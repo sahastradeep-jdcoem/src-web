@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { ChevronDown, ArrowRight } from "lucide-react";
 import { DEFAULT_HERO_SETTINGS, HeroSettings } from "@/data/heroSettings";
 import { getStoredHeroSettings, syncHeroSettingsFromFirestore, subscribeToHeroSettings } from "@/lib/heroStore";
@@ -13,24 +12,7 @@ export default function HeroSection() {
   const [settings, setSettings] = useState<HeroSettings>(DEFAULT_HERO_SETTINGS);
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [isLoopDissolving, setIsLoopDissolving] = useState(false);
-  const heroRef = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-
-  // Smooth mouse parallax motion values
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
-
-  const springConfig = { damping: 30, stiffness: 180, mass: 0.6 };
-  const smoothMouseX = useSpring(mouseX, springConfig);
-  const smoothMouseY = useSpring(mouseY, springConfig);
-
-  // Parallax layer depths
-  const bgShiftX = useTransform(smoothMouseX, [-0.5, 0.5], [-14, 14]);
-  const bgShiftY = useTransform(smoothMouseY, [-0.5, 0.5], [-10, 10]);
-  const cloudShiftX = useTransform(smoothMouseX, [-0.5, 0.5], [8, -8]);
-  const cloudShiftY = useTransform(smoothMouseY, [-0.5, 0.5], [5, -5]);
-  const centerShiftX = useTransform(smoothMouseX, [-0.5, 0.5], [-5, 5]);
-  const centerShiftY = useTransform(smoothMouseY, [-0.5, 0.5], [-3, 3]);
 
   // Set video playback rate to 1.5x
   const setPlaybackSpeed = () => {
@@ -85,31 +67,13 @@ export default function HeroSection() {
     setPlaybackSpeed();
   }, []);
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLElement>) => {
-    if (!heroRef.current) return;
-    const rect = heroRef.current.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width - 0.5;
-    const y = (e.clientY - rect.top) / rect.height - 0.5;
-    mouseX.set(x);
-    mouseY.set(y);
-  };
-
-  const handleMouseLeave = () => {
-    mouseX.set(0);
-    mouseY.set(0);
-  };
-
   return (
     <section
-      ref={heroRef}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
       className="relative w-full h-[calc(100vh-4rem)] min-h-[680px] max-h-[1080px] flex flex-col items-center justify-between overflow-hidden bg-[#F4F1E8] select-none"
     >
-      {/* 1. LAYER 0: CRISP FULL-SCALE BACKGROUND IMAGE WITH PARALLAX */}
-      <motion.div 
-        style={{ x: bgShiftX, y: bgShiftY }}
-        className="absolute -inset-8 z-0 pointer-events-none"
+      {/* 1. LAYER 0: CRISP STATIC FULL-SCALE BACKGROUND IMAGE */}
+      <div 
+        className="absolute inset-0 z-0 pointer-events-none overflow-hidden"
       >
         <Image
           key={settings.bgImageUrl}
@@ -118,7 +82,7 @@ export default function HeroSection() {
           fill
           priority
           sizes="100vw"
-          className="object-cover object-center opacity-95 scale-[1.03] filter contrast-[1.04] brightness-[1.02] transition-opacity duration-700"
+          className="object-cover object-center opacity-95 filter contrast-[1.04] brightness-[1.02] transition-opacity duration-700"
         />
 
         {/* Soft color harmony lens that matches the video's ivory backdrop tone */}
@@ -128,11 +92,10 @@ export default function HeroSection() {
             background: "radial-gradient(ellipse 65% 55% at 50% 45%, rgba(245,244,239,0.82) 0%, rgba(245,244,239,0.5) 45%, rgba(245,244,239,0.15) 75%, transparent 100%)",
           }}
         />
-      </motion.div>
+      </div>
 
       {/* 2. LAYER 1: VOLUMETRIC MATCHING-TONE CLOUDS & FOCUSED AMBIENT MIST */}
-      <motion.div 
-        style={{ x: cloudShiftX, y: cloudShiftY }}
+      <div 
         className="absolute inset-0 z-10 pointer-events-none overflow-hidden"
       >
         {/* Subtle top edge transition to navbar (Matching #F5F4EF / white) */}
@@ -167,14 +130,13 @@ export default function HeroSection() {
             animationDuration: "14s",
           }}
         />
-      </motion.div>
+      </div>
 
       {/* Top Spacer */}
       <div className="h-6 sm:h-10" />
 
       {/* 3. LAYER 2: CENTERPIECE — 3D LOGO REVEAL LOOP VIDEO (WITH 0.5s DISSOLVE TRANSITION) */}
-      <motion.div 
-        style={{ x: centerShiftX, y: centerShiftY }}
+      <div 
         className="relative z-20 flex flex-col items-center justify-center my-auto px-4"
       >
         {/* Luminous warm ambient aura directly behind video matching #F5F4EF and golden tone */}
@@ -256,7 +218,7 @@ export default function HeroSection() {
           </div>
 
         </div>
-      </motion.div>
+      </div>
 
       {/* 5. BOTTOM TICKER & SCROLL ARROW */}
       <div className="relative z-20 w-full pb-3 sm:pb-4 flex flex-col items-center gap-2">
