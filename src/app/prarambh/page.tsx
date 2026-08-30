@@ -8,19 +8,13 @@ import {
   Calendar, 
   MapPin, 
   Quote, 
-  Award, 
   ArrowRight, 
-  ShieldCheck, 
-  Flame,
-  Users
+  Flame 
 } from "lucide-react";
 import { 
   getStoredFoundingMembers, 
-  getStoredCouncilMembers,
   syncFoundingMembersFromFirestore,
-  syncCouncilMembersFromFirestore,
-  subscribeToFoundingMembers,
-  subscribeToCouncilMembers
+  subscribeToFoundingMembers
 } from "@/lib/councilStore";
 import { TeamMember } from "@/types";
 import { CouncilMemberCard } from "@/components/team/CouncilMemberCard";
@@ -28,11 +22,9 @@ import { Badge } from "@/components/ui/Badge";
 
 export default function PrarambhPage() {
   const [foundingMembers, setFoundingMembers] = useState<TeamMember[]>([]);
-  const [councilMembers, setCouncilMembers] = useState<TeamMember[]>([]);
 
   const refreshMembers = () => {
     setFoundingMembers(getStoredFoundingMembers());
-    setCouncilMembers(getStoredCouncilMembers());
   };
 
   useEffect(() => {
@@ -41,32 +33,24 @@ export default function PrarambhPage() {
     syncFoundingMembersFromFirestore().then((res) => {
       if (res) setFoundingMembers(res);
     });
-    syncCouncilMembersFromFirestore().then((res) => {
-      if (res) setCouncilMembers(res);
-    });
 
     const unsubFounding = subscribeToFoundingMembers((members) => setFoundingMembers(members));
-    const unsubCouncil = subscribeToCouncilMembers((members) => setCouncilMembers(members));
 
     const handleUpdate = () => {
       refreshMembers();
     };
 
     window.addEventListener("src_founding_members_updated", handleUpdate);
-    window.addEventListener("src_council_team_updated", handleUpdate);
     window.addEventListener("storage", handleUpdate);
 
     return () => {
       unsubFounding();
-      unsubCouncil();
       window.removeEventListener("src_founding_members_updated", handleUpdate);
-      window.removeEventListener("src_council_team_updated", handleUpdate);
       window.removeEventListener("storage", handleUpdate);
     };
   }, []);
 
   const sortedFounders = [...foundingMembers].sort((a, b) => (a.order || 999) - (b.order || 999));
-  const sortedCouncil = [...councilMembers].sort((a, b) => (a.order || 999) - (b.order || 999));
 
   const highlights = [
     {
@@ -178,44 +162,7 @@ export default function PrarambhPage() {
           )}
         </section>
 
-        {/* 4. ADMINS SECTION (SAME ADMINS AS IN TEAM) */}
-        <section className="space-y-8 pt-8 border-t border-slate-200">
-          <div className="border-b border-slate-200 pb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-            <div className="space-y-1">
-              <span className="text-xs font-bold uppercase tracking-wider text-[#E78023] flex items-center gap-1.5 font-sans">
-                <ShieldCheck className="w-4 h-4" />
-                <span>Executive Governance</span>
-              </span>
-              <h2 className="font-extrabold text-2xl sm:text-4xl text-[#17458F] uppercase font-heading">
-                ADMINS ({sortedCouncil.length})
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-500 font-medium font-sans">
-                The central student leadership body carrying forward the Sahastradeep mandate.
-              </p>
-            </div>
-            <Link
-              href="/team"
-              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#17458F] hover:text-[#E78023] transition-colors shrink-0"
-            >
-              <span>View Full Team Roster</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
-            {sortedCouncil.map((member) => (
-              <CouncilMemberCard key={member.id} member={member} />
-            ))}
-          </div>
-
-          {sortedCouncil.length === 0 && (
-            <div className="p-8 text-center bg-white rounded-3xl border border-slate-200 text-slate-500 text-xs">
-              No admins listed yet.
-            </div>
-          )}
-        </section>
-
-        {/* 5. HISTORICAL QUOTE SECTION */}
+        {/* 4. HISTORICAL QUOTE SECTION */}
         <section className="p-8 sm:p-12 rounded-3xl bg-white border border-slate-200 shadow-sm text-center max-w-4xl mx-auto space-y-6">
           <Quote className="w-12 h-12 text-[#E78023] mx-auto opacity-80" />
           <blockquote className="font-extrabold text-xl sm:text-2xl md:text-3xl text-[#0F172A] leading-snug font-heading">
