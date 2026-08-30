@@ -61,7 +61,9 @@ export default function HomeEventsSection() {
               WHAT&apos;S HAPPENING
             </h2>
             <p className="text-sm text-slate-600 max-w-xl font-sans font-normal">
-              Experience Prarambh and upcoming flagship events hosted by the Student Representative Council.
+              {featuredEvent 
+                ? `Experience ${featuredEvent.name} and upcoming flagship showcases hosted by the Student Representative Council.`
+                : "Experience campus fests and upcoming flagship events hosted by the Student Representative Council."}
             </p>
           </div>
 

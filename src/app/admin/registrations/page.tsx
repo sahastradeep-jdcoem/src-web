@@ -39,7 +39,7 @@ export default function AdminRegistrationsPage() {
       id: r.id,
       registrationId: r.id,
       eventSlug: r.eventId,
-      eventName: r.eventTitle || "PRARAMBH Fest",
+      eventName: r.eventTitle || "Event Delegate Pass",
       participantName: r.leaderName,
       email: r.email,
       phone: r.phone,
@@ -250,7 +250,7 @@ export default function AdminRegistrationsPage() {
               </h3>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
                 {registrations.length === 0
-                  ? "No registrations submitted yet. As delegates register for PRARAMBH, their verified accreditation records will appear here."
+                  ? "No registrations submitted yet. As delegates register for events, their verified accreditation records will appear here."
                   : "No registrations match your current search or filter query."}
               </p>
             </div>

@@ -25,16 +25,37 @@ import { mockRegistrations } from "@/data/registrations";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { RegistrationRecord } from "@/types";
+import { RegistrationRecord, EventItem } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { downloadPassAsImage } from "@/lib/passExport";
+import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
 
 export default function StudentDashboardPage() {
   const { user, openAuthModal, openProfileModal, logout } = useAuth();
   const [registrations, setRegistrations] = useState<RegistrationRecord[]>([]);
+  const [events, setEvents] = useState<EventItem[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<RegistrationRecord | null>(null);
 
   useEffect(() => {
+    // Load dynamic events from store & cloud
+    setEvents(getStoredEvents());
+    syncEventsFromFirestore().then((res) => {
+      if (res) setEvents(res);
+    });
+    const unsub = subscribeToEvents((remote) => {
+      if (remote) setEvents(remote);
+    });
+
+    const handleEventsUpdate = (e: any) => {
+      if (e?.detail && Array.isArray(e.detail)) {
+        setEvents(e.detail);
+      } else {
+        setEvents(getStoredEvents());
+      }
+    };
+    window.addEventListener("src_events_updated", handleEventsUpdate);
+    window.addEventListener("storage", handleEventsUpdate);
+
     try {
       const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
       if (Array.isArray(local) && local.length > 0) {
@@ -42,7 +63,7 @@ export default function StudentDashboardPage() {
           id: r.id,
           registrationId: r.id,
           eventSlug: r.eventId,
-          eventName: r.eventTitle || "PRARAMBH Fest",
+          eventName: r.eventTitle || "Event Delegate Pass",
           participantName: r.leaderName,
           email: r.email,
           phone: r.phone,
@@ -65,7 +86,15 @@ export default function StudentDashboardPage() {
       console.warn("Local registrations load warning", e);
       setRegistrations([]);
     }
+
+    return () => {
+      unsub();
+      window.removeEventListener("src_events_updated", handleEventsUpdate);
+      window.removeEventListener("storage", handleEventsUpdate);
+    };
   }, []);
+
+  const flagshipEvent = events.find(e => e.isFeatured || e.category === "Fest") || events[0] || null;
 
   const activeRegistrations = registrations.filter((r) => r.status !== "COMPLETED");
   const completedRegistrations = registrations.filter((r) => r.status === "COMPLETED");
@@ -154,15 +183,28 @@ export default function StudentDashboardPage() {
         {/* 3 Metric Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           
-          <div className="p-6 rounded-3xl bg-white border border-slate-200 space-y-2 shadow-xs">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-[#E78023]" />
-              <span>Flagship Event</span>
-            </span>
-            <h3 className="font-heading font-bold text-xl text-[#17458F]">
-              PRARAMBH
-            </h3>
-            <p className="text-xs text-[#E78023] font-bold">Annual Council Showcase</p>
+          <div className="p-6 rounded-3xl bg-white border border-slate-200 space-y-2 shadow-xs flex flex-col justify-between">
+            <div className="space-y-1.5">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-[#E78023]" />
+                <span>Flagship Event</span>
+              </span>
+              <h3 className="font-heading font-bold text-xl text-[#17458F] line-clamp-1">
+                {flagshipEvent ? flagshipEvent.name : "No Active Event"}
+              </h3>
+              <p className="text-xs text-[#E78023] font-bold line-clamp-1">
+                {flagshipEvent ? (flagshipEvent.tagline || `${flagshipEvent.category} Showcase`) : "Check back soon for college fests"}
+              </p>
+            </div>
+            {flagshipEvent && (
+              <Link 
+                href={`/events/${flagshipEvent.slug}`} 
+                className="text-[11px] font-bold text-[#17458F] hover:text-[#E78023] transition-colors inline-flex items-center gap-1 pt-1"
+              >
+                <span>View Event Details</span>
+                <ArrowRight className="w-3 h-3" />
+              </Link>
+            )}
           </div>
 
           <div className="p-6 rounded-3xl bg-white border border-slate-200 space-y-2 shadow-xs">
@@ -220,14 +262,16 @@ export default function StudentDashboardPage() {
                       No Event Passes Yet
                     </h3>
                     <p className="text-xs text-slate-500 max-w-sm mx-auto font-sans font-medium">
-                      You haven&apos;t registered for any flagship fests or events yet. Explore PRARAMBH and generate your instant digital delegate pass.
+                      {flagshipEvent
+                        ? `You haven't registered for any events yet. Explore ${flagshipEvent.name} and generate your instant digital delegate pass.`
+                        : `You haven't registered for any events yet. Explore upcoming council events and generate your instant digital delegate pass.`}
                     </p>
                   </div>
                   <Link
-                    href="/events"
+                    href={flagshipEvent ? `/events/${flagshipEvent.slug}` : "/events"}
                     className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-semibold uppercase tracking-wider transition-all shadow-md shadow-[#E78023]/20"
                   >
-                    <span>Explore Flagship Events</span>
+                    <span>{flagshipEvent ? `Explore ${flagshipEvent.name}` : "Explore Events"}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
                 </div>
