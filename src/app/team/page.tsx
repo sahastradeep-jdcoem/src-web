@@ -28,6 +28,7 @@ import {
   syncClubsFromFirestore,
   subscribeToClubs
 } from "@/lib/councilStore";
+import { getCurrentTenure, CouncilTenure } from "@/lib/tenureStore";
 import { TeamMember, ClubItem } from "@/types";
 import { CouncilMemberCard } from "@/components/team/CouncilMemberCard";
 import { Badge } from "@/components/ui/Badge";
@@ -38,12 +39,14 @@ export default function TeamPage() {
   const [hostingMembers, setHostingMembers] = useState<TeamMember[]>([]);
   const [spokespersons, setSpokespersons] = useState<TeamMember[]>([]);
   const [clubs, setClubs] = useState<ClubItem[]>([]);
+  const [currentTenure, setCurrentTenure] = useState<CouncilTenure | null>(null);
 
   const refreshAll = () => {
     setCouncilMembers(getStoredCouncilMembers());
     setHostingMembers(getStoredHostingCommittee());
     setSpokespersons(getStoredSpokespersons());
     setClubs(getStoredClubs());
+    setCurrentTenure(getCurrentTenure());
   };
 
   useEffect(() => {
@@ -75,6 +78,8 @@ export default function TeamPage() {
     window.addEventListener("src_hosting_updated", handleUpdate);
     window.addEventListener("src_spokespersons_updated", handleUpdate);
     window.addEventListener("src_clubs_updated", handleUpdate);
+    window.addEventListener("src_tenure_changed", handleUpdate);
+    window.addEventListener("src_tenures_updated", handleUpdate);
     window.addEventListener("storage", handleUpdate);
 
     return () => {
@@ -86,6 +91,8 @@ export default function TeamPage() {
       window.removeEventListener("src_hosting_updated", handleUpdate);
       window.removeEventListener("src_spokespersons_updated", handleUpdate);
       window.removeEventListener("src_clubs_updated", handleUpdate);
+      window.removeEventListener("src_tenure_changed", handleUpdate);
+      window.removeEventListener("src_tenures_updated", handleUpdate);
       window.removeEventListener("storage", handleUpdate);
     };
   }, []);
@@ -157,16 +164,32 @@ export default function TeamPage() {
         
         {/* Page Header */}
         <div className="space-y-4 max-w-3xl">
-          <Badge variant="orange" size="md">
-            LEADERSHIP & GOVERNANCE
-          </Badge>
-          <h1 className="font-extrabold text-4xl sm:text-6xl text-[#0F172A] tracking-tight uppercase leading-none">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="orange" size="md">
+              LEADERSHIP & GOVERNANCE
+            </Badge>
+            {currentTenure && (
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-[#17458F] text-white shadow-xs">
+                <span>Tenure {currentTenure.label}</span>
+                {currentTenure.isCurrent && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                )}
+              </span>
+            )}
+            <Link
+              href="/archive"
+              className="text-xs font-bold text-[#E78023] hover:underline flex items-center gap-1 ml-2"
+            >
+              <span>Past Tenures Archive &rarr;</span>
+            </Link>
+          </div>
+          <h1 className="font-extrabold text-4xl sm:text-6xl text-[#0F172A] tracking-tight uppercase leading-none font-heading">
             THE PEOPLE
             <br />
             <span className="text-[#E78023]">BEHIND SAHASTRADEEP.</span>
           </h1>
           <p className="text-base sm:text-lg text-slate-600 font-medium">
-            Meet the {councilMembers.length} Admins, {clubLeadMembers.length} Heads &amp; Co-Heads, and {unifiedHostingMembers.length} Hosting Committee members steering JDCOEM Nagpur.
+            Meet the {councilMembers.length} Admins, {clubLeadMembers.length} Heads &amp; Co-Heads, and {unifiedHostingMembers.length} Hosting Committee members steering JDCOEM Nagpur in Tenure {currentTenure?.label || "2025-26"}.
           </p>
         </div>
 

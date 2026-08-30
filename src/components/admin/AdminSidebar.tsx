@@ -31,8 +31,8 @@ const ADMIN_NAV = [
   { name: "Departments", href: "/admin/departments", icon: Building2 },
   { name: "Clubs", href: "/admin/clubs", icon: Sparkles },
   { name: "Team Members", href: "/admin/team", icon: Users },
-  { name: "Gallery", href: "/gallery", icon: ImageIcon },
-  { name: "Archive", href: "/archive", icon: Trophy },
+  { name: "Gallery", href: "/admin/gallery", icon: ImageIcon },
+  { name: "Tenures & Archive", href: "/admin/tenures", icon: Trophy },
 ];
 
 export function AdminSidebar() {

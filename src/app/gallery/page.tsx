@@ -1,9 +1,13 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { Filter, Sparkles, Maximize2, Tag, Calendar } from "lucide-react";
-import { mockGalleryPhotos } from "@/data/gallery";
+import { 
+  getStoredGalleryPhotos, 
+  syncGalleryFromFirestore, 
+  subscribeToGallery 
+} from "@/lib/galleryStore";
 import { LightboxModal } from "@/components/gallery/LightboxModal";
 import { GalleryPhoto } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -19,13 +23,37 @@ const CATEGORIES = [
 ];
 
 export default function GalleryPage() {
+  const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [activePhotoIndex, setActivePhotoIndex] = useState<number | null>(null);
 
+  useEffect(() => {
+    setPhotos(getStoredGalleryPhotos());
+
+    syncGalleryFromFirestore().then((res) => {
+      if (res) setPhotos(res);
+    });
+
+    const unsub = subscribeToGallery((p) => setPhotos(p));
+
+    const handleUpdate = () => {
+      setPhotos(getStoredGalleryPhotos());
+    };
+
+    window.addEventListener("src_gallery_updated", handleUpdate);
+    window.addEventListener("storage", handleUpdate);
+
+    return () => {
+      unsub();
+      window.removeEventListener("src_gallery_updated", handleUpdate);
+      window.removeEventListener("storage", handleUpdate);
+    };
+  }, []);
+
   const filteredPhotos = useMemo(() => {
-    if (selectedCategory === "All") return mockGalleryPhotos;
-    return mockGalleryPhotos.filter((p) => p.category === selectedCategory);
-  }, [selectedCategory]);
+    if (selectedCategory === "All") return photos;
+    return photos.filter((p) => p.category === selectedCategory);
+  }, [photos, selectedCategory]);
 
   const activePhoto = activePhotoIndex !== null ? filteredPhotos[activePhotoIndex] : null;
 

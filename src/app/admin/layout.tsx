@@ -16,6 +16,7 @@ import {
   UserCheck 
 } from "lucide-react";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
+import { AdminTopBar } from "@/components/admin/AdminTopBar";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/context/AuthContext";
@@ -300,6 +301,7 @@ export default function AdminLayout({
       <div className="hidden md:flex min-h-screen bg-[#F8FAFC] text-[#0F172A] flex-row">
         <AdminSidebar />
         <div className="flex-1 min-w-0 p-6 sm:p-8 lg:p-10 overflow-y-auto">
+          <AdminTopBar />
           {children}
         </div>
       </div>
