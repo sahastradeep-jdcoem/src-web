@@ -135,47 +135,46 @@ export default function StudentDashboardPage() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             {!user ? (
-              <Button
-                variant="primary"
-                size="md"
+              <button
+                type="button"
                 onClick={openAuthModal}
-                className="gap-2"
+                className="px-5 py-2.5 rounded-full bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-semibold uppercase tracking-wider transition-all shadow-md shadow-[#E78023]/25 flex items-center gap-2 font-sans cursor-pointer"
               >
                 <User className="w-4 h-4" />
                 <span>Sign In with College ID</span>
-              </Button>
+              </button>
             ) : (
               <>
-                <Button
-                  variant="secondary"
-                  size="sm"
+                {/* Edit Profile Button */}
+                <button
+                  type="button"
                   onClick={openProfileModal}
-                  className="gap-1.5 text-slate-700 border-slate-200 hover:bg-slate-50 cursor-pointer"
+                  className="px-4 py-2.5 rounded-full bg-white hover:bg-slate-50 border border-slate-300 hover:border-[#17458F] text-slate-700 hover:text-[#17458F] text-xs font-semibold uppercase tracking-wider transition-all shadow-xs flex items-center gap-2 cursor-pointer font-sans"
                 >
-                  <User className="w-3.5 h-3.5 text-[#17458F]" />
+                  <User className="w-3.5 h-3.5 text-[#E78023]" />
                   <span>Edit Profile</span>
-                </Button>
+                </button>
 
-                <Button
-                  variant="secondary"
-                  size="sm"
+                {/* Sign Out Button */}
+                <button
+                  type="button"
                   onClick={() => logout()}
-                  className="gap-1.5 text-rose-600 border-rose-200 hover:bg-rose-50 cursor-pointer"
+                  className="px-4 py-2.5 rounded-full bg-white hover:bg-rose-50 border border-slate-300 hover:border-rose-300 text-slate-700 hover:text-rose-600 text-xs font-semibold uppercase tracking-wider transition-all shadow-xs flex items-center gap-2 cursor-pointer font-sans"
                 >
-                  <LogOut className="w-3.5 h-3.5" />
+                  <LogOut className="w-3.5 h-3.5 text-rose-500" />
                   <span>Sign Out</span>
-                </Button>
+                </button>
               </>
             )}
 
             <Link
               href="/events"
-              className="px-5 py-2.5 rounded-full bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-semibold uppercase tracking-wider transition-all shadow-md shadow-[#E78023]/20 flex items-center gap-1.5 font-sans"
+              className="px-5 py-2.5 rounded-full bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-semibold uppercase tracking-wider transition-all duration-200 shadow-md shadow-[#E78023]/25 flex items-center gap-2 font-sans cursor-pointer group"
             >
               <span>Explore New Events</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <ArrowRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
             </Link>
           </div>
         </div>
