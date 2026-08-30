@@ -36,7 +36,7 @@ import {
   RegisteredUserRecord 
 } from "@/lib/usersStore";
 import { subscribeToUsersFromFirestore } from "@/lib/firebase/firestore";
-import { getStoredDepartments } from "@/lib/departmentsStore";
+import { getStoredDepartments, getDepartmentShortName } from "@/lib/departmentsStore";
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<RegisteredUserRecord[]>([]);
@@ -507,8 +507,13 @@ export default function AdminUsersPage() {
 
                     {/* Department & Year */}
                     <td className="py-4 px-6">
-                      <div className="text-slate-900 font-bold max-w-xs truncate">
-                        {u.department || "Basic Science & Humanities"}
+                      <div className="text-slate-900 font-bold max-w-xs truncate" title={u.department}>
+                        <span className="lg:hidden inline-block px-2 py-0.5 rounded-md bg-slate-100 text-[#17458F] font-mono text-[11px] font-bold">
+                          {getDepartmentShortName(u.department || "Basic Science & Humanities Dept.")}
+                        </span>
+                        <span className="hidden lg:inline">
+                          {u.department || "Basic Science & Humanities"}
+                        </span>
                       </div>
                       <div className="text-[11px] text-slate-500 font-sans">
                         {u.year || "—"}

@@ -15,6 +15,7 @@ import {
   Image as ImageIcon 
 } from "lucide-react";
 import { getStoredClubs } from "@/lib/councilStore";
+import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { ClubItem, EventItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { EventCard } from "@/components/events/EventCard";
@@ -158,7 +159,9 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
                   {club.lead.name}
                 </h4>
                 <p className="text-xs text-slate-500 font-medium">
-                  {club.lead.department} • {club.lead.year}
+                  <span className="sm:hidden">{getDepartmentShortName(club.lead.department)}</span>
+                  <span className="hidden sm:inline">{club.lead.department}</span>
+                  {" "}• {club.lead.year}
                 </p>
               </div>
             </div>
@@ -182,7 +185,9 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
                     {club.coLead.name}
                   </h4>
                   <p className="text-xs text-slate-500 font-medium">
-                    {club.coLead.department} • {club.coLead.year}
+                    <span className="sm:hidden">{getDepartmentShortName(club.coLead.department)}</span>
+                    <span className="hidden sm:inline">{club.coLead.department}</span>
+                    {" "}• {club.coLead.year}
                   </p>
                 </div>
               </div>

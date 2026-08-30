@@ -35,7 +35,7 @@ import {
   syncCouncilMembersFromFirestore,
   syncHostingCommitteeFromFirestore
 } from "@/lib/councilStore";
-import { getStoredDepartments, syncDepartmentsFromFirestore } from "@/lib/departmentsStore";
+import { getStoredDepartments, syncDepartmentsFromFirestore, getDepartmentShortName } from "@/lib/departmentsStore";
 import { adminCouncilMembers, hostingCommitteeMembers } from "@/data/team";
 import { TeamMember } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -340,8 +340,9 @@ export default function AdminTeamPage() {
                     <p className="text-xs text-[#E78023] font-bold truncate">
                       {member.role || "Untitled Position"}
                     </p>
-                    <p className="text-[11px] text-slate-500 font-medium truncate">
-                      {member.department}
+                    <p className="text-[11px] text-slate-500 font-medium truncate" title={member.department}>
+                      <span className="lg:hidden">{getDepartmentShortName(member.department)}</span>
+                      <span className="hidden lg:inline">{member.department}</span>
                     </p>
                     {member.btId && (
                       <div className="pt-1">

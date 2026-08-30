@@ -22,7 +22,7 @@ import {
   Hash
 } from "lucide-react";
 import { getStoredClubs, saveStoredClubs, syncClubsFromFirestore } from "@/lib/councilStore";
-import { getStoredDepartments, syncDepartmentsFromFirestore } from "@/lib/departmentsStore";
+import { getStoredDepartments, syncDepartmentsFromFirestore, getDepartmentShortName } from "@/lib/departmentsStore";
 import { mockClubs } from "@/data/clubs";
 import { ClubItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -284,7 +284,10 @@ export default function AdminClubsPage() {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-slate-500 font-medium">Department:</span>
-                <span className="text-[#E78023] font-semibold">{club.lead.department}</span>
+                <span className="text-[#E78023] font-semibold truncate max-w-[140px]" title={club.lead.department}>
+                  <span className="xl:hidden">{getDepartmentShortName(club.lead.department)}</span>
+                  <span className="hidden xl:inline">{club.lead.department}</span>
+                </span>
               </div>
               {club.coLead?.name && (
                 <div className="flex justify-between items-center pt-1 border-t border-slate-200">

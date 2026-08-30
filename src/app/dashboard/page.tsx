@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { mockRegistrations } from "@/data/registrations";
 import { Badge } from "@/components/ui/Badge";
+import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { RegistrationRecord, EventItem } from "@/types";
@@ -380,7 +381,10 @@ export default function StudentDashboardPage() {
                     <span className="text-[10px] text-slate-300 font-medium uppercase tracking-wider">
                       Department
                     </span>
-                    <p className="font-semibold text-slate-100 truncate">{displayDepartment.split("(")[0]}</p>
+                    <p className="font-semibold text-slate-100 truncate" title={displayDepartment}>
+                      <span className="sm:hidden">{getDepartmentShortName(displayDepartment)}</span>
+                      <span className="hidden sm:inline">{displayDepartment.split("(")[0]}</span>
+                    </p>
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-300 font-medium uppercase tracking-wider">

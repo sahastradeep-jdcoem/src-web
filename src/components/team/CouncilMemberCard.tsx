@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Mail, Linkedin, ArrowRight } from "lucide-react";
 import { TeamMember } from "@/types";
+import { getDepartmentShortName } from "@/lib/departmentsStore";
 
 interface CouncilMemberCardProps {
   member: TeamMember;
@@ -41,7 +42,9 @@ export function CouncilMemberCard({ member }: CouncilMemberCardProps) {
             {member.name}
           </h3>
           <p className="text-[10px] sm:text-xs text-slate-500 font-sans font-medium pt-0.5 line-clamp-1">
-            {member.department} {member.year && `• ${member.year}`}
+            <span className="sm:hidden">{getDepartmentShortName(member.department)}</span>
+            <span className="hidden sm:inline">{member.department}</span>
+            {member.year && ` • ${member.year}`}
           </p>
         </div>
 

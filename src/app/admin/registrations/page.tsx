@@ -20,6 +20,7 @@ import { RegistrationRecord } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { 
   checkInStudentPass, 
   getAllRegistrationsFromFirestore, 
@@ -288,7 +289,14 @@ export default function AdminRegistrationsPage() {
                       </span>
                     </td>
                     <td className="py-4 px-6">
-                      <div className="text-slate-800 font-medium">{r.department || "—"}</div>
+                      <div className="text-slate-800 font-medium max-w-xs truncate" title={r.department}>
+                        <span className="lg:hidden inline-block px-2 py-0.5 rounded-md bg-slate-100 text-[#17458F] font-mono text-[11px] font-bold">
+                          {getDepartmentShortName(r.department)}
+                        </span>
+                        <span className="hidden lg:inline">
+                          {r.department || "—"}
+                        </span>
+                      </div>
                       <div className="text-[10px] text-slate-500">{r.year || "—"}</div>
                     </td>
                     <td className="py-4 px-6">
