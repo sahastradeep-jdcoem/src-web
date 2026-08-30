@@ -1,7 +1,9 @@
-import React from "react";
+"use client";
+
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { notFound } from "next/navigation";
+import { useParams } from "next/navigation";
 import { 
   Calendar, 
   Clock, 
@@ -13,48 +15,127 @@ import {
   CheckCircle2, 
   Phone, 
   Sparkles, 
-  Trophy 
+  Trophy,
+  AlertCircle
 } from "lucide-react";
 import { mockEvents } from "@/data/events";
+import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
+import { EventItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Accordion } from "@/components/ui/Accordion";
 import { ScheduleTimeline } from "@/components/events/ScheduleTimeline";
 import { PrizeCard } from "@/components/events/PrizeCard";
 
-interface EventPageProps {
-  params: Promise<{ slug: string }>;
-}
+export default function EventDetailPage() {
+  const params = useParams();
+  const slug = params?.slug as string;
 
-export async function generateStaticParams() {
-  return mockEvents.map((event) => ({
-    slug: event.slug,
-  }));
-}
+  const [event, setEvent] = useState<EventItem | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-export default async function EventDetailPage({ params }: EventPageProps) {
-  const { slug } = await params;
-  const event = mockEvents.find((e) => e.slug === slug);
+  const findEvent = (allEvents: EventItem[], targetSlug: string): EventItem | null => {
+    if (!targetSlug) return null;
+    const cleanSlug = targetSlug.toLowerCase().trim();
+    return (
+      allEvents.find(
+        (e) =>
+          e.slug === cleanSlug ||
+          e.id === cleanSlug ||
+          e.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") === cleanSlug ||
+          e.name.toLowerCase() === decodeURIComponent(cleanSlug).toLowerCase()
+      ) || null
+    );
+  };
+
+  useEffect(() => {
+    if (!slug) return;
+
+    // 1. Check local stored events + fallback mock events
+    const stored = getStoredEvents();
+    const combined = [...stored, ...mockEvents];
+    const match = findEvent(combined, slug);
+
+    if (match) {
+      setEvent(match);
+      setIsLoading(false);
+    }
+
+    // 2. Fetch latest from Firestore in case event was just created on another device
+    syncEventsFromFirestore().then((remote) => {
+      if (remote) {
+        const remoteMatch = findEvent([...remote, ...mockEvents], slug);
+        if (remoteMatch) {
+          setEvent(remoteMatch);
+        }
+      }
+      setIsLoading(false);
+    });
+
+    const unsub = subscribeToEvents((remoteEvents) => {
+      if (remoteEvents) {
+        const remoteMatch = findEvent([...remoteEvents, ...mockEvents], slug);
+        if (remoteMatch) {
+          setEvent(remoteMatch);
+        }
+      }
+    });
+
+    return () => {
+      unsub();
+    };
+  }, [slug]);
+
+  if (isLoading && !event) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-6 space-y-4">
+        <div className="w-10 h-10 border-3 border-[#17458F] border-t-transparent rounded-full animate-spin" />
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+          Loading Event Details...
+        </p>
+      </div>
+    );
+  }
 
   if (!event) {
-    notFound();
+    return (
+      <div className="min-h-[70vh] bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center space-y-6">
+        <div className="p-4 rounded-3xl bg-amber-50 border border-amber-200 text-[#E78023]">
+          <AlertCircle className="w-10 h-10 mx-auto" />
+        </div>
+        <div className="space-y-2 max-w-md">
+          <h1 className="font-heading font-extrabold text-2xl text-[#0F172A] uppercase">
+            Event Not Found
+          </h1>
+          <p className="text-xs text-slate-500 leading-relaxed font-sans">
+            The event <code className="font-mono text-[#17458F] font-bold">/{slug}</code> could not be found or may have been updated.
+          </p>
+        </div>
+        <Link
+          href="/events"
+          className="px-6 py-3 rounded-2xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider transition-all hover:bg-[#123670] shadow-sm"
+        >
+          &larr; Browse All Events
+        </Link>
+      </div>
+    );
   }
 
   const isRegistrationOpen = event.status === "Registration Open";
 
-  const ruleAccordionItems = event.rules.map((rule, idx) => ({
+  const ruleAccordionItems = (event.rules || []).map((rule, idx) => ({
     id: `rule-${idx}`,
     title: `Regulation 0${idx + 1}: ${rule.slice(0, 45)}...`,
     content: rule,
   }));
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] pb-20">
+    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] pb-20 font-sans">
       
       {/* 1. CINEMATIC HERO BANNER */}
       <section className="relative h-[55vh] sm:h-[60vh] flex items-end pb-12 px-4 sm:px-6 lg:px-8 overflow-hidden bg-slate-900">
         {/* Background Poster */}
         <Image
-          src={event.poster}
+          src={event.poster || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop"}
           alt={event.name}
           fill
           priority
@@ -73,10 +154,10 @@ export default async function EventDetailPage({ params }: EventPageProps) {
 
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-[#E78023] text-white">
+              <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-[#E78023] text-white shadow-xs">
                 {event.category}
               </span>
-              <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/90 text-slate-900">
+              <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/90 text-slate-900 shadow-xs">
                 {event.status}
               </span>
               {event.tagline && (
@@ -86,7 +167,7 @@ export default async function EventDetailPage({ params }: EventPageProps) {
               )}
             </div>
 
-            <h1 className="font-extrabold text-4xl sm:text-6xl text-white tracking-tight uppercase">
+            <h1 className="font-heading font-extrabold text-4xl sm:text-6xl text-white tracking-tight uppercase">
               {event.name}
             </h1>
           </div>
@@ -99,11 +180,11 @@ export default async function EventDetailPage({ params }: EventPageProps) {
             </div>
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-slate-300 shrink-0" />
-              <span>{event.time}</span>
+              <span>{event.time || "10:00 AM IST"}</span>
             </div>
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4 text-[#E78023] shrink-0" />
-              <span>{event.venue}</span>
+              <span>{event.venue || "JDCOEM Campus"}</span>
             </div>
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-slate-300 shrink-0" />
@@ -126,18 +207,18 @@ export default async function EventDetailPage({ params }: EventPageProps) {
                 <Sparkles className="w-4 h-4" />
                 <span>Overview</span>
               </div>
-              <h2 className="font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase">
+              <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase">
                 ABOUT THE EVENT
               </h2>
-              <p className="text-slate-700 leading-relaxed text-sm sm:text-base font-medium">
-                {event.about}
+              <p className="text-slate-700 leading-relaxed text-sm sm:text-base font-medium font-sans">
+                {event.about || event.description}
               </p>
             </section>
 
             {/* WHAT TO EXPECT */}
             {event.whatToExpect && event.whatToExpect.length > 0 && (
               <section className="space-y-6">
-                <h2 className="font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase">
+                <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase">
                   WHAT TO EXPECT
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -161,8 +242,8 @@ export default async function EventDetailPage({ params }: EventPageProps) {
                   <span className="text-xs font-bold uppercase tracking-wider text-[#E78023]">
                     Event Sequence
                   </span>
-                  <h2 className="font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase">
-                    SCHEDULE & ITINERARY
+                  <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase">
+                    SCHEDULE &amp; ITINERARY
                   </h2>
                 </div>
                 <ScheduleTimeline schedule={event.schedule} />
@@ -175,10 +256,10 @@ export default async function EventDetailPage({ params }: EventPageProps) {
                 <div className="space-y-1">
                   <span className="text-xs font-bold uppercase tracking-wider text-[#E78023] flex items-center gap-1.5">
                     <Trophy className="w-4 h-4" />
-                    <span>Rewards & Laurels</span>
+                    <span>Rewards &amp; Laurels</span>
                   </span>
-                  <h2 className="font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase">
-                    PRIZES & RECOGNITION
+                  <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase">
+                    PRIZES &amp; RECOGNITION
                   </h2>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -190,14 +271,14 @@ export default async function EventDetailPage({ params }: EventPageProps) {
             )}
 
             {/* RULES & GUIDELINES ACCORDION */}
-            {event.rules && event.rules.length > 0 && (
+            {ruleAccordionItems && ruleAccordionItems.length > 0 && (
               <section className="space-y-6">
                 <div className="space-y-1">
                   <span className="text-xs font-bold uppercase tracking-wider text-[#E78023]">
                     Official Code of Conduct
                   </span>
-                  <h2 className="font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase">
-                    RULES & GUIDELINES
+                  <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase">
+                    RULES &amp; GUIDELINES
                   </h2>
                 </div>
                 <Accordion items={ruleAccordionItems} />
@@ -213,7 +294,7 @@ export default async function EventDetailPage({ params }: EventPageProps) {
                 <Badge variant={isRegistrationOpen ? "orange" : "slate"} size="md">
                   {event.status}
                 </Badge>
-                <h3 className="font-extrabold text-2xl text-[#0F172A]">
+                <h3 className="font-heading font-extrabold text-2xl text-[#0F172A]">
                   Registration Portal
                 </h3>
                 <p className="text-xs text-slate-500 font-medium">
@@ -225,17 +306,17 @@ export default async function EventDetailPage({ params }: EventPageProps) {
               <div className="space-y-3 pt-4 border-t border-slate-100 text-xs">
                 <div className="flex justify-between items-center py-1 border-b border-slate-100">
                   <span className="text-slate-500">Participation Format:</span>
-                  <span className="font-bold text-slate-900">{event.teamType}</span>
+                  <span className="font-bold text-slate-900">{event.teamType || "Individual"}</span>
                 </div>
                 {event.maxTeamSize && (
                   <div className="flex justify-between items-center py-1 border-b border-slate-100">
                     <span className="text-slate-500">Team Size:</span>
-                    <span className="font-bold text-slate-900">{event.minTeamSize} – {event.maxTeamSize} Members</span>
+                    <span className="font-bold text-slate-900">{event.minTeamSize || 1} – {event.maxTeamSize} Members</span>
                   </div>
                 )}
                 <div className="flex justify-between items-center py-1 border-b border-slate-100">
                   <span className="text-slate-500">Registration Closes:</span>
-                  <span className="font-bold text-[#E78023]">{event.registrationDeadline}</span>
+                  <span className="font-bold text-[#E78023]">{event.registrationDeadline || "Open until slots filled"}</span>
                 </div>
                 <div className="flex justify-between items-center py-1">
                   <span className="text-slate-500">Fee:</span>
