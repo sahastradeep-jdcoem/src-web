@@ -10,8 +10,15 @@
     --brand-bg: #F8FAFC;
   }
 
+  html {
+    @apply scroll-smooth;
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
     @apply bg-[#F8FAFC] text-[#0F172A] antialiased selection:bg-[#E78023] selection:text-white font-sans;
+    overflow-x: hidden;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
   }
 
