@@ -166,23 +166,23 @@ export default function TeamPage() {
             <span className="text-[#E78023]">BEHIND SAHASTRADEEP.</span>
           </h1>
           <p className="text-base sm:text-lg text-slate-600 font-medium">
-            Meet the {councilMembers.length} executive council officers, {unifiedHostingMembers.length} hosting committee members (spokespersons & anchors), and {clubLeadMembers.length} chartered club leaders steering JDCOEM Nagpur.
+            Meet the {councilMembers.length} Admins, {clubLeadMembers.length} Heads &amp; Co-Heads, and {unifiedHostingMembers.length} Hosting Committee members steering JDCOEM Nagpur.
           </p>
         </div>
 
-        {/* SECTION 1: SRC ADMIN COUNCIL POSITIONS */}
+        {/* SECTION 1: SRC ADMIN POSITIONS */}
         <section className="space-y-8">
           <div className="border-b border-slate-200 pb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div className="space-y-1">
               <span className="text-xs font-bold uppercase tracking-wider text-[#E78023] flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4" />
-                <span>Executive Council</span>
+                <span>Admins</span>
               </span>
               <h2 className="font-extrabold text-2xl sm:text-4xl text-[#17458F] uppercase">
                 {councilMembers.length} ADMIN POSITIONS
               </h2>
               <p className="text-xs sm:text-sm text-slate-500 font-medium">
-                The governing body authorized under JDCOEM student bylaws.
+                The central leadership body authorized under JDCOEM student bylaws.
               </p>
             </div>
           </div>
@@ -196,7 +196,7 @@ export default function TeamPage() {
 
           {councilMembers.length === 0 && (
             <div className="p-8 text-center bg-white rounded-3xl border border-slate-200 text-slate-500 text-xs">
-              No council officers listed yet.
+              No admins listed yet.
             </div>
           )}
         </section>
@@ -227,17 +227,17 @@ export default function TeamPage() {
           </section>
         )}
 
-        {/* SECTION 3: CHARTERED CLUBS LEADS */}
+        {/* SECTION 3: CHARTERED CLUBS HEADS & CO-HEADS */}
         {clubLeadMembers.length > 0 && (
           <section className="space-y-8 pt-8 border-t border-slate-200">
             <div className="border-b border-slate-200 pb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
               <div className="space-y-1">
                 <span className="text-xs font-bold uppercase tracking-wider text-[#E78023] flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4" />
-                  <span>Domain Leadership</span>
+                  <span>Club Leadership</span>
                 </span>
                 <h2 className="font-extrabold text-2xl sm:text-4xl text-[#17458F] uppercase">
-                  CLUBS LEADERSHIP ({clubLeadMembers.length})
+                  HEADS &amp; CO-HEADS ({clubLeadMembers.length})
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-500 font-medium">
                   Club Heads and Co-Heads orchestrating workshops, hackathons, productions, and competitions across all 12 chartered societies.

@@ -36,7 +36,7 @@ export default function AboutPage() {
     },
     {
       title: "Develop Leadership",
-      desc: "Incubating administrative acumen, crisis handling, event production, and team governance in student executives.",
+      desc: "Incubating administrative acumen, crisis handling, event production, and team governance in student leaders.",
     },
     {
       title: "Represent Student Voices",
@@ -127,7 +127,7 @@ export default function AboutPage() {
                 DUAL-TIER GOVERNANCE
               </h2>
               <p className="text-sm text-slate-600 leading-relaxed">
-                Sahastradeep functions through a comprehensive governance model: the <strong>Central Admin Council</strong> (16 executive positions overseeing institutional policies, event operations, technical systems, PR, finance, and protocol), specialized <strong>Hosting & Spokesperson Delegations</strong>, and the <strong>Club Leadership Council</strong> (managing day-to-day domain activities across 12 chartered clubs).
+                Sahastradeep functions through an official four-tier hierarchy: <strong>Admins</strong> (overseeing institutional policies, event operations, technical systems, PR, finance, and protocol), <strong>Heads &amp; Co-Heads</strong> (managing domain activities across all 12 chartered clubs), and active student <strong>Members</strong>, supported by the specialized <strong>Hosting Committee</strong>.
               </p>
             </div>
 

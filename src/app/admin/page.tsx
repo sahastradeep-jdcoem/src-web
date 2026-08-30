@@ -226,7 +226,7 @@ export default function AdminOverviewPage() {
             Council & Positions Roster
           </h4>
           <p className="text-xs text-slate-500">
-            Create, edit, or remove executive positions, student officers, departments, and avatars.
+            Create, edit, or remove admin positions, student officers, departments, and avatars.
           </p>
         </Link>
 

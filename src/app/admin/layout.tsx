@@ -98,7 +98,7 @@ export default function AdminLayout({
 
         {/* Footer */}
         <div className="relative z-10 pt-4 border-t border-slate-800 text-center text-[10px] text-slate-500">
-          SRC Executive Council • JD College of Engineering & Management
+          SRC Central Administration • JD College of Engineering & Management
         </div>
       </div>
 

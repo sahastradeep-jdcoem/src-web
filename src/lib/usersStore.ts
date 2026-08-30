@@ -65,7 +65,7 @@ export function resolveDesignationByBtId(btId: string): {
   if (!btId || !btId.trim()) return null;
   const cleanBtId = btId.trim().toUpperCase();
 
-  // 1. Check Executive Admin Council
+  // 1. Check Admin Council
   const council = getStoredCouncilMembers();
   const matchedCouncil = council.find((m) => m.btId && m.btId.trim().toUpperCase() === cleanBtId);
   if (matchedCouncil) {

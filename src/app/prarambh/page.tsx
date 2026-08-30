@@ -25,7 +25,7 @@ export default function PrarambhPage() {
     {
       time: "10:30 AM",
       title: "Investiture of the SRC Admin Council",
-      desc: "Badging and sash conferral for the 16 Executive Council officers who took the formal oath of student stewardship.",
+      desc: "Badging and sash conferral for the 16 Admin officers who took the formal oath of student stewardship.",
       venue: "Main Stage",
     },
     {
@@ -61,7 +61,7 @@ export default function PrarambhPage() {
     },
     {
       stat: "16",
-      label: "Executive Sashes Conferred",
+      label: "Admin Sashes Conferred",
       desc: "Sworn to uphold student democratic representation",
     },
   ];

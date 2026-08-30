@@ -55,7 +55,7 @@ export default function HomePage() {
               <h4 className="text-xs sm:text-sm font-sans font-semibold uppercase tracking-wider text-[#17458F]">
                 Student Council
               </h4>
-              <p className="text-xs text-slate-500 font-sans font-medium">Executive Secretariat & Officers</p>
+              <p className="text-xs text-slate-500 font-sans font-medium">Council Admins &amp; Officers</p>
             </div>
 
             {/* Stat 3 */}
@@ -66,7 +66,7 @@ export default function HomePage() {
               <h4 className="text-xs sm:text-sm font-sans font-semibold uppercase tracking-wider text-[#17458F]">
                 JDCOEM Portal
               </h4>
-              <p className="text-xs text-slate-500 font-sans font-medium">Autonomous & Student-Driven</p>
+              <p className="text-xs text-slate-500 font-sans font-medium">Autonomous &amp; Student-Driven</p>
             </div>
 
             {/* Stat 4 */}
@@ -77,7 +77,7 @@ export default function HomePage() {
               <h4 className="text-xs sm:text-sm font-sans font-semibold uppercase tracking-wider text-[#17458F]">
                 Opportunities
               </h4>
-              <p className="text-xs text-slate-500 font-sans font-medium">Leadership, Fests & Impact</p>
+              <p className="text-xs text-slate-500 font-sans font-medium">Leadership, Fests &amp; Impact</p>
             </div>
 
           </div>
@@ -111,7 +111,7 @@ export default function HomePage() {
               </div>
 
               <p className="text-sm text-slate-600 leading-relaxed font-sans font-normal">
-                The inaugural foundation ceremony that unified all twelve collegiate societies under a single, autonomous student council — badging the first executive officers and lighting the perpetual lamp of student leadership.
+                The inaugural foundation ceremony that unified all twelve collegiate societies under a single, autonomous student council — badging the first council admins and lighting the perpetual lamp of student leadership.
               </p>
 
               <div className="pt-2">

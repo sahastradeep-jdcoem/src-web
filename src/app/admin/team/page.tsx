@@ -125,7 +125,7 @@ export default function AdminTeamPage() {
       role: "",
       department: "Computer Science & Engineering",
       year: "4th Year",
-      level: activeTab === "council" ? "Executive Secretariat" : "Hosting Committee",
+      level: activeTab === "council" ? "Admin" : "Hosting Committee",
       bio: "",
       avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
       badgeNumber: `${currentMembers.length + 1}`,
@@ -253,7 +253,7 @@ export default function AdminTeamPage() {
           }`}
         >
           <ShieldCheck className="w-4 h-4" />
-          <span>Executive Council ({councilMembers.length})</span>
+          <span>Admins ({councilMembers.length})</span>
         </button>
 
         <button
