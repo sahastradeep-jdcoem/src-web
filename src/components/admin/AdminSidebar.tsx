@@ -57,8 +57,9 @@ export function AdminSidebar() {
               <span className="font-bold text-sm text-[#17458F]">
                 SRC ADMIN
               </span>
-              <span className="text-[9px] font-bold text-[#E78023] px-1.5 py-0.5 rounded bg-[#E78023]/10 border border-[#E78023]/25">
-                PROTOTYPE
+              <span className="text-[9px] font-bold text-emerald-700 px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 uppercase tracking-wider flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                LIVE
               </span>
             </div>
             <p className="text-[10px] text-slate-500 font-medium">JDCOEM Central Council</p>

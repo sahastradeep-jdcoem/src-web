@@ -21,8 +21,8 @@ import {
   Layers,
   Hash
 } from "lucide-react";
-import { getStoredClubs, saveStoredClubs } from "@/lib/councilStore";
-import { getStoredDepartments } from "@/lib/departmentsStore";
+import { getStoredClubs, saveStoredClubs, syncClubsFromFirestore } from "@/lib/councilStore";
+import { getStoredDepartments, syncDepartmentsFromFirestore } from "@/lib/departmentsStore";
 import { mockClubs } from "@/data/clubs";
 import { ClubItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -42,6 +42,13 @@ export default function AdminClubsPage() {
   useEffect(() => {
     setClubs(getStoredClubs());
     setDepartmentsList(getStoredDepartments());
+
+    syncClubsFromFirestore().then((res) => {
+      if (res) setClubs(res);
+    });
+    syncDepartmentsFromFirestore().then((res) => {
+      if (res) setDepartmentsList(res);
+    });
   }, []);
 
   const saveList = (updated: ClubItem[]) => {

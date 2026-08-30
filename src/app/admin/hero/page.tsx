@@ -29,6 +29,14 @@ import {
   HeroSettings, 
   PRESET_HERO_BG_IMAGES 
 } from "@/data/heroSettings";
+import { 
+  getStoredHeroSettings, 
+  saveStoredHeroSettings, 
+  syncHeroSettingsFromFirestore,
+  getStoredHeroPresets,
+  saveStoredHeroPresets,
+  syncHeroPresetsFromFirestore
+} from "@/lib/heroStore";
 
 export default function AdminHeroSettingsPage() {
   const [settings, setSettings] = useState<HeroSettings>(DEFAULT_HERO_SETTINGS);
@@ -37,37 +45,23 @@ export default function AdminHeroSettingsPage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("src_hero_settings");
-      if (stored) {
-        setSettings({
-          ...DEFAULT_HERO_SETTINGS,
-          ...JSON.parse(stored),
-        });
-      }
+    setSettings(getStoredHeroSettings());
+    setPresets(getStoredHeroPresets());
 
-      const storedPresets = localStorage.getItem("src_hero_presets");
-      if (storedPresets) {
-        const parsed = JSON.parse(storedPresets);
-        if (Array.isArray(parsed)) {
-          setPresets(parsed);
-        }
-      }
-    } catch (e) {
-      console.warn("Could not load stored hero settings or presets", e);
-    }
+    syncHeroSettingsFromFirestore().then((res) => {
+      if (res) setSettings(res);
+    });
+
+    syncHeroPresetsFromFirestore().then((res) => {
+      if (res) setPresets(res);
+    });
   }, []);
 
   const saveAndBroadcast = (newSettings: HeroSettings) => {
     setSettings(newSettings);
-    try {
-      localStorage.setItem("src_hero_settings", JSON.stringify(newSettings));
-      window.dispatchEvent(new CustomEvent("src_hero_updated", { detail: newSettings }));
-      setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 3000);
-    } catch (e) {
-      console.error("Failed to save hero settings", e);
-    }
+    saveStoredHeroSettings(newSettings);
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 3000);
   };
 
   const handleUpdate = (field: keyof HeroSettings, value: string) => {

@@ -6,6 +6,7 @@ import Image from "next/image";
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { ChevronDown, ArrowRight } from "lucide-react";
 import { DEFAULT_HERO_SETTINGS, HeroSettings } from "@/data/heroSettings";
+import { getStoredHeroSettings, syncHeroSettingsFromFirestore, subscribeToHeroSettings } from "@/lib/heroStore";
 import { cn } from "@/lib/utils";
 
 export default function HeroSection() {
@@ -53,24 +54,20 @@ export default function HeroSection() {
 
   // Real-time dynamic hero settings synchronization
   useEffect(() => {
-    const loadSettings = () => {
-      try {
-        const stored = localStorage.getItem("src_hero_settings");
-        if (stored) {
-          setSettings(JSON.parse(stored));
-        }
-      } catch (e) {
-        console.warn("Could not load stored hero settings", e);
-      }
-    };
+    setSettings(getStoredHeroSettings());
+    syncHeroSettingsFromFirestore().then((res) => {
+      if (res) setSettings(res);
+    });
 
-    loadSettings();
+    const unsubscribe = subscribeToHeroSettings((remoteSettings) => {
+      setSettings(remoteSettings);
+    });
 
     const handleUpdate = (e: any) => {
       if (e?.detail) {
         setSettings(e.detail);
       } else {
-        loadSettings();
+        setSettings(getStoredHeroSettings());
       }
     };
 
@@ -78,6 +75,7 @@ export default function HeroSection() {
     window.addEventListener("storage", handleUpdate);
 
     return () => {
+      unsubscribe();
       window.removeEventListener("src_hero_updated", handleUpdate);
       window.removeEventListener("storage", handleUpdate);
     };

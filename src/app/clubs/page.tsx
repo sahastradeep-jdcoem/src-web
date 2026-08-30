@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { Search, Filter, Sparkles, Users } from "lucide-react";
-import { getStoredClubs } from "@/lib/councilStore";
+import { getStoredClubs, syncClubsFromFirestore, subscribeToClubs } from "@/lib/councilStore";
 import { ClubItem } from "@/types";
 import { ClubCard } from "@/components/clubs/ClubCard";
 import { Badge } from "@/components/ui/Badge";
@@ -13,21 +13,25 @@ export default function ClubsDirectoryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDomain, setSelectedDomain] = useState("All");
 
-  const refreshClubs = () => {
-    setClubs(getStoredClubs());
-  };
-
   useEffect(() => {
-    refreshClubs();
+    setClubs(getStoredClubs());
+    syncClubsFromFirestore().then((res) => {
+      if (res) setClubs(res);
+    });
+
+    const unsubscribe = subscribeToClubs((remoteClubs) => {
+      setClubs(remoteClubs);
+    });
 
     const handleUpdate = () => {
-      refreshClubs();
+      setClubs(getStoredClubs());
     };
 
     window.addEventListener("src_clubs_updated", handleUpdate);
     window.addEventListener("storage", handleUpdate);
 
     return () => {
+      unsubscribe();
       window.removeEventListener("src_clubs_updated", handleUpdate);
       window.removeEventListener("storage", handleUpdate);
     };

@@ -77,6 +77,32 @@ export function saveStoredHostingCommittee(members: TeamMember[]): void {
   }
 }
 
+export async function syncHostingCommitteeFromFirestore(): Promise<TeamMember[]> {
+  try {
+    const remote = await getSiteContentFromFirestore<TeamMember[]>("hosting_committee");
+    if (remote !== null && Array.isArray(remote) && remote.length > 0) {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("src_hosting_committee", JSON.stringify(remote));
+        window.dispatchEvent(new CustomEvent("src_hosting_updated", { detail: remote }));
+      }
+      return remote;
+    }
+  } catch {}
+  return getStoredHostingCommittee();
+}
+
+export function subscribeToHostingCommittee(callback: (members: TeamMember[]) => void): () => void {
+  return subscribeToSiteContent<TeamMember[]>("hosting_committee", (remote) => {
+    if (remote !== null && Array.isArray(remote)) {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("src_hosting_committee", JSON.stringify(remote));
+        window.dispatchEvent(new CustomEvent("src_hosting_updated", { detail: remote }));
+      }
+      callback(remote);
+    }
+  });
+}
+
 // Spokespersons Store
 export function getStoredSpokespersons(): TeamMember[] {
   if (typeof window === "undefined") return initialSpokespersons;
@@ -101,6 +127,44 @@ export function saveStoredSpokespersons(members: TeamMember[]): void {
   } catch (e) {
     console.error("Could not save spokespersons to storage", e);
   }
+}
+
+export async function syncSpokespersonsFromFirestore(): Promise<TeamMember[]> {
+  try {
+    const remote = await getSiteContentFromFirestore<TeamMember[]>("spokespersons");
+    if (remote !== null && Array.isArray(remote) && remote.length > 0) {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("src_spokespersons", JSON.stringify(remote));
+        window.dispatchEvent(new CustomEvent("src_spokespersons_updated", { detail: remote }));
+      }
+      return remote;
+    }
+  } catch {}
+  return getStoredSpokespersons();
+}
+
+export function subscribeToSpokespersons(callback: (members: TeamMember[]) => void): () => void {
+  return subscribeToSiteContent<TeamMember[]>("spokespersons", (remote) => {
+    if (remote !== null && Array.isArray(remote)) {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("src_spokespersons", JSON.stringify(remote));
+        window.dispatchEvent(new CustomEvent("src_spokespersons_updated", { detail: remote }));
+      }
+      callback(remote);
+    }
+  });
+}
+
+export function subscribeToCouncilMembers(callback: (members: TeamMember[]) => void): () => void {
+  return subscribeToSiteContent<TeamMember[]>("council_team", (remote) => {
+    if (remote !== null && Array.isArray(remote)) {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("src_council_team", JSON.stringify(remote));
+        window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: remote }));
+      }
+      callback(remote);
+    }
+  });
 }
 
 // Clubs Roster Store

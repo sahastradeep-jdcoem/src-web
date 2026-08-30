@@ -30,9 +30,12 @@ import {
   getStoredHostingCommittee,
   saveStoredHostingCommittee,
   getStoredSpokespersons,
-  saveStoredSpokespersons
+  saveStoredSpokespersons,
+  syncCouncilMembersFromFirestore,
+  syncHostingCommitteeFromFirestore,
+  syncSpokespersonsFromFirestore
 } from "@/lib/councilStore";
-import { getStoredDepartments } from "@/lib/departmentsStore";
+import { getStoredDepartments, syncDepartmentsFromFirestore } from "@/lib/departmentsStore";
 import { adminCouncilMembers } from "@/data/team";
 import { TeamMember } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -59,6 +62,19 @@ export default function AdminTeamPage() {
     setHostingMembers(getStoredHostingCommittee());
     setSpokespersons(getStoredSpokespersons());
     setDepartmentsList(getStoredDepartments());
+
+    syncCouncilMembersFromFirestore().then((res) => {
+      if (res) setCouncilMembers(res);
+    });
+    syncHostingCommitteeFromFirestore().then((res) => {
+      if (res) setHostingMembers(res);
+    });
+    syncSpokespersonsFromFirestore().then((res) => {
+      if (res) setSpokespersons(res);
+    });
+    syncDepartmentsFromFirestore().then((res) => {
+      if (res) setDepartmentsList(res);
+    });
   }, []);
 
   // Determine current active list

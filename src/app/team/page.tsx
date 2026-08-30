@@ -18,7 +18,15 @@ import {
   getStoredCouncilMembers, 
   getStoredHostingCommittee, 
   getStoredSpokespersons, 
-  getStoredClubs 
+  getStoredClubs,
+  syncCouncilMembersFromFirestore,
+  subscribeToCouncilMembers,
+  syncHostingCommitteeFromFirestore,
+  subscribeToHostingCommittee,
+  syncSpokespersonsFromFirestore,
+  subscribeToSpokespersons,
+  syncClubsFromFirestore,
+  subscribeToClubs
 } from "@/lib/councilStore";
 import { TeamMember, ClubItem } from "@/types";
 import { CouncilMemberCard } from "@/components/team/CouncilMemberCard";
@@ -42,6 +50,24 @@ export default function TeamPage() {
   useEffect(() => {
     refreshAll();
 
+    syncCouncilMembersFromFirestore().then((res) => {
+      if (res) setCouncilMembers(res);
+    });
+    syncHostingCommitteeFromFirestore().then((res) => {
+      if (res) setHostingMembers(res);
+    });
+    syncSpokespersonsFromFirestore().then((res) => {
+      if (res) setSpokespersons(res);
+    });
+    syncClubsFromFirestore().then((res) => {
+      if (res) setClubs(res);
+    });
+
+    const unsubCouncil = subscribeToCouncilMembers((members) => setCouncilMembers(members));
+    const unsubHosting = subscribeToHostingCommittee((members) => setHostingMembers(members));
+    const unsubSpokes = subscribeToSpokespersons((members) => setSpokespersons(members));
+    const unsubClubs = subscribeToClubs((c) => setClubs(c));
+
     const handleUpdate = () => {
       refreshAll();
     };
@@ -53,6 +79,10 @@ export default function TeamPage() {
     window.addEventListener("storage", handleUpdate);
 
     return () => {
+      unsubCouncil();
+      unsubHosting();
+      unsubSpokes();
+      unsubClubs();
       window.removeEventListener("src_council_team_updated", handleUpdate);
       window.removeEventListener("src_hosting_updated", handleUpdate);
       window.removeEventListener("src_spokespersons_updated", handleUpdate);

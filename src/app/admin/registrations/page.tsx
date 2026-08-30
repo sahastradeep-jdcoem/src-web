@@ -20,7 +20,12 @@ import { RegistrationRecord } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { checkInStudentPass } from "@/lib/firebase/firestore";
+import { 
+  checkInStudentPass, 
+  getAllRegistrationsFromFirestore, 
+  subscribeToRegistrationsFromFirestore, 
+  StudentRegistrationRecord 
+} from "@/lib/firebase/firestore";
 
 export default function AdminRegistrationsPage() {
   const [registrations, setRegistrations] = useState<RegistrationRecord[]>([]);
@@ -29,45 +34,58 @@ export default function AdminRegistrationsPage() {
   const [selectedRecord, setSelectedRecord] = useState<RegistrationRecord | null>(null);
   const [checkInNotice, setCheckInNotice] = useState<string | null>(null);
 
-  const loadRegistrations = () => {
+  const formatRecords = (records: any[]): RegistrationRecord[] => {
+    return records.map((r: any) => ({
+      id: r.id,
+      registrationId: r.id,
+      eventSlug: r.eventId,
+      eventName: r.eventTitle || "PRARAMBH Fest",
+      participantName: r.leaderName,
+      email: r.email,
+      phone: r.phone,
+      department: r.department,
+      year: r.year,
+      teamType: r.teamSize > 1 ? "Team" : "Individual",
+      teamName: r.teamName,
+      teamMembers: r.members?.map((m: any) => m.name),
+      registeredAt: r.registeredAt || (r.createdAt ? new Date().toISOString().split("T")[0] : new Date().toISOString().split("T")[0]),
+      status: r.status || "CONFIRMED",
+      ticketCode: `${r.id.slice(0, 7)}-TK`,
+      qrPayload: r.qrPayload || `SRC:PASS:${r.id}`,
+    }));
+  };
+
+  const loadRegistrations = async () => {
     try {
       const localRecords = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
       if (Array.isArray(localRecords) && localRecords.length > 0) {
-        const formatted: RegistrationRecord[] = localRecords.map((r: any) => ({
-          id: r.id,
-          registrationId: r.id,
-          eventSlug: r.eventId,
-          eventName: r.eventTitle || "PRARAMBH Fest",
-          participantName: r.leaderName,
-          email: r.email,
-          phone: r.phone,
-          department: r.department,
-          year: r.year,
-          teamType: r.teamSize > 1 ? "Team" : "Individual",
-          teamName: r.teamName,
-          teamMembers: r.members?.map((m: any) => m.name),
-          registeredAt: r.registeredAt || new Date().toISOString().split("T")[0],
-          status: r.status || "CONFIRMED",
-          ticketCode: `${r.id.slice(0, 7)}-TK`,
-          qrPayload: r.qrPayload || `SRC:PASS:${r.id}`,
-        }));
-
-        setRegistrations(formatted);
-      } else {
-        setRegistrations([]);
+        setRegistrations(formatRecords(localRecords));
       }
-    } catch (e) {
-      console.warn("Could not load local registration entries", e);
-      setRegistrations([]);
-    }
+    } catch {}
+
+    try {
+      const cloud = await getAllRegistrationsFromFirestore();
+      if (cloud && cloud.length > 0) {
+        setRegistrations(formatRecords(cloud));
+      }
+    } catch {}
   };
 
   useEffect(() => {
     loadRegistrations();
 
+    const unsubscribe = subscribeToRegistrationsFromFirestore((cloudRegs) => {
+      if (cloudRegs && cloudRegs.length > 0) {
+        setRegistrations(formatRecords(cloudRegs));
+      }
+    });
+
     const handleStorage = () => loadRegistrations();
     window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
+    return () => {
+      unsubscribe();
+      window.removeEventListener("storage", handleStorage);
+    };
   }, []);
 
   const handleGateCheckIn = async (record: RegistrationRecord) => {

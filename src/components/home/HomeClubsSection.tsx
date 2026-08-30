@@ -3,28 +3,32 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { getStoredClubs } from "@/lib/councilStore";
+import { getStoredClubs, syncClubsFromFirestore, subscribeToClubs } from "@/lib/councilStore";
 import { ClubCard } from "@/components/clubs/ClubCard";
 import { ClubItem } from "@/types";
 
 export default function HomeClubsSection() {
   const [clubs, setClubs] = useState<ClubItem[]>([]);
 
-  const refreshClubs = () => {
-    setClubs(getStoredClubs());
-  };
-
   useEffect(() => {
-    refreshClubs();
+    setClubs(getStoredClubs());
+    syncClubsFromFirestore().then((res) => {
+      if (res) setClubs(res);
+    });
+
+    const unsubscribe = subscribeToClubs((remoteClubs) => {
+      setClubs(remoteClubs);
+    });
 
     const handleUpdate = () => {
-      refreshClubs();
+      setClubs(getStoredClubs());
     };
 
     window.addEventListener("src_clubs_updated", handleUpdate);
     window.addEventListener("storage", handleUpdate);
 
     return () => {
+      unsubscribe();
       window.removeEventListener("src_clubs_updated", handleUpdate);
       window.removeEventListener("storage", handleUpdate);
     };

@@ -21,7 +21,8 @@ import {
 import { 
   getStoredDepartments, 
   saveStoredDepartments, 
-  resetStoredDepartments,
+  resetStoredDepartments, 
+  syncDepartmentsFromFirestore,
   DEFAULT_DEPARTMENTS 
 } from "@/lib/departmentsStore";
 import { Badge } from "@/components/ui/Badge";
@@ -37,6 +38,9 @@ export default function AdminDepartmentsPage() {
 
   useEffect(() => {
     setDepartments(getStoredDepartments());
+    syncDepartmentsFromFirestore().then((res) => {
+      if (res) setDepartments(res);
+    });
   }, []);
 
   const saveList = (updated: string[]) => {

@@ -253,6 +253,56 @@ export async function checkInStudentPass(id: string): Promise<boolean> {
   }
 }
 
+/**
+ * Fetch all registrations from Firestore
+ */
+export async function getAllRegistrationsFromFirestore(): Promise<StudentRegistrationRecord[]> {
+  try {
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      const colRef = collection(db, REGISTRATIONS_COLLECTION);
+      const snapshot = await getDocs(colRef);
+      if (!snapshot.empty) {
+        return snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as StudentRegistrationRecord));
+      }
+    }
+  } catch (error) {
+    console.warn("Could not fetch registrations from Firestore", error);
+  }
+
+  try {
+    const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+    if (Array.isArray(local)) return local;
+  } catch {}
+  return [];
+}
+
+/**
+ * Subscribe to real-time updates of event registrations in Firestore
+ */
+export function subscribeToRegistrationsFromFirestore(
+  callback: (regs: StudentRegistrationRecord[]) => void
+): () => void {
+  if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    return () => {};
+  }
+  try {
+    const colRef = collection(db, REGISTRATIONS_COLLECTION);
+    return onSnapshot(
+      colRef,
+      (snapshot) => {
+        const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as StudentRegistrationRecord));
+        callback(list);
+      },
+      (error) => {
+        console.warn("Firestore live registrations notice", error);
+      }
+    );
+  } catch (e) {
+    console.warn("Firestore subscription error for registrations", e);
+    return () => {};
+  }
+}
+
 const SITE_CONTENT_COLLECTION = "site_content";
 
 /**
