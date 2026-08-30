@@ -128,7 +128,6 @@ export default function AdminTeamPage() {
       level: activeTab === "council" ? "Admin" : "Hosting Committee",
       bio: "",
       avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
-      badgeNumber: `${currentMembers.length + 1}`,
       order: currentMembers.length + 1,
       email: "",
       linkedin: "",
@@ -521,18 +520,6 @@ export default function AdminTeamPage() {
               <p className="text-[10px] text-slate-500">
                 When the student logs in with Google and enters this BT ID, their student pass and profile will automatically receive official council designation badging.
               </p>
-            </div>
-
-            {/* Official Badge / Sash ID */}
-            <div className="space-y-1.5">
-              <label className="font-bold text-slate-700">Official Badge / Sash ID</label>
-              <input
-                type="text"
-                placeholder="e.g. 01, EXEC-01"
-                value={editingMember.badgeNumber || ""}
-                onChange={(e) => setEditingMember({ ...editingMember, badgeNumber: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
-              />
             </div>
 
             {/* Email & LinkedIn */}
