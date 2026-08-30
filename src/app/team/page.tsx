@@ -140,7 +140,7 @@ export default function TeamPage() {
           </div>
 
           {/* Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
             {councilMembers.map((member) => (
               <CouncilMemberCard key={member.id} member={member} />
             ))}
@@ -171,7 +171,7 @@ export default function TeamPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
               {unifiedHostingMembers.map((member) => (
                 <CouncilMemberCard key={member.id} member={member} />
               ))}
@@ -204,11 +204,11 @@ export default function TeamPage() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
             {clubs.map((club) => (
               <div
                 key={club.slug}
-                className="rounded-2xl bg-white border border-slate-200 p-6 space-y-4 hover:border-[#17458F]/30 hover:shadow-md transition-all flex flex-col justify-between shadow-xs"
+                className="rounded-2xl bg-white border border-slate-200 p-4 sm:p-6 space-y-4 hover:border-[#17458F]/30 hover:shadow-md transition-all flex flex-col justify-between shadow-xs"
               >
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
