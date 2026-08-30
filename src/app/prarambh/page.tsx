@@ -1,4 +1,6 @@
-import React from "react";
+"use client";
+
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { 
@@ -8,45 +10,63 @@ import {
   Quote, 
   Award, 
   ArrowRight, 
-  Clock, 
   ShieldCheck, 
-  Flame 
+  Flame,
+  Users
 } from "lucide-react";
+import { 
+  getStoredFoundingMembers, 
+  getStoredCouncilMembers,
+  syncFoundingMembersFromFirestore,
+  syncCouncilMembersFromFirestore,
+  subscribeToFoundingMembers,
+  subscribeToCouncilMembers
+} from "@/lib/councilStore";
+import { TeamMember } from "@/types";
+import { CouncilMemberCard } from "@/components/team/CouncilMemberCard";
 import { Badge } from "@/components/ui/Badge";
 
 export default function PrarambhPage() {
-  const ceremonyMilestones = [
-    {
-      time: "09:30 AM",
-      title: "Lighting of the Sahastradeep Lamp",
-      desc: "The ceremonial brass lamp was ignited by college leadership, signifying enlightenment, unity, and student leadership.",
-      venue: "Central Amphitheatre",
-    },
-    {
-      time: "10:30 AM",
-      title: "Investiture of the SRC Admin Council",
-      desc: "Badging and sash conferral for the 16 Admin officers who took the formal oath of student stewardship.",
-      venue: "Main Stage",
-    },
-    {
-      time: "11:45 AM",
-      title: "Charter Presentation for 12 Student Clubs",
-      desc: "Official hand-over of club constitutions and mandates to 24 student heads and co-heads across all domains.",
-      venue: "Main Stage",
-    },
-    {
-      time: "02:00 PM",
-      title: "Unveiling of Sahastradeep Brand Identity",
-      desc: "Debut of the official Sahastradeep logo emblem, brand palette, and the Hindi typographic seal 'सहस्रदीप'.",
-      venue: "Auditorium",
-    },
-    {
-      time: "04:30 PM",
-      title: "Inaugural Cultural Prologue",
-      desc: "Collaborative fusion performance by the newly chartered Dance, Music, and Drama clubs celebrating unity in diversity.",
-      venue: "Open Air Stage",
-    },
-  ];
+  const [foundingMembers, setFoundingMembers] = useState<TeamMember[]>([]);
+  const [councilMembers, setCouncilMembers] = useState<TeamMember[]>([]);
+
+  const refreshMembers = () => {
+    setFoundingMembers(getStoredFoundingMembers());
+    setCouncilMembers(getStoredCouncilMembers());
+  };
+
+  useEffect(() => {
+    refreshMembers();
+
+    syncFoundingMembersFromFirestore().then((res) => {
+      if (res) setFoundingMembers(res);
+    });
+    syncCouncilMembersFromFirestore().then((res) => {
+      if (res) setCouncilMembers(res);
+    });
+
+    const unsubFounding = subscribeToFoundingMembers((members) => setFoundingMembers(members));
+    const unsubCouncil = subscribeToCouncilMembers((members) => setCouncilMembers(members));
+
+    const handleUpdate = () => {
+      refreshMembers();
+    };
+
+    window.addEventListener("src_founding_members_updated", handleUpdate);
+    window.addEventListener("src_council_team_updated", handleUpdate);
+    window.addEventListener("storage", handleUpdate);
+
+    return () => {
+      unsubFounding();
+      unsubCouncil();
+      window.removeEventListener("src_founding_members_updated", handleUpdate);
+      window.removeEventListener("src_council_team_updated", handleUpdate);
+      window.removeEventListener("storage", handleUpdate);
+    };
+  }, []);
+
+  const sortedFounders = [...foundingMembers].sort((a, b) => (a.order || 999) - (b.order || 999));
+  const sortedCouncil = [...councilMembers].sort((a, b) => (a.order || 999) - (b.order || 999));
 
   const highlights = [
     {
@@ -70,9 +90,9 @@ export default function PrarambhPage() {
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] pb-20 space-y-20">
       
       {/* 1. CEREMONIAL HERO SECTION */}
-      <section className="relative min-h-[60vh] flex items-center justify-center py-20 px-4 sm:px-6 lg:px-8 overflow-hidden bg-gradient-to-b from-white via-slate-50 to-[#F8FAFC] border-b border-slate-200">
+      <section className="relative min-h-[55vh] flex items-center justify-center py-16 px-4 sm:px-6 lg:px-8 overflow-hidden bg-gradient-to-b from-white via-slate-50 to-[#F8FAFC] border-b border-slate-200">
         
-        <div className="max-w-5xl mx-auto relative z-10 text-center space-y-8">
+        <div className="max-w-5xl mx-auto relative z-10 text-center space-y-6">
           
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 shadow-sm">
             <Flame className="w-4 h-4 text-[#E78023]" />
@@ -82,10 +102,10 @@ export default function PrarambhPage() {
           </div>
 
           <div className="space-y-3">
-            <h1 className="font-extrabold text-5xl sm:text-7xl lg:text-8xl text-[#0F172A] tracking-tight uppercase leading-none">
+            <h1 className="font-extrabold text-5xl sm:text-7xl lg:text-8xl text-[#0F172A] tracking-tight uppercase leading-none font-heading">
               PRARAMBH
             </h1>
-            <p className="text-lg sm:text-2xl font-bold text-[#E78023] uppercase tracking-wider">
+            <p className="text-lg sm:text-2xl font-bold text-[#E78023] uppercase tracking-wider font-heading">
               THE BEGINNING OF SAHASTRADEEP
             </p>
           </div>
@@ -117,7 +137,7 @@ export default function PrarambhPage() {
               key={idx}
               className="p-8 rounded-3xl bg-white border border-slate-200 text-center space-y-2 shadow-sm"
             >
-              <span className="font-extrabold text-4xl sm:text-5xl text-[#E78023] block">
+              <span className="font-extrabold text-4xl sm:text-5xl text-[#E78023] block font-hero">
                 {item.stat}
               </span>
               <h3 className="font-bold text-sm uppercase tracking-wider text-[#17458F]">
@@ -128,66 +148,95 @@ export default function PrarambhPage() {
           ))}
         </div>
 
-        {/* 3. CEREMONIAL TIMELINE */}
-        <section className="space-y-10">
-          <div className="space-y-2 text-center max-w-2xl mx-auto">
-            <Badge variant="orange" size="md">
-              INAUGURAL SEQUENCE
-            </Badge>
-            <h2 className="font-extrabold text-3xl sm:text-4xl text-[#0F172A] uppercase">
-              CEREMONY TIMELINE
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-600">
-              Chronological milestones from the historic investiture day.
-            </p>
+        {/* 3. FOUNDING MEMBERS OF SAHASTRADEEP */}
+        <section className="space-y-8">
+          <div className="border-b border-slate-200 pb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+            <div className="space-y-1">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#E78023] flex items-center gap-1.5 font-sans">
+                <Sparkles className="w-4 h-4" />
+                <span>Founding Council</span>
+              </span>
+              <h2 className="font-extrabold text-2xl sm:text-4xl text-[#17458F] uppercase font-heading">
+                FOUNDING MEMBERS OF SAHASTRADEEP
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-500 font-medium font-sans">
+                The founding architects and visionaries who established the Student Representative Council institution.
+              </p>
+            </div>
           </div>
 
-          <div className="max-w-3xl mx-auto relative pl-8 space-y-8 before:absolute before:left-3 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200">
-            {ceremonyMilestones.map((ms, i) => (
-              <div key={i} className="relative group">
-                <div className="absolute -left-[37px] top-1.5 h-4 w-4 rounded-full bg-white border-2 border-[#E78023] group-hover:bg-[#E78023] transition-colors" />
-                <div className="p-6 rounded-3xl bg-white border border-slate-200 hover:border-[#17458F]/40 shadow-sm transition-all space-y-2">
-                  <div className="flex items-center justify-between text-xs font-bold text-[#E78023]">
-                    <span className="flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5" />
-                      <span>{ms.time}</span>
-                    </span>
-                    <span className="text-slate-500 font-medium">{ms.venue}</span>
-                  </div>
-                  <h3 className="font-bold text-lg text-[#17458F]">
-                    {ms.title}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-medium">
-                    {ms.desc}
-                  </p>
-                </div>
-              </div>
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
+            {sortedFounders.map((member) => (
+              <CouncilMemberCard key={member.id} member={member} />
             ))}
           </div>
+
+          {sortedFounders.length === 0 && (
+            <div className="p-8 text-center bg-white rounded-3xl border border-slate-200 text-slate-500 text-xs">
+              No founding members listed yet.
+            </div>
+          )}
         </section>
 
-        {/* 4. HISTORICAL QUOTE SECTION */}
+        {/* 4. ADMINS SECTION (SAME ADMINS AS IN TEAM) */}
+        <section className="space-y-8 pt-8 border-t border-slate-200">
+          <div className="border-b border-slate-200 pb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+            <div className="space-y-1">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#E78023] flex items-center gap-1.5 font-sans">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Executive Governance</span>
+              </span>
+              <h2 className="font-extrabold text-2xl sm:text-4xl text-[#17458F] uppercase font-heading">
+                ADMINS ({sortedCouncil.length})
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-500 font-medium font-sans">
+                The central student leadership body carrying forward the Sahastradeep mandate.
+              </p>
+            </div>
+            <Link
+              href="/team"
+              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#17458F] hover:text-[#E78023] transition-colors shrink-0"
+            >
+              <span>View Full Team Roster</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
+            {sortedCouncil.map((member) => (
+              <CouncilMemberCard key={member.id} member={member} />
+            ))}
+          </div>
+
+          {sortedCouncil.length === 0 && (
+            <div className="p-8 text-center bg-white rounded-3xl border border-slate-200 text-slate-500 text-xs">
+              No admins listed yet.
+            </div>
+          )}
+        </section>
+
+        {/* 5. HISTORICAL QUOTE SECTION */}
         <section className="p-8 sm:p-12 rounded-3xl bg-white border border-slate-200 shadow-sm text-center max-w-4xl mx-auto space-y-6">
           <Quote className="w-12 h-12 text-[#E78023] mx-auto opacity-80" />
-          <blockquote className="font-extrabold text-xl sm:text-2xl md:text-3xl text-[#0F172A] leading-snug">
+          <blockquote className="font-extrabold text-xl sm:text-2xl md:text-3xl text-[#0F172A] leading-snug font-heading">
             &ldquo;Sahastradeep is not just a student council; it is the collective beacon of a thousand voices striving for excellence, creativity, and fearless leadership.&rdquo;
           </blockquote>
           <div className="space-y-0.5 text-xs">
-            <p className="font-bold text-[#E78023] uppercase tracking-wider">
+            <p className="font-bold text-[#E78023] uppercase tracking-wider font-sans">
               From the Founding Charter of Sahastradeep
             </p>
-            <p className="text-slate-500 font-medium">Investiture Assembly • JDCOEM Nagpur</p>
+            <p className="text-slate-500 font-medium font-sans">Investiture Assembly • JDCOEM Nagpur</p>
           </div>
         </section>
 
-        {/* 5. PHOTO MEMORIES */}
+        {/* 6. PHOTO MEMORIES */}
         <section className="space-y-8">
           <div className="flex items-center justify-between border-b border-slate-200 pb-4">
             <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-[#E78023]">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#E78023] font-sans">
                 Visual Archives
               </span>
-              <h2 className="font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase">
+              <h2 className="font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase font-heading">
                 PRARAMBH GALLERY
               </h2>
             </div>

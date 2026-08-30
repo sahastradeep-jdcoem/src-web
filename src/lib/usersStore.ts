@@ -4,7 +4,8 @@ import {
   getStoredCouncilMembers, 
   getStoredHostingCommittee, 
   getStoredSpokespersons, 
-  getStoredClubs 
+  getStoredClubs,
+  getStoredFoundingMembers
 } from "./councilStore";
 
 const USERS_STORAGE_KEY = "src_registered_users";
@@ -114,6 +115,17 @@ export function resolveDesignationByBtId(btId: string): {
         category: "Club Leadership",
       };
     }
+  }
+
+  // 5. Check Founding Members
+  const founders = getStoredFoundingMembers();
+  const matchedFounder = founders.find((m) => m.btId && m.btId.trim().toUpperCase() === cleanBtId);
+  if (matchedFounder) {
+    return {
+      designationBadge: matchedFounder.role,
+      isCouncilOfficer: true,
+      category: "Founding Council",
+    };
   }
 
   return null;

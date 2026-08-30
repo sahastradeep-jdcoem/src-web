@@ -362,7 +362,41 @@ export const hostingCommitteeMembers: TeamMember[] = [
 
 export const spokespersonMembers: TeamMember[] = [];
 
-// 4. 12 CHARTERED CLUBS LEADERSHIP
+// 4. FOUNDING MEMBERS OF SAHASTRADEEP
+export const foundingMembers: TeamMember[] = [
+  {
+    id: "founder-1",
+    name: "Harsh Shende",
+    role: "Founding Mentor",
+    level: "Founding Council",
+    category: "Founding Member",
+    department: "Computer Science and Engineering",
+    year: "4th Year / Final Year",
+    btId: "BT230036CS",
+    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
+    bio: "Pioneered the founding architecture, digital governance framework, and institutional charter establishing Sahastradeep at JDCOEM.",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
+    email: "shendeha@jdcoem.ac.in",
+    order: 1
+  },
+  {
+    id: "founder-2",
+    name: "Sanskruti Tidke",
+    role: "Founding President",
+    level: "Founding Council",
+    category: "Founding Member",
+    department: "Data Science Engineering",
+    year: "3rd Year",
+    btId: "BT240115DS",
+    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
+    bio: "Led the inaugural foundation assembly, swearing in the inaugural council officers and uniting all twelve collegiate societies under one banner.",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
+    email: "sanskrutitidke@jdcoem.ac.in",
+    order: 2
+  },
+];
+
+// 5. 12 CHARTERED CLUBS LEADERSHIP
 export const clubLeadsData = [
   { club: "Dance Club", lead: "Club Head Placeholder", coLead: "Co-Head Placeholder", dept: "CSE / AI&DS", count: "64 Members" },
   { club: "Music Club", lead: "Club Head Placeholder", coLead: "Co-Head Placeholder", dept: "IT / ETC", count: "58 Members" },

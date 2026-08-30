@@ -30,25 +30,29 @@ import {
 import { 
   getStoredCouncilMembers, 
   saveStoredCouncilMembers,
-  getStoredHostingCommittee,
+  getStoredHostingCommittee, 
   saveStoredHostingCommittee,
+  getStoredFoundingMembers,
+  saveStoredFoundingMembers,
   syncCouncilMembersFromFirestore,
-  syncHostingCommitteeFromFirestore
+  syncHostingCommitteeFromFirestore,
+  syncFoundingMembersFromFirestore
 } from "@/lib/councilStore";
 import { getStoredDepartments, syncDepartmentsFromFirestore, getDepartmentShortName } from "@/lib/departmentsStore";
-import { adminCouncilMembers, hostingCommitteeMembers } from "@/data/team";
+import { adminCouncilMembers, hostingCommitteeMembers, foundingMembers as defaultFoundingMembers } from "@/data/team";
 import { TeamMember } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
 
-type TeamCategoryTab = "council" | "hosting";
+type TeamCategoryTab = "council" | "hosting" | "founding";
 
 export default function AdminTeamPage() {
   const [activeTab, setActiveTab] = useState<TeamCategoryTab>("council");
   const [councilMembers, setCouncilMembers] = useState<TeamMember[]>([]);
   const [hostingMembers, setHostingMembers] = useState<TeamMember[]>([]);
+  const [foundingMembersList, setFoundingMembersList] = useState<TeamMember[]>([]);
   const [departmentsList, setDepartmentsList] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   
@@ -59,6 +63,7 @@ export default function AdminTeamPage() {
   useEffect(() => {
     setCouncilMembers(getStoredCouncilMembers());
     setHostingMembers(getStoredHostingCommittee());
+    setFoundingMembersList(getStoredFoundingMembers());
     setDepartmentsList(getStoredDepartments());
 
     syncCouncilMembersFromFirestore().then((res) => {
@@ -67,16 +72,29 @@ export default function AdminTeamPage() {
     syncHostingCommitteeFromFirestore().then((res) => {
       if (res) setHostingMembers(res);
     });
+    syncFoundingMembersFromFirestore().then((res) => {
+      if (res) setFoundingMembersList(res);
+    });
     syncDepartmentsFromFirestore().then((res) => {
       if (res) setDepartmentsList(res);
     });
+
+    const handleFoundingUpdate = () => {
+      setFoundingMembersList(getStoredFoundingMembers());
+    };
+    window.addEventListener("src_founding_members_updated", handleFoundingUpdate);
+    return () => {
+      window.removeEventListener("src_founding_members_updated", handleFoundingUpdate);
+    };
   }, []);
 
   // Determine current active list
   const currentMembers = 
     activeTab === "council" 
       ? councilMembers 
-      : hostingMembers;
+      : activeTab === "hosting"
+      ? hostingMembers
+      : foundingMembersList;
 
   const saveCurrentList = (updated: TeamMember[]) => {
     // Re-index all orders to guarantee strict sequential 1..N order
@@ -88,9 +106,12 @@ export default function AdminTeamPage() {
     if (activeTab === "council") {
       setCouncilMembers(indexed);
       saveStoredCouncilMembers(indexed);
-    } else {
+    } else if (activeTab === "hosting") {
       setHostingMembers(indexed);
       saveStoredHostingCommittee(indexed);
+    } else {
+      setFoundingMembersList(indexed);
+      saveStoredFoundingMembers(indexed);
     }
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
@@ -123,9 +144,10 @@ export default function AdminTeamPage() {
       id: `member-${Date.now()}`,
       name: "",
       role: "",
-      department: "Computer Science & Engineering",
+      department: "Computer Science and Engineering",
       year: "4th Year",
-      level: activeTab === "council" ? "Admin" : "Hosting Committee",
+      level: activeTab === "council" ? "Admin" : activeTab === "hosting" ? "Hosting Committee" : "Founding Member",
+      category: activeTab === "council" ? "Admin Council" : activeTab === "hosting" ? "Hosting Committee" : "Founding Member",
       bio: "",
       avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
       order: currentMembers.length + 1,
@@ -174,8 +196,10 @@ export default function AdminTeamPage() {
     if (confirm("Reset roster to default templates?")) {
       if (activeTab === "council") {
         saveCurrentList(adminCouncilMembers);
-      } else {
+      } else if (activeTab === "hosting") {
         saveCurrentList(hostingCommitteeMembers);
+      } else {
+        saveCurrentList(defaultFoundingMembers);
       }
     }
   };
@@ -265,6 +289,18 @@ export default function AdminTeamPage() {
         >
           <Mic2 className="w-4 h-4" />
           <span>Hosting Committee ({hostingMembers.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("founding")}
+          className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === "founding"
+              ? "bg-[#17458F] text-white shadow-xs"
+              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-[#E78023]" />
+          <span>Founding Members ({foundingMembersList.length})</span>
         </button>
       </div>
 

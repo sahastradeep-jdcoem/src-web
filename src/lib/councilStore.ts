@@ -2,7 +2,8 @@ import { TeamMember, ClubItem } from "@/types";
 import { 
   adminCouncilMembers as initialAdminCouncil, 
   hostingCommitteeMembers as initialHosting, 
-  spokespersonMembers as initialSpokespersons 
+  spokespersonMembers as initialSpokespersons,
+  foundingMembers as initialFoundingMembers
 } from "@/data/team";
 import { mockClubs as initialClubs } from "@/data/clubs";
 import { 
@@ -222,4 +223,60 @@ export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => v
     }
   });
 }
+
+// Founding Members of Sahastradeep Store
+export function getStoredFoundingMembers(): TeamMember[] {
+  if (typeof window === "undefined") return initialFoundingMembers;
+  try {
+    const stored = localStorage.getItem("src_founding_members");
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.warn("Could not read founding members from storage", e);
+  }
+  return initialFoundingMembers;
+}
+
+export function saveStoredFoundingMembers(members: TeamMember[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem("src_founding_members", JSON.stringify(members));
+    window.dispatchEvent(new CustomEvent("src_founding_members_updated", { detail: members }));
+    window.dispatchEvent(new CustomEvent("src_users_updated"));
+    saveSiteContentToFirestore("founding_members", members);
+  } catch (e) {
+    console.error("Could not save founding members to storage", e);
+  }
+}
+
+export async function syncFoundingMembersFromFirestore(): Promise<TeamMember[]> {
+  try {
+    const remote = await getSiteContentFromFirestore<TeamMember[]>("founding_members");
+    if (remote !== null && Array.isArray(remote) && remote.length > 0) {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("src_founding_members", JSON.stringify(remote));
+        window.dispatchEvent(new CustomEvent("src_founding_members_updated", { detail: remote }));
+        window.dispatchEvent(new CustomEvent("src_users_updated"));
+      }
+      return remote;
+    }
+  } catch {}
+  return getStoredFoundingMembers();
+}
+
+export function subscribeToFoundingMembers(callback: (members: TeamMember[]) => void): () => void {
+  return subscribeToSiteContent<TeamMember[]>("founding_members", (remote) => {
+    if (remote !== null && Array.isArray(remote)) {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("src_founding_members", JSON.stringify(remote));
+        window.dispatchEvent(new CustomEvent("src_founding_members_updated", { detail: remote }));
+        window.dispatchEvent(new CustomEvent("src_users_updated"));
+      }
+      callback(remote);
+    }
+  });
+}
+
 
