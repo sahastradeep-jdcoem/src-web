@@ -78,7 +78,7 @@ export default function Footer() {
                 <Instagram className="w-4 h-4" />
               </a>
               <a
-                href="https://linkedin.com"
+                href="https://www.linkedin.com/company/src-jdcoem/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:text-[#17458F] hover:border-[#17458F]/40 shadow-sm transition-colors"
@@ -87,7 +87,7 @@ export default function Footer() {
                 <Linkedin className="w-4 h-4" />
               </a>
               <a
-                href="mailto:src@jdcoem.ac.in"
+                href="mailto:srcjdcoem@gmail.com"
                 className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:text-[#E78023] hover:border-[#E78023]/40 shadow-sm transition-colors"
                 aria-label="Email SRC"
               >
@@ -184,7 +184,9 @@ export default function Footer() {
               </p>
               <p className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-[#E78023] shrink-0" />
-                <span>src@jdcoem.ac.in</span>
+                <a href="mailto:srcjdcoem@gmail.com" className="hover:text-[#17458F] transition-colors">
+                  srcjdcoem@gmail.com
+                </a>
               </p>
             </div>
           </div>

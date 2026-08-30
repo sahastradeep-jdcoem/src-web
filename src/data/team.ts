@@ -12,7 +12,7 @@ export const adminCouncilMembers: TeamMember[] = [
     department: "Senior Advisory Board",
     avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
     bio: "Guiding long-term institutional vision, advisory oversight, council governance standards, and mentorship across all wings.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.mentor@jdcoem.ac.in",
     order: 1
   },
@@ -27,7 +27,7 @@ export const adminCouncilMembers: TeamMember[] = [
     year: "4th Year",
     avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
     bio: "Presiding over the entire Student Representative Council, executive policymaking, university administration liaison, and student body advocacy.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.president@jdcoem.ac.in",
     order: 2
   },
@@ -42,7 +42,7 @@ export const adminCouncilMembers: TeamMember[] = [
     year: "4th Year",
     avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=600&auto=format&fit=crop",
     bio: "Assisting executive governance, coordinating inter-club operations, presiding during presidential delegations, and supervising campus affairs.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.vp@jdcoem.ac.in",
     order: 3
   },
@@ -57,7 +57,7 @@ export const adminCouncilMembers: TeamMember[] = [
     year: "4th Year",
     avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=600&auto=format&fit=crop",
     bio: "Heading administrative records, official documentation, inter-departmental communications, and council resolution tracking.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.secretary@jdcoem.ac.in",
     order: 4
   },
@@ -72,7 +72,7 @@ export const adminCouncilMembers: TeamMember[] = [
     year: "3rd Year",
     avatar: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?q=80&w=600&auto=format&fit=crop",
     bio: "Assisting secretariat documentation, managing meeting agendas, official notices, and record compliance.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.deputysecretary@jdcoem.ac.in",
     order: 5
   },
@@ -87,7 +87,7 @@ export const adminCouncilMembers: TeamMember[] = [
     year: "4th Year",
     avatar: "https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?q=80&w=600&auto=format&fit=crop",
     bio: "Directing campus digital infrastructure, web portals, technical symposia, hackathons, and technology club governance.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.tech@jdcoem.ac.in",
     order: 6
   },
@@ -102,7 +102,7 @@ export const adminCouncilMembers: TeamMember[] = [
     year: "4th Year",
     avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=600&auto=format&fit=crop",
     bio: "Leading large-scale festival logistics, stage production, crowd control, sound engineering, and venue scheduling for major campus fests.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.chiefevent@jdcoem.ac.in",
     order: 7
   },
@@ -117,7 +117,7 @@ export const adminCouncilMembers: TeamMember[] = [
     year: "3rd Year",
     avatar: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=600&auto=format&fit=crop",
     bio: "Managing on-ground event workflows, stage marshaling, backstage coordination, and emergency response teams.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.deputyevent@jdcoem.ac.in",
     order: 8
   },
@@ -132,7 +132,7 @@ export const adminCouncilMembers: TeamMember[] = [
     year: "2nd Year (MBA)",
     avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=600&auto=format&fit=crop",
     bio: "Leading the official Sahastradeep magazine, press releases, editorial copy, annual yearbooks, and publication quality assurance.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.chiefeditor@jdcoem.ac.in",
     order: 9
   },
@@ -147,7 +147,7 @@ export const adminCouncilMembers: TeamMember[] = [
     year: "3rd Year",
     avatar: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=600&auto=format&fit=crop",
     bio: "Strategizing technical symposia, research workshops, hackathons, skill bootcamps, and academic co-curricular initiatives.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.strategic.cocurricular@jdcoem.ac.in",
     order: 10
   },
@@ -162,7 +162,7 @@ export const adminCouncilMembers: TeamMember[] = [
     year: "3rd Year",
     avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=600&auto=format&fit=crop",
     bio: "Structuring campus fests, sports leagues, cultural showcases, and community engagement roadmaps.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.strategic.extracurricular@jdcoem.ac.in",
     order: 11
   },
@@ -177,7 +177,7 @@ export const adminCouncilMembers: TeamMember[] = [
     year: "2nd Year",
     avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=600&auto=format&fit=crop",
     bio: "Directing media relations, press coverage, external institutional partnerships, influencer collaborations, and digital branding.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.pro@jdcoem.ac.in",
     order: 12
   },
@@ -192,7 +192,7 @@ export const adminCouncilMembers: TeamMember[] = [
     year: "4th Year",
     avatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=600&auto=format&fit=crop",
     bio: "Managing council treasury, fest sponsorship acquisition, club annual budget distribution, and transparent financial accounts.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.treasurer@jdcoem.ac.in",
     order: 13
   },
@@ -207,7 +207,7 @@ export const adminCouncilMembers: TeamMember[] = [
     year: "3rd Year",
     avatar: "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?q=80&w=600&auto=format&fit=crop",
     bio: "Assisting financial ledger records, vendor invoice clearances, ticket sales tracking, and audit verification.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.deputytreasurer@jdcoem.ac.in",
     order: 14
   },
@@ -222,7 +222,7 @@ export const adminCouncilMembers: TeamMember[] = [
     year: "4th Year",
     avatar: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?q=80&w=600&auto=format&fit=crop",
     bio: "Enforcing institutional conduct standards, VIP dignitary hospitality protocols, accreditation access, and campus assembly decorum.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.protocol@jdcoem.ac.in",
     order: 15
   },
@@ -237,7 +237,7 @@ export const adminCouncilMembers: TeamMember[] = [
     year: "3rd Year",
     avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
     bio: "Supervising gate accreditation, VIP green-room hospitality, volunteer disciplinary teams, and formal ceremony alignments.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.deputyprotocol@jdcoem.ac.in",
     order: 16
   }
@@ -256,7 +256,7 @@ export const hostingCommitteeMembers: TeamMember[] = [
     year: "4th Year",
     avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
     bio: "Curating stage scripts, anchoring flagship convocations, managing live VIP onstage moderation, and training the hosting squad.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.hosting@jdcoem.ac.in",
     order: 1
   },
@@ -271,7 +271,7 @@ export const hostingCommitteeMembers: TeamMember[] = [
     year: "3rd Year",
     avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=600&auto=format&fit=crop",
     bio: "Hosting major cultural nights, Battle of the Bands, celebrity artist concerts, and Natyam stage presentations.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.hosting.cultural@jdcoem.ac.in",
     order: 2
   },
@@ -286,7 +286,7 @@ export const hostingCommitteeMembers: TeamMember[] = [
     year: "3rd Year",
     avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=600&auto=format&fit=crop",
     bio: "Anchoring hackathons, tech talks, panel discussions, Robo Rage commentary, and formal inaugural addresses.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.hosting.tech@jdcoem.ac.in",
     order: 3
   },
@@ -301,7 +301,7 @@ export const hostingCommitteeMembers: TeamMember[] = [
     year: "2nd Year",
     avatar: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=600&auto=format&fit=crop",
     bio: "Co-anchoring stage ceremonies, audience engagement games, and prize distribution segments.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.hosting.associate@jdcoem.ac.in",
     order: 4
   }
@@ -320,7 +320,7 @@ export const spokespersonMembers: TeamMember[] = [
     year: "4th Year",
     avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
     bio: "Delivering central council addresses, student body press statements, and presiding over council town-halls.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.spokesperson1@jdcoem.ac.in",
     order: 1
   },
@@ -335,7 +335,7 @@ export const spokespersonMembers: TeamMember[] = [
     year: "4th Year",
     avatar: "https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?q=80&w=600&auto=format&fit=crop",
     bio: "Voicing student representations for core engineering departments, lab resources, and technical societies.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.spokesperson2@jdcoem.ac.in",
     order: 2
   },
@@ -350,7 +350,7 @@ export const spokespersonMembers: TeamMember[] = [
     year: "3rd Year",
     avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=600&auto=format&fit=crop",
     bio: "Representing student needs across computing streams, coding hackathons, and placement preparatory forums.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.spokesperson3@jdcoem.ac.in",
     order: 3
   },
@@ -365,7 +365,7 @@ export const spokespersonMembers: TeamMember[] = [
     year: "2nd Year",
     avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=600&auto=format&fit=crop",
     bio: "Liaisoning for business conclaves, entrepreneurship initiatives, and management branch student representations.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.spokesperson4@jdcoem.ac.in",
     order: 4
   },
@@ -380,7 +380,7 @@ export const spokespersonMembers: TeamMember[] = [
     year: "2nd Year",
     avatar: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=600&auto=format&fit=crop",
     bio: "Facilitating smooth campus onboarding, orientation forums, hostel student welfare, and grievance redressals for junior cohorts.",
-    linkedin: "https://linkedin.com",
+    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.spokesperson5@jdcoem.ac.in",
     order: 5
   }

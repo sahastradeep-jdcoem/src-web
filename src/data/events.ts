@@ -67,7 +67,7 @@ export const defaultPrarambhEvent: EventItem = {
   coordinatorContact: {
     name: "SRC Secretariat Desk",
     role: "Central Student Council",
-    phone: "src@jdcoem.ac.in"
+    phone: "srcjdcoem@gmail.com"
   }
 };
 

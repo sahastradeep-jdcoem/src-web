@@ -118,7 +118,9 @@ export default function ContactPage() {
                   <Mail className="w-4 h-4 text-[#E78023] shrink-0 mt-0.5" />
                   <div>
                     <strong className="text-slate-900 block font-bold">Official Email</strong>
-                    <span>src@jdcoem.ac.in</span>
+                    <a href="mailto:srcjdcoem@gmail.com" className="hover:text-[#17458F] transition-colors">
+                      srcjdcoem@gmail.com
+                    </a>
                   </div>
                 </div>
 
@@ -151,7 +153,7 @@ export default function ContactPage() {
                   <Instagram className="w-4 h-4" />
                 </a>
                 <a
-                  href="https://linkedin.com"
+                  href="https://www.linkedin.com/company/src-jdcoem/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-3 rounded-xl bg-slate-50 hover:bg-[#17458F] text-slate-600 hover:text-white border border-slate-200 transition-colors shadow-xs"
@@ -160,7 +162,7 @@ export default function ContactPage() {
                   <Linkedin className="w-4 h-4" />
                 </a>
                 <a
-                  href="mailto:src@jdcoem.ac.in"
+                  href="mailto:srcjdcoem@gmail.com"
                   className="p-3 rounded-xl bg-slate-50 hover:bg-[#3D406B] text-slate-600 hover:text-white border border-slate-200 transition-colors shadow-xs"
                   aria-label="Email SRC"
                 >
