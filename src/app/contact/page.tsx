@@ -144,7 +144,7 @@ export default function ContactPage() {
               {/* Social Channels */}
               <div className="pt-4 border-t border-slate-100 flex items-center gap-3">
                 <a
-                  href="https://instagram.com"
+                  href="https://www.instagram.com/jdcoem.src"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-3 rounded-xl bg-slate-50 hover:bg-[#E78023] text-slate-600 hover:text-white border border-slate-200 transition-colors shadow-xs"

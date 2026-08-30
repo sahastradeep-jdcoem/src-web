@@ -82,7 +82,7 @@ export default function Footer() {
 
             <div className="pt-2 flex items-center gap-3">
               <a
-                href="https://instagram.com"
+                href="https://www.instagram.com/jdcoem.src"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:text-[#E78023] hover:border-[#E78023]/40 shadow-sm transition-colors"
