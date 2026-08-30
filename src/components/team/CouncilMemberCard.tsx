@@ -39,11 +39,6 @@ export function CouncilMemberCard({ member }: CouncilMemberCardProps) {
           <h3 className="font-heading font-bold text-sm sm:text-xl text-[#0F172A] line-clamp-1">
             {member.name}
           </h3>
-          {member.designation && (
-            <p className="text-[11px] sm:text-xs font-sans font-medium text-[#17458F] line-clamp-1">
-              {member.designation}
-            </p>
-          )}
           <p className="text-[10px] sm:text-xs text-slate-500 font-sans font-medium pt-0.5 line-clamp-1">
             {member.department} {member.year && `• ${member.year}`}
           </p>
