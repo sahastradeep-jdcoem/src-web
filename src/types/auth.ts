@@ -12,7 +12,7 @@ export interface UserProfile {
   year?: string; // Year of study (e.g. 1st Year, 2nd Year, 3rd Year, 4th Year)
   phone?: string;
   profileCompleted?: boolean;
-  designationBadge?: string; // e.g. "President • Central Council", "Head • Coding Club"
+  designationBadge?: string; // e.g. "President", "Mentor", "Head • Coding Club"
   isCouncilOfficer?: boolean;
 }
 

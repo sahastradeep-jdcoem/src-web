@@ -69,7 +69,7 @@ export function resolveDesignationByBtId(btId: string): {
   const matchedCouncil = council.find((m) => m.btId && m.btId.trim().toUpperCase() === cleanBtId);
   if (matchedCouncil) {
     return {
-      designationBadge: `${matchedCouncil.role} • Central Council`,
+      designationBadge: matchedCouncil.role,
       isCouncilOfficer: true,
       category: "Admin Council",
     };
@@ -80,7 +80,7 @@ export function resolveDesignationByBtId(btId: string): {
   const matchedHosting = hosting.find((m) => m.btId && m.btId.trim().toUpperCase() === cleanBtId);
   if (matchedHosting) {
     return {
-      designationBadge: `${matchedHosting.role} • Hosting Secretariat`,
+      designationBadge: matchedHosting.role,
       isCouncilOfficer: true,
       category: "Hosting Committee",
     };
@@ -91,7 +91,7 @@ export function resolveDesignationByBtId(btId: string): {
   const matchedSpokes = spokes.find((m) => m.btId && m.btId.trim().toUpperCase() === cleanBtId);
   if (matchedSpokes) {
     return {
-      designationBadge: `${matchedSpokes.role} • SRC Spokesperson`,
+      designationBadge: matchedSpokes.role,
       isCouncilOfficer: true,
       category: "Spokesperson",
     };
@@ -134,7 +134,7 @@ export const DEFAULT_REGISTERED_USERS: RegisteredUserRecord[] = [
     year: "3rd Year",
     phone: "9075828232",
     profileCompleted: true,
-    designationBadge: "President • Central Council",
+    designationBadge: "President",
     isCouncilOfficer: true,
     lastActive: "2026-08-31T01:00:00.000Z",
     createdAt: "2026-08-31T01:00:00.000Z",
@@ -153,7 +153,7 @@ export const DEFAULT_REGISTERED_USERS: RegisteredUserRecord[] = [
     year: "4th Year / Final Year",
     phone: "",
     profileCompleted: true,
-    designationBadge: "Mentor • Central Council",
+    designationBadge: "Mentor",
     isCouncilOfficer: true,
     lastActive: "2026-08-31T01:00:00.000Z",
     createdAt: "2026-08-30T18:00:00.000Z",
