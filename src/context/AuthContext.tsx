@@ -92,9 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         setUser(merged);
         localStorage.setItem("src_auth_user", JSON.stringify(merged));
-        if (isCompleted && resolvedBtId) {
-          saveRegisteredUser(merged);
-        }
+        saveRegisteredUser(merged);
 
         // Only open modal if user has NEVER set a BT ID or completed profile
         if (!isCompleted && !resolvedBtId) {
@@ -162,9 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         setUser(merged);
         localStorage.setItem("src_auth_user", JSON.stringify(merged));
-        if (isCompleted && resolvedBtId) {
-          saveRegisteredUser(merged);
-        }
+        saveRegisteredUser(merged);
         setIsAuthModalOpen(false);
 
         if (!isCompleted && !resolvedBtId) {

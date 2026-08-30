@@ -250,7 +250,7 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
       department: user.department || "Basic Science & Humanities Dept.",
       year: user.year || "1st Year",
       phone: user.phone || "",
-      profileCompleted: user.profileCompleted ?? true,
+      profileCompleted: user.profileCompleted !== undefined ? user.profileCompleted : Boolean(cleanBtId),
       designationBadge: assignedBadge,
       isCouncilOfficer: isOfficer,
       lastActive: now,
