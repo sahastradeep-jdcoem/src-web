@@ -21,12 +21,14 @@ import {
   Inbox,
   Building2,
   Users,
-  RefreshCw
+  RefreshCw,
+  Image as ImageIcon
 } from "lucide-react";
 import { EventItem, ClubItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
 import { 
   getStoredEvents, 
   saveStoredEvents, 
@@ -71,6 +73,7 @@ export default function AdminEventsPage() {
     venue: "JDCOEM Campus",
     organizer: "SRC JDCOEM",
     status: "Registration Open" as "Registration Open" | "Upcoming" | "Completed",
+    poster: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
     description: "",
   });
 
@@ -83,6 +86,7 @@ export default function AdminEventsPage() {
     venue: "JDCOEM Campus",
     organizer: "SRC JDCOEM",
     status: "Registration Open" as "Registration Open" | "Upcoming" | "Completed",
+    poster: "",
     description: "",
   });
 
@@ -118,34 +122,29 @@ export default function AdminEventsPage() {
     loadData();
 
     const unsubscribe = subscribeToEvents((remoteEvents) => {
-      setEventsList(remoteEvents);
+      if (remoteEvents && remoteEvents.length > 0) {
+        setEventsList(remoteEvents);
+      }
     });
 
-    const handleUpdate = (e: any) => {
-      if (e?.detail && Array.isArray(e.detail)) {
-        setEventsList(e.detail);
-      } else {
-        setEventsList(getStoredEvents());
-      }
-    };
-
-    const handleClubsUpdate = () => {
+    const handleUpdate = () => {
+      setEventsList(getStoredEvents());
       setClubsList(getStoredClubs());
     };
 
     window.addEventListener("src_events_updated", handleUpdate);
-    window.addEventListener("src_clubs_updated", handleClubsUpdate);
+    window.addEventListener("src_tenure_changed", handleUpdate);
     window.addEventListener("storage", handleUpdate);
 
     return () => {
       unsubscribe();
       window.removeEventListener("src_events_updated", handleUpdate);
-      window.removeEventListener("src_clubs_updated", handleClubsUpdate);
+      window.removeEventListener("src_tenure_changed", handleUpdate);
       window.removeEventListener("storage", handleUpdate);
     };
   }, []);
 
-  const handleDateChange = (val: string, isEdit = false) => {
+  const handleDateChange = (val: string, isEdit: boolean) => {
     const formatted = formatDateToReadable(val);
     if (isEdit) {
       setEditForm((prev) => ({
@@ -178,9 +177,9 @@ export default function AdminEventsPage() {
       date: newEvent.date || "TBD 2026",
       time: "10:00 AM IST",
       venue: newEvent.venue,
-      organizer: newEvent.organizer || "SRC Sahastradeep Central Council",
+      organizer: newEvent.organizer || "SRC JDCOEM",
       status: newEvent.status,
-      poster: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
+      poster: newEvent.poster || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
       description: newEvent.description,
       about: newEvent.description,
       whatToExpect: ["High-impact collegiate showcase", "Cash awards and certificates"],
@@ -203,8 +202,9 @@ export default function AdminEventsPage() {
       rawDate: new Date().toISOString().split("T")[0],
       date: formatDateToReadable(new Date().toISOString().split("T")[0]),
       venue: "JDCOEM Campus",
-      organizer: "SRC Sahastradeep Central Council",
+      organizer: "SRC JDCOEM",
       status: "Registration Open",
+      poster: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
       description: "",
     });
   };
@@ -217,8 +217,9 @@ export default function AdminEventsPage() {
       rawDate: "",
       date: evt.date,
       venue: evt.venue,
-      organizer: evt.organizer || "SRC Sahastradeep Central Council",
+      organizer: evt.organizer || "SRC JDCOEM",
       status: evt.status as any,
+      poster: evt.poster || "",
       description: evt.description || "",
     });
   };
@@ -237,6 +238,7 @@ export default function AdminEventsPage() {
             venue: editForm.venue,
             organizer: editForm.organizer,
             status: editForm.status,
+            poster: editForm.poster || item.poster,
             description: editForm.description,
             about: editForm.description,
           }
@@ -681,6 +683,31 @@ export default function AdminEventsPage() {
               />
             </div>
 
+            {/* Event Poster Photo / Direct URL */}
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <ImageIcon className="w-3.5 h-3.5 text-[#E78023]" />
+                <span>Event Poster / Cover Photo</span>
+              </label>
+              
+              <ImageUploadDropzone
+                label="Drop Event Poster Here"
+                sublabel="Converts phone/DSLR flyer to optimized WebP image"
+                previewUrl={newEvent.poster}
+                onImageCompressed={(res) => {
+                  setNewEvent({ ...newEvent, poster: res.dataUrl });
+                }}
+              />
+
+              <input
+                type="text"
+                placeholder="Or paste Direct Image URL (https://...)"
+                value={newEvent.poster}
+                onChange={(e) => setNewEvent({ ...newEvent, poster: e.target.value })}
+                className="w-full px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 focus:outline-none focus:border-[#17458F]"
+              />
+            </div>
+
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
               <Button
                 type="button"
@@ -840,6 +867,31 @@ export default function AdminEventsPage() {
                 value={editForm.description}
                 onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F] resize-none"
+              />
+            </div>
+
+            {/* Event Poster Photo / Direct URL */}
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <ImageIcon className="w-3.5 h-3.5 text-[#E78023]" />
+                <span>Event Poster / Cover Photo</span>
+              </label>
+              
+              <ImageUploadDropzone
+                label="Drop Event Poster Here"
+                sublabel="Converts phone/DSLR flyer to optimized WebP image"
+                previewUrl={editForm.poster}
+                onImageCompressed={(res) => {
+                  setEditForm({ ...editForm, poster: res.dataUrl });
+                }}
+              />
+
+              <input
+                type="text"
+                placeholder="Or paste Direct Image URL (https://...)"
+                value={editForm.poster}
+                onChange={(e) => setEditForm({ ...editForm, poster: e.target.value })}
+                className="w-full px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 focus:outline-none focus:border-[#17458F]"
               />
             </div>
 
