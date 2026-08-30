@@ -90,6 +90,19 @@ export default function TeamPage() {
     };
   }, []);
 
+  // Unified Hosting Committee (spokespersons as a group is called Hosting Committee)
+  const unifiedHostingMembers = React.useMemo(() => {
+    const list: TeamMember[] = [];
+    const seen = new Set<string>();
+    [...hostingMembers, ...spokespersons].forEach((m) => {
+      if (!seen.has(m.id)) {
+        seen.add(m.id);
+        list.push(m);
+      }
+    });
+    return list;
+  }, [hostingMembers, spokespersons]);
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] py-12 px-4 sm:px-6 lg:px-8 space-y-20">
       <div className="max-w-7xl mx-auto space-y-20">
@@ -105,7 +118,7 @@ export default function TeamPage() {
             <span className="text-[#E78023]">BEHIND SAHASTRADEEP.</span>
           </h1>
           <p className="text-base sm:text-lg text-slate-600 font-medium">
-            Meet the {councilMembers.length} executive council officers, hosting committee anchors, spokespersons, and {clubs.length} chartered club leaders steering JDCOEM Nagpur.
+            Meet the {councilMembers.length} executive council officers, {unifiedHostingMembers.length} hosting committee members (spokespersons & anchors), and {clubs.length} chartered club leaders steering JDCOEM Nagpur.
           </p>
         </div>
 
@@ -140,58 +153,31 @@ export default function TeamPage() {
           )}
         </section>
 
-        {/* SECTION 2: SUB-COMMITTEES */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 pt-8 border-t border-slate-200">
-          
-          {/* HOSTING COMMITTEE */}
-          {hostingMembers.length > 0 && (
-            <section className="space-y-6">
-              <div className="space-y-1 pb-4 border-b border-slate-200">
-                <span className="text-xs font-bold uppercase tracking-wider text-[#E78023] flex items-center gap-1.5">
-                  <Mic2 className="w-4 h-4" />
-                  <span>Stage & Convocations</span>
-                </span>
-                <h3 className="font-extrabold text-2xl text-[#17458F] uppercase">
-                  HOSTING COMMITTEE ({hostingMembers.length})
-                </h3>
-                <p className="text-xs text-slate-500 font-medium">
-                  Official emcees, anchors, and stage coordinators managing live audience engagements.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {hostingMembers.map((member) => (
-                  <CouncilMemberCard key={member.id} member={member} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* SPOKESPERSONS */}
-          {spokespersons.length > 0 && (
-            <section className="space-y-6">
-              <div className="space-y-1 pb-4 border-b border-slate-200">
+        {/* SECTION 2: HOSTING COMMITTEE (COUNCIL SPOKESPERSONS & STAGE ANCHORS) */}
+        {unifiedHostingMembers.length > 0 && (
+          <section className="space-y-8 pt-8 border-t border-slate-200">
+            <div className="border-b border-slate-200 pb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+              <div className="space-y-1">
                 <span className="text-xs font-bold uppercase tracking-wider text-[#E78023] flex items-center gap-1.5">
                   <Megaphone className="w-4 h-4" />
-                  <span>Student Representation</span>
+                  <span>Stage Convocations & Student Representation</span>
                 </span>
-                <h3 className="font-extrabold text-2xl text-[#17458F] uppercase">
-                  COUNCIL SPOKESPERSONS ({spokespersons.length})
-                </h3>
-                <p className="text-xs text-slate-500 font-medium">
-                  Designated voices representing individual departments and student interests.
+                <h2 className="font-extrabold text-2xl sm:text-4xl text-[#17458F] uppercase">
+                  HOSTING COMMITTEE ({unifiedHostingMembers.length})
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-500 font-medium">
+                  Official council spokespersons, stage anchors, and emcees representing student voices and live event moderation.
                 </p>
               </div>
+            </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {spokespersons.map((member) => (
-                  <CouncilMemberCard key={member.id} member={member} />
-                ))}
-              </div>
-            </section>
-          )}
-
-        </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {unifiedHostingMembers.map((member) => (
+                <CouncilMemberCard key={member.id} member={member} />
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* SECTION 3: CHARTERED CLUBS LEADS */}
         <section className="space-y-8 pt-8 border-t border-slate-200">
