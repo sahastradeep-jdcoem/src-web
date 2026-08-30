@@ -1,6 +1,7 @@
 import React from "react";
 import Image from "next/image";
-import { Mail, Linkedin } from "lucide-react";
+import Link from "next/link";
+import { Mail, Linkedin, ArrowRight } from "lucide-react";
 import { TeamMember } from "@/types";
 
 interface CouncilMemberCardProps {
@@ -50,11 +51,21 @@ export function CouncilMemberCard({ member }: CouncilMemberCardProps) {
           </p>
         )}
 
-        {/* Contact Links */}
-        <div className="pt-2 sm:pt-3 border-t border-slate-100 flex items-center justify-between font-sans">
-          <span className="text-[8px] sm:text-[10px] text-slate-500 uppercase font-semibold tracking-wider truncate max-w-[80px] sm:max-w-none">
-            {member.category || "SRC Council"}
-          </span>
+        {/* Contact Links & Club Link */}
+        <div className="pt-2 sm:pt-3 border-t border-slate-100 flex items-center justify-between font-sans gap-1">
+          {member.clubSlug ? (
+            <Link
+              href={`/clubs/${member.clubSlug}`}
+              className="inline-flex items-center gap-1 text-[9px] sm:text-[11px] text-[#17458F] hover:text-[#E78023] font-bold uppercase tracking-wider transition-colors group/link"
+            >
+              <span>View Club</span>
+              <ArrowRight className="w-2.5 h-2.5 sm:w-3 sm:h-3 transition-transform group-hover/link:translate-x-0.5" />
+            </Link>
+          ) : (
+            <span className="text-[8px] sm:text-[10px] text-slate-500 uppercase font-semibold tracking-wider truncate max-w-[80px] sm:max-w-none">
+              {member.category || "SRC Council"}
+            </span>
+          )}
 
           <div className="flex items-center gap-1.5 sm:gap-2">
             {member.email && (

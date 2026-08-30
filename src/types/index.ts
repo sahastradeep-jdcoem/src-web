@@ -108,6 +108,7 @@ export interface TeamMember {
   order?: number;
   badgeNumber?: string;
   btId?: string; // College BT ID for designation badge linkage
+  clubSlug?: string; // Optional slug to navigate to club profile
 }
 
 export interface RegistrationRecord {
