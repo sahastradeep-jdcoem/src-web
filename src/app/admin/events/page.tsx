@@ -20,7 +20,8 @@ import {
   RotateCcw,
   Inbox,
   Building2,
-  Users
+  Users,
+  RefreshCw
 } from "lucide-react";
 import { EventItem, ClubItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -59,6 +60,7 @@ export default function AdminEventsPage() {
   const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
   const [eventToDelete, setEventToDelete] = useState<EventItem | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // New Event Form State
   const [newEvent, setNewEvent] = useState({
@@ -85,11 +87,31 @@ export default function AdminEventsPage() {
   });
 
   const loadData = () => {
-    setEventsList(getStoredEvents());
+    const stored = getStoredEvents();
+    setEventsList(stored);
     setClubsList(getStoredClubs());
     syncEventsFromFirestore().then((res) => {
-      if (res) setEventsList(res);
+      if (res) {
+        setEventsList(res);
+      } else {
+        // If Firestore had no record, push the current local state
+        saveStoredEvents(stored);
+      }
     });
+  };
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      saveStoredEvents(eventsList);
+      const synced = await syncEventsFromFirestore();
+      setEventsList(synced);
+      showNotice(`Successfully synced ${synced.length} events with live cloud database.`);
+    } catch (e) {
+      showNotice("Could not reach cloud database, displaying cached roster.");
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   useEffect(() => {
@@ -283,13 +305,24 @@ export default function AdminEventsPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <Button
+            onClick={handleManualSync}
+            variant="outline"
+            size="sm"
+            className="gap-1.5 cursor-pointer bg-white"
+            disabled={isSyncing}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-[#17458F] ${isSyncing ? "animate-spin" : ""}`} />
+            <span>{isSyncing ? "Syncing..." : "Sync Live Cloud"}</span>
+          </Button>
+
           <button
             onClick={handleResetDefaults}
             className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
             title="Reset to default PRARAMBH event"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Reset Defaults</span>
+            <span className="hidden sm:inline">Restore PRARAMBH</span>
           </button>
 
           <Button
