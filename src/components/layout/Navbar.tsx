@@ -144,7 +144,7 @@ export default function Navbar() {
                   "p-2.5 rounded-xl border border-amber-200 bg-amber-50/50 text-[#17458F] hover:text-[#E78023] hover:border-[#E78023] shadow-xs transition-all",
                   isAdminRoute && "text-[#E78023] border-[#E78023] bg-[#E78023]/10"
                 )}
-                title="Council Admin Console"
+                title="Admin Console"
               >
                 <ShieldCheck className="w-4 h-4 text-[#17458F]" />
               </Link>

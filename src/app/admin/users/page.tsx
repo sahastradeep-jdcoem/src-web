@@ -227,7 +227,7 @@ export default function AdminUsersPage() {
 
   const handleRoleToggle = (user: RegisteredUserRecord) => {
     const newRole = user.role === "COUNCIL_ADMIN" ? "STUDENT" : "COUNCIL_ADMIN";
-    const actionName = newRole === "COUNCIL_ADMIN" ? "Promoted to Council Admin" : "Demoted to Student";
+    const actionName = newRole === "COUNCIL_ADMIN" ? "Promoted to Admin" : "Demoted to Student";
     changeUserRole(user.uid, newRole);
     showNotice(`${actionName}: ${user.displayName} (${user.email})`);
   };
@@ -371,7 +371,7 @@ export default function AdminUsersPage() {
         </div>
 
         <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Council Officers</span>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Admins</span>
           <p className="font-hero font-extrabold text-2xl text-[#E78023]">{adminCount}</p>
           <span className="text-[10px] text-slate-500 font-medium">Admin Studio Privileges</span>
         </div>
@@ -522,7 +522,7 @@ export default function AdminUsersPage() {
                           variant={u.role === "COUNCIL_ADMIN" ? "orange" : "slate"}
                           size="sm"
                         >
-                          {u.role === "COUNCIL_ADMIN" ? "Council Admin" : "Student"}
+                          {u.role === "COUNCIL_ADMIN" ? "Admin" : "Student"}
                         </Badge>
                         {u.designationBadge && (
                           <div className="pt-0.5">
@@ -575,7 +575,7 @@ export default function AdminUsersPage() {
                               ? "bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200"
                               : "bg-slate-100 hover:bg-slate-200 text-slate-600"
                           }`}
-                          title={u.role === "COUNCIL_ADMIN" ? "Demote to Student" : "Promote to Council Admin"}
+                          title={u.role === "COUNCIL_ADMIN" ? "Demote to Student" : "Promote to Admin"}
                         >
                           {u.role === "COUNCIL_ADMIN" ? (
                             <ShieldCheck className="w-3.5 h-3.5 text-[#E78023]" />
@@ -687,7 +687,7 @@ export default function AdminUsersPage() {
                 variant="primary"
                 size="sm"
               >
-                {selectedUser.role === "COUNCIL_ADMIN" ? "Demote to Student" : "Promote to Council Admin"}
+                {selectedUser.role === "COUNCIL_ADMIN" ? "Demote to Student" : "Promote to Admin"}
               </Button>
             </div>
           </div>
@@ -798,7 +798,7 @@ export default function AdminUsersPage() {
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
                 >
                   <option value="STUDENT">Student (Delegate)</option>
-                  <option value="COUNCIL_ADMIN">Council Admin</option>
+                  <option value="COUNCIL_ADMIN">Admin</option>
                 </select>
               </div>
             </div>
@@ -969,7 +969,7 @@ export default function AdminUsersPage() {
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
               >
                 <option value="STUDENT">Student (Delegate)</option>
-                <option value="COUNCIL_ADMIN">Council Admin</option>
+                <option value="COUNCIL_ADMIN">Admin</option>
               </select>
             </div>
 
