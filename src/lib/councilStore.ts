@@ -5,6 +5,11 @@ import {
   spokespersonMembers as initialSpokespersons 
 } from "@/data/team";
 import { mockClubs as initialClubs } from "@/data/clubs";
+import { 
+  saveSiteContentToFirestore, 
+  getSiteContentFromFirestore, 
+  subscribeToSiteContent 
+} from "./firebase/firestore";
 
 // Council Team Store
 export function getStoredCouncilMembers(): TeamMember[] {
@@ -26,9 +31,24 @@ export function saveStoredCouncilMembers(members: TeamMember[]): void {
   try {
     localStorage.setItem("src_council_team", JSON.stringify(members));
     window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: members }));
+    saveSiteContentToFirestore("council_team", members);
   } catch (e) {
     console.error("Could not save council team to storage", e);
   }
+}
+
+export async function syncCouncilMembersFromFirestore(): Promise<TeamMember[]> {
+  try {
+    const remote = await getSiteContentFromFirestore<TeamMember[]>("council_team");
+    if (remote !== null && Array.isArray(remote) && remote.length > 0) {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("src_council_team", JSON.stringify(remote));
+        window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: remote }));
+      }
+      return remote;
+    }
+  } catch {}
+  return getStoredCouncilMembers();
 }
 
 // Hosting Committee Store
@@ -51,6 +71,7 @@ export function saveStoredHostingCommittee(members: TeamMember[]): void {
   try {
     localStorage.setItem("src_hosting_committee", JSON.stringify(members));
     window.dispatchEvent(new CustomEvent("src_hosting_updated", { detail: members }));
+    saveSiteContentToFirestore("hosting_committee", members);
   } catch (e) {
     console.error("Could not save hosting committee to storage", e);
   }
@@ -76,6 +97,7 @@ export function saveStoredSpokespersons(members: TeamMember[]): void {
   try {
     localStorage.setItem("src_spokespersons", JSON.stringify(members));
     window.dispatchEvent(new CustomEvent("src_spokespersons_updated", { detail: members }));
+    saveSiteContentToFirestore("spokespersons", members);
   } catch (e) {
     console.error("Could not save spokespersons to storage", e);
   }
@@ -101,7 +123,35 @@ export function saveStoredClubs(clubs: ClubItem[]): void {
   try {
     localStorage.setItem("src_clubs_roster", JSON.stringify(clubs));
     window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: clubs }));
+    saveSiteContentToFirestore("clubs", clubs);
   } catch (e) {
     console.error("Could not save clubs to storage", e);
   }
 }
+
+export async function syncClubsFromFirestore(): Promise<ClubItem[]> {
+  try {
+    const remote = await getSiteContentFromFirestore<ClubItem[]>("clubs");
+    if (remote !== null && Array.isArray(remote) && remote.length > 0) {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("src_clubs_roster", JSON.stringify(remote));
+        window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: remote }));
+      }
+      return remote;
+    }
+  } catch {}
+  return getStoredClubs();
+}
+
+export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => void {
+  return subscribeToSiteContent<ClubItem[]>("clubs", (remote) => {
+    if (remote !== null && Array.isArray(remote) && remote.length > 0) {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("src_clubs_roster", JSON.stringify(remote));
+        window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: remote }));
+      }
+      callback(remote);
+    }
+  });
+}
+

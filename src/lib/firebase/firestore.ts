@@ -252,3 +252,63 @@ export async function checkInStudentPass(id: string): Promise<boolean> {
     return false;
   }
 }
+
+const SITE_CONTENT_COLLECTION = "site_content";
+
+/**
+ * Save site content document (e.g. events, clubs, team, hero) to Firestore
+ */
+export async function saveSiteContentToFirestore<T>(docId: string, data: T): Promise<void> {
+  try {
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      const docRef = doc(db, SITE_CONTENT_COLLECTION, docId);
+      await setDoc(docRef, { payload: data, updatedAt: serverTimestamp() }, { merge: true });
+    }
+  } catch (error) {
+    console.warn(`Firestore saveSiteContent error [${docId}]`, error);
+  }
+}
+
+/**
+ * Get site content document from Firestore
+ */
+export async function getSiteContentFromFirestore<T>(docId: string): Promise<T | null> {
+  try {
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      const docRef = doc(db, SITE_CONTENT_COLLECTION, docId);
+      const snapshot = await getDoc(docRef);
+      if (snapshot.exists() && snapshot.data()?.payload !== undefined) {
+        return snapshot.data()?.payload as T;
+      }
+    }
+  } catch (error) {
+    console.warn(`Firestore getSiteContent error [${docId}]`, error);
+  }
+  return null;
+}
+
+/**
+ * Subscribe to real-time changes of site content document
+ */
+export function subscribeToSiteContent<T>(docId: string, callback: (data: T) => void): () => void {
+  if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    return () => {};
+  }
+  try {
+    const docRef = doc(db, SITE_CONTENT_COLLECTION, docId);
+    return onSnapshot(
+      docRef,
+      (snapshot) => {
+        if (snapshot.exists() && snapshot.data()?.payload !== undefined) {
+          callback(snapshot.data()?.payload as T);
+        }
+      },
+      (error) => {
+        console.warn(`Firestore subscribeToSiteContent notice [${docId}]`, error);
+      }
+    );
+  } catch (e) {
+    console.warn(`Firestore subscription setup notice [${docId}]`, e);
+    return () => {};
+  }
+}

@@ -1,3 +1,8 @@
+import { 
+  saveSiteContentToFirestore, 
+  getSiteContentFromFirestore 
+} from "./firebase/firestore";
+
 export const DEFAULT_DEPARTMENTS: string[] = [
   "Basic Science & Humanities Dept.",
   "Computer Science and Engineering",
@@ -35,9 +40,24 @@ export function saveStoredDepartments(departments: string[]): void {
   try {
     localStorage.setItem("src_departments", JSON.stringify(departments));
     window.dispatchEvent(new CustomEvent("src_departments_updated", { detail: departments }));
+    saveSiteContentToFirestore("departments", departments);
   } catch (e) {
     console.error("Could not save departments", e);
   }
+}
+
+export async function syncDepartmentsFromFirestore(): Promise<string[]> {
+  try {
+    const remote = await getSiteContentFromFirestore<string[]>("departments");
+    if (remote !== null && Array.isArray(remote) && remote.length > 0) {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("src_departments", JSON.stringify(remote));
+        window.dispatchEvent(new CustomEvent("src_departments_updated", { detail: remote }));
+      }
+      return remote;
+    }
+  } catch {}
+  return getStoredDepartments();
 }
 
 export function resetStoredDepartments(): string[] {
@@ -45,6 +65,7 @@ export function resetStoredDepartments(): string[] {
   try {
     localStorage.removeItem("src_departments");
     window.dispatchEvent(new CustomEvent("src_departments_updated", { detail: DEFAULT_DEPARTMENTS }));
+    saveSiteContentToFirestore("departments", DEFAULT_DEPARTMENTS);
   } catch (e) {
     console.error("Could not reset departments", e);
   }

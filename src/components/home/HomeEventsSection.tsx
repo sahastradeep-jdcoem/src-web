@@ -5,13 +5,20 @@ import Link from "next/link";
 import { Flame, ArrowRight, Calendar, Inbox } from "lucide-react";
 import { EventCard } from "@/components/events/EventCard";
 import { EventItem } from "@/types";
-import { getStoredEvents } from "@/lib/eventsStore";
+import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
 
 export default function HomeEventsSection() {
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
 
   useEffect(() => {
     setEventsList(getStoredEvents());
+    syncEventsFromFirestore().then((res) => {
+      if (res) setEventsList(res);
+    });
+
+    const unsubscribe = subscribeToEvents((remoteEvents) => {
+      setEventsList(remoteEvents);
+    });
 
     const handleUpdate = (e: any) => {
       if (e?.detail && Array.isArray(e.detail)) {
@@ -25,6 +32,7 @@ export default function HomeEventsSection() {
     window.addEventListener("storage", handleUpdate);
 
     return () => {
+      unsubscribe();
       window.removeEventListener("src_events_updated", handleUpdate);
       window.removeEventListener("storage", handleUpdate);
     };

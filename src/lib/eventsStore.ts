@@ -1,5 +1,10 @@
 import { EventItem } from "@/types";
 import { mockEvents as initialEvents } from "@/data/events";
+import { 
+  saveSiteContentToFirestore, 
+  getSiteContentFromFirestore, 
+  subscribeToSiteContent 
+} from "./firebase/firestore";
 
 const EVENTS_STORAGE_KEY = "src_events";
 
@@ -21,16 +26,51 @@ export function getStoredEvents(): EventItem[] {
 }
 
 /**
- * Persist events list and broadcast real-time event update across tabs and components
+ * Persist events list and broadcast real-time event update across tabs, components, and Firestore Cloud
  */
 export function saveStoredEvents(events: EventItem[]): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(events));
     window.dispatchEvent(new CustomEvent("src_events_updated", { detail: events }));
+    saveSiteContentToFirestore("events", events);
   } catch (e) {
     console.error("Could not save events to storage", e);
   }
+}
+
+/**
+ * Fetch and sync events list from Firestore
+ */
+export async function syncEventsFromFirestore(): Promise<EventItem[]> {
+  try {
+    const remote = await getSiteContentFromFirestore<EventItem[]>("events");
+    if (remote !== null && Array.isArray(remote)) {
+      if (typeof window !== "undefined") {
+        localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(remote));
+        window.dispatchEvent(new CustomEvent("src_events_updated", { detail: remote }));
+      }
+      return remote;
+    }
+  } catch (e) {
+    console.warn("Could not sync events from Firestore", e);
+  }
+  return getStoredEvents();
+}
+
+/**
+ * Subscribe to real-time events changes from Firestore across all devices
+ */
+export function subscribeToEvents(callback: (events: EventItem[]) => void): () => void {
+  return subscribeToSiteContent<EventItem[]>("events", (remote) => {
+    if (remote !== null && Array.isArray(remote)) {
+      if (typeof window !== "undefined") {
+        localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(remote));
+        window.dispatchEvent(new CustomEvent("src_events_updated", { detail: remote }));
+      }
+      callback(remote);
+    }
+  });
 }
 
 /**
@@ -50,3 +90,4 @@ export function resetStoredEvents(): EventItem[] {
   saveStoredEvents(initialEvents);
   return initialEvents;
 }
+

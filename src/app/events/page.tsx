@@ -25,7 +25,7 @@ const STATUSES: ("All" | EventStatus)[] = [
   "Completed",
 ];
 
-import { getStoredEvents } from "@/lib/eventsStore";
+import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
 import { EventItem } from "@/types";
 
 export default function EventsPage() {
@@ -36,6 +36,13 @@ export default function EventsPage() {
 
   useEffect(() => {
     setEventsList(getStoredEvents());
+    syncEventsFromFirestore().then((res) => {
+      if (res) setEventsList(res);
+    });
+
+    const unsubscribe = subscribeToEvents((remoteEvents) => {
+      setEventsList(remoteEvents);
+    });
 
     const handleUpdate = (e: any) => {
       if (e?.detail && Array.isArray(e.detail)) {
@@ -49,6 +56,7 @@ export default function EventsPage() {
     window.addEventListener("storage", handleUpdate);
 
     return () => {
+      unsubscribe();
       window.removeEventListener("src_events_updated", handleUpdate);
       window.removeEventListener("storage", handleUpdate);
     };

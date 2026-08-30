@@ -29,7 +29,9 @@ import { Modal } from "@/components/ui/Modal";
 import { 
   getStoredEvents, 
   saveStoredEvents, 
-  resetStoredEvents 
+  resetStoredEvents,
+  syncEventsFromFirestore,
+  subscribeToEvents
 } from "@/lib/eventsStore";
 import { getStoredClubs } from "@/lib/councilStore";
 
@@ -85,10 +87,17 @@ export default function AdminEventsPage() {
   const loadData = () => {
     setEventsList(getStoredEvents());
     setClubsList(getStoredClubs());
+    syncEventsFromFirestore().then((res) => {
+      if (res) setEventsList(res);
+    });
   };
 
   useEffect(() => {
     loadData();
+
+    const unsubscribe = subscribeToEvents((remoteEvents) => {
+      setEventsList(remoteEvents);
+    });
 
     const handleUpdate = (e: any) => {
       if (e?.detail && Array.isArray(e.detail)) {
@@ -107,6 +116,7 @@ export default function AdminEventsPage() {
     window.addEventListener("storage", handleUpdate);
 
     return () => {
+      unsubscribe();
       window.removeEventListener("src_events_updated", handleUpdate);
       window.removeEventListener("src_clubs_updated", handleClubsUpdate);
       window.removeEventListener("storage", handleUpdate);
