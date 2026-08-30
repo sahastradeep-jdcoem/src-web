@@ -103,6 +103,46 @@ export default function TeamPage() {
     return list;
   }, [hostingMembers, spokespersons]);
 
+  // Club Heads & Co-Heads converted to standard TeamMember cards
+  const clubLeadMembers = React.useMemo(() => {
+    const list: TeamMember[] = [];
+    clubs.forEach((club, index) => {
+      if (club.lead) {
+        list.push({
+          id: `${club.id || club.slug}-lead`,
+          name: club.lead.name || `${club.name} Head`,
+          role: `${club.name} Head`,
+          level: club.name,
+          category: "Clubs Leadership",
+          department: club.lead.department || "JDCOEM Nagpur",
+          year: club.lead.year || "4th Year",
+          avatar: club.lead.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
+          bio: club.lead.bio || `Leading ${club.name} activities, workshops, productions, and student talent mentorship.`,
+          email: club.lead.email || `src.${club.slug}.head@jdcoem.ac.in`,
+          linkedin: club.lead.linkedin || "https://www.linkedin.com/company/src-jdcoem/",
+          order: index * 2 + 1
+        });
+      }
+      if (club.coLead && club.coLead.name) {
+        list.push({
+          id: `${club.id || club.slug}-colead`,
+          name: club.coLead.name,
+          role: `${club.name} Co-Head`,
+          level: club.name,
+          category: "Clubs Leadership",
+          department: club.coLead.department || "JDCOEM Nagpur",
+          year: club.coLead.year || "3rd Year",
+          avatar: club.coLead.avatar || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
+          bio: club.coLead.bio || `Co-leading ${club.name} logistics, rehearsals, member coordination, and event execution.`,
+          email: club.coLead.email || `src.${club.slug}.cohead@jdcoem.ac.in`,
+          linkedin: club.coLead.linkedin || "https://www.linkedin.com/company/src-jdcoem/",
+          order: index * 2 + 2
+        });
+      }
+    });
+    return list;
+  }, [clubs]);
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] py-12 px-4 sm:px-6 lg:px-8 space-y-20">
       <div className="max-w-7xl mx-auto space-y-20">
@@ -118,7 +158,7 @@ export default function TeamPage() {
             <span className="text-[#E78023]">BEHIND SAHASTRADEEP.</span>
           </h1>
           <p className="text-base sm:text-lg text-slate-600 font-medium">
-            Meet the {councilMembers.length} executive council officers, {unifiedHostingMembers.length} hosting committee members (spokespersons & anchors), and {clubs.length} chartered club leaders steering JDCOEM Nagpur.
+            Meet the {councilMembers.length} executive council officers, {unifiedHostingMembers.length} hosting committee members (spokespersons & anchors), and {clubLeadMembers.length} chartered club leaders steering JDCOEM Nagpur.
           </p>
         </div>
 
@@ -180,82 +220,38 @@ export default function TeamPage() {
         )}
 
         {/* SECTION 3: CHARTERED CLUBS LEADS */}
-        <section className="space-y-8 pt-8 border-t border-slate-200">
-          <div className="border-b border-slate-200 pb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-            <div className="space-y-1">
-              <span className="text-xs font-bold uppercase tracking-wider text-[#E78023] flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4" />
-                <span>Domain Leadership</span>
-              </span>
-              <h2 className="font-extrabold text-2xl sm:text-4xl text-[#17458F] uppercase">
-                {clubs.length} CLUBS LEADERSHIP
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-500 font-medium">
-                Club Presidents, Heads, and Co-Heads orchestrating day-to-day workshops, hackathons, and productions.
-              </p>
+        {clubLeadMembers.length > 0 && (
+          <section className="space-y-8 pt-8 border-t border-slate-200">
+            <div className="border-b border-slate-200 pb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+              <div className="space-y-1">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#E78023] flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4" />
+                  <span>Domain Leadership</span>
+                </span>
+                <h2 className="font-extrabold text-2xl sm:text-4xl text-[#17458F] uppercase">
+                  CLUBS LEADERSHIP ({clubLeadMembers.length})
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-500 font-medium">
+                  Club Heads and Co-Heads orchestrating workshops, hackathons, productions, and competitions across all 12 chartered societies.
+                </p>
+              </div>
+
+              <Link
+                href="/clubs"
+                className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#17458F] hover:text-[#E78023] transition-colors"
+              >
+                <span>Explore All {clubs.length} Clubs</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
             </div>
 
-            <Link
-              href="/clubs"
-              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#17458F] hover:text-[#E78023] transition-colors"
-            >
-              <span>Explore All {clubs.length} Clubs</span>
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-            {clubs.map((club) => (
-              <div
-                key={club.slug}
-                className="rounded-2xl bg-white border border-slate-200 p-4 sm:p-6 space-y-4 hover:border-[#17458F]/30 hover:shadow-md transition-all flex flex-col justify-between shadow-xs"
-              >
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                      {club.name}
-                    </span>
-                    <span className="text-[10px] font-bold text-[#E78023]">
-                      CLUB LEAD
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="relative h-12 w-12 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-xs shrink-0">
-                      <Image
-                        src={club.lead.avatar}
-                        alt={club.lead.name}
-                        fill
-                        className="object-cover"
-                      />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-sm text-[#0F172A]">
-                        {club.lead.name || "TBA"}
-                      </h4>
-                      <p className="text-xs text-[#17458F] font-semibold">{club.lead.role}</p>
-                    </div>
-                  </div>
-
-                  {club.coLead?.name && (
-                    <div className="text-xs text-slate-500 pt-2 border-t border-slate-100 font-medium">
-                      <span>Co-Lead: </span>
-                      <strong className="text-slate-800 font-semibold">{club.coLead.name}</strong> ({club.coLead.role})
-                    </div>
-                  )}
-                </div>
-
-                <Link
-                  href={`/clubs/${club.slug}`}
-                  className="inline-flex items-center justify-between w-full pt-3 border-t border-slate-100 text-xs font-bold uppercase tracking-wider text-[#17458F] hover:text-[#E78023] transition-colors"
-                >
-                  <span>View Club Page</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-            ))}
-          </div>
-        </section>
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
+              {clubLeadMembers.map((member) => (
+                <CouncilMemberCard key={member.id} member={member} />
+              ))}
+            </div>
+          </section>
+        )}
 
       </div>
     </div>

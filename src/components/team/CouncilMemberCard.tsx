@@ -53,7 +53,7 @@ export function CouncilMemberCard({ member }: CouncilMemberCardProps) {
         {/* Contact Links */}
         <div className="pt-2 sm:pt-3 border-t border-slate-100 flex items-center justify-between font-sans">
           <span className="text-[8px] sm:text-[10px] text-slate-500 uppercase font-semibold tracking-wider truncate max-w-[80px] sm:max-w-none">
-            SRC Council
+            {member.category || "SRC Council"}
           </span>
 
           <div className="flex items-center gap-1.5 sm:gap-2">

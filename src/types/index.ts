@@ -72,6 +72,9 @@ export interface ClubItem {
     year: string;
     avatar: string;
     btId?: string;
+    bio?: string;
+    email?: string;
+    linkedin?: string;
   };
   coLead?: {
     name: string;
@@ -80,6 +83,9 @@ export interface ClubItem {
     year: string;
     avatar: string;
     btId?: string;
+    bio?: string;
+    email?: string;
+    linkedin?: string;
   };
   upcomingEvents?: string[];
   pastHighlights: string[];
