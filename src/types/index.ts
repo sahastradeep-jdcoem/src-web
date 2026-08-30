@@ -1,0 +1,134 @@
+export type EventCategory = 
+  | "Cultural"
+  | "Technical"
+  | "Sports"
+  | "Competitions"
+  | "Workshops"
+  | "Fest";
+
+export type EventStatus = "Registration Open" | "Upcoming" | "Completed";
+
+export interface EventScheduleItem {
+  time: string;
+  title: string;
+  description: string;
+  venue: string;
+}
+
+export interface EventPrize {
+  position: "Winner" | "Runner Up" | "Second Runner Up" | string;
+  amount: string;
+  perks: string[];
+}
+
+export interface EventItem {
+  id: string;
+  slug: string;
+  name: string;
+  tagline?: string;
+  category: EventCategory;
+  date: string;
+  time: string;
+  venue: string;
+  organizer: string;
+  organizerClubSlug?: string;
+  status: EventStatus;
+  isFeatured?: boolean;
+  poster: string;
+  description: string;
+  about: string;
+  whatToExpect: string[];
+  rules: string[];
+  schedule: EventScheduleItem[];
+  prizes: EventPrize[];
+  teamType: "Individual" | "Team" | "Both";
+  maxTeamSize?: number;
+  minTeamSize?: number;
+  registrationDeadline: string;
+  entryFee?: string;
+  coordinatorContact?: {
+    name: string;
+    role: string;
+    phone: string;
+  };
+}
+
+export interface ClubItem {
+  id: string;
+  slug: string;
+  name: string;
+  tagline: string;
+  category: string;
+  description: string;
+  mission: string;
+  iconName: string;
+  memberCount: number;
+  established: string;
+  heroImage: string;
+  lead: {
+    name: string;
+    role: string;
+    department: string;
+    year: string;
+    avatar: string;
+    btId?: string;
+  };
+  coLead?: {
+    name: string;
+    role: string;
+    department: string;
+    year: string;
+    avatar: string;
+    btId?: string;
+  };
+  upcomingEvents?: string[];
+  pastHighlights: string[];
+  galleryImages: string[];
+}
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  role: string;
+  designation?: string;
+  level: string;
+  category?: string;
+  department: string;
+  year?: string;
+  avatar: string;
+  bio?: string;
+  linkedin?: string;
+  email?: string;
+  order?: number;
+  badgeNumber?: string;
+  btId?: string; // College BT ID for designation badge linkage
+}
+
+export interface RegistrationRecord {
+  id: string;
+  registrationId: string;
+  eventSlug: string;
+  eventName: string;
+  participantName: string;
+  email: string;
+  phone: string;
+  department: string;
+  year: string;
+  teamType: "Individual" | "Team";
+  teamName?: string;
+  teamMembers?: string[];
+  registeredAt: string;
+  status: "CONFIRMED" | "PENDING" | "COMPLETED" | "CHECKED_IN" | "CANCELLED";
+  ticketCode: string;
+  qrPayload: string;
+}
+
+export interface GalleryPhoto {
+  id: string;
+  title: string;
+  category: "Events" | "Clubs" | "SRC" | "Prarambh" | "Vibrance" | "Behind the Scenes";
+  imageUrl: string;
+  date: string;
+  caption: string;
+  aspectRatio?: "landscape" | "portrait" | "square";
+}

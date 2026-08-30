@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --brand-orange: #E78023;
+    --brand-navy: #17458F;
+    --brand-slate: #3D406B;
+    --brand-bg: #F8FAFC;
+  }
+
+  body {
+    @apply bg-[#F8FAFC] text-[#0F172A] antialiased selection:bg-[#E78023] selection:text-white font-sans;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading tracking-tight;
+  }
+
+  /* Sleek minimalist scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #F1F5F9;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #E78023;
+  }
+}
+
+@layer utilities {
+  .font-hero {
+    font-family: 'Sora', sans-serif;
+    font-weight: 800;
+  }
+  .font-section {
+    font-family: 'Sora', sans-serif;
+    font-weight: 700;
+  }
+  .font-nav {
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+  }
+  .font-btn {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+  }
+  .font-meta {
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+  }
+}
