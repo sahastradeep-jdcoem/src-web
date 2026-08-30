@@ -153,7 +153,7 @@ export function ProfileSetupModal() {
         profileCompleted: true,
         designationBadge: designationInfo ? designationInfo.designationBadge : undefined,
         isCouncilOfficer: designationInfo ? true : false,
-        role: designationInfo ? designationInfo.role : (user?.role || "STUDENT"),
+        role: user?.role || "STUDENT",
       });
       closeProfileModal();
     } catch (err: any) {

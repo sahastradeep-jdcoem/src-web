@@ -54,12 +54,11 @@ export function checkBtIdAvailability(
 }
 
 /**
- * Resolve special council badging, designations, and privileges attached to a BT ID
+ * Resolve special council badging and designations attached to a BT ID
  */
 export function resolveDesignationByBtId(btId: string): { 
   designationBadge: string; 
   isCouncilOfficer: boolean; 
-  role: "COUNCIL_ADMIN" | "STUDENT";
   category?: string;
 } | null {
   if (!btId || !btId.trim()) return null;
@@ -72,7 +71,6 @@ export function resolveDesignationByBtId(btId: string): {
     return {
       designationBadge: `${matchedCouncil.role} • Central Council`,
       isCouncilOfficer: true,
-      role: "COUNCIL_ADMIN",
       category: "Admin Council",
     };
   }
@@ -84,7 +82,6 @@ export function resolveDesignationByBtId(btId: string): {
     return {
       designationBadge: `${matchedHosting.role} • Hosting Secretariat`,
       isCouncilOfficer: true,
-      role: "COUNCIL_ADMIN",
       category: "Hosting Committee",
     };
   }
@@ -96,7 +93,6 @@ export function resolveDesignationByBtId(btId: string): {
     return {
       designationBadge: `${matchedSpokes.role} • SRC Spokesperson`,
       isCouncilOfficer: true,
-      role: "COUNCIL_ADMIN",
       category: "Spokesperson",
     };
   }
@@ -108,7 +104,6 @@ export function resolveDesignationByBtId(btId: string): {
       return {
         designationBadge: `Head • ${club.name}`,
         isCouncilOfficer: true,
-        role: "COUNCIL_ADMIN",
         category: "Club Leadership",
       };
     }
@@ -116,7 +111,6 @@ export function resolveDesignationByBtId(btId: string): {
       return {
         designationBadge: `Co-Head • ${club.name}`,
         isCouncilOfficer: true,
-        role: "COUNCIL_ADMIN",
         category: "Club Leadership",
       };
     }
@@ -131,7 +125,7 @@ export const DEFAULT_REGISTERED_USERS: RegisteredUserRecord[] = [
     email: "sanskrutitidke@jdcoem.ac.in",
     displayName: "Sanskruti Tidke",
     photoURL: null,
-    role: "COUNCIL_ADMIN",
+    role: "STUDENT",
     isCollegeStudent: true,
     firstName: "Sanskruti",
     lastName: "Tidke",
@@ -200,7 +194,7 @@ export function getStoredUsers(): RegisteredUserRecord[] {
     }
   }
 
-  // Always dynamically resolve designation badge & council privileges from live team store
+  // Always dynamically resolve designation badge & council status without altering security role
   return list.map((user) => {
     const cleanBtId = user.btId ? user.btId.trim().toUpperCase() : "";
     const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId) : null;
@@ -208,7 +202,6 @@ export function getStoredUsers(): RegisteredUserRecord[] {
       return {
         ...user,
         btId: cleanBtId,
-        role: designationInfo.role,
         designationBadge: designationInfo.designationBadge,
         isCouncilOfficer: true,
       };
@@ -237,7 +230,7 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
       if (!r || (!r.uid && !r.email)) continue;
       const cleanBtId = r.btId ? r.btId.trim().toUpperCase() : "";
       const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId) : null;
-      const assignedRole = designationInfo ? designationInfo.role : (r.role || "STUDENT");
+      const assignedRole = r.role || "STUDENT";
       const assignedBadge = designationInfo ? designationInfo.designationBadge : r.designationBadge;
 
       const record: RegisteredUserRecord = {
@@ -307,7 +300,7 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
     const cleanBtId = user.btId ? user.btId.trim().toUpperCase() : "";
     const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId) : null;
 
-    const assignedRole = designationInfo ? designationInfo.role : (user.role || "STUDENT");
+    const assignedRole = user.role || (existingIndex >= 0 ? current[existingIndex].role : "STUDENT");
     const assignedBadge = designationInfo ? designationInfo.designationBadge : user.designationBadge;
     const isOfficer = designationInfo ? true : Boolean(user.isCouncilOfficer);
 

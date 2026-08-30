@@ -38,7 +38,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const cleanBt = parsed.btId ? parsed.btId.trim().toUpperCase() : "";
         const desig = cleanBt ? resolveDesignationByBtId(cleanBt) : null;
         if (desig) {
-          parsed.role = desig.role;
           parsed.designationBadge = desig.designationBadge;
           parsed.isCouncilOfficer = true;
         }
@@ -84,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           (cleanBt && cleanBt.length > 0)
         );
 
-        const assignedRole = isAdminUser || designationInfo?.role === "COUNCIL_ADMIN" 
+        const assignedRole = isAdminUser 
           ? "COUNCIL_ADMIN" 
           : (storedProfile?.role || localProfile?.role || registeredUser?.role || "STUDENT");
 
@@ -165,7 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           (cleanBt && cleanBt.length > 0)
         );
 
-        const assignedRole = isAdminUser || designationInfo?.role === "COUNCIL_ADMIN" 
+        const assignedRole = isAdminUser 
           ? "COUNCIL_ADMIN" 
           : (storedProfile?.role || localProfile?.role || registeredUser?.role || "STUDENT");
 
@@ -232,7 +231,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email: normalizedEmail,
           displayName: `${firstName} ${lastName}`,
           photoURL: null,
-          role: isAdminUser || desig?.role === "COUNCIL_ADMIN" ? "COUNCIL_ADMIN" : "STUDENT",
+          role: isAdminUser ? "COUNCIL_ADMIN" : "STUDENT",
           isCollegeStudent: true,
           firstName,
           lastName,
@@ -260,7 +259,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: normalizedEmail,
         displayName: normalizedEmail.split("@")[0].replace(".", " "),
         photoURL: null,
-        role: isAdminUser || desig?.role === "COUNCIL_ADMIN" ? "COUNCIL_ADMIN" : "STUDENT",
+        role: isAdminUser ? "COUNCIL_ADMIN" : "STUDENT",
         isCollegeStudent: true,
         firstName: normalizedEmail.split("@")[0] || "Student",
         lastName: "",
@@ -346,7 +345,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ...data,
       btId: mergedBtId,
       displayName: data.displayName || `${data.firstName || user.firstName || ""} ${data.lastName || user.lastName || ""}`.trim() || user.displayName,
-      role: designationInfo?.role === "COUNCIL_ADMIN" ? "COUNCIL_ADMIN" : (data.role || user.role),
+      role: data.role || user.role || "STUDENT",
       designationBadge: designationInfo ? designationInfo.designationBadge : (data.designationBadge || user.designationBadge),
       isCouncilOfficer: designationInfo ? true : Boolean(data.isCouncilOfficer || user.isCouncilOfficer),
       profileCompleted: true,
