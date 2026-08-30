@@ -31,6 +31,7 @@ export function saveStoredCouncilMembers(members: TeamMember[]): void {
   try {
     localStorage.setItem("src_council_team", JSON.stringify(members));
     window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: members }));
+    window.dispatchEvent(new CustomEvent("src_users_updated"));
     saveSiteContentToFirestore("council_team", members);
   } catch (e) {
     console.error("Could not save council team to storage", e);
@@ -44,6 +45,7 @@ export async function syncCouncilMembersFromFirestore(): Promise<TeamMember[]> {
       if (typeof window !== "undefined") {
         localStorage.setItem("src_council_team", JSON.stringify(remote));
         window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: remote }));
+        window.dispatchEvent(new CustomEvent("src_users_updated"));
       }
       return remote;
     }
@@ -71,6 +73,7 @@ export function saveStoredHostingCommittee(members: TeamMember[]): void {
   try {
     localStorage.setItem("src_hosting_committee", JSON.stringify(members));
     window.dispatchEvent(new CustomEvent("src_hosting_updated", { detail: members }));
+    window.dispatchEvent(new CustomEvent("src_users_updated"));
     saveSiteContentToFirestore("hosting_committee", members);
   } catch (e) {
     console.error("Could not save hosting committee to storage", e);
@@ -84,6 +87,7 @@ export async function syncHostingCommitteeFromFirestore(): Promise<TeamMember[]>
       if (typeof window !== "undefined") {
         localStorage.setItem("src_hosting_committee", JSON.stringify(remote));
         window.dispatchEvent(new CustomEvent("src_hosting_updated", { detail: remote }));
+        window.dispatchEvent(new CustomEvent("src_users_updated"));
       }
       return remote;
     }

@@ -19,7 +19,7 @@ import {
   saveUserProfileToFirestore 
 } from "@/lib/firebase/firestore";
 import { UserProfile, AuthUser, AuthContextType } from "@/types/auth";
-import { saveRegisteredUser, getStoredUsers } from "@/lib/usersStore";
+import { saveRegisteredUser, getStoredUsers, resolveDesignationByBtId } from "@/lib/usersStore";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -35,6 +35,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const cached = localStorage.getItem("src_auth_user");
       if (cached) {
         const parsed = JSON.parse(cached);
+        const cleanBt = parsed.btId ? parsed.btId.trim().toUpperCase() : "";
+        const desig = cleanBt ? resolveDesignationByBtId(cleanBt) : null;
+        if (desig) {
+          parsed.role = desig.role;
+          parsed.designationBadge = desig.designationBadge;
+          parsed.isCouncilOfficer = true;
+        }
         setUser(parsed);
       }
     } catch (e) {
@@ -67,27 +74,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch {}
 
         const resolvedBtId = storedProfile?.btId || localProfile?.btId || registeredUser?.btId || "";
+        const cleanBt = resolvedBtId ? resolvedBtId.trim().toUpperCase() : "";
+        const designationInfo = cleanBt ? resolveDesignationByBtId(cleanBt) : null;
+
         const isCompleted = Boolean(
           storedProfile?.profileCompleted || 
           localProfile?.profileCompleted || 
           registeredUser?.profileCompleted || 
-          (resolvedBtId && resolvedBtId.trim().length > 0)
+          (cleanBt && cleanBt.length > 0)
         );
+
+        const assignedRole = isAdminUser || designationInfo?.role === "COUNCIL_ADMIN" 
+          ? "COUNCIL_ADMIN" 
+          : (storedProfile?.role || localProfile?.role || registeredUser?.role || "STUDENT");
+
+        const assignedBadge = designationInfo 
+          ? designationInfo.designationBadge 
+          : (storedProfile?.designationBadge || localProfile?.designationBadge || registeredUser?.designationBadge);
 
         const merged: AuthUser = {
           uid: fbUser.uid,
           email: fbUser.email,
           displayName: storedProfile?.displayName || localProfile?.displayName || registeredUser?.displayName || fbUser.displayName || fbUser.email?.split("@")[0] || "JDCOEM Student",
           photoURL: fbUser.photoURL || storedProfile?.photoURL || localProfile?.photoURL || registeredUser?.photoURL || null,
-          role: isAdminUser ? "COUNCIL_ADMIN" : (storedProfile?.role || localProfile?.role || registeredUser?.role || "STUDENT"),
+          role: assignedRole,
           isCollegeStudent: fbUser.isCollegeStudent,
           firstName: storedProfile?.firstName || localProfile?.firstName || registeredUser?.firstName || (fbUser.displayName ? fbUser.displayName.split(" ")[0] : ""),
           lastName: storedProfile?.lastName || localProfile?.lastName || registeredUser?.lastName || (fbUser.displayName ? fbUser.displayName.split(" ").slice(1).join(" ") : ""),
-          btId: resolvedBtId,
+          btId: cleanBt,
           department: storedProfile?.department || localProfile?.department || registeredUser?.department || "Computer Science and Engineering",
           year: storedProfile?.year || localProfile?.year || registeredUser?.year || "3rd Year",
           phone: storedProfile?.phone || localProfile?.phone || registeredUser?.phone || "",
           profileCompleted: isCompleted,
+          designationBadge: assignedBadge,
+          isCouncilOfficer: designationInfo ? true : Boolean(storedProfile?.isCouncilOfficer || localProfile?.isCouncilOfficer || registeredUser?.isCouncilOfficer),
         };
 
         setUser(merged);
@@ -135,27 +155,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch {}
 
         const resolvedBtId = storedProfile?.btId || localProfile?.btId || registeredUser?.btId || "";
+        const cleanBt = resolvedBtId ? resolvedBtId.trim().toUpperCase() : "";
+        const designationInfo = cleanBt ? resolveDesignationByBtId(cleanBt) : null;
+
         const isCompleted = Boolean(
           storedProfile?.profileCompleted || 
           localProfile?.profileCompleted || 
           registeredUser?.profileCompleted || 
-          (resolvedBtId && resolvedBtId.trim().length > 0)
+          (cleanBt && cleanBt.length > 0)
         );
+
+        const assignedRole = isAdminUser || designationInfo?.role === "COUNCIL_ADMIN" 
+          ? "COUNCIL_ADMIN" 
+          : (storedProfile?.role || localProfile?.role || registeredUser?.role || "STUDENT");
+
+        const assignedBadge = designationInfo 
+          ? designationInfo.designationBadge 
+          : (storedProfile?.designationBadge || localProfile?.designationBadge || registeredUser?.designationBadge);
 
         const merged: AuthUser = {
           uid: fbUser.uid,
           email: fbUser.email,
           displayName: storedProfile?.displayName || localProfile?.displayName || registeredUser?.displayName || fbUser.displayName || "Google Student",
           photoURL: fbUser.photoURL || storedProfile?.photoURL || localProfile?.photoURL || null,
-          role: isAdminUser ? "COUNCIL_ADMIN" : (storedProfile?.role || localProfile?.role || registeredUser?.role || "STUDENT"),
+          role: assignedRole,
           isCollegeStudent: fbUser.isCollegeStudent,
           firstName: storedProfile?.firstName || localProfile?.firstName || registeredUser?.firstName || (fbUser.displayName ? fbUser.displayName.split(" ")[0] : ""),
           lastName: storedProfile?.lastName || localProfile?.lastName || registeredUser?.lastName || (fbUser.displayName ? fbUser.displayName.split(" ").slice(1).join(" ") : ""),
-          btId: resolvedBtId,
+          btId: cleanBt,
           department: storedProfile?.department || localProfile?.department || registeredUser?.department || "Computer Science and Engineering",
           year: storedProfile?.year || localProfile?.year || registeredUser?.year || "3rd Year",
           phone: storedProfile?.phone || localProfile?.phone || registeredUser?.phone || "",
           profileCompleted: isCompleted,
+          designationBadge: assignedBadge,
+          isCouncilOfficer: designationInfo ? true : Boolean(storedProfile?.isCouncilOfficer || localProfile?.isCouncilOfficer || registeredUser?.isCouncilOfficer),
         };
 
         setUser(merged);
@@ -163,7 +196,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         saveRegisteredUser(merged);
         setIsAuthModalOpen(false);
 
-        if (!isCompleted && !resolvedBtId) {
+        if (!isCompleted && !cleanBt) {
           setIsProfileModalOpen(true);
         } else {
           setIsProfileModalOpen(false);
@@ -191,20 +224,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const namePart = normalizedEmail.split("@")[0].replace(".", " ");
         const firstName = namePart.split(" ")[0] || "Aryan";
         const lastName = namePart.split(" ").slice(1).join(" ") || "Sharma";
+        const btId = isAdminUser ? "EXEC-2026" : "BT22CSE045";
+        const desig = resolveDesignationByBtId(btId);
 
         const mockUser: AuthUser = {
           uid: `user-${Date.now()}`,
           email: normalizedEmail,
           displayName: `${firstName} ${lastName}`,
           photoURL: null,
-          role: isAdminUser ? "COUNCIL_ADMIN" : "STUDENT",
+          role: isAdminUser || desig?.role === "COUNCIL_ADMIN" ? "COUNCIL_ADMIN" : "STUDENT",
           isCollegeStudent: true,
           firstName,
           lastName,
-          btId: isAdminUser ? "EXEC-2026" : "BT22CSE045",
+          btId,
           department: "Computer Science and Engineering",
           year: "3rd Year",
           profileCompleted: true,
+          designationBadge: desig?.designationBadge,
+          isCouncilOfficer: Boolean(desig),
         };
         setUser(mockUser);
         localStorage.setItem("src_auth_user", JSON.stringify(mockUser));
@@ -215,19 +252,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // If Firebase failed, still provide friendly fallback
       const normalizedEmail = email.toLowerCase().trim();
       const isAdminUser = normalizedEmail.includes("admin") || normalizedEmail.startsWith("src.");
+      const btId = "BT22CSE045";
+      const desig = resolveDesignationByBtId(btId);
+
       const mockUser: AuthUser = {
         uid: `user-${Date.now()}`,
         email: normalizedEmail,
         displayName: normalizedEmail.split("@")[0].replace(".", " "),
         photoURL: null,
-        role: isAdminUser ? "COUNCIL_ADMIN" : "STUDENT",
+        role: isAdminUser || desig?.role === "COUNCIL_ADMIN" ? "COUNCIL_ADMIN" : "STUDENT",
         isCollegeStudent: true,
         firstName: normalizedEmail.split("@")[0] || "Student",
         lastName: "",
-        btId: "BT22CSE045",
+        btId,
         department: "Computer Science and Engineering",
         year: "3rd Year",
         profileCompleted: true,
+        designationBadge: desig?.designationBadge,
+        isCouncilOfficer: Boolean(desig),
       };
       setUser(mockUser);
       localStorage.setItem("src_auth_user", JSON.stringify(mockUser));
@@ -296,10 +338,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const updateUserProfile = async (data: Partial<UserProfile>) => {
     if (!user) return;
 
+    const mergedBtId = (data.btId !== undefined ? data.btId : user.btId || "").trim().toUpperCase();
+    const designationInfo = mergedBtId ? resolveDesignationByBtId(mergedBtId) : null;
+
     const updatedUser: AuthUser = {
       ...user,
       ...data,
+      btId: mergedBtId,
       displayName: data.displayName || `${data.firstName || user.firstName || ""} ${data.lastName || user.lastName || ""}`.trim() || user.displayName,
+      role: designationInfo?.role === "COUNCIL_ADMIN" ? "COUNCIL_ADMIN" : (data.role || user.role),
+      designationBadge: designationInfo ? designationInfo.designationBadge : (data.designationBadge || user.designationBadge),
+      isCouncilOfficer: designationInfo ? true : Boolean(data.isCouncilOfficer || user.isCouncilOfficer),
       profileCompleted: true,
     };
 

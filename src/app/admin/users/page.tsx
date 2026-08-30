@@ -203,14 +203,24 @@ export default function AdminUsersPage() {
       }
     };
 
+    const handleTeamUpdate = () => {
+      setUsers(getStoredUsers());
+    };
+
     window.addEventListener("src_users_updated", handleUsersUpdate);
     window.addEventListener("src_departments_updated", handleDeptsUpdate);
+    window.addEventListener("src_council_team_updated", handleTeamUpdate);
+    window.addEventListener("src_hosting_updated", handleTeamUpdate);
+    window.addEventListener("src_clubs_updated", handleTeamUpdate);
     window.addEventListener("storage", handleUsersUpdate);
 
     return () => {
       unsubscribeFirestore();
       window.removeEventListener("src_users_updated", handleUsersUpdate);
       window.removeEventListener("src_departments_updated", handleDeptsUpdate);
+      window.removeEventListener("src_council_team_updated", handleTeamUpdate);
+      window.removeEventListener("src_hosting_updated", handleTeamUpdate);
+      window.removeEventListener("src_clubs_updated", handleTeamUpdate);
       window.removeEventListener("storage", handleUsersUpdate);
     };
   }, []);

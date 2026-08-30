@@ -131,7 +131,7 @@ export const DEFAULT_REGISTERED_USERS: RegisteredUserRecord[] = [
     email: "sanskrutitidke@jdcoem.ac.in",
     displayName: "Sanskruti Tidke",
     photoURL: null,
-    role: "STUDENT",
+    role: "COUNCIL_ADMIN",
     isCollegeStudent: true,
     firstName: "Sanskruti",
     lastName: "Tidke",
@@ -140,6 +140,8 @@ export const DEFAULT_REGISTERED_USERS: RegisteredUserRecord[] = [
     year: "3rd Year",
     phone: "9075828232",
     profileCompleted: true,
+    designationBadge: "President • Central Council",
+    isCouncilOfficer: true,
     lastActive: "2026-08-31T01:00:00.000Z",
     createdAt: "2026-08-31T01:00:00.000Z",
   },
@@ -157,7 +159,7 @@ export const DEFAULT_REGISTERED_USERS: RegisteredUserRecord[] = [
     year: "4th Year / Final Year",
     phone: "",
     profileCompleted: true,
-    designationBadge: "Tech & Dev Head",
+    designationBadge: "Mentor • Central Council",
     isCouncilOfficer: true,
     lastActive: "2026-08-31T01:00:00.000Z",
     createdAt: "2026-08-30T18:00:00.000Z",
@@ -168,35 +170,51 @@ export const DEFAULT_REGISTERED_USERS: RegisteredUserRecord[] = [
  * Retrieve all registered active users from local storage or defaults
  */
 export function getStoredUsers(): RegisteredUserRecord[] {
-  if (typeof window === "undefined") return DEFAULT_REGISTERED_USERS;
-  try {
-    const stored = localStorage.getItem(USERS_STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        // Ensure default accounts are present
-        const map = new Map<string, RegisteredUserRecord>();
-        for (const u of DEFAULT_REGISTERED_USERS) {
-          if (u.email) map.set(u.email.toLowerCase(), u);
-        }
-        for (const u of parsed) {
-          if (u && u.email) {
-            const key = u.email.toLowerCase();
-            const existing = map.get(key);
-            if (key === "sanskrutitidke@jdcoem.ac.in" && u.year === "2nd Year") {
-              u.year = "3rd Year";
-              u.phone = u.phone || "9075828232";
-            }
-            map.set(key, { ...(existing || {}), ...u });
+  let list: RegisteredUserRecord[] = DEFAULT_REGISTERED_USERS;
+  if (typeof window !== "undefined") {
+    try {
+      const stored = localStorage.getItem(USERS_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const map = new Map<string, RegisteredUserRecord>();
+          for (const u of DEFAULT_REGISTERED_USERS) {
+            if (u.email) map.set(u.email.toLowerCase(), u);
           }
+          for (const u of parsed) {
+            if (u && u.email) {
+              const key = u.email.toLowerCase();
+              const existing = map.get(key);
+              if (key === "sanskrutitidke@jdcoem.ac.in" && u.year === "2nd Year") {
+                u.year = "3rd Year";
+                u.phone = u.phone || "9075828232";
+              }
+              map.set(key, { ...(existing || {}), ...u });
+            }
+          }
+          list = Array.from(map.values());
         }
-        return Array.from(map.values());
       }
+    } catch (e) {
+      console.warn("Could not read users from storage", e);
     }
-  } catch (e) {
-    console.warn("Could not read users from storage", e);
   }
-  return DEFAULT_REGISTERED_USERS;
+
+  // Always dynamically resolve designation badge & council privileges from live team store
+  return list.map((user) => {
+    const cleanBtId = user.btId ? user.btId.trim().toUpperCase() : "";
+    const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId) : null;
+    if (designationInfo) {
+      return {
+        ...user,
+        btId: cleanBtId,
+        role: designationInfo.role,
+        designationBadge: designationInfo.designationBadge,
+        isCouncilOfficer: true,
+      };
+    }
+    return user;
+  });
 }
 
 /**
