@@ -127,6 +127,12 @@ export function ProfileSetupModal() {
       return;
     }
 
+    const cleanPhone = phone.trim();
+    if (!cleanPhone) {
+      setError("Please enter your WhatsApp contact number.");
+      return;
+    }
+
     // 1. Uniqueness check: Is this BT ID already linked to another email?
     const availability = checkBtIdAvailability(cleanBtId, user?.uid);
     if (!availability.available) {
@@ -313,14 +319,16 @@ export function ProfileSetupModal() {
             </select>
           </div>
 
-          {/* WhatsApp / Phone (Optional) */}
+          {/* WhatsApp / Phone */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-700">
-              WhatsApp Contact Number (Optional)
+            <label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
+              <span>WhatsApp Contact Number</span>
+              <span className="text-rose-500 font-bold">*</span>
             </label>
             <input
               type="tel"
-              placeholder="+91 98230 11223"
+              required
+              placeholder="e.g. 9823011223"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
