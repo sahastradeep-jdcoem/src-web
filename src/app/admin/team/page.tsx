@@ -29,27 +29,23 @@ import {
   saveStoredCouncilMembers,
   getStoredHostingCommittee,
   saveStoredHostingCommittee,
-  getStoredSpokespersons,
-  saveStoredSpokespersons,
   syncCouncilMembersFromFirestore,
-  syncHostingCommitteeFromFirestore,
-  syncSpokespersonsFromFirestore
+  syncHostingCommitteeFromFirestore
 } from "@/lib/councilStore";
 import { getStoredDepartments, syncDepartmentsFromFirestore } from "@/lib/departmentsStore";
-import { adminCouncilMembers } from "@/data/team";
+import { adminCouncilMembers, hostingCommitteeMembers } from "@/data/team";
 import { TeamMember } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
 
-type TeamCategoryTab = "council" | "hosting" | "spokespersons";
+type TeamCategoryTab = "council" | "hosting";
 
 export default function AdminTeamPage() {
   const [activeTab, setActiveTab] = useState<TeamCategoryTab>("council");
   const [councilMembers, setCouncilMembers] = useState<TeamMember[]>([]);
   const [hostingMembers, setHostingMembers] = useState<TeamMember[]>([]);
-  const [spokespersons, setSpokespersons] = useState<TeamMember[]>([]);
   const [departmentsList, setDepartmentsList] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   
@@ -60,7 +56,6 @@ export default function AdminTeamPage() {
   useEffect(() => {
     setCouncilMembers(getStoredCouncilMembers());
     setHostingMembers(getStoredHostingCommittee());
-    setSpokespersons(getStoredSpokespersons());
     setDepartmentsList(getStoredDepartments());
 
     syncCouncilMembersFromFirestore().then((res) => {
@@ -68,9 +63,6 @@ export default function AdminTeamPage() {
     });
     syncHostingCommitteeFromFirestore().then((res) => {
       if (res) setHostingMembers(res);
-    });
-    syncSpokespersonsFromFirestore().then((res) => {
-      if (res) setSpokespersons(res);
     });
     syncDepartmentsFromFirestore().then((res) => {
       if (res) setDepartmentsList(res);
@@ -81,20 +73,15 @@ export default function AdminTeamPage() {
   const currentMembers = 
     activeTab === "council" 
       ? councilMembers 
-      : activeTab === "hosting" 
-      ? hostingMembers 
-      : spokespersons;
+      : hostingMembers;
 
   const saveCurrentList = (updated: TeamMember[]) => {
     if (activeTab === "council") {
       setCouncilMembers(updated);
       saveStoredCouncilMembers(updated);
-    } else if (activeTab === "hosting") {
+    } else {
       setHostingMembers(updated);
       saveStoredHostingCommittee(updated);
-    } else {
-      setSpokespersons(updated);
-      saveStoredSpokespersons(updated);
     }
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
@@ -115,7 +102,7 @@ export default function AdminTeamPage() {
       role: "",
       department: "Computer Science & Engineering",
       year: "4th Year",
-      level: activeTab === "council" ? "Executive Secretariat" : activeTab === "hosting" ? "Host" : "Spokesperson",
+      level: activeTab === "council" ? "Executive Secretariat" : "Hosting Committee",
       bio: "",
       avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
       badgeNumber: `${currentMembers.length + 1}`,
@@ -159,6 +146,8 @@ export default function AdminTeamPage() {
     if (confirm("Reset roster to default templates?")) {
       if (activeTab === "council") {
         saveCurrentList(adminCouncilMembers);
+      } else {
+        saveCurrentList(hostingCommitteeMembers);
       }
     }
   };
@@ -248,18 +237,6 @@ export default function AdminTeamPage() {
         >
           <Mic2 className="w-4 h-4" />
           <span>Hosting Committee ({hostingMembers.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab("spokespersons")}
-          className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === "spokespersons"
-              ? "bg-[#17458F] text-white shadow-xs"
-              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-          }`}
-        >
-          <Megaphone className="w-4 h-4" />
-          <span>Spokespersons ({spokespersons.length})</span>
         </button>
       </div>
 

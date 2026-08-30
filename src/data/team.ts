@@ -243,7 +243,7 @@ export const adminCouncilMembers: TeamMember[] = [
   }
 ];
 
-// 2. HOSTING COMMITTEE
+// 2. HOSTING COMMITTEE (Includes Stage Emcees & Council Spokespersons)
 export const hostingCommitteeMembers: TeamMember[] = [
   {
     id: "host-1",
@@ -304,87 +304,85 @@ export const hostingCommitteeMembers: TeamMember[] = [
     linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.hosting.associate@jdcoem.ac.in",
     order: 4
-  }
-];
-
-// 3. OFFICIAL COUNCIL SPOKESPERSONS (4 to 5 Spokespersons)
-export const spokespersonMembers: TeamMember[] = [
+  },
   {
     id: "spoke-1",
     name: "Name Placeholder",
     role: "Chief Spokesperson",
     designation: "Principal Student Voice",
-    level: "Council Spokesperson",
-    category: "Spokespersons",
+    level: "Hosting Committee",
+    category: "Hosting Committee",
     department: "Computer Science & Engineering",
     year: "4th Year",
     avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
     bio: "Delivering central council addresses, student body press statements, and presiding over council town-halls.",
     linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.spokesperson1@jdcoem.ac.in",
-    order: 1
+    order: 5
   },
   {
     id: "spoke-2",
     name: "Name Placeholder",
     role: "Spokesperson — Engineering Affairs",
     designation: "Technical & Core Branches Voice",
-    level: "Council Spokesperson",
-    category: "Spokespersons",
+    level: "Hosting Committee",
+    category: "Hosting Committee",
     department: "Mechanical & Civil Engineering",
     year: "4th Year",
     avatar: "https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?q=80&w=600&auto=format&fit=crop",
     bio: "Voicing student representations for core engineering departments, lab resources, and technical societies.",
     linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.spokesperson2@jdcoem.ac.in",
-    order: 2
+    order: 6
   },
   {
     id: "spoke-3",
     name: "Name Placeholder",
     role: "Spokesperson — Computing & AI",
     designation: "Circuits & IT Wings Voice",
-    level: "Council Spokesperson",
-    category: "Spokespersons",
+    level: "Hosting Committee",
+    category: "Hosting Committee",
     department: "AI/DS & Information Technology",
     year: "3rd Year",
     avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=600&auto=format&fit=crop",
     bio: "Representing student needs across computing streams, coding hackathons, and placement preparatory forums.",
     linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.spokesperson3@jdcoem.ac.in",
-    order: 3
+    order: 7
   },
   {
     id: "spoke-4",
     name: "Name Placeholder",
     role: "Spokesperson — Management & Commerce",
     designation: "MBA & Allied Programs Voice",
-    level: "Council Spokesperson",
-    category: "Spokespersons",
+    level: "Hosting Committee",
+    category: "Hosting Committee",
     department: "Department of Management Studies (MBA)",
     year: "2nd Year",
     avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=600&auto=format&fit=crop",
     bio: "Liaisoning for business conclaves, entrepreneurship initiatives, and management branch student representations.",
     linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.spokesperson4@jdcoem.ac.in",
-    order: 4
+    order: 8
   },
   {
     id: "spoke-5",
     name: "Name Placeholder",
     role: "Spokesperson — Student Welfare & First Years",
     designation: "Junior Affairs Representative",
-    level: "Council Spokesperson",
-    category: "Spokespersons",
+    level: "Hosting Committee",
+    category: "Hosting Committee",
     department: "First Year Engineering (FYE)",
     year: "2nd Year",
     avatar: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=600&auto=format&fit=crop",
     bio: "Facilitating smooth campus onboarding, orientation forums, hostel student welfare, and grievance redressals for junior cohorts.",
     linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "src.spokesperson5@jdcoem.ac.in",
-    order: 5
+    order: 9
   }
 ];
+
+export const spokespersonMembers: TeamMember[] = [];
 
 // 4. 12 CHARTERED CLUBS LEADERSHIP
 export const clubLeadsData = [
