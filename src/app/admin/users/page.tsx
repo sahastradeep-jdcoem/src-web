@@ -20,7 +20,8 @@ import {
   Hash,
   Inbox,
   UserPlus,
-  RefreshCw
+  RefreshCw,
+  Edit3
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -44,6 +45,7 @@ export default function AdminUsersPage() {
   const [roleFilter, setRoleFilter] = useState("All");
   const [deptFilter, setDeptFilter] = useState("All");
   const [selectedUser, setSelectedUser] = useState<RegisteredUserRecord | null>(null);
+  const [userToEdit, setUserToEdit] = useState<RegisteredUserRecord | null>(null);
   const [userToDelete, setUserToDelete] = useState<RegisteredUserRecord | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -65,9 +67,59 @@ export default function AdminUsersPage() {
     email: "",
     btId: "",
     department: "Data Science Engineering",
-    year: "2nd Year",
+    year: "3rd Year",
     role: "STUDENT" as "STUDENT" | "COUNCIL_ADMIN",
   });
+
+  const [editUserForm, setEditUserForm] = useState({
+    displayName: "",
+    email: "",
+    btId: "",
+    department: "Data Science Engineering",
+    year: "3rd Year",
+    phone: "",
+    role: "STUDENT" as "STUDENT" | "COUNCIL_ADMIN",
+  });
+
+  const openEditModal = (u: RegisteredUserRecord) => {
+    setUserToEdit(u);
+    setEditUserForm({
+      displayName: u.displayName || "",
+      email: u.email || "",
+      btId: u.btId || "",
+      department: u.department || "Data Science Engineering",
+      year: u.year || "3rd Year",
+      phone: u.phone || "",
+      role: u.role === "COUNCIL_ADMIN" ? "COUNCIL_ADMIN" : "STUDENT",
+    });
+  };
+
+  const handleUpdateUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userToEdit) return;
+
+    const cleanBt = editUserForm.btId.trim().toUpperCase();
+    const parts = editUserForm.displayName.trim().split(" ");
+
+    const updatedRecord: RegisteredUserRecord = {
+      ...userToEdit,
+      displayName: editUserForm.displayName.trim(),
+      email: editUserForm.email.trim().toLowerCase(),
+      btId: cleanBt,
+      department: editUserForm.department,
+      year: editUserForm.year,
+      phone: editUserForm.phone.trim(),
+      role: editUserForm.role,
+      firstName: parts[0] || userToEdit.firstName || "",
+      lastName: parts.slice(1).join(" ") || userToEdit.lastName || "",
+      profileCompleted: Boolean(cleanBt),
+      lastActive: new Date().toISOString(),
+    };
+
+    saveRegisteredUser(updatedRecord);
+    showNotice(`Successfully updated profile for ${updatedRecord.displayName} (${updatedRecord.year}).`);
+    setUserToEdit(null);
+  };
 
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,7 +158,7 @@ export default function AdminUsersPage() {
       email: "",
       btId: "",
       department: "Data Science Engineering",
-      year: "2nd Year",
+      year: "3rd Year",
       role: "STUDENT",
     });
   };
@@ -499,6 +551,14 @@ export default function AdminUsersPage() {
                         </button>
 
                         <button
+                          onClick={() => openEditModal(u)}
+                          className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#17458F] transition-colors cursor-pointer"
+                          title="Edit Student Profile & Year"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
                           onClick={() => handleRoleToggle(u)}
                           className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                             u.role === "COUNCIL_ADMIN"
@@ -783,6 +843,141 @@ export default function AdminUsersPage() {
                 size="sm"
               >
                 Save & Link Account
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Modal: Edit Student Record */}
+      {userToEdit && (
+        <Modal
+          isOpen={!!userToEdit}
+          onClose={() => setUserToEdit(null)}
+          title="Edit Student Record"
+          subtitle={`Update profile details for ${userToEdit.displayName}`}
+          maxWidth="lg"
+        >
+          <form onSubmit={handleUpdateUser} className="space-y-4 pt-2">
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                Full Name <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={editUserForm.displayName}
+                onChange={(e) => setEditUserForm({ ...editUserForm, displayName: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                College Email Address <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="email"
+                required
+                value={editUserForm.email}
+                onChange={(e) => setEditUserForm({ ...editUserForm, email: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  College BT ID
+                </label>
+                <input
+                  type="text"
+                  value={editUserForm.btId}
+                  onChange={(e) => setEditUserForm({ ...editUserForm, btId: e.target.value.toUpperCase() })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold text-[#E78023] focus:outline-none focus:border-[#17458F]"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  Contact Phone
+                </label>
+                <input
+                  type="text"
+                  value={editUserForm.phone}
+                  onChange={(e) => setEditUserForm({ ...editUserForm, phone: e.target.value })}
+                  placeholder="e.g. 9075828232"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  Department / Branch
+                </label>
+                <select
+                  value={editUserForm.department}
+                  onChange={(e) => setEditUserForm({ ...editUserForm, department: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                >
+                  {departments.map((dept) => (
+                    <option key={dept} value={dept}>
+                      {dept}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  Year of Study <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={editUserForm.year}
+                  onChange={(e) => setEditUserForm({ ...editUserForm, year: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-[#17458F] focus:outline-none focus:border-[#17458F] cursor-pointer"
+                >
+                  <option value="1st Year">1st Year</option>
+                  <option value="2nd Year">2nd Year</option>
+                  <option value="3rd Year">3rd Year</option>
+                  <option value="4th Year / Final Year">4th Year / Final Year</option>
+                  <option value="Postgraduate (MBA/MCA)">Postgraduate (MBA/MCA)</option>
+                  <option value="Faculty / Alumni">Faculty / Alumni</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                Access Role
+              </label>
+              <select
+                value={editUserForm.role}
+                onChange={(e) => setEditUserForm({ ...editUserForm, role: e.target.value as any })}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+              >
+                <option value="STUDENT">Student (Delegate)</option>
+                <option value="COUNCIL_ADMIN">Council Admin</option>
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <Button
+                type="button"
+                onClick={() => setUserToEdit(null)}
+                variant="outline"
+                size="sm"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+              >
+                Save Changes
               </Button>
             </div>
           </form>

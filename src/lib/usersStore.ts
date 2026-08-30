@@ -137,8 +137,8 @@ export const DEFAULT_REGISTERED_USERS: RegisteredUserRecord[] = [
     lastName: "Tidke",
     btId: "BT240115DS",
     department: "Data Science Engineering",
-    year: "2nd Year",
-    phone: "",
+    year: "3rd Year",
+    phone: "9075828232",
     profileCompleted: true,
     lastActive: "2026-08-31T01:00:00.000Z",
     createdAt: "2026-08-31T01:00:00.000Z",
@@ -180,7 +180,15 @@ export function getStoredUsers(): RegisteredUserRecord[] {
           if (u.email) map.set(u.email.toLowerCase(), u);
         }
         for (const u of parsed) {
-          if (u && u.email) map.set(u.email.toLowerCase(), { ...(map.get(u.email.toLowerCase()) || {}), ...u });
+          if (u && u.email) {
+            const key = u.email.toLowerCase();
+            const existing = map.get(key);
+            if (key === "sanskrutitidke@jdcoem.ac.in" && u.year === "2nd Year") {
+              u.year = "3rd Year";
+              u.phone = u.phone || "9075828232";
+            }
+            map.set(key, { ...(existing || {}), ...u });
+          }
         }
         return Array.from(map.values());
       }
