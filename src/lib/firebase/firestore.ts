@@ -131,7 +131,7 @@ export async function getAllUsersFromFirestore(): Promise<UserProfile[]> {
       const usersRef = collection(db, USERS_COLLECTION);
       const snapshot = await getDocs(usersRef);
       if (!snapshot.empty) {
-        return snapshot.docs.map((d) => d.data() as UserProfile);
+        return snapshot.docs.map((d) => ({ uid: d.id, ...d.data() } as UserProfile));
       }
     }
   } catch (error) {
@@ -143,6 +143,31 @@ export async function getAllUsersFromFirestore(): Promise<UserProfile[]> {
     if (local) return JSON.parse(local);
   } catch {}
   return [];
+}
+
+/**
+ * Subscribe to real-time updates of all registered student users in Firestore
+ */
+export function subscribeToUsersFromFirestore(callback: (users: UserProfile[]) => void): () => void {
+  if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    return () => {};
+  }
+  try {
+    const usersRef = collection(db, USERS_COLLECTION);
+    return onSnapshot(
+      usersRef, 
+      (snapshot) => {
+        const users = snapshot.docs.map((d) => ({ uid: d.id, ...d.data() } as UserProfile));
+        callback(users);
+      },
+      (error) => {
+        console.warn("Firestore live users snapshot notice", error);
+      }
+    );
+  } catch (e) {
+    console.warn("Firestore subscription error", e);
+    return () => {};
+  }
 }
 
 /**

@@ -22,7 +22,8 @@ import {
 import { Badge } from "@/components/ui/Badge";
 import { getStoredClubs, getStoredCouncilMembers } from "@/lib/councilStore";
 import { getStoredEvents } from "@/lib/eventsStore";
-import { getStoredUsers } from "@/lib/usersStore";
+import { getStoredUsers, syncUsersFromFirestore, mergeRemoteUsers } from "@/lib/usersStore";
+import { subscribeToUsersFromFirestore } from "@/lib/firebase/firestore";
 
 export default function AdminOverviewPage() {
   const [councilCount, setCouncilCount] = useState(0);
@@ -46,6 +47,16 @@ export default function AdminOverviewPage() {
 
   useEffect(() => {
     refreshCounts();
+    syncUsersFromFirestore().then((synced) => {
+      if (synced) setUsersCount(synced.length);
+    });
+
+    const unsubscribeFirestore = subscribeToUsersFromFirestore((remoteUsers) => {
+      if (remoteUsers && remoteUsers.length > 0) {
+        const merged = mergeRemoteUsers(remoteUsers as any);
+        setUsersCount(merged.length);
+      }
+    });
 
     window.addEventListener("src_council_team_updated", refreshCounts);
     window.addEventListener("src_clubs_updated", refreshCounts);
@@ -54,6 +65,7 @@ export default function AdminOverviewPage() {
     window.addEventListener("storage", refreshCounts);
 
     return () => {
+      unsubscribeFirestore();
       window.removeEventListener("src_council_team_updated", refreshCounts);
       window.removeEventListener("src_clubs_updated", refreshCounts);
       window.removeEventListener("src_events_updated", refreshCounts);

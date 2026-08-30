@@ -19,7 +19,8 @@ import {
   Mail,
   Hash,
   Inbox,
-  UserPlus
+  UserPlus,
+  RefreshCw
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -29,8 +30,11 @@ import {
   saveRegisteredUser, 
   deleteRegisteredUser, 
   changeUserRole, 
+  mergeRemoteUsers,
+  syncUsersFromFirestore,
   RegisteredUserRecord 
 } from "@/lib/usersStore";
+import { subscribeToUsersFromFirestore } from "@/lib/firebase/firestore";
 import { getStoredDepartments } from "@/lib/departmentsStore";
 
 export default function AdminUsersPage() {
@@ -42,14 +46,42 @@ export default function AdminUsersPage() {
   const [selectedUser, setSelectedUser] = useState<RegisteredUserRecord | null>(null);
   const [userToDelete, setUserToDelete] = useState<RegisteredUserRecord | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
-  const loadData = () => {
+  const loadData = async () => {
     setUsers(getStoredUsers());
     setDepartments(getStoredDepartments());
+    try {
+      const synced = await syncUsersFromFirestore();
+      if (synced && synced.length > 0) {
+        setUsers(synced);
+      }
+    } catch {}
+  };
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      const synced = await syncUsersFromFirestore();
+      setUsers(synced);
+      showNotice(`Successfully synced ${synced.length} active registered users from cloud database.`);
+    } catch (e) {
+      showNotice("Could not reach cloud database, displaying cached roster.");
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   useEffect(() => {
     loadData();
+
+    // 1. Subscribe to Firestore live snapshot for instant cross-device updates
+    const unsubscribeFirestore = subscribeToUsersFromFirestore((remoteUsers) => {
+      if (remoteUsers && remoteUsers.length > 0) {
+        const merged = mergeRemoteUsers(remoteUsers as RegisteredUserRecord[]);
+        setUsers(merged);
+      }
+    });
 
     const handleUsersUpdate = (e: any) => {
       if (e?.detail && Array.isArray(e.detail)) {
@@ -72,6 +104,7 @@ export default function AdminUsersPage() {
     window.addEventListener("storage", handleUsersUpdate);
 
     return () => {
+      unsubscribeFirestore();
       window.removeEventListener("src_users_updated", handleUsersUpdate);
       window.removeEventListener("src_departments_updated", handleDeptsUpdate);
       window.removeEventListener("storage", handleUsersUpdate);
@@ -169,6 +202,17 @@ export default function AdminUsersPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <Button
+            onClick={handleManualSync}
+            variant="outline"
+            size="md"
+            className="gap-2 cursor-pointer bg-white"
+            disabled={isSyncing}
+          >
+            <RefreshCw className={`w-4 h-4 text-[#17458F] ${isSyncing ? "animate-spin" : ""}`} />
+            <span>{isSyncing ? "Syncing..." : "Sync Live Cloud"}</span>
+          </Button>
+
           <Button
             onClick={handleExportCSV}
             variant="secondary"

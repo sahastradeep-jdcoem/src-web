@@ -143,6 +143,83 @@ export function getStoredUsers(): RegisteredUserRecord[] {
 }
 
 /**
+ * Merge an array of remote users from Firestore into localStorage
+ */
+export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): RegisteredUserRecord[] {
+  if (typeof window === "undefined" || !Array.isArray(remoteUsers)) return getStoredUsers();
+  try {
+    const current = getStoredUsers();
+    const map = new Map<string, RegisteredUserRecord>();
+
+    // Seed with local users
+    for (const u of current) {
+      if (u.uid) map.set(u.uid, u);
+      else if (u.email) map.set(u.email.toLowerCase(), u);
+    }
+
+    // Merge remote users
+    for (const r of remoteUsers) {
+      if (!r || (!r.uid && !r.email)) continue;
+      const cleanBtId = r.btId ? r.btId.trim().toUpperCase() : "";
+      const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId) : null;
+      const assignedRole = designationInfo ? designationInfo.role : (r.role || "STUDENT");
+      const assignedBadge = designationInfo ? designationInfo.designationBadge : r.designationBadge;
+
+      const record: RegisteredUserRecord = {
+        uid: r.uid || `user-${Date.now()}`,
+        email: r.email || "",
+        displayName: r.displayName || `${r.firstName || ""} ${r.lastName || ""}`.trim() || "Student",
+        photoURL: r.photoURL || null,
+        role: assignedRole,
+        isCollegeStudent: r.isCollegeStudent ?? true,
+        firstName: r.firstName || "",
+        lastName: r.lastName || "",
+        btId: cleanBtId,
+        department: r.department || "Computer Science and Engineering",
+        year: r.year || "3rd Year",
+        phone: r.phone || "",
+        profileCompleted: r.profileCompleted ?? true,
+        designationBadge: assignedBadge,
+        isCouncilOfficer: designationInfo ? true : Boolean(r.isCouncilOfficer),
+        lastActive: r.lastActive || new Date().toISOString(),
+        createdAt: r.createdAt || new Date().toISOString(),
+      };
+
+      const key = record.uid || (record.email ? record.email.toLowerCase() : "");
+      if (key) {
+        map.set(key, { ...(map.get(key) || {}), ...record });
+      }
+    }
+
+    const mergedList = Array.from(map.values()).sort(
+      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    );
+
+    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(mergedList));
+    window.dispatchEvent(new CustomEvent("src_users_updated", { detail: mergedList }));
+    return mergedList;
+  } catch (e) {
+    console.warn("Could not merge remote users", e);
+    return getStoredUsers();
+  }
+}
+
+/**
+ * Trigger an asynchronous fetch and sync from Firestore
+ */
+export async function syncUsersFromFirestore(): Promise<RegisteredUserRecord[]> {
+  try {
+    const remote = await getAllUsersFromFirestore();
+    if (remote && remote.length > 0) {
+      return mergeRemoteUsers(remote as RegisteredUserRecord[]);
+    }
+  } catch (e) {
+    console.warn("Could not sync users from Firestore", e);
+  }
+  return getStoredUsers();
+}
+
+/**
  * Save or update a registered user record in both localStorage and Firestore
  */
 export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
