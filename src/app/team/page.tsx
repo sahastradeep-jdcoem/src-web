@@ -100,8 +100,14 @@ export default function TeamPage() {
         list.push(m);
       }
     });
-    return list;
+    return list.sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
   }, [hostingMembers, spokespersons]);
+
+  const sortedHostingMembers = unifiedHostingMembers;
+
+  const sortedCouncilMembers = React.useMemo(() => {
+    return [...councilMembers].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+  }, [councilMembers]);
 
   // Club Heads & Co-Heads converted to standard TeamMember cards
   const clubLeadMembers = React.useMemo(() => {
@@ -183,7 +189,7 @@ export default function TeamPage() {
 
           {/* Cards Grid */}
           <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
-            {councilMembers.map((member) => (
+            {sortedCouncilMembers.map((member) => (
               <CouncilMemberCard key={member.id} member={member} />
             ))}
           </div>
@@ -196,7 +202,7 @@ export default function TeamPage() {
         </section>
 
         {/* SECTION 2: HOSTING COMMITTEE (COUNCIL SPOKESPERSONS & STAGE ANCHORS) */}
-        {unifiedHostingMembers.length > 0 && (
+        {sortedHostingMembers.length > 0 && (
           <section className="space-y-8 pt-8 border-t border-slate-200">
             <div className="border-b border-slate-200 pb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
               <div className="space-y-1">
@@ -205,7 +211,7 @@ export default function TeamPage() {
                   <span>Stage Convocations & Student Representation</span>
                 </span>
                 <h2 className="font-extrabold text-2xl sm:text-4xl text-[#17458F] uppercase">
-                  HOSTING COMMITTEE ({unifiedHostingMembers.length})
+                  HOSTING COMMITTEE ({sortedHostingMembers.length})
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-500 font-medium">
                   Official council spokespersons, stage anchors, and emcees representing student voices and live event moderation.
@@ -214,7 +220,7 @@ export default function TeamPage() {
             </div>
 
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
-              {unifiedHostingMembers.map((member) => (
+              {sortedHostingMembers.map((member) => (
                 <CouncilMemberCard key={member.id} member={member} />
               ))}
             </div>

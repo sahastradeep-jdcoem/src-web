@@ -22,7 +22,10 @@ import {
   ShieldCheck,
   Mic2,
   Megaphone,
-  Hash
+  Hash,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown
 } from "lucide-react";
 import { 
   getStoredCouncilMembers, 
@@ -76,22 +79,42 @@ export default function AdminTeamPage() {
       : hostingMembers;
 
   const saveCurrentList = (updated: TeamMember[]) => {
+    // Re-index all orders to guarantee strict sequential 1..N order
+    const indexed = updated.map((m, idx) => ({
+      ...m,
+      order: idx + 1
+    }));
+
     if (activeTab === "council") {
-      setCouncilMembers(updated);
-      saveStoredCouncilMembers(updated);
+      setCouncilMembers(indexed);
+      saveStoredCouncilMembers(indexed);
     } else {
-      setHostingMembers(updated);
-      saveStoredHostingCommittee(updated);
+      setHostingMembers(indexed);
+      saveStoredHostingCommittee(indexed);
     }
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
   };
 
+  const handleMoveMember = (memberId: string, direction: "up" | "down") => {
+    const currentIndex = currentMembers.findIndex((m) => m.id === memberId);
+    if (currentIndex === -1) return;
+
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= currentMembers.length) return;
+
+    const newMembers = [...currentMembers];
+    const [moved] = newMembers.splice(currentIndex, 1);
+    newMembers.splice(targetIndex, 0, moved);
+
+    saveCurrentList(newMembers);
+  };
+
   const filteredMembers = currentMembers.filter(
     (m) =>
-      m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.department.toLowerCase().includes(searchQuery.toLowerCase())
+      (m.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (m.role || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (m.department || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleOpenAddModal = () => {
@@ -106,6 +129,7 @@ export default function AdminTeamPage() {
       bio: "",
       avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
       badgeNumber: `${currentMembers.length + 1}`,
+      order: currentMembers.length + 1,
       email: "",
       linkedin: "",
       btId: ""
@@ -121,13 +145,18 @@ export default function AdminTeamPage() {
       return;
     }
 
+    const maxRank = currentMembers.length + (isCreatingNew ? 1 : 0);
+    const targetRank = Math.max(1, Math.min(editingMember.order || maxRank, maxRank));
+
     let updated: TeamMember[];
     if (isCreatingNew) {
-      updated = [...currentMembers, editingMember];
+      const listWithoutNew = [...currentMembers];
+      listWithoutNew.splice(targetRank - 1, 0, { ...editingMember, order: targetRank });
+      updated = listWithoutNew;
     } else {
-      updated = currentMembers.map((m) =>
-        m.id === editingMember.id ? editingMember : m
-      );
+      const listFiltered = currentMembers.filter((m) => m.id !== editingMember.id);
+      listFiltered.splice(targetRank - 1, 0, { ...editingMember, order: targetRank });
+      updated = listFiltered;
     }
 
     saveCurrentList(updated);
@@ -254,75 +283,105 @@ export default function AdminTeamPage() {
 
       {/* Roster Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-        {filteredMembers.map((member) => (
-          <div
-            key={member.id}
-            className="p-5 rounded-3xl bg-white border border-slate-200 hover:border-[#17458F]/30 transition-all flex flex-col justify-between space-y-4 shadow-xs"
-          >
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                  {member.level || "Council Member"}
-                </span>
-                <span className="text-[10px] font-mono font-bold text-[#E78023]">
-                  #{member.badgeNumber || member.id.slice(-2)}
-                </span>
+        {filteredMembers.map((member) => {
+          const actualIndex = currentMembers.findIndex((m) => m.id === member.id);
+          return (
+            <div
+              key={member.id}
+              className="p-5 rounded-3xl bg-white border border-slate-200 hover:border-[#17458F]/30 transition-all flex flex-col justify-between space-y-4 shadow-xs"
+            >
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                      {member.level || "Council Member"}
+                    </span>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-[#17458F]/10 text-[#17458F]">
+                      Rank #{actualIndex + 1}
+                    </span>
+                  </div>
+
+                  {/* Move Up / Down Buttons */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleMoveMember(member.id, "up")}
+                      disabled={actualIndex === 0 || !!searchQuery}
+                      className="p-1 rounded-md bg-slate-100 hover:bg-[#17458F] text-slate-600 hover:text-white disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer"
+                      title="Move Up in Hierarchy"
+                    >
+                      <ArrowUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMoveMember(member.id, "down")}
+                      disabled={actualIndex === currentMembers.length - 1 || !!searchQuery}
+                      className="p-1 rounded-md bg-slate-100 hover:bg-[#17458F] text-slate-600 hover:text-white disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer"
+                      title="Move Down in Hierarchy"
+                    >
+                      <ArrowDown className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Photo & Name */}
+                <div className="flex items-center gap-3">
+                  <div className="relative h-14 w-14 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
+                    <Image
+                      src={member.avatar}
+                      alt={member.name}
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-sm text-[#0F172A] truncate">
+                      {member.name || "Untitled Member"}
+                    </h3>
+                    <p className="text-xs text-[#E78023] font-bold truncate">
+                      {member.role || "Untitled Position"}
+                    </p>
+                    <p className="text-[11px] text-slate-500 font-medium truncate">
+                      {member.department}
+                    </p>
+                    {member.btId && (
+                      <div className="pt-1">
+                        <span className="text-[10px] font-mono font-bold text-[#E78023] px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 inline-block">
+                          BT ID: {member.btId}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              {/* Photo & Name */}
-              <div className="flex items-center gap-3">
-                <div className="relative h-14 w-14 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
-                  <Image
-                    src={member.avatar}
-                    alt={member.name}
-                    fill
-                    className="object-cover"
-                  />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="font-bold text-sm text-[#0F172A] truncate">
-                    {member.name || "Untitled Member"}
-                  </h3>
-                  <p className="text-xs text-[#E78023] font-bold truncate">
-                    {member.role || "Untitled Position"}
-                  </p>
-                  <p className="text-[11px] text-slate-500 font-medium truncate">
-                    {member.department}
-                  </p>
-                  {member.btId && (
-                    <div className="pt-1">
-                      <span className="text-[10px] font-mono font-bold text-[#E78023] px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 inline-block">
-                        BT ID: {member.btId}
-                      </span>
-                    </div>
-                  )}
-                </div>
+              {/* Action Buttons */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                <button
+                  onClick={() => handleDeleteMember(member.id, member.name)}
+                  className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 transition-colors cursor-pointer"
+                  title="Remove Position / Officer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsCreatingNew(false);
+                    setEditingMember({
+                      ...member,
+                      order: actualIndex + 1
+                    });
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#17458F] hover:bg-[#0E2F66] text-white text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Edit Details</span>
+                </button>
               </div>
             </div>
-
-            {/* Action Buttons */}
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-              <button
-                onClick={() => handleDeleteMember(member.id, member.name)}
-                className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 transition-colors"
-                title="Remove Position / Officer"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-
-              <button
-                onClick={() => {
-                  setIsCreatingNew(false);
-                  setEditingMember(member);
-                }}
-                className="px-3.5 py-1.5 rounded-xl bg-[#17458F] hover:bg-[#0E2F66] text-white text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                <span>Edit Details</span>
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {filteredMembers.length === 0 && (
@@ -347,7 +406,7 @@ export default function AdminTeamPage() {
             setIsCreatingNew(false);
           }}
           title={isCreatingNew ? "Add New Council Position & Officer" : `Edit: ${editingMember.role || "Position"}`}
-          subtitle="Configure position title, student officer credentials, department, and photo."
+          subtitle="Configure position title, student officer credentials, hierarchy rank, and photo."
           maxWidth="lg"
         >
           <form onSubmit={handleSaveMember} className="space-y-5 text-xs text-slate-900">
@@ -379,6 +438,35 @@ export default function AdminTeamPage() {
                   value={editingMember.name}
                   onChange={(e) => setEditingMember({ ...editingMember, name: e.target.value })}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                />
+              </div>
+            </div>
+
+            {/* Hierarchy Rank & Category */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-700 flex items-center justify-between">
+                  <span>Hierarchy Priority / Rank #</span>
+                  <span className="text-[10px] text-slate-400">1 = Highest (Top of Page)</span>
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max={currentMembers.length + (isCreatingNew ? 1 : 0)}
+                  value={editingMember.order || 1}
+                  onChange={(e) => setEditingMember({ ...editingMember, order: parseInt(e.target.value) || 1 })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold text-[#17458F] focus:outline-none focus:border-[#17458F]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-700">Category / Tier</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Presidency, Technical & Systems, Cultural..."
+                  value={editingMember.level}
+                  onChange={(e) => setEditingMember({ ...editingMember, level: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
                 />
               </div>
             </div>
@@ -435,29 +523,16 @@ export default function AdminTeamPage() {
               </p>
             </div>
 
-            {/* Category / Tier & Badge Number */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="font-bold text-slate-700">Category / Tier</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Presidency, Technical & Systems, Cultural..."
-                  value={editingMember.level}
-                  onChange={(e) => setEditingMember({ ...editingMember, level: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="font-bold text-slate-700">Official Badge / Sash ID</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 01, EXEC-01"
-                  value={editingMember.badgeNumber || ""}
-                  onChange={(e) => setEditingMember({ ...editingMember, badgeNumber: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
-                />
-              </div>
+            {/* Official Badge / Sash ID */}
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-700">Official Badge / Sash ID</label>
+              <input
+                type="text"
+                placeholder="e.g. 01, EXEC-01"
+                value={editingMember.badgeNumber || ""}
+                onChange={(e) => setEditingMember({ ...editingMember, badgeNumber: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
+              />
             </div>
 
             {/* Email & LinkedIn */}
