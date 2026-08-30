@@ -118,7 +118,7 @@ export default function TeamPage() {
                 <span>Executive Council</span>
               </span>
               <h2 className="font-extrabold text-2xl sm:text-4xl text-[#17458F] uppercase">
-                {councilMembers.length} COUNCIL POSITIONS
+                {councilMembers.length} ADMIN POSITIONS
               </h2>
               <p className="text-xs sm:text-sm text-slate-500 font-medium">
                 The governing body authorized under JDCOEM student bylaws.
