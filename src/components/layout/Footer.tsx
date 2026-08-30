@@ -23,22 +23,35 @@ export default function Footer() {
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8 pb-12 border-b border-slate-200">
           
           <div className="flex flex-wrap items-center gap-6 sm:gap-10">
-            {/* SRC Horizontal B Logo */}
-            <div className="relative h-11 w-48 sm:w-56">
-              <Image
-                src="/assets/SRC Horizontal B.png"
-                alt="SRC Sahastradeep"
-                fill
-                className="object-contain object-left"
-              />
+            {/* SRC Official Logo & Seal */}
+            <div className="flex items-center gap-3.5 sm:gap-4">
+              <div className="relative h-14 w-14 sm:h-18 sm:w-18 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center p-2 shrink-0">
+                <Image
+                  src="/assets/SRC Logo.png"
+                  alt="Student Representative Council Sahastradeep"
+                  fill
+                  className="object-contain p-1"
+                />
+              </div>
+              <div className="flex flex-col">
+                <span className="font-hero font-extrabold text-base sm:text-lg text-[#17458F] tracking-tight leading-tight uppercase">
+                  SAHASTRADEEP
+                </span>
+                <span className="text-[11px] sm:text-xs font-sans font-bold text-[#E78023] uppercase tracking-wider leading-tight">
+                  Student Representative Council
+                </span>
+                <span className="text-[9px] sm:text-[10px] font-sans font-medium text-slate-400 uppercase tracking-widest leading-tight">
+                  JDCOEM NAGPUR
+                </span>
+              </div>
             </div>
 
-            <div className="hidden sm:block h-6 w-px bg-slate-300" />
+            <div className="hidden sm:block h-12 w-px bg-slate-300" />
 
-            {/* JDCOEM Dark Header Logo */}
-            <div className="relative h-10 w-44 sm:w-52">
+            {/* JDCOEM Official Logo */}
+            <div className="relative h-14 sm:h-18 w-56 sm:w-72">
               <Image
-                src="/assets/JD B Short Header.png"
+                src="/assets/JD Header B.png"
                 alt="JD College of Engineering & Management"
                 fill
                 className="object-contain object-left"
