@@ -60,7 +60,7 @@ export function AdminTopBar() {
             </div>
             <div className="flex items-center gap-2">
               <span className="font-heading font-extrabold text-sm text-[#17458F]">
-                Tenure {currentTenure?.label || "2025-26"}
+                {currentTenure?.tenureNumber ? `${currentTenure.tenureNumber} (${currentTenure.label})` : `Tenure ${currentTenure?.label || "2025-26"}`}
               </span>
               <span className="text-slate-400 text-xs">•</span>
               <span className="text-xs text-slate-600 font-medium">

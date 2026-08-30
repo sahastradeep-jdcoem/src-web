@@ -143,12 +143,12 @@ export default function AdminTenuresPage() {
         <div className="space-y-1.5">
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-[#E78023] text-white">
-              ACTIVE PUBLIC TENURE
+              {currentTenure?.tenureNumber || "ACTIVE TENURE"}
             </span>
             <span className="text-xs text-blue-200 font-mono">Academic Year {currentTenure?.academicYear}</span>
           </div>
           <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-white">
-            Tenure {currentTenure?.label} — {currentTenure?.theme || "Annual Council"}
+            {currentTenure?.tenureNumber ? `${currentTenure.tenureNumber} (${currentTenure.label})` : `Tenure ${currentTenure?.label}`} — {currentTenure?.theme || "Annual Council"}
           </h2>
           <p className="text-xs text-blue-100 max-w-2xl leading-relaxed">
             {currentTenure?.archiveNotes || "Currently serving leadership body across all campus operations."}
@@ -188,10 +188,15 @@ export default function AdminTenuresPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="font-heading font-bold text-sm text-[#0F172A]">
-                        Tenure {t.label}
+                        {t.tenureNumber ? `${t.tenureNumber} (${t.label})` : `Tenure ${t.label}`}
                       </h4>
+                      {t.id === "tenure-2025-26" && (
+                        <span className="px-2 py-0.5 rounded-full bg-[#E78023]/10 text-[#E78023] border border-[#E78023]/20 text-[9px] font-bold uppercase tracking-wider">
+                          Founding
+                        </span>
+                      )}
                       {t.isCurrent && (
                         <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9px] font-bold uppercase tracking-wider">
                           Active

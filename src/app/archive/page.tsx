@@ -108,7 +108,7 @@ export default function ArchivePage() {
                     : "bg-slate-100 hover:bg-slate-200 text-slate-700"
                 )}
               >
-                <span>Tenure {t.label}</span>
+                <span>{t.tenureNumber ? `${t.tenureNumber} (${t.label})` : `Tenure ${t.label}`}</span>
                 {t.isCurrent && (
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                 )}
@@ -131,10 +131,15 @@ export default function ArchivePage() {
               {/* Tenure Header */}
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
                 <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-heading font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase">
-                      TENURE {tenure.label}
+                      {tenure.tenureNumber ? `${tenure.tenureNumber.toUpperCase()} (${tenure.label})` : `TENURE ${tenure.label}`}
                     </span>
+                    {tenure.id === "tenure-2025-26" && (
+                      <span className="px-2.5 py-0.5 rounded-full bg-[#E78023]/10 text-[#E78023] border border-[#E78023]/20 text-[10px] font-bold uppercase tracking-wider">
+                        Founding Session
+                      </span>
+                    )}
                     {tenure.isCurrent ? (
                       <Badge variant="success" size="sm">
                         CURRENT ACTIVE TENURE

@@ -18,8 +18,9 @@ import {
 
 export interface CouncilTenure {
   id: string;
-  label: string; // e.g. "2025-26", "2026-27", "2024-25"
+  label: string; // e.g. "2025-26", "2026-27"
   academicYear: string; // e.g. "2025 - 2026"
+  tenureNumber: string; // e.g. "1st Tenure", "2nd Tenure"
   theme?: string;
   isCurrent: boolean;
   adminCouncil: TeamMember[];
@@ -37,104 +38,46 @@ export const initialDefaultTenures: CouncilTenure[] = [
     id: "tenure-2025-26",
     label: "2025-26",
     academicYear: "2025 - 2026",
+    tenureNumber: "1st Tenure",
     theme: "Prarambh: The Genesis of Sahastradeep",
     isCurrent: true,
     adminCouncil: adminCouncilMembers,
     hostingCommittee: hostingCommitteeMembers,
     foundingMembers: foundingMembers,
     events: mockEvents,
-    archiveNotes: "The inaugural chartered council of Sahastradeep, uniting 12 collegiate societies at JDCOEM under one central autonomous constitution.",
+    archiveNotes: "The 1st & Founding Tenure of Sahastradeep, uniting all 12 collegiate societies at JDCOEM under one central autonomous student council constitution.",
     createdAt: "2025-09-24T00:00:00Z"
-  },
-  {
-    id: "tenure-2024-25",
-    label: "2024-25",
-    academicYear: "2024 - 2025",
-    theme: "Foundational Assembly & Pre-Charter Committee",
-    isCurrent: false,
-    adminCouncil: [
-      {
-        id: "legacy-admin-1",
-        name: "Devendra Verma",
-        role: "Past President",
-        level: "Presidency",
-        category: "Admin Council",
-        department: "Computer Science and Engineering",
-        year: "Alumni / 2025 Batch",
-        avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=600&auto=format&fit=crop",
-        bio: "Presided over the ad-hoc student representation committee prior to the formal chartering of Sahastradeep.",
-        email: "alumni.devendra@jdcoem.ac.in",
-        order: 1
-      },
-      {
-        id: "legacy-admin-2",
-        name: "Ritika Deshmukh",
-        role: "Past General Secretary",
-        level: "Secretariat",
-        category: "Admin Council",
-        department: "Information Technology",
-        year: "Alumni / 2025 Batch",
-        avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=600&auto=format&fit=crop",
-        bio: "Managed inter-departmental sports meet and collegiate technical symposia for 2024-25.",
-        email: "alumni.ritika@jdcoem.ac.in",
-        order: 2
-      }
-    ],
-    hostingCommittee: [
-      {
-        id: "legacy-host-1",
-        name: "Aditya Raut",
-        role: "Head Anchor",
-        level: "Hosting Committee",
-        category: "Hosting Committee",
-        department: "Mechanical Engineering",
-        year: "Alumni / 2025 Batch",
-        avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=600&auto=format&fit=crop",
-        bio: "Principal stage host for the 2024 annual cultural fest.",
-        email: "alumni.aditya@jdcoem.ac.in",
-        order: 1
-      }
-    ],
-    foundingMembers: foundingMembers,
-    events: [
-      {
-        id: "evt-legacy-2024-1",
-        slug: "vibrance-2024",
-        name: "Vibrance 2024 Annual Fest",
-        category: "Fest",
-        date: "22 February 2024",
-        time: "10:00 AM - 09:00 PM",
-        venue: "JDCOEM Main Campus Grounds",
-        organizer: "SRC Pre-Charter Committee",
-        status: "Completed",
-        poster: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
-        description: "The annual inter-college cultural extravaganza of JDCOEM featuring over 30 competitive showcases.",
-        about: "The annual inter-college cultural extravaganza of JDCOEM featuring over 30 competitive showcases.",
-        whatToExpect: ["Battle of the Bands", "Fashion Showcase", "Star Celebrity Night"],
-        rules: ["Standard campus bylaws apply."],
-        schedule: [
-          { time: "10:00 AM", title: "Inauguration", description: "Campus kickoff", venue: "Main Grounds" }
-        ],
-        prizes: [
-          { position: "Overall Champion Trophy", amount: "₹50,000", perks: ["Rolling Institutional Trophy"] }
-        ],
-        teamType: "Both",
-        registrationDeadline: "Completed",
-        entryFee: "Free"
-      }
-    ],
-    archiveNotes: "Pre-charter institutional council session managing annual fests and department coordination.",
-    createdAt: "2024-08-01T00:00:00Z"
   }
 ];
+
+function getOrdinalSuffix(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return s[(v - 20) % 10] || s[v] || s[0];
+}
 
 export function getStoredTenures(): CouncilTenure[] {
   if (typeof window === "undefined") return initialDefaultTenures;
   try {
     const stored = localStorage.getItem(TENURES_STORAGE_KEY);
     if (stored !== null) {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      let parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Filter out any legacy pre-2025 mock tenures
+        parsed = parsed.filter((t: CouncilTenure) => t.id !== "tenure-2024-25" && !t.label.includes("2024"));
+        if (parsed.length > 0) {
+          // Ensure tenureNumber is populated on all records
+          return parsed.map((t: CouncilTenure, idx: number) => {
+            if (t.id === "tenure-2025-26" || t.label.includes("2025")) {
+              return { ...t, tenureNumber: "1st Tenure" };
+            }
+            return {
+              ...t,
+              tenureNumber: t.tenureNumber || `${idx + 1}${getOrdinalSuffix(idx + 1)} Tenure`
+            };
+          });
+        }
+      }
     }
   } catch (e) {
     console.warn("Could not read tenures from storage", e);
@@ -159,7 +102,7 @@ export function getCurrentTenure(): CouncilTenure {
 }
 
 /**
- * Switch Active Tenure (e.g. from 2025-26 to 2026-27 or back to 2024-25)
+ * Switch Active Tenure (e.g. from 2025-26 to 2026-27)
  * 1. Synchronizes current active state into old tenure's archive snapshot
  * 2. Activates the target tenure
  * 3. Restores target tenure's team & events into active stores
@@ -270,10 +213,14 @@ export function createAndActivateNewTenure(
       ]
     : [];
 
+  const tenureCount = tenures.length + 1;
+  const tenureNumber = `${tenureCount}${getOrdinalSuffix(tenureCount)} Tenure`;
+
   const newTenure: CouncilTenure = {
     id: `tenure-${label.toLowerCase().replace(/[^a-z0-9]/g, "-")}-${Date.now()}`,
     label,
     academicYear,
+    tenureNumber,
     theme,
     isCurrent: true,
     adminCouncil: newAdminCouncil,
@@ -300,11 +247,12 @@ export async function syncTenuresFromFirestore(): Promise<CouncilTenure[]> {
   try {
     const remote = await getSiteContentFromFirestore<CouncilTenure[]>("council_tenures");
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
+      const filtered = remote.filter((t: CouncilTenure) => t.id !== "tenure-2024-25" && !t.label.includes("2024"));
       if (typeof window !== "undefined") {
-        localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(remote));
-        window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: remote }));
+        localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(filtered));
+        window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: filtered }));
       }
-      return remote;
+      return filtered;
     }
   } catch (e) {
     console.warn("Could not sync tenures from Firestore", e);
@@ -315,11 +263,12 @@ export async function syncTenuresFromFirestore(): Promise<CouncilTenure[]> {
 export function subscribeToTenures(callback: (tenures: CouncilTenure[]) => void): () => void {
   return subscribeToSiteContent<CouncilTenure[]>("council_tenures", (remote) => {
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
+      const filtered = remote.filter((t: CouncilTenure) => t.id !== "tenure-2024-25" && !t.label.includes("2024"));
       if (typeof window !== "undefined") {
-        localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(remote));
-        window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: remote }));
+        localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(filtered));
+        window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: filtered }));
       }
-      callback(remote);
+      callback(filtered);
     }
   });
 }

@@ -170,7 +170,7 @@ export default function TeamPage() {
             </Badge>
             {currentTenure && (
               <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-[#17458F] text-white shadow-xs">
-                <span>Tenure {currentTenure.label}</span>
+                <span>{currentTenure.tenureNumber ? `${currentTenure.tenureNumber} (${currentTenure.label})` : `Tenure ${currentTenure.label}`}</span>
                 {currentTenure.isCurrent && (
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 )}
@@ -180,7 +180,7 @@ export default function TeamPage() {
               href="/archive"
               className="text-xs font-bold text-[#E78023] hover:underline flex items-center gap-1 ml-2"
             >
-              <span>Past Tenures Archive &rarr;</span>
+              <span>Tenures Archive &rarr;</span>
             </Link>
           </div>
           <h1 className="font-extrabold text-4xl sm:text-6xl text-[#0F172A] tracking-tight uppercase leading-none font-heading">

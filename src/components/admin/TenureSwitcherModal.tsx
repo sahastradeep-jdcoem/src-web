@@ -125,11 +125,16 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
                       : "bg-slate-50 border-slate-200 hover:border-slate-300"
                   }`}
                 >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
+                    <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-heading font-extrabold text-sm text-[#0F172A]">
-                        Tenure {t.label}
+                        {t.tenureNumber ? `${t.tenureNumber} (${t.label})` : `Tenure ${t.label}`}
                       </span>
+                      {t.id === "tenure-2025-26" && (
+                        <span className="px-2 py-0.5 rounded-full bg-[#E78023]/10 text-[#E78023] border border-[#E78023]/20 text-[9px] font-bold uppercase tracking-wider">
+                          Founding Session
+                        </span>
+                      )}
                       {t.isCurrent ? (
                         <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">
                           Active Now
