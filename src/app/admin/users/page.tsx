@@ -59,6 +59,58 @@ export default function AdminUsersPage() {
     } catch {}
   };
 
+  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const [newUserForm, setNewUserForm] = useState({
+    displayName: "",
+    email: "",
+    btId: "",
+    department: "Data Science Engineering",
+    year: "2nd Year",
+    role: "STUDENT" as "STUDENT" | "COUNCIL_ADMIN",
+  });
+
+  const handleCreateUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUserForm.email.trim() || !newUserForm.displayName.trim()) {
+      alert("Please provide both full name and email.");
+      return;
+    }
+
+    const email = newUserForm.email.trim().toLowerCase();
+    const cleanBt = newUserForm.btId.trim().toUpperCase();
+    const parts = newUserForm.displayName.trim().split(" ");
+
+    const record: RegisteredUserRecord = {
+      uid: `student-${Date.now()}`,
+      email: email,
+      displayName: newUserForm.displayName.trim(),
+      photoURL: null,
+      role: newUserForm.role,
+      isCollegeStudent: true,
+      firstName: parts[0] || "",
+      lastName: parts.slice(1).join(" ") || "",
+      btId: cleanBt,
+      department: newUserForm.department,
+      year: newUserForm.year,
+      phone: "",
+      profileCompleted: Boolean(cleanBt),
+      lastActive: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    };
+
+    saveRegisteredUser(record);
+    showNotice(`Successfully added student: ${record.displayName} (${record.email})`);
+    setIsAddUserOpen(false);
+    setNewUserForm({
+      displayName: "",
+      email: "",
+      btId: "",
+      department: "Data Science Engineering",
+      year: "2nd Year",
+      role: "STUDENT",
+    });
+  };
+
   const handleManualSync = async () => {
     setIsSyncing(true);
     try {
@@ -202,6 +254,16 @@ export default function AdminUsersPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <Button
+            onClick={() => setIsAddUserOpen(true)}
+            variant="primary"
+            size="md"
+            className="gap-2 cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Add Student</span>
+          </Button>
+
           <Button
             onClick={handleManualSync}
             variant="outline"
@@ -601,6 +663,129 @@ export default function AdminUsersPage() {
               </button>
             </div>
           </div>
+        </Modal>
+      )}
+
+      {/* Modal: Add Registered Student */}
+      {isAddUserOpen && (
+        <Modal
+          isOpen={isAddUserOpen}
+          onClose={() => setIsAddUserOpen(false)}
+          title="Add Student / Officer to Directory"
+          subtitle="Manually register or sync an authenticated student account with college BT ID and branch."
+          maxWidth="lg"
+        >
+          <form onSubmit={handleCreateUser} className="space-y-4 pt-2">
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                Full Name <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={newUserForm.displayName}
+                onChange={(e) => setNewUserForm({ ...newUserForm, displayName: e.target.value })}
+                placeholder="e.g. Sanskruti Tidke"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                College Email Address <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="email"
+                required
+                value={newUserForm.email}
+                onChange={(e) => setNewUserForm({ ...newUserForm, email: e.target.value })}
+                placeholder="e.g. sanskrutitidke@jdcoem.ac.in"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  College BT ID
+                </label>
+                <input
+                  type="text"
+                  value={newUserForm.btId}
+                  onChange={(e) => setNewUserForm({ ...newUserForm, btId: e.target.value.toUpperCase() })}
+                  placeholder="e.g. BT240115DS"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold text-[#E78023] focus:outline-none focus:border-[#17458F]"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  Role
+                </label>
+                <select
+                  value={newUserForm.role}
+                  onChange={(e) => setNewUserForm({ ...newUserForm, role: e.target.value as any })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                >
+                  <option value="STUDENT">Student (Delegate)</option>
+                  <option value="COUNCIL_ADMIN">Council Admin</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  Department / Branch
+                </label>
+                <select
+                  value={newUserForm.department}
+                  onChange={(e) => setNewUserForm({ ...newUserForm, department: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                >
+                  {departments.map((dept) => (
+                    <option key={dept} value={dept}>
+                      {dept}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  Year of Study
+                </label>
+                <select
+                  value={newUserForm.year}
+                  onChange={(e) => setNewUserForm({ ...newUserForm, year: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                >
+                  <option value="1st Year">1st Year</option>
+                  <option value="2nd Year">2nd Year</option>
+                  <option value="3rd Year">3rd Year</option>
+                  <option value="4th Year / Final Year">4th Year / Final Year</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <Button
+                type="button"
+                onClick={() => setIsAddUserOpen(false)}
+                variant="outline"
+                size="sm"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+              >
+                Save & Link Account
+              </Button>
+            </div>
+          </form>
         </Modal>
       )}
 

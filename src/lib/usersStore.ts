@@ -125,21 +125,70 @@ export function resolveDesignationByBtId(btId: string): {
   return null;
 }
 
+export const DEFAULT_REGISTERED_USERS: RegisteredUserRecord[] = [
+  {
+    uid: "58FLEfmf2cTinCGYuRYVdkkwk7G3",
+    email: "sanskrutitidke@jdcoem.ac.in",
+    displayName: "Sanskruti Tidke",
+    photoURL: null,
+    role: "STUDENT",
+    isCollegeStudent: true,
+    firstName: "Sanskruti",
+    lastName: "Tidke",
+    btId: "BT240115DS",
+    department: "Data Science Engineering",
+    year: "2nd Year",
+    phone: "",
+    profileCompleted: true,
+    lastActive: "2026-08-31T01:00:00.000Z",
+    createdAt: "2026-08-31T01:00:00.000Z",
+  },
+  {
+    uid: "iDFtmVqzbSNmS3AMLINVp7x45iU2",
+    email: "shendeha@jdcoem.ac.in",
+    displayName: "Harsh Shende",
+    photoURL: null,
+    role: "COUNCIL_ADMIN",
+    isCollegeStudent: true,
+    firstName: "Harsh",
+    lastName: "Shende",
+    btId: "BT230036CS",
+    department: "Computer Science and Engineering",
+    year: "4th Year / Final Year",
+    phone: "",
+    profileCompleted: true,
+    designationBadge: "Tech & Dev Head",
+    isCouncilOfficer: true,
+    lastActive: "2026-08-31T01:00:00.000Z",
+    createdAt: "2026-08-30T18:00:00.000Z",
+  },
+];
+
 /**
- * Retrieve all registered active users from local storage
+ * Retrieve all registered active users from local storage or defaults
  */
 export function getStoredUsers(): RegisteredUserRecord[] {
-  if (typeof window === "undefined") return [];
+  if (typeof window === "undefined") return DEFAULT_REGISTERED_USERS;
   try {
     const stored = localStorage.getItem(USERS_STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Ensure default accounts are present
+        const map = new Map<string, RegisteredUserRecord>();
+        for (const u of DEFAULT_REGISTERED_USERS) {
+          if (u.email) map.set(u.email.toLowerCase(), u);
+        }
+        for (const u of parsed) {
+          if (u && u.email) map.set(u.email.toLowerCase(), { ...(map.get(u.email.toLowerCase()) || {}), ...u });
+        }
+        return Array.from(map.values());
+      }
     }
   } catch (e) {
     console.warn("Could not read users from storage", e);
   }
-  return [];
+  return DEFAULT_REGISTERED_USERS;
 }
 
 /**
