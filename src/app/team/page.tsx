@@ -38,7 +38,6 @@ export default function TeamPage() {
   const [hostingMembers, setHostingMembers] = useState<TeamMember[]>([]);
   const [spokespersons, setSpokespersons] = useState<TeamMember[]>([]);
   const [clubs, setClubs] = useState<ClubItem[]>([]);
-  const [adminTierFilter, setAdminTierFilter] = useState("All");
 
   const refreshAll = () => {
     setCouncilMembers(getStoredCouncilMembers());
@@ -91,17 +90,6 @@ export default function TeamPage() {
     };
   }, []);
 
-  // Dynamically compute unique tiers from active council members
-  const dynamicTiers = [
-    "All",
-    ...Array.from(new Set(councilMembers.map((m) => m.level).filter(Boolean))),
-  ];
-
-  const filteredAdminMembers = councilMembers.filter((m) => {
-    if (adminTierFilter === "All") return true;
-    return m.level.toLowerCase().includes(adminTierFilter.toLowerCase()) || m.level === adminTierFilter;
-  });
-
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] py-12 px-4 sm:px-6 lg:px-8 space-y-20">
       <div className="max-w-7xl mx-auto space-y-20">
@@ -123,7 +111,7 @@ export default function TeamPage() {
 
         {/* SECTION 1: SRC ADMIN COUNCIL POSITIONS */}
         <section className="space-y-8">
-          <div className="border-b border-slate-200 pb-6 flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+          <div className="border-b border-slate-200 pb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div className="space-y-1">
               <span className="text-xs font-bold uppercase tracking-wider text-[#E78023] flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4" />
@@ -136,40 +124,18 @@ export default function TeamPage() {
                 The governing body authorized under JDCOEM student bylaws.
               </p>
             </div>
-
-            {/* Dynamic Tier Filter Pills */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs text-slate-500 font-bold mr-1 flex items-center gap-1">
-                <Filter className="w-3.5 h-3.5 text-[#E78023]" />
-                Filter:
-              </span>
-              {dynamicTiers.map((tier) => (
-                <button
-                  key={tier}
-                  onClick={() => setAdminTierFilter(tier)}
-                  className={cn(
-                    "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider transition-all",
-                    adminTierFilter === tier
-                      ? "bg-[#E78023] text-white shadow-xs"
-                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                  )}
-                >
-                  {tier}
-                </button>
-              ))}
-            </div>
           </div>
 
           {/* Cards Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredAdminMembers.map((member) => (
+            {councilMembers.map((member) => (
               <CouncilMemberCard key={member.id} member={member} />
             ))}
           </div>
 
-          {filteredAdminMembers.length === 0 && (
+          {councilMembers.length === 0 && (
             <div className="p-8 text-center bg-white rounded-3xl border border-slate-200 text-slate-500 text-xs">
-              No council officers found under &ldquo;{adminTierFilter}&rdquo;.
+              No council officers listed yet.
             </div>
           )}
         </section>

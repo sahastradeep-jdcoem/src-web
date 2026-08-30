@@ -11,7 +11,6 @@ import { cn } from "@/lib/utils";
 export default function ClubsDirectoryPage() {
   const [clubs, setClubs] = useState<ClubItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedDomain, setSelectedDomain] = useState("All");
 
   useEffect(() => {
     setClubs(getStoredClubs());
@@ -37,23 +36,17 @@ export default function ClubsDirectoryPage() {
     };
   }, []);
 
-  const dynamicDomains = useMemo(() => {
-    return ["All", ...Array.from(new Set(clubs.map((c) => c.category).filter(Boolean)))];
-  }, [clubs]);
-
   const filteredClubs = useMemo(() => {
     return clubs.filter((club) => {
       const matchesSearch =
         club.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         club.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        club.tagline.toLowerCase().includes(searchQuery.toLowerCase());
+        club.tagline.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        club.category.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchesDomain =
-        selectedDomain === "All" || club.category === selectedDomain;
-
-      return matchesSearch && matchesDomain;
+      return matchesSearch;
     });
-  }, [clubs, searchQuery, selectedDomain]);
+  }, [clubs, searchQuery]);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] py-12 px-4 sm:px-6 lg:px-8 space-y-12 text-[#0F172A]">
@@ -74,39 +67,17 @@ export default function ClubsDirectoryPage() {
           </p>
         </div>
 
-        {/* Filter & Search Toolbar */}
-        <div className="p-6 rounded-3xl bg-white border border-slate-200 space-y-6 shadow-xs">
+        {/* Search Toolbar */}
+        <div className="p-4 sm:p-6 rounded-3xl bg-white border border-slate-200 shadow-xs">
           <div className="relative">
             <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by club name, interest, or discipline..."
+              placeholder="Search by club name, category, or interests..."
               className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F] placeholder:text-slate-400 font-sans"
             />
-          </div>
-
-          <div className="space-y-2 pt-2 border-t border-slate-100">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
-              Filter by Domain:
-            </span>
-            <div className="flex flex-wrap gap-2">
-              {dynamicDomains.map((domain) => (
-                <button
-                  key={domain}
-                  onClick={() => setSelectedDomain(domain)}
-                  className={cn(
-                    "px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all cursor-pointer",
-                    selectedDomain === domain
-                      ? "bg-[#E78023] text-white shadow-xs"
-                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                  )}
-                >
-                  {domain}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
 
