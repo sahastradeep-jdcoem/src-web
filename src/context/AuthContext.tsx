@@ -19,7 +19,7 @@ import {
   saveUserProfileToFirestore 
 } from "@/lib/firebase/firestore";
 import { UserProfile, AuthUser, AuthContextType } from "@/types/auth";
-import { saveRegisteredUser } from "@/lib/usersStore";
+import { saveRegisteredUser, getStoredUsers } from "@/lib/usersStore";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -52,33 +52,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const cached = localStorage.getItem("src_auth_user");
           if (cached) {
             const parsed = JSON.parse(cached);
-            if (parsed.uid === fbUser.uid) {
+            if (parsed.uid === fbUser.uid || (parsed.email && parsed.email.toLowerCase() === fbUser.email.toLowerCase())) {
               localProfile = parsed;
             }
           }
         } catch {}
 
+        let registeredUser: Partial<UserProfile> | undefined;
+        try {
+          const allStored = getStoredUsers();
+          registeredUser = allStored.find(
+            (u) => (u.uid && u.uid === fbUser.uid) || (u.email && u.email.toLowerCase() === fbUser.email?.toLowerCase())
+          );
+        } catch {}
+
+        const resolvedBtId = storedProfile?.btId || localProfile?.btId || registeredUser?.btId || "";
+        const isCompleted = Boolean(
+          storedProfile?.profileCompleted || 
+          localProfile?.profileCompleted || 
+          registeredUser?.profileCompleted || 
+          (resolvedBtId && resolvedBtId.trim().length > 0)
+        );
+
         const merged: AuthUser = {
           uid: fbUser.uid,
           email: fbUser.email,
-          displayName: storedProfile?.displayName || localProfile?.displayName || fbUser.displayName || fbUser.email?.split("@")[0] || "JDCOEM Student",
-          photoURL: fbUser.photoURL || storedProfile?.photoURL || localProfile?.photoURL || null,
-          role: isAdminUser ? "COUNCIL_ADMIN" : (storedProfile?.role || localProfile?.role || "STUDENT"),
+          displayName: storedProfile?.displayName || localProfile?.displayName || registeredUser?.displayName || fbUser.displayName || fbUser.email?.split("@")[0] || "JDCOEM Student",
+          photoURL: fbUser.photoURL || storedProfile?.photoURL || localProfile?.photoURL || registeredUser?.photoURL || null,
+          role: isAdminUser ? "COUNCIL_ADMIN" : (storedProfile?.role || localProfile?.role || registeredUser?.role || "STUDENT"),
           isCollegeStudent: fbUser.isCollegeStudent,
-          firstName: storedProfile?.firstName || localProfile?.firstName || (fbUser.displayName ? fbUser.displayName.split(" ")[0] : ""),
-          lastName: storedProfile?.lastName || localProfile?.lastName || (fbUser.displayName ? fbUser.displayName.split(" ").slice(1).join(" ") : ""),
-          btId: storedProfile?.btId || localProfile?.btId || "",
-          department: storedProfile?.department || localProfile?.department || "Computer Science and Engineering",
-          year: storedProfile?.year || localProfile?.year || "3rd Year",
-          phone: storedProfile?.phone || localProfile?.phone || "",
-          profileCompleted: storedProfile?.profileCompleted || localProfile?.profileCompleted || false,
+          firstName: storedProfile?.firstName || localProfile?.firstName || registeredUser?.firstName || (fbUser.displayName ? fbUser.displayName.split(" ")[0] : ""),
+          lastName: storedProfile?.lastName || localProfile?.lastName || registeredUser?.lastName || (fbUser.displayName ? fbUser.displayName.split(" ").slice(1).join(" ") : ""),
+          btId: resolvedBtId,
+          department: storedProfile?.department || localProfile?.department || registeredUser?.department || "Computer Science and Engineering",
+          year: storedProfile?.year || localProfile?.year || registeredUser?.year || "3rd Year",
+          phone: storedProfile?.phone || localProfile?.phone || registeredUser?.phone || "",
+          profileCompleted: isCompleted,
         };
 
         setUser(merged);
         localStorage.setItem("src_auth_user", JSON.stringify(merged));
+        if (isCompleted && resolvedBtId) {
+          saveRegisteredUser(merged);
+        }
 
-        if (!merged.profileCompleted || !merged.btId) {
+        // Only open modal if user has NEVER set a BT ID or completed profile
+        if (!isCompleted && !resolvedBtId) {
           setIsProfileModalOpen(true);
+        } else {
+          setIsProfileModalOpen(false);
         }
       }
       setIsLoading(false);
@@ -95,29 +117,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const isAdminUser = await checkIsAdminInFirestore(fbUser.email || "");
         const storedProfile = await getUserProfileFromFirestore(fbUser.uid);
 
+        let localProfile: Partial<UserProfile> = {};
+        try {
+          const cached = localStorage.getItem("src_auth_user");
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed.uid === fbUser.uid || (parsed.email && parsed.email.toLowerCase() === (fbUser.email || "").toLowerCase())) {
+              localProfile = parsed;
+            }
+          }
+        } catch {}
+
+        let registeredUser: Partial<UserProfile> | undefined;
+        try {
+          const allStored = getStoredUsers();
+          registeredUser = allStored.find(
+            (u) => (u.uid && u.uid === fbUser.uid) || (u.email && u.email.toLowerCase() === (fbUser.email || "").toLowerCase())
+          );
+        } catch {}
+
+        const resolvedBtId = storedProfile?.btId || localProfile?.btId || registeredUser?.btId || "";
+        const isCompleted = Boolean(
+          storedProfile?.profileCompleted || 
+          localProfile?.profileCompleted || 
+          registeredUser?.profileCompleted || 
+          (resolvedBtId && resolvedBtId.trim().length > 0)
+        );
+
         const merged: AuthUser = {
           uid: fbUser.uid,
           email: fbUser.email,
-          displayName: storedProfile?.displayName || fbUser.displayName || "Google Student",
-          photoURL: fbUser.photoURL || null,
-          role: isAdminUser ? "COUNCIL_ADMIN" : (storedProfile?.role || "STUDENT"),
+          displayName: storedProfile?.displayName || localProfile?.displayName || registeredUser?.displayName || fbUser.displayName || "Google Student",
+          photoURL: fbUser.photoURL || storedProfile?.photoURL || localProfile?.photoURL || null,
+          role: isAdminUser ? "COUNCIL_ADMIN" : (storedProfile?.role || localProfile?.role || registeredUser?.role || "STUDENT"),
           isCollegeStudent: fbUser.isCollegeStudent,
-          firstName: storedProfile?.firstName || (fbUser.displayName ? fbUser.displayName.split(" ")[0] : ""),
-          lastName: storedProfile?.lastName || (fbUser.displayName ? fbUser.displayName.split(" ").slice(1).join(" ") : ""),
-          btId: storedProfile?.btId || "",
-          department: storedProfile?.department || "Computer Science and Engineering",
-          year: storedProfile?.year || "3rd Year",
-          phone: storedProfile?.phone || "",
-          profileCompleted: storedProfile?.profileCompleted || false,
+          firstName: storedProfile?.firstName || localProfile?.firstName || registeredUser?.firstName || (fbUser.displayName ? fbUser.displayName.split(" ")[0] : ""),
+          lastName: storedProfile?.lastName || localProfile?.lastName || registeredUser?.lastName || (fbUser.displayName ? fbUser.displayName.split(" ").slice(1).join(" ") : ""),
+          btId: resolvedBtId,
+          department: storedProfile?.department || localProfile?.department || registeredUser?.department || "Computer Science and Engineering",
+          year: storedProfile?.year || localProfile?.year || registeredUser?.year || "3rd Year",
+          phone: storedProfile?.phone || localProfile?.phone || registeredUser?.phone || "",
+          profileCompleted: isCompleted,
         };
 
         setUser(merged);
         localStorage.setItem("src_auth_user", JSON.stringify(merged));
-        saveRegisteredUser(merged);
+        if (isCompleted && resolvedBtId) {
+          saveRegisteredUser(merged);
+        }
         setIsAuthModalOpen(false);
 
-        if (!merged.profileCompleted || !merged.btId) {
+        if (!isCompleted && !resolvedBtId) {
           setIsProfileModalOpen(true);
+        } else {
+          setIsProfileModalOpen(false);
         }
       }
     } catch (error) {
@@ -257,9 +310,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(updatedUser);
     localStorage.setItem("src_auth_user", JSON.stringify(updatedUser));
     saveRegisteredUser(updatedUser);
+    setIsProfileModalOpen(false);
 
-    // Save to Firestore
-    await saveUserProfileToFirestore(user.uid, updatedUser);
+    // Save to Firestore asynchronously
+    try {
+      await saveUserProfileToFirestore(user.uid, updatedUser);
+    } catch (e) {
+      console.warn("Firestore sync background notice", e);
+    }
   };
 
   const logout = async () => {
