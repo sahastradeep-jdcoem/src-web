@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { downloadPassAsImage } from "@/lib/passExport";
+import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 
 interface TicketPassProps {
   registrationId: string;
@@ -189,19 +190,31 @@ export function TicketPass({
             )}
           </div>
 
-          {/* Visual QR Code & Verification Block */}
-          <div className="flex flex-col items-center justify-center p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-3">
-            <div className="relative p-3 bg-white rounded-xl shadow-xs border border-slate-200">
-              <QrCode className="w-28 h-28 text-[#17458F]" />
+          {/* Visual Scannable QR Code & Verification Block */}
+          <div className="flex flex-col items-center justify-center p-5 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-3">
+            <div className="relative p-2 bg-white rounded-xl shadow-xs border border-slate-200 flex items-center justify-center overflow-hidden">
+              <ScannableQRCode
+                value={
+                  typeof window !== "undefined"
+                    ? `${window.location.origin}/dashboard?passId=${encodeURIComponent(registrationId)}&ticket=${encodeURIComponent(ticketCode)}`
+                    : `https://src-jdcoem.vercel.app/dashboard?passId=${encodeURIComponent(registrationId)}&ticket=${encodeURIComponent(ticketCode)}`
+                }
+                size={116}
+                level="H"
+                includeMargin={true}
+                fgColor="#0F172A"
+                bgColor="#FFFFFF"
+                renderAs="canvas"
+              />
             </div>
 
             <div className="space-y-1">
-              <span className="font-mono text-[11px] font-bold text-[#E78023]">
+              <span className="font-mono text-[11px] font-bold text-[#E78023] block tracking-wider">
                 {ticketCode}
               </span>
               <p className="text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1">
                 <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                <span>Verified SRC Protocol</span>
+                <span>Scan for Gate Check-In</span>
               </p>
             </div>
           </div>

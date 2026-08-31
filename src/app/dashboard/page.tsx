@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { RegistrationRecord, EventItem } from "@/types";
 import { useAuth } from "@/context/AuthContext";
+import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { downloadPassAsImage } from "@/lib/passExport";
 import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
 
@@ -409,8 +410,13 @@ export default function StudentDashboardPage() {
                     {user ? `SRC-${user.uid.slice(0, 8).toUpperCase()}` : "SRC-DELEGATE-2026"}
                   </p>
                 </div>
-                <div className="p-1 bg-slate-50 rounded-lg border border-slate-200">
-                  <QrCode className="w-9 h-9 text-[#17458F]" />
+                <div className="p-1 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-center">
+                  <ScannableQRCode
+                    value={user ? `SRC:STUDENT:${user.uid}:${displayBtId}` : "SRC:STUDENT:DELEGATE"}
+                    size={38}
+                    includeMargin={false}
+                    renderAs="canvas"
+                  />
                 </div>
               </div>
 
@@ -433,8 +439,18 @@ export default function StudentDashboardPage() {
           >
             <div className="space-y-6" id="dashboard-ticket-modal">
               <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-3">
-                <div className="mx-auto w-32 h-32 p-3 bg-white rounded-2xl shadow-xs border border-slate-200 flex items-center justify-center">
-                  <QrCode className="w-28 h-28 text-[#17458F]" />
+                <div className="mx-auto w-36 h-36 p-2 bg-white rounded-2xl shadow-xs border border-slate-200 flex items-center justify-center overflow-hidden">
+                  <ScannableQRCode
+                    value={
+                      typeof window !== "undefined"
+                        ? `${window.location.origin}/dashboard?passId=${encodeURIComponent(selectedTicket.registrationId)}&ticket=${encodeURIComponent(selectedTicket.ticketCode)}`
+                        : `https://src-jdcoem.vercel.app/dashboard?passId=${encodeURIComponent(selectedTicket.registrationId)}&ticket=${encodeURIComponent(selectedTicket.ticketCode)}`
+                    }
+                    size={132}
+                    level="H"
+                    includeMargin={true}
+                    renderAs="canvas"
+                  />
                 </div>
                 <div>
                   <span className="font-mono text-xs font-bold text-[#E78023]">

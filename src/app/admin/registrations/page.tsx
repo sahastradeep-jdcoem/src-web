@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { getDepartmentShortName } from "@/lib/departmentsStore";
+import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { 
   checkInStudentPass, 
   getAllRegistrationsFromFirestore, 
@@ -443,11 +444,20 @@ export default function AdminRegistrationsPage() {
         >
           <div className="space-y-6">
             <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-3">
-              <div className="h-28 w-28 mx-auto bg-white p-2 rounded-xl border border-slate-200 flex items-center justify-center">
-                <QrCode className="w-full h-full text-[#17458F]" />
+              <div className="h-32 w-32 mx-auto bg-white p-2 rounded-2xl border border-slate-200 flex items-center justify-center overflow-hidden shadow-xs">
+                <ScannableQRCode
+                  value={
+                    selectedRecord.qrPayload ||
+                    `https://src-jdcoem.vercel.app/dashboard?passId=${encodeURIComponent(selectedRecord.registrationId)}`
+                  }
+                  size={120}
+                  level="H"
+                  includeMargin={true}
+                  renderAs="canvas"
+                />
               </div>
               <div>
-                <span className="font-mono text-xs font-bold text-[#E78023] block">
+                <span className="font-mono text-xs font-bold text-[#E78023] block tracking-wider">
                   {selectedRecord.ticketCode || `${selectedRecord.registrationId}-TK`}
                 </span>
                 <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">
