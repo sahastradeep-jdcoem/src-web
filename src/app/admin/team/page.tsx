@@ -512,10 +512,7 @@ export default function AdminTeamPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                      {member.level || "Council Member"}
-                    </span>
-                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-[#17458F]/10 text-[#17458F]">
+                    <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-md bg-[#17458F]/10 text-[#17458F]">
                       Rank #{actualIndex + 1}
                     </span>
                   </div>
@@ -662,33 +659,20 @@ export default function AdminTeamPage() {
               </div>
             </div>
 
-            {/* Hierarchy Rank & Category */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="font-bold text-slate-700 flex items-center justify-between">
-                  <span>Hierarchy Priority / Rank #</span>
-                  <span className="text-[10px] text-slate-400">1 = Highest (Top of Page)</span>
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max={currentMembers.length + (isCreatingNew ? 1 : 0)}
-                  value={editingMember.order || 1}
-                  onChange={(e) => setEditingMember({ ...editingMember, order: parseInt(e.target.value) || 1 })}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold text-[#17458F] focus:outline-none focus:border-[#17458F]"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="font-bold text-slate-700">Category / Tier</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Presidency, Technical & Systems, Cultural..."
-                  value={editingMember.level}
-                  onChange={(e) => setEditingMember({ ...editingMember, level: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
-                />
-              </div>
+            {/* Hierarchy Rank */}
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-700 flex items-center justify-between">
+                <span>Hierarchy Priority / Rank #</span>
+                <span className="text-[10px] text-slate-400">1 = Highest (Top of Roster Page)</span>
+              </label>
+              <input
+                type="number"
+                min="1"
+                max={currentMembers.length + (isCreatingNew ? 1 : 0)}
+                value={editingMember.order || 1}
+                onChange={(e) => setEditingMember({ ...editingMember, order: parseInt(e.target.value) || 1 })}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold text-[#17458F] focus:outline-none focus:border-[#17458F]"
+              />
             </div>
 
             {/* Department & Year */}

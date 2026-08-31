@@ -24,12 +24,14 @@ export function CouncilMemberCard({ member }: CouncilMemberCardProps) {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
 
-        {/* Position Tag */}
-        <div className="absolute top-2 left-2 sm:top-3.5 sm:left-3.5">
-          <span className="text-[8px] sm:text-[10px] font-sans font-semibold uppercase tracking-wider px-2 py-0.5 sm:px-3 sm:py-1 rounded-full bg-white/95 text-[#E78023] border border-slate-200 shadow-xs">
-            {member.level}
-          </span>
-        </div>
+        {/* Club Tag (Only for Club Heads) */}
+        {member.clubSlug && (
+          <div className="absolute top-2 left-2 sm:top-3.5 sm:left-3.5">
+            <span className="text-[8px] sm:text-[10px] font-sans font-semibold uppercase tracking-wider px-2 py-0.5 sm:px-3 sm:py-1 rounded-full bg-white/95 text-[#E78023] border border-slate-200 shadow-xs">
+              {member.level || "Club Society"}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Profile Details */}
@@ -66,8 +68,8 @@ export function CouncilMemberCard({ member }: CouncilMemberCardProps) {
               <ArrowRight className="w-2.5 h-2.5 sm:w-3 sm:h-3 transition-transform group-hover/link:translate-x-0.5" />
             </Link>
           ) : (
-            <span className="text-[8px] sm:text-[10px] text-slate-500 uppercase font-semibold tracking-wider truncate max-w-[80px] sm:max-w-none">
-              {member.category || "SRC Council"}
+            <span className="text-[9px] sm:text-[11px] text-slate-400 font-mono font-medium">
+              {member.year || "Official Roster"}
             </span>
           )}
 
