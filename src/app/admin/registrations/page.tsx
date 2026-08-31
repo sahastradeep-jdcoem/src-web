@@ -553,6 +553,28 @@ export default function AdminRegistrationsPage() {
     }
   };
 
+  const formatGoogleFormsTimestamp = (r: any): string => {
+    const raw = r.paidAt || r.registeredAt || r.createdAt;
+    if (!raw) {
+      const now = new Date();
+      return `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+    }
+
+    if (typeof raw === "number" || /^\d{10,13}$/.test(String(raw))) {
+      const d = new Date(Number(raw));
+      if (!isNaN(d.getTime())) {
+        return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+      }
+    }
+
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+    }
+
+    return String(raw);
+  };
+
   const generateExportData = () => {
     // Collect all custom questions across the current scope
     const customQCols = availableQuestions.filter((q) => !q.isStandard);
@@ -569,7 +591,7 @@ export default function AdminRegistrationsPage() {
 
     const rows = eventRegistrations.map((r) => {
       const rowData: Record<string, any> = {
-        "Timestamp": r.registeredAt || "",
+        "Timestamp": formatGoogleFormsTimestamp(r),
         "Email Address": r.email || "",
         "Full Name": r.participantName || "",
         "College BT ID": r.btId || "",
