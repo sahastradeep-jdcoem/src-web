@@ -107,7 +107,7 @@ export interface TeamMember {
   name: string;
   role: string;
   designation?: string;
-  level: string;
+  level?: string;
   category?: string;
   department: string;
   year?: string;

@@ -243,8 +243,6 @@ export default function AdminTeamPage() {
       role: "",
       department: "Computer Science and Engineering",
       year: "4th Year",
-      level: activeTab === "council" ? "Admin" : activeTab === "hosting" ? "Hosting Committee" : "Founding Member",
-      category: activeTab === "council" ? "Admin Council" : activeTab === "hosting" ? "Hosting Committee" : "Founding Member",
       bio: "",
       avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
       order: currentMembers.length + 1,
