@@ -190,7 +190,7 @@ export default function ArchivePage() {
 
                   <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
                     {tenure.adminCouncil.map((member) => (
-                      <CouncilMemberCard key={member.id} member={member} />
+                      <CouncilMemberCard key={member.id} member={member} categoryLabel="ADMIN" />
                     ))}
                   </div>
                 </div>

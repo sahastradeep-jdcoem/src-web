@@ -7,9 +7,10 @@ import { getDepartmentShortName } from "@/lib/departmentsStore";
 
 interface CouncilMemberCardProps {
   member: TeamMember;
+  categoryLabel?: string;
 }
 
-export function CouncilMemberCard({ member }: CouncilMemberCardProps) {
+export function CouncilMemberCard({ member, categoryLabel = "ADMIN" }: CouncilMemberCardProps) {
   return (
     <div className="group rounded-2xl bg-white border border-slate-200 hover:border-[#17458F]/30 hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col justify-between shadow-xs font-sans">
       
@@ -68,8 +69,8 @@ export function CouncilMemberCard({ member }: CouncilMemberCardProps) {
               <ArrowRight className="w-2.5 h-2.5 sm:w-3 sm:h-3 transition-transform group-hover/link:translate-x-0.5" />
             </Link>
           ) : (
-            <span className="text-[9px] sm:text-[11px] text-slate-400 font-mono font-medium">
-              {member.year || "Official Roster"}
+            <span className="text-[9px] sm:text-[11px] font-sans font-bold uppercase tracking-wider text-slate-500">
+              {categoryLabel}
             </span>
           )}
 
