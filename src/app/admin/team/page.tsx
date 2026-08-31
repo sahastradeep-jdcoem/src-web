@@ -34,9 +34,13 @@ import {
   saveStoredHostingCommittee,
   getStoredFoundingMembers,
   saveStoredFoundingMembers,
+  getStoredClubs,
+  saveStoredClubs,
   syncCouncilMembersFromFirestore,
   syncHostingCommitteeFromFirestore,
-  syncFoundingMembersFromFirestore
+  syncFoundingMembersFromFirestore,
+  syncClubsFromFirestore,
+  subscribeToClubs
 } from "@/lib/councilStore";
 import { 
   getStoredTenures, 
@@ -48,13 +52,13 @@ import {
 } from "@/lib/tenureStore";
 import { getStoredDepartments, syncDepartmentsFromFirestore, getDepartmentShortName } from "@/lib/departmentsStore";
 import { adminCouncilMembers, hostingCommitteeMembers, foundingMembers as defaultFoundingMembers } from "@/data/team";
-import { TeamMember } from "@/types";
+import { TeamMember, ClubItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
 
-type TeamCategoryTab = "council" | "hosting" | "founding";
+type TeamCategoryTab = "council" | "hosting" | "founding" | "clubs";
 
 export default function AdminTeamPage() {
   const [activeTab, setActiveTab] = useState<TeamCategoryTab>("council");
@@ -63,6 +67,7 @@ export default function AdminTeamPage() {
   const [councilMembers, setCouncilMembers] = useState<TeamMember[]>([]);
   const [hostingMembers, setHostingMembers] = useState<TeamMember[]>([]);
   const [foundingMembersList, setFoundingMembersList] = useState<TeamMember[]>([]);
+  const [clubsList, setClubsList] = useState<ClubItem[]>([]);
   const [departmentsList, setDepartmentsList] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   
@@ -95,6 +100,8 @@ export default function AdminTeamPage() {
       setHostingMembers(targetTenure.hostingCommittee || []);
       setFoundingMembersList(targetTenure.foundingMembers || getStoredFoundingMembers());
     }
+
+    setClubsList(getStoredClubs());
   };
 
   useEffect(() => {
@@ -110,8 +117,15 @@ export default function AdminTeamPage() {
     syncFoundingMembersFromFirestore().then((res) => {
       if (res) loadData();
     });
+    syncClubsFromFirestore().then((res) => {
+      if (res) setClubsList(res);
+    });
     syncDepartmentsFromFirestore().then((res) => {
       if (res) setDepartmentsList(res);
+    });
+
+    const unsubClubs = subscribeToClubs((updated) => {
+      setClubsList(updated);
     });
 
     const handleUpdate = () => {
@@ -123,13 +137,16 @@ export default function AdminTeamPage() {
     window.addEventListener("src_council_team_updated", handleUpdate);
     window.addEventListener("src_hosting_updated", handleUpdate);
     window.addEventListener("src_founding_members_updated", handleUpdate);
+    window.addEventListener("src_clubs_updated", handleUpdate);
 
     return () => {
+      unsubClubs();
       window.removeEventListener("src_tenures_updated", handleUpdate);
       window.removeEventListener("src_tenure_changed", handleUpdate);
       window.removeEventListener("src_council_team_updated", handleUpdate);
       window.removeEventListener("src_hosting_updated", handleUpdate);
       window.removeEventListener("src_founding_members_updated", handleUpdate);
+      window.removeEventListener("src_clubs_updated", handleUpdate);
     };
   }, [selectedTenureId]);
 
@@ -171,15 +188,65 @@ export default function AdminTeamPage() {
     }
   };
 
+  // Convert clubs to editable team member items
+  const clubLeadMembers = React.useMemo(() => {
+    const list: (TeamMember & { clubId: string; roleType: "lead" | "coLead"; clubName: string })[] = [];
+    clubsList.forEach((club, index) => {
+      if (club.lead) {
+        list.push({
+          id: `${club.id || club.slug}-lead`,
+          name: club.lead.name || "",
+          role: club.lead.role || `${club.name} Head`,
+          clubSlug: club.slug,
+          clubId: club.id,
+          clubName: club.name,
+          roleType: "lead",
+          department: club.lead.department || "Computer Science & Engineering",
+          year: club.lead.year || "4th Year",
+          avatar: club.lead.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
+          bio: club.lead.bio || "",
+          email: club.lead.email || "",
+          linkedin: club.lead.linkedin || "",
+          btId: club.lead.btId || "",
+          order: index * 2 + 1
+        });
+      }
+      if (club.coLead) {
+        list.push({
+          id: `${club.id || club.slug}-colead`,
+          name: club.coLead.name || "",
+          role: club.coLead.role || `${club.name} Co-Head`,
+          clubSlug: club.slug,
+          clubId: club.id,
+          clubName: club.name,
+          roleType: "coLead",
+          department: club.coLead.department || "Information Technology",
+          year: club.coLead.year || "3rd Year",
+          avatar: club.coLead.avatar || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
+          bio: club.coLead.bio || "",
+          email: club.coLead.email || "",
+          linkedin: club.coLead.linkedin || "",
+          btId: club.coLead.btId || "",
+          order: index * 2 + 2
+        });
+      }
+    });
+    return list;
+  }, [clubsList]);
+
   // Determine current active list
   const currentMembers = 
     activeTab === "council" 
       ? councilMembers 
       : activeTab === "hosting"
       ? hostingMembers
-      : foundingMembersList;
+      : activeTab === "founding"
+      ? foundingMembersList
+      : clubLeadMembers;
 
   const saveCurrentList = (updated: TeamMember[]) => {
+    if (activeTab === "clubs") return;
+
     // Re-index all orders to guarantee strict sequential 1..N order
     const indexed = updated.map((m, idx) => ({
       ...m,
@@ -190,7 +257,7 @@ export default function AdminTeamPage() {
       setCouncilMembers(indexed);
     } else if (activeTab === "hosting") {
       setHostingMembers(indexed);
-    } else {
+    } else if (activeTab === "founding") {
       setFoundingMembersList(indexed);
     }
 
@@ -200,7 +267,7 @@ export default function AdminTeamPage() {
         saveStoredCouncilMembers(indexed);
       } else if (activeTab === "hosting") {
         saveStoredHostingCommittee(indexed);
-      } else {
+      } else if (activeTab === "founding") {
         saveStoredFoundingMembers(indexed);
       }
     } else if (selectedTenure) {
@@ -215,6 +282,7 @@ export default function AdminTeamPage() {
   };
 
   const handleMoveMember = (memberId: string, direction: "up" | "down") => {
+    if (activeTab === "clubs") return;
     const currentIndex = currentMembers.findIndex((m) => m.id === memberId);
     if (currentIndex === -1) return;
 
@@ -261,6 +329,62 @@ export default function AdminTeamPage() {
       return;
     }
 
+    if (activeTab === "clubs") {
+      const match = clubLeadMembers.find((m) => m.id === editingMember.id);
+      if (match) {
+        const updatedClubs = clubsList.map((club) => {
+          if (club.id === match.clubId) {
+            if (match.roleType === "lead") {
+              return {
+                ...club,
+                lead: {
+                  ...club.lead,
+                  name: editingMember.name,
+                  role: editingMember.role || `${club.name} Head`,
+                  department: editingMember.department,
+                  year: editingMember.year || "4th Year",
+                  avatar: editingMember.avatar,
+                  bio: editingMember.bio || "",
+                  email: editingMember.email || "",
+                  linkedin: editingMember.linkedin || "",
+                  btId: editingMember.btId || ""
+                }
+              };
+            } else {
+              return {
+                ...club,
+                coLead: {
+                  ...(club.coLead || {
+                    name: "",
+                    role: `${club.name} Co-Head`,
+                    department: editingMember.department,
+                    year: "3rd Year",
+                    avatar: ""
+                  }),
+                  name: editingMember.name,
+                  role: editingMember.role || `${club.name} Co-Head`,
+                  department: editingMember.department,
+                  year: editingMember.year || "3rd Year",
+                  avatar: editingMember.avatar,
+                  bio: editingMember.bio || "",
+                  email: editingMember.email || "",
+                  linkedin: editingMember.linkedin || "",
+                  btId: editingMember.btId || ""
+                }
+              };
+            }
+          }
+          return club;
+        });
+        setClubsList(updatedClubs);
+        saveStoredClubs(updatedClubs);
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 3000);
+        setEditingMember(null);
+        return;
+      }
+    }
+
     const maxRank = currentMembers.length + (isCreatingNew ? 1 : 0);
     const targetRank = Math.max(1, Math.min(editingMember.order || maxRank, maxRank));
 
@@ -281,6 +405,10 @@ export default function AdminTeamPage() {
   };
 
   const handleDeleteMember = (id: string, name: string) => {
+    if (activeTab === "clubs") {
+      alert("To add, delete or configure whole Chartered Societies, please visit the Clubs Manager tab in Admin Console.");
+      return;
+    }
     if (confirm(`Are you sure you want to remove ${name || "this position"} from the roster?`)) {
       const updated = currentMembers.filter((m) => m.id !== id);
       saveCurrentList(updated);
@@ -484,6 +612,18 @@ export default function AdminTeamPage() {
           <Sparkles className="w-4 h-4 text-[#E78023]" />
           <span>Founding Members ({foundingMembersList.length})</span>
         </button>
+
+        <button
+          onClick={() => setActiveTab("clubs")}
+          className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === "clubs"
+              ? "bg-[#17458F] text-white shadow-xs"
+              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+          }`}
+        >
+          <Users className="w-4 h-4 text-[#E78023]" />
+          <span>Club Heads &amp; Co-Heads ({clubLeadMembers.length})</span>
+        </button>
       </div>
 
       {/* Search Bar */}
@@ -493,7 +633,7 @@ export default function AdminTeamPage() {
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder={`Search ${activeTab} members by name, position, department...`}
+          placeholder={`Search ${activeTab === "clubs" ? "club leadership" : activeTab} members by name, position, department...`}
           className="w-full pl-11 pr-4 py-3 rounded-2xl bg-white border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F] shadow-xs"
         />
       </div>
@@ -510,32 +650,40 @@ export default function AdminTeamPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-md bg-[#17458F]/10 text-[#17458F]">
-                      Rank #{actualIndex + 1}
-                    </span>
+                    {activeTab === "clubs" ? (
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-md bg-amber-50 text-[#E78023] border border-amber-200 uppercase">
+                        {member.role.includes("Co-Head") ? "Club Co-Head" : "Club Head"}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-md bg-[#17458F]/10 text-[#17458F]">
+                        Rank #{actualIndex + 1}
+                      </span>
+                    )}
                   </div>
 
-                  {/* Move Up / Down Buttons */}
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => handleMoveMember(member.id, "up")}
-                      disabled={actualIndex === 0 || !!searchQuery}
-                      className="p-1 rounded-md bg-slate-100 hover:bg-[#17458F] text-slate-600 hover:text-white disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer"
-                      title="Move Up in Hierarchy"
-                    >
-                      <ArrowUp className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleMoveMember(member.id, "down")}
-                      disabled={actualIndex === currentMembers.length - 1 || !!searchQuery}
-                      className="p-1 rounded-md bg-slate-100 hover:bg-[#17458F] text-slate-600 hover:text-white disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer"
-                      title="Move Down in Hierarchy"
-                    >
-                      <ArrowDown className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  {/* Move Up / Down Buttons (Admins & Council) */}
+                  {activeTab !== "clubs" && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleMoveMember(member.id, "up")}
+                        disabled={actualIndex === 0 || !!searchQuery}
+                        className="p-1 rounded-md bg-slate-100 hover:bg-[#17458F] text-slate-600 hover:text-white disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer"
+                        title="Move Up in Hierarchy"
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleMoveMember(member.id, "down")}
+                        disabled={actualIndex === currentMembers.length - 1 || !!searchQuery}
+                        className="p-1 rounded-md bg-slate-100 hover:bg-[#17458F] text-slate-600 hover:text-white disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer"
+                        title="Move Down in Hierarchy"
+                      >
+                        <ArrowDown className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Photo & Name */}
@@ -545,6 +693,7 @@ export default function AdminTeamPage() {
                       src={member.avatar}
                       alt={member.name}
                       fill
+                      unoptimized={true}
                       className="object-cover"
                     />
                   </div>
@@ -572,13 +721,23 @@ export default function AdminTeamPage() {
 
               {/* Action Buttons */}
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                <button
-                  onClick={() => handleDeleteMember(member.id, member.name)}
-                  className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 transition-colors cursor-pointer"
-                  title="Remove Position / Officer"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {activeTab !== "clubs" ? (
+                  <button
+                    onClick={() => handleDeleteMember(member.id, member.name)}
+                    className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 transition-colors cursor-pointer"
+                    title="Remove Position / Officer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <Link
+                    href={`/clubs/${member.clubSlug}`}
+                    target="_blank"
+                    className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold uppercase transition-colors"
+                  >
+                    View Club
+                  </Link>
+                )}
 
                 <button
                   onClick={() => {
@@ -591,7 +750,7 @@ export default function AdminTeamPage() {
                   className="px-3.5 py-1.5 rounded-xl bg-[#17458F] hover:bg-[#0E2F66] text-white text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
                 >
                   <Edit3 className="w-3.5 h-3.5" />
-                  <span>Edit Details</span>
+                  <span>{activeTab === "clubs" ? "Edit PFP & Details" : "Edit Details"}</span>
                 </button>
               </div>
             </div>
@@ -620,8 +779,18 @@ export default function AdminTeamPage() {
             setEditingMember(null);
             setIsCreatingNew(false);
           }}
-          title={isCreatingNew ? "Add New Council Position & Officer" : `Edit: ${editingMember.role || "Position"}`}
-          subtitle="Configure position title, student officer credentials, hierarchy rank, and photo."
+          title={
+            activeTab === "clubs"
+              ? `Edit Club Leadership PFP: ${editingMember.role || "Officer"}`
+              : isCreatingNew
+              ? "Add New Council Position & Officer"
+              : `Edit: ${editingMember.role || "Position"}`
+          }
+          subtitle={
+            activeTab === "clubs"
+              ? "Crop & upload avatar photo (PFP), student credentials, and BT ID for this chartered society."
+              : "Configure position title, student officer credentials, hierarchy rank, and photo."
+          }
           maxWidth="lg"
         >
           <form onSubmit={handleSaveMember} className="space-y-5 text-xs text-slate-900">
@@ -657,21 +826,23 @@ export default function AdminTeamPage() {
               </div>
             </div>
 
-            {/* Hierarchy Rank */}
-            <div className="space-y-1.5">
-              <label className="font-bold text-slate-700 flex items-center justify-between">
-                <span>Hierarchy Priority / Rank #</span>
-                <span className="text-[10px] text-slate-400">1 = Highest (Top of Roster Page)</span>
-              </label>
-              <input
-                type="number"
-                min="1"
-                max={currentMembers.length + (isCreatingNew ? 1 : 0)}
-                value={editingMember.order || 1}
-                onChange={(e) => setEditingMember({ ...editingMember, order: parseInt(e.target.value) || 1 })}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold text-[#17458F] focus:outline-none focus:border-[#17458F]"
-              />
-            </div>
+            {/* Hierarchy Rank (Only for Council & Admins) */}
+            {activeTab !== "clubs" && (
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-700 flex items-center justify-between">
+                  <span>Hierarchy Priority / Rank #</span>
+                  <span className="text-[10px] text-slate-400">1 = Highest (Top of Roster Page)</span>
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max={currentMembers.length + (isCreatingNew ? 1 : 0)}
+                  value={editingMember.order || 1}
+                  onChange={(e) => setEditingMember({ ...editingMember, order: parseInt(e.target.value) || 1 })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold text-[#17458F] focus:outline-none focus:border-[#17458F]"
+                />
+              </div>
+            )}
 
             {/* Department & Year */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -753,15 +924,15 @@ export default function AdminTeamPage() {
             {/* Avatar Photo Upload / URL */}
             <div className="space-y-2 pt-2 border-t border-slate-100">
               <label className="font-bold text-slate-700">
-                Officer Avatar Photo (Auto-Compressed WebP)
+                {activeTab === "clubs" ? "Club Head / Co-Head Portrait Photo (PFP)" : "Officer Avatar Photo (Auto-Compressed WebP)"}
               </label>
               
               <ImageUploadDropzone
-                label="Officer Portrait / Headshot"
+                label={activeTab === "clubs" ? "Club Head / Co-Head Portrait Photo" : "Officer Portrait / Headshot"}
                 sublabel="Crop, zoom & frame headshot to square (1:1)"
                 aspectRatio="1:1"
                 recommendedSize="600 x 600 px (1:1)"
-                storagePath="team/avatars"
+                storagePath={activeTab === "clubs" ? "clubs/leads" : "team/avatars"}
                 previewUrl={editingMember.avatar}
                 onUrlChange={(url) => {
                   setEditingMember((prev) => prev ? { ...prev, avatar: url } : null);
