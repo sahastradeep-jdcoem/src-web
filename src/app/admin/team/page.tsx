@@ -801,23 +801,26 @@ export default function AdminTeamPage() {
 
               {/* Action Buttons */}
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                {activeTab !== "clubs" ? (
+                <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => handleDeleteMember(member.id, member.name)}
-                    className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 transition-colors cursor-pointer"
-                    title="Remove Position / Officer"
+                    className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 hover:text-rose-600 border border-transparent hover:border-rose-200 transition-all cursor-pointer"
+                    title={activeTab === "clubs" ? "Remove Club Head / Co-Head" : "Remove Position / Officer"}
+                    aria-label="Delete position"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
-                ) : (
-                  <Link
-                    href={`/clubs/${(member as any).clubSlug}`}
-                    target="_blank"
-                    className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold uppercase transition-colors"
-                  >
-                    View Club
-                  </Link>
-                )}
+
+                  {activeTab === "clubs" && (member as any).clubSlug && (
+                    <Link
+                      href={`/clubs/${(member as any).clubSlug}`}
+                      target="_blank"
+                      className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold uppercase transition-colors"
+                    >
+                      View Club
+                    </Link>
+                  )}
+                </div>
 
                 <button
                   onClick={() => {
@@ -1099,28 +1102,51 @@ export default function AdminTeamPage() {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setEditingMember(null);
-                  setIsCreatingNew(false);
-                }}
-              >
-                Cancel
-              </Button>
+            <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-100">
+              <div>
+                {!isCreatingNew && (
+                  <Button
+                    type="button"
+                    variant="danger"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => {
+                      if (editingMember) {
+                        const memberToDelete = editingMember;
+                        setEditingMember(null);
+                        handleDeleteMember(memberToDelete.id, memberToDelete.name);
+                      }
+                    }}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Position</span>
+                  </Button>
+                )}
+              </div>
 
-              <Button
-                type="submit"
-                variant="primary"
-                size="sm"
-                className="gap-1.5"
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>{isCreatingNew ? "Create Position" : "Save Changes"}</span>
-              </Button>
+              <div className="flex items-center gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setEditingMember(null);
+                    setIsCreatingNew(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  className="gap-1.5"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{isCreatingNew ? "Create Position" : "Save Changes"}</span>
+                </Button>
+              </div>
             </div>
 
           </form>
