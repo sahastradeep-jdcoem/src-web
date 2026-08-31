@@ -298,9 +298,8 @@ export default function EventDetailPage() {
                     <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
                     Official Event Poster
                   </span>
-                  <span className="text-[10px] text-slate-400">Portrait 3:4</span>
                 </div>
-                <div className="relative aspect-[3/4] w-full rounded-2xl overflow-hidden border border-slate-100 shadow-xs group">
+                <div className="relative aspect-[4/5] w-full rounded-2xl overflow-hidden border border-slate-100 shadow-xs group">
                   <Image
                     src={event.posterImage || event.poster}
                     alt={`${event.name} Official Poster`}

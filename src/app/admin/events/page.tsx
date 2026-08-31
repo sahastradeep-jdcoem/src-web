@@ -1128,13 +1128,13 @@ export default function AdminEventsPage() {
                   />
                 </div>
 
-                {/* 2. Official Vertical Poster (3:4) */}
+                {/* 2. Official Vertical Poster (4:5) */}
                 <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
                   <ImageUploadDropzone
                     label="2. Vertical Poster"
                     sublabel="For official notices & passes"
-                    aspectRatio="3:4"
-                    recommendedSize="1080 x 1440 px (3:4)"
+                    aspectRatio="4:5"
+                    recommendedSize="1080 x 1350 px (4:5)"
                     storagePath="events/posters"
                     previewUrl={newEvent.posterImage || newEvent.poster}
                     onUrlChange={(url) => {
@@ -1657,13 +1657,13 @@ export default function AdminEventsPage() {
                   />
                 </div>
 
-                {/* 2. Official Vertical Poster (3:4) */}
+                {/* 2. Official Vertical Poster (4:5) */}
                 <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
                   <ImageUploadDropzone
                     label="2. Vertical Poster"
                     sublabel="For official notices & passes"
-                    aspectRatio="3:4"
-                    recommendedSize="1080 x 1440 px (3:4)"
+                    aspectRatio="4:5"
+                    recommendedSize="1080 x 1350 px (4:5)"
                     storagePath="events/posters"
                     previewUrl={editForm.posterImage || editForm.poster}
                     onUrlChange={(url) => {

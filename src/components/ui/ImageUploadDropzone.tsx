@@ -12,7 +12,7 @@ interface ImageUploadDropzoneProps {
   label?: string;
   sublabel?: string;
   recommendedSize?: string;
-  aspectRatio?: "16:9" | "3:4" | "21:9" | "1:1" | "auto";
+  aspectRatio?: "16:9" | "3:4" | "4:5" | "21:9" | "1:1" | "auto";
   previewUrl?: string;
   storagePath?: string;
   className?: string;
@@ -123,7 +123,9 @@ export function ImageUploadDropzone({
   };
 
   const aspectClass =
-    aspectRatio === "3:4"
+    aspectRatio === "4:5"
+      ? "aspect-[4/5] max-h-72"
+      : aspectRatio === "3:4"
       ? "aspect-[3/4] max-h-72"
       : aspectRatio === "21:9"
       ? "aspect-[21/9] max-h-56"
