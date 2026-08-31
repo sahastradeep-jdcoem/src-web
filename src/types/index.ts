@@ -34,7 +34,10 @@ export interface EventItem {
   organizerClubSlug?: string;
   status: EventStatus;
   isFeatured?: boolean;
-  poster: string;
+  poster: string; // Base / fallback poster
+  posterImage?: string; // Vertical portrait poster (3:4 or 4:5) for official notices & sidebar
+  cardImage?: string; // Landscape card thumbnail (16:9) for event listings & dashboard
+  headerImage?: string; // Ultra-wide cinematic banner (21:9) for event page backdrop
   description: string;
   about: string;
   whatToExpect: string[];
@@ -68,7 +71,10 @@ export interface ClubItem {
   iconName: string;
   memberCount: number;
   established: string;
-  heroImage: string;
+  heroImage: string; // Base / fallback hero
+  headerImage?: string; // Ultra-wide cinematic banner (21:9) for club detail page header
+  cardImage?: string; // Landscape card thumbnail (16:9) for club directory grid
+  logoImage?: string; // Square (1:1) club emblem / insignia logo
   lead: {
     name: string;
     role: string;

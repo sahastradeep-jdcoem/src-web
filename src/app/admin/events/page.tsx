@@ -74,6 +74,9 @@ export default function AdminEventsPage() {
     organizer: "SRC JDCOEM",
     status: "Registration Open" as "Registration Open" | "Upcoming" | "Completed",
     poster: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
+    cardImage: "",
+    posterImage: "",
+    headerImage: "",
     description: "",
     about: "",
     whatToExpect: [""] as string[],
@@ -99,6 +102,9 @@ export default function AdminEventsPage() {
     organizer: "SRC JDCOEM",
     status: "Registration Open" as "Registration Open" | "Upcoming" | "Completed",
     poster: "",
+    cardImage: "",
+    posterImage: "",
+    headerImage: "",
     description: "",
     about: "",
     whatToExpect: [""] as string[],
@@ -215,7 +221,10 @@ export default function AdminEventsPage() {
       venue: newEvent.venue,
       organizer: newEvent.organizer || "SRC JDCOEM",
       status: newEvent.status,
-      poster: newEvent.poster || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
+      poster: newEvent.poster || newEvent.cardImage || newEvent.posterImage || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
+      cardImage: newEvent.cardImage || newEvent.poster,
+      posterImage: newEvent.posterImage || newEvent.poster,
+      headerImage: newEvent.headerImage || newEvent.cardImage || newEvent.poster,
       description: newEvent.description,
       about: newEvent.about || newEvent.description,
       whatToExpect: cleanWhatToExpect.length > 0 ? cleanWhatToExpect : ["High-impact collegiate showcase"],
@@ -248,6 +257,9 @@ export default function AdminEventsPage() {
       organizer: "SRC JDCOEM",
       status: "Registration Open",
       poster: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
+      cardImage: "",
+      posterImage: "",
+      headerImage: "",
       description: "",
       about: "",
       whatToExpect: [""],
@@ -275,6 +287,9 @@ export default function AdminEventsPage() {
       organizer: evt.organizer || "SRC JDCOEM",
       status: evt.status as any,
       poster: evt.poster || "",
+      cardImage: evt.cardImage || evt.poster || "",
+      posterImage: evt.posterImage || evt.poster || "",
+      headerImage: evt.headerImage || evt.poster || "",
       description: evt.description || "",
       about: evt.about || evt.description || "",
       whatToExpect: evt.whatToExpect && evt.whatToExpect.length > 0 ? [...evt.whatToExpect] : [""],
@@ -317,7 +332,10 @@ export default function AdminEventsPage() {
             venue: editForm.venue,
             organizer: editForm.organizer,
             status: editForm.status,
-            poster: editForm.poster || item.poster,
+            poster: editForm.poster || editForm.cardImage || editForm.posterImage || item.poster,
+            cardImage: editForm.cardImage || item.cardImage || editForm.poster,
+            posterImage: editForm.posterImage || item.posterImage || editForm.poster,
+            headerImage: editForm.headerImage || item.headerImage || editForm.cardImage || editForm.poster,
             description: editForm.description,
             about: editForm.about || editForm.description,
             whatToExpect: cleanWhatToExpect.length > 0 ? cleanWhatToExpect : item.whatToExpect,
@@ -1071,29 +1089,73 @@ export default function AdminEventsPage() {
               )}
             </div>
 
-            {/* Event Poster Photo / Direct URL */}
-            <div className="space-y-2 pt-2 border-t border-slate-100">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <ImageIcon className="w-3.5 h-3.5 text-[#E78023]" />
-                <span>Event Poster / Cover Photo</span>
-              </label>
-              
-              <ImageUploadDropzone
-                label="Drop Event Poster Here"
-                sublabel="Converts phone/DSLR flyer to optimized WebP image"
-                previewUrl={newEvent.poster}
-                onImageCompressed={(res) => {
-                  setNewEvent({ ...newEvent, poster: res.dataUrl });
-                }}
-              />
+            {/* Multi-Size Visual Asset Suite */}
+            <div className="space-y-4 pt-4 border-t border-slate-200">
+              <div className="space-y-1">
+                <label className="text-xs font-extrabold uppercase tracking-wider text-[#17458F] flex items-center gap-1.5 font-heading">
+                  <ImageIcon className="w-4 h-4 text-[#E78023]" />
+                  <span>Event Visual Asset Suite (Multi-Size Imagery)</span>
+                </label>
+                <p className="text-[11px] text-slate-500 font-sans">
+                  Upload dedicated photos optimized for different screens and layouts across the portal.
+                </p>
+              </div>
 
-              <input
-                type="text"
-                placeholder="Or paste Direct Image URL (https://...)"
-                value={newEvent.poster}
-                onChange={(e) => setNewEvent({ ...newEvent, poster: e.target.value })}
-                className="w-full px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 focus:outline-none focus:border-[#17458F]"
-              />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* 1. Event Card Thumbnail (16:9) */}
+                <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
+                  <ImageUploadDropzone
+                    label="1. Card Thumbnail"
+                    sublabel="For event catalog cards & dashboard"
+                    aspectRatio="16:9"
+                    recommendedSize="1200 x 675 px (16:9)"
+                    storagePath="events/cards"
+                    previewUrl={newEvent.cardImage || newEvent.poster}
+                    onUrlChange={(url) => {
+                      setNewEvent({ ...newEvent, cardImage: url, poster: newEvent.poster || url });
+                    }}
+                    onImageCompressed={(res) => {
+                      setNewEvent({ ...newEvent, cardImage: res.dataUrl, poster: newEvent.poster || res.dataUrl });
+                    }}
+                  />
+                </div>
+
+                {/* 2. Official Vertical Poster (3:4) */}
+                <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
+                  <ImageUploadDropzone
+                    label="2. Vertical Poster"
+                    sublabel="For official notices & passes"
+                    aspectRatio="3:4"
+                    recommendedSize="1080 x 1440 px (3:4)"
+                    storagePath="events/posters"
+                    previewUrl={newEvent.posterImage || newEvent.poster}
+                    onUrlChange={(url) => {
+                      setNewEvent({ ...newEvent, posterImage: url, poster: url });
+                    }}
+                    onImageCompressed={(res) => {
+                      setNewEvent({ ...newEvent, posterImage: res.dataUrl, poster: res.dataUrl });
+                    }}
+                  />
+                </div>
+
+                {/* 3. Hero Header Backdrop (21:9) */}
+                <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
+                  <ImageUploadDropzone
+                    label="3. Header Banner"
+                    sublabel="Cinematic backdrop on detail page"
+                    aspectRatio="21:9"
+                    recommendedSize="1920 x 820 px (21:9)"
+                    storagePath="events/headers"
+                    previewUrl={newEvent.headerImage || newEvent.cardImage || newEvent.poster}
+                    onUrlChange={(url) => {
+                      setNewEvent({ ...newEvent, headerImage: url });
+                    }}
+                    onImageCompressed={(res) => {
+                      setNewEvent({ ...newEvent, headerImage: res.dataUrl });
+                    }}
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
@@ -1556,29 +1618,73 @@ export default function AdminEventsPage() {
               )}
             </div>
 
-            {/* Event Poster Photo / Direct URL */}
-            <div className="space-y-2 pt-2 border-t border-slate-100">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <ImageIcon className="w-3.5 h-3.5 text-[#E78023]" />
-                <span>Event Poster / Cover Photo</span>
-              </label>
-              
-              <ImageUploadDropzone
-                label="Drop Event Poster Here"
-                sublabel="Converts phone/DSLR flyer to optimized WebP image"
-                previewUrl={editForm.poster}
-                onImageCompressed={(res) => {
-                  setEditForm({ ...editForm, poster: res.dataUrl });
-                }}
-              />
+            {/* Multi-Size Visual Asset Suite */}
+            <div className="space-y-4 pt-4 border-t border-slate-200">
+              <div className="space-y-1">
+                <label className="text-xs font-extrabold uppercase tracking-wider text-[#17458F] flex items-center gap-1.5 font-heading">
+                  <ImageIcon className="w-4 h-4 text-[#E78023]" />
+                  <span>Event Visual Asset Suite (Multi-Size Imagery)</span>
+                </label>
+                <p className="text-[11px] text-slate-500 font-sans">
+                  Upload dedicated photos optimized for different screens and layouts across the portal.
+                </p>
+              </div>
 
-              <input
-                type="text"
-                placeholder="Or paste Direct Image URL (https://...)"
-                value={editForm.poster}
-                onChange={(e) => setEditForm({ ...editForm, poster: e.target.value })}
-                className="w-full px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 focus:outline-none focus:border-[#17458F]"
-              />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* 1. Event Card Thumbnail (16:9) */}
+                <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
+                  <ImageUploadDropzone
+                    label="1. Card Thumbnail"
+                    sublabel="For event catalog cards & dashboard"
+                    aspectRatio="16:9"
+                    recommendedSize="1200 x 675 px (16:9)"
+                    storagePath="events/cards"
+                    previewUrl={editForm.cardImage || editForm.poster}
+                    onUrlChange={(url) => {
+                      setEditForm({ ...editForm, cardImage: url, poster: editForm.poster || url });
+                    }}
+                    onImageCompressed={(res) => {
+                      setEditForm({ ...editForm, cardImage: res.dataUrl, poster: editForm.poster || res.dataUrl });
+                    }}
+                  />
+                </div>
+
+                {/* 2. Official Vertical Poster (3:4) */}
+                <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
+                  <ImageUploadDropzone
+                    label="2. Vertical Poster"
+                    sublabel="For official notices & passes"
+                    aspectRatio="3:4"
+                    recommendedSize="1080 x 1440 px (3:4)"
+                    storagePath="events/posters"
+                    previewUrl={editForm.posterImage || editForm.poster}
+                    onUrlChange={(url) => {
+                      setEditForm({ ...editForm, posterImage: url, poster: url });
+                    }}
+                    onImageCompressed={(res) => {
+                      setEditForm({ ...editForm, posterImage: res.dataUrl, poster: res.dataUrl });
+                    }}
+                  />
+                </div>
+
+                {/* 3. Hero Header Backdrop (21:9) */}
+                <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
+                  <ImageUploadDropzone
+                    label="3. Header Banner"
+                    sublabel="Cinematic backdrop on detail page"
+                    aspectRatio="21:9"
+                    recommendedSize="1920 x 820 px (21:9)"
+                    storagePath="events/headers"
+                    previewUrl={editForm.headerImage || editForm.cardImage || editForm.poster}
+                    onUrlChange={(url) => {
+                      setEditForm({ ...editForm, headerImage: url });
+                    }}
+                    onImageCompressed={(res) => {
+                      setEditForm({ ...editForm, headerImage: res.dataUrl });
+                    }}
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">

@@ -58,7 +58,7 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
       {/* 1. CINEMATIC HERO */}
       <section className="relative h-[50vh] sm:h-[55vh] flex items-end pb-12 px-4 sm:px-6 lg:px-8 overflow-hidden bg-slate-900">
         <Image
-          src={club.heroImage}
+          src={club.headerImage || club.heroImage}
           alt={club.name}
           fill
           priority
@@ -75,24 +75,38 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
             <span>Back to Clubs Directory</span>
           </Link>
 
-          <div className="space-y-3 max-w-3xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-[#E78023] text-white">
-                {club.category}
-              </span>
-              <span className="text-xs font-bold text-white px-3 py-1 rounded-full bg-white/20 backdrop-blur-xs flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5 text-[#E78023]" />
-                <span>{club.memberCount} Active Members</span>
-              </span>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+            {club.logoImage && (
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-white/95 backdrop-blur-md p-2 border-2 border-white/40 shadow-xl overflow-hidden shrink-0">
+                <Image
+                  src={club.logoImage}
+                  alt={`${club.name} Logo`}
+                  width={96}
+                  height={96}
+                  className="object-cover w-full h-full rounded-2xl"
+                />
+              </div>
+            )}
+
+            <div className="space-y-3 max-w-3xl">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-[#E78023] text-white">
+                  {club.category}
+                </span>
+                <span className="text-xs font-bold text-white px-3 py-1 rounded-full bg-white/20 backdrop-blur-xs flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-[#E78023]" />
+                  <span>{club.memberCount} Active Members</span>
+                </span>
+              </div>
+
+              <h1 className="font-extrabold text-4xl sm:text-6xl text-white tracking-tight uppercase font-heading">
+                {club.name}
+              </h1>
+
+              <p className="text-base sm:text-lg text-[#E78023] font-bold tracking-wide">
+                {club.tagline}
+              </p>
             </div>
-
-            <h1 className="font-extrabold text-4xl sm:text-6xl text-white tracking-tight uppercase font-heading">
-              {club.name}
-            </h1>
-
-            <p className="text-base sm:text-lg text-[#E78023] font-bold tracking-wide">
-              {club.tagline}
-            </p>
           </div>
         </div>
       </section>

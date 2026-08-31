@@ -856,32 +856,70 @@ export default function AdminClubsPage() {
               </div>
             )}
 
-            {/* Tab 4: Banner & Media */}
+            {/* Tab 4: Multi-Size Visual Assets & Media */}
             {modalTab === "media" && (
-              <div className="space-y-5 animate-in fade-in duration-200">
-                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/70 border border-slate-200 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <label className="font-bold text-slate-800 text-xs">Club Hero Backdrop Image</label>
-                    <span className="text-[10px] text-slate-500">Supports drag & drop or direct URL</span>
+              <div className="space-y-6 animate-in fade-in duration-200">
+                <div className="space-y-1">
+                  <h4 className="font-heading font-extrabold text-xs uppercase tracking-wider text-[#17458F]">
+                    Club Visual Asset Suite (Multi-Size Imagery)
+                  </h4>
+                  <p className="text-[11px] text-slate-500 font-sans">
+                    Upload dedicated photos tailored for club directory cards, detail page banners, and circular insignia badges.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* 1. Directory Card (16:9) */}
+                  <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
+                    <ImageUploadDropzone
+                      label="1. Directory Card"
+                      sublabel="For /clubs directory grid"
+                      aspectRatio="16:9"
+                      recommendedSize="1200 x 675 px (16:9)"
+                      storagePath="clubs/cards"
+                      previewUrl={editingClub.cardImage || editingClub.heroImage}
+                      onUrlChange={(url) => {
+                        setEditingClub({ ...editingClub, cardImage: url, heroImage: editingClub.heroImage || url });
+                      }}
+                      onImageCompressed={(res) => {
+                        setEditingClub({ ...editingClub, cardImage: res.dataUrl, heroImage: editingClub.heroImage || res.dataUrl });
+                      }}
+                    />
                   </div>
 
-                  <ImageUploadDropzone
-                    label="Drop Club Banner Photo Here"
-                    sublabel="Optimizes club hero images to high-res WebP"
-                    previewUrl={editingClub.heroImage}
-                    onImageCompressed={(res) => {
-                      setEditingClub({ ...editingClub, heroImage: res.dataUrl });
-                    }}
-                  />
+                  {/* 2. Hero Header Banner (21:9) */}
+                  <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
+                    <ImageUploadDropzone
+                      label="2. Header Banner"
+                      sublabel="Backdrop on /clubs/[slug]"
+                      aspectRatio="21:9"
+                      recommendedSize="1920 x 820 px (21:9)"
+                      storagePath="clubs/headers"
+                      previewUrl={editingClub.headerImage || editingClub.heroImage}
+                      onUrlChange={(url) => {
+                        setEditingClub({ ...editingClub, headerImage: url, heroImage: url });
+                      }}
+                      onImageCompressed={(res) => {
+                        setEditingClub({ ...editingClub, headerImage: res.dataUrl, heroImage: res.dataUrl });
+                      }}
+                    />
+                  </div>
 
-                  <div className="space-y-1.5">
-                    <label className="font-semibold text-slate-600 text-[11px]">Direct Image URL</label>
-                    <input
-                      type="text"
-                      placeholder="https://..."
-                      value={editingClub.heroImage}
-                      onChange={(e) => setEditingClub({ ...editingClub, heroImage: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-[11px] font-mono text-slate-700 focus:outline-none focus:border-[#17458F]"
+                  {/* 3. Official Logo / Insignia (1:1) */}
+                  <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
+                    <ImageUploadDropzone
+                      label="3. Logo / Badge"
+                      sublabel="Square club crest / icon"
+                      aspectRatio="1:1"
+                      recommendedSize="500 x 500 px (1:1)"
+                      storagePath="clubs/logos"
+                      previewUrl={editingClub.logoImage || ""}
+                      onUrlChange={(url) => {
+                        setEditingClub({ ...editingClub, logoImage: url });
+                      }}
+                      onImageCompressed={(res) => {
+                        setEditingClub({ ...editingClub, logoImage: res.dataUrl });
+                      }}
                     />
                   </div>
                 </div>

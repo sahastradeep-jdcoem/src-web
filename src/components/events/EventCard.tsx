@@ -25,10 +25,10 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
     return (
       <div className="group rounded-3xl bg-white border border-slate-200 hover:border-[#17458F]/30 hover:shadow-xl transition-all duration-300 overflow-hidden shadow-xs flex flex-col lg:flex-row font-sans">
         
-        {/* Poster Image */}
+        {/* Poster / Card Image */}
         <div className="relative lg:w-3/5 h-64 sm:h-80 lg:h-auto overflow-hidden">
           <Image
-            src={event.poster}
+            src={event.cardImage || event.poster}
             alt={event.name}
             fill
             className="object-cover transition-transform duration-500 group-hover:scale-[1.02]"
@@ -111,7 +111,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
       {/* Top Image Container */}
       <div className="relative h-48 w-full overflow-hidden">
         <Image
-          src={event.poster}
+          src={event.cardImage || event.poster}
           alt={event.name}
           fill
           className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"

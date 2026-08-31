@@ -133,9 +133,9 @@ export default function EventDetailPage() {
       
       {/* 1. CINEMATIC HERO BANNER */}
       <section className="relative h-[55vh] sm:h-[60vh] flex items-end pb-12 px-4 sm:px-6 lg:px-8 overflow-hidden bg-slate-900">
-        {/* Background Poster */}
+        {/* Cinematic Background Backdrop Banner */}
         <Image
-          src={event.poster || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop"}
+          src={event.headerImage || event.cardImage || event.poster || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=1920&auto=format&fit=crop"}
           alt={event.name}
           fill
           priority
@@ -287,8 +287,30 @@ export default function EventDetailPage() {
 
           </div>
 
-          {/* Right Column: Sticky Registration Card */}
+          {/* Right Column: Sticky Registration Card & Official Poster */}
           <div className="lg:sticky lg:top-24 space-y-6">
+            
+            {/* Official Event Notice Poster */}
+            {(event.posterImage || event.poster) && (
+              <div className="rounded-3xl bg-white border border-slate-200 p-4 shadow-sm space-y-2">
+                <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-500 px-1">
+                  <span className="flex items-center gap-1.5 text-[#17458F]">
+                    <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
+                    Official Event Poster
+                  </span>
+                  <span className="text-[10px] text-slate-400">Portrait 3:4</span>
+                </div>
+                <div className="relative aspect-[3/4] w-full rounded-2xl overflow-hidden border border-slate-100 shadow-xs group">
+                  <Image
+                    src={event.posterImage || event.poster}
+                    alt={`${event.name} Official Poster`}
+                    fill
+                    className="object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-6">
               <div className="space-y-2">
                 <Badge variant={isRegistrationOpen ? "orange" : "slate"} size="md">
