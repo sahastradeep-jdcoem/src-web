@@ -121,6 +121,25 @@ export async function getUserProfileFromFirestore(uid: string): Promise<UserProf
 }
 
 /**
+ * Deeply strips undefined values from objects and arrays so Firestore setDoc / updateDoc never throws
+ */
+export function cleanUndefined<T>(obj: T): T {
+  if (obj === null || obj === undefined) return null as unknown as T;
+  if (typeof obj !== "object") return obj;
+  if (Array.isArray(obj)) {
+    return obj.map((item) => cleanUndefined(item)) as unknown as T;
+  }
+  const result: any = {};
+  for (const key of Object.keys(obj as any)) {
+    const val = (obj as any)[key];
+    if (val !== undefined) {
+      result[key] = typeof val === "object" && val !== null ? cleanUndefined(val) : val;
+    }
+  }
+  return result;
+}
+
+/**
  * Save or update a student user profile in Firestore
  */
 export async function saveUserProfileToFirestore(
@@ -129,9 +148,10 @@ export async function saveUserProfileToFirestore(
 ): Promise<void> {
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      const cleanProfile = cleanUndefined(profileData);
       const docRef = doc(db, USERS_COLLECTION, uid);
       await setDoc(docRef, {
-        ...profileData,
+        ...cleanProfile,
         updatedAt: serverTimestamp(),
       }, { merge: true });
     }
@@ -194,8 +214,9 @@ export function subscribeToUsersFromFirestore(callback: (users: UserProfile[]) =
 export async function saveRegistrationToFirestore(
   data: Omit<StudentRegistrationRecord, "createdAt" | "status">
 ): Promise<StudentRegistrationRecord> {
+  const cleanData = cleanUndefined(data);
   const newRecord: StudentRegistrationRecord = {
-    ...data,
+    ...cleanData,
     status: "CONFIRMED",
     createdAt: serverTimestamp(),
   };
@@ -329,11 +350,12 @@ const SITE_CONTENT_COLLECTION = "site_content";
 export async function saveSiteContentToFirestore<T>(docId: string, data: T): Promise<void> {
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      const sanitized = cleanUndefined(data);
       const docRef = doc(db, SITE_CONTENT_COLLECTION, docId);
-      await setDoc(docRef, { payload: data, updatedAt: serverTimestamp() }, { merge: true });
+      await setDoc(docRef, { payload: sanitized, updatedAt: serverTimestamp() }, { merge: true });
     }
   } catch (error) {
-    console.warn(`Firestore saveSiteContent error [${docId}]`, error);
+    console.error(`Firestore saveSiteContent error [${docId}]`, error);
   }
 }
 

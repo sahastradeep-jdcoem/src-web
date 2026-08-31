@@ -3,7 +3,8 @@ import { mockEvents as initialEvents } from "@/data/events";
 import { 
   saveSiteContentToFirestore, 
   getSiteContentFromFirestore, 
-  subscribeToSiteContent 
+  subscribeToSiteContent,
+  cleanUndefined
 } from "./firebase/firestore";
 
 const EVENTS_STORAGE_KEY = "src_events";
@@ -31,9 +32,10 @@ export function getStoredEvents(): EventItem[] {
 export function saveStoredEvents(events: EventItem[]): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(events));
-    window.dispatchEvent(new CustomEvent("src_events_updated", { detail: events }));
-    saveSiteContentToFirestore("events", events);
+    const sanitized = cleanUndefined(events);
+    localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(sanitized));
+    window.dispatchEvent(new CustomEvent("src_events_updated", { detail: sanitized }));
+    saveSiteContentToFirestore("events", sanitized);
   } catch (e) {
     console.error("Could not save events to storage", e);
   }
