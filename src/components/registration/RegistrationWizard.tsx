@@ -383,6 +383,28 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     const regId = `SRC-${event.slug.slice(0, 3).toUpperCase()}-26-${Math.floor(10000 + Math.random() * 90000)}`;
     const tkCode = `${event.slug.slice(0, 3).toUpperCase()}26-TK-${Math.floor(1000 + Math.random() * 9000)}`;
 
+    // Build structured custom answers preserving human-readable question titles
+    const structuredAnswers: Record<string, any> = {};
+    if (event.customQuestions && event.customQuestions.length > 0) {
+      event.customQuestions.forEach((q) => {
+        if (q.type !== "note" && customAnswers[q.id] !== undefined) {
+          structuredAnswers[q.id] = {
+            id: q.id,
+            question: q.question || "Custom Question",
+            type: q.type || "short_text",
+            options: q.options || [],
+            value: customAnswers[q.id],
+          };
+        }
+      });
+    }
+    // Also include any raw key answers not matching current customQuestions list
+    Object.entries(customAnswers).forEach(([k, v]) => {
+      if (!structuredAnswers[k]) {
+        structuredAnswers[k] = v;
+      }
+    });
+
     try {
       await saveRegistrationToFirestore({
         id: regId,
@@ -406,7 +428,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         currency: "INR",
         paidAt: new Date().toISOString(),
         tenureId: "tenure-2025-26",
-        customAnswers: Object.keys(customAnswers).length > 0 ? customAnswers : undefined,
+        customAnswers: Object.keys(structuredAnswers).length > 0 ? structuredAnswers : undefined,
       });
     } catch (e) {
       console.warn("Firestore registration save fallback handled", e);

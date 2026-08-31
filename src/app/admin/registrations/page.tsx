@@ -41,14 +41,15 @@ import { RegistrationRecord, EventItem, CustomQuestion } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { getStoredEvents } from "@/lib/eventsStore";
+import { getStoredEvents, syncEventsFromFirestore } from "@/lib/eventsStore";
 import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { 
   checkInStudentPass, 
   getAllRegistrationsFromFirestore, 
   subscribeToRegistrationsFromFirestore, 
-  deleteRegistrationFromFirestore 
+  deleteRegistrationFromFirestore,
+  subscribeToSiteContent
 } from "@/lib/firebase/firestore";
 
 type ActiveTab = "summary" | "question" | "individual" | "table";
@@ -73,9 +74,19 @@ export default function AdminRegistrationsPage() {
   const [selectedRecord, setSelectedRecord] = useState<RegistrationRecord | null>(null);
   const [checkInNotice, setCheckInNotice] = useState<string | null>(null);
 
-  // Load events for question definitions
+  // Load and sync events from local store & Firestore for question definitions
   useEffect(() => {
     setEventsList(getStoredEvents());
+    syncEventsFromFirestore().then((evts) => {
+      if (evts && evts.length > 0) setEventsList(evts);
+    });
+
+    const unsubscribeEvents = subscribeToSiteContent<EventItem[]>("events", (cloudEvts) => {
+      if (cloudEvts && Array.isArray(cloudEvts) && cloudEvts.length > 0) {
+        setEventsList(cloudEvts);
+      }
+    });
+
     const handleEventsUpdate = (e: any) => {
       if (e?.detail && Array.isArray(e.detail)) {
         setEventsList(e.detail);
@@ -84,7 +95,10 @@ export default function AdminRegistrationsPage() {
       }
     };
     window.addEventListener("src_events_updated", handleEventsUpdate);
-    return () => window.removeEventListener("src_events_updated", handleEventsUpdate);
+    return () => {
+      unsubscribeEvents();
+      window.removeEventListener("src_events_updated", handleEventsUpdate);
+    };
   }, []);
 
   // Sync event query param from URL on initial client load
@@ -242,6 +256,150 @@ export default function AdminRegistrationsPage() {
     };
   }, [eventRegistrations]);
 
+  // Helper to format question types into friendly display labels
+  const getQuestionTypeLabel = (type?: string) => {
+    switch (type) {
+      case "short_text": return "Short Answer";
+      case "long_text": return "Paragraph";
+      case "multiple_choice": return "Multiple Choice";
+      case "checkboxes": return "Checkboxes";
+      case "dropdown": return "Dropdown";
+      default: return "Custom Field";
+    }
+  };
+
+  // Helper to extract clean answer string/array
+  const getAnswerValue = (raw: any): any => {
+    if (raw === undefined || raw === null) return "";
+    if (typeof raw === "object" && !Array.isArray(raw)) {
+      if ("value" in raw) return raw.value;
+      if ("answer" in raw) return raw.answer;
+    }
+    return raw;
+  };
+
+  // Build a comprehensive Question Meta Map from eventsList and registration records
+  const questionMetaMap = useMemo(() => {
+    const map = new Map<string, { id: string; question: string; type: string; options?: string[]; eventName?: string }>();
+    
+    // 1. Map from all loaded events
+    eventsList.forEach((evt) => {
+      if (evt.customQuestions && Array.isArray(evt.customQuestions)) {
+        evt.customQuestions.forEach((q) => {
+          if (q && q.id) {
+            map.set(q.id, {
+              id: q.id,
+              question: q.question || "Custom Question",
+              type: q.type || "short_text",
+              options: q.options || [],
+              eventName: evt.name,
+            });
+          }
+        });
+      }
+    });
+
+    // 2. Scan all registrations for any embedded question definitions
+    registrations.forEach((r) => {
+      if (r.customAnswers && typeof r.customAnswers === "object") {
+        Object.entries(r.customAnswers).forEach(([k, v]) => {
+          if (v && typeof v === "object" && "question" in v) {
+            const qTitle = (v as any).question;
+            if (qTitle && !qTitle.startsWith("q-")) {
+              map.set(k, {
+                id: k,
+                question: qTitle,
+                type: (v as any).type || "short_text",
+                options: (v as any).options || [],
+                eventName: r.eventName,
+              });
+            }
+          }
+        });
+      }
+    });
+
+    return map;
+  }, [eventsList, registrations]);
+
+  // Robust Resolver: extracts clean title, type, and options for any question key
+  const getQuestionInfo = (key: string, eventName?: string, r?: RegistrationRecord) => {
+    // 1. Check if structured inside registration
+    if (r?.customAnswers && typeof r.customAnswers[key] === "object" && r.customAnswers[key] !== null) {
+      const obj = r.customAnswers[key];
+      if (obj.question && !obj.question.startsWith("q-")) {
+        return {
+          id: key,
+          title: obj.question,
+          type: obj.type || "short_text",
+          options: obj.options || [],
+        };
+      }
+    }
+
+    // 2. Check questionMetaMap
+    const meta = questionMetaMap.get(key);
+    if (meta && meta.question && !meta.question.startsWith("q-")) {
+      return {
+        id: key,
+        title: meta.question,
+        type: meta.type,
+        options: meta.options || [],
+      };
+    }
+
+    // 3. Search across all eventsList
+    for (const evt of eventsList) {
+      if (evt.customQuestions) {
+        const found = evt.customQuestions.find((q) => q.id === key);
+        if (found && found.question && !found.question.startsWith("q-")) {
+          return {
+            id: key,
+            title: found.question,
+            type: found.type,
+            options: found.options || [],
+          };
+        }
+      }
+    }
+
+    // 4. If key is already human-readable text
+    if (!key.startsWith("q-")) {
+      return {
+        id: key,
+        title: key,
+        type: "short_text",
+        options: [],
+      };
+    }
+
+    // 5. Match by event positional index if event is known
+    const targetEvtName = eventName || selectedEventSlug;
+    if (targetEvtName && targetEvtName !== "all") {
+      const evt = eventsList.find((e) => e.name.toLowerCase() === targetEvtName.toLowerCase() || e.slug.toLowerCase() === targetEvtName.toLowerCase());
+      if (evt?.customQuestions && evt.customQuestions.length > 0) {
+        const idx = evt.customQuestions.findIndex((q) => q.id === key);
+        if (idx !== -1) {
+          const q = evt.customQuestions[idx];
+          return { id: key, title: q.question, type: q.type, options: q.options || [] };
+        }
+        // If question count matches single custom question
+        if (evt.customQuestions.length === 1) {
+          const q = evt.customQuestions[0];
+          return { id: key, title: q.question, type: q.type, options: q.options || [] };
+        }
+      }
+    }
+
+    // 6. Friendly fallback label
+    return {
+      id: key,
+      title: "Event Participant Response",
+      type: "short_text",
+      options: [],
+    };
+  };
+
   // Questions available for the Question tab & Summary custom questions
   const availableQuestions = useMemo(() => {
     const questions: {
@@ -258,81 +416,91 @@ export default function AdminRegistrationsPage() {
       { id: "paymentStatus", title: "Payment & Pass Status", type: "multiple_choice", options: ["FREE", "PAID"], isStandard: true },
     ];
 
-    // If a specific event is selected, append its custom questions
-    if (currentSelectedEventObj?.customQuestions) {
+    // If a specific event is selected and has defined custom questions
+    if (currentSelectedEventObj?.customQuestions && currentSelectedEventObj.customQuestions.length > 0) {
       currentSelectedEventObj.customQuestions.forEach((q) => {
         if (q.type !== "note") {
           questions.push({
             id: q.id,
-            title: q.question,
+            title: q.question || "Custom Question",
             type: q.type,
-            options: q.options,
+            options: q.options || [],
             isStandard: false,
           });
         }
       });
     } else {
       // Find all custom question IDs that exist across any registration in the current scope
-      const customKeyMap = new Map<string, string>();
+      const customKeyMap = new Map<string, { id: string; title: string; type: string; options?: string[] }>();
       eventRegistrations.forEach((r) => {
         if (r.customAnswers) {
           Object.keys(r.customAnswers).forEach((k) => {
             if (!customKeyMap.has(k)) {
-              customKeyMap.set(k, k);
+              const info = getQuestionInfo(k, r.eventName, r);
+              customKeyMap.set(k, {
+                id: k,
+                title: info.title,
+                type: info.type,
+                options: info.options,
+              });
             }
           });
         }
       });
-      customKeyMap.forEach((title, id) => {
+      customKeyMap.forEach((qInfo) => {
         questions.push({
-          id,
-          title,
-          type: "custom_text",
+          ...qInfo,
           isStandard: false,
         });
       });
     }
 
     return questions;
-  }, [currentSelectedEventObj, eventRegistrations]);
+  }, [currentSelectedEventObj, eventRegistrations, questionMetaMap, eventsList]);
 
   // Question aggregation helper for the active question in Question Tab & Summary
   const getQuestionAggregation = (q: { id: string; title: string; type: string; options?: string[]; isStandard?: boolean }) => {
     const responses: { respondent: RegistrationRecord; answer: any }[] = [];
     const optionCounts: Record<string, { count: number; respondents: RegistrationRecord[] }> = {};
 
-    if (q.options) {
+    const isChoice = q.type === "multiple_choice" || q.type === "checkboxes" || q.type === "dropdown";
+
+    if (q.options && isChoice) {
       q.options.forEach((opt) => {
         optionCounts[opt] = { count: 0, respondents: [] };
       });
     }
 
     eventRegistrations.forEach((r) => {
-      let val: any = undefined;
+      let rawVal: any = undefined;
       if (q.isStandard) {
-        val = (r as any)[q.id];
+        rawVal = (r as any)[q.id];
       } else if (r.customAnswers) {
-        val = r.customAnswers[q.id];
+        rawVal = r.customAnswers[q.id];
       }
+
+      const val = getAnswerValue(rawVal);
 
       if (val !== undefined && val !== null && val !== "") {
         responses.push({ respondent: r, answer: val });
 
-        if (Array.isArray(val)) {
-          val.forEach((item) => {
-            if (!optionCounts[item]) {
-              optionCounts[item] = { count: 0, respondents: [] };
+        if (isChoice) {
+          if (Array.isArray(val)) {
+            val.forEach((item) => {
+              if (!optionCounts[item]) {
+                optionCounts[item] = { count: 0, respondents: [] };
+              }
+              optionCounts[item].count += 1;
+              optionCounts[item].respondents.push(r);
+            });
+          } else {
+            const strVal = String(val);
+            if (!optionCounts[strVal]) {
+              optionCounts[strVal] = { count: 0, respondents: [] };
             }
-            optionCounts[item].count += 1;
-            optionCounts[item].respondents.push(r);
-          });
-        } else {
-          const strVal = String(val);
-          if (!optionCounts[strVal]) {
-            optionCounts[strVal] = { count: 0, respondents: [] };
+            optionCounts[strVal].count += 1;
+            optionCounts[strVal].respondents.push(r);
           }
-          optionCounts[strVal].count += 1;
-          optionCounts[strVal].respondents.push(r);
         }
       }
     });
@@ -340,6 +508,7 @@ export default function AdminRegistrationsPage() {
     return {
       totalAnswered: responses.length,
       responses,
+      isChoice,
       optionCounts: Object.entries(optionCounts).sort((a, b) => b[1].count - a[1].count),
     };
   };
@@ -391,7 +560,12 @@ export default function AdminRegistrationsPage() {
     const rows = eventRegistrations
       .map((r) => {
         const customAnsStr = r.customAnswers 
-          ? Object.entries(r.customAnswers).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join("; ") : v}`).join(" | ")
+          ? Object.entries(r.customAnswers).map(([k, v]) => {
+              const qInfo = getQuestionInfo(k, r.eventName, r);
+              const val = getAnswerValue(v);
+              const displayVal = Array.isArray(val) ? val.join("; ") : String(val);
+              return `${qInfo.title}: ${displayVal}`;
+            }).join(" | ")
           : "None";
         return `"${r.registrationId}","${r.participantName}","${r.btId || ""}","${r.email}","${r.phone}","${r.eventName}","${r.teamType}","${r.teamName || ""}","${r.department || ""}","${r.year || ""}","${r.status}","${r.paymentStatus || "FREE"}","${r.amountPaid || 0}","${customAnsStr.replace(/"/g, '""')}","${r.paymentId || "N/A"}","${r.orderId || "N/A"}"`;
       })
@@ -767,8 +941,8 @@ export default function AdminRegistrationsPage() {
                             <span className="text-[10px] font-mono font-bold text-[#E78023] bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
                               Q{idx + 1}
                             </span>
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                              {q.type}
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                              {getQuestionTypeLabel(q.type)}
                             </span>
                           </div>
                           <h4 className="font-heading font-extrabold text-base text-[#17458F]">
@@ -780,8 +954,8 @@ export default function AdminRegistrationsPage() {
                         </span>
                       </div>
 
-                      {/* Options breakdown with percentage bars */}
-                      {agg.optionCounts.length > 0 && q.type !== "long_text" && q.type !== "short_text" ? (
+                      {/* Options breakdown with percentage bars if choice question */}
+                      {agg.isChoice && agg.optionCounts.length > 0 ? (
                         <div className="space-y-3 pt-2">
                           {agg.optionCounts.map(([opt, data]) => {
                             const pct = agg.totalAnswered > 0 ? Math.round((data.count / agg.totalAnswered) * 100) : 0;
@@ -806,24 +980,28 @@ export default function AdminRegistrationsPage() {
                       ) : (
                         /* Text responses feed */
                         <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                          {agg.responses.map((item, respIdx) => (
-                            <div
-                              key={respIdx}
-                              className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-1"
-                            >
-                              <div className="flex items-center justify-between text-[11px]">
-                                <span className="font-bold text-slate-900">
-                                  {item.respondent.participantName}
-                                </span>
-                                <span className="font-mono text-[10px] text-[#E78023] font-bold">
-                                  {item.respondent.btId || item.respondent.registrationId}
-                                </span>
+                          {agg.responses.length === 0 ? (
+                            <p className="text-xs text-slate-400 italic py-2">No responses recorded yet.</p>
+                          ) : (
+                            agg.responses.map((item, respIdx) => (
+                              <div
+                                key={respIdx}
+                                className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-1"
+                              >
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <span className="font-bold text-slate-900">
+                                    {item.respondent.participantName}
+                                  </span>
+                                  <span className="font-mono text-[10px] text-[#E78023] font-bold">
+                                    {item.respondent.btId || item.respondent.registrationId}
+                                  </span>
+                                </div>
+                                <p className="text-slate-800 leading-relaxed font-medium">
+                                  {Array.isArray(item.answer) ? item.answer.join(", ") : String(item.answer)}
+                                </p>
                               </div>
-                              <p className="text-slate-700 leading-relaxed font-medium">
-                                {Array.isArray(item.answer) ? item.answer.join(", ") : String(item.answer)}
-                              </p>
-                            </div>
-                          ))}
+                            ))
+                          )}
                         </div>
                       )}
                     </div>
@@ -898,8 +1076,8 @@ export default function AdminRegistrationsPage() {
                         <Badge variant="orange" size="sm">
                           Question {selectedQuestionIndex + 1}
                         </Badge>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                          {currentQ.type}
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                          {getQuestionTypeLabel(currentQ.type)}
                         </span>
                       </div>
                       <h3 className="font-heading font-extrabold text-xl sm:text-2xl text-[#17458F]">
@@ -910,8 +1088,8 @@ export default function AdminRegistrationsPage() {
                       </p>
                     </div>
 
-                    {/* Grouped Responses */}
-                    {agg.optionCounts.length > 0 ? (
+                    {/* Grouped Responses if Choice Question */}
+                    {agg.isChoice && agg.optionCounts.length > 0 ? (
                       <div className="space-y-4">
                         {agg.optionCounts.map(([optionText, optData]) => (
                           <div
@@ -1213,12 +1391,19 @@ export default function AdminRegistrationsPage() {
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {Object.entries(currentIndividual.customAnswers).map(([qKey, qVal]) => {
-                          const displayVal = Array.isArray(qVal) ? qVal.join(", ") : String(qVal);
+                          const qInfo = getQuestionInfo(qKey, currentIndividual.eventName, currentIndividual);
+                          const val = getAnswerValue(qVal);
+                          const displayVal = Array.isArray(val) ? val.join(", ") : String(val);
                           return (
                             <div key={qKey} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5">
-                              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">
-                                {qKey}
-                              </span>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[11px] font-bold text-[#17458F] block">
+                                  {qInfo.title}
+                                </span>
+                                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 bg-slate-200/60 px-1.5 py-0.5 rounded">
+                                  {getQuestionTypeLabel(qInfo.type)}
+                                </span>
+                              </div>
                               <p className="font-semibold text-slate-900 text-sm break-words">
                                 {displayVal || "—"}
                               </p>
@@ -1470,11 +1655,18 @@ export default function AdminRegistrationsPage() {
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {Object.entries(selectedRecord.customAnswers).map(([k, v]) => {
-                    const displayVal = Array.isArray(v) ? v.join(", ") : String(v);
+                    const qInfo = getQuestionInfo(k, selectedRecord.eventName, selectedRecord);
+                    const val = getAnswerValue(v);
+                    const displayVal = Array.isArray(val) ? val.join(", ") : String(val);
                     return (
-                      <div key={k} className="p-2.5 rounded-lg bg-white border border-slate-200">
-                        <span className="text-[10px] font-mono text-slate-400 block">{k}</span>
-                        <span className="font-bold text-slate-900 text-xs break-words">{displayVal}</span>
+                      <div key={k} className="p-3 rounded-xl bg-white border border-slate-200 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-bold text-[#17458F] block">{qInfo.title}</span>
+                          <span className="text-[8px] font-bold uppercase text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                            {getQuestionTypeLabel(qInfo.type)}
+                          </span>
+                        </div>
+                        <span className="font-bold text-slate-900 text-xs break-words block">{displayVal || "—"}</span>
                       </div>
                     );
                   })}
