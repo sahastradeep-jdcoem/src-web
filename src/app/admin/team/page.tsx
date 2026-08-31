@@ -877,8 +877,8 @@ export default function AdminTeamPage() {
                     }}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
                   >
-                    <option value="lead">Club Head (Lead)</option>
-                    <option value="coLead">Club Co-Head (Second-in-Command)</option>
+                    <option value="lead">Club Head</option>
+                    <option value="coLead">Club Co-Head</option>
                   </select>
                 </div>
               </div>
