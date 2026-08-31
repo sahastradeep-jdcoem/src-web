@@ -46,6 +46,10 @@ export interface EventItem {
   minTeamSize?: number;
   registrationDeadline: string;
   entryFee?: string;
+  isPaid?: boolean;
+  feeAmount?: number; // Base fee per person in INR
+  teamFeeAmount?: number; // Optional flat fee for entire team in INR
+  feePricingModel?: "per_person" | "per_team";
   coordinatorContact?: {
     name: string;
     role: string;
@@ -126,6 +130,10 @@ export interface RegistrationRecord {
   teamMembers?: string[];
   registeredAt: string;
   status: "CONFIRMED" | "PENDING" | "COMPLETED" | "CHECKED_IN" | "CANCELLED";
+  paymentStatus?: "FREE" | "PAID" | "PENDING";
+  paymentId?: string;
+  orderId?: string;
+  amountPaid?: number;
   ticketCode: string;
   qrPayload: string;
 }

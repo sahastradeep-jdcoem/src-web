@@ -46,6 +46,13 @@ export interface StudentRegistrationRecord {
     isLeader?: boolean;
   }>;
   status: "CONFIRMED" | "WAITLISTED" | "CHECKED_IN" | "CANCELLED";
+  paymentStatus?: "FREE" | "PAID" | "PENDING";
+  paymentId?: string; // Razorpay Payment ID e.g. pay_xxxxxxxx
+  orderId?: string; // Razorpay Order ID e.g. order_xxxxxxxx
+  amountPaid?: number; // In INR (e.g. 150)
+  currency?: string; // e.g. "INR"
+  paidAt?: string;
+  tenureId?: string; // e.g. "tenure-2025-26"
   checkInTimestamp?: any;
   createdAt: any;
   qrPayload: string;

@@ -83,6 +83,10 @@ export default function AdminEventsPage() {
     maxTeamSize: 4,
     registrationStartDate: new Date().toISOString().split("T")[0],
     registrationDeadline: "",
+    isPaid: false,
+    feeAmount: 100,
+    feePricingModel: "per_person" as "per_person" | "per_team",
+    teamFeeAmount: 300,
   });
 
   // Edit Event Form State
@@ -104,6 +108,10 @@ export default function AdminEventsPage() {
     maxTeamSize: 4,
     registrationStartDate: "",
     registrationDeadline: "",
+    isPaid: false,
+    feeAmount: 100,
+    feePricingModel: "per_person" as "per_person" | "per_team",
+    teamFeeAmount: 300,
   });
 
   const loadData = () => {
@@ -191,6 +199,12 @@ export default function AdminEventsPage() {
       ? formatDateToReadable(newEvent.registrationDeadline)
       : "TBD";
 
+    const entryFeeText = newEvent.isPaid
+      ? (newEvent.feePricingModel === "per_team" && newEvent.teamFeeAmount 
+          ? `₹${newEvent.teamFeeAmount} / team`
+          : `₹${newEvent.feeAmount} / person`)
+      : "Free Entry";
+
     const created: EventItem = {
       id: `evt-${Date.now()}`,
       slug: newEvent.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
@@ -212,6 +226,11 @@ export default function AdminEventsPage() {
       minTeamSize: newEvent.teamType !== "Individual" ? newEvent.minTeamSize : undefined,
       maxTeamSize: newEvent.teamType !== "Individual" ? newEvent.maxTeamSize : undefined,
       registrationDeadline: regDeadlineFormatted,
+      entryFee: entryFeeText,
+      isPaid: newEvent.isPaid,
+      feeAmount: newEvent.isPaid ? Number(newEvent.feeAmount) || 0 : 0,
+      teamFeeAmount: newEvent.isPaid && newEvent.feePricingModel === "per_team" ? Number(newEvent.teamFeeAmount) || 0 : undefined,
+      feePricingModel: newEvent.isPaid ? newEvent.feePricingModel : undefined,
     };
 
     const updated = [created, ...eventsList];
@@ -238,6 +257,10 @@ export default function AdminEventsPage() {
       maxTeamSize: 4,
       registrationStartDate: new Date().toISOString().split("T")[0],
       registrationDeadline: "",
+      isPaid: false,
+      feeAmount: 100,
+      feePricingModel: "per_person",
+      teamFeeAmount: 300,
     });
   };
 
@@ -261,6 +284,10 @@ export default function AdminEventsPage() {
       maxTeamSize: evt.maxTeamSize || 4,
       registrationStartDate: "",
       registrationDeadline: "",
+      isPaid: Boolean(evt.isPaid || (evt.feeAmount && evt.feeAmount > 0)),
+      feeAmount: evt.feeAmount || 100,
+      feePricingModel: evt.feePricingModel || "per_person",
+      teamFeeAmount: evt.teamFeeAmount || 300,
     });
   };
 
@@ -273,6 +300,12 @@ export default function AdminEventsPage() {
     const regDeadlineFormatted = editForm.registrationDeadline
       ? formatDateToReadable(editForm.registrationDeadline)
       : undefined;
+
+    const entryFeeText = editForm.isPaid
+      ? (editForm.feePricingModel === "per_team" && editForm.teamFeeAmount 
+          ? `₹${editForm.teamFeeAmount} / team`
+          : `₹${editForm.feeAmount} / person`)
+      : "Free Entry";
 
     const updated = eventsList.map((item) =>
       item.id === editingEvent.id
@@ -293,6 +326,11 @@ export default function AdminEventsPage() {
             minTeamSize: editForm.teamType !== "Individual" ? editForm.minTeamSize : undefined,
             maxTeamSize: editForm.teamType !== "Individual" ? editForm.maxTeamSize : undefined,
             registrationDeadline: regDeadlineFormatted || item.registrationDeadline,
+            entryFee: entryFeeText,
+            isPaid: editForm.isPaid,
+            feeAmount: editForm.isPaid ? Number(editForm.feeAmount) || 0 : 0,
+            teamFeeAmount: editForm.isPaid && editForm.feePricingModel === "per_team" ? Number(editForm.teamFeeAmount) || 0 : undefined,
+            feePricingModel: editForm.isPaid ? editForm.feePricingModel : undefined,
           }
         : item
     );
@@ -919,6 +957,120 @@ export default function AdminEventsPage() {
               </div>
             </div>
 
+            {/* Registration Fee & Gateway Pricing */}
+            <div className="space-y-3 pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
+                  <span>Registration Fee (Razorpay Gateway)</span>
+                </label>
+                <span className="text-[10px] font-bold text-slate-500">
+                  {newEvent.isPaid ? "Paid Event" : "Free Entry"}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewEvent({ ...newEvent, isPaid: false })}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer ${
+                    !newEvent.isPaid
+                      ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
+                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  Free Event (₹0)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewEvent({ ...newEvent, isPaid: true })}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer ${
+                    newEvent.isPaid
+                      ? "bg-[#17458F] text-white border-[#E78023] shadow-xs"
+                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  Paid Event (₹ Fees)
+                </button>
+              </div>
+
+              {newEvent.isPaid && (
+                <div className="p-4 rounded-2xl bg-blue-50/60 border border-[#17458F]/20 space-y-3 animate-in fade-in duration-200">
+                  {newEvent.teamType !== "Individual" && (
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+                        Team Pricing Structure
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setNewEvent({ ...newEvent, feePricingModel: "per_person" })}
+                          className={`py-1.5 px-3 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                            newEvent.feePricingModel === "per_person"
+                              ? "bg-[#17458F] text-white border-[#17458F]"
+                              : "bg-white text-slate-700 border-slate-200"
+                          }`}
+                        >
+                          Per Member (₹ × Squad)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewEvent({ ...newEvent, feePricingModel: "per_team" })}
+                          className={`py-1.5 px-3 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                            newEvent.feePricingModel === "per_team"
+                              ? "bg-[#17458F] text-white border-[#17458F]"
+                              : "bg-white text-slate-700 border-slate-200"
+                          }`}
+                        >
+                          Flat Team Fee (₹ Fixed)
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                        {newEvent.feePricingModel === "per_team" && newEvent.teamType !== "Individual"
+                          ? "Solo Delegate Fee (₹)"
+                          : "Fee Per Participant (₹)"}
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={10}
+                        value={newEvent.feeAmount}
+                        onChange={(e) => setNewEvent({ ...newEvent, feeAmount: Math.max(0, parseInt(e.target.value) || 0) })}
+                        placeholder="e.g. 100"
+                        className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
+                      />
+                    </div>
+
+                    {newEvent.teamType !== "Individual" && newEvent.feePricingModel === "per_team" && (
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                          Flat Squad Fee (₹ / Team)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          step={10}
+                          value={newEvent.teamFeeAmount}
+                          onChange={(e) => setNewEvent({ ...newEvent, teamFeeAmount: Math.max(0, parseInt(e.target.value) || 0) })}
+                          placeholder="e.g. 300"
+                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    Integrated with Razorpay Gateway. Registrations will securely charge this amount via UPI (GPay/PhonePe), Cards, or NetBanking before issuing delegate passes.
+                  </p>
+                </div>
+              )}
+            </div>
+
             {/* Event Poster Photo / Direct URL */}
             <div className="space-y-2 pt-2 border-t border-slate-100">
               <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
@@ -1288,6 +1440,120 @@ export default function AdminEventsPage() {
                   className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
                 />
               </div>
+            </div>
+
+            {/* Registration Fee & Gateway Pricing */}
+            <div className="space-y-3 pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
+                  <span>Registration Fee (Razorpay Gateway)</span>
+                </label>
+                <span className="text-[10px] font-bold text-slate-500">
+                  {editForm.isPaid ? "Paid Event" : "Free Entry"}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditForm({ ...editForm, isPaid: false })}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer ${
+                    !editForm.isPaid
+                      ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
+                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  Free Event (₹0)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditForm({ ...editForm, isPaid: true })}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer ${
+                    editForm.isPaid
+                      ? "bg-[#17458F] text-white border-[#E78023] shadow-xs"
+                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  Paid Event (₹ Fees)
+                </button>
+              </div>
+
+              {editForm.isPaid && (
+                <div className="p-4 rounded-2xl bg-blue-50/60 border border-[#17458F]/20 space-y-3 animate-in fade-in duration-200">
+                  {editForm.teamType !== "Individual" && (
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+                        Team Pricing Structure
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditForm({ ...editForm, feePricingModel: "per_person" })}
+                          className={`py-1.5 px-3 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                            editForm.feePricingModel === "per_person"
+                              ? "bg-[#17458F] text-white border-[#17458F]"
+                              : "bg-white text-slate-700 border-slate-200"
+                          }`}
+                        >
+                          Per Member (₹ × Squad)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditForm({ ...editForm, feePricingModel: "per_team" })}
+                          className={`py-1.5 px-3 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                            editForm.feePricingModel === "per_team"
+                              ? "bg-[#17458F] text-white border-[#17458F]"
+                              : "bg-white text-slate-700 border-slate-200"
+                          }`}
+                        >
+                          Flat Team Fee (₹ Fixed)
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                        {editForm.feePricingModel === "per_team" && editForm.teamType !== "Individual"
+                          ? "Solo Delegate Fee (₹)"
+                          : "Fee Per Participant (₹)"}
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={10}
+                        value={editForm.feeAmount}
+                        onChange={(e) => setEditForm({ ...editForm, feeAmount: Math.max(0, parseInt(e.target.value) || 0) })}
+                        placeholder="e.g. 100"
+                        className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
+                      />
+                    </div>
+
+                    {editForm.teamType !== "Individual" && editForm.feePricingModel === "per_team" && (
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                          Flat Squad Fee (₹ / Team)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          step={10}
+                          value={editForm.teamFeeAmount}
+                          onChange={(e) => setEditForm({ ...editForm, teamFeeAmount: Math.max(0, parseInt(e.target.value) || 0) })}
+                          placeholder="e.g. 300"
+                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    Integrated with Razorpay Gateway. Registrations will securely charge this amount via UPI (GPay/PhonePe), Cards, or NetBanking before issuing delegate passes.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Event Poster Photo / Direct URL */}

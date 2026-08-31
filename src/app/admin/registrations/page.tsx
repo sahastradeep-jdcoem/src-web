@@ -14,7 +14,9 @@ import {
   Check,
   ShieldCheck,
   Trash2,
-  Inbox
+  Inbox,
+  CreditCard,
+  Receipt
 } from "lucide-react";
 import { RegistrationRecord } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -48,9 +50,13 @@ export default function AdminRegistrationsPage() {
       year: r.year,
       teamType: r.teamSize > 1 ? "Team" : "Individual",
       teamName: r.teamName,
-      teamMembers: r.members?.map((m: any) => m.name),
+      teamMembers: r.teamMembers ? r.teamMembers.map((m: any) => `${m.name} (${m.btId})`) : r.members?.map((m: any) => m.name),
       registeredAt: r.registeredAt || (r.createdAt ? new Date().toISOString().split("T")[0] : new Date().toISOString().split("T")[0]),
       status: r.status || "CONFIRMED",
+      paymentStatus: r.paymentStatus || (r.amountPaid > 0 ? "PAID" : "FREE"),
+      paymentId: r.paymentId,
+      orderId: r.orderId,
+      amountPaid: r.amountPaid || 0,
       ticketCode: `${r.id.slice(0, 7)}-TK`,
       qrPayload: r.qrPayload || `SRC:PASS:${r.id}`,
     }));
@@ -136,16 +142,28 @@ export default function AdminRegistrationsPage() {
     });
   }, [registrations, searchQuery, statusFilter]);
 
+  const totalRevenue = useMemo(() => {
+    return registrations.reduce((sum, r) => sum + (r.amountPaid || 0), 0);
+  }, [registrations]);
+
+  const paidCount = useMemo(() => {
+    return registrations.filter((r) => r.paymentStatus === "PAID").length;
+  }, [registrations]);
+
+  const checkedInCount = useMemo(() => {
+    return registrations.filter((r) => r.status === "CHECKED_IN").length;
+  }, [registrations]);
+
   const handleExportCSV = () => {
     if (filtered.length === 0) {
       alert("No registrations available to export.");
       return;
     }
-    const headers = "Registration ID,Participant Name,Email,Phone,Event,Format,Department,Year,Status\n";
+    const headers = "Registration ID,Participant Name,Email,Phone,Event,Format,Department,Year,Status,Payment Status,Amount Paid (INR),Payment ID,Order ID\n";
     const rows = filtered
       .map(
         (r) =>
-          `"${r.registrationId}","${r.participantName}","${r.email}","${r.phone}","${r.eventName}","${r.teamType}","${r.department || ""}","${r.year || ""}","${r.status}"`
+          `"${r.registrationId}","${r.participantName}","${r.email}","${r.phone}","${r.eventName}","${r.teamType}","${r.department || ""}","${r.year || ""}","${r.status}","${r.paymentStatus || "FREE"}","${r.amountPaid || 0}","${r.paymentId || "N/A"}","${r.orderId || "N/A"}"`
       )
       .join("\n");
 
@@ -153,7 +171,7 @@ export default function AdminRegistrationsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `SRC_Registrations_Export_${Date.now()}.csv`);
+    link.setAttribute("download", `SRC_Registrations_Ledger_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -167,14 +185,14 @@ export default function AdminRegistrationsPage() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#0F172A] uppercase tracking-tight">
-              DELEGATE REGISTRATIONS & GATE VERIFICATION
+              DELEGATE REGISTRATIONS &amp; REVENUE LEDGER
             </h1>
             <Badge variant="orange" size="sm">
               {registrations.length} LIVE PASSES
             </Badge>
           </div>
           <p className="text-xs text-slate-500 font-medium mt-1">
-            Real-time participant accreditation roster with live QR check-ins and CSV export.
+            Real-time participant accreditation roster, live QR check-ins, Razorpay payment reconciliation, and CSV export.
           </p>
         </div>
 
@@ -195,7 +213,7 @@ export default function AdminRegistrationsPage() {
             className="gap-2 cursor-pointer"
           >
             <Download className="w-4 h-4" />
-            <span>Export CSV</span>
+            <span>Export Finance CSV</span>
           </Button>
         </div>
       </div>
@@ -206,6 +224,59 @@ export default function AdminRegistrationsPage() {
           <span>{checkInNotice}</span>
         </div>
       )}
+
+      {/* KPI Stats Overview */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">
+            Total Registrations
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="font-heading font-extrabold text-2xl text-[#17458F]">
+              {registrations.length}
+            </span>
+            <span className="text-xs text-slate-500 font-semibold">Passes Issued</span>
+          </div>
+        </div>
+
+        <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">
+            Gate Checked-In
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="font-heading font-extrabold text-2xl text-emerald-600">
+              {checkedInCount}
+            </span>
+            <span className="text-xs text-emerald-700 font-semibold">
+              {registrations.length > 0 ? `${Math.round((checkedInCount / registrations.length) * 100)}% Verified` : "0%"}
+            </span>
+          </div>
+        </div>
+
+        <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">
+            Total Revenue (Razorpay)
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="font-heading font-extrabold text-2xl text-[#E78023]">
+              ₹{totalRevenue.toLocaleString("en-IN")}
+            </span>
+            <span className="text-xs text-slate-500 font-semibold">{paidCount} Paid Entries</span>
+          </div>
+        </div>
+
+        <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">
+            Complimentary / Free
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="font-heading font-extrabold text-2xl text-slate-700">
+              {registrations.length - paidCount}
+            </span>
+            <span className="text-xs text-slate-500 font-semibold">Free Passes</span>
+          </div>
+        </div>
+      </div>
 
       {/* Filter & Search Bar */}
       <div className="p-4 sm:p-6 rounded-3xl bg-white border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
@@ -265,7 +336,8 @@ export default function AdminRegistrationsPage() {
                   <th className="py-4 px-6">Participant</th>
                   <th className="py-4 px-6">Event</th>
                   <th className="py-4 px-6">Format / Team</th>
-                  <th className="py-4 px-6">Department & Year</th>
+                  <th className="py-4 px-6">Department &amp; Year</th>
+                  <th className="py-4 px-6">Payment</th>
                   <th className="py-4 px-6">Status</th>
                   <th className="py-4 px-6 text-right">Actions</th>
                 </tr>
@@ -298,6 +370,25 @@ export default function AdminRegistrationsPage() {
                         </span>
                       </div>
                       <div className="text-[10px] text-slate-500">{r.year || "—"}</div>
+                    </td>
+                    <td className="py-4 px-6">
+                      {r.paymentStatus === "PAID" ? (
+                        <div className="space-y-0.5">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <CreditCard className="w-3 h-3" />
+                            <span>PAID • ₹{r.amountPaid}</span>
+                          </span>
+                          {r.paymentId && (
+                            <span className="block font-mono text-[9px] text-slate-400 truncate max-w-[100px]">
+                              {r.paymentId}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                          <span>FREE PASS</span>
+                        </span>
+                      )}
                     </td>
                     <td className="py-4 px-6">
                       <Badge
@@ -365,7 +456,7 @@ export default function AdminRegistrationsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
               <div className="p-3.5 rounded-xl bg-slate-50 space-y-1">
                 <span className="text-slate-500 uppercase text-[10px] font-bold">Primary Delegate</span>
                 <p className="font-bold text-slate-900 text-sm">{selectedRecord.participantName}</p>
@@ -380,6 +471,21 @@ export default function AdminRegistrationsPage() {
                 <Badge variant="orange" size="sm" className="mt-1">
                   {selectedRecord.status}
                 </Badge>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-50 space-y-1">
+                <span className="text-slate-500 uppercase text-[10px] font-bold">Finance / Gateway</span>
+                <p className="font-bold text-slate-900 text-sm">
+                  {selectedRecord.paymentStatus === "PAID" ? `₹${selectedRecord.amountPaid || 0}` : "Free Pass"}
+                </p>
+                <p className="text-[10px] font-mono text-slate-500 truncate" title={selectedRecord.paymentId || "Free"}>
+                  ID: {selectedRecord.paymentId || "N/A (Free)"}
+                </p>
+                {selectedRecord.orderId && (
+                  <p className="text-[9px] font-mono text-slate-400 truncate">
+                    Ord: {selectedRecord.orderId}
+                  </p>
+                )}
               </div>
             </div>
 
