@@ -270,6 +270,60 @@ export async function getRegistrationById(id: string): Promise<StudentRegistrati
 }
 
 /**
+ * Check if a student (by email or BT ID) has already registered for a specific event
+ */
+export async function checkExistingStudentRegistration(
+  eventId: string,
+  eventSlug: string,
+  email?: string | null,
+  btId?: string | null
+): Promise<StudentRegistrationRecord | null> {
+  const cleanEmail = email?.trim().toLowerCase();
+  const cleanBtId = btId?.trim().toUpperCase();
+  const cleanEventId = eventId.trim().toLowerCase();
+  const cleanEventSlug = eventSlug.trim().toLowerCase();
+
+  const matchesRecord = (r: StudentRegistrationRecord): boolean => {
+    const recEventId = (r.eventId || "").trim().toLowerCase();
+    const isSameEvent = recEventId === cleanEventId || recEventId === cleanEventSlug;
+    if (!isSameEvent) return false;
+
+    // Check primary delegate
+    if (cleanEmail && r.email && r.email.trim().toLowerCase() === cleanEmail) return true;
+    if (cleanBtId && r.btId && r.btId.trim().toUpperCase() === cleanBtId) return true;
+
+    // Check team members
+    if (r.teamMembers && Array.isArray(r.teamMembers)) {
+      return r.teamMembers.some((m: any) => {
+        if (cleanEmail && m.email && m.email.trim().toLowerCase() === cleanEmail) return true;
+        if (cleanBtId && m.btId && m.btId.trim().toUpperCase() === cleanBtId) return true;
+        return false;
+      });
+    }
+
+    return false;
+  };
+
+  // Check local cache first
+  try {
+    const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+    if (Array.isArray(local)) {
+      const match = local.find(matchesRecord);
+      if (match) return match;
+    }
+  } catch {}
+
+  // Check Firestore
+  try {
+    const all = await getAllRegistrationsFromFirestore();
+    const match = all.find(matchesRecord);
+    if (match) return match;
+  } catch {}
+
+  return null;
+}
+
+/**
  * Mark a student registration as CHECKED-IN during gate entry QR scanning
  */
 export async function checkInStudentPass(id: string): Promise<boolean> {

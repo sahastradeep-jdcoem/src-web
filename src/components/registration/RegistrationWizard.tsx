@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { EventItem } from "@/types";
 import { TicketPass } from "@/components/registration/TicketPass";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { saveRegistrationToFirestore } from "@/lib/firebase/firestore";
+import { saveRegistrationToFirestore, checkExistingStudentRegistration, StudentRegistrationRecord } from "@/lib/firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
 import { 
   User, 
@@ -100,10 +101,41 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [customAnswers, setCustomAnswers] = useState<Record<string, any>>({});
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
+  const [existingRegistration, setExistingRegistration] = useState<StudentRegistrationRecord | null>(null);
+  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
   const [generatedTicket, setGeneratedTicket] = useState<{
     registrationId: string;
     ticketCode: string;
   } | null>(null);
+
+  // Check if current user is already registered for this event
+  useEffect(() => {
+    let isMounted = true;
+    const checkDuplicate = async () => {
+      const targetEmail = user?.email || formData.email;
+      const targetBtId = user?.btId || formData.btId;
+      if (!targetEmail && !targetBtId) return;
+
+      setIsCheckingDuplicate(true);
+      try {
+        const found = await checkExistingStudentRegistration(
+          event.id,
+          event.slug,
+          targetEmail,
+          targetBtId
+        );
+        if (isMounted && found) {
+          setExistingRegistration(found);
+        }
+      } catch (e) {
+        console.warn("Existing registration check warning", e);
+      } finally {
+        if (isMounted) setIsCheckingDuplicate(false);
+      }
+    };
+    checkDuplicate();
+    return () => { isMounted = false; };
+  }, [user, event.id, event.slug, formData.btId, formData.email]);
 
   // Sync profile data directly from authenticated user
   useEffect(() => {
@@ -197,6 +229,22 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         return;
       }
 
+      // Check if teammate is already registered for this event
+      const teammateDuplicate = await checkExistingStudentRegistration(
+        event.id,
+        event.slug,
+        found.email || undefined,
+        cleanBtId
+      );
+
+      if (teammateDuplicate) {
+        setLookupError(
+          `Teammate "${found.displayName || cleanBtId}" is already registered for this event under Pass ID: ${teammateDuplicate.id}. A student cannot be registered multiple times for the same competition.`
+        );
+        setIsVerifyingTeammate(false);
+        return;
+      }
+
       const memberName = found.displayName || `${found.firstName || ""} ${found.lastName || ""}`.trim() || found.email || "Student";
       const newEntry: TeamMemberEntry = {
         name: memberName,
@@ -223,7 +271,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     setTeamMembers((prev) => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
-  const handleProceedToStep2 = () => {
+  const handleProceedToStep2 = async () => {
     if (!user) {
       openAuthModal();
       return;
@@ -234,6 +282,20 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     }
     if (!formData.phone.trim()) {
       alert("Please provide a WhatsApp contact phone number for event coordinators.");
+      return;
+    }
+
+    // Check if user already registered for this event
+    const dup = await checkExistingStudentRegistration(
+      event.id,
+      event.slug,
+      formData.email || user.email,
+      formData.btId || user.btId
+    );
+
+    if (dup) {
+      setExistingRegistration(dup);
+      alert(`You are already registered for this event (Registration ID: ${dup.id}). Duplicate registrations for the same student are not permitted.`);
       return;
     }
 
@@ -374,6 +436,24 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
   const handleConfirmRegistration = async () => {
     setIsSubmitting(true);
+
+    // Safeguard duplicate check before processing registration
+    try {
+      const dup = await checkExistingStudentRegistration(
+        event.id,
+        event.slug,
+        formData.email || user?.email,
+        formData.btId || user?.btId
+      );
+      if (dup) {
+        setExistingRegistration(dup);
+        setIsSubmitting(false);
+        alert(`You are already registered for this event (Registration ID: ${dup.id}). Duplicate registrations are not allowed.`);
+        return;
+      }
+    } catch (e) {
+      console.warn("Duplicate safeguard check notice", e);
+    }
 
     // 1. Free Event Direct Flow
     if (totalPayableAmount === 0) {
@@ -588,132 +668,201 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             /* Verified Student Profile Display */
             <div className="space-y-6">
               
-              <div className="p-5 rounded-2xl bg-blue-50/50 border border-[#17458F]/20 flex items-start gap-4">
-                <div className="w-10 h-10 rounded-xl bg-[#17458F] text-white flex items-center justify-center shrink-0 shadow-xs">
-                  <ShieldCheck className="w-5 h-5 text-[#E78023]" />
-                </div>
-                <div className="space-y-1">
-                  <h4 className="font-bold text-sm text-[#17458F]">
-                    Authenticated JDCOEM Student Profile
-                  </h4>
-                  <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                    Your official college BT ID, department, and credentials will be encoded into your digital delegate entry pass.
-                  </p>
-                </div>
-              </div>
+              {/* Duplicate Pass Alert Banner (If already registered) */}
+              {existingRegistration && (
+                <div className="p-6 sm:p-8 rounded-3xl bg-emerald-50/80 border-2 border-emerald-500/30 text-emerald-950 space-y-4 shadow-sm animate-in fade-in duration-300">
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                      <ShieldCheck className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-300">
+                        Duplicate Entry Prevented
+                      </span>
+                      <h4 className="font-heading font-extrabold text-xl text-emerald-900">
+                        You Are Already Registered for This Event
+                      </h4>
+                      <p className="text-xs text-emerald-800 font-medium leading-relaxed">
+                        A confirmed delegate accreditation pass already exists for your profile for <strong>{event.name}</strong>. Multiple entries by the same student are restricted.
+                      </p>
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                
-                {/* Full Name */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5 text-[#E78023]" />
-                    <span>Full Name *</span>
-                  </label>
-                  <input
-                    type="text"
-                    disabled
-                    value={formData.fullName}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-900 text-sm font-semibold cursor-not-allowed"
-                  />
+                  <div className="p-4 rounded-2xl bg-white border border-emerald-200 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                    <div>
+                      <span className="text-slate-400 text-[10px] uppercase font-bold block">Registration Pass ID</span>
+                      <span className="font-mono font-bold text-[#17458F]">{existingRegistration.id}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 text-[10px] uppercase font-bold block">Entry Status</span>
+                      <span className="font-bold text-emerald-700">{existingRegistration.status}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 text-[10px] uppercase font-bold block">Participation Format</span>
+                      <span className="font-semibold text-slate-800">
+                        {(existingRegistration.teamSize && existingRegistration.teamSize > 1) || existingRegistration.teamName ? `Squad: ${existingRegistration.teamName || "Team"}` : "Solo Individual"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                    <Button
+                      onClick={() => {
+                        setGeneratedTicket({
+                          registrationId: existingRegistration.id,
+                          ticketCode: (existingRegistration as any).ticketCode || `${existingRegistration.id}-TK`,
+                        });
+                        setCurrentStep(4);
+                      }}
+                      variant="primary"
+                      size="md"
+                      className="gap-2 cursor-pointer shadow-xs bg-emerald-700 hover:bg-emerald-800 text-white"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span>View &amp; Download Your Pass</span>
+                    </Button>
+                    <Link
+                      href={`/verify/${encodeURIComponent(existingRegistration.id)}`}
+                      target="_blank"
+                      className="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 border border-emerald-300 text-emerald-900 text-xs font-bold transition-all flex items-center gap-1.5"
+                    >
+                      <span>Public Verification Link</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
                 </div>
+              )}
 
-                {/* BT ID */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <Hash className="w-3.5 h-3.5 text-[#17458F]" />
-                    <span>College BT ID *</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.btId}
-                    onChange={(e) => setFormData({ ...formData, btId: e.target.value.toUpperCase() })}
-                    placeholder="e.g. BT230036CS"
-                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-mono font-bold uppercase focus:outline-none focus:border-[#17458F]"
-                  />
-                </div>
+              {!existingRegistration && (
+                <>
+                  <div className="p-5 rounded-2xl bg-blue-50/50 border border-[#17458F]/20 flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-[#17458F] text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <ShieldCheck className="w-5 h-5 text-[#E78023]" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="font-bold text-sm text-[#17458F]">
+                        Authenticated JDCOEM Student Profile
+                      </h4>
+                      <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                        Your official college BT ID, department, and credentials will be encoded into your digital delegate entry pass.
+                      </p>
+                    </div>
+                  </div>
 
-                {/* College Email */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5 text-[#E78023]" />
-                    <span>Official College Email *</span>
-                  </label>
-                  <input
-                    type="email"
-                    disabled
-                    value={formData.email}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-900 text-sm font-medium cursor-not-allowed"
-                  />
-                </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    
+                    {/* Full Name */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5 text-[#E78023]" />
+                        <span>Full Name *</span>
+                      </label>
+                      <input
+                        type="text"
+                        disabled
+                        value={formData.fullName}
+                        className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-900 text-sm font-semibold cursor-not-allowed"
+                      />
+                    </div>
 
-                {/* WhatsApp Phone */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <Phone className="w-3.5 h-3.5 text-[#E78023]" />
-                    <span>WhatsApp Contact Phone *</span>
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="e.g. 9823011223"
-                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
-                  />
-                </div>
+                    {/* BT ID */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <Hash className="w-3.5 h-3.5 text-[#17458F]" />
+                        <span>College BT ID *</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.btId}
+                        onChange={(e) => setFormData({ ...formData, btId: e.target.value.toUpperCase() })}
+                        placeholder="e.g. BT230036CS"
+                        className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-mono font-bold uppercase focus:outline-none focus:border-[#17458F]"
+                      />
+                    </div>
 
-                {/* Academic Year */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <GraduationCap className="w-3.5 h-3.5 text-[#E78023]" />
-                    <span>Academic Year *</span>
-                  </label>
-                  <select
-                    value={formData.year}
-                    onChange={(e) => setFormData({ ...formData, year: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
-                  >
-                    {YEARS.map((yr) => (
-                      <option key={yr} value={yr} className="bg-white text-slate-900">
-                        {yr}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                    {/* College Email */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-[#E78023]" />
+                        <span>Official College Email *</span>
+                      </label>
+                      <input
+                        type="email"
+                        disabled
+                        value={formData.email}
+                        className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-900 text-sm font-medium cursor-not-allowed"
+                      />
+                    </div>
 
-                {/* Department */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <Building2 className="w-3.5 h-3.5 text-[#17458F]" />
-                    <span>Department / Branch *</span>
-                  </label>
-                  <select
-                    value={formData.department}
-                    onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
-                  >
-                    {departmentsList.map((dept) => (
-                      <option key={dept} value={dept} className="bg-white text-slate-900">
-                        {dept}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                    {/* WhatsApp Phone */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <Phone className="w-3.5 h-3.5 text-[#E78023]" />
+                        <span>WhatsApp Contact Phone *</span>
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        placeholder="e.g. 9823011223"
+                        className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
+                      />
+                    </div>
 
-              </div>
+                    {/* Academic Year */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <GraduationCap className="w-3.5 h-3.5 text-[#E78023]" />
+                        <span>Academic Year *</span>
+                      </label>
+                      <select
+                        value={formData.year}
+                        onChange={(e) => setFormData({ ...formData, year: e.target.value })}
+                        className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
+                      >
+                        {YEARS.map((yr) => (
+                          <option key={yr} value={yr} className="bg-white text-slate-900">
+                            {yr}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-              <div className="flex justify-end pt-4 border-t border-slate-100">
-                <Button
-                  onClick={handleProceedToStep2}
-                  variant="primary"
-                  size="md"
-                  className="gap-2 cursor-pointer"
-                >
-                  <span>Continue to Participation Format</span>
-                  <ArrowRight className="w-4 h-4" />
-                </Button>
-              </div>
+                    {/* Department */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-[#17458F]" />
+                        <span>Department / Branch *</span>
+                      </label>
+                      <select
+                        value={formData.department}
+                        onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                        className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
+                      >
+                        {departmentsList.map((dept) => (
+                          <option key={dept} value={dept} className="bg-white text-slate-900">
+                            {dept}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                  </div>
+
+                  <div className="flex justify-end pt-4 border-t border-slate-100">
+                    <Button
+                      onClick={handleProceedToStep2}
+                      variant="primary"
+                      size="md"
+                      className="gap-2 cursor-pointer"
+                    >
+                      <span>Continue to Participation Format</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
