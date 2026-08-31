@@ -24,11 +24,12 @@ import {
   RefreshCw,
   Image as ImageIcon
 } from "lucide-react";
-import { EventItem, ClubItem } from "@/types";
+import { EventItem, ClubItem, CustomQuestion } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
+import { CustomQuestionsBuilder } from "@/components/admin/events/CustomQuestionsBuilder";
 import { 
   getStoredEvents, 
   saveStoredEvents, 
@@ -111,6 +112,7 @@ export default function AdminEventsPage() {
     feeAmount: 100,
     feePricingModel: "per_person" as "per_person" | "per_team",
     teamFeeAmount: 300,
+    customQuestions: [] as CustomQuestion[],
   });
 
   // Edit Event Form State
@@ -139,6 +141,7 @@ export default function AdminEventsPage() {
     feeAmount: 100,
     feePricingModel: "per_person" as "per_person" | "per_team",
     teamFeeAmount: 300,
+    customQuestions: [] as CustomQuestion[],
   });
 
   const loadData = () => {
@@ -262,6 +265,7 @@ export default function AdminEventsPage() {
       feeAmount: newEvent.isPaid ? Number(newEvent.feeAmount) || 0 : 0,
       teamFeeAmount: newEvent.isPaid && newEvent.feePricingModel === "per_team" ? Number(newEvent.teamFeeAmount) || 0 : undefined,
       feePricingModel: newEvent.isPaid ? newEvent.feePricingModel : undefined,
+      customQuestions: newEvent.customQuestions && newEvent.customQuestions.length > 0 ? newEvent.customQuestions : undefined,
     };
 
     const updated = [created, ...eventsList];
@@ -295,6 +299,7 @@ export default function AdminEventsPage() {
       feeAmount: 100,
       feePricingModel: "per_person",
       teamFeeAmount: 300,
+      customQuestions: [],
     });
   };
 
@@ -329,6 +334,7 @@ export default function AdminEventsPage() {
       feeAmount: evt.feeAmount || 100,
       feePricingModel: evt.feePricingModel || "per_person",
       teamFeeAmount: evt.teamFeeAmount || 300,
+      customQuestions: evt.customQuestions ? JSON.parse(JSON.stringify(evt.customQuestions)) : [],
     });
   };
 
@@ -376,6 +382,7 @@ export default function AdminEventsPage() {
             feeAmount: editForm.isPaid ? Number(editForm.feeAmount) || 0 : 0,
             teamFeeAmount: editForm.isPaid && editForm.feePricingModel === "per_team" ? Number(editForm.teamFeeAmount) || 0 : undefined,
             feePricingModel: editForm.isPaid ? editForm.feePricingModel : undefined,
+            customQuestions: editForm.customQuestions && editForm.customQuestions.length > 0 ? editForm.customQuestions : undefined,
           }
         : item
     );
@@ -1192,6 +1199,12 @@ export default function AdminEventsPage() {
               </div>
             </div>
 
+            {/* Custom Registration Questions & Notes (Q&N) */}
+            <CustomQuestionsBuilder
+              questions={newEvent.customQuestions}
+              onChange={(qs) => setNewEvent({ ...newEvent, customQuestions: qs })}
+            />
+
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
               <Button
                 type="button"
@@ -1720,6 +1733,12 @@ export default function AdminEventsPage() {
                 </div>
               </div>
             </div>
+
+            {/* Custom Registration Questions & Notes (Q&N) */}
+            <CustomQuestionsBuilder
+              questions={editForm.customQuestions}
+              onChange={(qs) => setEditForm({ ...editForm, customQuestions: qs })}
+            />
 
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
               <Button

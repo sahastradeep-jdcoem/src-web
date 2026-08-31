@@ -58,6 +58,7 @@ export interface StudentRegistrationRecord {
   checkInTimestamp?: any;
   createdAt: any;
   qrPayload: string;
+  customAnswers?: Record<string, any>;
 }
 
 const REGISTRATIONS_COLLECTION = "registrations";

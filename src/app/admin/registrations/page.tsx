@@ -61,6 +61,8 @@ export default function AdminRegistrationsPage() {
       amountPaid: r.amountPaid || 0,
       ticketCode: `${r.id.slice(0, 7)}-TK`,
       qrPayload: r.qrPayload || `SRC:PASS:${r.id}`,
+      btId: r.btId,
+      customAnswers: r.customAnswers,
     }));
   };
 
@@ -162,11 +164,15 @@ export default function AdminRegistrationsPage() {
       alert("No registrations available to export.");
       return;
     }
-    const headers = "Registration ID,Participant Name,Email,Phone,Event,Format,Department,Year,Status,Payment Status,Amount Paid (INR),Payment ID,Order ID\n";
+    const headers = "Registration ID,Participant Name,BT ID,Email,Phone,Event,Format,Department,Year,Status,Payment Status,Amount Paid (INR),Custom Q&N Answers,Payment ID,Order ID\n";
     const rows = filtered
       .map(
-        (r) =>
-          `"${r.registrationId}","${r.participantName}","${r.email}","${r.phone}","${r.eventName}","${r.teamType}","${r.department || ""}","${r.year || ""}","${r.status}","${r.paymentStatus || "FREE"}","${r.amountPaid || 0}","${r.paymentId || "N/A"}","${r.orderId || "N/A"}"`
+        (r) => {
+          const customAnsStr = r.customAnswers 
+            ? Object.entries(r.customAnswers).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join("; ") : v}`).join(" | ")
+            : "None";
+          return `"${r.registrationId}","${r.participantName}","${r.btId || ""}","${r.email}","${r.phone}","${r.eventName}","${r.teamType}","${r.department || ""}","${r.year || ""}","${r.status}","${r.paymentStatus || "FREE"}","${r.amountPaid || 0}","${customAnsStr.replace(/"/g, '""')}","${r.paymentId || "N/A"}","${r.orderId || "N/A"}"`;
+        }
       )
       .join("\n");
 
@@ -515,6 +521,27 @@ export default function AdminRegistrationsPage() {
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {/* Custom Q&N Answers */}
+            {selectedRecord.customAnswers && Object.keys(selectedRecord.customAnswers).length > 0 && (
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+                <span className="text-slate-500 uppercase text-[10px] font-bold flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
+                  <span>Custom Event Q&amp;N Answers</span>
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {Object.entries(selectedRecord.customAnswers).map(([k, v]) => {
+                    const displayVal = Array.isArray(v) ? v.join(", ") : String(v);
+                    return (
+                      <div key={k} className="p-2.5 rounded-lg bg-white border border-slate-200">
+                        <span className="text-[10px] font-mono text-slate-400 block">{k}</span>
+                        <span className="font-bold text-slate-900 text-xs break-words">{displayVal}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 

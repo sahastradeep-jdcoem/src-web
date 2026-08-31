@@ -98,6 +98,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   const [isVerifyingTeammate, setIsVerifyingTeammate] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [customAnswers, setCustomAnswers] = useState<Record<string, any>>({});
+  const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
   const [generatedTicket, setGeneratedTicket] = useState<{
     registrationId: string;
     ticketCode: string;
@@ -261,6 +263,32 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         return;
       }
     }
+
+    // Validate custom registration questions
+    if (event.customQuestions && event.customQuestions.length > 0) {
+      const errors: Record<string, string> = {};
+      for (const q of event.customQuestions) {
+        if (q.type === "note") continue;
+        if (q.required) {
+          const val = customAnswers[q.id];
+          if (
+            val === undefined || 
+            val === null || 
+            (typeof val === "string" && !val.trim()) ||
+            (Array.isArray(val) && val.length === 0)
+          ) {
+            errors[q.id] = "This question is required by the organizers.";
+          }
+        }
+      }
+      if (Object.keys(errors).length > 0) {
+        setCustomErrors(errors);
+        alert("Please complete all required event-specific questions before proceeding.");
+        return;
+      }
+      setCustomErrors({});
+    }
+
     setCurrentStep(3);
   };
 
@@ -316,6 +344,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         currency: "INR",
         paidAt: new Date().toISOString(),
         tenureId: "tenure-2025-26",
+        customAnswers: Object.keys(customAnswers).length > 0 ? customAnswers : undefined,
       });
     } catch (e) {
       console.warn("Firestore registration save fallback handled", e);
@@ -899,6 +928,208 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               </div>
             )}
 
+            {/* Custom Event Questions & Notes Section (Q&N) */}
+            {event.customQuestions && event.customQuestions.length > 0 && (
+              <div className="space-y-6 pt-6 border-t border-slate-200">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-[#17458F] font-heading flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
+                      <span>Event-Specific Questions &amp; Guidelines</span>
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Please review the notes and complete the custom details required by event organizers.
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  {event.customQuestions.map((q, qIdx) => {
+                    const isError = Boolean(customErrors[q.id]);
+                    const currentVal = customAnswers[q.id];
+
+                    if (q.type === "note") {
+                      return (
+                        <div key={q.id} className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-1.5">
+                          <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                            <AlertCircle className="w-4 h-4 text-[#E78023] shrink-0" />
+                            <span>{q.question || "Important Notice"}</span>
+                          </div>
+                          {q.noteContent && (
+                            <p className="text-xs text-slate-700 leading-relaxed pl-6 whitespace-pre-line">
+                              {q.noteContent}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div
+                        key={q.id}
+                        className={`p-4 sm:p-5 rounded-2xl border transition-all space-y-3 ${
+                          isError
+                            ? "bg-rose-50/50 border-rose-300 ring-2 ring-rose-200"
+                            : "bg-slate-50/60 border-slate-200 hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[#E78023] font-mono text-[11px]">0{qIdx + 1}.</span>
+                            <span>{q.question}</span>
+                            {q.required && <span className="text-rose-500 font-bold">*</span>}
+                          </label>
+                          {q.description && (
+                            <p className="text-[11px] text-slate-500 font-medium leading-normal">
+                              {q.description}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Question Inputs by Type */}
+                        {q.type === "short_text" && (
+                          <input
+                            type="text"
+                            value={currentVal || ""}
+                            onChange={(e) => {
+                              setCustomAnswers({ ...customAnswers, [q.id]: e.target.value });
+                              if (customErrors[q.id]) {
+                                const errs = { ...customErrors };
+                                delete errs[q.id];
+                                setCustomErrors(errs);
+                              }
+                            }}
+                            placeholder={q.placeholder || "Your answer..."}
+                            className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F]"
+                          />
+                        )}
+
+                        {q.type === "long_text" && (
+                          <textarea
+                            rows={3}
+                            value={currentVal || ""}
+                            onChange={(e) => {
+                              setCustomAnswers({ ...customAnswers, [q.id]: e.target.value });
+                              if (customErrors[q.id]) {
+                                const errs = { ...customErrors };
+                                delete errs[q.id];
+                                setCustomErrors(errs);
+                              }
+                            }}
+                            placeholder={q.placeholder || "Enter detailed response..."}
+                            className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F]"
+                          />
+                        )}
+
+                        {q.type === "multiple_choice" && (
+                          <div className="space-y-2">
+                            {(q.options || []).map((opt) => {
+                              const isSelected = currentVal === opt;
+                              return (
+                                <label
+                                  key={opt}
+                                  onClick={() => {
+                                    setCustomAnswers({ ...customAnswers, [q.id]: opt });
+                                    if (customErrors[q.id]) {
+                                      const errs = { ...customErrors };
+                                      delete errs[q.id];
+                                      setCustomErrors(errs);
+                                    }
+                                  }}
+                                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                                    isSelected
+                                      ? "bg-[#17458F]/5 border-[#17458F] text-[#17458F] font-bold shadow-2xs"
+                                      : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                                  }`}
+                                >
+                                  <div
+                                    className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                                      isSelected ? "border-[#17458F] bg-[#17458F]" : "border-slate-300"
+                                    }`}
+                                  >
+                                    {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                  </div>
+                                  <span className="text-xs">{opt}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {q.type === "checkboxes" && (
+                          <div className="space-y-2">
+                            {(q.options || []).map((opt) => {
+                              const selectedList: string[] = Array.isArray(currentVal) ? currentVal : [];
+                              const isChecked = selectedList.includes(opt);
+                              return (
+                                <label
+                                  key={opt}
+                                  onClick={() => {
+                                    const next = isChecked
+                                      ? selectedList.filter((item) => item !== opt)
+                                      : [...selectedList, opt];
+                                    setCustomAnswers({ ...customAnswers, [q.id]: next });
+                                    if (customErrors[q.id]) {
+                                      const errs = { ...customErrors };
+                                      delete errs[q.id];
+                                      setCustomErrors(errs);
+                                    }
+                                  }}
+                                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                                    isChecked
+                                      ? "bg-emerald-50/60 border-emerald-600 text-emerald-950 font-bold shadow-2xs"
+                                      : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                                  }`}
+                                >
+                                  <div
+                                    className={`w-4 h-4 rounded-md border flex items-center justify-center ${
+                                      isChecked ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300"
+                                    }`}
+                                  >
+                                    {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                                  </div>
+                                  <span className="text-xs">{opt}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {q.type === "dropdown" && (
+                          <select
+                            value={currentVal || ""}
+                            onChange={(e) => {
+                              setCustomAnswers({ ...customAnswers, [q.id]: e.target.value });
+                              if (customErrors[q.id]) {
+                                const errs = { ...customErrors };
+                                delete errs[q.id];
+                                setCustomErrors(errs);
+                              }
+                            }}
+                            className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
+                          >
+                            <option value="">-- Choose an option --</option>
+                            {(q.options || []).map((opt) => (
+                              <option key={opt} value={opt}>
+                                {opt}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+
+                        {isError && (
+                          <p className="text-[11px] font-bold text-rose-600 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            <span>{customErrors[q.id]}</span>
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
           </div>
 
           <div className="flex items-center justify-between pt-4 border-t border-slate-100">
@@ -1026,6 +1257,34 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                 </div>
               </div>
             )}
+
+            {/* Custom Question Answers Review */}
+            {event.customQuestions && event.customQuestions.some((q) => q.type !== "note" && customAnswers[q.id]) && (
+              <div className="pt-4 border-t border-slate-200 text-xs space-y-2">
+                <span className="text-[10px] text-slate-500 uppercase font-bold block">
+                  Event-Specific Answers:
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {event.customQuestions
+                    .filter((q) => q.type !== "note" && customAnswers[q.id])
+                    .map((q) => {
+                      const val = customAnswers[q.id];
+                      const displayVal = Array.isArray(val) ? val.join(", ") : String(val);
+                      return (
+                        <div key={q.id} className="p-3 rounded-xl bg-white border border-slate-200 space-y-0.5">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase block truncate">
+                            {q.question}
+                          </span>
+                          <span className="font-semibold text-slate-900 block text-xs break-words">
+                            {displayVal}
+                          </span>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+
             {/* Fee Breakdown Card for Paid Events */}
             {totalPayableAmount > 0 ? (
               <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-50/80 to-amber-50/80 border border-[#17458F]/20 space-y-3">

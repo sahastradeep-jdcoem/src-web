@@ -21,6 +21,25 @@ export interface EventPrize {
   perks: string[];
 }
 
+export type CustomQuestionType = 
+  | "short_text" 
+  | "long_text" 
+  | "multiple_choice" 
+  | "checkboxes" 
+  | "dropdown" 
+  | "note";
+
+export interface CustomQuestion {
+  id: string;
+  type: CustomQuestionType;
+  question: string;
+  description?: string;
+  placeholder?: string;
+  required?: boolean;
+  options?: string[]; // For multiple_choice, checkboxes, dropdown
+  noteContent?: string; // For "note" / important announcement banners
+}
+
 export interface EventItem {
   id: string;
   slug: string;
@@ -59,6 +78,7 @@ export interface EventItem {
     role: string;
     phone: string;
   };
+  customQuestions?: CustomQuestion[];
 }
 
 export interface ClubItem {
@@ -143,6 +163,8 @@ export interface RegistrationRecord {
   amountPaid?: number;
   ticketCode: string;
   qrPayload: string;
+  btId?: string;
+  customAnswers?: Record<string, any>;
 }
 
 export interface GalleryPhoto {
