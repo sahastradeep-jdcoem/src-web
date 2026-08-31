@@ -57,8 +57,11 @@ export default function GateScannerHubPage() {
     e.preventDefault();
     if (!passInput.trim()) return;
 
-    // Handle both direct ID or full URL pasted from scanner
+    // Handle direct ID, legacy SRC:PASS: tokens, or full URLs from scanners
     let id = passInput.trim();
+    if (id.startsWith("SRC:PASS:")) {
+      id = id.replace("SRC:PASS:", "").trim();
+    }
     if (id.includes("/verify/")) {
       id = id.split("/verify/")[1].split("?")[0];
     } else if (id.includes("passId=")) {

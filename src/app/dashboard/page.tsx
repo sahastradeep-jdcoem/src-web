@@ -39,6 +39,16 @@ export default function StudentDashboardPage() {
   const [selectedTicket, setSelectedTicket] = useState<RegistrationRecord | null>(null);
 
   useEffect(() => {
+    // Legacy Backwards Compatibility:
+    // If an older pass QR code with `/dashboard?passId=...` is scanned, seamlessly forward to `/verify/[passId]`
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const legacyPassId = urlParams.get("passId");
+      if (legacyPassId) {
+        window.location.replace(`/verify/${encodeURIComponent(legacyPassId)}`);
+        return;
+      }
+    }
     // Load dynamic events from store & cloud
     setEvents(getStoredEvents());
     syncEventsFromFirestore().then((res) => {
