@@ -22,7 +22,8 @@ import {
   Award,
   RefreshCw,
   Check,
-  Printer
+  Printer,
+  Share2
 } from "lucide-react";
 import { mockRegistrations } from "@/data/registrations";
 import { Badge } from "@/components/ui/Badge";
@@ -47,6 +48,7 @@ export default function StudentDashboardPage() {
   const [selectedTicket, setSelectedTicket] = useState<RegistrationRecord | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   useEffect(() => {
     // Legacy Backwards Compatibility:
@@ -722,13 +724,16 @@ export default function StudentDashboardPage() {
                       onClick={async () => {
                         setIsDownloading(true);
                         try {
-                          const success = await downloadPassAsImage(
+                          const res = await downloadPassAsImage(
                             "src-dashboard-delegate-pass",
                             `${selectedTicket.registrationId}-${selectedTicket.eventName.replace(/\s+/g, "_")}_Pass.png`
                           );
-                          if (success) {
+                          if (res.success) {
                             setDownloadSuccess(true);
                             setTimeout(() => setDownloadSuccess(false), 3000);
+                            if (res.isMobile && res.imageUrl) {
+                              setPreviewImage(res.imageUrl);
+                            }
                           }
                         } catch (e) {
                           console.error("Pass export error", e);
@@ -745,7 +750,7 @@ export default function StudentDashboardPage() {
                       ) : (
                         <Download className="w-4 h-4" />
                       )}
-                      <span>{downloadSuccess ? "Pass Saved!" : isDownloading ? "Generating..." : "Save Pass to Phone (PNG)"}</span>
+                      <span>{downloadSuccess ? "Pass Ready!" : isDownloading ? "Generating..." : "Save Pass to Phone (PNG)"}</span>
                     </Button>
 
                     <Button
@@ -772,6 +777,86 @@ export default function StudentDashboardPage() {
             </Modal>
           );
         })()}
+
+        {/* Mobile Photo Save & Share Dialog */}
+        {previewImage && selectedTicket && (
+          <Modal
+            isOpen={!!previewImage}
+            onClose={() => setPreviewImage(null)}
+            title="Official Delegate Pass Ready"
+            subtitle="Save directly to your phone gallery or share via WhatsApp"
+            maxWidth="lg"
+          >
+            <div className="space-y-5 text-center">
+              <div className="relative rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-slate-50 p-1">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={previewImage}
+                  alt="Official Delegate Pass"
+                  className="w-full h-auto object-contain rounded-xl"
+                />
+              </div>
+
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs font-semibold">
+                💡 <strong>Mobile Save Tip:</strong> Tap and hold the pass image above to select <strong>&quot;Save to Photos&quot;</strong>, or use the Share button below.
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(previewImage);
+                      const blob = await res.blob();
+                      const file = new File([blob], `${selectedTicket.registrationId}_Pass.png`, { type: "image/png" });
+                      if (typeof navigator !== "undefined" && navigator.canShare && navigator.canShare({ files: [file] })) {
+                        await navigator.share({
+                          files: [file],
+                          title: "SRC Official Delegate Pass",
+                          text: `My Official Delegate Pass for ${selectedTicket.eventName} (${selectedTicket.registrationId})`,
+                        });
+                      } else if (typeof navigator !== "undefined" && navigator.share) {
+                        await navigator.share({
+                          title: "SRC Official Delegate Pass",
+                          url: window.location.href,
+                        });
+                      }
+                    } catch (e) {
+                      console.warn(e);
+                    }
+                  }}
+                  className="w-full sm:w-auto gap-2 bg-[#E78023] hover:bg-[#D26E17] text-white shadow-md"
+                >
+                  <Share2 className="w-4 h-4" />
+                  <span>Share / Save Image</span>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="md"
+                  onClick={() => {
+                    const w = window.open("");
+                    w?.document.write(`<img src="${previewImage}" style="max-width:100%; height:auto;" />`);
+                  }}
+                  className="w-full sm:w-auto gap-2"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>Open Full Image</span>
+                </Button>
+
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={() => setPreviewImage(null)}
+                  className="w-full sm:w-auto"
+                >
+                  Done
+                </Button>
+              </div>
+            </div>
+          </Modal>
+        )}
 
       </div>
     </div>
