@@ -144,30 +144,8 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
   if (!Array.isArray(remoteList) || remoteList.length === 0) {
     return localList;
   }
-  if (!Array.isArray(localList) || localList.length === 0) {
-    return remoteList;
-  }
-
-  const map = new Map<string, T>();
-
-  // Add all remote items first
-  remoteList.forEach((item) => {
-    const key = item.id || item.slug || JSON.stringify(item);
-    map.set(key, item);
-  });
-
-  // Merge local items: user edits take precedence over cached remote snapshots
-  localList.forEach((item) => {
-    const key = item.id || item.slug || JSON.stringify(item);
-    const existingRemote = map.get(key);
-    if (existingRemote) {
-      map.set(key, { ...existingRemote, ...item });
-    } else {
-      map.set(key, item);
-    }
-  });
-
-  return Array.from(map.values());
+  // Remote cloud dataset is the authoritative source of truth across all devices & users
+  return remoteList;
 }
 
 // -------------------------------------------------------------

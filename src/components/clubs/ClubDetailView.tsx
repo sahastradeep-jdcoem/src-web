@@ -14,7 +14,7 @@ import {
   Compass, 
   Image as ImageIcon 
 } from "lucide-react";
-import { getStoredClubs } from "@/lib/councilStore";
+import { getStoredClubs, syncClubsFromFirestore, subscribeToClubs } from "@/lib/councilStore";
 import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { ClubItem, EventItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -29,24 +29,30 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
   const [club, setClub] = useState<ClubItem>(initialClub);
 
   useEffect(() => {
-    const storedClubs = getStoredClubs();
-    const found = storedClubs.find((c) => c.slug === initialClub.slug || c.id === initialClub.id);
-    if (found) {
-      setClub(found);
-    }
+    const applyClub = (list: ClubItem[]) => {
+      const found = list.find((c) => c.slug === initialClub.slug || c.id === initialClub.id);
+      if (found) setClub(found);
+    };
+
+    applyClub(getStoredClubs());
+
+    syncClubsFromFirestore().then((res) => {
+      if (res) applyClub(res);
+    });
+
+    const unsubscribe = subscribeToClubs((remoteClubs) => {
+      applyClub(remoteClubs);
+    });
 
     const handleUpdate = () => {
-      const updatedClubs = getStoredClubs();
-      const updatedFound = updatedClubs.find((c) => c.slug === initialClub.slug || c.id === initialClub.id);
-      if (updatedFound) {
-        setClub(updatedFound);
-      }
+      applyClub(getStoredClubs());
     };
 
     window.addEventListener("src_clubs_updated", handleUpdate);
     window.addEventListener("storage", handleUpdate);
 
     return () => {
+      unsubscribe();
       window.removeEventListener("src_clubs_updated", handleUpdate);
       window.removeEventListener("storage", handleUpdate);
     };
