@@ -70,7 +70,9 @@ export default function AdminRegistrationsPage() {
   // Event Autocomplete & Dropdown filter state
   const [eventSearchQuery, setEventSearchQuery] = useState("");
   const [isEventDropdownOpen, setIsEventDropdownOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(0);
   const eventDropdownRef = useRef<HTMLDivElement | null>(null);
+  const optionsListRef = useRef<HTMLDivElement | null>(null);
 
   // Search & Filters for Table tab
   const [searchQuery, setSearchQuery] = useState("");
@@ -224,6 +226,88 @@ export default function AdminRegistrationsPage() {
         (e.category && e.category.toLowerCase().includes(q))
     );
   }, [tenureFilteredEvents, eventSearchQuery]);
+
+  // Selectable event options list for keyboard navigation and rendering
+  const selectableEventOptions = useMemo(() => {
+    const allOption = {
+      slug: "all",
+      name: "All Events & Forms",
+      category: "Overview",
+      count: registrations.length,
+      isAll: true,
+    };
+
+    const eventOptions = filteredDropdownEvents.map((evt) => ({
+      slug: evt.slug,
+      name: evt.name,
+      category: evt.category || "Event",
+      count: registrations.filter(
+        (r) =>
+          r.eventName.toLowerCase() === evt.name.toLowerCase() ||
+          (r.eventSlug && r.eventSlug.toLowerCase() === evt.slug.toLowerCase())
+      ).length,
+      isAll: false,
+    }));
+
+    return [allOption, ...eventOptions];
+  }, [filteredDropdownEvents, registrations]);
+
+  // Keep highlighted index in sync when search changes
+  useEffect(() => {
+    if (eventSearchQuery.trim() && selectableEventOptions.length > 1) {
+      setHighlightedIndex(1); // highlight the first matching event
+    } else {
+      setHighlightedIndex(0);
+    }
+  }, [eventSearchQuery, selectableEventOptions.length]);
+
+  // Auto-scroll highlighted option into view
+  useEffect(() => {
+    if (isEventDropdownOpen && optionsListRef.current) {
+      const el = optionsListRef.current.querySelector(`[data-option-index="${highlightedIndex}"]`);
+      if (el) {
+        el.scrollIntoView({ block: "nearest" });
+      }
+    }
+  }, [highlightedIndex, isEventDropdownOpen]);
+
+  const handleSelectEventOption = (slug: string) => {
+    setSelectedEventSlug(slug);
+    setIsEventDropdownOpen(false);
+    setEventSearchQuery("");
+    setIndividualIndex(0);
+  };
+
+  const handleEventInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isEventDropdownOpen) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        setIsEventDropdownOpen(true);
+        setHighlightedIndex(selectableEventOptions.length > 1 && selectedEventSlug !== "all" ? 1 : 0);
+      }
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex((prev) =>
+        prev < selectableEventOptions.length - 1 ? prev + 1 : 0
+      );
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex((prev) =>
+        prev > 0 ? prev - 1 : selectableEventOptions.length - 1
+      );
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (selectableEventOptions[highlightedIndex]) {
+        handleSelectEventOption(selectableEventOptions[highlightedIndex].slug);
+      }
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setIsEventDropdownOpen(false);
+    }
+  };
 
   // Current active event object (if filtered to a specific event)
   const currentSelectedEventObj = useMemo(() => {
@@ -812,7 +896,8 @@ export default function AdminRegistrationsPage() {
                   setEventSearchQuery(e.target.value);
                   setIsEventDropdownOpen(true);
                 }}
-                placeholder={selectedEventSlug === "all" ? "Search & select event (e.g. Hackathon)..." : "Change event..."}
+                onKeyDown={handleEventInputKeyDown}
+                placeholder={selectedEventSlug === "all" ? "Search event (use ↑↓ keys & Enter)..." : "Change event (use ↑↓ keys & Enter)..."}
                 className="w-full pl-10 pr-9 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:outline-none focus:border-[#17458F] shadow-2xs"
               />
               {selectedEventSlug !== "all" ? (
@@ -835,73 +920,58 @@ export default function AdminRegistrationsPage() {
               )}
             </div>
 
-            {/* Autocomplete Dropdown Options Menu */}
+            {/* Autocomplete Dropdown Options Menu with Keyboard Controls */}
             {isEventDropdownOpen && (
-              <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 max-h-64 overflow-y-auto p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-150">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedEventSlug("all");
-                    setIsEventDropdownOpen(false);
-                    setEventSearchQuery("");
-                    setIndividualIndex(0);
-                  }}
-                  className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold transition-colors flex items-center justify-between cursor-pointer ${
-                    selectedEventSlug === "all"
-                      ? "bg-[#17458F] text-white"
-                      : "text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  <span>All Events &amp; Forms</span>
-                  <Badge variant={selectedEventSlug === "all" ? "orange" : "slate"} size="sm">
-                    {registrations.length}
-                  </Badge>
-                </button>
-
-                {filteredDropdownEvents.map((evt) => {
-                  const evtCount = registrations.filter(
-                    (r) =>
-                      r.eventName.toLowerCase() === evt.name.toLowerCase() ||
-                      (r.eventSlug && r.eventSlug.toLowerCase() === evt.slug.toLowerCase())
-                  ).length;
-                  const isSelected =
-                    selectedEventSlug.toLowerCase() === evt.slug.toLowerCase() ||
-                    selectedEventSlug.toLowerCase() === evt.name.toLowerCase();
+              <div 
+                ref={optionsListRef}
+                className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 max-h-64 overflow-y-auto p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-150 scrollbar-thin"
+              >
+                {selectableEventOptions.map((opt, idx) => {
+                  const isHighlighted = highlightedIndex === idx;
+                  const isCurrentActive = opt.isAll 
+                    ? selectedEventSlug === "all" 
+                    : (selectedEventSlug.toLowerCase() === opt.slug.toLowerCase() || selectedEventSlug.toLowerCase() === opt.name.toLowerCase());
 
                   return (
                     <button
-                      key={evt.id || evt.slug}
+                      key={opt.slug}
                       type="button"
-                      onClick={() => {
-                        setSelectedEventSlug(evt.slug);
-                        setIsEventDropdownOpen(false);
-                        setEventSearchQuery("");
-                        setIndividualIndex(0);
-                      }}
-                      className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold transition-colors flex items-center justify-between cursor-pointer ${
-                        isSelected
-                          ? "bg-[#17458F] text-white"
+                      data-option-index={idx}
+                      onMouseEnter={() => setHighlightedIndex(idx)}
+                      onClick={() => handleSelectEventOption(opt.slug)}
+                      className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
+                        isHighlighted
+                          ? "bg-[#17458F] text-white shadow-xs ring-1 ring-[#17458F]"
+                          : isCurrentActive
+                          ? "bg-slate-100 text-[#17458F]"
                           : "text-slate-700 hover:bg-slate-50"
                       }`}
                     >
                       <div className="flex items-center gap-2 truncate pr-2">
-                        <span className="truncate">{evt.name}</span>
-                        <span
-                          className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${
-                            isSelected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
-                          }`}
-                        >
-                          {evt.category}
-                        </span>
+                        <span className="truncate">{opt.name}</span>
+                        {!opt.isAll && (
+                          <span
+                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${
+                              isHighlighted 
+                                ? "bg-white/20 text-white" 
+                                : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            {opt.category}
+                          </span>
+                        )}
                       </div>
-                      <Badge variant={isSelected ? "orange" : "slate"} size="sm">
-                        {evtCount}
+                      <Badge 
+                        variant={isHighlighted ? "orange" : isCurrentActive ? "orange" : "slate"} 
+                        size="sm"
+                      >
+                        {opt.count}
                       </Badge>
                     </button>
                   );
                 })}
 
-                {filteredDropdownEvents.length === 0 && (
+                {selectableEventOptions.length === 0 && (
                   <div className="p-3 text-center text-xs text-slate-400">
                     No matching events found
                   </div>
