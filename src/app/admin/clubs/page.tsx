@@ -739,6 +739,29 @@ export default function AdminClubsPage() {
                         className="w-full px-3.5 py-2.5 rounded-xl bg-amber-50/50 border border-amber-300 text-xs font-mono font-bold text-[#E78023] uppercase tracking-wider focus:outline-none focus:border-[#17458F]"
                       />
                     </div>
+
+                    <div className="sm:col-span-2 space-y-1.5 pt-2 border-t border-slate-200">
+                      <ImageUploadDropzone
+                        label="Club Head Portrait"
+                        sublabel="Crop & frame 1:1 headshot"
+                        aspectRatio="1:1"
+                        recommendedSize="500 x 500 px (1:1)"
+                        storagePath="clubs/leads"
+                        previewUrl={editingClub.lead.avatar}
+                        onUrlChange={(url) => {
+                          setEditingClub({
+                            ...editingClub,
+                            lead: { ...editingClub.lead, avatar: url }
+                          });
+                        }}
+                        onImageCompressed={(res) => {
+                          setEditingClub({
+                            ...editingClub,
+                            lead: { ...editingClub.lead, avatar: res.dataUrl }
+                          });
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -849,6 +872,45 @@ export default function AdminClubsPage() {
                           }
                         })}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-amber-50/50 border border-amber-300 text-xs font-mono font-bold text-[#E78023] uppercase tracking-wider focus:outline-none focus:border-[#17458F]"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2 space-y-1.5 pt-2 border-t border-slate-200">
+                      <ImageUploadDropzone
+                        label="Club Co-Head Portrait"
+                        sublabel="Crop & frame 1:1 headshot"
+                        aspectRatio="1:1"
+                        recommendedSize="500 x 500 px (1:1)"
+                        storagePath="clubs/leads"
+                        previewUrl={editingClub.coLead?.avatar || ""}
+                        onUrlChange={(url) => {
+                          setEditingClub({
+                            ...editingClub,
+                            coLead: {
+                              ...(editingClub.coLead || {
+                                name: "",
+                                role: "Club Co-Head",
+                                department: departmentsList[0] || "Computer Science & Engineering",
+                                year: "3rd Year",
+                              }),
+                              avatar: url
+                            }
+                          });
+                        }}
+                        onImageCompressed={(res) => {
+                          setEditingClub({
+                            ...editingClub,
+                            coLead: {
+                              ...(editingClub.coLead || {
+                                name: "",
+                                role: "Club Co-Head",
+                                department: departmentsList[0] || "Computer Science & Engineering",
+                                year: "3rd Year",
+                              }),
+                              avatar: res.dataUrl
+                            }
+                          });
+                        }}
                       />
                     </div>
                   </div>

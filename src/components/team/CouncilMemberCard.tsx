@@ -19,6 +19,7 @@ export function CouncilMemberCard({ member }: CouncilMemberCardProps) {
           src={member.avatar}
           alt={member.role}
           fill
+          unoptimized={true}
           className="object-cover object-top transition-transform duration-500 group-hover:scale-[1.02]"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />

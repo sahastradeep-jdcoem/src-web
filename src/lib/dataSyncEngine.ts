@@ -156,11 +156,13 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
     map.set(key, item);
   });
 
-  // Merge local items: if local has items created or edited that remote doesn't have yet, preserve them!
+  // Merge local items: user edits take precedence over cached remote snapshots
   localList.forEach((item) => {
     const key = item.id || item.slug || JSON.stringify(item);
-    if (!map.has(key)) {
-      // Local has a newly added item not yet in remote! Keep it!
+    const existingRemote = map.get(key);
+    if (existingRemote) {
+      map.set(key, { ...existingRemote, ...item });
+    } else {
       map.set(key, item);
     }
   });

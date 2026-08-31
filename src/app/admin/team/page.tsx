@@ -775,20 +775,18 @@ export default function AdminTeamPage() {
               </label>
               
               <ImageUploadDropzone
-                label="Drop Officer Portrait Here"
-                sublabel="Converts phone/DSLR photo to high-res WebP"
+                label="Officer Portrait / Headshot"
+                sublabel="Crop, zoom & frame headshot to square (1:1)"
+                aspectRatio="1:1"
+                recommendedSize="600 x 600 px (1:1)"
+                storagePath="team/avatars"
                 previewUrl={editingMember.avatar}
-                onImageCompressed={(res) => {
-                  setEditingMember({ ...editingMember, avatar: res.dataUrl });
+                onUrlChange={(url) => {
+                  setEditingMember((prev) => prev ? { ...prev, avatar: url } : null);
                 }}
-              />
-
-              <input
-                type="text"
-                placeholder="Or paste Direct Image URL..."
-                value={editingMember.avatar}
-                onChange={(e) => setEditingMember({ ...editingMember, avatar: e.target.value })}
-                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-[11px] font-mono text-slate-600 focus:outline-none focus:border-[#17458F]"
+                onImageCompressed={(res) => {
+                  setEditingMember((prev) => prev ? { ...prev, avatar: res.dataUrl } : null);
+                }}
               />
             </div>
 

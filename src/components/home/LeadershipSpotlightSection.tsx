@@ -130,6 +130,7 @@ export default function LeadershipSpotlightSection() {
                       src={president.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop"}
                       alt={president.name}
                       fill
+                      unoptimized={true}
                       className="object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                   </div>
@@ -214,6 +215,7 @@ export default function LeadershipSpotlightSection() {
                       src={vicePresident.avatar || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=400&auto=format&fit=crop"}
                       alt={vicePresident.name}
                       fill
+                      unoptimized={true}
                       className="object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                   </div>
