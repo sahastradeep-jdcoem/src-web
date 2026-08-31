@@ -443,8 +443,8 @@ export default function StudentDashboardPage() {
                   <ScannableQRCode
                     value={
                       typeof window !== "undefined"
-                        ? `${window.location.origin}/dashboard?passId=${encodeURIComponent(selectedTicket.registrationId)}&ticket=${encodeURIComponent(selectedTicket.ticketCode)}`
-                        : `https://src-jdcoem.vercel.app/dashboard?passId=${encodeURIComponent(selectedTicket.registrationId)}&ticket=${encodeURIComponent(selectedTicket.ticketCode)}`
+                        ? `${window.location.origin}/verify/${encodeURIComponent(selectedTicket.registrationId)}`
+                        : `https://src-jdcoem.vercel.app/verify/${encodeURIComponent(selectedTicket.registrationId)}`
                     }
                     size={132}
                     level="H"

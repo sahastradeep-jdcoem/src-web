@@ -28,6 +28,7 @@ export interface StudentRegistrationRecord {
   year: string;
   btId?: string; // Replaced rollNo with btId
   teamSize: number;
+  registeredAt?: string;
   members?: Array<{
     name: string;
     email?: string;

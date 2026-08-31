@@ -196,8 +196,8 @@ export function TicketPass({
               <ScannableQRCode
                 value={
                   typeof window !== "undefined"
-                    ? `${window.location.origin}/dashboard?passId=${encodeURIComponent(registrationId)}&ticket=${encodeURIComponent(ticketCode)}`
-                    : `https://src-jdcoem.vercel.app/dashboard?passId=${encodeURIComponent(registrationId)}&ticket=${encodeURIComponent(ticketCode)}`
+                    ? `${window.location.origin}/verify/${encodeURIComponent(registrationId)}`
+                    : `https://src-jdcoem.vercel.app/verify/${encodeURIComponent(registrationId)}`
                 }
                 size={116}
                 level="H"

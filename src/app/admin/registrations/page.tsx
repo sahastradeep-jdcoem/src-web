@@ -447,8 +447,9 @@ export default function AdminRegistrationsPage() {
               <div className="h-32 w-32 mx-auto bg-white p-2 rounded-2xl border border-slate-200 flex items-center justify-center overflow-hidden shadow-xs">
                 <ScannableQRCode
                   value={
-                    selectedRecord.qrPayload ||
-                    `https://src-jdcoem.vercel.app/dashboard?passId=${encodeURIComponent(selectedRecord.registrationId)}`
+                    typeof window !== "undefined"
+                      ? `${window.location.origin}/verify/${encodeURIComponent(selectedRecord.registrationId)}`
+                      : `https://src-jdcoem.vercel.app/verify/${encodeURIComponent(selectedRecord.registrationId)}`
                   }
                   size={120}
                   level="H"
