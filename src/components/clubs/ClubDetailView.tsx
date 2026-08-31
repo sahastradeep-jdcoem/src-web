@@ -85,14 +85,13 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-6">
             {club.logoImage && (
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden shrink-0 bg-white/95 backdrop-blur-xs p-2 border border-white/60 shadow-lg flex items-center justify-center">
+              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden shrink-0 shadow-md">
                 <Image
                   src={club.logoImage}
                   alt={`${club.name} Logo`}
-                  width={96}
-                  height={96}
+                  fill
                   unoptimized={true}
-                  className="object-contain w-full h-full rounded-full"
+                  className="object-cover w-full h-full rounded-full"
                 />
               </div>
             )}
