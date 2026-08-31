@@ -380,59 +380,23 @@ export default function AdminClubsPage() {
               </p>
             </div>
 
-            {/* Club Leadership Box with PFPs */}
-            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2.5">
+            {/* Club Leadership Box */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="relative w-8 h-8 rounded-full overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
-                    <Image
-                      src={club.lead.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop"}
-                      alt={club.lead.name || "Club Head"}
-                      fill
-                      unoptimized={true}
-                      className="object-cover"
-                    />
-                  </div>
-                  <div className="space-y-0.5">
-                    <span className="text-[10px] font-bold text-[#E78023] uppercase tracking-wider block">
-                      {club.lead.role || "Club Head"}
-                    </span>
-                    <span className="font-bold text-slate-900 block line-clamp-1">{club.lead.name || "TBA"}</span>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCreatingNew(false);
-                    setEditingClub(club);
-                    setModalTab("leadership");
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-[10px] font-bold text-[#17458F] transition-colors cursor-pointer"
-                >
-                  Change PFP
-                </button>
+                <span className="text-slate-500 font-medium">Club Head:</span>
+                <span className="font-bold text-slate-900">{club.lead.name || "TBA"}</span>
               </div>
-
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-medium">Department:</span>
+                <span className="text-[#E78023] font-semibold truncate max-w-[140px]" title={club.lead.department}>
+                  <span className="xl:hidden">{getDepartmentShortName(club.lead.department)}</span>
+                  <span className="hidden xl:inline">{club.lead.department}</span>
+                </span>
+              </div>
               {club.coLead?.name && (
-                <div className="flex items-center justify-between pt-2 border-t border-slate-200/80">
-                  <div className="flex items-center gap-2.5">
-                    <div className="relative w-7 h-7 rounded-full overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
-                      <Image
-                        src={club.coLead.avatar || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=400&auto=format&fit=crop"}
-                        alt={club.coLead.name}
-                        fill
-                        unoptimized={true}
-                        className="object-cover"
-                      />
-                    </div>
-                    <div className="space-y-0.5">
-                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">
-                        {club.coLead.role || "Co-Head"}
-                      </span>
-                      <span className="font-semibold text-slate-800 text-[11px] block line-clamp-1">{club.coLead.name}</span>
-                    </div>
-                  </div>
+                <div className="flex items-center justify-between pt-1 border-t border-slate-200/80">
+                  <span className="text-slate-500 font-medium">Co-Head:</span>
+                  <span className="font-semibold text-slate-800">{club.coLead.name}</span>
                 </div>
               )}
             </div>
@@ -456,32 +420,17 @@ export default function AdminClubsPage() {
                 </Link>
               </div>
 
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => {
-                    setIsCreatingNew(false);
-                    setEditingClub(club);
-                    setModalTab("leadership");
-                  }}
-                  className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-[#E78023] border border-amber-200 text-[11px] font-bold uppercase transition-colors cursor-pointer shadow-xs flex items-center gap-1"
-                  title="Edit Head & Co-Head PFPs"
-                >
-                  <Users className="w-3.5 h-3.5" />
-                  <span>PFPs</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setIsCreatingNew(false);
-                    setEditingClub(club);
-                    setModalTab("identity");
-                  }}
-                  className="px-3.5 py-1.5 rounded-xl bg-[#17458F] hover:bg-[#0E2F66] text-white text-[11px] font-bold uppercase transition-colors cursor-pointer shadow-xs flex items-center gap-1"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Edit Club</span>
-                </button>
-              </div>
+              <button
+                onClick={() => {
+                  setIsCreatingNew(false);
+                  setEditingClub(club);
+                  setModalTab("identity");
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-[#17458F] hover:bg-[#0E2F66] text-white text-[11px] font-bold uppercase transition-colors cursor-pointer shadow-xs flex items-center gap-1"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Edit Club</span>
+              </button>
             </div>
           </div>
         ))}
@@ -555,7 +504,7 @@ export default function AdminClubsPage() {
                 )}
               >
                 <Users className="w-3.5 h-3.5 text-[#E78023]" />
-                <span>3. Leadership PFPs & Heads</span>
+                <span>3. Leadership & Heads</span>
               </button>
 
               <button
