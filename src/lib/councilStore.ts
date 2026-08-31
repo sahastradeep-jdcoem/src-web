@@ -250,6 +250,29 @@ export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => v
   });
 }
 
+// Helper to convert Founding Member to Council Admin Officer
+export function mapFoundingMemberToCouncilAdmin(founder: TeamMember, idx?: number): TeamMember {
+  let role = (founder.role || "Council Officer").trim();
+  if (role.toLowerCase().startsWith("founding ")) {
+    role = role.replace(/^Founding\s+/i, "");
+  }
+  return {
+    ...founder,
+    id: founder.id.startsWith("founder-") ? founder.id.replace("founder-", "admin-") : founder.id,
+    role: role || "Council Officer",
+    order: founder.order || (idx !== undefined ? idx + 1 : 1)
+  };
+}
+
+export function syncFoundingToCouncilAdmins(foundingList?: TeamMember[]): TeamMember[] {
+  const founders = foundingList || getStoredFoundingMembers();
+  if (!Array.isArray(founders) || founders.length === 0) return getStoredCouncilMembers();
+  
+  const mapped = founders.map((f, i) => mapFoundingMemberToCouncilAdmin(f, i));
+  saveStoredCouncilMembers(mapped);
+  return mapped;
+}
+
 // Founding Members of Sahastradeep Store
 export function getStoredFoundingMembers(): TeamMember[] {
   if (typeof window === "undefined") return stripCategoryAndLevel(initialFoundingMembers);
@@ -265,7 +288,7 @@ export function getStoredFoundingMembers(): TeamMember[] {
   return stripCategoryAndLevel(initialFoundingMembers);
 }
 
-export function saveStoredFoundingMembers(members: TeamMember[]): void {
+export function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCouncil: boolean = true): void {
   if (typeof window === "undefined") return;
   try {
     const sanitized = stripCategoryAndLevel(members);
@@ -273,6 +296,11 @@ export function saveStoredFoundingMembers(members: TeamMember[]): void {
     window.dispatchEvent(new CustomEvent("src_founding_members_updated", { detail: sanitized }));
     window.dispatchEvent(new CustomEvent("src_users_updated"));
     saveSiteContentToFirestore("founding_members", sanitized);
+
+    if (autoSyncToCouncil && Array.isArray(sanitized) && sanitized.length > 0) {
+      const mapped = sanitized.map((f, i) => mapFoundingMemberToCouncilAdmin(f, i));
+      saveStoredCouncilMembers(mapped);
+    }
   } catch (e) {
     console.error("Could not save founding members to storage", e);
   }

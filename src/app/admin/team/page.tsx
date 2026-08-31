@@ -34,6 +34,7 @@ import {
   saveStoredHostingCommittee,
   getStoredFoundingMembers,
   saveStoredFoundingMembers,
+  syncFoundingToCouncilAdmins,
   getStoredClubs,
   saveStoredClubs,
   syncCouncilMembersFromFirestore,
@@ -277,6 +278,18 @@ export default function AdminTeamPage() {
       });
     }
 
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 3000);
+  };
+
+  const handleSyncFromFounding = () => {
+    const listToSync = foundingMembersList.length > 0 ? foundingMembersList : getStoredFoundingMembers();
+    if (!Array.isArray(listToSync) || listToSync.length === 0) {
+      alert("No founding members found to sync.");
+      return;
+    }
+    const synced = syncFoundingToCouncilAdmins(listToSync);
+    setCouncilMembers(synced);
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
   };
@@ -626,16 +639,30 @@ export default function AdminTeamPage() {
         </button>
       </div>
 
-      {/* Search Bar */}
-      <div className="relative">
-        <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder={`Search ${activeTab === "clubs" ? "club leadership" : activeTab} members by name, position, department...`}
-          className="w-full pl-11 pr-4 py-3 rounded-2xl bg-white border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F] shadow-xs"
-        />
+      {/* Search & Actions Bar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={`Search ${activeTab === "clubs" ? "club leadership" : activeTab} members by name, position, department...`}
+            className="w-full pl-11 pr-4 py-3 rounded-2xl bg-white border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F] shadow-xs"
+          />
+        </div>
+
+        {activeTab === "council" && (
+          <button
+            type="button"
+            onClick={handleSyncFromFounding}
+            className="px-4 py-3 rounded-2xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 shadow-xs"
+            title="Sync 2025-26 Council Admins with Founding Members list"
+          >
+            <Sparkles className="w-4 h-4 text-[#E78023]" />
+            <span>Sync from Founding Members ({foundingMembersList.length})</span>
+          </button>
+        )}
       </div>
 
       {/* Roster Grid */}
