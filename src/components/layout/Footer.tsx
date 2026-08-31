@@ -1,6 +1,9 @@
+"use client";
+
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { 
   Instagram, 
   Linkedin, 
@@ -11,6 +14,13 @@ import {
 } from "lucide-react";
 
 export default function Footer() {
+  const pathname = usePathname();
+
+  // Do not render public footer inside Admin Console
+  if (pathname && pathname.startsWith("/admin")) {
+    return null;
+  }
+
   return (
     <footer className="bg-slate-50 border-t border-slate-200 pt-16 pb-12 text-slate-700">
       
