@@ -31,13 +31,18 @@ export async function downloadPassAsImage(
       allowTaint: true,
       backgroundColor: "#FFFFFF",
       logging: false,
-      imageTimeout: 2000,
+      imageTimeout: 3000,
       removeContainer: true,
+      windowWidth: 1024, // Fix viewport width during clone so layout always renders in desktop landscape
       onclone: (clonedDoc) => {
         const clonedEl = clonedDoc.getElementById(elementId);
         if (clonedEl) {
           clonedEl.style.transform = "none";
           clonedEl.style.boxShadow = "none";
+          clonedEl.style.width = "720px";
+          clonedEl.style.minWidth = "720px";
+          clonedEl.style.maxWidth = "720px";
+          clonedEl.style.margin = "0";
         }
       },
     });
