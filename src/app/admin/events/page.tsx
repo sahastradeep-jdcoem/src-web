@@ -94,6 +94,7 @@ export default function AdminEventsPage() {
     date: formatDateToReadable(new Date().toISOString().split("T")[0]),
     venue: "JDCOEM Campus",
     organizer: "SRC JDCOEM",
+    organizerClubSlug: "src-council",
     status: "Registration Open" as "Registration Open" | "Upcoming" | "Completed",
     poster: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
     cardImage: "",
@@ -123,6 +124,7 @@ export default function AdminEventsPage() {
     date: "",
     venue: "JDCOEM Campus",
     organizer: "SRC JDCOEM",
+    organizerClubSlug: "src-council",
     status: "Registration Open" as "Registration Open" | "Upcoming" | "Completed",
     poster: "",
     cardImage: "",
@@ -244,6 +246,7 @@ export default function AdminEventsPage() {
       time: "10:00 AM IST",
       venue: newEvent.venue,
       organizer: newEvent.organizer || "SRC JDCOEM",
+      organizerClubSlug: newEvent.organizerClubSlug || (newEvent.organizer === "SRC JDCOEM" ? "src-council" : undefined),
       status: newEvent.status,
       poster: newEvent.poster || newEvent.cardImage || newEvent.posterImage || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
       cardImage: newEvent.cardImage || newEvent.poster,
@@ -281,6 +284,7 @@ export default function AdminEventsPage() {
       date: formatDateToReadable(new Date().toISOString().split("T")[0]),
       venue: "JDCOEM Campus",
       organizer: "SRC JDCOEM",
+      organizerClubSlug: "src-council",
       status: "Registration Open",
       poster: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
       cardImage: "",
@@ -316,6 +320,7 @@ export default function AdminEventsPage() {
       date: evt.date,
       venue: evt.venue,
       organizer: evt.organizer || "SRC JDCOEM",
+      organizerClubSlug: evt.organizerClubSlug || (evt.organizer === "SRC JDCOEM" ? "src-council" : ""),
       status: evt.status as any,
       poster: evt.poster || "",
       cardImage: evt.cardImage || evt.poster || "",
@@ -363,6 +368,7 @@ export default function AdminEventsPage() {
             date: editForm.rawDate ? formatDateToReadable(editForm.rawDate) : editForm.date,
             venue: editForm.venue,
             organizer: editForm.organizer,
+            organizerClubSlug: editForm.organizerClubSlug || item.organizerClubSlug,
             status: editForm.status,
             poster: editForm.poster || editForm.cardImage || editForm.posterImage || item.poster,
             cardImage: editForm.cardImage || item.cardImage || editForm.poster,
@@ -725,7 +731,15 @@ export default function AdminEventsPage() {
               </label>
               <select
                 value={newEvent.organizer}
-                onChange={(e) => setNewEvent({ ...newEvent, organizer: e.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const matchedClub = clubsList.find((c) => c.name === val || `SRC ${c.name}` === val);
+                  setNewEvent({
+                    ...newEvent,
+                    organizer: val,
+                    organizerClubSlug: matchedClub ? matchedClub.slug : (val === "SRC JDCOEM" ? "src-council" : "")
+                  });
+                }}
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
               >
                 <optgroup label="Central Student Council">
@@ -736,8 +750,8 @@ export default function AdminEventsPage() {
 
                 <optgroup label="Chartered Student Clubs">
                   {clubsList.map((c) => (
-                    <option key={c.id || c.slug} value={`SRC ${c.name}`}>
-                      SRC {c.name} ({c.category} Club)
+                    <option key={c.id || c.slug} value={c.name}>
+                      {c.name}
                     </option>
                   ))}
                 </optgroup>
@@ -1264,7 +1278,15 @@ export default function AdminEventsPage() {
               </label>
               <select
                 value={editForm.organizer}
-                onChange={(e) => setEditForm({ ...editForm, organizer: e.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const matchedClub = clubsList.find((c) => c.name === val || `SRC ${c.name}` === val);
+                  setEditForm({
+                    ...editForm,
+                    organizer: val,
+                    organizerClubSlug: matchedClub ? matchedClub.slug : (val === "SRC JDCOEM" ? "src-council" : "")
+                  });
+                }}
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
               >
                 <optgroup label="Central Student Council">
@@ -1275,8 +1297,8 @@ export default function AdminEventsPage() {
 
                 <optgroup label="Chartered Student Clubs">
                   {clubsList.map((c) => (
-                    <option key={c.id || c.slug} value={`SRC ${c.name}`}>
-                      SRC {c.name} ({c.category} Club)
+                    <option key={c.id || c.slug} value={c.name}>
+                      {c.name}
                     </option>
                   ))}
                 </optgroup>
