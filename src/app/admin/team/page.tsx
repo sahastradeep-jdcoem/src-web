@@ -777,7 +777,7 @@ export default function AdminTeamPage() {
                   className="px-3.5 py-1.5 rounded-xl bg-[#17458F] hover:bg-[#0E2F66] text-white text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
                 >
                   <Edit3 className="w-3.5 h-3.5" />
-                  <span>{activeTab === "clubs" ? "Edit PFP & Details" : "Edit Details"}</span>
+                  <span>Edit Details</span>
                 </button>
               </div>
             </div>
