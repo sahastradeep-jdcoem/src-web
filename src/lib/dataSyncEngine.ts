@@ -144,8 +144,36 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
   if (!Array.isArray(remoteList) || remoteList.length === 0) {
     return localList;
   }
-  // Remote cloud dataset is the authoritative source of truth across all devices & users
-  return remoteList;
+  if (!Array.isArray(localList) || localList.length === 0) {
+    return remoteList;
+  }
+
+  // Create lookup map for local items
+  const localMap = new Map<string, T>();
+  localList.forEach((item) => {
+    const key = (item.id || item.slug || "").toLowerCase();
+    if (key) localMap.set(key, item);
+  });
+
+  // Smart Deep Merge: Merge remote items with local items
+  const merged = remoteList.map((remoteItem) => {
+    const key = (remoteItem.id || remoteItem.slug || "").toLowerCase();
+    const localItem = key ? localMap.get(key) : undefined;
+    if (!localItem) return remoteItem;
+
+    // Start with local base, overlay remote changes, but preserve any local fields where remote is empty/null/undefined
+    const result: any = { ...localItem, ...remoteItem };
+    for (const k of Object.keys(localItem as any)) {
+      const localVal = (localItem as any)[k];
+      const remoteVal = (remoteItem as any)[k];
+      if (localVal !== undefined && localVal !== null && localVal !== "" && (remoteVal === undefined || remoteVal === null || remoteVal === "")) {
+        result[k] = localVal;
+      }
+    }
+    return result as T;
+  });
+
+  return merged;
 }
 
 // -------------------------------------------------------------

@@ -31,7 +31,14 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
   useEffect(() => {
     const applyClub = (list: ClubItem[]) => {
       const found = list.find((c) => c.slug === initialClub.slug || c.id === initialClub.id);
-      if (found) setClub(found);
+      if (found) {
+        setClub((prev) => {
+          if (prev?.logoImage && !found.logoImage) {
+            return { ...found, logoImage: prev.logoImage };
+          }
+          return found;
+        });
+      }
     };
 
     applyClub(getStoredClubs());
