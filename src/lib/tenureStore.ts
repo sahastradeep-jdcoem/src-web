@@ -1,13 +1,16 @@
-import { TeamMember, EventItem } from "@/types";
+import { TeamMember, EventItem, ClubItem } from "@/types";
 import { adminCouncilMembers, hostingCommitteeMembers, foundingMembers } from "@/data/team";
 import { mockEvents } from "@/data/events";
+import { mockClubs } from "@/data/clubs";
 import { 
   getStoredCouncilMembers, 
   saveStoredCouncilMembers,
   getStoredHostingCommittee,
   saveStoredHostingCommittee,
   getStoredFoundingMembers,
-  saveStoredFoundingMembers
+  saveStoredFoundingMembers,
+  getStoredClubs,
+  saveStoredClubs
 } from "./councilStore";
 import { getStoredEvents, saveStoredEvents } from "./eventsStore";
 import { 
@@ -26,6 +29,7 @@ export interface CouncilTenure {
   adminCouncil: TeamMember[];
   hostingCommittee: TeamMember[];
   foundingMembers?: TeamMember[];
+  clubs?: ClubItem[];
   events: EventItem[];
   archiveNotes?: string;
   createdAt: string;
@@ -44,6 +48,7 @@ export const initialDefaultTenures: CouncilTenure[] = [
     adminCouncil: adminCouncilMembers,
     hostingCommittee: hostingCommitteeMembers,
     foundingMembers: foundingMembers,
+    clubs: mockClubs,
     events: mockEvents,
     archiveNotes: "The 1st & Founding Tenure of Sahastradeep, uniting all 12 collegiate societies at JDCOEM under one central autonomous student council constitution.",
     createdAt: "2025-09-24T00:00:00Z"
@@ -76,11 +81,12 @@ export function getStoredTenures(): CouncilTenure[] {
     }
   }
 
-  // Active Council & Events Sync: dynamically inject live active state into whichever tenure is current!
+  // Active Council, Hosting, Clubs & Events Sync: dynamically inject live active state into whichever tenure is current!
   const activeAdmins = getStoredCouncilMembers();
   const activeHosting = getStoredHostingCommittee();
   const activeFounders = getStoredFoundingMembers();
   const activeEvents = getStoredEvents();
+  const activeClubs = getStoredClubs();
 
   // If no tenure has isCurrent, make the first one current
   const hasCurrent = list.some((t) => t.isCurrent);
@@ -99,6 +105,7 @@ export function getStoredTenures(): CouncilTenure[] {
         adminCouncil: activeAdmins,
         hostingCommittee: activeHosting,
         foundingMembers: activeFounders,
+        clubs: activeClubs,
         events: activeEvents,
       };
     }
@@ -126,11 +133,66 @@ export function getCurrentTenure(): CouncilTenure {
   return tenures.find((t) => t.isCurrent) || tenures[0] || initialDefaultTenures[0];
 }
 
+export function getTenureById(id: string): CouncilTenure | null {
+  const tenures = getStoredTenures();
+  return tenures.find((t) => t.id === id) || null;
+}
+
+/**
+ * Pre-configure / Update roster for a specific tenure (Live active or Upcoming draft)
+ */
+export function updateTenureRoster(
+  tenureId: string,
+  updates: {
+    adminCouncil?: TeamMember[];
+    hostingCommittee?: TeamMember[];
+    foundingMembers?: TeamMember[];
+    clubs?: ClubItem[];
+    events?: EventItem[];
+    theme?: string;
+    archiveNotes?: string;
+  }
+): void {
+  if (typeof window === "undefined") return;
+  const tenures = getStoredTenures();
+  const target = tenures.find((t) => t.id === tenureId);
+  if (!target) return;
+
+  const isCurrentActive = target.isCurrent;
+
+  // If this is the currently active tenure, also update the live active stores
+  if (isCurrentActive) {
+    if (updates.adminCouncil) saveStoredCouncilMembers(updates.adminCouncil);
+    if (updates.hostingCommittee) saveStoredHostingCommittee(updates.hostingCommittee);
+    if (updates.foundingMembers) saveStoredFoundingMembers(updates.foundingMembers);
+    if (updates.clubs) saveStoredClubs(updates.clubs);
+    if (updates.events) saveStoredEvents(updates.events);
+  }
+
+  const updatedTenures = tenures.map((t) => {
+    if (t.id === tenureId) {
+      return {
+        ...t,
+        adminCouncil: updates.adminCouncil !== undefined ? updates.adminCouncil : t.adminCouncil,
+        hostingCommittee: updates.hostingCommittee !== undefined ? updates.hostingCommittee : t.hostingCommittee,
+        foundingMembers: updates.foundingMembers !== undefined ? updates.foundingMembers : t.foundingMembers,
+        clubs: updates.clubs !== undefined ? updates.clubs : t.clubs,
+        events: updates.events !== undefined ? updates.events : t.events,
+        theme: updates.theme !== undefined ? updates.theme : t.theme,
+        archiveNotes: updates.archiveNotes !== undefined ? updates.archiveNotes : t.archiveNotes,
+      };
+    }
+    return t;
+  });
+
+  saveStoredTenures(updatedTenures);
+}
+
 /**
  * Switch Active Tenure (e.g. from 2025-26 to 2026-27)
  * 1. Synchronizes current active state into old tenure's archive snapshot
  * 2. Activates the target tenure
- * 3. Restores target tenure's team & events into active stores
+ * 3. Restores target tenure's pre-configured team, clubs & events into active stores
  */
 export function switchActiveTenure(targetTenureId: string): void {
   if (typeof window === "undefined") return;
@@ -140,6 +202,7 @@ export function switchActiveTenure(targetTenureId: string): void {
   const currentActiveTeam = getStoredCouncilMembers();
   const currentActiveHosting = getStoredHostingCommittee();
   const currentActiveFounders = getStoredFoundingMembers();
+  const currentActiveClubs = getStoredClubs();
   const currentActiveEvents = getStoredEvents();
 
   const updatedTenures = tenures.map((tenure) => {
@@ -150,6 +213,7 @@ export function switchActiveTenure(targetTenureId: string): void {
         adminCouncil: currentActiveTeam,
         hostingCommittee: currentActiveHosting,
         foundingMembers: currentActiveFounders,
+        clubs: currentActiveClubs,
         events: currentActiveEvents,
       };
     }
@@ -163,7 +227,7 @@ export function switchActiveTenure(targetTenureId: string): void {
   targetTenure.isCurrent = true;
   saveStoredTenures(updatedTenures);
 
-  // 3. Load target tenure's team and events into current active memory
+  // 3. Load target tenure's pre-configured team, clubs and events into current active memory
   if (targetTenure.adminCouncil && Array.isArray(targetTenure.adminCouncil)) {
     saveStoredCouncilMembers(targetTenure.adminCouncil);
   }
@@ -173,45 +237,38 @@ export function switchActiveTenure(targetTenureId: string): void {
   if (targetTenure.foundingMembers && Array.isArray(targetTenure.foundingMembers)) {
     saveStoredFoundingMembers(targetTenure.foundingMembers);
   }
+  if (targetTenure.clubs && Array.isArray(targetTenure.clubs)) {
+    saveStoredClubs(targetTenure.clubs);
+  }
   if (targetTenure.events && Array.isArray(targetTenure.events)) {
     saveStoredEvents(targetTenure.events);
   }
 
   window.dispatchEvent(new CustomEvent("src_tenure_changed", { detail: targetTenure }));
+  window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: updatedTenures }));
 }
 
 /**
- * Create a new tenure (e.g. "2026-27") and optionally activate it immediately
+ * Create a new draft tenure (e.g. "2026-27") for pre-configuring teams without immediately activating it
  */
-export function createAndActivateNewTenure(
+export function createNewDraftTenure(
   label: string, 
   academicYear: string, 
   theme: string, 
   startWithTemplateTeam: boolean = true
 ): CouncilTenure {
   const tenures = getStoredTenures();
-  
-  // Snapshot current active state
-  const currentActiveTeam = getStoredCouncilMembers();
-  const currentActiveHosting = getStoredHostingCommittee();
   const currentActiveFounders = getStoredFoundingMembers();
-  const currentActiveEvents = getStoredEvents();
 
-  const updatedTenures = tenures.map((tenure) => ({
-    ...tenure,
-    isCurrent: false,
-    adminCouncil: tenure.isCurrent ? currentActiveTeam : tenure.adminCouncil,
-    hostingCommittee: tenure.isCurrent ? currentActiveHosting : tenure.hostingCommittee,
-    foundingMembers: tenure.isCurrent ? currentActiveFounders : tenure.foundingMembers,
-    events: tenure.isCurrent ? currentActiveEvents : tenure.events,
-  }));
+  const tenureCount = tenures.length + 1;
+  const tenureNumber = `${tenureCount}${getOrdinalSuffix(tenureCount)} Tenure`;
 
-  // Create fresh team for new tenure
+  // Create fresh pre-configured roster template for new tenure
   const newAdminCouncil: TeamMember[] = startWithTemplateTeam 
     ? [
         {
           id: `admin-${Date.now()}-1`,
-          name: "Name Placeholder",
+          name: "Mentor (Appointee)",
           role: "Mentor",
           level: "Advisory & Mentorship",
           category: "Admin Council",
@@ -224,7 +281,7 @@ export function createAndActivateNewTenure(
         },
         {
           id: `admin-${Date.now()}-2`,
-          name: "Name Placeholder",
+          name: "President (Appointee)",
           role: "President",
           level: "Presidency",
           category: "Admin Council",
@@ -234,38 +291,56 @@ export function createAndActivateNewTenure(
           bio: `Presiding over the ${label} Student Representative Council.`,
           email: "president@jdcoem.ac.in",
           order: 2
+        },
+        {
+          id: `admin-${Date.now()}-3`,
+          name: "Vice President (Appointee)",
+          role: "Vice President",
+          level: "Presidency",
+          category: "Admin Council",
+          department: "Information Technology",
+          year: "4th Year",
+          avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=600&auto=format&fit=crop",
+          bio: `Executive coordination and student council operations for ${label}.`,
+          email: "vp@jdcoem.ac.in",
+          order: 3
         }
       ]
     : [];
 
-  const tenureCount = tenures.length + 1;
-  const tenureNumber = `${tenureCount}${getOrdinalSuffix(tenureCount)} Tenure`;
-
-  const newTenure: CouncilTenure = {
+  const draftTenure: CouncilTenure = {
     id: `tenure-${label.toLowerCase().replace(/[^a-z0-9]/g, "-")}-${Date.now()}`,
     label,
     academicYear,
     tenureNumber,
     theme,
-    isCurrent: true,
+    isCurrent: false, // Remains in draft / upcoming status
     adminCouncil: newAdminCouncil,
     hostingCommittee: [],
-    foundingMembers: currentActiveFounders, // Founding members always carry through
+    foundingMembers: currentActiveFounders,
+    clubs: mockClubs,
     events: [],
-    archiveNotes: `Official council session for academic year ${academicYear}.`,
+    archiveNotes: `Pre-configured roster for upcoming session ${academicYear}.`,
     createdAt: new Date().toISOString()
   };
 
-  const finalTenures = [newTenure, ...updatedTenures];
+  const finalTenures = [...tenures, draftTenure];
   saveStoredTenures(finalTenures);
+  return draftTenure;
+}
 
-  // Activate new team in live stores
-  saveStoredCouncilMembers(newAdminCouncil);
-  saveStoredHostingCommittee([]);
-  saveStoredEvents([]);
-
-  window.dispatchEvent(new CustomEvent("src_tenure_changed", { detail: newTenure }));
-  return newTenure;
+/**
+ * Create a new tenure and activate it immediately
+ */
+export function createAndActivateNewTenure(
+  label: string, 
+  academicYear: string, 
+  theme: string, 
+  startWithTemplateTeam: boolean = true
+): CouncilTenure {
+  const draft = createNewDraftTenure(label, academicYear, theme, startWithTemplateTeam);
+  switchActiveTenure(draft.id);
+  return draft;
 }
 
 export async function syncTenuresFromFirestore(): Promise<CouncilTenure[]> {

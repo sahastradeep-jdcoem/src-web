@@ -18,8 +18,10 @@ import {
   getCurrentTenure, 
   switchActiveTenure, 
   createAndActivateNewTenure, 
+  createNewDraftTenure,
   CouncilTenure 
 } from "@/lib/tenureStore";
+import Link from "next/link";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -61,7 +63,22 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
     }, 1500);
   };
 
-  const handleCreateNewTenure = (e: React.FormEvent) => {
+  const handleCreateDraftOnly = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newLabel.trim() || !newAcademicYear.trim()) {
+      alert("Please provide both a Tenure Label (e.g. 2026-27) and Academic Year.");
+      return;
+    }
+
+    createNewDraftTenure(newLabel.trim(), newAcademicYear.trim(), newTheme.trim(), startWithTemplate);
+    refresh();
+    setFeedback(`New draft tenure ${newLabel} created! You can now pre-configure its team roster in Council Leadership Studio.`);
+    setTimeout(() => {
+      onClose();
+    }, 1500);
+  };
+
+  const handleCreateAndActivate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLabel.trim() || !newAcademicYear.trim()) {
       alert("Please provide both a Tenure Label (e.g. 2026-27) and Academic Year.");
@@ -79,14 +96,14 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
   if (!isOpen) return null;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Academic Tenure & Council Session Manager">
+    <Modal isOpen={isOpen} onClose={onClose} title="Academic Tenure &amp; Council Session Manager">
       <div className="space-y-6 text-xs text-[#0F172A]">
         
         {/* Info Banner */}
         <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-2.5">
           <AlertCircle className="w-4 h-4 text-[#E78023] shrink-0 mt-0.5" />
           <p className="leading-relaxed">
-            Changing tenure switches the live active student council roster and active events. The previous tenure&apos;s team and events are preserved in historical archives.
+            Pre-configure upcoming teams (President, Admins, Heads) before the new academic year begins. When you activate the tenure, the live website will transition to the new team instantly!
           </p>
         </div>
 
@@ -101,16 +118,16 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <span className="font-bold text-slate-700 uppercase tracking-wider text-[11px]">
-                Available Tenures ({tenures.length})
+                Available Sessions ({tenures.length})
               </span>
               <Button
                 onClick={() => setIsCreatingNew(true)}
                 variant="primary"
                 size="sm"
-                className="gap-1.5"
+                className="gap-1.5 bg-[#E78023] hover:bg-[#D26E17] text-white border-none"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>+ New Tenure (e.g. 2026-27)</span>
+                <span>+ Pre-Configure Next Tenure</span>
               </Button>
             </div>
 
@@ -125,7 +142,7 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
                       : "bg-slate-50 border-slate-200 hover:border-slate-300"
                   }`}
                 >
-                    <div className="space-y-1">
+                  <div className="space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-heading font-extrabold text-sm text-[#0F172A]">
                         {t.tenureNumber ? `${t.tenureNumber} (${t.label})` : `Tenure ${t.label}`}
@@ -137,11 +154,11 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
                       )}
                       {t.isCurrent ? (
                         <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">
-                          Active Now
+                          ● Active Live
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold uppercase tracking-wider">
-                          Archived
+                        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[10px] font-bold uppercase tracking-wider">
+                          Draft / Pre-Configured
                         </span>
                       )}
                     </div>
@@ -155,19 +172,28 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
                     </div>
                   </div>
 
-                  <div>
+                  <div className="flex items-center gap-2">
                     {t.isCurrent ? (
                       <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
                         <CheckCircle2 className="w-4 h-4" />
-                        <span>Current</span>
+                        <span>Serving Now</span>
                       </span>
                     ) : (
-                      <button
-                        onClick={() => handleSwitchTenure(t.id, t.label)}
-                        className="px-3.5 py-1.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
-                      >
-                        Activate Tenure
-                      </button>
+                      <>
+                        <Link
+                          href="/admin/team"
+                          onClick={onClose}
+                          className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-[#17458F] border border-slate-200 text-xs font-bold transition-all shadow-xs"
+                        >
+                          Edit Roster
+                        </Link>
+                        <button
+                          onClick={() => handleSwitchTenure(t.id, t.label)}
+                          className="px-3 py-1.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                        >
+                          Activate Live
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -176,13 +202,13 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
           </div>
         ) : (
           /* Create New Tenure Form */
-          <form onSubmit={handleCreateNewTenure} className="space-y-4">
+          <form className="space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h4 className="font-bold text-sm text-[#17458F]">Advance to New Academic Tenure</h4>
+              <h4 className="font-bold text-sm text-[#17458F]">Create &amp; Pre-Configure New Tenure</h4>
               <button
                 type="button"
                 onClick={() => setIsCreatingNew(false)}
-                className="text-xs font-semibold text-slate-500 hover:text-slate-800"
+                className="text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
               >
                 &larr; Back to List
               </button>
@@ -218,7 +244,7 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
               <label className="font-bold text-slate-700">Tenure Theme / Motto</label>
               <input
                 type="text"
-                placeholder="e.g. Vibrance & Future Horizons"
+                placeholder="e.g. Vibrance &amp; Future Horizons"
                 value={newTheme}
                 onChange={(e) => setNewTheme(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
@@ -234,11 +260,11 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
                 className="rounded text-[#17458F] focus:ring-[#17458F]"
               />
               <label htmlFor="templateTeam" className="text-slate-700 font-medium cursor-pointer">
-                Pre-populate standard leadership positions (Mentor, President) ready to edit
+                Pre-populate standard leadership positions (Mentor, President, VP) ready to edit
               </label>
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+            <div className="flex flex-wrap items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
               <Button
                 type="button"
                 variant="outline"
@@ -247,8 +273,24 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
               >
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" size="sm">
-                Create &amp; Activate {newLabel}
+              
+              <Button 
+                type="button" 
+                onClick={handleCreateDraftOnly}
+                variant="secondary" 
+                size="sm"
+                className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200"
+              >
+                Save as Draft Roster (Pre-configure)
+              </Button>
+
+              <Button 
+                type="button" 
+                onClick={handleCreateAndActivate}
+                variant="primary" 
+                size="sm"
+              >
+                Create &amp; Activate Live
               </Button>
             </div>
           </form>

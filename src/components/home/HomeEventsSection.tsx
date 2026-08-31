@@ -6,6 +6,7 @@ import { Flame, ArrowRight, Calendar, Inbox } from "lucide-react";
 import { EventCard } from "@/components/events/EventCard";
 import { EventItem } from "@/types";
 import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
+import LeadershipSpotlightSection from "./LeadershipSpotlightSection";
 
 export default function HomeEventsSection() {
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
@@ -42,7 +43,7 @@ export default function HomeEventsSection() {
   const otherEvents = eventsList.slice(1);
 
   if (eventsList.length === 0) {
-    return null;
+    return <LeadershipSpotlightSection />;
   }
 
   return (

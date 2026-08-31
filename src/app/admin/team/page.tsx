@@ -38,6 +38,14 @@ import {
   syncHostingCommitteeFromFirestore,
   syncFoundingMembersFromFirestore
 } from "@/lib/councilStore";
+import { 
+  getStoredTenures, 
+  getCurrentTenure, 
+  updateTenureRoster, 
+  switchActiveTenure, 
+  createNewDraftTenure,
+  CouncilTenure 
+} from "@/lib/tenureStore";
 import { getStoredDepartments, syncDepartmentsFromFirestore, getDepartmentShortName } from "@/lib/departmentsStore";
 import { adminCouncilMembers, hostingCommitteeMembers, foundingMembers as defaultFoundingMembers } from "@/data/team";
 import { TeamMember } from "@/types";
@@ -50,6 +58,8 @@ type TeamCategoryTab = "council" | "hosting" | "founding";
 
 export default function AdminTeamPage() {
   const [activeTab, setActiveTab] = useState<TeamCategoryTab>("council");
+  const [tenures, setTenures] = useState<CouncilTenure[]>([]);
+  const [selectedTenureId, setSelectedTenureId] = useState<string>("");
   const [councilMembers, setCouncilMembers] = useState<TeamMember[]>([]);
   const [hostingMembers, setHostingMembers] = useState<TeamMember[]>([]);
   const [foundingMembersList, setFoundingMembersList] = useState<TeamMember[]>([]);
@@ -59,34 +69,107 @@ export default function AdminTeamPage() {
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [isCreatingDraftTenure, setIsCreatingDraftTenure] = useState(false);
+  const [draftLabel, setDraftLabel] = useState("2026-27");
+  const [draftAcademicYear, setDraftAcademicYear] = useState("2026 - 2027");
+
+  const loadData = () => {
+    const list = getStoredTenures();
+    setTenures(list);
+    const active = list.find((t) => t.isCurrent) || list[0];
+    
+    // Default to active tenure if not yet set or not in list
+    const currentId = selectedTenureId && list.some((t) => t.id === selectedTenureId)
+      ? selectedTenureId
+      : active?.id || "tenure-2025-26";
+      
+    setSelectedTenureId(currentId);
+
+    const targetTenure = list.find((t) => t.id === currentId) || active;
+    if (targetTenure?.isCurrent) {
+      setCouncilMembers(getStoredCouncilMembers());
+      setHostingMembers(getStoredHostingCommittee());
+      setFoundingMembersList(getStoredFoundingMembers());
+    } else if (targetTenure) {
+      setCouncilMembers(targetTenure.adminCouncil || []);
+      setHostingMembers(targetTenure.hostingCommittee || []);
+      setFoundingMembersList(targetTenure.foundingMembers || getStoredFoundingMembers());
+    }
+  };
 
   useEffect(() => {
-    setCouncilMembers(getStoredCouncilMembers());
-    setHostingMembers(getStoredHostingCommittee());
-    setFoundingMembersList(getStoredFoundingMembers());
+    loadData();
     setDepartmentsList(getStoredDepartments());
 
     syncCouncilMembersFromFirestore().then((res) => {
-      if (res) setCouncilMembers(res);
+      if (res) loadData();
     });
     syncHostingCommitteeFromFirestore().then((res) => {
-      if (res) setHostingMembers(res);
+      if (res) loadData();
     });
     syncFoundingMembersFromFirestore().then((res) => {
-      if (res) setFoundingMembersList(res);
+      if (res) loadData();
     });
     syncDepartmentsFromFirestore().then((res) => {
       if (res) setDepartmentsList(res);
     });
 
-    const handleFoundingUpdate = () => {
-      setFoundingMembersList(getStoredFoundingMembers());
+    const handleUpdate = () => {
+      loadData();
     };
-    window.addEventListener("src_founding_members_updated", handleFoundingUpdate);
+
+    window.addEventListener("src_tenures_updated", handleUpdate);
+    window.addEventListener("src_tenure_changed", handleUpdate);
+    window.addEventListener("src_council_team_updated", handleUpdate);
+    window.addEventListener("src_hosting_updated", handleUpdate);
+    window.addEventListener("src_founding_members_updated", handleUpdate);
+
     return () => {
-      window.removeEventListener("src_founding_members_updated", handleFoundingUpdate);
+      window.removeEventListener("src_tenures_updated", handleUpdate);
+      window.removeEventListener("src_tenure_changed", handleUpdate);
+      window.removeEventListener("src_council_team_updated", handleUpdate);
+      window.removeEventListener("src_hosting_updated", handleUpdate);
+      window.removeEventListener("src_founding_members_updated", handleUpdate);
     };
-  }, []);
+  }, [selectedTenureId]);
+
+  const selectedTenure = tenures.find((t) => t.id === selectedTenureId) || tenures.find((t) => t.isCurrent) || tenures[0];
+  const isDraftTenure = selectedTenure && !selectedTenure.isCurrent;
+
+  const handleSelectTenure = (tId: string) => {
+    setSelectedTenureId(tId);
+    const targetTenure = tenures.find((t) => t.id === tId);
+    if (targetTenure?.isCurrent) {
+      setCouncilMembers(getStoredCouncilMembers());
+      setHostingMembers(getStoredHostingCommittee());
+      setFoundingMembersList(getStoredFoundingMembers());
+    } else if (targetTenure) {
+      setCouncilMembers(targetTenure.adminCouncil || []);
+      setHostingMembers(targetTenure.hostingCommittee || []);
+      setFoundingMembersList(targetTenure.foundingMembers || getStoredFoundingMembers());
+    }
+  };
+
+  const handleCreateDraftTenure = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!draftLabel.trim()) return;
+    const newDraft = createNewDraftTenure(draftLabel.trim(), draftAcademicYear.trim(), "Empowerment & Innovation", true);
+    setIsCreatingDraftTenure(false);
+    setSelectedTenureId(newDraft.id);
+    loadData();
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 3000);
+  };
+
+  const handleActivateThisTenure = () => {
+    if (!selectedTenure) return;
+    if (confirm(`Activate Tenure ${selectedTenure.label} live right now? The public website will immediately display this new council team and events!`)) {
+      switchActiveTenure(selectedTenure.id);
+      loadData();
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    }
+  };
 
   // Determine current active list
   const currentMembers = 
@@ -105,14 +188,28 @@ export default function AdminTeamPage() {
 
     if (activeTab === "council") {
       setCouncilMembers(indexed);
-      saveStoredCouncilMembers(indexed);
     } else if (activeTab === "hosting") {
       setHostingMembers(indexed);
-      saveStoredHostingCommittee(indexed);
     } else {
       setFoundingMembersList(indexed);
-      saveStoredFoundingMembers(indexed);
     }
+
+    if (selectedTenure?.isCurrent) {
+      // Live active tenure
+      if (activeTab === "council") {
+        saveStoredCouncilMembers(indexed);
+      } else if (activeTab === "hosting") {
+        saveStoredHostingCommittee(indexed);
+      } else {
+        saveStoredFoundingMembers(indexed);
+      }
+    } else if (selectedTenure) {
+      // Draft / upcoming tenure: save to draft tenure record
+      updateTenureRoster(selectedTenure.id, {
+        [activeTab === "council" ? "adminCouncil" : activeTab === "hosting" ? "hostingCommittee" : "foundingMembers"]: indexed
+      });
+    }
+
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
   };
@@ -257,13 +354,100 @@ export default function AdminTeamPage() {
         <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between shadow-xs animate-in fade-in duration-300">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>Council team changes saved & published live!</span>
+            <span>Council team changes saved successfully! {isDraftTenure ? `(Saved to draft session ${selectedTenure?.label})` : "(Published live to website)"}</span>
           </div>
           <Link href="/team" target="_blank" className="text-emerald-700 underline font-bold uppercase tracking-wider">
             View Live Public Team Page &rarr;
           </Link>
         </div>
       )}
+
+      {/* Tenure Session Selector Bar */}
+      <div className="p-4 sm:p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-heading font-extrabold text-[#0F172A] uppercase tracking-wider">
+              SELECT TENURE SESSION:
+            </span>
+            <span className="text-[11px] text-slate-500 font-medium">
+              (Pre-configure upcoming teams in advance or edit live roster)
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsCreatingDraftTenure(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold transition-all cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5 text-[#E78023]" />
+            <span>+ Add Upcoming Tenure Session</span>
+          </button>
+        </div>
+
+        {/* Tenure Pills */}
+        <div className="flex flex-wrap items-center gap-2">
+          {tenures.map((t) => {
+            const isSelected = t.id === selectedTenureId;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => handleSelectTenure(t.id)}
+                className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border ${
+                  isSelected
+                    ? t.isCurrent
+                      ? "bg-[#17458F] text-white border-[#17458F] shadow-sm"
+                      : "bg-[#E78023] text-white border-[#E78023] shadow-sm"
+                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                }`}
+              >
+                <span>Tenure {t.label}</span>
+                {t.isCurrent ? (
+                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase ${
+                    isSelected ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"
+                  }`}>
+                    ● LIVE
+                  </span>
+                ) : (
+                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase ${
+                    isSelected ? "bg-white/20 text-white" : "bg-amber-100 text-amber-800"
+                  }`}>
+                    DRAFT
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Banner if editing an upcoming draft tenure */}
+        {isDraftTenure && selectedTenure && (
+          <div className="p-4 rounded-2xl bg-amber-50/90 border border-amber-200 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in duration-200">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#E78023] shrink-0" />
+                <h4 className="font-heading font-extrabold text-xs text-amber-900 uppercase tracking-wider">
+                  PRE-CONFIGURING UPCOMING TENURE {selectedTenure.label} ({selectedTenure.academicYear})
+                </h4>
+              </div>
+              <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
+                You are pre-building the team roster (Presidency, Admins, Heads) for the next session. Changes are saved in draft mode. When the new season starts, click &quot;Activate Live&quot; and the entire website will update instantly!
+              </p>
+            </div>
+
+            <Button
+              type="button"
+              onClick={handleActivateThisTenure}
+              variant="primary"
+              size="sm"
+              className="gap-2 shrink-0 bg-[#E78023] hover:bg-[#D26E17] text-white border-none shadow-sm cursor-pointer"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Activate Tenure {selectedTenure.label} Live Now</span>
+            </Button>
+          </div>
+        )}
+      </div>
 
       {/* Tabs */}
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
@@ -633,6 +817,70 @@ export default function AdminTeamPage() {
               </Button>
             </div>
 
+          </form>
+        </Modal>
+      )}
+
+      {/* Modal: Create Upcoming Tenure Session Draft */}
+      {isCreatingDraftTenure && (
+        <Modal
+          isOpen={isCreatingDraftTenure}
+          onClose={() => setIsCreatingDraftTenure(false)}
+          title="Create Upcoming Tenure Session Draft"
+          subtitle="Pre-build next year's council roster in advance without affecting the live website"
+        >
+          <form onSubmit={handleCreateDraftTenure} className="space-y-4 text-xs">
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-700">Tenure Label (Short Code)</label>
+              <input
+                type="text"
+                placeholder="e.g. 2026-27"
+                value={draftLabel}
+                onChange={(e) => setDraftLabel(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-700">Academic Year</label>
+              <input
+                type="text"
+                placeholder="e.g. 2026 - 2027"
+                value={draftAcademicYear}
+                onChange={(e) => setDraftAcademicYear(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
+                required
+              />
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] leading-relaxed">
+              <p className="font-bold">Draft Mode Guarantee:</p>
+              <p>
+                This will create a draft session where you can appoint the next President, Vice President, Mentors, and Heads in advance. The live site will continue showing Tenure {tenures.find(t => t.isCurrent)?.label || "2025-26"}.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsCreatingDraftTenure(false)}
+              >
+                Cancel
+              </Button>
+
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                className="gap-1.5 bg-[#E78023] hover:bg-[#D26E17] text-white border-none"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Create Draft Session</span>
+              </Button>
+            </div>
           </form>
         </Modal>
       )}

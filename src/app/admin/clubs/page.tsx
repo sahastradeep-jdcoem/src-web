@@ -22,6 +22,7 @@ import {
   Hash
 } from "lucide-react";
 import { getStoredClubs, saveStoredClubs, syncClubsFromFirestore } from "@/lib/councilStore";
+import { getStoredTenures, updateTenureRoster, CouncilTenure } from "@/lib/tenureStore";
 import { getStoredDepartments, syncDepartmentsFromFirestore, getDepartmentShortName } from "@/lib/departmentsStore";
 import { mockClubs } from "@/data/clubs";
 import { ClubItem } from "@/types";
@@ -33,6 +34,8 @@ import { cn } from "@/lib/utils";
 
 export default function AdminClubsPage() {
   const [clubs, setClubs] = useState<ClubItem[]>([]);
+  const [tenures, setTenures] = useState<CouncilTenure[]>([]);
+  const [selectedTenureId, setSelectedTenureId] = useState<string>("");
   const [departmentsList, setDepartmentsList] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDomain, setSelectedDomain] = useState("All");
@@ -41,21 +44,63 @@ export default function AdminClubsPage() {
   const [isSaved, setIsSaved] = useState(false);
   const [modalTab, setModalTab] = useState<"identity" | "about" | "leadership" | "media">("identity");
 
+  const loadData = () => {
+    const tenureList = getStoredTenures();
+    setTenures(tenureList);
+    const active = tenureList.find((t) => t.isCurrent) || tenureList[0];
+    const currentId = selectedTenureId && tenureList.some((t) => t.id === selectedTenureId)
+      ? selectedTenureId
+      : active?.id || "tenure-2025-26";
+    setSelectedTenureId(currentId);
+
+    const targetTenure = tenureList.find((t) => t.id === currentId) || active;
+    if (targetTenure?.isCurrent) {
+      setClubs(getStoredClubs());
+    } else if (targetTenure) {
+      setClubs(targetTenure.clubs || getStoredClubs());
+    }
+  };
+
   useEffect(() => {
-    setClubs(getStoredClubs());
+    loadData();
     setDepartmentsList(getStoredDepartments());
 
     syncClubsFromFirestore().then((res) => {
-      if (res) setClubs(res);
+      if (res) loadData();
     });
     syncDepartmentsFromFirestore().then((res) => {
       if (res) setDepartmentsList(res);
     });
-  }, []);
+
+    const handleUpdate = () => loadData();
+    window.addEventListener("src_tenures_updated", handleUpdate);
+    window.addEventListener("src_clubs_updated", handleUpdate);
+    return () => {
+      window.removeEventListener("src_tenures_updated", handleUpdate);
+      window.removeEventListener("src_clubs_updated", handleUpdate);
+    };
+  }, [selectedTenureId]);
+
+  const selectedTenure = tenures.find((t) => t.id === selectedTenureId) || tenures.find((t) => t.isCurrent) || tenures[0];
+  const isDraftTenure = selectedTenure && !selectedTenure.isCurrent;
+
+  const handleSelectTenure = (tId: string) => {
+    setSelectedTenureId(tId);
+    const targetTenure = tenures.find((t) => t.id === tId);
+    if (targetTenure?.isCurrent) {
+      setClubs(getStoredClubs());
+    } else if (targetTenure) {
+      setClubs(targetTenure.clubs || getStoredClubs());
+    }
+  };
 
   const saveList = (updated: ClubItem[]) => {
     setClubs(updated);
-    saveStoredClubs(updated);
+    if (selectedTenure?.isCurrent) {
+      saveStoredClubs(updated);
+    } else if (selectedTenure) {
+      updateTenureRoster(selectedTenure.id, { clubs: updated });
+    }
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
   };
@@ -203,13 +248,72 @@ export default function AdminClubsPage() {
         <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between shadow-xs animate-in fade-in duration-300">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>Clubs directory updated and published live across the platform!</span>
+            <span>Clubs directory updated successfully! {isDraftTenure ? `(Saved to draft session ${selectedTenure?.label})` : "(Published live across platform)"}</span>
           </div>
           <Link href="/clubs" target="_blank" className="text-emerald-700 underline font-bold uppercase tracking-wider">
             View Public Clubs Directory &rarr;
           </Link>
         </div>
       )}
+
+      {/* Tenure Session Selector Bar */}
+      <div className="p-4 sm:p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-heading font-extrabold text-[#0F172A] uppercase tracking-wider">
+              TENURE SESSION:
+            </span>
+            <span className="text-[11px] text-slate-500 font-medium">
+              (Assign Club Heads &amp; Co-Heads for upcoming or live tenure)
+            </span>
+          </div>
+        </div>
+
+        {/* Tenure Pills */}
+        <div className="flex flex-wrap items-center gap-2">
+          {tenures.map((t) => {
+            const isSelected = t.id === selectedTenureId;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => handleSelectTenure(t.id)}
+                className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border ${
+                  isSelected
+                    ? t.isCurrent
+                      ? "bg-[#17458F] text-white border-[#17458F] shadow-sm"
+                      : "bg-[#E78023] text-white border-[#E78023] shadow-sm"
+                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                }`}
+              >
+                <span>Tenure {t.label}</span>
+                {t.isCurrent ? (
+                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase ${
+                    isSelected ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"
+                  }`}>
+                    ● LIVE
+                  </span>
+                ) : (
+                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase ${
+                    isSelected ? "bg-white/20 text-white" : "bg-amber-100 text-amber-900"
+                  }`}>
+                    DRAFT
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {isDraftTenure && selectedTenure && (
+          <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 text-[11px] leading-relaxed">
+            <span className="font-bold block text-amber-900 mb-0.5">
+              Draft Mode: Pre-configuring Club Heads &amp; Co-Heads for Upcoming Tenure {selectedTenure.label}
+            </span>
+            Any leadership updates saved here are linked to Tenure {selectedTenure.label} and will go live automatically when this tenure is activated!
+          </div>
+        )}
+      </div>
 
       {/* Filter & Search Bar */}
       <div className="p-5 rounded-3xl bg-white border border-slate-200 space-y-4 shadow-xs">

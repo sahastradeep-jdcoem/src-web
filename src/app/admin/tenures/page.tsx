@@ -284,11 +284,12 @@ export default function AdminTenuresPage() {
                     <ShieldCheck className="w-4 h-4 text-[#E78023]" />
                     <span>Admin Council ({selectedTenure.adminCouncil?.length || 0})</span>
                   </span>
-                  {selectedTenure.isCurrent && (
-                    <Link href="/admin/team" className="text-xs font-bold text-[#E78023] hover:underline">
-                      Edit Team in Studio &rarr;
-                    </Link>
-                  )}
+                  <Link 
+                    href="/admin/team" 
+                    className="text-xs font-bold text-[#E78023] hover:underline flex items-center gap-1"
+                  >
+                    <span>{selectedTenure.isCurrent ? "Edit Live Team in Studio" : "Pre-Configure Team in Studio"} &rarr;</span>
+                  </Link>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
