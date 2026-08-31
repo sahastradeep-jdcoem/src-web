@@ -26,7 +26,8 @@ import {
   syncSpokespersonsFromFirestore,
   subscribeToSpokespersons,
   syncClubsFromFirestore,
-  subscribeToClubs
+  subscribeToClubs,
+  getClubLeaders
 } from "@/lib/councilStore";
 import { getCurrentTenure, CouncilTenure } from "@/lib/tenureStore";
 import { TeamMember, ClubItem } from "@/types";
@@ -39,61 +40,52 @@ export default function TeamPage() {
   const [hostingMembers, setHostingMembers] = useState<TeamMember[]>([]);
   const [spokespersons, setSpokespersons] = useState<TeamMember[]>([]);
   const [clubs, setClubs] = useState<ClubItem[]>([]);
+  const [activeFilter, setActiveFilter] = useState<string>("All");
   const [currentTenure, setCurrentTenure] = useState<CouncilTenure | null>(null);
 
-  const refreshAll = () => {
+  useEffect(() => {
+    setCurrentTenure(getCurrentTenure());
     setCouncilMembers(getStoredCouncilMembers());
     setHostingMembers(getStoredHostingCommittee());
     setSpokespersons(getStoredSpokespersons());
     setClubs(getStoredClubs());
-    setCurrentTenure(getCurrentTenure());
-  };
 
-  useEffect(() => {
-    refreshAll();
+    syncCouncilMembersFromFirestore().then((res) => { if (res) setCouncilMembers(res); });
+    syncHostingCommitteeFromFirestore().then((res) => { if (res) setHostingMembers(res); });
+    syncSpokespersonsFromFirestore().then((res) => { if (res) setSpokespersons(res); });
+    syncClubsFromFirestore().then((res) => { if (res) setClubs(res); });
 
-    syncCouncilMembersFromFirestore().then((res) => {
-      if (res) setCouncilMembers(res);
-    });
-    syncHostingCommitteeFromFirestore().then((res) => {
-      if (res) setHostingMembers(res);
-    });
-    syncSpokespersonsFromFirestore().then((res) => {
-      if (res) setSpokespersons(res);
-    });
-    syncClubsFromFirestore().then((res) => {
-      if (res) setClubs(res);
-    });
-
-    const unsubCouncil = subscribeToCouncilMembers((members) => setCouncilMembers(members));
-    const unsubHosting = subscribeToHostingCommittee((members) => setHostingMembers(members));
-    const unsubSpokes = subscribeToSpokespersons((members) => setSpokespersons(members));
-    const unsubClubs = subscribeToClubs((c) => setClubs(c));
+    const unsubCouncil = subscribeToCouncilMembers((remote) => setCouncilMembers(remote));
+    const unsubHosting = subscribeToHostingCommittee((remote) => setHostingMembers(remote));
+    const unsubSpokes = subscribeToSpokespersons((remote) => setSpokespersons(remote));
+    const unsubClubs = subscribeToClubs((remote) => setClubs(remote));
 
     const handleUpdate = () => {
-      refreshAll();
+      setCurrentTenure(getCurrentTenure());
+      setCouncilMembers(getStoredCouncilMembers());
+      setHostingMembers(getStoredHostingCommittee());
+      setSpokespersons(getStoredSpokespersons());
+      setClubs(getStoredClubs());
     };
 
+    window.addEventListener("src_tenures_updated", handleUpdate);
+    window.addEventListener("src_tenure_changed", handleUpdate);
     window.addEventListener("src_council_team_updated", handleUpdate);
     window.addEventListener("src_hosting_updated", handleUpdate);
-    window.addEventListener("src_spokespersons_updated", handleUpdate);
+    window.addEventListener("src_founding_members_updated", handleUpdate);
     window.addEventListener("src_clubs_updated", handleUpdate);
-    window.addEventListener("src_tenure_changed", handleUpdate);
-    window.addEventListener("src_tenures_updated", handleUpdate);
-    window.addEventListener("storage", handleUpdate);
 
     return () => {
       unsubCouncil();
       unsubHosting();
       unsubSpokes();
       unsubClubs();
+      window.removeEventListener("src_tenures_updated", handleUpdate);
+      window.removeEventListener("src_tenure_changed", handleUpdate);
       window.removeEventListener("src_council_team_updated", handleUpdate);
       window.removeEventListener("src_hosting_updated", handleUpdate);
-      window.removeEventListener("src_spokespersons_updated", handleUpdate);
+      window.removeEventListener("src_founding_members_updated", handleUpdate);
       window.removeEventListener("src_clubs_updated", handleUpdate);
-      window.removeEventListener("src_tenure_changed", handleUpdate);
-      window.removeEventListener("src_tenures_updated", handleUpdate);
-      window.removeEventListener("storage", handleUpdate);
     };
   }, []);
 
@@ -119,41 +111,28 @@ export default function TeamPage() {
   // Club Heads & Co-Heads converted to standard TeamMember cards
   const clubLeadMembers = React.useMemo(() => {
     const list: TeamMember[] = [];
-    clubs.forEach((club, index) => {
-      if (club.lead) {
-        list.push({
-          id: `${club.id || club.slug}-lead`,
-          name: club.lead.name || `${club.name} Head`,
-          role: `${club.name} Head`,
-          level: club.name,
-          category: "Clubs Leadership",
-          clubSlug: club.slug,
-          department: club.lead.department || "JDCOEM Nagpur",
-          year: club.lead.year || "4th Year",
-          avatar: club.lead.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
-          bio: club.lead.bio || `Leading ${club.name} activities, workshops, productions, and student talent mentorship.`,
-          email: club.lead.email || `src.${club.slug}.head@jdcoem.ac.in`,
-          linkedin: club.lead.linkedin || "https://www.linkedin.com/company/src-jdcoem/",
-          order: index * 2 + 1
-        });
-      }
-      if (club.coLead && club.coLead.name) {
-        list.push({
-          id: `${club.id || club.slug}-colead`,
-          name: club.coLead.name,
-          role: `${club.name} Co-Head`,
-          level: club.name,
-          category: "Clubs Leadership",
-          clubSlug: club.slug,
-          department: club.coLead.department || "JDCOEM Nagpur",
-          year: club.coLead.year || "3rd Year",
-          avatar: club.coLead.avatar || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
-          bio: club.coLead.bio || `Co-leading ${club.name} logistics, rehearsals, member coordination, and event execution.`,
-          email: club.coLead.email || `src.${club.slug}.cohead@jdcoem.ac.in`,
-          linkedin: club.coLead.linkedin || "https://www.linkedin.com/company/src-jdcoem/",
-          order: index * 2 + 2
-        });
-      }
+    clubs.forEach((club, clubIndex) => {
+      const leaders = getClubLeaders(club);
+      leaders.forEach((leader, leaderIndex) => {
+        if (leader && (leader.name || leader.role)) {
+          const isCoLead = leader.roleType === "coLead" || (leader.role && leader.role.toLowerCase().includes("co-head"));
+          list.push({
+            id: leader.id || `${club.id || club.slug}-leader-${leaderIndex}`,
+            name: leader.name || (isCoLead ? `${club.name} Co-Head` : `${club.name} Head`),
+            role: leader.role || (isCoLead ? `${club.name} Co-Head` : `${club.name} Head`),
+            level: club.name,
+            category: "Clubs Leadership",
+            clubSlug: club.slug,
+            department: leader.department || "JDCOEM Nagpur",
+            year: leader.year || (isCoLead ? "3rd Year" : "4th Year"),
+            avatar: leader.avatar || (isCoLead ? "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop" : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"),
+            bio: leader.bio || (isCoLead ? `Co-leading ${club.name} logistics, rehearsals, member coordination, and event execution.` : `Leading ${club.name} activities, workshops, productions, and student talent mentorship.`),
+            email: leader.email || (isCoLead ? `src.${club.slug}.cohead${leaderIndex > 1 ? leaderIndex : ""}@jdcoem.ac.in` : `src.${club.slug}.head@jdcoem.ac.in`),
+            linkedin: leader.linkedin || "https://www.linkedin.com/company/src-jdcoem/",
+            order: clubIndex * 10 + leaderIndex + 1
+          });
+        }
+      });
     });
     return list;
   }, [clubs]);

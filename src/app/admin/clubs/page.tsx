@@ -21,7 +21,7 @@ import {
   Layers,
   Hash
 } from "lucide-react";
-import { getStoredClubs, saveStoredClubs, syncClubsFromFirestore } from "@/lib/councilStore";
+import { getStoredClubs, saveStoredClubs, syncClubsFromFirestore, getClubLeaders } from "@/lib/councilStore";
 import { getStoredTenures, updateTenureRoster, CouncilTenure } from "@/lib/tenureStore";
 import { getStoredDepartments, syncDepartmentsFromFirestore, getDepartmentShortName } from "@/lib/departmentsStore";
 import { mockClubs } from "@/data/clubs";
@@ -381,34 +381,46 @@ export default function AdminClubsPage() {
             </div>
 
             {/* Club Leadership Box */}
-            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500 font-medium">Club Head:</span>
-                <span className="font-bold text-slate-900">{club.lead.name || "TBA"}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500 font-medium">Department:</span>
-                <span className="text-[#E78023] font-semibold truncate max-w-[140px]" title={club.lead.department}>
-                  <span className="xl:hidden">{getDepartmentShortName(club.lead.department)}</span>
-                  <span className="hidden xl:inline">{club.lead.department}</span>
-                </span>
-              </div>
-              {club.coLead?.name && (
-                <div className="flex items-center justify-between pt-1 border-t border-slate-200/80">
-                  <span className="text-slate-500 font-medium">Co-Head:</span>
-                  <span className="font-semibold text-slate-800">{club.coLead.name}</span>
+            {(() => {
+              const leaders = getClubLeaders(club);
+              const heads = leaders.filter(l => l.roleType === "lead" || !l.role.toLowerCase().includes("co-head"));
+              const coHeads = leaders.filter(l => l.roleType === "coLead" || l.role.toLowerCase().includes("co-head"));
+
+              return (
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 font-medium">Club Head{heads.length > 1 ? "s" : ""}:</span>
+                    <span className="font-bold text-slate-900 truncate max-w-[150px]">
+                      {heads.map(h => h.name).filter(Boolean).join(", ") || club.lead.name || "TBA"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 font-medium">Department:</span>
+                    <span className="text-[#E78023] font-semibold truncate max-w-[140px]" title={club.lead.department}>
+                      <span className="xl:hidden">{getDepartmentShortName(club.lead.department)}</span>
+                      <span className="hidden xl:inline">{club.lead.department}</span>
+                    </span>
+                  </div>
+                  {coHeads.length > 0 && (
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-200/80">
+                      <span className="text-slate-500 font-medium">Co-Head{coHeads.length > 1 ? "s" : ""}:</span>
+                      <span className="font-semibold text-slate-800 truncate max-w-[150px]">
+                        {coHeads.map(c => c.name).filter(Boolean).join(", ")}
+                      </span>
+                    </div>
+                  )}
+                  <div className="pt-2 border-t border-slate-200/60 flex items-center justify-end">
+                    <Link
+                      href="/admin/team"
+                      className="text-[10px] text-[#17458F] font-bold hover:underline flex items-center gap-1"
+                    >
+                      <Users className="w-3 h-3 text-[#E78023]" />
+                      <span>Edit in Team Members &rarr;</span>
+                    </Link>
+                  </div>
                 </div>
-              )}
-              <div className="pt-2 border-t border-slate-200/60 flex items-center justify-end">
-                <Link
-                  href="/admin/team"
-                  className="text-[10px] text-[#17458F] font-bold hover:underline flex items-center gap-1"
-                >
-                  <Users className="w-3 h-3 text-[#E78023]" />
-                  <span>Edit in Team Members &rarr;</span>
-                </Link>
-              </div>
-            </div>
+              );
+            })()}
 
             {/* Actions Toolbar */}
             <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">

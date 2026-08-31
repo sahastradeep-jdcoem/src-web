@@ -1,4 +1,4 @@
-import { TeamMember, ClubItem } from "@/types";
+import { TeamMember, ClubItem, ClubLeader } from "@/types";
 import { 
   adminCouncilMembers as initialAdminCouncil, 
   hostingCommitteeMembers as initialHosting, 
@@ -13,6 +13,46 @@ import {
   cleanUndefined
 } from "./firebase/firestore";
 import { enqueueCloudWrite, reconcileArrayDatasets } from "./dataSyncEngine";
+
+export function getClubLeaders(club: ClubItem): ClubLeader[] {
+  if (!club) return [];
+  if (Array.isArray(club.leaders) && club.leaders.length > 0) {
+    return club.leaders.map((l, i) => ({
+      ...l,
+      id: l.id || `${club.id || club.slug}-leader-${i}`,
+      roleType: l.roleType || (l.role && l.role.toLowerCase().includes("co-head") ? "coLead" : "lead")
+    }));
+  }
+
+  const list: ClubLeader[] = [];
+  if (club.lead && (club.lead.name || club.lead.role)) {
+    list.push({
+      ...club.lead,
+      id: club.lead.id || `${club.id || club.slug}-lead`,
+      roleType: "lead"
+    });
+  }
+
+  if (Array.isArray(club.coLeads) && club.coLeads.length > 0) {
+    club.coLeads.forEach((cl, i) => {
+      if (cl && (cl.name || cl.role)) {
+        list.push({
+          ...cl,
+          id: cl.id || `${club.id || club.slug}-colead-${i}`,
+          roleType: "coLead"
+        });
+      }
+    });
+  } else if (club.coLead && (club.coLead.name || club.coLead.role)) {
+    list.push({
+      ...club.coLead,
+      id: club.coLead.id || `${club.id || club.slug}-colead`,
+      roleType: "coLead"
+    });
+  }
+
+  return list;
+}
 
 export function stripCategoryAndLevel(members: TeamMember[]): TeamMember[] {
   if (!Array.isArray(members)) return [];

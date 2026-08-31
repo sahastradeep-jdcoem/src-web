@@ -14,7 +14,7 @@ import {
   Compass, 
   Image as ImageIcon 
 } from "lucide-react";
-import { getStoredClubs, syncClubsFromFirestore, subscribeToClubs } from "@/lib/councilStore";
+import { getStoredClubs, syncClubsFromFirestore, subscribeToClubs, getClubLeaders } from "@/lib/councilStore";
 import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { ClubItem, EventItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -57,6 +57,8 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
       window.removeEventListener("storage", handleUpdate);
     };
   }, [initialClub]);
+
+  const allLeaders = getClubLeaders(club);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] pb-20">
@@ -160,58 +162,35 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-3xl">
-            {/* Primary Lead */}
-            <div className="p-6 rounded-3xl bg-white border border-slate-200 flex items-center gap-4 shadow-xs">
-              <div className="relative h-16 w-16 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
-                <Image
-                  src={club.lead.avatar}
-                  alt={club.lead.name}
-                  fill
-                  className="object-cover"
-                />
-              </div>
-              <div className="space-y-0.5">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[#E78023]">
-                  {club.lead.role}
-                </span>
-                <h4 className="font-bold text-base text-[#0F172A]">
-                  {club.lead.name}
-                </h4>
-                <p className="text-xs text-slate-500 font-medium">
-                  <span className="sm:hidden">{getDepartmentShortName(club.lead.department)}</span>
-                  <span className="hidden sm:inline">{club.lead.department}</span>
-                  {" "}• {club.lead.year}
-                </p>
-              </div>
-            </div>
-
-            {/* Co-Lead */}
-            {club.coLead && (
-              <div className="p-6 rounded-3xl bg-white border border-slate-200 flex items-center gap-4 shadow-xs">
-                <div className="relative h-16 w-16 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
-                  <Image
-                    src={club.coLead.avatar}
-                    alt={club.coLead.name}
-                    fill
-                    className="object-cover"
-                  />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {allLeaders.map((leader, idx) => {
+              const isCoLead = leader.roleType === "coLead" || (leader.role && leader.role.toLowerCase().includes("co-head"));
+              return (
+                <div key={leader.id || idx} className="p-6 rounded-3xl bg-white border border-slate-200 flex items-center gap-4 shadow-xs">
+                  <div className="relative h-16 w-16 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
+                    <Image
+                      src={leader.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"}
+                      alt={leader.name}
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${isCoLead ? "text-[#17458F]" : "text-[#E78023]"}`}>
+                      {leader.role || (isCoLead ? `${club.name} Co-Head` : `${club.name} Head`)}
+                    </span>
+                    <h4 className="font-bold text-base text-[#0F172A]">
+                      {leader.name}
+                    </h4>
+                    <p className="text-xs text-slate-500 font-medium">
+                      <span className="sm:hidden">{getDepartmentShortName(leader.department)}</span>
+                      <span className="hidden sm:inline">{leader.department}</span>
+                      {" "}• {leader.year}
+                    </p>
+                  </div>
                 </div>
-                <div className="space-y-0.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#17458F]">
-                    {club.coLead.role}
-                  </span>
-                  <h4 className="font-bold text-base text-[#0F172A]">
-                    {club.coLead.name}
-                  </h4>
-                  <p className="text-xs text-slate-500 font-medium">
-                    <span className="sm:hidden">{getDepartmentShortName(club.coLead.department)}</span>
-                    <span className="hidden sm:inline">{club.coLead.department}</span>
-                    {" "}• {club.coLead.year}
-                  </p>
-                </div>
-              </div>
-            )}
+              );
+            })}
           </div>
         </section>
 

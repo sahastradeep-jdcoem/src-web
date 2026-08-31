@@ -37,27 +37,33 @@ import {
   syncFoundingToCouncilAdmins,
   getStoredClubs,
   saveStoredClubs,
+  getClubLeaders,
   syncCouncilMembersFromFirestore,
+  subscribeToCouncilMembers,
   syncHostingCommitteeFromFirestore,
+  subscribeToHostingCommittee,
   syncFoundingMembersFromFirestore,
+  subscribeToFoundingMembers,
   syncClubsFromFirestore,
   subscribeToClubs
 } from "@/lib/councilStore";
 import { 
   getStoredTenures, 
+  saveStoredTenures, 
   getCurrentTenure, 
-  updateTenureRoster, 
   switchActiveTenure, 
   createNewDraftTenure,
+  updateTenureRoster,
   CouncilTenure 
 } from "@/lib/tenureStore";
 import { getStoredDepartments, syncDepartmentsFromFirestore, getDepartmentShortName } from "@/lib/departmentsStore";
 import { adminCouncilMembers, hostingCommitteeMembers, foundingMembers as defaultFoundingMembers } from "@/data/team";
-import { TeamMember, ClubItem } from "@/types";
+import { TeamMember, ClubItem, ClubLeader } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
+import { cn } from "@/lib/utils";
 
 type TeamCategoryTab = "council" | "hosting" | "founding" | "clubs";
 
@@ -192,45 +198,28 @@ export default function AdminTeamPage() {
   // Convert clubs to editable team member items
   const clubLeadMembers = React.useMemo(() => {
     const list: (TeamMember & { clubId: string; roleType: "lead" | "coLead"; clubName: string })[] = [];
-    clubsList.forEach((club, index) => {
-      if (club.lead) {
+    clubsList.forEach((club, clubIndex) => {
+      const leaders = getClubLeaders(club);
+      leaders.forEach((leader, leaderIndex) => {
+        const isCoLead = leader.roleType === "coLead" || (leader.role && leader.role.toLowerCase().includes("co-head"));
         list.push({
-          id: `${club.id || club.slug}-lead`,
-          name: club.lead.name || "",
-          role: club.lead.role || `${club.name} Head`,
+          id: leader.id || `${club.id || club.slug}-leader-${leaderIndex}`,
+          name: leader.name || "",
+          role: leader.role || (isCoLead ? `${club.name} Co-Head` : `${club.name} Head`),
           clubSlug: club.slug,
           clubId: club.id,
           clubName: club.name,
-          roleType: "lead",
-          department: club.lead.department || "Computer Science & Engineering",
-          year: club.lead.year || "4th Year",
-          avatar: club.lead.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
-          bio: club.lead.bio || "",
-          email: club.lead.email || "",
-          linkedin: club.lead.linkedin || "",
-          btId: club.lead.btId || "",
-          order: index * 2 + 1
+          roleType: isCoLead ? "coLead" : "lead",
+          department: leader.department || "Computer Science & Engineering",
+          year: leader.year || (isCoLead ? "3rd Year" : "4th Year"),
+          avatar: leader.avatar || (isCoLead ? "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop" : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"),
+          bio: leader.bio || "",
+          email: leader.email || "",
+          linkedin: leader.linkedin || "",
+          btId: leader.btId || "",
+          order: clubIndex * 10 + leaderIndex + 1
         });
-      }
-      if (club.coLead) {
-        list.push({
-          id: `${club.id || club.slug}-colead`,
-          name: club.coLead.name || "",
-          role: club.coLead.role || `${club.name} Co-Head`,
-          clubSlug: club.slug,
-          clubId: club.id,
-          clubName: club.name,
-          roleType: "coLead",
-          department: club.coLead.department || "Information Technology",
-          year: club.coLead.year || "3rd Year",
-          avatar: club.coLead.avatar || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
-          bio: club.coLead.bio || "",
-          email: club.coLead.email || "",
-          linkedin: club.coLead.linkedin || "",
-          btId: club.coLead.btId || "",
-          order: index * 2 + 2
-        });
-      }
+      });
     });
     return list;
   }, [clubsList]);
@@ -318,87 +307,129 @@ export default function AdminTeamPage() {
 
   const handleOpenAddModal = () => {
     setIsCreatingNew(true);
-    setEditingMember({
-      id: `member-${Date.now()}`,
-      name: "",
-      role: "",
-      department: "Computer Science and Engineering",
-      year: "4th Year",
-      bio: "",
-      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
-      order: currentMembers.length + 1,
-      email: "",
-      linkedin: "",
-      btId: ""
-    });
+    if (activeTab === "clubs") {
+      const firstClub = clubsList[0];
+      setEditingMember({
+        id: `leader-${Date.now()}`,
+        name: "",
+        role: firstClub ? `${firstClub.name} Co-Head` : "Club Co-Head",
+        clubId: firstClub?.id || "",
+        clubSlug: firstClub?.slug || "",
+        clubName: firstClub?.name || "",
+        roleType: "coLead",
+        department: "Computer Science & Engineering",
+        year: "3rd Year",
+        bio: "",
+        avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
+        order: currentMembers.length + 1,
+        email: "",
+        linkedin: "",
+        btId: ""
+      } as any);
+    } else {
+      setEditingMember({
+        id: `member-${Date.now()}`,
+        name: "",
+        role: "",
+        department: "Computer Science and Engineering",
+        year: "4th Year",
+        bio: "",
+        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
+        order: currentMembers.length + 1,
+        email: "",
+        linkedin: "",
+        btId: ""
+      });
+    }
   };
 
   const handleSaveMember = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingMember) return;
 
-    if (!editingMember.name.trim() || !editingMember.role.trim()) {
-      alert("Please provide both a Member Name and a Position / Role Title.");
+    if (!editingMember.name.trim()) {
+      alert("Please provide the Student Full Name.");
+      return;
+    }
+    if (activeTab !== "clubs" && !editingMember.role.trim()) {
+      alert("Please provide a Position / Role Title.");
       return;
     }
 
     if (activeTab === "clubs") {
       const match = clubLeadMembers.find((m) => m.id === editingMember.id);
       const targetClubId = (editingMember as any).clubId || match?.clubId;
-      const targetRoleType = (editingMember as any).roleType || match?.roleType || "lead";
+      const targetRoleType: "lead" | "coLead" = (editingMember as any).roleType || match?.roleType || "lead";
 
-      if (targetClubId) {
-        const updatedClubs = clubsList.map((club) => {
-          if (club.id === targetClubId || club.slug === targetClubId) {
-            if (targetRoleType === "lead") {
-              return {
-                ...club,
-                lead: {
-                  ...club.lead,
-                  name: editingMember.name,
-                  role: editingMember.role || `${club.name} Head`,
-                  department: editingMember.department,
-                  year: editingMember.year || "4th Year",
-                  avatar: editingMember.avatar,
-                  bio: editingMember.bio || "",
-                  email: editingMember.email || "",
-                  linkedin: editingMember.linkedin || "",
-                  btId: editingMember.btId || ""
-                }
-              };
-            } else {
-              return {
-                ...club,
-                coLead: {
-                  ...(club.coLead || {
-                    name: "",
-                    role: `${club.name} Co-Head`,
-                    department: editingMember.department,
-                    year: "3rd Year",
-                    avatar: ""
-                  }),
-                  name: editingMember.name,
-                  role: editingMember.role || `${club.name} Co-Head`,
-                  department: editingMember.department,
-                  year: editingMember.year || "3rd Year",
-                  avatar: editingMember.avatar,
-                  bio: editingMember.bio || "",
-                  email: editingMember.email || "",
-                  linkedin: editingMember.linkedin || "",
-                  btId: editingMember.btId || ""
-                }
-              };
-            }
-          }
-          return club;
-        });
-        setClubsList(updatedClubs);
-        saveStoredClubs(updatedClubs);
-        setIsSaved(true);
-        setTimeout(() => setIsSaved(false), 3000);
-        setEditingMember(null);
+      if (!targetClubId) {
+        alert("Please select a chartered club.");
         return;
       }
+
+      const updatedClubs = clubsList.map((club) => {
+        if (club.id === targetClubId || club.slug === targetClubId) {
+          const currentLeaders = getClubLeaders(club);
+          const leaderPayload: ClubLeader = {
+            id: editingMember.id,
+            name: editingMember.name,
+            role: targetRoleType === "coLead" ? `${club.name} Co-Head` : `${club.name} Head`,
+            roleType: targetRoleType,
+            department: editingMember.department,
+            year: editingMember.year || (targetRoleType === "lead" ? "4th Year" : "3rd Year"),
+            avatar: editingMember.avatar,
+            bio: editingMember.bio || "",
+            email: editingMember.email || "",
+            linkedin: editingMember.linkedin || "",
+            btId: editingMember.btId || ""
+          };
+
+          let newLeaders: ClubLeader[];
+          if (isCreatingNew) {
+            newLeaders = [...currentLeaders, leaderPayload];
+          } else {
+            const existingIdx = currentLeaders.findIndex((l) => l.id === editingMember.id);
+            if (existingIdx !== -1) {
+              newLeaders = [...currentLeaders];
+              newLeaders[existingIdx] = leaderPayload;
+            } else {
+              newLeaders = [...currentLeaders, leaderPayload];
+            }
+          }
+
+          const primaryLead = newLeaders.find((l) => l.roleType === "lead") || newLeaders[0] || leaderPayload;
+          const coLeadsList = newLeaders.filter((l) => l.roleType === "coLead");
+
+          return {
+            ...club,
+            leaders: newLeaders,
+            lead: primaryLead,
+            coLead: coLeadsList[0] || undefined,
+            coLeads: coLeadsList
+          };
+        } else if (match && (club.id === match.clubId || club.slug === match.clubSlug) && club.id !== targetClubId) {
+          // If member was switched to a different club
+          const currentLeaders = getClubLeaders(club).filter((l) => l.id !== editingMember.id);
+          const primaryLead = currentLeaders.find((l) => l.roleType === "lead") || currentLeaders[0] || club.lead;
+          const coLeadsList = currentLeaders.filter((l) => l.roleType === "coLead");
+
+          return {
+            ...club,
+            leaders: currentLeaders,
+            lead: primaryLead,
+            coLead: coLeadsList[0] || undefined,
+            coLeads: coLeadsList
+          };
+        }
+        return club;
+      });
+
+      setClubsList(updatedClubs);
+      saveStoredClubs(updatedClubs);
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+      setEditingMember(null);
+      setIsCreatingNew(false);
+      return;
     }
 
     const maxRank = currentMembers.length + (isCreatingNew ? 1 : 0);
@@ -421,14 +452,44 @@ export default function AdminTeamPage() {
   };
 
   const handleDeleteMember = (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to remove ${name || "this member"}?`)) return;
+
     if (activeTab === "clubs") {
-      alert("To add, delete or configure whole Chartered Societies, please visit the Clubs Manager tab in Admin Console.");
-      return;
+      const match = clubLeadMembers.find((m) => m.id === id);
+      if (match) {
+        const updatedClubs = clubsList.map((club) => {
+          if (club.id === match.clubId || club.slug === match.clubSlug) {
+            const currentLeaders = getClubLeaders(club).filter((l) => l.id !== id);
+            const primaryLead = currentLeaders.find((l) => l.roleType === "lead") || currentLeaders[0] || {
+              name: "",
+              role: `${club.name} Head`,
+              department: "Computer Science & Engineering",
+              year: "4th Year",
+              avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"
+            };
+            const coLeadsList = currentLeaders.filter((l) => l.roleType === "coLead");
+
+            return {
+              ...club,
+              leaders: currentLeaders,
+              lead: primaryLead,
+              coLead: coLeadsList[0] || undefined,
+              coLeads: coLeadsList
+            };
+          }
+          return club;
+        });
+
+        setClubsList(updatedClubs);
+        saveStoredClubs(updatedClubs);
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 3000);
+        return;
+      }
     }
-    if (confirm(`Are you sure you want to remove ${name || "this position"} from the roster?`)) {
-      const updated = currentMembers.filter((m) => m.id !== id);
-      saveCurrentList(updated);
-    }
+
+    const updated = currentMembers.filter((m) => m.id !== id);
+    saveCurrentList(updated);
   };
 
   const handleResetDefaults = () => {
@@ -478,7 +539,7 @@ export default function AdminTeamPage() {
             className="gap-1.5"
           >
             <Plus className="w-4 h-4" />
-            <span>Add New Position / Officer</span>
+            <span>{activeTab === "clubs" ? "Add Club Head / Co-Head" : "Add New Position / Officer"}</span>
           </Button>
 
           <Link
@@ -519,74 +580,55 @@ export default function AdminTeamPage() {
           <button
             type="button"
             onClick={() => setIsCreatingDraftTenure(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold transition-all cursor-pointer"
+            className="text-xs font-bold text-[#17458F] hover:text-[#E78023] flex items-center gap-1"
           >
-            <Plus className="w-3.5 h-3.5 text-[#E78023]" />
-            <span>+ Add Upcoming Tenure Session</span>
+            <Plus className="w-3.5 h-3.5" />
+            <span>Create Future Tenure Session</span>
           </button>
         </div>
 
         {/* Tenure Pills */}
         <div className="flex flex-wrap items-center gap-2">
-          {tenures.map((t) => {
-            const isSelected = t.id === selectedTenureId;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => handleSelectTenure(t.id)}
-                className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border ${
-                  isSelected
-                    ? t.isCurrent
-                      ? "bg-[#17458F] text-white border-[#17458F] shadow-sm"
-                      : "bg-[#E78023] text-white border-[#E78023] shadow-sm"
-                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
-                }`}
-              >
-                <span>Tenure {t.label}</span>
-                {t.isCurrent ? (
-                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase ${
-                    isSelected ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"
-                  }`}>
-                    ● LIVE
-                  </span>
-                ) : (
-                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase ${
-                    isSelected ? "bg-white/20 text-white" : "bg-amber-100 text-amber-800"
-                  }`}>
-                    DRAFT
-                  </span>
-                )}
-              </button>
-            );
-          })}
+          {tenures.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => handleSelectTenure(t.id)}
+              className={cn(
+                "px-4 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border",
+                selectedTenureId === t.id
+                  ? "bg-[#17458F] text-white border-[#17458F] shadow-sm"
+                  : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
+              )}
+            >
+              <span>{t.tenureNumber ? `${t.tenureNumber} (${t.label})` : `Tenure ${t.label}`}</span>
+              {t.isCurrent && (
+                <span className="px-1.5 py-0.5 rounded-full bg-emerald-500 text-white text-[9px] font-black uppercase">
+                  Live
+                </span>
+              )}
+              {!t.isCurrent && (
+                <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black uppercase">
+                  Draft
+                </span>
+              )}
+            </button>
+          ))}
         </div>
 
         {/* Banner if editing an upcoming draft tenure */}
         {isDraftTenure && selectedTenure && (
-          <div className="p-4 rounded-2xl bg-amber-50/90 border border-amber-200 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in duration-200">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-[#E78023] shrink-0" />
-                <h4 className="font-heading font-extrabold text-xs text-amber-900 uppercase tracking-wider">
-                  PRE-CONFIGURING UPCOMING TENURE {selectedTenure.label} ({selectedTenure.academicYear})
-                </h4>
-              </div>
-              <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
-                You are pre-building the team roster (Presidency, Admins, Heads) for the next session. Changes are saved in draft mode. When the new season starts, click &quot;Activate Live&quot; and the entire website will update instantly!
-              </p>
-            </div>
-
-            <Button
+          <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <p>
+              Editing <strong>{selectedTenure.label} ({selectedTenure.academicYear})</strong>. Changes stay in draft until activated.
+            </p>
+            <button
               type="button"
               onClick={handleActivateThisTenure}
-              variant="primary"
-              size="sm"
-              className="gap-2 shrink-0 bg-[#E78023] hover:bg-[#D26E17] text-white border-none shadow-sm cursor-pointer"
+              className="px-3 py-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] uppercase tracking-wider shrink-0 cursor-pointer"
             >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Activate Tenure {selectedTenure.label} Live Now</span>
-            </Button>
+              Publish & Make Live Tenure &rarr;
+            </button>
           </div>
         )}
       </div>
@@ -681,10 +723,16 @@ export default function AdminTeamPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     {activeTab === "clubs" ? (
-                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-md bg-amber-50 text-[#E78023] border border-amber-200 uppercase tracking-wider">
+                      <span className={cn(
+                        "text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full flex items-center gap-1",
+                        (member as any).roleType === "coLead" || member.role.toLowerCase().includes("co-head")
+                          ? "bg-[#17458F]/10 text-[#17458F]"
+                          : "bg-[#E78023]/10 text-[#E78023]"
+                      )}>
+                        <Sparkles className="w-3 h-3" />
                         {(member as any).clubName 
-                          ? `${(member as any).clubName} • ${member.role.includes("Co-Head") ? "Co-Head" : "Head"}`
-                          : (member.role.includes("Co-Head") ? "Club Co-Head" : "Club Head")}
+                          ? `${(member as any).clubName} • ${(member as any).roleType === "coLead" || member.role.toLowerCase().includes("co-head") ? "CO-HEAD" : "HEAD"}`
+                          : (member.role.toLowerCase().includes("co-head") ? "CLUB CO-HEAD" : "CLUB HEAD")}
                       </span>
                     ) : (
                       <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-md bg-[#17458F]/10 text-[#17458F]">
@@ -763,7 +811,7 @@ export default function AdminTeamPage() {
                   </button>
                 ) : (
                   <Link
-                    href={`/clubs/${member.clubSlug}`}
+                    href={`/clubs/${(member as any).clubSlug}`}
                     target="_blank"
                     className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold uppercase transition-colors"
                   >
@@ -795,10 +843,10 @@ export default function AdminTeamPage() {
           <Users className="w-8 h-8 text-[#E78023] mx-auto opacity-70" />
           <h4 className="font-bold text-base text-slate-800">No positions found</h4>
           <p className="text-xs text-slate-500">
-            Click &ldquo;Add New Position / Officer&rdquo; to create your first team record.
+            Click &ldquo;{activeTab === "clubs" ? "Add Club Head / Co-Head" : "Add New Position / Officer"}&rdquo; to create your first team record.
           </p>
           <Button onClick={handleOpenAddModal} variant="primary" size="sm" className="mt-2">
-            + Add Position / Officer
+            + {activeTab === "clubs" ? "Add Club Head / Co-Head" : "Add Position / Officer"}
           </Button>
         </div>
       )}
@@ -813,7 +861,9 @@ export default function AdminTeamPage() {
           }}
           title={
             activeTab === "clubs"
-              ? `Edit Club Leadership PFP: ${editingMember.role || "Officer"}`
+              ? isCreatingNew
+                ? "Add Club Head / Co-Head"
+                : `Edit Club Leader: ${editingMember.name || "Leader"}`
               : isCreatingNew
               ? "Add New Council Position & Officer"
               : `Edit: ${editingMember.role || "Position"}`

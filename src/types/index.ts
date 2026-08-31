@@ -81,6 +81,20 @@ export interface EventItem {
   customQuestions?: CustomQuestion[];
 }
 
+export interface ClubLeader {
+  id?: string;
+  name: string;
+  role: string;
+  roleType?: "lead" | "coLead";
+  department: string;
+  year: string;
+  avatar: string;
+  btId?: string;
+  bio?: string;
+  email?: string;
+  linkedin?: string;
+}
+
 export interface ClubItem {
   id: string;
   slug: string;
@@ -96,28 +110,10 @@ export interface ClubItem {
   headerImage?: string; // Ultra-wide cinematic banner (21:9) for club detail page header
   cardImage?: string; // Landscape card thumbnail (16:9) for club directory grid
   logoImage?: string; // Square (1:1) club emblem / insignia logo
-  lead: {
-    name: string;
-    role: string;
-    department: string;
-    year: string;
-    avatar: string;
-    btId?: string;
-    bio?: string;
-    email?: string;
-    linkedin?: string;
-  };
-  coLead?: {
-    name: string;
-    role: string;
-    department: string;
-    year: string;
-    avatar: string;
-    btId?: string;
-    bio?: string;
-    email?: string;
-    linkedin?: string;
-  };
+  lead: ClubLeader;
+  coLead?: ClubLeader;
+  coLeads?: ClubLeader[];
+  leaders?: ClubLeader[];
   upcomingEvents?: string[];
   pastHighlights: string[];
   galleryImages: string[];
