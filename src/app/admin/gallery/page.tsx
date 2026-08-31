@@ -22,7 +22,8 @@ import {
   getStoredGalleryPhotos, 
   saveStoredGalleryPhotos, 
   syncGalleryFromFirestore, 
-  resetGalleryToDefaults 
+  resetGalleryToDefaults,
+  subscribeToGallery
 } from "@/lib/galleryStore";
 import { GalleryPhoto } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -55,6 +56,29 @@ export default function AdminGalleryPage() {
     syncGalleryFromFirestore().then((res) => {
       if (res) setPhotos(res);
     });
+
+    const unsub = subscribeToGallery((cloudPhotos) => {
+      if (cloudPhotos && cloudPhotos.length > 0) {
+        setPhotos(cloudPhotos);
+      }
+    });
+
+    const handleUpdate = (e: any) => {
+      if (e?.detail && Array.isArray(e.detail)) {
+        setPhotos(e.detail);
+      } else {
+        setPhotos(getStoredGalleryPhotos());
+      }
+    };
+
+    window.addEventListener("src_gallery_updated", handleUpdate);
+    window.addEventListener("storage", handleUpdate);
+
+    return () => {
+      unsub();
+      window.removeEventListener("src_gallery_updated", handleUpdate);
+      window.removeEventListener("storage", handleUpdate);
+    };
   }, []);
 
   const saveList = (updated: GalleryPhoto[]) => {

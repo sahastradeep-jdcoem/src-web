@@ -59,7 +59,7 @@ export default function Footer() {
             <div className="hidden sm:block h-12 w-px bg-slate-300" />
 
             {/* JDCOEM Official Logo */}
-            <div className="relative h-14 sm:h-18 w-56 sm:w-72">
+            <div className="relative h-14 sm:h-18 w-56 sm:w-72 max-w-full">
               <Image
                 src="/assets/JD Header B.png"
                 alt="JD College of Engineering & Management"

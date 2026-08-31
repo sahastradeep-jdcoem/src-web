@@ -33,6 +33,7 @@ import {
   getStoredHeroSettings, 
   saveStoredHeroSettings, 
   syncHeroSettingsFromFirestore,
+  subscribeToHeroSettings,
   getStoredHeroPresets,
   saveStoredHeroPresets,
   syncHeroPresetsFromFirestore
@@ -55,6 +56,26 @@ export default function AdminHeroSettingsPage() {
     syncHeroPresetsFromFirestore().then((res) => {
       if (res) setPresets(res);
     });
+
+    const unsubHero = subscribeToHeroSettings((cloudHero) => {
+      if (cloudHero) setSettings(cloudHero);
+    });
+
+    const handleUpdate = () => {
+      setSettings(getStoredHeroSettings());
+      setPresets(getStoredHeroPresets());
+    };
+
+    window.addEventListener("src_hero_updated", handleUpdate);
+    window.addEventListener("src_hero_presets_updated", handleUpdate);
+    window.addEventListener("storage", handleUpdate);
+
+    return () => {
+      unsubHero();
+      window.removeEventListener("src_hero_updated", handleUpdate);
+      window.removeEventListener("src_hero_presets_updated", handleUpdate);
+      window.removeEventListener("storage", handleUpdate);
+    };
   }, []);
 
   const saveAndBroadcast = (newSettings: HeroSettings) => {

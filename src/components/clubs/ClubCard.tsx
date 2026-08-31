@@ -18,6 +18,7 @@ import {
   Users 
 } from "lucide-react";
 import { ClubItem } from "@/types";
+import { getClubLeaders } from "@/lib/councilStore";
 import { Badge } from "@/components/ui/Badge";
 
 interface ClubCardProps {
@@ -98,30 +99,40 @@ export function ClubCard({ club }: ClubCardProps) {
         </div>
 
         {/* Lead snippet */}
-        <div className="pt-3.5 border-t border-slate-100 flex items-center justify-between font-sans">
-          <div className="flex items-center gap-2.5">
-            <div className="relative h-7 w-7 rounded-full overflow-hidden border border-slate-200">
-              <Image
-                src={club.lead.avatar}
-                alt={club.lead.name}
-                fill
-                className="object-cover"
-              />
-            </div>
-            <div className="text-xs">
-              <p className="text-slate-800 font-semibold leading-tight">{club.lead.name}</p>
-              <p className="text-slate-500 text-[10px] font-medium">{club.lead.role}</p>
-            </div>
-          </div>
+        {(() => {
+          const leaders = getClubLeaders(club);
+          const primaryLead = leaders.find((l) => l.roleType === "lead") || leaders[0] || club.lead || {
+            name: "Club Head",
+            role: "Club Head",
+            avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
+          };
+          return (
+            <div className="pt-3.5 border-t border-slate-100 flex items-center justify-between font-sans">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="relative h-7 w-7 rounded-full overflow-hidden border border-slate-200 shrink-0">
+                  <Image
+                    src={primaryLead.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"}
+                    alt={primaryLead.name || club.name}
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+                <div className="text-xs min-w-0">
+                  <p className="text-slate-800 font-semibold leading-tight truncate">{primaryLead.name || "Club Head"}</p>
+                  <p className="text-slate-500 text-[10px] font-medium truncate">{primaryLead.role || "Club Head"}</p>
+                </div>
+              </div>
 
-          <Link
-            href={`/clubs/${club.slug}`}
-            className="inline-flex items-center gap-1 text-xs font-sans font-semibold uppercase tracking-wider text-[#17458F] group-hover:text-[#E78023] group-hover:translate-x-0.5 transition-all cursor-pointer"
-          >
-            <span>Explore</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
+              <Link
+                href={`/clubs/${club.slug}`}
+                className="inline-flex items-center gap-1 text-xs font-sans font-semibold uppercase tracking-wider text-[#17458F] group-hover:text-[#E78023] group-hover:translate-x-0.5 transition-all cursor-pointer shrink-0 ml-2"
+              >
+                <span>Explore</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          );
+        })()}
       </div>
 
     </div>

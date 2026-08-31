@@ -75,9 +75,11 @@ export default function AdminClubsPage() {
     const handleUpdate = () => loadData();
     window.addEventListener("src_tenures_updated", handleUpdate);
     window.addEventListener("src_clubs_updated", handleUpdate);
+    window.addEventListener("storage", handleUpdate);
     return () => {
       window.removeEventListener("src_tenures_updated", handleUpdate);
       window.removeEventListener("src_clubs_updated", handleUpdate);
+      window.removeEventListener("storage", handleUpdate);
     };
   }, [selectedTenureId]);
 
@@ -108,10 +110,14 @@ export default function AdminClubsPage() {
   const domains = ["All", ...Array.from(new Set(clubs.map((c) => c.category).filter(Boolean)))];
 
   const filteredClubs = clubs.filter((club) => {
+    const q = searchQuery.toLowerCase().trim();
+    const leaders = getClubLeaders(club);
+    const matchesLeader = leaders.some((l) => l.name?.toLowerCase().includes(q) || l.department?.toLowerCase().includes(q));
     const matchesSearch =
-      club.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      club.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      club.lead.name.toLowerCase().includes(searchQuery.toLowerCase());
+      !q ||
+      club.name?.toLowerCase().includes(q) ||
+      club.description?.toLowerCase().includes(q) ||
+      matchesLeader;
     const matchesDomain = selectedDomain === "All" || club.category === selectedDomain;
     return matchesSearch && matchesDomain;
   });

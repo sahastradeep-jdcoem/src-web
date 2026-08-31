@@ -352,19 +352,19 @@ export default function PassVerificationPage() {
 
           {/* Anti-Tamper Cryptographic Security Info */}
           <div className="p-4 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-2 text-[11px] font-mono shadow-xs">
-            <div className="flex justify-between items-center text-slate-400">
-              <span>Security Pass ID:</span>
-              <span className="text-white font-bold">{record.id}</span>
+            <div className="flex justify-between items-center text-slate-400 gap-2 min-w-0">
+              <span className="shrink-0">Security Pass ID:</span>
+              <span className="text-white font-bold truncate">{record.id}</span>
             </div>
-            <div className="flex justify-between items-center text-slate-400">
-              <span>Verification Hash:</span>
-              <span className="text-emerald-400 truncate max-w-[200px]">
+            <div className="flex justify-between items-center text-slate-400 gap-2 min-w-0">
+              <span className="shrink-0">Verification Hash:</span>
+              <span className="text-emerald-400 truncate max-w-[200px] sm:max-w-[300px]">
                 {record.qrPayload || `SHA256:SRC:${record.id.slice(0, 10)}`}
               </span>
             </div>
-            <div className="flex justify-between items-center text-slate-400">
-              <span>Issued On:</span>
-              <span className="text-slate-300">
+            <div className="flex justify-between items-center text-slate-400 gap-2 min-w-0">
+              <span className="shrink-0">Issued On:</span>
+              <span className="text-slate-300 truncate">
                 {record.registeredAt || "Official Season 2025-26"}
               </span>
             </div>

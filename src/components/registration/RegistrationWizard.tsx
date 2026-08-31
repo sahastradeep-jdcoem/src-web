@@ -597,17 +597,17 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   };
 
   const steps = [
-    { number: 1, title: "01 DETAILS" },
-    { number: 2, title: "02 PARTICIPATION" },
-    { number: 3, title: "03 REVIEW" },
-    { number: 4, title: "04 DONE" },
+    { number: 1, title: "01 DETAILS", shortTitle: "01 INFO" },
+    { number: 2, title: "02 PARTICIPATION", shortTitle: "02 SQUAD" },
+    { number: 3, title: "03 REVIEW", shortTitle: "03 REVIEW" },
+    { number: 4, title: "04 PASS", shortTitle: "04 PASS" },
   ];
 
   return (
     <div className="max-w-4xl mx-auto space-y-10 font-sans">
       
       {/* Progress Stepper Bar */}
-      <div className="grid grid-cols-4 gap-2 sm:gap-4">
+      <div className="grid grid-cols-4 gap-1.5 sm:gap-4">
         {steps.map((step) => {
           const isActive = currentStep === step.number;
           const isCompleted = currentStep > step.number;
@@ -615,7 +615,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           return (
             <div
               key={step.number}
-              className={`relative p-3 sm:p-4 rounded-2xl border transition-all ${
+              className={`relative p-2.5 sm:p-4 rounded-2xl border transition-all ${
                 isActive
                   ? "bg-[#17458F] border-[#E78023] text-white shadow-md"
                   : isCompleted
@@ -623,13 +623,14 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                   : "bg-slate-100 border-slate-200 text-slate-400 opacity-60"
               }`}
             >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider font-heading">
-                  {step.title}
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[9px] sm:text-xs font-bold uppercase tracking-tight sm:tracking-wider font-heading truncate">
+                  <span className="sm:hidden">{step.shortTitle}</span>
+                  <span className="hidden sm:inline">{step.title}</span>
                 </span>
                 {isCompleted && (
-                  <div className="h-4 w-4 rounded-full bg-[#E78023] text-white flex items-center justify-center">
-                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  <div className="h-3.5 w-3.5 sm:h-4 sm:w-4 rounded-full bg-[#E78023] text-white flex items-center justify-center shrink-0">
+                    <Check className="w-2 sm:w-2.5 h-2 sm:h-2.5 stroke-[3]" />
                   </div>
                 )}
               </div>

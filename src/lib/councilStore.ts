@@ -128,11 +128,11 @@ export function getStoredHostingCommittee(): TeamMember[] {
 export function saveStoredHostingCommittee(members: TeamMember[]): void {
   if (typeof window === "undefined") return;
   try {
-    const sanitized = stripCategoryAndLevel(members);
+    const sanitized = cleanUndefined(stripCategoryAndLevel(members));
     localStorage.setItem("src_hosting_committee", JSON.stringify(sanitized));
     window.dispatchEvent(new CustomEvent("src_hosting_updated", { detail: sanitized }));
     window.dispatchEvent(new CustomEvent("src_users_updated"));
-    saveSiteContentToFirestore("hosting_committee", sanitized);
+    enqueueCloudWrite("hosting_committee", sanitized, `Hosting Committee (${members.length} Members)`);
   } catch (e) {
     console.error("Could not save hosting committee to storage", e);
   }
@@ -185,10 +185,10 @@ export function getStoredSpokespersons(): TeamMember[] {
 export function saveStoredSpokespersons(members: TeamMember[]): void {
   if (typeof window === "undefined") return;
   try {
-    const sanitized = stripCategoryAndLevel(members);
+    const sanitized = cleanUndefined(stripCategoryAndLevel(members));
     localStorage.setItem("src_spokespersons", JSON.stringify(sanitized));
     window.dispatchEvent(new CustomEvent("src_spokespersons_updated", { detail: sanitized }));
-    saveSiteContentToFirestore("spokespersons", sanitized);
+    enqueueCloudWrite("spokespersons", sanitized, `Spokespersons (${members.length} Members)`);
   } catch (e) {
     console.error("Could not save spokespersons to storage", e);
   }
@@ -332,11 +332,11 @@ export function getStoredFoundingMembers(): TeamMember[] {
 export function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCouncil: boolean = true): void {
   if (typeof window === "undefined") return;
   try {
-    const sanitized = stripCategoryAndLevel(members);
+    const sanitized = cleanUndefined(stripCategoryAndLevel(members));
     localStorage.setItem("src_founding_members", JSON.stringify(sanitized));
     window.dispatchEvent(new CustomEvent("src_founding_members_updated", { detail: sanitized }));
     window.dispatchEvent(new CustomEvent("src_users_updated"));
-    saveSiteContentToFirestore("founding_members", sanitized);
+    enqueueCloudWrite("founding_members", sanitized, `Founding Members (${members.length} Members)`);
 
     if (autoSyncToCouncil && Array.isArray(sanitized) && sanitized.length > 0) {
       const mapped = sanitized.map((f, i) => mapFoundingMemberToCouncilAdmin(f, i));

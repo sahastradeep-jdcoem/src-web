@@ -5,7 +5,8 @@ import {
   getStoredHostingCommittee, 
   getStoredSpokespersons, 
   getStoredClubs,
-  getStoredFoundingMembers
+  getStoredFoundingMembers,
+  getClubLeaders
 } from "./councilStore";
 
 const USERS_STORAGE_KEY = "src_registered_users";
@@ -101,19 +102,17 @@ export function resolveDesignationByBtId(btId: string): {
   // 4. Check Chartered Clubs (Head / Co-Head)
   const clubs = getStoredClubs();
   for (const club of clubs) {
-    if (club.lead?.btId && club.lead.btId.trim().toUpperCase() === cleanBtId) {
-      return {
-        designationBadge: `Head • ${club.name}`,
-        isCouncilOfficer: true,
-        category: "Club Leadership",
-      };
-    }
-    if (club.coLead?.btId && club.coLead.btId.trim().toUpperCase() === cleanBtId) {
-      return {
-        designationBadge: `Co-Head • ${club.name}`,
-        isCouncilOfficer: true,
-        category: "Club Leadership",
-      };
+    const leaders = getClubLeaders(club);
+    for (const leader of leaders) {
+      if (leader.btId && leader.btId.trim().toUpperCase() === cleanBtId) {
+        const isCoLead = leader.roleType === "coLead" || (leader.role && leader.role.toLowerCase().includes("co-head"));
+        const rolePrefix = isCoLead ? "Club Co-Head" : "Club Head";
+        return {
+          designationBadge: `${rolePrefix} • ${club.name}`,
+          isCouncilOfficer: true,
+          category: "Club Leadership",
+        };
+      }
     }
   }
 

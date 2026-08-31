@@ -61,7 +61,7 @@ export default function RootLayout({
         <JsonLd type="Organization" />
         <AuthProvider>
           <Navbar />
-          <main className="flex-grow pt-16">
+          <main className="flex-grow pt-16 w-full min-w-0 overflow-x-clip">
             {children}
           </main>
           <Footer />

@@ -41,6 +41,22 @@ export default function AdminDepartmentsPage() {
     syncDepartmentsFromFirestore().then((res) => {
       if (res) setDepartments(res);
     });
+
+    const handleUpdate = (e: any) => {
+      if (e?.detail && Array.isArray(e.detail)) {
+        setDepartments(e.detail);
+      } else {
+        setDepartments(getStoredDepartments());
+      }
+    };
+
+    window.addEventListener("src_departments_updated", handleUpdate);
+    window.addEventListener("storage", handleUpdate);
+
+    return () => {
+      window.removeEventListener("src_departments_updated", handleUpdate);
+      window.removeEventListener("storage", handleUpdate);
+    };
   }, []);
 
   const saveList = (updated: string[]) => {
