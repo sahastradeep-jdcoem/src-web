@@ -557,6 +557,16 @@ export default function AdminRegistrationsPage() {
     // Collect all custom questions across the current scope
     const customQCols = availableQuestions.filter((q) => !q.isStandard);
 
+    // Check if there are any paid registrations in this export scope
+    const hasAnyPaid = eventRegistrations.some(
+      (r) => (r.amountPaid && r.amountPaid > 0) || r.paymentStatus === "PAID" || (r.paymentId && r.paymentId !== "N/A")
+    );
+
+    // Check if there are any team registrations in this export scope
+    const hasAnyTeam = eventRegistrations.some(
+      (r) => r.teamType === "Team" || Boolean(r.teamName) || (Array.isArray(r.teamMembers) && r.teamMembers.length > 0)
+    );
+
     const rows = eventRegistrations.map((r) => {
       const rowData: Record<string, any> = {
         "Timestamp": r.registeredAt || "",
@@ -568,9 +578,12 @@ export default function AdminRegistrationsPage() {
         "Academic Year": r.year || "",
         "Event": r.eventName || "",
         "Participation Format": r.teamType || "Individual",
-        "Team Name": r.teamName || "",
-        "Team Members": Array.isArray(r.teamMembers) ? r.teamMembers.join("; ") : (r.teamMembers || ""),
       };
+
+      if (hasAnyTeam) {
+        rowData["Team Name"] = r.teamName || "";
+        rowData["Team Members"] = Array.isArray(r.teamMembers) ? r.teamMembers.join("; ") : (r.teamMembers || "");
+      }
 
       // Each custom question gets its OWN dedicated column with its exact prompt text as header
       customQCols.forEach((qCol) => {
@@ -594,10 +607,14 @@ export default function AdminRegistrationsPage() {
       rowData["Registration Pass ID"] = r.registrationId;
       rowData["Ticket Code"] = r.ticketCode || `${r.registrationId}-TK`;
       rowData["Pass Status"] = r.status || "CONFIRMED";
-      rowData["Payment Status"] = r.paymentStatus || "FREE";
-      rowData["Amount Paid (INR)"] = r.amountPaid || 0;
-      rowData["Payment Transaction ID"] = r.paymentId || "N/A";
-      rowData["Order ID"] = r.orderId || "N/A";
+
+      // Only include payment tracking columns if the event is a paid event or contains paid registrations
+      if (hasAnyPaid) {
+        rowData["Payment Status"] = r.paymentStatus || "FREE";
+        rowData["Amount Paid (INR)"] = r.amountPaid || 0;
+        rowData["Payment Transaction ID"] = r.paymentId || "N/A";
+        rowData["Order ID"] = r.orderId || "N/A";
+      }
 
       return rowData;
     });
