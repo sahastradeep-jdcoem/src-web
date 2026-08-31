@@ -64,4 +64,34 @@
     font-family: 'Inter', sans-serif;
     font-weight: 500;
   }
+
+  /* Smooth Ticker & Marquee Animations */
+  @keyframes marquee-glide {
+    0% {
+      transform: translate3d(0, 0, 0);
+    }
+    100% {
+      transform: translate3d(-50%, 0, 0);
+    }
+  }
+
+  .animate-marquee-glide {
+    display: flex;
+    width: max-content;
+    animation: marquee-glide 40s linear infinite;
+    will-change: transform;
+  }
+
+  .pause-on-hover:hover .animate-marquee-glide {
+    animation-play-state: paused;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
+
