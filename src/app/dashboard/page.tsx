@@ -31,6 +31,11 @@ import { useAuth } from "@/context/AuthContext";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { downloadPassAsImage } from "@/lib/passExport";
 import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
+import { 
+  getAllRegistrationsFromFirestore, 
+  subscribeToRegistrationsFromFirestore, 
+  StudentRegistrationRecord 
+} from "@/lib/firebase/firestore";
 
 export default function StudentDashboardPage() {
   const { user, openAuthModal, openProfileModal, logout } = useAuth();
@@ -58,70 +63,127 @@ export default function StudentDashboardPage() {
       if (remote) setEvents(remote);
     });
 
-    const loadRegistrations = () => {
+    const formatStudentRecords = (rawRecords: any[], activeStoredEvents: EventItem[]): RegistrationRecord[] => {
+      const cleanEmail = user?.email?.trim().toLowerCase();
+      const cleanBtId = user?.btId?.trim().toUpperCase();
+      const cleanName = user?.displayName?.trim().toLowerCase();
+
+      // 1. Filter out records for deleted events (e.g. Code Strom or anything not matching active events)
+      const validRecords = rawRecords.filter((r: any) => {
+        const eventId = (r.eventId || "").toLowerCase();
+        const eventTitle = (r.eventTitle || "").toLowerCase().trim();
+        const regId = (r.id || "").toLowerCase();
+
+        // Explicitly purge Code Strom / codestorm if it was deleted
+        if (eventTitle.includes("strom") || eventId.includes("strom") || regId.includes("cod-")) {
+          const isStillPublished = activeStoredEvents.some(e => 
+            e.name.toLowerCase().includes("strom") || e.slug.toLowerCase().includes("strom")
+          );
+          if (!isStillPublished) return false;
+        }
+
+        // Must match at least one published event in current system
+        return activeStoredEvents.some(e =>
+          e.id.toLowerCase() === eventId ||
+          e.slug.toLowerCase() === eventId ||
+          e.name.toLowerCase().trim() === eventTitle ||
+          eventId.includes(e.slug.toLowerCase()) ||
+          e.slug.toLowerCase().includes(eventId)
+        );
+      });
+
+      // 2. Filter records that specifically belong to this authenticated student
+      const userMatched = validRecords.filter((r: any) => {
+        if (!cleanEmail && !cleanBtId) return true;
+
+        const rEmail = (r.email || "").trim().toLowerCase();
+        const rBtId = (r.btId || "").trim().toUpperCase();
+        const rLeader = (r.leaderName || r.participantName || "").trim().toLowerCase();
+
+        if (cleanEmail && rEmail === cleanEmail) return true;
+        if (cleanBtId && rBtId === cleanBtId) return true;
+        if (cleanName && rLeader === cleanName) return true;
+
+        // Check if member of squad
+        if (Array.isArray(r.teamMembers)) {
+          return r.teamMembers.some((m: any) => {
+            if (typeof m === "string") {
+              return (cleanBtId && m.toUpperCase().includes(cleanBtId)) || (cleanName && m.toLowerCase().includes(cleanName));
+            }
+            if (typeof m === "object" && m !== null) {
+              return (cleanBtId && m.btId?.toUpperCase() === cleanBtId) || (cleanEmail && m.email?.toLowerCase() === cleanEmail);
+            }
+            return false;
+          });
+        }
+        return false;
+      });
+
+      // 3. Deduplicate by event (if multiple exist for the same event, keep the latest or checked-in one)
+      const eventMap = new Map<string, any>();
+      userMatched.forEach((r: any) => {
+        const evKey = (r.eventId || r.eventTitle || r.id).toLowerCase();
+        const existing = eventMap.get(evKey);
+        if (!existing || r.status === "CHECKED_IN") {
+          eventMap.set(evKey, r);
+        }
+      });
+
+      return Array.from(eventMap.values()).map((r: any) => ({
+        id: r.id,
+        registrationId: r.id,
+        eventSlug: r.eventId || r.eventSlug || "",
+        eventName: r.eventTitle || r.eventName || "Event Delegate Pass",
+        participantName: r.leaderName || r.participantName || "Delegate",
+        email: r.email,
+        phone: r.phone,
+        department: r.department,
+        year: r.year,
+        teamType: (r.teamSize && r.teamSize > 1) || r.teamType === "Team" ? "Team" : "Individual",
+        teamName: r.teamName,
+        teamMembers: r.teamMembers ? r.teamMembers.map((m: any) => typeof m === "string" ? m : `${m.name} (${m.btId})`) : r.members?.map((m: any) => m.name),
+        registeredAt: r.registeredAt || (r.paidAt ? new Date(r.paidAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]),
+        status: r.status || "CONFIRMED",
+        paymentStatus: r.paymentStatus || (r.amountPaid > 0 ? "PAID" : "FREE"),
+        ticketCode: r.ticketCode || `${r.id.slice(0, 7)}-TK`,
+        qrPayload: r.qrPayload || `SRC:PASS:${r.id}`,
+        amountPaid: r.amountPaid || 0,
+        customAnswers: r.customAnswers,
+      }));
+    };
+
+    const syncAndLoadRegistrations = async (cloudList?: StudentRegistrationRecord[]) => {
       try {
         const storedEvents = getStoredEvents();
-        const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
-        if (Array.isArray(local) && local.length > 0) {
-          // Filter out registrations for deleted events (e.g. Code Strom or anything not matching active events)
-          const validRecords = local.filter((r: any) => {
-            const eventId = (r.eventId || "").toLowerCase();
-            const eventTitle = (r.eventTitle || "").toLowerCase().trim();
-            const regId = (r.id || "").toLowerCase();
+        let allRecords: any[] = [];
 
-            // Explicitly purge Code Strom / codestorm if it was deleted
-            if (eventTitle.includes("strom") || eventId.includes("strom") || regId.includes("cod-")) {
-              const isStillPublished = storedEvents.some(e => 
-                e.name.toLowerCase().includes("strom") || e.slug.toLowerCase().includes("strom")
-              );
-              if (!isStillPublished) return false;
-            }
-
-            // Must match at least one published event in current system
-            return storedEvents.some(e =>
-              e.id.toLowerCase() === eventId ||
-              e.slug.toLowerCase() === eventId ||
-              e.name.toLowerCase().trim() === eventTitle ||
-              eventId.includes(e.slug.toLowerCase()) ||
-              e.slug.toLowerCase().includes(eventId)
-            );
-          });
-
-          // Sync back clean list to local storage if orphaned items were removed
-          if (validRecords.length !== local.length) {
-            localStorage.setItem("src_local_registrations", JSON.stringify(validRecords));
-          }
-
-          const formatted: RegistrationRecord[] = validRecords.map((r: any) => ({
-            id: r.id,
-            registrationId: r.id,
-            eventSlug: r.eventId,
-            eventName: r.eventTitle || "Event Delegate Pass",
-            participantName: r.leaderName,
-            email: r.email,
-            phone: r.phone,
-            department: r.department,
-            year: r.year,
-            teamType: r.teamSize > 1 ? "Team" : "Individual",
-            teamName: r.teamName,
-            teamMembers: r.members?.map((m: any) => m.name),
-            registeredAt: r.registeredAt || new Date().toISOString().split("T")[0],
-            status: r.status || "CONFIRMED",
-            ticketCode: `${r.id.slice(0, 7)}-TK`,
-            qrPayload: r.qrPayload || `SRC:PASS:${r.id}`,
-          }));
-
-          setRegistrations(formatted);
-        } else {
-          setRegistrations([]);
+        // If cloud records provided or fetched from Firestore
+        let remoteRecords = cloudList;
+        if (!remoteRecords) {
+          remoteRecords = await getAllRegistrationsFromFirestore();
         }
+
+        if (remoteRecords && Array.isArray(remoteRecords)) {
+          allRecords = remoteRecords;
+          // Purge deleted records from local storage cache
+          localStorage.setItem("src_local_registrations", JSON.stringify(remoteRecords));
+        } else {
+          allRecords = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+        }
+
+        const formatted = formatStudentRecords(allRecords, storedEvents);
+        setRegistrations(formatted);
       } catch (e) {
-        console.warn("Local registrations load warning", e);
-        setRegistrations([]);
+        console.warn("Registrations sync error on student dashboard", e);
       }
     };
 
-    loadRegistrations();
+    syncAndLoadRegistrations();
+
+    // Subscribe to Firestore for real-time deletions and check-ins
+    const unsubRegistrations = subscribeToRegistrationsFromFirestore((cloudRegs) => {
+      syncAndLoadRegistrations(cloudRegs);
+    });
 
     const handleEventsUpdate = (e: any) => {
       if (e?.detail && Array.isArray(e.detail)) {
@@ -129,11 +191,11 @@ export default function StudentDashboardPage() {
       } else {
         setEvents(getStoredEvents());
       }
-      loadRegistrations();
+      syncAndLoadRegistrations();
     };
 
-    const handleRegsUpdate = () => {
-      loadRegistrations();
+    const handleRegsUpdate = (e: any) => {
+      syncAndLoadRegistrations(e?.detail);
     };
 
     window.addEventListener("src_events_updated", handleEventsUpdate);
@@ -142,11 +204,12 @@ export default function StudentDashboardPage() {
 
     return () => {
       unsub();
+      unsubRegistrations();
       window.removeEventListener("src_events_updated", handleEventsUpdate);
       window.removeEventListener("src_registrations_updated", handleRegsUpdate);
       window.removeEventListener("storage", handleEventsUpdate);
     };
-  }, []);
+  }, [user]);
 
   const flagshipEvent = events.find(e => e.isFeatured || e.category === "Fest") || events[0] || null;
 
