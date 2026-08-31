@@ -54,10 +54,10 @@ export default function AdminClubsPage() {
     setSelectedTenureId(currentId);
 
     const targetTenure = tenureList.find((t) => t.id === currentId) || active;
-    if (targetTenure?.isCurrent) {
+    if (targetTenure?.isCurrent || !targetTenure?.clubs || targetTenure.clubs.length === 0) {
       setClubs(getStoredClubs());
-    } else if (targetTenure) {
-      setClubs(targetTenure.clubs || getStoredClubs());
+    } else {
+      setClubs(targetTenure.clubs);
     }
   };
 
@@ -89,18 +89,17 @@ export default function AdminClubsPage() {
   const handleSelectTenure = (tId: string) => {
     setSelectedTenureId(tId);
     const targetTenure = tenures.find((t) => t.id === tId);
-    if (targetTenure?.isCurrent) {
+    if (targetTenure?.isCurrent || !targetTenure?.clubs || targetTenure.clubs.length === 0) {
       setClubs(getStoredClubs());
-    } else if (targetTenure) {
-      setClubs(targetTenure.clubs || getStoredClubs());
+    } else {
+      setClubs(targetTenure.clubs);
     }
   };
 
   const saveList = (updated: ClubItem[]) => {
     setClubs(updated);
-    if (selectedTenure?.isCurrent) {
-      saveStoredClubs(updated);
-    } else if (selectedTenure) {
+    saveStoredClubs(updated);
+    if (selectedTenure?.id) {
       updateTenureRoster(selectedTenure.id, { clubs: updated });
     }
     setIsSaved(true);

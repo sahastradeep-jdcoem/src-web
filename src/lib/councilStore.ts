@@ -254,6 +254,7 @@ export function saveStoredClubs(clubs: ClubItem[]): void {
     const sanitized = cleanUndefined(clubs);
     localStorage.setItem("src_clubs_roster", JSON.stringify(sanitized));
     window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: sanitized }));
+    window.dispatchEvent(new CustomEvent("src_tenures_updated"));
     saveSiteContentToFirestore("clubs", sanitized);
     enqueueCloudWrite("clubs", sanitized, `Clubs Directory (${clubs.length} Clubs)`);
   } catch (e) {
