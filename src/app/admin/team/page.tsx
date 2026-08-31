@@ -681,8 +681,10 @@ export default function AdminTeamPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     {activeTab === "clubs" ? (
-                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-md bg-amber-50 text-[#E78023] border border-amber-200 uppercase">
-                        {member.role.includes("Co-Head") ? "Club Co-Head" : "Club Head"}
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-md bg-amber-50 text-[#E78023] border border-amber-200 uppercase tracking-wider">
+                        {(member as any).clubName 
+                          ? `${(member as any).clubName} • ${member.role.includes("Co-Head") ? "Co-Head" : "Head"}`
+                          : (member.role.includes("Co-Head") ? "Club Co-Head" : "Club Head")}
                       </span>
                     ) : (
                       <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-md bg-[#17458F]/10 text-[#17458F]">
