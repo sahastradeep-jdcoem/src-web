@@ -147,13 +147,6 @@ export default function HomeClubsSection() {
             ))}
           </div>
         </div>
-
-        {/* Carousel Micro Hint */}
-        <div className="text-center pt-2">
-          <p className="text-[11px] font-sans font-medium text-slate-400">
-            Hover over any card to pause • Click arrows or drag to explore all {displayClubs.length || 12} chartered clubs
-          </p>
-        </div>
       </div>
     </section>
   );
