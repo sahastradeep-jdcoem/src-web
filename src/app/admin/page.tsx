@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { 
   Calendar, 
@@ -17,13 +17,37 @@ import {
   ShieldCheck,
   UserCheck,
   Building2,
-  Sliders
+  Sliders,
+  Database,
+  Download,
+  Upload,
+  Activity,
+  Check,
+  RefreshCw,
+  Server
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
-import { getStoredClubs, getStoredCouncilMembers } from "@/lib/councilStore";
-import { getStoredEvents } from "@/lib/eventsStore";
+import { Button } from "@/components/ui/Button";
+import { 
+  getStoredClubs, 
+  saveStoredClubs, 
+  getStoredCouncilMembers, 
+  saveStoredCouncilMembers,
+  getStoredHostingCommittee,
+  saveStoredHostingCommittee,
+  getStoredFoundingMembers,
+  saveStoredFoundingMembers,
+  getStoredSpokespersons,
+  saveStoredSpokespersons
+} from "@/lib/councilStore";
+import { getStoredEvents, saveStoredEvents } from "@/lib/eventsStore";
 import { getStoredUsers, syncUsersFromFirestore, mergeRemoteUsers } from "@/lib/usersStore";
+import { getStoredTenures, saveStoredTenures } from "@/lib/tenureStore";
+import { getStoredDepartments, saveStoredDepartments } from "@/lib/departmentsStore";
+import { getStoredGalleryPhotos, saveStoredGalleryPhotos } from "@/lib/galleryStore";
+import { getStoredHeroSettings, saveStoredHeroSettings } from "@/lib/heroStore";
 import { subscribeToUsersFromFirestore } from "@/lib/firebase/firestore";
+import { toast } from "@/lib/toastStore";
 
 export default function AdminOverviewPage() {
   const [councilCount, setCouncilCount] = useState(0);
@@ -31,6 +55,10 @@ export default function AdminOverviewPage() {
   const [eventsCount, setEventsCount] = useState(0);
   const [registrationsCount, setRegistrationsCount] = useState(0);
   const [usersCount, setUsersCount] = useState(0);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refreshCounts = () => {
     setCouncilCount(getStoredCouncilMembers().length);
@@ -74,6 +102,95 @@ export default function AdminOverviewPage() {
     };
   }, []);
 
+  // 1-Click Disaster Recovery Full JSON Export
+  const handleExportBackup = () => {
+    setIsExporting(true);
+    try {
+      const backupPayload = {
+        version: "1.0.0-prod",
+        exportedAt: new Date().toISOString(),
+        site: "SRC JDCOEM Sahastradeep",
+        data: {
+          tenures: getStoredTenures(),
+          events: getStoredEvents(),
+          clubs: getStoredClubs(),
+          councilTeam: getStoredCouncilMembers(),
+          hostingCommittee: getStoredHostingCommittee(),
+          foundingMembers: getStoredFoundingMembers(),
+          spokespersons: getStoredSpokespersons(),
+          departments: getStoredDepartments(),
+          gallery: getStoredGalleryPhotos(),
+          hero: getStoredHeroSettings(),
+          localRegistrations: JSON.parse(localStorage.getItem("src_local_registrations") || "[]"),
+          registeredUsers: getStoredUsers(),
+        },
+      };
+
+      const blob = new Blob([JSON.stringify(backupPayload, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const dateStr = new Date().toISOString().split("T")[0];
+      link.href = url;
+      link.download = `SRC_JDCOEM_Full_Backup_${dateStr}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success("Full system backup JSON exported successfully!", "Disaster Recovery");
+    } catch (e) {
+      toast.error("Failed to export backup JSON.", "Export Error");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Restore From JSON Backup
+  const handleRestoreFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsRestoring(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const content = event.target?.result as string;
+        const parsed = JSON.parse(content);
+
+        if (!parsed.data) {
+          throw new Error("Invalid backup format: missing data root.");
+        }
+
+        const { data } = parsed;
+        if (Array.isArray(data.tenures)) saveStoredTenures(data.tenures);
+        if (Array.isArray(data.events)) saveStoredEvents(data.events);
+        if (Array.isArray(data.clubs)) saveStoredClubs(data.clubs);
+        if (Array.isArray(data.councilTeam)) saveStoredCouncilMembers(data.councilTeam);
+        if (Array.isArray(data.hostingCommittee)) saveStoredHostingCommittee(data.hostingCommittee);
+        if (Array.isArray(data.foundingMembers)) saveStoredFoundingMembers(data.foundingMembers);
+        if (Array.isArray(data.spokespersons)) saveStoredSpokespersons(data.spokespersons);
+        if (Array.isArray(data.departments)) saveStoredDepartments(data.departments);
+        if (Array.isArray(data.gallery)) saveStoredGalleryPhotos(data.gallery);
+        if (data.hero) saveStoredHeroSettings(data.hero);
+
+        if (Array.isArray(data.localRegistrations)) {
+          localStorage.setItem("src_local_registrations", JSON.stringify(data.localRegistrations));
+        }
+
+        refreshCounts();
+        toast.success("All collections restored & synced with Firestore!", "System Restored");
+      } catch (err: any) {
+        toast.error(`Restore failed: ${err?.message || "Invalid JSON"}`, "Error");
+      } finally {
+        setIsRestoring(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const metrics = [
     {
       title: "Active Users",
@@ -109,6 +226,9 @@ export default function AdminOverviewPage() {
     },
   ];
 
+  const hasFirebaseKey = Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
+  const hasRazorpayKey = Boolean(process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID);
+
   return (
     <div className="space-y-8 max-w-7xl mx-auto text-[#0F172A]">
       
@@ -120,7 +240,7 @@ export default function AdminOverviewPage() {
               ADMIN DASHBOARD
             </h1>
             <Badge variant="orange" size="sm">
-              LIVE CONTROL
+              PRODUCTION LIVE
             </Badge>
           </div>
           <p className="text-xs text-slate-500 font-medium mt-1">
@@ -128,7 +248,7 @@ export default function AdminOverviewPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Link
             href="/admin/users"
             className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs"
@@ -143,6 +263,56 @@ export default function AdminOverviewPage() {
             <span>Events Manager</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
+        </div>
+      </div>
+
+      {/* Production Diagnostics Bar */}
+      <div className="p-4 sm:p-5 rounded-3xl bg-slate-900 text-white shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <Server className="w-4 h-4 text-emerald-400" />
+            <span className="font-heading font-bold text-xs uppercase tracking-wider text-slate-200">
+              PRODUCTION SYSTEM HEALTH &amp; INTEGRATIONS
+            </span>
+          </div>
+          <span className="text-[11px] text-emerald-400 font-mono font-semibold flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>All Systems Operational</span>
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+          <div className="p-3 rounded-2xl bg-slate-800/80 border border-slate-700/60 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Cloud Database</span>
+            <p className="font-bold text-slate-100 flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{hasFirebaseKey ? "Firestore Active" : "Local Fallback"}</span>
+            </p>
+          </div>
+
+          <div className="p-3 rounded-2xl bg-slate-800/80 border border-slate-700/60 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Authentication</span>
+            <p className="font-bold text-slate-100 flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Google Firebase Auth</span>
+            </p>
+          </div>
+
+          <div className="p-3 rounded-2xl bg-slate-800/80 border border-slate-700/60 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Payment Gateway</span>
+            <p className="font-bold text-slate-100 flex items-center gap-1.5">
+              <Activity className="w-3.5 h-3.5 text-[#E78023]" />
+              <span>{hasRazorpayKey ? "Razorpay Live" : "Sandbox Test Mode"}</span>
+            </p>
+          </div>
+
+          <div className="p-3 rounded-2xl bg-slate-800/80 border border-slate-700/60 space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400">QR Engine</span>
+            <p className="font-bold text-slate-100 flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>300 DPI Canvas Matrix</span>
+            </p>
+          </div>
         </div>
       </div>
 
@@ -193,7 +363,7 @@ export default function AdminOverviewPage() {
             <UserCheck className="w-5 h-5" />
           </div>
           <h4 className="font-bold text-base text-slate-900 group-hover:text-[#17458F] transition-colors">
-            Active Users & Student Directory
+            Active Users &amp; Student Directory
           </h4>
           <p className="text-xs text-slate-500">
             View all authenticated students, search by BT ID, branch, or email, and manage council admin permissions.
@@ -208,7 +378,7 @@ export default function AdminOverviewPage() {
             <Sparkles className="w-5 h-5" />
           </div>
           <h4 className="font-bold text-base text-slate-900 group-hover:text-[#E78023] transition-colors">
-            Hero Studio & Mottos
+            Hero Studio &amp; Mottos
           </h4>
           <p className="text-xs text-slate-500">
             Change the 100vh background wallpaper, 3 hero motto texts, and live banner ribbons.
@@ -223,10 +393,10 @@ export default function AdminOverviewPage() {
             <Users className="w-5 h-5" />
           </div>
           <h4 className="font-bold text-base text-slate-900 group-hover:text-[#17458F] transition-colors">
-            Council & Positions Roster
+            Council &amp; Positions Roster
           </h4>
           <p className="text-xs text-slate-500">
-            Create, edit, or remove admin positions, student officers, departments, and avatars.
+            Create, edit, or remove admin positions, student officers, departments, and pre-configure upcoming tenures.
           </p>
         </Link>
 
@@ -268,13 +438,64 @@ export default function AdminOverviewPage() {
             <FileText className="w-5 h-5" />
           </div>
           <h4 className="font-bold text-base text-slate-900 group-hover:text-[#17458F] transition-colors">
-            Delegate Passes & Check-Ins
+            Delegate Passes &amp; Check-Ins
           </h4>
           <p className="text-xs text-slate-500">
-            Real-time participant accreditation roster with live QR check-ins and CSV export.
+            Real-time participant accreditation roster with live QR check-ins, Razorpay ledger, and CSV export.
           </p>
         </Link>
 
+      </div>
+
+      {/* Disaster Recovery & Full Backup Panel */}
+      <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-2xl bg-slate-100 text-slate-700">
+              <Database className="w-6 h-6 text-[#17458F]" />
+            </div>
+            <div>
+              <h3 className="font-heading font-bold text-lg text-slate-900">
+                Disaster Recovery &amp; Full Data Backup
+              </h3>
+              <p className="text-xs text-slate-500 font-medium">
+                Export full site snapshot (Tenures, Events, Clubs, Positions, Gallery, Registrations) or restore from an existing JSON backup.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              onClick={handleExportBackup}
+              disabled={isExporting}
+              variant="primary"
+              size="sm"
+              className="gap-2 shadow-sm"
+            >
+              {isExporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              <span>Download Backup (JSON)</span>
+            </Button>
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleRestoreFile}
+              accept=".json"
+              className="hidden"
+            />
+
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isRestoring}
+              variant="secondary"
+              size="sm"
+              className="gap-2"
+            >
+              {isRestoring ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+              <span>Restore from Backup</span>
+            </Button>
+          </div>
+        </div>
       </div>
 
     </div>

@@ -5,6 +5,8 @@ import Footer from "@/components/layout/Footer";
 import { AuthProvider } from "@/context/AuthContext";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { ProfileSetupModal } from "@/components/auth/ProfileSetupModal";
+import { ToastContainer } from "@/components/ui/Toast";
+import { JsonLd } from "@/components/seo/JsonLd";
 
 export const viewport: Viewport = {
   themeColor: "#17458F",
@@ -56,6 +58,7 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans flex flex-col justify-between selection:bg-[#E78023] selection:text-white">
+        <JsonLd type="Organization" />
         <AuthProvider>
           <Navbar />
           <main className="flex-grow pt-16">
@@ -64,6 +67,7 @@ export default function RootLayout({
           <Footer />
           <AuthModal />
           <ProfileSetupModal />
+          <ToastContainer />
         </AuthProvider>
       </body>
     </html>
