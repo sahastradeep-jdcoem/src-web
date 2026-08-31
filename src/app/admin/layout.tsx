@@ -297,11 +297,11 @@ export default function AdminLayout({
       </div>
 
       {/* DESKTOP ADMIN WORKSPACE (>= md) */}
-      <div className="hidden md:flex min-h-screen bg-[#F8FAFC] text-[#0F172A] flex-row">
+      <div className="hidden md:block min-h-[calc(100vh-4rem)] bg-[#F8FAFC] text-[#0F172A]">
         <AdminSidebar />
-        <div className="flex-1 min-w-0 p-6 sm:p-8 lg:p-10 overflow-y-auto">
+        <main className="md:pl-64 min-w-0 p-6 sm:p-8 lg:p-10">
           {children}
-        </div>
+        </main>
       </div>
     </>
   );
