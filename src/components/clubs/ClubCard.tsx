@@ -56,12 +56,13 @@ export function ClubCard({ club }: ClubCardProps) {
 
         <div className="absolute top-3.5 left-3.5 flex items-center gap-2.5">
           {club.logoImage ? (
-            <div className="relative h-10 w-10 rounded-full overflow-hidden shrink-0">
+            <div className="relative h-10 w-10 rounded-full overflow-hidden shrink-0 bg-white/95 backdrop-blur-xs p-1 border border-white/60 shadow-md flex items-center justify-center">
               <Image 
                 src={club.logoImage} 
                 alt={club.name} 
-                width={40} 
-                height={40} 
+                width={36} 
+                height={36} 
+                unoptimized={true}
                 className="object-contain w-full h-full rounded-full" 
               />
             </div>

@@ -43,10 +43,8 @@ export function ImageUploadDropzone({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (previewUrl && previewUrl !== preview) {
-      setPreview(previewUrl);
-      setManualUrl(previewUrl);
-    }
+    setPreview(previewUrl || "");
+    setManualUrl(previewUrl || "");
   }, [previewUrl]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -95,27 +93,37 @@ export function ImageUploadDropzone({
     setIsProcessing(true);
     try {
       // 1. Process & optimize the cropped canvas dataUrl
+      const isSquare = aspectRatio === "1:1";
+      const isBanner = aspectRatio === "21:9";
       const result = await compressImage(croppedDataUrl, {
-        maxWidth: 1920,
-        maxHeight: 1920,
-        quality: 0.88,
+        maxWidth: isSquare ? 500 : isBanner ? 1400 : 1000,
+        maxHeight: isSquare ? 500 : isBanner ? 600 : 1000,
+        quality: 0.85,
         outputFormat: "image/webp",
       });
 
       setCompressionStats(result);
       setPreview(result.dataUrl);
+      setManualUrl(result.dataUrl);
 
       if (onImageCompressed) {
         onImageCompressed(result);
       }
 
-      // 2. Upload to Firebase Storage
+      if (onUrlChange) {
+        onUrlChange(result.dataUrl);
+      }
+
+      // 2. Upload to Firebase Storage in the background
       const cleanName = originalFileName.replace(/[^a-zA-Z0-9.-]/g, "_").replace(/\.[^/.]+$/, "");
       const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}.webp`;
       const cloudUrl = await uploadImageToStorage(result.dataUrl, finalStoragePath);
 
-      if (onUrlChange) {
-        onUrlChange(cloudUrl || result.dataUrl);
+      if (cloudUrl && cloudUrl !== result.dataUrl) {
+        setManualUrl(cloudUrl);
+        if (onUrlChange) {
+          onUrlChange(cloudUrl);
+        }
       }
     } catch (err) {
       console.error("Image crop and compression error", err);

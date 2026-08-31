@@ -180,7 +180,7 @@ export default function AdminClubsPage() {
     if (isCreatingNew) {
       updated = [...clubs, clubToSave];
     } else {
-      updated = clubs.map((c) => (c.id === clubToSave.id ? clubToSave : c));
+      updated = clubs.map((c) => (c.id === clubToSave.id || c.slug === clubToSave.slug ? clubToSave : c));
     }
 
     saveList(updated);
@@ -548,7 +548,10 @@ export default function AdminClubsPage() {
                       required
                       placeholder="e.g. AI & Robotics Society, Dance Club, Music Society..."
                       value={editingClub.name}
-                      onChange={(e) => setEditingClub({ ...editingClub, name: e.target.value })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditingClub((prev) => (prev ? { ...prev, name: val } : null));
+                      }}
                       className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F] shadow-xs"
                     />
                   </div>
@@ -574,7 +577,7 @@ export default function AdminClubsPage() {
                         <button
                           key={cat}
                           type="button"
-                          onClick={() => setEditingClub({ ...editingClub, category: cat })}
+                          onClick={() => setEditingClub((prev) => (prev ? { ...prev, category: cat } : null))}
                           className={cn(
                             "px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer",
                             editingClub.category === cat
@@ -592,7 +595,10 @@ export default function AdminClubsPage() {
                       required
                       placeholder="Or type custom domain..."
                       value={editingClub.category}
-                      onChange={(e) => setEditingClub({ ...editingClub, category: e.target.value })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditingClub((prev) => (prev ? { ...prev, category: val } : null));
+                      }}
                       className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
                     />
                   </div>
@@ -605,7 +611,10 @@ export default function AdminClubsPage() {
                       type="text"
                       placeholder="e.g. Rhythm in Motion, Passion on Stage"
                       value={editingClub.tagline}
-                      onChange={(e) => setEditingClub({ ...editingClub, tagline: e.target.value })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditingClub((prev) => (prev ? { ...prev, tagline: val } : null));
+                      }}
                       className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
                     />
                   </div>
@@ -618,7 +627,10 @@ export default function AdminClubsPage() {
                         min="1"
                         placeholder="e.g. 50"
                         value={editingClub.memberCount}
-                        onChange={(e) => setEditingClub({ ...editingClub, memberCount: Number(e.target.value) })}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setEditingClub((prev) => (prev ? { ...prev, memberCount: val } : null));
+                        }}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
                       />
                     </div>
@@ -629,7 +641,10 @@ export default function AdminClubsPage() {
                         type="text"
                         placeholder="e.g. 2024"
                         value={editingClub.established || "2024"}
-                        onChange={(e) => setEditingClub({ ...editingClub, established: e.target.value })}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditingClub((prev) => (prev ? { ...prev, established: val } : null));
+                        }}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
                       />
                     </div>
@@ -650,7 +665,10 @@ export default function AdminClubsPage() {
                     rows={4}
                     placeholder="Describe the club's origin, activities, audition process, and regular collegiate engagements..."
                     value={editingClub.description}
-                    onChange={(e) => setEditingClub({ ...editingClub, description: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEditingClub((prev) => (prev ? { ...prev, description: val } : null));
+                    }}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F] resize-none leading-relaxed"
                   />
                 </div>
@@ -664,7 +682,10 @@ export default function AdminClubsPage() {
                     rows={4}
                     placeholder="Enter the official mission, values, and student growth aspirations for this charter..."
                     value={editingClub.mission}
-                    onChange={(e) => setEditingClub({ ...editingClub, mission: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEditingClub((prev) => (prev ? { ...prev, mission: val } : null));
+                    }}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F] resize-none leading-relaxed"
                   />
                 </div>
@@ -694,10 +715,10 @@ export default function AdminClubsPage() {
                       storagePath="clubs/cards"
                       previewUrl={editingClub.cardImage || editingClub.heroImage}
                       onUrlChange={(url) => {
-                        setEditingClub({ ...editingClub, cardImage: url, heroImage: editingClub.heroImage || url });
+                        setEditingClub((prev) => (prev ? { ...prev, cardImage: url, heroImage: prev.heroImage || url } : null));
                       }}
                       onImageCompressed={(res) => {
-                        setEditingClub({ ...editingClub, cardImage: res.dataUrl, heroImage: editingClub.heroImage || res.dataUrl });
+                        setEditingClub((prev) => (prev ? { ...prev, cardImage: res.dataUrl, heroImage: prev.heroImage || res.dataUrl } : null));
                       }}
                     />
                   </div>
@@ -712,10 +733,10 @@ export default function AdminClubsPage() {
                       storagePath="clubs/headers"
                       previewUrl={editingClub.headerImage || editingClub.heroImage}
                       onUrlChange={(url) => {
-                        setEditingClub({ ...editingClub, headerImage: url, heroImage: url });
+                        setEditingClub((prev) => (prev ? { ...prev, headerImage: url, heroImage: url } : null));
                       }}
                       onImageCompressed={(res) => {
-                        setEditingClub({ ...editingClub, headerImage: res.dataUrl, heroImage: res.dataUrl });
+                        setEditingClub((prev) => (prev ? { ...prev, headerImage: res.dataUrl, heroImage: res.dataUrl } : null));
                       }}
                     />
                   </div>
@@ -730,10 +751,10 @@ export default function AdminClubsPage() {
                       storagePath="clubs/logos"
                       previewUrl={editingClub.logoImage || ""}
                       onUrlChange={(url) => {
-                        setEditingClub({ ...editingClub, logoImage: url });
+                        setEditingClub((prev) => (prev ? { ...prev, logoImage: url } : null));
                       }}
                       onImageCompressed={(res) => {
-                        setEditingClub({ ...editingClub, logoImage: res.dataUrl });
+                        setEditingClub((prev) => (prev ? { ...prev, logoImage: res.dataUrl } : null));
                       }}
                     />
                   </div>
