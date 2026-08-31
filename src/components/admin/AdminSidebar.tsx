@@ -39,7 +39,7 @@ export function AdminSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="sticky top-0 h-screen w-64 bg-white border-r border-slate-200 flex flex-col justify-between p-4 shrink-0 shadow-xs z-30 overflow-y-auto">
+    <aside className="sticky top-16 h-[calc(100vh-4rem)] w-64 bg-white border-r border-slate-200 flex flex-col justify-between p-4 shrink-0 shadow-xs z-30 overflow-y-auto">
       <div className="space-y-6">
         
         {/* Brand Header */}
