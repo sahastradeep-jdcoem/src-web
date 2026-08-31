@@ -55,6 +55,26 @@ function formatDateToReadable(dateStr: string): string {
   }
 }
 
+function parseToIsoDate(dateStr?: string): string {
+  if (!dateStr) return "";
+  const trimmed = dateStr.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+  try {
+    const parsed = new Date(trimmed);
+    if (!isNaN(parsed.getTime())) {
+      const year = parsed.getFullYear();
+      const month = String(parsed.getMonth() + 1).padStart(2, "0");
+      const day = String(parsed.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+  } catch {
+    // ignore
+  }
+  return "";
+}
+
 export default function AdminEventsPage() {
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
   const [clubsList, setClubsList] = useState<ClubItem[]>([]);
@@ -235,6 +255,7 @@ export default function AdminEventsPage() {
       teamType: newEvent.teamType,
       minTeamSize: newEvent.teamType !== "Individual" ? newEvent.minTeamSize : undefined,
       maxTeamSize: newEvent.teamType !== "Individual" ? newEvent.maxTeamSize : undefined,
+      registrationStartDate: newEvent.registrationStartDate || new Date().toISOString().split("T")[0],
       registrationDeadline: regDeadlineFormatted,
       entryFee: entryFeeText,
       isPaid: newEvent.isPaid,
@@ -279,10 +300,14 @@ export default function AdminEventsPage() {
 
   const handleStartEdit = (evt: EventItem) => {
     setEditingEvent(evt);
+    const parsedEventDate = parseToIsoDate(evt.date);
+    const parsedStartDate = parseToIsoDate(evt.registrationStartDate) || new Date().toISOString().split("T")[0];
+    const parsedDeadline = parseToIsoDate(evt.registrationDeadline) || parsedEventDate;
+
     setEditForm({
       name: evt.name,
       category: evt.category,
-      rawDate: "",
+      rawDate: parsedEventDate,
       date: evt.date,
       venue: evt.venue,
       organizer: evt.organizer || "SRC JDCOEM",
@@ -298,8 +323,8 @@ export default function AdminEventsPage() {
       teamType: evt.teamType || "Both",
       minTeamSize: evt.minTeamSize || 2,
       maxTeamSize: evt.maxTeamSize || 4,
-      registrationStartDate: "",
-      registrationDeadline: "",
+      registrationStartDate: parsedStartDate,
+      registrationDeadline: parsedDeadline,
       isPaid: Boolean(evt.isPaid || (evt.feeAmount && evt.feeAmount > 0)),
       feeAmount: evt.feeAmount || 100,
       feePricingModel: evt.feePricingModel || "per_person",
@@ -329,7 +354,7 @@ export default function AdminEventsPage() {
             ...item,
             name: editForm.name,
             category: editForm.category as any,
-            date: editForm.date,
+            date: editForm.rawDate ? formatDateToReadable(editForm.rawDate) : editForm.date,
             venue: editForm.venue,
             organizer: editForm.organizer,
             status: editForm.status,
@@ -344,6 +369,7 @@ export default function AdminEventsPage() {
             teamType: editForm.teamType,
             minTeamSize: editForm.teamType !== "Individual" ? editForm.minTeamSize : undefined,
             maxTeamSize: editForm.teamType !== "Individual" ? editForm.maxTeamSize : undefined,
+            registrationStartDate: editForm.registrationStartDate || (item as any).registrationStartDate || undefined,
             registrationDeadline: regDeadlineFormatted || item.registrationDeadline,
             entryFee: entryFeeText,
             isPaid: editForm.isPaid,

@@ -47,6 +47,7 @@ export interface EventItem {
   teamType: "Individual" | "Team" | "Both";
   maxTeamSize?: number;
   minTeamSize?: number;
+  registrationStartDate?: string;
   registrationDeadline: string;
   entryFee?: string;
   isPaid?: boolean;
