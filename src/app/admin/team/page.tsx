@@ -904,7 +904,7 @@ export default function AdminTeamPage() {
                   >
                     {clubsList.map((c) => (
                       <option key={c.id || c.slug} value={c.id || c.slug}>
-                        {c.name} ({c.category})
+                        {c.name}
                       </option>
                     ))}
                   </select>
