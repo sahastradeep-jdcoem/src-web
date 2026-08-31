@@ -57,32 +57,57 @@ function getOrdinalSuffix(n: number): string {
 }
 
 export function getStoredTenures(): CouncilTenure[] {
-  if (typeof window === "undefined") return initialDefaultTenures;
-  try {
-    const stored = localStorage.getItem(TENURES_STORAGE_KEY);
-    if (stored !== null) {
-      let parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        // Filter out any legacy pre-2025 mock tenures
-        parsed = parsed.filter((t: CouncilTenure) => t.id !== "tenure-2024-25" && !t.label.includes("2024"));
-        if (parsed.length > 0) {
-          // Ensure tenureNumber is populated on all records
-          return parsed.map((t: CouncilTenure, idx: number) => {
-            if (t.id === "tenure-2025-26" || t.label.includes("2025")) {
-              return { ...t, tenureNumber: "1st Tenure" };
-            }
-            return {
-              ...t,
-              tenureNumber: t.tenureNumber || `${idx + 1}${getOrdinalSuffix(idx + 1)} Tenure`
-            };
-          });
+  let list: CouncilTenure[] = initialDefaultTenures;
+  if (typeof window !== "undefined") {
+    try {
+      const stored = localStorage.getItem(TENURES_STORAGE_KEY);
+      if (stored !== null) {
+        let parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Filter out any legacy pre-2025 mock tenures
+          parsed = parsed.filter((t: CouncilTenure) => t.id !== "tenure-2024-25" && !t.label.includes("2024"));
+          if (parsed.length > 0) {
+            list = parsed;
+          }
         }
       }
+    } catch (e) {
+      console.warn("Could not read tenures from storage", e);
     }
-  } catch (e) {
-    console.warn("Could not read tenures from storage", e);
   }
-  return initialDefaultTenures;
+
+  // Active Council & Events Sync: dynamically inject live active state into whichever tenure is current!
+  const activeAdmins = getStoredCouncilMembers();
+  const activeHosting = getStoredHostingCommittee();
+  const activeFounders = getStoredFoundingMembers();
+  const activeEvents = getStoredEvents();
+
+  // If no tenure has isCurrent, make the first one current
+  const hasCurrent = list.some((t) => t.isCurrent);
+
+  return list.map((t: CouncilTenure, idx: number) => {
+    const isCurrent = hasCurrent ? t.isCurrent : idx === 0;
+    const tenureNum = (t.id === "tenure-2025-26" || t.label.includes("2025"))
+      ? "1st Tenure"
+      : (t.tenureNumber || `${idx + 1}${getOrdinalSuffix(idx + 1)} Tenure`);
+
+    if (isCurrent) {
+      return {
+        ...t,
+        isCurrent: true,
+        tenureNumber: tenureNum,
+        adminCouncil: activeAdmins,
+        hostingCommittee: activeHosting,
+        foundingMembers: activeFounders,
+        events: activeEvents,
+      };
+    }
+
+    return {
+      ...t,
+      tenureNumber: tenureNum,
+    };
+  });
 }
 
 export function saveStoredTenures(tenures: CouncilTenure[]): void {
@@ -252,7 +277,7 @@ export async function syncTenuresFromFirestore(): Promise<CouncilTenure[]> {
         localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(filtered));
         window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: filtered }));
       }
-      return filtered;
+      return getStoredTenures();
     }
   } catch (e) {
     console.warn("Could not sync tenures from Firestore", e);
@@ -268,7 +293,7 @@ export function subscribeToTenures(callback: (tenures: CouncilTenure[]) => void)
         localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(filtered));
         window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: filtered }));
       }
-      callback(filtered);
+      callback(getStoredTenures());
     }
   });
 }

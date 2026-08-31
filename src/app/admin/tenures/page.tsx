@@ -65,11 +65,19 @@ export default function AdminTenuresPage() {
 
     window.addEventListener("src_tenures_updated", handleUpdate);
     window.addEventListener("src_tenure_changed", handleUpdate);
+    window.addEventListener("src_council_team_updated", handleUpdate);
+    window.addEventListener("src_hosting_updated", handleUpdate);
+    window.addEventListener("src_founding_members_updated", handleUpdate);
+    window.addEventListener("src_events_updated", handleUpdate);
     window.addEventListener("storage", handleUpdate);
 
     return () => {
       window.removeEventListener("src_tenures_updated", handleUpdate);
       window.removeEventListener("src_tenure_changed", handleUpdate);
+      window.removeEventListener("src_council_team_updated", handleUpdate);
+      window.removeEventListener("src_hosting_updated", handleUpdate);
+      window.removeEventListener("src_founding_members_updated", handleUpdate);
+      window.removeEventListener("src_events_updated", handleUpdate);
       window.removeEventListener("storage", handleUpdate);
     };
   }, []);

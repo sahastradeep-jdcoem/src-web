@@ -32,6 +32,7 @@ export function saveStoredCouncilMembers(members: TeamMember[]): void {
   try {
     localStorage.setItem("src_council_team", JSON.stringify(members));
     window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: members }));
+    window.dispatchEvent(new CustomEvent("src_tenures_updated"));
     window.dispatchEvent(new CustomEvent("src_users_updated"));
     saveSiteContentToFirestore("council_team", members);
   } catch (e) {
