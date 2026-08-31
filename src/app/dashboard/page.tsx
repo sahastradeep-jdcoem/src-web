@@ -19,7 +19,10 @@ import {
   Ticket,
   User,
   LogOut,
-  Award
+  Award,
+  RefreshCw,
+  Check,
+  Printer
 } from "lucide-react";
 import { mockRegistrations } from "@/data/registrations";
 import { Badge } from "@/components/ui/Badge";
@@ -42,6 +45,8 @@ export default function StudentDashboardPage() {
   const [registrations, setRegistrations] = useState<RegistrationRecord[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<RegistrationRecord | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
 
   useEffect(() => {
     // Legacy Backwards Compatibility:
@@ -543,64 +548,230 @@ export default function StudentDashboardPage() {
 
         </div>
 
-        {/* Modal: View Participant QR & Pass Record */}
-        {selectedTicket && (
-          <Modal
-            isOpen={!!selectedTicket}
-            onClose={() => setSelectedTicket(null)}
-            title="Digital Delegate Pass"
-            subtitle={`Pass ID: ${selectedTicket.registrationId}`}
-            maxWidth="md"
-          >
-            <div className="space-y-6" id="dashboard-ticket-modal">
-              <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-3">
-                <div className="mx-auto w-36 h-36 p-2 bg-white rounded-2xl shadow-xs border border-slate-200 flex items-center justify-center overflow-hidden">
-                  <ScannableQRCode
-                    value={
-                      typeof window !== "undefined"
-                        ? `${window.location.origin}/verify/${encodeURIComponent(selectedTicket.registrationId)}`
-                        : `https://src-jdcoem.vercel.app/verify/${encodeURIComponent(selectedTicket.registrationId)}`
-                    }
-                    size={132}
-                    level="H"
-                    includeMargin={true}
-                    renderAs="canvas"
-                  />
-                </div>
-                <div>
-                  <span className="font-mono text-xs font-bold text-[#E78023]">
-                    {selectedTicket.ticketCode}
-                  </span>
-                  <h4 className="font-heading font-bold text-xl text-slate-900 mt-1">
-                    {selectedTicket.eventName}
-                  </h4>
-                  <p className="text-xs text-slate-500 font-medium font-sans">
-                    Delegate: {selectedTicket.participantName} ({selectedTicket.department})
-                  </p>
-                </div>
-              </div>
+        {/* Modal: View Participant Official Delegate Pass */}
+        {selectedTicket && (() => {
+          const matchedEvent = events.find(e => 
+            e.name.toLowerCase() === selectedTicket.eventName.toLowerCase() ||
+            e.id.toLowerCase() === selectedTicket.eventSlug?.toLowerCase() ||
+            e.slug.toLowerCase() === selectedTicket.eventSlug?.toLowerCase()
+          );
+          const eventDateStr = matchedEvent?.date || "10 September 2026";
+          const eventVenueStr = matchedEvent?.venue || "JDCOEM Campus";
 
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => downloadPassAsImage("dashboard-ticket-modal", `${selectedTicket.registrationId}-Pass.png`)}
-                  className="gap-1.5"
+          return (
+            <Modal
+              isOpen={!!selectedTicket}
+              onClose={() => setSelectedTicket(null)}
+              title="Official Delegate Pass"
+              subtitle={`Pass ID: ${selectedTicket.registrationId}`}
+              maxWidth="4xl"
+            >
+              <div className="space-y-6">
+                
+                {/* Official Digital Ticket Pass Card (Exportable Target) */}
+                <div
+                  id="src-dashboard-delegate-pass"
+                  className="relative rounded-3xl bg-white border border-slate-200 shadow-xl overflow-hidden text-left"
                 >
-                  <Download className="w-4 h-4" />
-                  <span>Download Pass Image</span>
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setSelectedTicket(null)}
-                >
-                  Close
-                </Button>
+                  {/* Ticket Top Strip */}
+                  <div className="bg-[#17458F] p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="relative h-12 w-12 rounded-xl bg-white p-1 shrink-0">
+                        <Image
+                          src="/assets/SRC Logo.png"
+                          alt="SRC Logo"
+                          fill
+                          className="object-contain"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-[#E78023]">
+                          Official Delegate Pass
+                        </span>
+                        <h3 className="font-bold text-xl sm:text-2xl text-white font-heading">
+                          SAHASTRADEEP
+                        </h3>
+                        <p className="text-xs text-slate-200 font-sans">Student Representative Council • JDCOEM</p>
+                      </div>
+                    </div>
+
+                    <div className="text-left sm:text-right">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-200">
+                        Pass ID
+                      </span>
+                      <p className="font-mono font-bold text-base sm:text-lg text-[#E78023]">
+                        {selectedTicket.registrationId}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Ticket Perforation Notch */}
+                  <div className="relative py-2 flex items-center justify-between px-2 sm:px-4 bg-slate-50">
+                    <div className="w-5 h-5 -ml-5 sm:-ml-7 rounded-full bg-[#F8FAFC] border border-slate-200" />
+                    <div className="w-full border-t-2 border-dashed border-slate-300 mx-4" />
+                    <div className="w-5 h-5 -mr-5 sm:-mr-7 rounded-full bg-[#F8FAFC] border border-slate-200" />
+                  </div>
+
+                  {/* Ticket Body */}
+                  <div className="p-6 sm:p-8 grid grid-cols-1 md:grid-cols-3 gap-8 items-center bg-white">
+                    
+                    {/* Main Info */}
+                    <div className="md:col-span-2 space-y-6">
+                      <div>
+                        <span className="text-xs font-bold uppercase tracking-widest text-[#E78023]">
+                          Event Selection
+                        </span>
+                        <h4 className="font-extrabold text-2xl text-[#0F172A] mt-1 font-heading">
+                          {selectedTicket.eventName}
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-1 font-medium font-sans">
+                          {eventDateStr} • {eventVenueStr}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 text-xs">
+                        <div>
+                          <span className="text-slate-500 uppercase font-bold text-[10px]">
+                            Participant
+                          </span>
+                          <p className="font-bold text-slate-900 text-sm font-sans">{selectedTicket.participantName}</p>
+                          <p className="text-slate-600 text-[11px] font-medium font-sans">
+                            {selectedTicket.department || displayDepartment} ({selectedTicket.year || displayYear})
+                          </p>
+                        </div>
+
+                        <div>
+                          <span className="text-slate-500 uppercase font-bold text-[10px]">
+                            Category / Squad
+                          </span>
+                          <p className="font-bold text-slate-900 text-sm font-sans">
+                            {selectedTicket.teamType === "Team" ? selectedTicket.teamName || "Team Entry" : "Individual Entry"}
+                          </p>
+                          <Badge variant={selectedTicket.status === "CHECKED_IN" ? "success" : "orange"} size="sm" className="mt-1">
+                            {selectedTicket.status}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {selectedTicket.teamMembers && selectedTicket.teamMembers.length > 0 && (
+                        <div className="pt-2 border-t border-slate-100 font-medium">
+                          <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">
+                            Roster Members:
+                          </span>
+                          <p className="text-xs text-slate-700 mt-0.5 font-sans">
+                            {selectedTicket.teamMembers.join(" • ")}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Visual Scannable QR Code & Verification Block */}
+                    <div className="flex flex-col items-center justify-center p-5 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-3">
+                      <div className="relative p-2 bg-white rounded-xl shadow-xs border border-slate-200 flex items-center justify-center overflow-hidden">
+                        <ScannableQRCode
+                          value={
+                            typeof window !== "undefined"
+                              ? `${window.location.origin}/verify/${encodeURIComponent(selectedTicket.registrationId)}`
+                              : `https://src-jdcoem.vercel.app/verify/${encodeURIComponent(selectedTicket.registrationId)}`
+                          }
+                          size={116}
+                          level="H"
+                          includeMargin={true}
+                          fgColor="#0F172A"
+                          bgColor="#FFFFFF"
+                          renderAs="canvas"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="font-mono text-[11px] font-bold text-[#E78023] block tracking-wider">
+                          {selectedTicket.ticketCode}
+                        </span>
+                        <p className="text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1 font-sans">
+                          <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                          <span>Scan for Gate Check-In</span>
+                        </p>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* Ticket Bottom Endorsement Footer */}
+                  <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 font-medium gap-2 font-sans">
+                    <p>Entry permitted only with valid physical College ID card.</p>
+                    <p className="font-semibold text-slate-700">JDCOEM Nagpur • SRC Sahastradeep</p>
+                  </div>
+                </div>
+
+                {/* Modal Action Buttons */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                  <Link
+                    href={`/verify/${encodeURIComponent(selectedTicket.registrationId)}`}
+                    target="_blank"
+                    className="inline-flex items-center gap-1.5 text-xs text-[#17458F] hover:underline font-semibold"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Public Verification Link</span>
+                  </Link>
+
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={isDownloading}
+                      onClick={async () => {
+                        setIsDownloading(true);
+                        try {
+                          const success = await downloadPassAsImage(
+                            "src-dashboard-delegate-pass",
+                            `${selectedTicket.registrationId}-${selectedTicket.eventName.replace(/\s+/g, "_")}_Pass.png`
+                          );
+                          if (success) {
+                            setDownloadSuccess(true);
+                            setTimeout(() => setDownloadSuccess(false), 3000);
+                          }
+                        } catch (e) {
+                          console.error("Pass export error", e);
+                        } finally {
+                          setIsDownloading(false);
+                        }
+                      }}
+                      className="gap-2 shadow-md shadow-[#17458F]/20"
+                    >
+                      {isDownloading ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : downloadSuccess ? (
+                        <Check className="w-4 h-4 text-emerald-300" />
+                      ) : (
+                        <Download className="w-4 h-4" />
+                      )}
+                      <span>{downloadSuccess ? "Pass Saved!" : isDownloading ? "Generating..." : "Save Pass to Phone (PNG)"}</span>
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.print()}
+                      className="gap-1.5"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>Print</span>
+                    </Button>
+
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setSelectedTicket(null)}
+                    >
+                      Close
+                    </Button>
+                  </div>
+                </div>
+
               </div>
-            </div>
-          </Modal>
-        )}
+            </Modal>
+          );
+        })()}
 
       </div>
     </div>
