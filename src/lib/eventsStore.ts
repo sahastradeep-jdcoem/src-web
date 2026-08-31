@@ -6,6 +6,7 @@ import {
   subscribeToSiteContent,
   cleanUndefined
 } from "./firebase/firestore";
+import { enqueueCloudWrite, reconcileArrayDatasets } from "./dataSyncEngine";
 
 const EVENTS_STORAGE_KEY = "src_events";
 
@@ -27,7 +28,7 @@ export function getStoredEvents(): EventItem[] {
 }
 
 /**
- * Persist events list and broadcast real-time event update across tabs, components, and Firestore Cloud
+ * Persist events list with write-ahead queue and automatic retry
  */
 export function saveStoredEvents(events: EventItem[]): void {
   if (typeof window === "undefined") return;
@@ -35,24 +36,26 @@ export function saveStoredEvents(events: EventItem[]): void {
     const sanitized = cleanUndefined(events);
     localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(sanitized));
     window.dispatchEvent(new CustomEvent("src_events_updated", { detail: sanitized }));
-    saveSiteContentToFirestore("events", sanitized);
+    enqueueCloudWrite("events", sanitized, `Events Roster (${events.length} Events)`);
   } catch (e) {
     console.error("Could not save events to storage", e);
   }
 }
 
 /**
- * Fetch and sync events list from Firestore
+ * Fetch and sync events list from Firestore with conflict-free reconciliation
  */
 export async function syncEventsFromFirestore(): Promise<EventItem[]> {
   try {
     const remote = await getSiteContentFromFirestore<EventItem[]>("events");
     if (remote !== null && Array.isArray(remote)) {
+      const current = getStoredEvents();
+      const merged = reconcileArrayDatasets(current, remote);
       if (typeof window !== "undefined") {
-        localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(remote));
-        window.dispatchEvent(new CustomEvent("src_events_updated", { detail: remote }));
+        localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(merged));
+        window.dispatchEvent(new CustomEvent("src_events_updated", { detail: merged }));
       }
-      return remote;
+      return merged;
     }
   } catch (e) {
     console.warn("Could not sync events from Firestore", e);
@@ -66,11 +69,13 @@ export async function syncEventsFromFirestore(): Promise<EventItem[]> {
 export function subscribeToEvents(callback: (events: EventItem[]) => void): () => void {
   return subscribeToSiteContent<EventItem[]>("events", (remote) => {
     if (remote !== null && Array.isArray(remote)) {
+      const current = getStoredEvents();
+      const merged = reconcileArrayDatasets(current, remote);
       if (typeof window !== "undefined") {
-        localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(remote));
-        window.dispatchEvent(new CustomEvent("src_events_updated", { detail: remote }));
+        localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(merged));
+        window.dispatchEvent(new CustomEvent("src_events_updated", { detail: merged }));
       }
-      callback(remote);
+      callback(merged);
     }
   });
 }

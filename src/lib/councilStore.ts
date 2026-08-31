@@ -9,8 +9,10 @@ import { mockClubs as initialClubs } from "@/data/clubs";
 import { 
   saveSiteContentToFirestore, 
   getSiteContentFromFirestore, 
-  subscribeToSiteContent 
+  subscribeToSiteContent,
+  cleanUndefined
 } from "./firebase/firestore";
+import { enqueueCloudWrite, reconcileArrayDatasets } from "./dataSyncEngine";
 
 // Council Team Store
 export function getStoredCouncilMembers(): TeamMember[] {
@@ -30,11 +32,12 @@ export function getStoredCouncilMembers(): TeamMember[] {
 export function saveStoredCouncilMembers(members: TeamMember[]): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem("src_council_team", JSON.stringify(members));
-    window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: members }));
+    const sanitized = cleanUndefined(members);
+    localStorage.setItem("src_council_team", JSON.stringify(sanitized));
+    window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: sanitized }));
     window.dispatchEvent(new CustomEvent("src_tenures_updated"));
     window.dispatchEvent(new CustomEvent("src_users_updated"));
-    saveSiteContentToFirestore("council_team", members);
+    enqueueCloudWrite("council_team", sanitized, `Council Leadership (${members.length} Members)`);
   } catch (e) {
     console.error("Could not save council team to storage", e);
   }
@@ -44,12 +47,14 @@ export async function syncCouncilMembersFromFirestore(): Promise<TeamMember[]> {
   try {
     const remote = await getSiteContentFromFirestore<TeamMember[]>("council_team");
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
+      const current = getStoredCouncilMembers();
+      const merged = reconcileArrayDatasets(current, remote);
       if (typeof window !== "undefined") {
-        localStorage.setItem("src_council_team", JSON.stringify(remote));
-        window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: remote }));
+        localStorage.setItem("src_council_team", JSON.stringify(merged));
+        window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: merged }));
         window.dispatchEvent(new CustomEvent("src_users_updated"));
       }
-      return remote;
+      return merged;
     }
   } catch {}
   return getStoredCouncilMembers();
@@ -191,9 +196,10 @@ export function getStoredClubs(): ClubItem[] {
 export function saveStoredClubs(clubs: ClubItem[]): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem("src_clubs_roster", JSON.stringify(clubs));
-    window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: clubs }));
-    saveSiteContentToFirestore("clubs", clubs);
+    const sanitized = cleanUndefined(clubs);
+    localStorage.setItem("src_clubs_roster", JSON.stringify(sanitized));
+    window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: sanitized }));
+    enqueueCloudWrite("clubs", sanitized, `Clubs Directory (${clubs.length} Clubs)`);
   } catch (e) {
     console.error("Could not save clubs to storage", e);
   }
@@ -203,11 +209,13 @@ export async function syncClubsFromFirestore(): Promise<ClubItem[]> {
   try {
     const remote = await getSiteContentFromFirestore<ClubItem[]>("clubs");
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
+      const current = getStoredClubs();
+      const merged = reconcileArrayDatasets(current, remote);
       if (typeof window !== "undefined") {
-        localStorage.setItem("src_clubs_roster", JSON.stringify(remote));
-        window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: remote }));
+        localStorage.setItem("src_clubs_roster", JSON.stringify(merged));
+        window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: merged }));
       }
-      return remote;
+      return merged;
     }
   } catch {}
   return getStoredClubs();
@@ -216,11 +224,13 @@ export async function syncClubsFromFirestore(): Promise<ClubItem[]> {
 export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => void {
   return subscribeToSiteContent<ClubItem[]>("clubs", (remote) => {
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
+      const current = getStoredClubs();
+      const merged = reconcileArrayDatasets(current, remote);
       if (typeof window !== "undefined") {
-        localStorage.setItem("src_clubs_roster", JSON.stringify(remote));
-        window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: remote }));
+        localStorage.setItem("src_clubs_roster", JSON.stringify(merged));
+        window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: merged }));
       }
-      callback(remote);
+      callback(merged);
     }
   });
 }

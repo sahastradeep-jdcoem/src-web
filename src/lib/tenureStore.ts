@@ -16,8 +16,10 @@ import { getStoredEvents, saveStoredEvents } from "./eventsStore";
 import { 
   saveSiteContentToFirestore, 
   getSiteContentFromFirestore, 
-  subscribeToSiteContent 
+  subscribeToSiteContent,
+  cleanUndefined
 } from "./firebase/firestore";
+import { enqueueCloudWrite, reconcileArrayDatasets } from "./dataSyncEngine";
 
 export interface CouncilTenure {
   id: string;
@@ -120,9 +122,10 @@ export function getStoredTenures(): CouncilTenure[] {
 export function saveStoredTenures(tenures: CouncilTenure[]): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(tenures));
-    window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: tenures }));
-    saveSiteContentToFirestore("council_tenures", tenures);
+    const sanitized = cleanUndefined(tenures);
+    localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(sanitized));
+    window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: sanitized }));
+    enqueueCloudWrite("council_tenures", sanitized, `Council Tenures (${tenures.length} Sessions)`);
   } catch (e) {
     console.error("Could not save tenures to storage", e);
   }
@@ -348,9 +351,11 @@ export async function syncTenuresFromFirestore(): Promise<CouncilTenure[]> {
     const remote = await getSiteContentFromFirestore<CouncilTenure[]>("council_tenures");
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
       const filtered = remote.filter((t: CouncilTenure) => t.id !== "tenure-2024-25" && !t.label.includes("2024"));
+      const current = getStoredTenures();
+      const merged = reconcileArrayDatasets(current, filtered);
       if (typeof window !== "undefined") {
-        localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(filtered));
-        window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: filtered }));
+        localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(merged));
+        window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: merged }));
       }
       return getStoredTenures();
     }
@@ -364,9 +369,11 @@ export function subscribeToTenures(callback: (tenures: CouncilTenure[]) => void)
   return subscribeToSiteContent<CouncilTenure[]>("council_tenures", (remote) => {
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
       const filtered = remote.filter((t: CouncilTenure) => t.id !== "tenure-2024-25" && !t.label.includes("2024"));
+      const current = getStoredTenures();
+      const merged = reconcileArrayDatasets(current, filtered);
       if (typeof window !== "undefined") {
-        localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(filtered));
-        window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: filtered }));
+        localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(merged));
+        window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: merged }));
       }
       callback(getStoredTenures());
     }

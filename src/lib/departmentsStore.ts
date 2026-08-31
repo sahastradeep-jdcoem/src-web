@@ -1,7 +1,9 @@
 import { 
   saveSiteContentToFirestore, 
-  getSiteContentFromFirestore 
+  getSiteContentFromFirestore,
+  cleanUndefined
 } from "./firebase/firestore";
+import { enqueueCloudWrite } from "./dataSyncEngine";
 
 export const DEFAULT_DEPARTMENTS: string[] = [
   "Basic Science & Humanities Dept.",
@@ -118,9 +120,10 @@ export function getStoredDepartments(): string[] {
 export function saveStoredDepartments(departments: string[]): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem("src_departments", JSON.stringify(departments));
-    window.dispatchEvent(new CustomEvent("src_departments_updated", { detail: departments }));
-    saveSiteContentToFirestore("departments", departments);
+    const sanitized = cleanUndefined(departments);
+    localStorage.setItem("src_departments", JSON.stringify(sanitized));
+    window.dispatchEvent(new CustomEvent("src_departments_updated", { detail: sanitized }));
+    enqueueCloudWrite("departments", sanitized, `Academic Departments (${departments.length} Branches)`);
   } catch (e) {
     console.error("Could not save departments", e);
   }
