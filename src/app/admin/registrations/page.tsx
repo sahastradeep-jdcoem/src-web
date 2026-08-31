@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
 import { 
@@ -26,6 +26,8 @@ import {
   Table as TableIcon,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  X,
   ArrowRight,
   Calendar,
   Building2,
@@ -45,6 +47,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { getStoredEvents, syncEventsFromFirestore } from "@/lib/eventsStore";
 import { getDepartmentShortName } from "@/lib/departmentsStore";
+import { getStoredTenures, syncTenuresFromFirestore, subscribeToTenures, CouncilTenure } from "@/lib/tenureStore";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { 
   checkInStudentPass, 
@@ -59,9 +62,16 @@ type ActiveTab = "summary" | "question" | "individual" | "table";
 export default function AdminRegistrationsPage() {
   const [registrations, setRegistrations] = useState<RegistrationRecord[]>([]);
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
+  const [tenuresList, setTenuresList] = useState<CouncilTenure[]>([]);
+  const [selectedTenureId, setSelectedTenureId] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<ActiveTab>("summary");
   const [selectedEventSlug, setSelectedEventSlug] = useState<string>("all");
   
+  // Event Autocomplete & Dropdown filter state
+  const [eventSearchQuery, setEventSearchQuery] = useState("");
+  const [isEventDropdownOpen, setIsEventDropdownOpen] = useState(false);
+  const eventDropdownRef = useRef<HTMLDivElement | null>(null);
+
   // Search & Filters for Table tab
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -76,16 +86,27 @@ export default function AdminRegistrationsPage() {
   const [selectedRecord, setSelectedRecord] = useState<RegistrationRecord | null>(null);
   const [checkInNotice, setCheckInNotice] = useState<string | null>(null);
 
-  // Load and sync events from local store & Firestore for question definitions
+  // Load and sync events & tenures from local store & Firestore
   useEffect(() => {
     setEventsList(getStoredEvents());
     syncEventsFromFirestore().then((evts) => {
       if (evts && evts.length > 0) setEventsList(evts);
     });
 
+    setTenuresList(getStoredTenures());
+    syncTenuresFromFirestore().then((res) => {
+      if (res && res.length > 0) setTenuresList(res);
+    });
+
     const unsubscribeEvents = subscribeToSiteContent<EventItem[]>("events", (cloudEvts) => {
       if (cloudEvts && Array.isArray(cloudEvts) && cloudEvts.length > 0) {
         setEventsList(cloudEvts);
+      }
+    });
+
+    const unsubscribeTenures = subscribeToTenures((cloudTenures) => {
+      if (cloudTenures && Array.isArray(cloudTenures) && cloudTenures.length > 0) {
+        setTenuresList(cloudTenures);
       }
     });
 
@@ -97,9 +118,19 @@ export default function AdminRegistrationsPage() {
       }
     };
     window.addEventListener("src_events_updated", handleEventsUpdate);
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (eventDropdownRef.current && !eventDropdownRef.current.contains(event.target as Node)) {
+        setIsEventDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+
     return () => {
       unsubscribeEvents();
+      unsubscribeTenures();
       window.removeEventListener("src_events_updated", handleEventsUpdate);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
@@ -174,10 +205,25 @@ export default function AdminRegistrationsPage() {
     };
   }, []);
 
-  // Distinct events from registrations list
-  const distinctEventNames = useMemo(() => {
-    return Array.from(new Set(registrations.map((r) => r.eventName))).filter(Boolean);
-  }, [registrations]);
+  // Events available in selected tenure
+  const tenureFilteredEvents = useMemo(() => {
+    if (selectedTenureId === "all") return eventsList;
+    const matchedTenure = tenuresList.find((t) => t.id === selectedTenureId);
+    if (!matchedTenure || !matchedTenure.events) return eventsList;
+    return matchedTenure.events;
+  }, [eventsList, selectedTenureId, tenuresList]);
+
+  // Autocomplete / search filtered events for dropdown
+  const filteredDropdownEvents = useMemo(() => {
+    if (!eventSearchQuery.trim()) return tenureFilteredEvents;
+    const q = eventSearchQuery.toLowerCase();
+    return tenureFilteredEvents.filter(
+      (e) =>
+        e.name.toLowerCase().includes(q) ||
+        e.slug.toLowerCase().includes(q) ||
+        (e.category && e.category.toLowerCase().includes(q))
+    );
+  }, [tenureFilteredEvents, eventSearchQuery]);
 
   // Current active event object (if filtered to a specific event)
   const currentSelectedEventObj = useMemo(() => {
@@ -192,17 +238,40 @@ export default function AdminRegistrationsPage() {
     );
   }, [selectedEventSlug, eventsList]);
 
-  // Filter registrations by currently selected event
+  // Filter registrations by currently selected tenure & event
   const eventRegistrations = useMemo(() => {
-    if (selectedEventSlug === "all") return registrations;
-    return registrations.filter((r) => {
-      return (
-        r.eventName.toLowerCase() === selectedEventSlug.toLowerCase() ||
-        (r.eventSlug && r.eventSlug.toLowerCase() === selectedEventSlug.toLowerCase()) ||
-        (currentSelectedEventObj && r.eventName.toLowerCase() === currentSelectedEventObj.name.toLowerCase())
-      );
-    });
-  }, [registrations, selectedEventSlug, currentSelectedEventObj]);
+    let list = registrations;
+
+    // Filter by tenure
+    if (selectedTenureId !== "all") {
+      const tenureEvents = tenuresList.find((t) => t.id === selectedTenureId)?.events || [];
+      const tenureEventSlugs = new Set(tenureEvents.map((e) => e.slug.toLowerCase()));
+      const tenureEventNames = new Set(tenureEvents.map((e) => e.name.toLowerCase()));
+
+      list = list.filter((r: any) => {
+        if (r.tenureId && r.tenureId === selectedTenureId) return true;
+        const eSlug = (r.eventSlug || r.eventId || "").toLowerCase();
+        const eName = (r.eventName || "").toLowerCase();
+        return tenureEventSlugs.has(eSlug) || tenureEventNames.has(eName);
+      });
+    }
+
+    // Filter by event
+    if (selectedEventSlug !== "all") {
+      list = list.filter((r) => {
+        return (
+          r.eventName.toLowerCase() === selectedEventSlug.toLowerCase() ||
+          (r.eventSlug && r.eventSlug.toLowerCase() === selectedEventSlug.toLowerCase()) ||
+          (currentSelectedEventObj && r.eventName.toLowerCase() === currentSelectedEventObj.name.toLowerCase())
+        );
+      });
+    }
+
+    return list;
+  }, [registrations, selectedEventSlug, selectedTenureId, currentSelectedEventObj, tenuresList]);
+
+  // Export Excel button is enabled only after selecting a specific event filter
+  const isExportDisabled = selectedEventSlug === "all" || eventRegistrations.length === 0;
 
   // Filtered registrations for the Table tab (with search & status)
   const tableFilteredRegistrations = useMemo(() => {
@@ -681,55 +750,191 @@ export default function AdminRegistrationsPage() {
     <div className="space-y-8 max-w-7xl mx-auto text-[#0F172A] font-sans pb-16">
       
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
-        <div>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#0F172A] uppercase tracking-tight">
-              REGISTRATION &amp; RESPONSES STUDIO
-            </h1>
-            <Badge variant="orange" size="md">
-              {eventRegistrations.length} RESPONSES
-            </Badge>
+      <div className="pb-1 border-b border-slate-200/60">
+        <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#0F172A] uppercase tracking-tight">
+          REGISTRATION &amp; RESPONSES STUDIO
+        </h1>
+      </div>
+
+      {/* FILTER MENU BAR */}
+      <div className="p-4 sm:p-5 rounded-3xl bg-white border border-slate-200 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        
+        {/* Left Side: Tenure Filter & Autocomplete Event Filter */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
+          
+          {/* 1. Tenure Dropdown Filter */}
+          <div className="min-w-[180px] sm:min-w-[210px]">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+              Tenure Period
+            </span>
+            <div className="relative">
+              <select
+                value={selectedTenureId}
+                onChange={(e) => {
+                  setSelectedTenureId(e.target.value);
+                  setIndividualIndex(0);
+                }}
+                className="w-full pl-9 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:outline-none focus:border-[#17458F] cursor-pointer appearance-none shadow-2xs"
+              >
+                <option value="all">All Tenures</option>
+                {tenuresList.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.tenureNumber} ({t.label})
+                  </option>
+                ))}
+              </select>
+              <Calendar className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
           </div>
-          <p className="text-xs text-slate-500 font-medium mt-1">
-            Google Forms-grade response analytics, question breakdown, individual delegate inspection, and Excel spreadsheet ledger.
-          </p>
+
+          {/* 2. Autocomplete & Dropdown Supported Event Filter */}
+          <div className="relative flex-1 min-w-[240px]" ref={eventDropdownRef}>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+              Event / Competition Filter
+            </span>
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={
+                  isEventDropdownOpen
+                    ? eventSearchQuery
+                    : selectedEventSlug === "all"
+                    ? ""
+                    : (eventsList.find(e => e.slug.toLowerCase() === selectedEventSlug.toLowerCase() || e.name.toLowerCase() === selectedEventSlug.toLowerCase())?.name || selectedEventSlug)
+                }
+                onFocus={() => {
+                  setIsEventDropdownOpen(true);
+                  setEventSearchQuery("");
+                }}
+                onChange={(e) => {
+                  setEventSearchQuery(e.target.value);
+                  setIsEventDropdownOpen(true);
+                }}
+                placeholder={selectedEventSlug === "all" ? "Search & select event (e.g. Hackathon)..." : "Change event..."}
+                className="w-full pl-10 pr-9 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:outline-none focus:border-[#17458F] shadow-2xs"
+              />
+              {selectedEventSlug !== "all" ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedEventSlug("all");
+                    setEventSearchQuery("");
+                    setIsEventDropdownOpen(false);
+                    setIndividualIndex(0);
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1 rounded-full hover:bg-slate-200 cursor-pointer"
+                  title="Clear event filter"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              )}
+            </div>
+
+            {/* Autocomplete Dropdown Options Menu */}
+            {isEventDropdownOpen && (
+              <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 max-h-64 overflow-y-auto p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedEventSlug("all");
+                    setIsEventDropdownOpen(false);
+                    setEventSearchQuery("");
+                    setIndividualIndex(0);
+                  }}
+                  className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold transition-colors flex items-center justify-between cursor-pointer ${
+                    selectedEventSlug === "all"
+                      ? "bg-[#17458F] text-white"
+                      : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <span>All Events &amp; Forms</span>
+                  <Badge variant={selectedEventSlug === "all" ? "orange" : "slate"} size="sm">
+                    {registrations.length}
+                  </Badge>
+                </button>
+
+                {filteredDropdownEvents.map((evt) => {
+                  const evtCount = registrations.filter(
+                    (r) =>
+                      r.eventName.toLowerCase() === evt.name.toLowerCase() ||
+                      (r.eventSlug && r.eventSlug.toLowerCase() === evt.slug.toLowerCase())
+                  ).length;
+                  const isSelected =
+                    selectedEventSlug.toLowerCase() === evt.slug.toLowerCase() ||
+                    selectedEventSlug.toLowerCase() === evt.name.toLowerCase();
+
+                  return (
+                    <button
+                      key={evt.id || evt.slug}
+                      type="button"
+                      onClick={() => {
+                        setSelectedEventSlug(evt.slug);
+                        setIsEventDropdownOpen(false);
+                        setEventSearchQuery("");
+                        setIndividualIndex(0);
+                      }}
+                      className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold transition-colors flex items-center justify-between cursor-pointer ${
+                        isSelected
+                          ? "bg-[#17458F] text-white"
+                          : "text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 truncate pr-2">
+                        <span className="truncate">{evt.name}</span>
+                        <span
+                          className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${
+                            isSelected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
+                          }`}
+                        >
+                          {evt.category}
+                        </span>
+                      </div>
+                      <Badge variant={isSelected ? "orange" : "slate"} size="sm">
+                        {evtCount}
+                      </Badge>
+                    </button>
+                  );
+                })}
+
+                {filteredDropdownEvents.length === 0 && (
+                  <div className="p-3 text-center text-xs text-slate-400">
+                    No matching events found
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
         </div>
 
-        {/* Global Actions */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {eventRegistrations.length > 0 && (
-            <button
-              onClick={handleClearAll}
-              className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
-              title="Delete records in current scope"
-            >
-              Clear Scope
-            </button>
-          )}
-
-          <Button
-            onClick={handlePrint}
-            variant="outline"
-            size="sm"
-            className="gap-1.5 cursor-pointer"
-            title="Print Summary / Roster"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Print</span>
-          </Button>
-
+        {/* Right Corner: Export Excel Button (Enabled only after selecting filter) */}
+        <div className="pt-1 md:pt-0 flex items-end">
           <Button
             onClick={handleExportExcel}
+            disabled={isExportDisabled}
             variant="primary"
-            size="sm"
-            className="gap-1.5 cursor-pointer shadow-xs bg-emerald-700 hover:bg-emerald-800 text-white"
-            title="Download formatted Excel (.xlsx) spreadsheet with separate question columns"
+            size="md"
+            className={`gap-2 transition-all font-bold ${
+              isExportDisabled
+                ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-50 shadow-none hover:bg-slate-100"
+                : "bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm cursor-pointer"
+            }`}
+            title={
+              isExportDisabled
+                ? "Select an event filter to enable Excel export"
+                : `Download Excel (.xlsx) responses for ${currentSelectedEventObj?.name || selectedEventSlug}`
+            }
           >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <FileSpreadsheet className={`w-4 h-4 ${isExportDisabled ? "text-slate-400" : "text-emerald-100"}`} />
             <span>Export Excel (.xlsx)</span>
           </Button>
         </div>
+
       </div>
 
       {/* Notice Toast */}
@@ -739,89 +944,6 @@ export default function AdminRegistrationsPage() {
           <span>{checkInNotice}</span>
         </div>
       )}
-
-      {/* EVENT SWITCHER / SELECTOR */}
-      <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-3">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-[#17458F] text-white flex items-center justify-center">
-              <Layers className="w-4 h-4 text-[#E78023]" />
-            </div>
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-800 font-heading">
-              Select Event / Form:
-            </span>
-          </div>
-
-          {currentSelectedEventObj && (
-            <div className="flex items-center gap-3 text-xs">
-              <Link
-                href={`/events/${currentSelectedEventObj.slug}`}
-                target="_blank"
-                className="text-[#17458F] hover:underline font-bold flex items-center gap-1"
-              >
-                <span>Live Event Page</span>
-                <ExternalLink className="w-3 h-3" />
-              </Link>
-              <Link
-                href="/admin/events"
-                className="text-slate-500 hover:text-slate-900 font-medium"
-              >
-                Edit Event
-              </Link>
-            </div>
-          )}
-        </div>
-
-        {/* Horizontal Event Chips */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedEventSlug("all");
-              setIndividualIndex(0);
-            }}
-            className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-2 ${
-              selectedEventSlug === "all"
-                ? "bg-[#17458F] text-white shadow-sm ring-2 ring-[#17458F]/20"
-                : "bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100"
-            }`}
-          >
-            <span>All Events &amp; Forms</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
-              selectedEventSlug === "all" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"
-            }`}>
-              {registrations.length}
-            </span>
-          </button>
-
-          {distinctEventNames.map((name) => {
-            const count = registrations.filter((r) => r.eventName === name).length;
-            const isSelected = selectedEventSlug.toLowerCase() === name.toLowerCase();
-            return (
-              <button
-                key={name}
-                type="button"
-                onClick={() => {
-                  setSelectedEventSlug(name);
-                  setIndividualIndex(0);
-                }}
-                className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-2 ${
-                  isSelected
-                    ? "bg-[#17458F] text-white shadow-sm ring-2 ring-[#17458F]/20"
-                    : "bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100"
-                }`}
-              >
-                <span>{name}</span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
-                  isSelected ? "bg-[#E78023] text-white" : "bg-slate-200 text-slate-700"
-                }`}>
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
 
       {/* GOOGLE FORMS STYLE 4-TAB NAVIGATION */}
       <div className="flex border-b border-slate-200 bg-white rounded-2xl p-1.5 shadow-xs">
