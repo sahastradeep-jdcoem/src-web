@@ -344,10 +344,13 @@ export default function AdminTeamPage() {
 
     if (activeTab === "clubs") {
       const match = clubLeadMembers.find((m) => m.id === editingMember.id);
-      if (match) {
+      const targetClubId = (editingMember as any).clubId || match?.clubId;
+      const targetRoleType = (editingMember as any).roleType || match?.roleType || "lead";
+
+      if (targetClubId) {
         const updatedClubs = clubsList.map((club) => {
-          if (club.id === match.clubId) {
-            if (match.roleType === "lead") {
+          if (club.id === targetClubId || club.slug === targetClubId) {
+            if (targetRoleType === "lead") {
               return {
                 ...club,
                 lead: {
@@ -822,6 +825,63 @@ export default function AdminTeamPage() {
         >
           <form onSubmit={handleSaveMember} className="space-y-5 text-xs text-slate-900">
             
+            {/* Club Name Dropdown Menu (When in Club Leadership tab) */}
+            {activeTab === "clubs" && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3.5 rounded-2xl bg-[#17458F]/5 border border-[#17458F]/15">
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
+                    <span>Select Chartered Club <span className="text-rose-500">*</span></span>
+                  </label>
+                  <select
+                    value={(editingMember as any).clubId || (editingMember as any).clubSlug || ""}
+                    onChange={(e) => {
+                      const selectedClub = clubsList.find((c) => c.id === e.target.value || c.slug === e.target.value);
+                      if (selectedClub) {
+                        const currentRoleType = (editingMember as any).roleType || "lead";
+                        setEditingMember({
+                          ...editingMember,
+                          clubId: selectedClub.id,
+                          clubSlug: selectedClub.slug,
+                          clubName: selectedClub.name,
+                          role: currentRoleType === "lead" ? `${selectedClub.name} Head` : `${selectedClub.name} Co-Head`
+                        } as any);
+                      }
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                  >
+                    {clubsList.map((c) => (
+                      <option key={c.id || c.slug} value={c.id || c.slug}>
+                        {c.name} ({c.category})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-800 text-xs">
+                    Leadership Tier <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={(editingMember as any).roleType || "lead"}
+                    onChange={(e) => {
+                      const newRoleType = e.target.value as "lead" | "coLead";
+                      const currentClubName = (editingMember as any).clubName || "Club";
+                      setEditingMember({
+                        ...editingMember,
+                        roleType: newRoleType,
+                        role: newRoleType === "lead" ? `${currentClubName} Head` : `${currentClubName} Co-Head`
+                      } as any);
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                  >
+                    <option value="lead">Club Head (Lead)</option>
+                    <option value="coLead">Club Co-Head (Second-in-Command)</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
             {/* Position Title & Member Name */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
