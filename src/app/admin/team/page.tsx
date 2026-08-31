@@ -885,21 +885,37 @@ export default function AdminTeamPage() {
             )}
 
             {/* Position Title & Member Name */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="font-bold text-slate-700">
-                  Position / Role Title <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. President, Vice President, Head of Tech..."
-                  value={editingMember.role}
-                  onChange={(e) => setEditingMember({ ...editingMember, role: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
-                />
-              </div>
+            {activeTab !== "clubs" ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-700">
+                    Position / Role Title <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. President, Vice President, Head of Tech..."
+                    value={editingMember.role}
+                    onChange={(e) => setEditingMember({ ...editingMember, role: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                  />
+                </div>
 
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-700">
+                    Student Full Name <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Aryan Sharma"
+                    value={editingMember.name}
+                    onChange={(e) => setEditingMember({ ...editingMember, name: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                  />
+                </div>
+              </div>
+            ) : (
               <div className="space-y-1.5">
                 <label className="font-bold text-slate-700">
                   Student Full Name <span className="text-rose-500">*</span>
@@ -913,7 +929,7 @@ export default function AdminTeamPage() {
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
                 />
               </div>
-            </div>
+            )}
 
             {/* Hierarchy Rank (Only for Council & Admins) */}
             {activeTab !== "clubs" && (
