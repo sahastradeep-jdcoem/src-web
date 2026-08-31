@@ -668,33 +668,6 @@ export default function AdminRegistrationsPage() {
     XLSX.writeFile(wb, `SRC_${filenameSlug}_Responses_${Date.now()}.xlsx`);
   };
 
-  const handleExportCSV = () => {
-    if (eventRegistrations.length === 0) {
-      alert("No registrations available to export.");
-      return;
-    }
-    const { rows } = generateExportData();
-    const headers = Object.keys(rows[0] || {});
-    
-    // Include UTF-8 BOM so Excel opens CSV without formatting or UTF-8 glitches
-    const csvContent = "\uFEFF" + [
-      headers.map(h => `"${h.replace(/"/g, '""')}"`).join(","),
-      ...rows.map(row => 
-        headers.map(h => `"${String(row[h] !== undefined && row[h] !== null ? row[h] : "").replace(/"/g, '""')}"`).join(",")
-      )
-    ].join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    const filenameSlug = selectedEventSlug === "all" ? "All_Events" : selectedEventSlug.replace(/\s+/g, "_");
-    link.setAttribute("download", `SRC_${filenameSlug}_Responses_${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   const handlePrint = () => {
     if (typeof window !== "undefined") {
       window.print();
@@ -719,7 +692,7 @@ export default function AdminRegistrationsPage() {
             </Badge>
           </div>
           <p className="text-xs text-slate-500 font-medium mt-1">
-            Google Forms-grade response analytics, question breakdown, individual delegate inspection, and CSV ledger.
+            Google Forms-grade response analytics, question breakdown, individual delegate inspection, and Excel spreadsheet ledger.
           </p>
         </div>
 
@@ -755,17 +728,6 @@ export default function AdminRegistrationsPage() {
           >
             <FileSpreadsheet className="w-3.5 h-3.5" />
             <span>Export Excel (.xlsx)</span>
-          </Button>
-
-          <Button
-            onClick={handleExportCSV}
-            variant="outline"
-            size="sm"
-            className="gap-1.5 cursor-pointer shadow-xs"
-            title="Download Google Forms standard CSV"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export CSV</span>
           </Button>
         </div>
       </div>
@@ -1588,18 +1550,10 @@ export default function AdminRegistrationsPage() {
                 <button
                   onClick={handleExportExcel}
                   className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                  title="Download formatted Excel (.xlsx) with all question columns"
+                  title="Download formatted Excel (.xlsx) spreadsheet with all question columns"
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-                  <span>Excel (.xlsx)</span>
-                </button>
-                <button
-                  onClick={handleExportCSV}
-                  className="px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-                  title="Download CSV"
-                >
-                  <Download className="w-3.5 h-3.5 text-slate-500" />
-                  <span>CSV</span>
+                  <span>Export Excel</span>
                 </button>
               </div>
             </div>
