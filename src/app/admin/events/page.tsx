@@ -660,7 +660,7 @@ export default function AdminEventsPage() {
           onClose={() => setIsCreateOpen(false)}
           title="Create New Event"
           subtitle="Publish an official festival, competition, or workshop."
-          maxWidth="2xl"
+          maxWidth="4xl"
         >
           <form onSubmit={handleCreateSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -1194,7 +1194,7 @@ export default function AdminEventsPage() {
           onClose={() => setEditingEvent(null)}
           title="Edit Event"
           subtitle={`Editing: ${editingEvent.name}`}
-          maxWidth="2xl"
+          maxWidth="4xl"
         >
           <form onSubmit={handleEditSubmit} className="space-y-4">
             <div className="space-y-2">

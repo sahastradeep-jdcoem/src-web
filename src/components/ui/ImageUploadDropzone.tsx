@@ -170,42 +170,46 @@ export function ImageUploadDropzone({
       : "aspect-video max-h-64";
 
   return (
-    <div className={`space-y-3 ${className}`}>
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold font-heading text-slate-800 uppercase tracking-wider">
+    <div className={`space-y-2.5 ${className}`}>
+      {/* Header with Title, Recommended Size, and Upload/Link Switch */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-bold font-heading text-slate-800 uppercase tracking-wider block truncate">
             {label}
           </span>
-          {recommendedSize && (
-            <span className="px-2 py-0.5 rounded-md bg-blue-50 text-[#17458F] border border-blue-200 text-[10px] font-mono font-bold">
-              {recommendedSize}
-            </span>
-          )}
+
+          {/* Upload Mode Toggle */}
+          <div className="inline-flex items-center bg-slate-100 p-0.5 rounded-lg text-[10px] font-bold shrink-0 border border-slate-200/80">
+            <button
+              type="button"
+              onClick={() => setInputMode("upload")}
+              className={`px-2 py-0.5 rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+                inputMode === "upload" ? "bg-white text-[#17458F] shadow-xs" : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <UploadCloud className="w-3 h-3" />
+              <span>Upload</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setInputMode("url")}
+              className={`px-2 py-0.5 rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+                inputMode === "url" ? "bg-white text-[#17458F] shadow-xs" : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <LinkIcon className="w-3 h-3" />
+              <span>Link</span>
+            </button>
+          </div>
         </div>
 
-        {/* Upload Mode Toggle */}
-        <div className="flex items-center bg-slate-100 p-0.5 rounded-lg text-[10px] font-bold">
-          <button
-            type="button"
-            onClick={() => setInputMode("upload")}
-            className={`px-2 py-0.5 rounded-md transition-all cursor-pointer flex items-center gap-1 ${
-              inputMode === "upload" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <UploadCloud className="w-3 h-3" />
-            <span>Upload</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setInputMode("url")}
-            className={`px-2 py-0.5 rounded-md transition-all cursor-pointer flex items-center gap-1 ${
-              inputMode === "url" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <LinkIcon className="w-3 h-3" />
-            <span>Web Link</span>
-          </button>
-        </div>
+        {recommendedSize && (
+          <div className="flex items-center gap-1.5">
+            <span className="px-2 py-0.5 rounded-md bg-blue-50 text-[#17458F] border border-blue-200/80 text-[10px] font-mono font-bold">
+              {recommendedSize}
+            </span>
+          </div>
+        )}
       </div>
 
       {inputMode === "url" ? (
@@ -216,39 +220,41 @@ export function ImageUploadDropzone({
               type="url"
               value={manualUrl}
               onChange={(e) => handleManualUrlSubmit(e.target.value)}
-              placeholder="Paste direct HTTPS image link (Unsplash, Cloudinary, Drive)..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-white border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
+              placeholder="Paste direct image URL..."
+              className="w-full pl-10 pr-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
             />
           </div>
           {preview && (
-            <div className={`relative w-full ${aspectClass} rounded-2xl overflow-hidden border border-slate-200 bg-slate-100`}>
+            <div className={`relative w-full ${aspectClass} rounded-2xl overflow-hidden border border-slate-200 bg-slate-900`}>
               <Image
                 src={preview}
                 alt="URL Preview"
                 fill
+                unoptimized={true}
                 className="object-cover"
               />
 
-              {/* Quick Crop Button */}
-              <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+              {/* Action Controls */}
+              <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-10">
                 <button
                   type="button"
                   onClick={openExistingImageInCropper}
-                  className="px-2.5 py-1 rounded-full bg-black/75 hover:bg-[#E78023] text-white text-[10px] font-bold transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
+                  className="px-2.5 py-1 rounded-full bg-slate-900/85 hover:bg-[#E78023] text-white text-[10px] font-bold transition-all flex items-center gap-1 shadow-md cursor-pointer border border-white/20 backdrop-blur-sm"
+                  title="Adjust crop & framing"
                 >
-                  <Crop className="w-3 h-3" />
+                  <Crop className="w-3 h-3 text-[#E78023]" />
                   <span>Crop &amp; Frame</span>
                 </button>
-              </div>
 
-              <button
-                type="button"
-                onClick={handleClear}
-                className="absolute top-2.5 right-2.5 p-1.5 rounded-full bg-black/70 hover:bg-black text-white transition-colors cursor-pointer"
-                title="Remove image"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="p-1 rounded-full bg-slate-900/85 hover:bg-rose-600 text-white transition-colors cursor-pointer border border-white/20 backdrop-blur-sm"
+                  title="Remove image"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -261,7 +267,7 @@ export function ImageUploadDropzone({
           onDragLeave={() => setIsDragging(false)}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className={`relative group rounded-3xl border-2 border-dashed p-6 text-center transition-all cursor-pointer flex flex-col items-center justify-center overflow-hidden ${
+          className={`relative group rounded-3xl border-2 border-dashed p-4 text-center transition-all cursor-pointer flex flex-col items-center justify-center overflow-hidden ${
             isDragging
               ? "border-[#E78023] bg-[#E78023]/5 scale-[1.01]"
               : preview
@@ -278,64 +284,60 @@ export function ImageUploadDropzone({
           />
 
           {preview ? (
-            <div className={`relative w-full ${aspectClass} rounded-2xl overflow-hidden border border-slate-200`}>
+            <div className={`relative w-full ${aspectClass} rounded-2xl overflow-hidden border border-slate-200 bg-slate-900`}>
               <Image
                 src={preview}
                 alt="Uploaded Preview"
                 fill
+                unoptimized={true}
                 className="object-cover"
               />
 
-              {/* Adjust Frame & Crop Action */}
-              <div className="absolute top-3 left-3 flex items-center gap-1.5 z-10">
+              {/* Adjust Frame & Crop Action (Top-Right) */}
+              <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-10">
                 <button
                   type="button"
                   onClick={openExistingImageInCropper}
-                  className="px-3 py-1.5 rounded-full bg-slate-900/90 hover:bg-[#E78023] text-white text-[11px] font-bold transition-all flex items-center gap-1.5 shadow-md cursor-pointer border border-white/10"
+                  className="px-2.5 py-1 rounded-full bg-slate-900/85 hover:bg-[#E78023] text-white text-[10px] font-bold transition-all flex items-center gap-1 shadow-md cursor-pointer border border-white/20 backdrop-blur-sm"
+                  title="Adjust crop & framing"
                 >
-                  <Crop className="w-3.5 h-3.5 text-[#E78023] group-hover:text-white" />
-                  <span>Adjust Framing &amp; Crop</span>
+                  <Crop className="w-3 h-3 text-[#E78023]" />
+                  <span>Crop &amp; Frame</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="p-1 rounded-full bg-slate-900/85 hover:bg-rose-600 text-white transition-colors cursor-pointer border border-white/20 backdrop-blur-sm"
+                  title="Remove image"
+                >
+                  <X className="w-3.5 h-3.5" />
                 </button>
               </div>
-              
-              <button
-                type="button"
-                onClick={handleClear}
-                className="absolute top-3 right-3 p-1.5 rounded-full bg-black/70 hover:bg-black text-white transition-colors cursor-pointer z-10"
-                title="Remove image"
-              >
-                <X className="w-4 h-4" />
-              </button>
 
-              <div className="absolute bottom-3 left-3 px-3 py-1 rounded-full bg-slate-900/85 backdrop-blur-md text-white text-[11px] font-semibold flex items-center gap-1.5 shadow-sm">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>WebP Optimized</span>
+              <div className="absolute bottom-2.5 left-2.5 px-2 py-0.5 rounded-full bg-slate-900/85 backdrop-blur-md text-white text-[10px] font-semibold flex items-center gap-1 border border-white/10 shadow-sm">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                <span>WebP</span>
               </div>
             </div>
           ) : (
-            <div className="space-y-3 flex flex-col items-center">
-              <div className="h-12 w-12 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-center text-[#E78023] group-hover:scale-110 transition-transform">
+            <div className="space-y-2 py-2 flex flex-col items-center">
+              <div className="h-10 w-10 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-center text-[#E78023] group-hover:scale-110 transition-transform">
                 {isProcessing ? (
-                  <RefreshCw className="w-5 h-5 animate-spin text-[#17458F]" />
+                  <RefreshCw className="w-4 h-4 animate-spin text-[#17458F]" />
                 ) : (
-                  <UploadCloud className="w-5 h-5" />
+                  <UploadCloud className="w-4 h-4" />
                 )}
               </div>
 
-              <div className="space-y-1">
+              <div className="space-y-0.5">
                 <h4 className="font-heading font-bold text-xs text-[#0F172A]">
                   Click or Drag to Upload
                 </h4>
-                <p className="text-[11px] text-slate-500 max-w-sm">
-                  {sublabel} • Includes interactive cropper &amp; zoom framing
+                <p className="text-[10px] text-slate-400 max-w-[200px] leading-tight">
+                  {sublabel}
                 </p>
               </div>
-
-              {recommendedSize && (
-                <span className="text-[10px] text-slate-400 font-mono font-medium">
-                  Recommended: {recommendedSize}
-                </span>
-              )}
             </div>
           )}
         </div>
