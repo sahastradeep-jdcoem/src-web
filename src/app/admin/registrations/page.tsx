@@ -36,8 +36,20 @@ export default function AdminRegistrationsPage() {
   const [registrations, setRegistrations] = useState<RegistrationRecord[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [eventFilter, setEventFilter] = useState("All");
   const [selectedRecord, setSelectedRecord] = useState<RegistrationRecord | null>(null);
   const [checkInNotice, setCheckInNotice] = useState<string | null>(null);
+
+  // Sync event query param from URL on initial client load
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const evt = params.get("event");
+      if (evt) {
+        setEventFilter(evt);
+      }
+    }
+  }, []);
 
   const formatRecords = (records: any[]): RegistrationRecord[] => {
     return records.map((r: any) => ({
@@ -132,6 +144,10 @@ export default function AdminRegistrationsPage() {
     }
   };
 
+  const eventOptions = useMemo(() => {
+    return Array.from(new Set(registrations.map((r) => r.eventName))).filter(Boolean);
+  }, [registrations]);
+
   const filtered = useMemo(() => {
     return registrations.filter((r) => {
       const matchesSearch =
@@ -143,9 +159,12 @@ export default function AdminRegistrationsPage() {
       const matchesStatus =
         statusFilter === "All" || r.status === statusFilter;
 
-      return matchesSearch && matchesStatus;
+      const matchesEvent =
+        eventFilter === "All" || r.eventName.toLowerCase() === eventFilter.toLowerCase() || (r.eventSlug && r.eventSlug.toLowerCase() === eventFilter.toLowerCase());
+
+      return matchesSearch && matchesStatus && matchesEvent;
     });
-  }, [registrations, searchQuery, statusFilter]);
+  }, [registrations, searchQuery, statusFilter, eventFilter]);
 
   const totalRevenue = useMemo(() => {
     return registrations.reduce((sum, r) => sum + (r.amountPaid || 0), 0);
@@ -300,21 +319,41 @@ export default function AdminRegistrationsPage() {
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
-          <span className="text-xs font-bold text-slate-500 mr-1">Status:</span>
-          {["All", "CONFIRMED", "CHECKED_IN", "PENDING"].map((st) => (
-            <button
-              key={st}
-              onClick={() => setStatusFilter(st)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                statusFilter === st
-                  ? "bg-[#E78023] text-white shadow-xs"
-                  : "bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100"
-              }`}
-            >
-              {st}
-            </button>
-          ))}
+        <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap">
+          {eventOptions.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-slate-500">Event:</span>
+              <select
+                value={eventFilter}
+                onChange={(e) => setEventFilter(e.target.value)}
+                className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-xs font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
+              >
+                <option value="All">All Events ({registrations.length})</option>
+                {eventOptions.map((evt) => (
+                  <option key={evt} value={evt}>
+                    {evt}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs font-bold text-slate-500 mr-1">Status:</span>
+            {["All", "CONFIRMED", "CHECKED_IN", "PENDING"].map((st) => (
+              <button
+                key={st}
+                onClick={() => setStatusFilter(st)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  statusFilter === st
+                    ? "bg-[#E78023] text-white shadow-xs"
+                    : "bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100"
+                }`}
+              >
+                {st}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

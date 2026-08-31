@@ -605,6 +605,13 @@ export default function AdminEventsPage() {
                     <td className="py-4 px-6 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <Link
+                          href={`/admin/registrations?event=${encodeURIComponent(evt.name)}`}
+                          className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#17458F] transition-colors"
+                          title="View Registrations & Responses"
+                        >
+                          <Users className="w-3.5 h-3.5" />
+                        </Link>
+                        <Link
                           href={`/events/${evt.slug}`}
                           target="_blank"
                           className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-[#17458F] transition-colors"
