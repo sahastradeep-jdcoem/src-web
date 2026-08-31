@@ -2,9 +2,11 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
+import * as XLSX from "xlsx";
 import { 
   Search, 
   Download, 
+  FileSpreadsheet,
   Eye, 
   ShieldCheck, 
   ShieldAlert, 
@@ -269,28 +271,37 @@ export default function AdminUsersPage() {
     });
   }, [users, searchQuery, roleFilter, deptFilter]);
 
-  const handleExportCSV = () => {
+  const handleExportExcel = () => {
     if (filteredUsers.length === 0) {
       alert("No user records available to export.");
       return;
     }
 
-    const headers = "Full Name,Email,BT ID,Department,Year of Study,Phone,Role,Profile Completed,Registered Date\n";
-    const rows = filteredUsers
-      .map(
-        (u) =>
-          `"${u.displayName || ""}","${u.email || ""}","${u.btId || ""}","${u.department || ""}","${u.year || ""}","${u.phone || ""}","${u.role}","${u.profileCompleted ? "YES" : "NO"}","${u.createdAt || ""}"`
-      )
-      .join("\n");
+    const rows = filteredUsers.map((u) => ({
+      "Full Name": u.displayName || "",
+      "Email Address": u.email || "",
+      "College BT ID": u.btId || "",
+      "Department / Branch": u.department || "",
+      "Academic Year": u.year || "",
+      "WhatsApp Contact": u.phone || "",
+      "Role": u.role,
+      "Profile Completed": u.profileCompleted ? "YES" : "NO",
+      "Registration Date": u.createdAt || "",
+    }));
 
-    const blob = new Blob([headers + rows], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `SRC_Active_Users_Roster_${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const colKeys = Object.keys(rows[0] || {});
+    ws["!cols"] = colKeys.map((k) => {
+      const maxLen = Math.max(
+        k.length,
+        ...rows.map((r: any) => String(r[k] || "").length)
+      );
+      return { wch: Math.min(Math.max(maxLen + 4, 12), 40) };
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Active Users");
+    XLSX.writeFile(wb, `SRC_Active_Users_Roster_${Date.now()}.xlsx`);
   };
 
   const studentCount = users.filter((u) => u.role === "STUDENT").length;
@@ -304,7 +315,7 @@ export default function AdminUsersPage() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#0F172A] uppercase tracking-tight">
-              ACTIVE USERS & STUDENT DIRECTORY
+              ACTIVE USERS &amp; STUDENT DIRECTORY
             </h1>
             <Badge variant="orange" size="sm">
               {users.length} REGISTERED
@@ -338,13 +349,14 @@ export default function AdminUsersPage() {
           </Button>
 
           <Button
-            onClick={handleExportCSV}
+            onClick={handleExportExcel}
             variant="secondary"
             size="md"
-            className="gap-2 cursor-pointer"
+            className="gap-2 cursor-pointer bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200"
+            title="Download formatted Excel (.xlsx) spreadsheet"
           >
-            <Download className="w-4 h-4" />
-            <span>Export Users CSV</span>
+            <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+            <span>Export Users Excel</span>
           </Button>
         </div>
       </div>

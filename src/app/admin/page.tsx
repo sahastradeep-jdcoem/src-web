@@ -387,7 +387,7 @@ export default function AdminOverviewPage() {
             Delegate Passes &amp; Check-Ins
           </h4>
           <p className="text-xs text-slate-500">
-            Real-time participant accreditation roster with live QR check-ins, Razorpay ledger, and CSV export.
+            Real-time participant accreditation roster with live QR check-ins, Razorpay ledger, and Excel export.
           </p>
         </Link>
 
