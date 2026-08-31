@@ -970,10 +970,10 @@ export default function AdminClubsPage() {
                   {/* 3. Official Logo / Insignia (1:1) */}
                   <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
                     <ImageUploadDropzone
-                      label="3. Logo / Badge"
-                      sublabel="Square club crest / icon"
+                      label="3. Official Club Logo"
+                      sublabel="Circle shape PNG without background"
                       aspectRatio="1:1"
-                      recommendedSize="500 x 500 px (1:1)"
+                      recommendedSize="500 x 500 px (Circle PNG)"
                       storagePath="clubs/logos"
                       previewUrl={editingClub.logoImage || ""}
                       onUrlChange={(url) => {

@@ -53,14 +53,22 @@ export function ClubCard({ club }: ClubCardProps) {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
-        <div className="absolute top-3.5 left-3.5 flex items-center gap-2">
-          <div className="h-9 w-9 rounded-xl bg-white/90 backdrop-blur-xs border border-white/40 flex items-center justify-center shadow-xs overflow-hidden">
-            {club.logoImage ? (
-              <Image src={club.logoImage} alt={club.name} width={36} height={36} className="object-cover w-full h-full" />
-            ) : (
-              ICON_MAP[club.iconName] || <Sparkles className="w-4 h-4 text-[#E78023]" />
-            )}
-          </div>
+        <div className="absolute top-3.5 left-3.5 flex items-center gap-2.5">
+          {club.logoImage ? (
+            <div className="relative h-10 w-10 rounded-full overflow-hidden shrink-0">
+              <Image 
+                src={club.logoImage} 
+                alt={club.name} 
+                width={40} 
+                height={40} 
+                className="object-contain w-full h-full rounded-full" 
+              />
+            </div>
+          ) : (
+            <div className="h-9 w-9 rounded-full bg-white/90 backdrop-blur-xs flex items-center justify-center shadow-xs shrink-0">
+              {ICON_MAP[club.iconName] || <Sparkles className="w-4 h-4 text-[#E78023]" />}
+            </div>
+          )}
           <span className="text-[10px] font-sans font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white/90 text-slate-800 border border-white/40 shadow-xs">
             {club.category}
           </span>
