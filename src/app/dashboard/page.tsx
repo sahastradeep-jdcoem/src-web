@@ -58,50 +58,92 @@ export default function StudentDashboardPage() {
       if (remote) setEvents(remote);
     });
 
+    const loadRegistrations = () => {
+      try {
+        const storedEvents = getStoredEvents();
+        const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+        if (Array.isArray(local) && local.length > 0) {
+          // Filter out registrations for deleted events (e.g. Code Strom or anything not matching active events)
+          const validRecords = local.filter((r: any) => {
+            const eventId = (r.eventId || "").toLowerCase();
+            const eventTitle = (r.eventTitle || "").toLowerCase().trim();
+            const regId = (r.id || "").toLowerCase();
+
+            // Explicitly purge Code Strom / codestorm if it was deleted
+            if (eventTitle.includes("strom") || eventId.includes("strom") || regId.includes("cod-")) {
+              const isStillPublished = storedEvents.some(e => 
+                e.name.toLowerCase().includes("strom") || e.slug.toLowerCase().includes("strom")
+              );
+              if (!isStillPublished) return false;
+            }
+
+            // Must match at least one published event in current system
+            return storedEvents.some(e =>
+              e.id.toLowerCase() === eventId ||
+              e.slug.toLowerCase() === eventId ||
+              e.name.toLowerCase().trim() === eventTitle ||
+              eventId.includes(e.slug.toLowerCase()) ||
+              e.slug.toLowerCase().includes(eventId)
+            );
+          });
+
+          // Sync back clean list to local storage if orphaned items were removed
+          if (validRecords.length !== local.length) {
+            localStorage.setItem("src_local_registrations", JSON.stringify(validRecords));
+          }
+
+          const formatted: RegistrationRecord[] = validRecords.map((r: any) => ({
+            id: r.id,
+            registrationId: r.id,
+            eventSlug: r.eventId,
+            eventName: r.eventTitle || "Event Delegate Pass",
+            participantName: r.leaderName,
+            email: r.email,
+            phone: r.phone,
+            department: r.department,
+            year: r.year,
+            teamType: r.teamSize > 1 ? "Team" : "Individual",
+            teamName: r.teamName,
+            teamMembers: r.members?.map((m: any) => m.name),
+            registeredAt: r.registeredAt || new Date().toISOString().split("T")[0],
+            status: r.status || "CONFIRMED",
+            ticketCode: `${r.id.slice(0, 7)}-TK`,
+            qrPayload: r.qrPayload || `SRC:PASS:${r.id}`,
+          }));
+
+          setRegistrations(formatted);
+        } else {
+          setRegistrations([]);
+        }
+      } catch (e) {
+        console.warn("Local registrations load warning", e);
+        setRegistrations([]);
+      }
+    };
+
+    loadRegistrations();
+
     const handleEventsUpdate = (e: any) => {
       if (e?.detail && Array.isArray(e.detail)) {
         setEvents(e.detail);
       } else {
         setEvents(getStoredEvents());
       }
+      loadRegistrations();
     };
+
+    const handleRegsUpdate = () => {
+      loadRegistrations();
+    };
+
     window.addEventListener("src_events_updated", handleEventsUpdate);
+    window.addEventListener("src_registrations_updated", handleRegsUpdate);
     window.addEventListener("storage", handleEventsUpdate);
-
-    try {
-      const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
-      if (Array.isArray(local) && local.length > 0) {
-        const formatted: RegistrationRecord[] = local.map((r: any) => ({
-          id: r.id,
-          registrationId: r.id,
-          eventSlug: r.eventId,
-          eventName: r.eventTitle || "Event Delegate Pass",
-          participantName: r.leaderName,
-          email: r.email,
-          phone: r.phone,
-          department: r.department,
-          year: r.year,
-          teamType: r.teamSize > 1 ? "Team" : "Individual",
-          teamName: r.teamName,
-          teamMembers: r.members?.map((m: any) => m.name),
-          registeredAt: r.registeredAt || new Date().toISOString().split("T")[0],
-          status: r.status || "CONFIRMED",
-          ticketCode: `${r.id.slice(0, 7)}-TK`,
-          qrPayload: r.qrPayload || `SRC:PASS:${r.id}`,
-        }));
-
-        setRegistrations(formatted);
-      } else {
-        setRegistrations([]);
-      }
-    } catch (e) {
-      console.warn("Local registrations load warning", e);
-      setRegistrations([]);
-    }
 
     return () => {
       unsub();
       window.removeEventListener("src_events_updated", handleEventsUpdate);
+      window.removeEventListener("src_registrations_updated", handleRegsUpdate);
       window.removeEventListener("storage", handleEventsUpdate);
     };
   }, []);

@@ -28,6 +28,7 @@ import {
   checkInStudentPass, 
   getAllRegistrationsFromFirestore, 
   subscribeToRegistrationsFromFirestore, 
+  deleteRegistrationFromFirestore,
   StudentRegistrationRecord 
 } from "@/lib/firebase/firestore";
 
@@ -108,13 +109,14 @@ export default function AdminRegistrationsPage() {
     setTimeout(() => setCheckInNotice(null), 4000);
   };
 
-  const handleDeleteRegistration = (regId: string, name: string) => {
+  const handleDeleteRegistration = async (regId: string, name: string) => {
     if (confirm(`Delete registration record for "${name}" (${regId})?`)) {
       try {
-        const localRecords = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
-        const updated = localRecords.filter((r: any) => r.id !== regId);
-        localStorage.setItem("src_local_registrations", JSON.stringify(updated));
-        loadRegistrations();
+        await deleteRegistrationFromFirestore(regId);
+        setRegistrations((prev) => prev.filter((r) => r.id !== regId && r.registrationId !== regId));
+        if (selectedRecord && (selectedRecord.id === regId || selectedRecord.registrationId === regId)) {
+          setSelectedRecord(null);
+        }
       } catch (e) {
         console.error("Error deleting registration", e);
       }

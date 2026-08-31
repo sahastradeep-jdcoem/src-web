@@ -4,6 +4,7 @@ import {
   setDoc, 
   getDoc, 
   getDocs, 
+  deleteDoc,
   query, 
   where, 
   orderBy, 
@@ -341,6 +342,87 @@ export function subscribeToRegistrationsFromFirestore(
     console.warn("Firestore subscription error for registrations", e);
     return () => {};
   }
+}
+
+/**
+ * Permanently delete a single registration from Firestore and local storage
+ */
+export async function deleteRegistrationFromFirestore(id: string): Promise<boolean> {
+  try {
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      const docRef = doc(db, REGISTRATIONS_COLLECTION, id);
+      await deleteDoc(docRef);
+    }
+  } catch (error) {
+    console.warn("Firestore delete error for registration:", id, error);
+  }
+
+  if (typeof window !== "undefined") {
+    try {
+      const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+      const updated = local.filter((r: any) => r.id !== id);
+      localStorage.setItem("src_local_registrations", JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent("src_registrations_updated", { detail: updated }));
+    } catch {}
+  }
+  return true;
+}
+
+/**
+ * Cascade-delete all registrations belonging to a deleted event
+ */
+export async function deleteRegistrationsForEvent(
+  eventId: string, 
+  eventSlug?: string, 
+  eventName?: string
+): Promise<number> {
+  let deletedCount = 0;
+
+  // 1. Query and delete from Firestore
+  try {
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      const colRef = collection(db, REGISTRATIONS_COLLECTION);
+      const snapshot = await getDocs(colRef);
+      
+      for (const d of snapshot.docs) {
+        const data = d.data();
+        const matchesEvent =
+          d.id.toLowerCase().includes(eventId.toLowerCase()) ||
+          (data.eventId && (data.eventId === eventId || (eventSlug && data.eventId === eventSlug))) ||
+          (data.eventTitle && eventName && data.eventTitle.toLowerCase().trim() === eventName.toLowerCase().trim()) ||
+          (data.eventTitle && eventName && data.eventTitle.toLowerCase().includes(eventName.toLowerCase())) ||
+          (eventSlug && d.id.toLowerCase().includes(eventSlug.toLowerCase()));
+
+        if (matchesEvent) {
+          await deleteDoc(doc(db, REGISTRATIONS_COLLECTION, d.id));
+          deletedCount++;
+        }
+      }
+    }
+  } catch (error) {
+    console.warn("Firestore cascade delete error for event registrations:", error);
+  }
+
+  // 2. Clean up local storage
+  if (typeof window !== "undefined") {
+    try {
+      const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+      const updated = local.filter((r: any) => {
+        const matchesEvent =
+          r.id.toLowerCase().includes(eventId.toLowerCase()) ||
+          (r.eventId && (r.eventId === eventId || (eventSlug && r.eventId === eventSlug))) ||
+          (r.eventTitle && eventName && r.eventTitle.toLowerCase().trim() === eventName.toLowerCase().trim()) ||
+          (r.eventTitle && eventName && r.eventTitle.toLowerCase().includes(eventName.toLowerCase())) ||
+          (eventSlug && r.id.toLowerCase().includes(eventSlug.toLowerCase()));
+        return !matchesEvent;
+      });
+
+      localStorage.setItem("src_local_registrations", JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent("src_registrations_updated", { detail: updated }));
+    } catch {}
+  }
+
+  return deletedCount;
 }
 
 const SITE_CONTENT_COLLECTION = "site_content";

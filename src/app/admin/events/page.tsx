@@ -37,6 +37,7 @@ import {
   subscribeToEvents
 } from "@/lib/eventsStore";
 import { getStoredClubs } from "@/lib/councilStore";
+import { deleteRegistrationsForEvent } from "@/lib/firebase/firestore";
 
 function formatDateToReadable(dateStr: string): string {
   if (!dateStr) return "";
@@ -372,16 +373,23 @@ export default function AdminEventsPage() {
     showNotice(`Duplicated "${evt.name}".`);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!eventToDelete) return;
     const deletedName = eventToDelete.name;
+    const deletedId = eventToDelete.id;
+    const deletedSlug = eventToDelete.slug;
+
     const updated = eventsList.filter(
-      (e) => e.id !== eventToDelete.id && e.slug !== eventToDelete.slug
+      (e) => e.id !== deletedId && e.slug !== deletedSlug
     );
     setEventsList(updated);
     saveStoredEvents(updated);
+    
+    // Cascade-delete registrations & passes for this deleted event
+    await deleteRegistrationsForEvent(deletedId, deletedSlug, deletedName);
+
     setEventToDelete(null);
-    showNotice(`Deleted event "${deletedName}".`);
+    showNotice(`Deleted event "${deletedName}" and purged all associated passes.`);
   };
 
   const handleResetDefaults = () => {
