@@ -2,9 +2,10 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
-import { UploadCloud, CheckCircle2, Sparkles, AlertCircle, RefreshCw, X, Link as LinkIcon, Image as ImageIcon } from "lucide-react";
+import { UploadCloud, CheckCircle2, Sparkles, AlertCircle, RefreshCw, X, Link as LinkIcon, Image as ImageIcon, Crop, Move } from "lucide-react";
 import { compressImage, formatBytes, CompressionResult } from "@/lib/imageCompression";
 import { uploadImageToStorage } from "@/lib/firebase/storage";
+import { ImageCropperModal, AspectRatioType } from "./ImageCropperModal";
 
 interface ImageUploadDropzoneProps {
   onImageCompressed?: (result: CompressionResult) => void;
@@ -36,6 +37,9 @@ export function ImageUploadDropzone({
   const [inputMode, setInputMode] = useState<"upload" | "url">("upload");
   const [manualUrl, setManualUrl] = useState<string>(previewUrl || "");
   const [error, setError] = useState<string | null>(null);
+  const [rawImageToCrop, setRawImageToCrop] = useState<string | null>(null);
+  const [isCropperOpen, setIsCropperOpen] = useState(false);
+  const [originalFileName, setOriginalFileName] = useState<string>("image.webp");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -45,21 +49,56 @@ export function ImageUploadDropzone({
     }
   }, [previewUrl]);
 
-  const processFile = async (file: File) => {
-    if (!file.type.startsWith("image/")) {
-      setError("Please select a valid image file (JPG, PNG, WebP, HEIC).");
-      return;
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith("image/")) {
+        setError("Please select a valid image file (JPG, PNG, WebP, HEIC).");
+        return;
+      }
+      setError(null);
+      setOriginalFileName(file.name);
+      
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
+        setRawImageToCrop(dataUrl);
+        setIsCropperOpen(true);
+      };
+      reader.readAsDataURL(file);
     }
+  };
 
-    setError(null);
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      if (!file.type.startsWith("image/")) {
+        setError("Please select a valid image file (JPG, PNG, WebP, HEIC).");
+        return;
+      }
+      setError(null);
+      setOriginalFileName(file.name);
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
+        setRawImageToCrop(dataUrl);
+        setIsCropperOpen(true);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCropComplete = async (croppedDataUrl: string) => {
     setIsProcessing(true);
-
     try {
-      // 1. Client-side WebP compression
-      const result = await compressImage(file, {
+      // 1. Process & optimize the cropped canvas dataUrl
+      const result = await compressImage(croppedDataUrl, {
         maxWidth: 1920,
         maxHeight: 1920,
-        quality: 0.85,
+        quality: 0.88,
         outputFormat: "image/webp",
       });
 
@@ -70,34 +109,31 @@ export function ImageUploadDropzone({
         onImageCompressed(result);
       }
 
-      // 2. Upload to Firebase Storage or use dataUrl
-      const finalStoragePath = `${storagePath}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}.webp`;
+      // 2. Upload to Firebase Storage
+      const cleanName = originalFileName.replace(/[^a-zA-Z0-9.-]/g, "_").replace(/\.[^/.]+$/, "");
+      const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}.webp`;
       const cloudUrl = await uploadImageToStorage(result.dataUrl, finalStoragePath);
-      
+
       if (onUrlChange) {
         onUrlChange(cloudUrl || result.dataUrl);
       }
     } catch (err) {
-      console.error("Image processing error", err);
-      setError("Failed to process image. Please try another file.");
+      console.error("Image crop and compression error", err);
+      setError("Failed to save cropped image.");
     } finally {
       setIsProcessing(false);
+      setRawImageToCrop(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      processFile(file);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      processFile(file);
+  const openExistingImageInCropper = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (preview) {
+      setRawImageToCrop(preview);
+      setIsCropperOpen(true);
     }
   };
 
@@ -192,6 +228,19 @@ export function ImageUploadDropzone({
                 fill
                 className="object-cover"
               />
+
+              {/* Quick Crop Button */}
+              <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={openExistingImageInCropper}
+                  className="px-2.5 py-1 rounded-full bg-black/75 hover:bg-[#E78023] text-white text-[10px] font-bold transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
+                >
+                  <Crop className="w-3 h-3" />
+                  <span>Crop &amp; Frame</span>
+                </button>
+              </div>
+
               <button
                 type="button"
                 onClick={handleClear}
@@ -236,11 +285,23 @@ export function ImageUploadDropzone({
                 fill
                 className="object-cover"
               />
+
+              {/* Adjust Frame & Crop Action */}
+              <div className="absolute top-3 left-3 flex items-center gap-1.5 z-10">
+                <button
+                  type="button"
+                  onClick={openExistingImageInCropper}
+                  className="px-3 py-1.5 rounded-full bg-slate-900/90 hover:bg-[#E78023] text-white text-[11px] font-bold transition-all flex items-center gap-1.5 shadow-md cursor-pointer border border-white/10"
+                >
+                  <Crop className="w-3.5 h-3.5 text-[#E78023] group-hover:text-white" />
+                  <span>Adjust Framing &amp; Crop</span>
+                </button>
+              </div>
               
               <button
                 type="button"
                 onClick={handleClear}
-                className="absolute top-3 right-3 p-1.5 rounded-full bg-black/70 hover:bg-black text-white transition-colors cursor-pointer"
+                className="absolute top-3 right-3 p-1.5 rounded-full bg-black/70 hover:bg-black text-white transition-colors cursor-pointer z-10"
                 title="Remove image"
               >
                 <X className="w-4 h-4" />
@@ -266,7 +327,7 @@ export function ImageUploadDropzone({
                   Click or Drag to Upload
                 </h4>
                 <p className="text-[11px] text-slate-500 max-w-sm">
-                  {sublabel}
+                  {sublabel} • Includes interactive cropper &amp; zoom framing
                 </p>
               </div>
 
@@ -297,6 +358,21 @@ export function ImageUploadDropzone({
             {compressionStats.savingsPercentage}% smaller
           </span>
         </div>
+      )}
+
+      {/* Interactive Photo Cropper & Framing Modal */}
+      {isCropperOpen && rawImageToCrop && (
+        <ImageCropperModal
+          isOpen={isCropperOpen}
+          onClose={() => {
+            setIsCropperOpen(false);
+            setRawImageToCrop(null);
+          }}
+          imageSrc={rawImageToCrop}
+          initialAspectRatio={aspectRatio === "auto" ? "16:9" : (aspectRatio as AspectRatioType)}
+          onCropComplete={handleCropComplete}
+          title={`Crop & Frame ${label}`}
+        />
       )}
     </div>
   );

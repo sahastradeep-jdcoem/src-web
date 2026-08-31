@@ -36,12 +36,30 @@ export function formatBytes(bytes: number, decimals = 1): string {
 }
 
 /**
- * Compress an image file in the browser using HTML5 Canvas API
+ * Convert a dataUrl string to a File object
+ */
+export function dataUrlToFile(dataUrl: string, filename = "image.webp"): File {
+  const arr = dataUrl.split(",");
+  const mimeMatch = arr[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : "image/webp";
+  const bstr = atob(arr[1] || "");
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new File([u8arr], filename, { type: mime });
+}
+
+/**
+ * Compress an image file or dataUrl in the browser using HTML5 Canvas API
  */
 export async function compressImage(
-  file: File,
-  options: CompressionOptions = {}
+  input: File | string,
+  options: CompressionOptions = {},
+  fileName = "image.webp"
 ): Promise<CompressionResult> {
+  const file = typeof input === "string" ? dataUrlToFile(input, fileName) : input;
   const {
     maxWidth = 1920,
     maxHeight = 1920,
