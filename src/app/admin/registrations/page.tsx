@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import * as XLSX from "xlsx";
 import { 
   Search, 
   Filter, 
   Download, 
+  FileSpreadsheet,
   Eye, 
   CheckCircle2, 
   Clock, 
@@ -551,27 +553,99 @@ export default function AdminRegistrationsPage() {
     }
   };
 
+  const generateExportData = () => {
+    // Collect all custom questions across the current scope
+    const customQCols = availableQuestions.filter((q) => !q.isStandard);
+
+    const rows = eventRegistrations.map((r) => {
+      const rowData: Record<string, any> = {
+        "Timestamp": r.registeredAt || "",
+        "Email Address": r.email || "",
+        "Full Name": r.participantName || "",
+        "College BT ID": r.btId || "",
+        "WhatsApp Contact": r.phone || "",
+        "Department / Branch": r.department || "",
+        "Academic Year": r.year || "",
+        "Event": r.eventName || "",
+        "Participation Format": r.teamType || "Individual",
+        "Team Name": r.teamName || "",
+        "Team Members": Array.isArray(r.teamMembers) ? r.teamMembers.join("; ") : (r.teamMembers || ""),
+      };
+
+      // Each custom question gets its OWN dedicated column with its exact prompt text as header
+      customQCols.forEach((qCol) => {
+        let answer: any = "";
+        if (r.customAnswers) {
+          if (r.customAnswers[qCol.id] !== undefined) {
+            answer = getAnswerValue(r.customAnswers[qCol.id]);
+          } else {
+            for (const [k, v] of Object.entries(r.customAnswers)) {
+              const info = getQuestionInfo(k, r.eventName, r);
+              if (info.title.toLowerCase() === qCol.title.toLowerCase() || k === qCol.id) {
+                answer = getAnswerValue(v);
+                break;
+              }
+            }
+          }
+        }
+        rowData[qCol.title] = Array.isArray(answer) ? answer.join(", ") : String(answer ?? "");
+      });
+
+      rowData["Registration Pass ID"] = r.registrationId;
+      rowData["Ticket Code"] = r.ticketCode || `${r.registrationId}-TK`;
+      rowData["Pass Status"] = r.status || "CONFIRMED";
+      rowData["Payment Status"] = r.paymentStatus || "FREE";
+      rowData["Amount Paid (INR)"] = r.amountPaid || 0;
+      rowData["Payment Transaction ID"] = r.paymentId || "N/A";
+      rowData["Order ID"] = r.orderId || "N/A";
+
+      return rowData;
+    });
+
+    return { rows, customQCols };
+  };
+
+  const handleExportExcel = () => {
+    if (eventRegistrations.length === 0) {
+      alert("No registrations available to export.");
+      return;
+    }
+    const { rows } = generateExportData();
+    const ws = XLSX.utils.json_to_sheet(rows);
+
+    // Auto-fit column widths for clear spreadsheet viewing
+    const colKeys = Object.keys(rows[0] || {});
+    ws["!cols"] = colKeys.map((k) => {
+      const maxLen = Math.max(
+        k.length,
+        ...rows.map((r) => String(r[k] !== undefined && r[k] !== null ? r[k] : "").length)
+      );
+      return { wch: Math.min(Math.max(maxLen + 4, 12), 48) };
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Form Responses");
+    const filenameSlug = selectedEventSlug === "all" ? "All_Events" : selectedEventSlug.replace(/\s+/g, "_");
+    XLSX.writeFile(wb, `SRC_${filenameSlug}_Responses_${Date.now()}.xlsx`);
+  };
+
   const handleExportCSV = () => {
     if (eventRegistrations.length === 0) {
       alert("No registrations available to export.");
       return;
     }
-    const headers = "Registration ID,Participant Name,BT ID,Email,Phone,Event,Format,Team Name,Department,Year,Status,Payment Status,Amount Paid (INR),Custom Q&N Answers,Payment ID,Order ID\n";
-    const rows = eventRegistrations
-      .map((r) => {
-        const customAnsStr = r.customAnswers 
-          ? Object.entries(r.customAnswers).map(([k, v]) => {
-              const qInfo = getQuestionInfo(k, r.eventName, r);
-              const val = getAnswerValue(v);
-              const displayVal = Array.isArray(val) ? val.join("; ") : String(val);
-              return `${qInfo.title}: ${displayVal}`;
-            }).join(" | ")
-          : "None";
-        return `"${r.registrationId}","${r.participantName}","${r.btId || ""}","${r.email}","${r.phone}","${r.eventName}","${r.teamType}","${r.teamName || ""}","${r.department || ""}","${r.year || ""}","${r.status}","${r.paymentStatus || "FREE"}","${r.amountPaid || 0}","${customAnsStr.replace(/"/g, '""')}","${r.paymentId || "N/A"}","${r.orderId || "N/A"}"`;
-      })
-      .join("\n");
+    const { rows } = generateExportData();
+    const headers = Object.keys(rows[0] || {});
+    
+    // Include UTF-8 BOM so Excel opens CSV without formatting or UTF-8 glitches
+    const csvContent = "\uFEFF" + [
+      headers.map(h => `"${h.replace(/"/g, '""')}"`).join(","),
+      ...rows.map(row => 
+        headers.map(h => `"${String(row[h] !== undefined && row[h] !== null ? row[h] : "").replace(/"/g, '""')}"`).join(",")
+      )
+    ].join("\n");
 
-    const blob = new Blob([headers + rows], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
@@ -634,10 +708,22 @@ export default function AdminRegistrationsPage() {
           </Button>
 
           <Button
-            onClick={handleExportCSV}
+            onClick={handleExportExcel}
             variant="primary"
             size="sm"
+            className="gap-1.5 cursor-pointer shadow-xs bg-emerald-700 hover:bg-emerald-800 text-white"
+            title="Download formatted Excel (.xlsx) spreadsheet with separate question columns"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>Export Excel (.xlsx)</span>
+          </Button>
+
+          <Button
+            onClick={handleExportCSV}
+            variant="outline"
+            size="sm"
             className="gap-1.5 cursor-pointer shadow-xs"
+            title="Download Google Forms standard CSV"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export CSV</span>
@@ -1441,21 +1527,42 @@ export default function AdminRegistrationsPage() {
               />
             </div>
 
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs font-bold text-slate-500 mr-1">Status:</span>
-              {["All", "CONFIRMED", "CHECKED_IN", "PENDING"].map((st) => (
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs font-bold text-slate-500 mr-1">Status:</span>
+                {["All", "CONFIRMED", "CHECKED_IN", "PENDING"].map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => setStatusFilter(st)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      statusFilter === st
+                        ? "bg-[#E78023] text-white shadow-xs"
+                        : "bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    {st}
+                  </button>
+                ))}
+              </div>
+
+              <div className="hidden sm:flex items-center gap-2 border-l border-slate-200 pl-3">
                 <button
-                  key={st}
-                  onClick={() => setStatusFilter(st)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    statusFilter === st
-                      ? "bg-[#E78023] text-white shadow-xs"
-                      : "bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100"
-                  }`}
+                  onClick={handleExportExcel}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  title="Download formatted Excel (.xlsx) with all question columns"
                 >
-                  {st}
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Excel (.xlsx)</span>
                 </button>
-              ))}
+                <button
+                  onClick={handleExportCSV}
+                  className="px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                  title="Download CSV"
+                >
+                  <Download className="w-3.5 h-3.5 text-slate-500" />
+                  <span>CSV</span>
+                </button>
+              </div>
             </div>
           </div>
 
