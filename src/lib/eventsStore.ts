@@ -6,7 +6,7 @@ import {
   subscribeToSiteContent,
   cleanUndefined
 } from "./firebase/firestore";
-import { enqueueCloudWrite, reconcileArrayDatasets } from "./dataSyncEngine";
+import { enqueueCloudWrite, reconcileArrayDatasets, hasPendingWritesFor } from "./dataSyncEngine";
 
 const EVENTS_STORAGE_KEY = "src_events";
 
@@ -69,6 +69,7 @@ export async function syncEventsFromFirestore(): Promise<EventItem[]> {
 export function subscribeToEvents(callback: (events: EventItem[]) => void): () => void {
   return subscribeToSiteContent<EventItem[]>("events", (remote) => {
     if (remote !== null && Array.isArray(remote)) {
+      if (hasPendingWritesFor("events")) return;
       const current = getStoredEvents();
       const merged = reconcileArrayDatasets(current, remote);
       if (typeof window !== "undefined") {

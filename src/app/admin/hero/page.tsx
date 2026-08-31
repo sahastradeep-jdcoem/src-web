@@ -19,7 +19,8 @@ import {
   FileText,
   Trash2,
   Plus,
-  Inbox
+  Inbox,
+  Loader2
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -44,6 +45,11 @@ export default function AdminHeroSettingsPage() {
   const [presets, setPresets] = useState(PRESET_HERO_BG_IMAGES);
   const [isSaved, setIsSaved] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [pendingUploads, setPendingUploads] = useState(0);
+
+  const handleUploadStateChange = (uploading: boolean) => {
+    setPendingUploads((prev) => Math.max(0, prev + (uploading ? 1 : -1)));
+  };
 
   useEffect(() => {
     setSettings(getStoredHeroSettings());
@@ -307,16 +313,23 @@ export default function AdminHeroSettingsPage() {
             <ImageUploadDropzone
               label="Drop Campus Backdrop Here"
               sublabel="Auto-converts DSLR photos to lightweight WebP"
+              storagePath="hero"
               previewUrl={settings.bgImageUrl}
-              onImageCompressed={(result) => {
-                const updated: HeroSettings = {
-                  ...settings,
-                  bgImageUrl: result.dataUrl,
-                  bgTitle: "Custom Uploaded Campus Backdrop",
-                  bgTag: "Custom Upload",
-                };
-                saveAndBroadcast(updated);
-                showNotice("Custom backdrop uploaded and set as active.");
+              onUploadStateChange={handleUploadStateChange}
+              onUrlChange={(cloudUrl) => {
+                if (cloudUrl) {
+                  setSettings((prev) => {
+                    const updated: HeroSettings = {
+                      ...prev,
+                      bgImageUrl: cloudUrl,
+                      bgTitle: "Custom Uploaded Campus Backdrop",
+                      bgTag: "Custom Upload",
+                    };
+                    saveAndBroadcast(updated);
+                    return updated;
+                  });
+                  showNotice("Custom backdrop uploaded and set as active.");
+                }
               }}
             />
 

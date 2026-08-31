@@ -19,7 +19,8 @@ import {
   CheckCircle2,
   Save,
   Layers,
-  Hash
+  Hash,
+  Loader2
 } from "lucide-react";
 import { getStoredClubs, saveStoredClubs, syncClubsFromFirestore, getClubLeaders } from "@/lib/councilStore";
 import { getStoredTenures, updateTenureRoster, CouncilTenure } from "@/lib/tenureStore";
@@ -43,6 +44,11 @@ export default function AdminClubsPage() {
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [modalTab, setModalTab] = useState<"identity" | "about" | "media">("identity");
+  const [pendingUploads, setPendingUploads] = useState(0);
+
+  const handleUploadStateChange = (uploading: boolean) => {
+    setPendingUploads((prev) => Math.max(0, prev + (uploading ? 1 : -1)));
+  };
 
   const loadData = () => {
     const tenureList = getStoredTenures();
@@ -136,6 +142,9 @@ export default function AdminClubsPage() {
       memberCount: 25,
       established: "2024",
       heroImage: "https://images.unsplash.com/photo-1547153760-18fc86324498?q=80&w=1600&auto=format&fit=crop",
+      cardImage: "",
+      headerImage: "",
+      logoImage: "",
       lead: {
         name: "",
         role: "Club Head",
@@ -713,11 +722,9 @@ export default function AdminClubsPage() {
                       recommendedSize="1200 x 675 px (16:9)"
                       storagePath="clubs/cards"
                       previewUrl={editingClub.cardImage || editingClub.heroImage}
+                      onUploadStateChange={handleUploadStateChange}
                       onUrlChange={(url) => {
                         setEditingClub((prev) => (prev ? { ...prev, cardImage: url, heroImage: prev.heroImage || url } : null));
-                      }}
-                      onImageCompressed={(res) => {
-                        setEditingClub((prev) => (prev ? { ...prev, cardImage: res.dataUrl, heroImage: prev.heroImage || res.dataUrl } : null));
                       }}
                     />
                   </div>
@@ -731,11 +738,9 @@ export default function AdminClubsPage() {
                       recommendedSize="1920 x 820 px (21:9)"
                       storagePath="clubs/headers"
                       previewUrl={editingClub.headerImage || editingClub.heroImage}
+                      onUploadStateChange={handleUploadStateChange}
                       onUrlChange={(url) => {
                         setEditingClub((prev) => (prev ? { ...prev, headerImage: url, heroImage: url } : null));
-                      }}
-                      onImageCompressed={(res) => {
-                        setEditingClub((prev) => (prev ? { ...prev, headerImage: res.dataUrl, heroImage: res.dataUrl } : null));
                       }}
                     />
                   </div>
@@ -749,11 +754,9 @@ export default function AdminClubsPage() {
                       recommendedSize="500 x 500 px (Circle PNG)"
                       storagePath="clubs/logos"
                       previewUrl={editingClub.logoImage || ""}
+                      onUploadStateChange={handleUploadStateChange}
                       onUrlChange={(url) => {
                         setEditingClub((prev) => (prev ? { ...prev, logoImage: url } : null));
-                      }}
-                      onImageCompressed={(res) => {
-                        setEditingClub((prev) => (prev ? { ...prev, logoImage: res.dataUrl } : null));
                       }}
                     />
                   </div>
@@ -809,10 +812,20 @@ export default function AdminClubsPage() {
                   type="submit"
                   variant="primary"
                   size="sm"
-                  className="gap-2 cursor-pointer shadow-md shadow-[#E78023]/20"
+                  disabled={pendingUploads > 0}
+                  className="gap-2 cursor-pointer shadow-md shadow-[#E78023]/20 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Save className="w-4 h-4" />
-                  <span>{isCreatingNew ? "Charter Club" : "Save Changes"}</span>
+                  {pendingUploads > 0 ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      <span>Uploading ({pendingUploads})...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>{isCreatingNew ? "Charter Club" : "Save Changes"}</span>
+                    </>
+                  )}
                 </Button>
               </div>
             </div>

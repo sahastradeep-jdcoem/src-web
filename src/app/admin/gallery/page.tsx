@@ -16,7 +16,8 @@ import {
   Sparkles,
   Calendar,
   Layers,
-  Tag
+  Tag,
+  Loader2
 } from "lucide-react";
 import { 
   getStoredGalleryPhotos, 
@@ -49,6 +50,11 @@ export default function AdminGalleryPage() {
   const [editingPhoto, setEditingPhoto] = useState<GalleryPhoto | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [pendingUploads, setPendingUploads] = useState(0);
+
+  const handleUploadStateChange = (uploading: boolean) => {
+    setPendingUploads((prev) => Math.max(0, prev + (uploading ? 1 : -1)));
+  };
 
   useEffect(() => {
     setPhotos(getStoredGalleryPhotos());
@@ -439,16 +445,18 @@ export default function AdminGalleryPage() {
               <ImageUploadDropzone
                 label="Drop Photograph Here"
                 sublabel="Raw DSLR photos are automatically compressed to WebP"
+                storagePath="gallery"
                 previewUrl={editingPhoto.imageUrl}
-                onImageCompressed={(res) => {
-                  setEditingPhoto({ ...editingPhoto, imageUrl: res.dataUrl });
+                onUploadStateChange={handleUploadStateChange}
+                onUrlChange={(url) => {
+                  setEditingPhoto((prev) => (prev ? { ...prev, imageUrl: url } : null));
                 }}
               />
               <input
                 type="text"
                 placeholder="Or paste direct image URL (https://...)"
                 value={editingPhoto.imageUrl}
-                onChange={(e) => setEditingPhoto({ ...editingPhoto, imageUrl: e.target.value })}
+                onChange={(e) => setEditingPhoto((prev) => (prev ? { ...prev, imageUrl: e.target.value } : null))}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
               />
             </div>
@@ -460,7 +468,7 @@ export default function AdminGalleryPage() {
                 rows={3}
                 placeholder="Describe the occasion, student participants, or milestone significance..."
                 value={editingPhoto.caption || ""}
-                onChange={(e) => setEditingPhoto({ ...editingPhoto, caption: e.target.value })}
+                onChange={(e) => setEditingPhoto((prev) => (prev ? { ...prev, caption: e.target.value } : null))}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
               />
             </div>
@@ -478,8 +486,21 @@ export default function AdminGalleryPage() {
               >
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" size="sm">
-                {isCreatingNew ? "Add to Gallery" : "Save Changes"}
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                disabled={pendingUploads > 0}
+                className="disabled:opacity-50 disabled:cursor-not-allowed gap-2"
+              >
+                {pendingUploads > 0 ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Uploading ({pendingUploads})...</span>
+                  </>
+                ) : (
+                  <span>{isCreatingNew ? "Add to Gallery" : "Save Changes"}</span>
+                )}
               </Button>
             </div>
           </form>

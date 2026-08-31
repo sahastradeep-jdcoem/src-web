@@ -22,7 +22,8 @@ import {
   Building2,
   Users,
   RefreshCw,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Loader2
 } from "lucide-react";
 import { EventItem, ClubItem, CustomQuestion } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -85,6 +86,11 @@ export default function AdminEventsPage() {
   const [eventToDelete, setEventToDelete] = useState<EventItem | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [pendingUploads, setPendingUploads] = useState(0);
+
+  const handleUploadStateChange = (uploading: boolean) => {
+    setPendingUploads((prev) => Math.max(0, prev + (uploading ? 1 : -1)));
+  };
 
   // New Event Form State
   const [newEvent, setNewEvent] = useState({
@@ -1173,11 +1179,9 @@ export default function AdminEventsPage() {
                     recommendedSize="1200 x 675 px (16:9)"
                     storagePath="events/cards"
                     previewUrl={newEvent.cardImage || newEvent.poster}
+                    onUploadStateChange={handleUploadStateChange}
                     onUrlChange={(url) => {
                       setNewEvent({ ...newEvent, cardImage: url, poster: newEvent.poster || url });
-                    }}
-                    onImageCompressed={(res) => {
-                      setNewEvent({ ...newEvent, cardImage: res.dataUrl, poster: newEvent.poster || res.dataUrl });
                     }}
                   />
                 </div>
@@ -1191,11 +1195,9 @@ export default function AdminEventsPage() {
                     recommendedSize="1080 x 1350 px (4:5)"
                     storagePath="events/posters"
                     previewUrl={newEvent.posterImage || newEvent.poster}
+                    onUploadStateChange={handleUploadStateChange}
                     onUrlChange={(url) => {
                       setNewEvent({ ...newEvent, posterImage: url, poster: url });
-                    }}
-                    onImageCompressed={(res) => {
-                      setNewEvent({ ...newEvent, posterImage: res.dataUrl, poster: res.dataUrl });
                     }}
                   />
                 </div>
@@ -1209,11 +1211,9 @@ export default function AdminEventsPage() {
                     recommendedSize="1920 x 820 px (21:9)"
                     storagePath="events/headers"
                     previewUrl={newEvent.headerImage || newEvent.cardImage || newEvent.poster}
+                    onUploadStateChange={handleUploadStateChange}
                     onUrlChange={(url) => {
                       setNewEvent({ ...newEvent, headerImage: url });
-                    }}
-                    onImageCompressed={(res) => {
-                      setNewEvent({ ...newEvent, headerImage: res.dataUrl });
                     }}
                   />
                 </div>
@@ -1239,8 +1239,17 @@ export default function AdminEventsPage() {
                 type="submit"
                 variant="primary"
                 size="sm"
+                disabled={pendingUploads > 0}
+                className="disabled:opacity-50 disabled:cursor-not-allowed gap-2"
               >
-                Save & Publish Event
+                {pendingUploads > 0 ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Uploading ({pendingUploads})...</span>
+                  </>
+                ) : (
+                  <span>Save & Publish Event</span>
+                )}
               </Button>
             </div>
           </form>
@@ -1716,11 +1725,9 @@ export default function AdminEventsPage() {
                     recommendedSize="1200 x 675 px (16:9)"
                     storagePath="events/cards"
                     previewUrl={editForm.cardImage || editForm.poster}
+                    onUploadStateChange={handleUploadStateChange}
                     onUrlChange={(url) => {
                       setEditForm({ ...editForm, cardImage: url, poster: editForm.poster || url });
-                    }}
-                    onImageCompressed={(res) => {
-                      setEditForm({ ...editForm, cardImage: res.dataUrl, poster: editForm.poster || res.dataUrl });
                     }}
                   />
                 </div>
@@ -1734,11 +1741,9 @@ export default function AdminEventsPage() {
                     recommendedSize="1080 x 1350 px (4:5)"
                     storagePath="events/posters"
                     previewUrl={editForm.posterImage || editForm.poster}
+                    onUploadStateChange={handleUploadStateChange}
                     onUrlChange={(url) => {
                       setEditForm({ ...editForm, posterImage: url, poster: url });
-                    }}
-                    onImageCompressed={(res) => {
-                      setEditForm({ ...editForm, posterImage: res.dataUrl, poster: res.dataUrl });
                     }}
                   />
                 </div>
@@ -1752,11 +1757,9 @@ export default function AdminEventsPage() {
                     recommendedSize="1920 x 820 px (21:9)"
                     storagePath="events/headers"
                     previewUrl={editForm.headerImage || editForm.cardImage || editForm.poster}
+                    onUploadStateChange={handleUploadStateChange}
                     onUrlChange={(url) => {
                       setEditForm({ ...editForm, headerImage: url });
-                    }}
-                    onImageCompressed={(res) => {
-                      setEditForm({ ...editForm, headerImage: res.dataUrl });
                     }}
                   />
                 </div>
@@ -1782,8 +1785,17 @@ export default function AdminEventsPage() {
                 type="submit"
                 variant="primary"
                 size="sm"
+                disabled={pendingUploads > 0}
+                className="disabled:opacity-50 disabled:cursor-not-allowed gap-2"
               >
-                Save Changes
+                {pendingUploads > 0 ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Uploading ({pendingUploads})...</span>
+                  </>
+                ) : (
+                  <span>Save Changes</span>
+                )}
               </Button>
             </div>
           </form>

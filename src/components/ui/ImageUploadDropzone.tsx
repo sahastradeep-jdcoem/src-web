@@ -10,6 +10,7 @@ import { ImageCropperModal, AspectRatioType } from "./ImageCropperModal";
 interface ImageUploadDropzoneProps {
   onImageCompressed?: (result: CompressionResult) => void;
   onUrlChange?: (url: string) => void;
+  onUploadStateChange?: (uploading: boolean) => void;
   label?: string;
   sublabel?: string;
   recommendedSize?: string;
@@ -22,6 +23,7 @@ interface ImageUploadDropzoneProps {
 export function ImageUploadDropzone({
   onImageCompressed,
   onUrlChange,
+  onUploadStateChange,
   label = "Upload Photo",
   sublabel = "Auto-compressed to high-speed WebP format",
   recommendedSize,
@@ -91,6 +93,7 @@ export function ImageUploadDropzone({
 
   const handleCropComplete = async (croppedDataUrl: string) => {
     setIsProcessing(true);
+    onUploadStateChange?.(true);
     try {
       // 1. Process & optimize the cropped canvas dataUrl
       const isSquare = aspectRatio === "1:1";
@@ -130,6 +133,7 @@ export function ImageUploadDropzone({
       setError("Failed to save cropped image.");
     } finally {
       setIsProcessing(false);
+      onUploadStateChange?.(false);
       setRawImageToCrop(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";

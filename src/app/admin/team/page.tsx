@@ -25,7 +25,8 @@ import {
   Hash,
   ArrowUp,
   ArrowDown,
-  ArrowUpDown
+  ArrowUpDown,
+  Loader2
 } from "lucide-react";
 import { 
   getStoredCouncilMembers, 
@@ -84,6 +85,11 @@ export default function AdminTeamPage() {
   const [isCreatingDraftTenure, setIsCreatingDraftTenure] = useState(false);
   const [draftLabel, setDraftLabel] = useState("2026-27");
   const [draftAcademicYear, setDraftAcademicYear] = useState("2026 - 2027");
+  const [pendingUploads, setPendingUploads] = useState(0);
+
+  const handleUploadStateChange = (uploading: boolean) => {
+    setPendingUploads((prev) => Math.max(0, prev + (uploading ? 1 : -1)));
+  };
 
   const loadData = () => {
     const list = getStoredTenures();
@@ -1092,11 +1098,9 @@ export default function AdminTeamPage() {
                 recommendedSize="600 x 600 px (1:1)"
                 storagePath={activeTab === "clubs" ? "clubs/leads" : "team/avatars"}
                 previewUrl={editingMember.avatar}
+                onUploadStateChange={handleUploadStateChange}
                 onUrlChange={(url) => {
                   setEditingMember((prev) => prev ? { ...prev, avatar: url } : null);
-                }}
-                onImageCompressed={(res) => {
-                  setEditingMember((prev) => prev ? { ...prev, avatar: res.dataUrl } : null);
                 }}
               />
             </div>
@@ -1141,10 +1145,20 @@ export default function AdminTeamPage() {
                   type="submit"
                   variant="primary"
                   size="sm"
-                  className="gap-1.5"
+                  disabled={pendingUploads > 0}
+                  className="gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Save className="w-3.5 h-3.5" />
-                  <span>{isCreatingNew ? "Create Position" : "Save Changes"}</span>
+                  {pendingUploads > 0 ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                      <span>Uploading ({pendingUploads})...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{isCreatingNew ? "Create Position" : "Save Changes"}</span>
+                    </>
+                  )}
                 </Button>
               </div>
             </div>

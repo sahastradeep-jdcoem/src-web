@@ -1,9 +1,10 @@
 import { DEFAULT_HERO_SETTINGS, HeroSettings, PRESET_HERO_BG_IMAGES } from "@/data/heroSettings";
 import { 
-  saveSiteContentToFirestore, 
   getSiteContentFromFirestore, 
-  subscribeToSiteContent 
+  subscribeToSiteContent,
+  cleanUndefined 
 } from "./firebase/firestore";
+import { enqueueCloudWrite, hasPendingWritesFor } from "./dataSyncEngine";
 
 const HERO_STORAGE_KEY = "src_hero_settings";
 const PRESETS_STORAGE_KEY = "src_hero_presets";
@@ -24,9 +25,10 @@ export function getStoredHeroSettings(): HeroSettings {
 export function saveStoredHeroSettings(settings: HeroSettings): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(HERO_STORAGE_KEY, JSON.stringify(settings));
-    window.dispatchEvent(new CustomEvent("src_hero_updated", { detail: settings }));
-    saveSiteContentToFirestore("hero_settings", settings);
+    const sanitized = cleanUndefined(settings);
+    localStorage.setItem(HERO_STORAGE_KEY, JSON.stringify(sanitized));
+    window.dispatchEvent(new CustomEvent("src_hero_updated", { detail: sanitized }));
+    enqueueCloudWrite("hero_settings", sanitized, "Hero Banner Settings");
   } catch (e) {
     console.error("Could not save hero settings to storage", e);
   }
@@ -50,6 +52,7 @@ export async function syncHeroSettingsFromFirestore(): Promise<HeroSettings> {
 export function subscribeToHeroSettings(callback: (settings: HeroSettings) => void): () => void {
   return subscribeToSiteContent<HeroSettings>("hero_settings", (remote) => {
     if (remote) {
+      if (hasPendingWritesFor("hero_settings")) return;
       const merged = { ...DEFAULT_HERO_SETTINGS, ...remote };
       if (typeof window !== "undefined") {
         localStorage.setItem(HERO_STORAGE_KEY, JSON.stringify(merged));
@@ -77,9 +80,10 @@ export function getStoredHeroPresets(): any[] {
 export function saveStoredHeroPresets(presets: any[]): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(presets));
-    window.dispatchEvent(new CustomEvent("src_hero_presets_updated", { detail: presets }));
-    saveSiteContentToFirestore("hero_presets", presets);
+    const sanitized = cleanUndefined(presets);
+    localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(sanitized));
+    window.dispatchEvent(new CustomEvent("src_hero_presets_updated", { detail: sanitized }));
+    enqueueCloudWrite("hero_presets", sanitized, `Hero Presets (${presets.length} Presets)`);
   } catch (e) {
     console.error("Could not save hero presets to storage", e);
   }

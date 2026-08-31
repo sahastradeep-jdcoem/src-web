@@ -14,6 +14,42 @@ export interface PendingSyncItem {
   retryCount: number;
 }
 
+// -------------------------------------------------------------
+// 0. BASE64 IMAGE STRIPPING — prevents Firestore 1MB limit blowout
+// -------------------------------------------------------------
+const BASE64_PREFIX = "data:image/";
+
+/**
+ * Recursively strips base64 data-URL strings from objects/arrays.
+ * Replaces any string value starting with "data:image/" with "".
+ * This ensures only permanent HTTPS URLs are written to Firestore.
+ */
+export function stripBase64Images<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj === "string") {
+    return (obj.startsWith(BASE64_PREFIX) ? "" : obj) as unknown as T;
+  }
+  if (typeof obj !== "object") return obj;
+  if (Array.isArray(obj)) {
+    return obj.map((item) => stripBase64Images(item)) as unknown as T;
+  }
+  const result: any = {};
+  for (const key of Object.keys(obj as any)) {
+    result[key] = stripBase64Images((obj as any)[key]);
+  }
+  return result as T;
+}
+
+/**
+ * Check if there are pending (un-flushed) cloud writes for a given docId.
+ * Used by realtime subscribers to skip reconciliation when local data is newer.
+ */
+export function hasPendingWritesFor(docId: string): boolean {
+  if (typeof window === "undefined") return false;
+  const queue = getPendingQueue();
+  return queue.some((item) => item.docId === docId);
+}
+
 export interface RollingSnapshot {
   id: string;
   timestamp: string;
@@ -81,7 +117,7 @@ export async function enqueueCloudWrite<T>(docId: string, data: T, label = "Data
   // Always record rolling backup snapshot first (Zero Data Loss guarantee)
   recordRollingSnapshot(docId, label, data);
 
-  const cleanData = cleanUndefined(data);
+  const cleanData = cleanUndefined(stripBase64Images(data));
   const queue = getPendingQueue();
   const existingIdx = queue.findIndex((item) => item.docId === docId);
 
@@ -148,29 +184,53 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
     return remoteList;
   }
 
-  // Create lookup map for local items
+  // Create lookup maps for both directions
   const localMap = new Map<string, T>();
   localList.forEach((item) => {
     const key = (item.id || item.slug || "").toLowerCase();
     if (key) localMap.set(key, item);
   });
 
+  const remoteKeys = new Set<string>();
+
   // Smart Deep Merge: Merge remote items with local items
   const merged = remoteList.map((remoteItem) => {
     const key = (remoteItem.id || remoteItem.slug || "").toLowerCase();
+    if (key) remoteKeys.add(key);
     const localItem = key ? localMap.get(key) : undefined;
     if (!localItem) return remoteItem;
 
-    // Start with local base, overlay remote changes, but preserve any local fields where remote is empty/null/undefined
-    const result: any = { ...localItem, ...remoteItem };
+    // Start with remote as base, then selectively preserve local values
+    const result: any = { ...remoteItem };
+
     for (const k of Object.keys(localItem as any)) {
       const localVal = (localItem as any)[k];
       const remoteVal = (remoteItem as any)[k];
-      if (localVal !== undefined && localVal !== null && localVal !== "" && (remoteVal === undefined || remoteVal === null || remoteVal === "")) {
+
+      // If local has a meaningful value and remote doesn't, keep local
+      // This covers: HTTPS URLs where Firestore write failed, base64 images not yet synced,
+      // and any non-empty field that remote lost
+      if (
+        localVal !== undefined && localVal !== null && localVal !== "" &&
+        (remoteVal === undefined || remoteVal === null || remoteVal === "")
+      ) {
+        result[k] = localVal;
+      }
+
+      // If local has a key that remote doesn't have at all, add it
+      if (!(k in (remoteItem as any))) {
         result[k] = localVal;
       }
     }
     return result as T;
+  });
+
+  // Add any local-only items not present in remote (newly added locally, not yet synced)
+  localList.forEach((item) => {
+    const key = (item.id || item.slug || "").toLowerCase();
+    if (key && !remoteKeys.has(key)) {
+      merged.push(item);
+    }
   });
 
   return merged;

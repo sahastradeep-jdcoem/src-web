@@ -1,5 +1,4 @@
 import { 
-  saveSiteContentToFirestore, 
   getSiteContentFromFirestore,
   cleanUndefined
 } from "./firebase/firestore";
@@ -148,7 +147,7 @@ export function resetStoredDepartments(): string[] {
   try {
     localStorage.removeItem("src_departments");
     window.dispatchEvent(new CustomEvent("src_departments_updated", { detail: DEFAULT_DEPARTMENTS }));
-    saveSiteContentToFirestore("departments", DEFAULT_DEPARTMENTS);
+    enqueueCloudWrite("departments", DEFAULT_DEPARTMENTS, "Reset Academic Departments");
   } catch (e) {
     console.error("Could not reset departments", e);
   }

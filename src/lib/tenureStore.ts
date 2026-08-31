@@ -14,12 +14,11 @@ import {
 } from "./councilStore";
 import { getStoredEvents, saveStoredEvents } from "./eventsStore";
 import { 
-  saveSiteContentToFirestore, 
   getSiteContentFromFirestore, 
   subscribeToSiteContent,
   cleanUndefined
 } from "./firebase/firestore";
-import { enqueueCloudWrite, reconcileArrayDatasets } from "./dataSyncEngine";
+import { enqueueCloudWrite, reconcileArrayDatasets, hasPendingWritesFor } from "./dataSyncEngine";
 
 export interface CouncilTenure {
   id: string;
@@ -362,6 +361,7 @@ export async function syncTenuresFromFirestore(): Promise<CouncilTenure[]> {
 export function subscribeToTenures(callback: (tenures: CouncilTenure[]) => void): () => void {
   return subscribeToSiteContent<CouncilTenure[]>("council_tenures", (remote) => {
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
+      if (hasPendingWritesFor("council_tenures")) return;
       const filtered = remote.filter((t: CouncilTenure) => t.id !== "tenure-2024-25" && !t.label.includes("2024"));
       const current = getStoredTenures();
       const merged = reconcileArrayDatasets(current, filtered);

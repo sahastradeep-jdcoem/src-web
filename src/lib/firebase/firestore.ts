@@ -494,6 +494,7 @@ export async function saveSiteContentToFirestore<T>(docId: string, data: T): Pro
     }
   } catch (error) {
     console.error(`Firestore saveSiteContent error [${docId}]`, error);
+    throw error; // Re-throw so enqueueCloudWrite can catch and queue for retry
   }
 }
 

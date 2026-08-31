@@ -7,12 +7,11 @@ import {
 } from "@/data/team";
 import { mockClubs as initialClubs } from "@/data/clubs";
 import { 
-  saveSiteContentToFirestore, 
   getSiteContentFromFirestore, 
   subscribeToSiteContent,
   cleanUndefined
 } from "./firebase/firestore";
-import { enqueueCloudWrite, reconcileArrayDatasets } from "./dataSyncEngine";
+import { enqueueCloudWrite, reconcileArrayDatasets, hasPendingWritesFor } from "./dataSyncEngine";
 
 export function getClubLeaders(club: ClubItem): ClubLeader[] {
   if (!club) return [];
@@ -157,6 +156,7 @@ export async function syncHostingCommitteeFromFirestore(): Promise<TeamMember[]>
 export function subscribeToHostingCommittee(callback: (members: TeamMember[]) => void): () => void {
   return subscribeToSiteContent<TeamMember[]>("hosting_committee", (remote) => {
     if (remote !== null && Array.isArray(remote)) {
+      if (hasPendingWritesFor("hosting_committee")) return;
       const cleaned = stripCategoryAndLevel(remote);
       if (typeof window !== "undefined") {
         localStorage.setItem("src_hosting_committee", JSON.stringify(cleaned));
@@ -212,6 +212,7 @@ export async function syncSpokespersonsFromFirestore(): Promise<TeamMember[]> {
 export function subscribeToSpokespersons(callback: (members: TeamMember[]) => void): () => void {
   return subscribeToSiteContent<TeamMember[]>("spokespersons", (remote) => {
     if (remote !== null && Array.isArray(remote)) {
+      if (hasPendingWritesFor("spokespersons")) return;
       if (typeof window !== "undefined") {
         localStorage.setItem("src_spokespersons", JSON.stringify(remote));
         window.dispatchEvent(new CustomEvent("src_spokespersons_updated", { detail: remote }));
@@ -224,6 +225,7 @@ export function subscribeToSpokespersons(callback: (members: TeamMember[]) => vo
 export function subscribeToCouncilMembers(callback: (members: TeamMember[]) => void): () => void {
   return subscribeToSiteContent<TeamMember[]>("council_team", (remote) => {
     if (remote !== null && Array.isArray(remote)) {
+      if (hasPendingWritesFor("council_team")) return;
       if (typeof window !== "undefined") {
         localStorage.setItem("src_council_team", JSON.stringify(remote));
         window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: remote }));
@@ -255,7 +257,7 @@ export function saveStoredClubs(clubs: ClubItem[]): void {
     localStorage.setItem("src_clubs_roster", JSON.stringify(sanitized));
     window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: sanitized }));
     window.dispatchEvent(new CustomEvent("src_tenures_updated"));
-    saveSiteContentToFirestore("clubs", sanitized);
+    // Single cloud write path — enqueueCloudWrite handles base64 stripping + retry
     enqueueCloudWrite("clubs", sanitized, `Clubs Directory (${clubs.length} Clubs)`);
   } catch (e) {
     console.error("Could not save clubs to storage", e);
@@ -281,6 +283,8 @@ export async function syncClubsFromFirestore(): Promise<ClubItem[]> {
 export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => void {
   return subscribeToSiteContent<ClubItem[]>("clubs", (remote) => {
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
+      // Skip reconciliation if local writes are pending — local is newer
+      if (hasPendingWritesFor("clubs")) return;
       const current = getStoredClubs();
       const merged = reconcileArrayDatasets(current, remote);
       if (typeof window !== "undefined") {
@@ -367,6 +371,7 @@ export async function syncFoundingMembersFromFirestore(): Promise<TeamMember[]> 
 export function subscribeToFoundingMembers(callback: (members: TeamMember[]) => void): () => void {
   return subscribeToSiteContent<TeamMember[]>("founding_members", (remote) => {
     if (remote !== null && Array.isArray(remote)) {
+      if (hasPendingWritesFor("founding_members")) return;
       const cleaned = stripCategoryAndLevel(remote);
       if (typeof window !== "undefined") {
         localStorage.setItem("src_founding_members", JSON.stringify(cleaned));
