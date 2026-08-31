@@ -73,64 +73,64 @@ export default function GateScannerHubPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-start p-4 sm:p-6 lg:p-10 font-sans">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col items-center justify-start p-4 sm:p-6 lg:p-10 font-sans">
       <div className="w-full max-w-xl space-y-6">
         
         {/* Header */}
         <div className="flex items-center justify-between">
           <Link
             href="/"
-            className="text-xs font-bold uppercase tracking-wider text-slate-400 hover:text-white transition-colors"
+            className="text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-[#17458F] transition-colors"
           >
             &larr; SRC JDCOEM
           </Link>
-          <span className="px-3 py-1 rounded-full bg-[#17458F]/40 border border-[#17458F] text-[11px] font-bold text-blue-300 flex items-center gap-1.5">
+          <span className="px-3.5 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-[11px] font-bold text-[#17458F] flex items-center gap-1.5 shadow-xs">
             <ShieldCheck className="w-3.5 h-3.5 text-[#E78023]" />
             <span>Gate Accreditation Hub</span>
           </span>
         </div>
 
         {/* Hero Portal Card */}
-        <div className="rounded-3xl bg-slate-900 border border-white/10 p-6 sm:p-8 text-center space-y-4 shadow-2xl relative overflow-hidden">
+        <div className="rounded-3xl bg-white border border-slate-200 p-6 sm:p-8 text-center space-y-4 shadow-sm relative overflow-hidden">
           <div className="w-16 h-16 rounded-3xl bg-[#E78023]/10 border border-[#E78023]/30 flex items-center justify-center mx-auto text-[#E78023]">
             <QrCode className="w-8 h-8" />
           </div>
 
           <div className="space-y-1">
-            <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-white tracking-tight">
+            <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-slate-900 tracking-tight">
               Pass Verification &amp; Check-In
             </h1>
-            <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed font-medium">
+            <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed font-medium">
               Scan participant QR passes with your smartphone camera or enter the pass ID below to authenticate genuine credentials.
             </p>
           </div>
 
           {/* Quick Stats Bar */}
           <div className="grid grid-cols-3 gap-2 pt-2 text-center">
-            <div className="p-3 rounded-2xl bg-slate-950/60 border border-white/5">
-              <span className="text-[10px] font-mono text-slate-400 uppercase">Total Passes</span>
-              <p className="font-extrabold text-lg text-white font-heading">{stats.total}</p>
+            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
+              <span className="text-[10px] font-mono text-slate-500 uppercase font-bold">Total Passes</span>
+              <p className="font-extrabold text-lg text-slate-900 font-heading">{stats.total}</p>
             </div>
-            <div className="p-3 rounded-2xl bg-emerald-950/30 border border-emerald-500/20">
-              <span className="text-[10px] font-mono text-emerald-400 uppercase">Checked In</span>
-              <p className="font-extrabold text-lg text-emerald-400 font-heading">{stats.checkedIn}</p>
+            <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200">
+              <span className="text-[10px] font-mono text-emerald-700 uppercase font-bold">Checked In</span>
+              <p className="font-extrabold text-lg text-emerald-700 font-heading">{stats.checkedIn}</p>
             </div>
-            <div className="p-3 rounded-2xl bg-blue-950/30 border border-blue-500/20">
-              <span className="text-[10px] font-mono text-blue-400 uppercase">Pending</span>
-              <p className="font-extrabold text-lg text-blue-300 font-heading">{stats.pending}</p>
+            <div className="p-3 rounded-2xl bg-blue-50 border border-blue-200">
+              <span className="text-[10px] font-mono text-[#17458F] uppercase font-bold">Pending</span>
+              <p className="font-extrabold text-lg text-[#17458F] font-heading">{stats.pending}</p>
             </div>
           </div>
         </div>
 
         {/* Manual Pass ID / URL Lookup Form */}
-        <form onSubmit={handleLookup} className="rounded-3xl bg-slate-900 border border-white/10 p-6 space-y-4">
+        <form onSubmit={handleLookup} className="rounded-3xl bg-white border border-slate-200 p-6 space-y-4 shadow-sm">
           <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
               <Search className="w-3.5 h-3.5 text-[#E78023]" />
               <span>Verify Pass by ID or Token</span>
             </label>
             <p className="text-[11px] text-slate-500 font-medium">
-              Enter Pass ID (e.g. <code className="text-[#E78023]">reg-174092...</code>) or paste scanner output:
+              Enter Pass ID (e.g. <code className="text-[#E78023] font-bold">reg-174092...</code>) or paste scanner output:
             </p>
           </div>
 
@@ -141,11 +141,11 @@ export default function GateScannerHubPage() {
               value={passInput}
               onChange={(e) => setPassInput(e.target.value)}
               placeholder="Paste Pass ID or Scan Token..."
-              className="w-full pl-4 pr-12 py-3.5 rounded-2xl bg-slate-950 border border-white/15 text-sm font-mono text-white placeholder-slate-600 focus:outline-none focus:border-[#E78023]"
+              className="w-full pl-4 pr-12 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-mono text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#E78023] focus:bg-white transition-all"
             />
             <button
               type="submit"
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-[#E78023] hover:bg-[#D26E17] text-white transition-colors cursor-pointer"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-[#E78023] hover:bg-[#D26E17] text-white transition-colors cursor-pointer shadow-xs"
             >
               <ArrowRight className="w-4 h-4" />
             </button>
@@ -162,13 +162,13 @@ export default function GateScannerHubPage() {
 
         {/* Recent Check-Ins List */}
         {recentCheckedIn.length > 0 && (
-          <div className="rounded-3xl bg-slate-900 border border-white/10 p-6 space-y-3">
+          <div className="rounded-3xl bg-white border border-slate-200 p-6 space-y-3 shadow-sm">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Recent Gate Check-Ins</span>
               </span>
-              <span className="text-[10px] text-slate-500 font-mono">Live Roster</span>
+              <span className="text-[10px] text-slate-400 font-mono font-bold">Live Roster</span>
             </div>
 
             <div className="space-y-2">
@@ -176,13 +176,13 @@ export default function GateScannerHubPage() {
                 <Link
                   key={r.id}
                   href={`/verify/${r.id}`}
-                  className="p-3 rounded-2xl bg-slate-950/60 hover:bg-slate-950 border border-white/5 flex items-center justify-between text-xs transition-colors group"
+                  className="p-3 rounded-2xl bg-slate-50 hover:bg-blue-50/60 border border-slate-200/80 flex items-center justify-between text-xs transition-colors group"
                 >
                   <div className="space-y-0.5">
-                    <span className="font-bold text-white block group-hover:text-[#E78023] transition-colors">
+                    <span className="font-bold text-slate-900 block group-hover:text-[#17458F] transition-colors">
                       {r.leaderName}
                     </span>
-                    <span className="text-[11px] text-slate-400">
+                    <span className="text-[11px] text-slate-500">
                       {r.eventTitle || r.eventId} • {r.department}
                     </span>
                   </div>
