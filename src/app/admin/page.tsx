@@ -23,8 +23,7 @@ import {
   Upload,
   Activity,
   Check,
-  RefreshCw,
-  Server
+  RefreshCw
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -226,9 +225,6 @@ export default function AdminOverviewPage() {
     },
   ];
 
-  const hasFirebaseKey = Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
-  const hasRazorpayKey = Boolean(process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID);
-
   return (
     <div className="space-y-8 max-w-7xl mx-auto text-[#0F172A]">
       
@@ -263,56 +259,6 @@ export default function AdminOverviewPage() {
             <span>Events Manager</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
-        </div>
-      </div>
-
-      {/* Production Diagnostics Bar */}
-      <div className="p-4 sm:p-5 rounded-3xl bg-slate-900 text-white shadow-xl space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
-          <div className="flex items-center gap-2.5">
-            <Server className="w-4 h-4 text-emerald-400" />
-            <span className="font-heading font-bold text-xs uppercase tracking-wider text-slate-200">
-              PRODUCTION SYSTEM HEALTH &amp; INTEGRATIONS
-            </span>
-          </div>
-          <span className="text-[11px] text-emerald-400 font-mono font-semibold flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>All Systems Operational</span>
-          </span>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-          <div className="p-3 rounded-2xl bg-slate-800/80 border border-slate-700/60 space-y-1">
-            <span className="text-[10px] uppercase font-bold text-slate-400">Cloud Database</span>
-            <p className="font-bold text-slate-100 flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>{hasFirebaseKey ? "Firestore Active" : "Local Fallback"}</span>
-            </p>
-          </div>
-
-          <div className="p-3 rounded-2xl bg-slate-800/80 border border-slate-700/60 space-y-1">
-            <span className="text-[10px] uppercase font-bold text-slate-400">Authentication</span>
-            <p className="font-bold text-slate-100 flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Google Firebase Auth</span>
-            </p>
-          </div>
-
-          <div className="p-3 rounded-2xl bg-slate-800/80 border border-slate-700/60 space-y-1">
-            <span className="text-[10px] uppercase font-bold text-slate-400">Payment Gateway</span>
-            <p className="font-bold text-slate-100 flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5 text-[#E78023]" />
-              <span>{hasRazorpayKey ? "Razorpay Live" : "Sandbox Test Mode"}</span>
-            </p>
-          </div>
-
-          <div className="p-3 rounded-2xl bg-slate-800/80 border border-slate-700/60 space-y-1">
-            <span className="text-[10px] uppercase font-bold text-slate-400">QR Engine</span>
-            <p className="font-bold text-slate-100 flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>300 DPI Canvas Matrix</span>
-            </p>
-          </div>
         </div>
       </div>
 
