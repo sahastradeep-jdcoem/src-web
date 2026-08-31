@@ -20,80 +20,243 @@ import {
   Sparkles, 
   Plus, 
   Trash2,
-  Hash
+  Hash,
+  AlertCircle,
+  LogIn,
+  CheckCircle2,
+  UserCheck,
+  Building2,
+  Search
 } from "lucide-react";
 import confetti from "canvas-confetti";
-
 import { 
   getStoredDepartments, 
   DEFAULT_DEPARTMENTS 
 } from "@/lib/departmentsStore";
+import { 
+  findRegisteredUserByBtId, 
+  lookupUserByBtId, 
+  RegisteredUserRecord,
+  saveRegisteredUser
+} from "@/lib/usersStore";
 
 interface RegistrationWizardProps {
   event: EventItem;
 }
 
-const YEARS = ["1st Year", "2nd Year", "3rd Year", "4th Year"];
+const YEARS = ["1st Year", "2nd Year", "3rd Year", "4th Year", "4th Year / Final Year"];
+
+export interface TeamMemberEntry {
+  name: string;
+  btId: string;
+  department?: string;
+  year?: string;
+  email?: string;
+  isLeader?: boolean;
+}
 
 export function RegistrationWizard({ event }: RegistrationWizardProps) {
-  const { user } = useAuth();
+  const { user, openAuthModal, updateUserProfile } = useAuth();
   const [departmentsList, setDepartmentsList] = useState<string[]>(DEFAULT_DEPARTMENTS);
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
 
-  useEffect(() => {
-    setDepartmentsList(getStoredDepartments());
-    const handleUpdate = (e: any) => {
-      if (e?.detail && Array.isArray(e.detail)) {
-        setDepartmentsList(e.detail);
-      } else {
-        setDepartmentsList(getStoredDepartments());
-      }
-    };
-    window.addEventListener("src_departments_updated", handleUpdate);
-    return () => window.removeEventListener("src_departments_updated", handleUpdate);
-  }, []);
+  // Determine available format
+  const initialFormat = event.teamType === "Team" ? "Team" : "Individual";
 
   // Form State
   const [formData, setFormData] = useState({
-    fullName: user?.displayName || "Aryan Sharma",
-    email: user?.email || "aryan.sharma@jdcoem.ac.in",
-    btId: user?.btId || "BT22CSE045",
-    phone: user?.phone || "+91 98230 11223",
-    department: user?.department || DEFAULT_DEPARTMENTS[1],
-    year: user?.year || YEARS[2],
-    teamType: (event.teamType === "Team" ? "Team" : "Individual") as "Individual" | "Team",
-    teamName: "Phantom Protocol",
-    teamMembers: ["Aryan Sharma", "Rohan Verma", "Sneha Patil"],
+    fullName: "",
+    email: "",
+    btId: "",
+    phone: "",
+    department: "",
+    year: "",
+    teamType: initialFormat as "Individual" | "Team",
+    teamName: "",
   });
 
-  const [newMemberName, setNewMemberName] = useState("");
+  // Team Roster State
+  const [teamMembers, setTeamMembers] = useState<TeamMemberEntry[]>([]);
+  const [teammateBtIdInput, setTeammateBtIdInput] = useState("");
+  const [lookupError, setLookupError] = useState<string | null>(null);
+  const [lookupSuccess, setLookupSuccess] = useState<string | null>(null);
+  const [isVerifyingTeammate, setIsVerifyingTeammate] = useState(false);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [generatedTicket, setGeneratedTicket] = useState<{
     registrationId: string;
     ticketCode: string;
   } | null>(null);
 
-  const handleAddMember = () => {
-    if (newMemberName.trim()) {
+  // Sync profile data directly from authenticated user
+  useEffect(() => {
+    setDepartmentsList(getStoredDepartments());
+    const handleDeptUpdate = (e: any) => {
+      if (e?.detail && Array.isArray(e.detail)) {
+        setDepartmentsList(e.detail);
+      } else {
+        setDepartmentsList(getStoredDepartments());
+      }
+    };
+    window.addEventListener("src_departments_updated", handleDeptUpdate);
+    return () => window.removeEventListener("src_departments_updated", handleDeptUpdate);
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+      const leaderName = user.displayName || `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email?.split("@")[0] || "Student";
+      const leaderBtId = user.btId || "";
+      const leaderDept = user.department || DEFAULT_DEPARTMENTS[0] || "Computer Science and Engineering";
+      const leaderYear = user.year || "3rd Year";
+      const leaderPhone = user.phone || "";
+      const leaderEmail = user.email || "";
+
       setFormData((prev) => ({
         ...prev,
-        teamMembers: [...prev.teamMembers, newMemberName.trim()],
+        fullName: leaderName,
+        email: leaderEmail,
+        btId: leaderBtId,
+        phone: leaderPhone,
+        department: leaderDept,
+        year: leaderYear,
       }));
-      setNewMemberName("");
+
+      // Initialize team leader in roster
+      setTeamMembers([
+        {
+          name: leaderName,
+          btId: leaderBtId,
+          department: leaderDept,
+          year: leaderYear,
+          email: leaderEmail,
+          isLeader: true,
+        },
+      ]);
+    }
+  }, [user]);
+
+  const minTeamSize = event.minTeamSize || (event.teamType === "Individual" ? 1 : 2);
+  const maxTeamSize = event.maxTeamSize || 4;
+
+  const handleVerifyAndAddTeammate = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setLookupError(null);
+    setLookupSuccess(null);
+
+    const cleanBtId = teammateBtIdInput.trim().toUpperCase();
+    if (!cleanBtId) {
+      setLookupError("Please enter a College BT ID to verify.");
+      return;
+    }
+
+    // 1. Check if same as leader
+    if (cleanBtId === formData.btId.trim().toUpperCase()) {
+      setLookupError("You are already registered as the Team Leader for this entry.");
+      return;
+    }
+
+    // 2. Check if already added
+    if (teamMembers.some((m) => m.btId.trim().toUpperCase() === cleanBtId)) {
+      setLookupError(`Teammate with BT ID ${cleanBtId} is already in your team roster.`);
+      return;
+    }
+
+    // 3. Check team limit
+    if (teamMembers.length >= maxTeamSize) {
+      setLookupError(`Maximum team size of ${maxTeamSize} members reached for this event.`);
+      return;
+    }
+
+    setIsVerifyingTeammate(true);
+
+    try {
+      const found = await lookupUserByBtId(cleanBtId);
+
+      if (!found) {
+        setLookupError(
+          `BT ID "${cleanBtId}" is not registered on the portal. All team members must sign in to the Sahastradeep portal at least once to create their verified profile before joining a team.`
+        );
+        setIsVerifyingTeammate(false);
+        return;
+      }
+
+      const memberName = found.displayName || `${found.firstName || ""} ${found.lastName || ""}`.trim() || found.email || "Student";
+      const newEntry: TeamMemberEntry = {
+        name: memberName,
+        btId: cleanBtId,
+        department: found.department,
+        year: found.year,
+        email: found.email || undefined,
+        isLeader: false,
+      };
+
+      setTeamMembers((prev) => [...prev, newEntry]);
+      setTeammateBtIdInput("");
+      setLookupSuccess(`Verified: ${memberName} (${found.department || "Student"}) added to squad!`);
+      setTimeout(() => setLookupSuccess(null), 3000);
+    } catch (err) {
+      setLookupError("Error connecting to member registry. Please try again.");
+    } finally {
+      setIsVerifyingTeammate(false);
     }
   };
 
-  const handleRemoveMember = (index: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      teamMembers: prev.teamMembers.filter((_, i) => i !== index),
-    }));
+  const handleRemoveTeammate = (indexToRemove: number) => {
+    if (indexToRemove === 0) return; // Cannot remove team leader
+    setTeamMembers((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const handleProceedToStep2 = () => {
+    if (!user) {
+      openAuthModal();
+      return;
+    }
+    if (!formData.btId.trim()) {
+      alert("Please ensure your College BT ID is saved in your profile.");
+      return;
+    }
+    if (!formData.phone.trim()) {
+      alert("Please provide a WhatsApp contact phone number for event coordinators.");
+      return;
+    }
+
+    // If user edited their phone or dept in step 1, persist to profile
+    if (updateUserProfile) {
+      updateUserProfile({
+        phone: formData.phone,
+        department: formData.department,
+        year: formData.year,
+        btId: formData.btId,
+      });
+    }
+
+    setCurrentStep(2);
+  };
+
+  const handleProceedToStep3 = () => {
+    if (formData.teamType === "Team") {
+      if (!formData.teamName.trim()) {
+        alert("Please enter your Team / Squad Name.");
+        return;
+      }
+      if (teamMembers.length < minTeamSize) {
+        alert(
+          `This event requires at least ${minTeamSize} members per team. You currently have ${teamMembers.length} member(s). Please add ${minTeamSize - teamMembers.length} more verified teammate(s).`
+        );
+        return;
+      }
+    }
+    setCurrentStep(3);
   };
 
   const handleConfirmRegistration = async () => {
     setIsSubmitting(true);
     const regId = `SRC-${event.slug.slice(0, 3).toUpperCase()}-26-${Math.floor(10000 + Math.random() * 90000)}`;
     const tkCode = `${event.slug.slice(0, 3).toUpperCase()}26-TK-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const memberNamesList = formData.teamType === "Team" 
+      ? teamMembers.map((m) => `${m.name} (${m.btId})`)
+      : [formData.fullName];
 
     try {
       await saveRegistrationToFirestore({
@@ -107,9 +270,10 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         department: formData.department,
         year: formData.year,
         btId: formData.btId,
-        teamSize: formData.teamType === "Team" ? formData.teamMembers.length : 1,
+        teamSize: formData.teamType === "Team" ? teamMembers.length : 1,
         teamName: formData.teamType === "Team" ? formData.teamName : undefined,
-        qrPayload: `SRC:JDCOEM:${regId}:${tkCode}:${event.id}`,
+        teamMembers: formData.teamType === "Team" ? teamMembers : undefined,
+        qrPayload: `SRC:JDCOEM:${regId}:${tkCode}:${event.id}:${formData.btId}`,
       });
     } catch (e) {
       console.warn("Firestore registration save fallback handled", e);
@@ -145,7 +309,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   ];
 
   return (
-    <div className="max-w-4xl mx-auto space-y-10">
+    <div className="max-w-4xl mx-auto space-y-10 font-sans">
       
       {/* Progress Stepper Bar */}
       <div className="grid grid-cols-4 gap-2 sm:gap-4">
@@ -165,7 +329,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider">
+                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider font-heading">
                   {step.title}
                 </span>
                 {isCompleted && (
@@ -179,152 +343,201 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         })}
       </div>
 
-      {/* STEP 1: PARTICIPANT DETAILS */}
+      {/* STEP 1: PARTICIPANT DETAILS (LOADED DIRECTLY FROM PROFILE) */}
       {currentStep === 1 && (
         <div className="rounded-3xl bg-white border border-slate-200 p-6 sm:p-10 space-y-8 shadow-sm">
-          <div className="border-b border-slate-100 pb-4">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#E78023]">
-              Step 01 of 03
-            </span>
-            <h3 className="font-extrabold text-2xl text-[#17458F] uppercase mt-1">
-              PRIMARY PARTICIPANT INFORMATION
-            </h3>
-            <p className="text-xs text-slate-500 font-medium">
-              Enter your credentials for verified college accreditation.
-            </p>
+          <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-[#E78023]">
+                Step 01 of 03
+              </span>
+              <h3 className="font-heading font-extrabold text-2xl text-[#17458F] uppercase mt-1">
+                PRIMARY PARTICIPANT INFORMATION
+              </h3>
+              <p className="text-xs text-slate-500 font-medium">
+                Accredited automatically from your verified student profile.
+              </p>
+            </div>
+
+            {user && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold uppercase tracking-wider">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>Verified Profile</span>
+              </span>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            
-            {/* Full Name */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-[#E78023]" />
-                <span>Full Name *</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.fullName}
-                onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                placeholder="e.g. Aryan Sharma"
-                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
-              />
-            </div>
-
-            {/* BT ID (Replaced Roll No) */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <Hash className="w-3.5 h-3.5 text-[#17458F]" />
-                <span>College BT ID *</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.btId}
-                onChange={(e) => setFormData({ ...formData, btId: e.target.value.toUpperCase() })}
-                placeholder="e.g. BT22CSE045"
-                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-mono font-bold uppercase focus:outline-none focus:border-[#17458F]"
-              />
-            </div>
-
-            {/* Email */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5 text-[#E78023]" />
-                <span>College / Personal Email *</span>
-              </label>
-              <input
-                type="email"
-                required
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="student@jdcoem.ac.in"
-                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
-              />
-            </div>
-
-            {/* Phone */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5 text-[#E78023]" />
-                <span>WhatsApp Contact Phone *</span>
-              </label>
-              <input
-                type="tel"
-                required
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="+91 98230 11223"
-                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
-              />
-            </div>
-
-            {/* Year */}
-            <div className="space-y-2 sm:col-span-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <GraduationCap className="w-3.5 h-3.5 text-[#E78023]" />
-                <span>Academic Year *</span>
-              </label>
-              <select
-                value={formData.year}
-                onChange={(e) => setFormData({ ...formData, year: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
+          {!user ? (
+            /* Unauthenticated Prompt */
+            <div className="p-8 rounded-3xl bg-amber-50/70 border border-amber-200 text-center space-y-4 max-w-lg mx-auto">
+              <div className="w-12 h-12 rounded-2xl bg-[#17458F] text-white flex items-center justify-center mx-auto shadow-md">
+                <UserCheck className="w-6 h-6" />
+              </div>
+              <div className="space-y-1.5">
+                <h4 className="font-heading font-extrabold text-lg text-[#0F172A]">
+                  Student Sign-In Required
+                </h4>
+                <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                  Primary participation details are verified directly from your college Google profile. Please sign in to continue your event accreditation.
+                </p>
+              </div>
+              <Button
+                onClick={openAuthModal}
+                variant="primary"
+                size="md"
+                className="gap-2 mx-auto cursor-pointer"
               >
-                {YEARS.map((yr) => (
-                  <option key={yr} value={yr} className="bg-white text-slate-900">
-                    {yr}
-                  </option>
-                ))}
-              </select>
+                <LogIn className="w-4 h-4" />
+                <span>Sign In with College Account</span>
+              </Button>
             </div>
+          ) : (
+            /* Verified Student Profile Display */
+            <div className="space-y-6">
+              
+              <div className="p-5 rounded-2xl bg-blue-50/50 border border-[#17458F]/20 flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-[#17458F] text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <ShieldCheck className="w-5 h-5 text-[#E78023]" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="font-bold text-sm text-[#17458F]">
+                    Authenticated JDCOEM Student Profile
+                  </h4>
+                  <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                    Your official college BT ID, department, and credentials will be encoded into your digital delegate entry pass.
+                  </p>
+                </div>
+              </div>
 
-            {/* Department */}
-            <div className="sm:col-span-2 space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                Department / Branch *
-              </label>
-              <select
-                value={formData.department}
-                onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
-              >
-                {departmentsList.map((dept) => (
-                  <option key={dept} value={dept} className="bg-white text-slate-900">
-                    {dept}
-                  </option>
-                ))}
-              </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                
+                {/* Full Name */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 text-[#E78023]" />
+                    <span>Full Name *</span>
+                  </label>
+                  <input
+                    type="text"
+                    disabled
+                    value={formData.fullName}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-900 text-sm font-semibold cursor-not-allowed"
+                  />
+                </div>
+
+                {/* BT ID */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <Hash className="w-3.5 h-3.5 text-[#17458F]" />
+                    <span>College BT ID *</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.btId}
+                    onChange={(e) => setFormData({ ...formData, btId: e.target.value.toUpperCase() })}
+                    placeholder="e.g. BT230036CS"
+                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-mono font-bold uppercase focus:outline-none focus:border-[#17458F]"
+                  />
+                </div>
+
+                {/* College Email */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-[#E78023]" />
+                    <span>Official College Email *</span>
+                  </label>
+                  <input
+                    type="email"
+                    disabled
+                    value={formData.email}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-900 text-sm font-medium cursor-not-allowed"
+                  />
+                </div>
+
+                {/* WhatsApp Phone */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-[#E78023]" />
+                    <span>WhatsApp Contact Phone *</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="e.g. 9823011223"
+                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
+                  />
+                </div>
+
+                {/* Academic Year */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <GraduationCap className="w-3.5 h-3.5 text-[#E78023]" />
+                    <span>Academic Year *</span>
+                  </label>
+                  <select
+                    value={formData.year}
+                    onChange={(e) => setFormData({ ...formData, year: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
+                  >
+                    {YEARS.map((yr) => (
+                      <option key={yr} value={yr} className="bg-white text-slate-900">
+                        {yr}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Department */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5 text-[#17458F]" />
+                    <span>Department / Branch *</span>
+                  </label>
+                  <select
+                    value={formData.department}
+                    onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
+                  >
+                    {departmentsList.map((dept) => (
+                      <option key={dept} value={dept} className="bg-white text-slate-900">
+                        {dept}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+              </div>
+
+              <div className="flex justify-end pt-4 border-t border-slate-100">
+                <Button
+                  onClick={handleProceedToStep2}
+                  variant="primary"
+                  size="md"
+                  className="gap-2 cursor-pointer"
+                >
+                  <span>Continue to Participation Format</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
-
-          </div>
-
-          <div className="flex justify-end pt-4 border-t border-slate-100">
-            <Button
-              onClick={() => setCurrentStep(2)}
-              variant="primary"
-              size="md"
-              className="gap-2 cursor-pointer"
-            >
-              <span>Continue to Participation</span>
-              <ArrowRight className="w-4 h-4" />
-            </Button>
-          </div>
+          )}
         </div>
       )}
 
-      {/* STEP 2: PARTICIPATION FORMAT */}
+      {/* STEP 2: PARTICIPATION FORMAT & VERIFIED TEAM ROSTER */}
       {currentStep === 2 && (
         <div className="rounded-3xl bg-white border border-slate-200 p-6 sm:p-10 space-y-8 shadow-sm">
           <div className="border-b border-slate-100 pb-4">
             <span className="text-xs font-bold uppercase tracking-wider text-[#E78023]">
               Step 02 of 03
             </span>
-            <h3 className="font-extrabold text-2xl text-[#17458F] uppercase mt-1">
-              PARTICIPATION FORMAT & TEAM ROSTER
+            <h3 className="font-heading font-extrabold text-2xl text-[#17458F] uppercase mt-1">
+              PARTICIPATION FORMAT &amp; TEAM ROSTER
             </h3>
             <p className="text-xs text-slate-500 font-medium">
-              Configure solo registration or team roster entry.
+              Configure solo registration or add verified team members by BT ID.
             </p>
           </div>
 
@@ -335,18 +548,22 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
                 Entry Category
               </label>
+              
               <div className="grid grid-cols-2 gap-4">
                 <button
                   type="button"
+                  disabled={event.teamType === "Team"}
                   onClick={() => setFormData({ ...formData, teamType: "Individual" })}
                   className={`p-4 rounded-2xl border text-center transition-all cursor-pointer ${
                     formData.teamType === "Individual"
                       ? "bg-[#17458F] border-[#E78023] text-white shadow-sm"
+                      : event.teamType === "Team"
+                      ? "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-50"
                       : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
                   }`}
                 >
                   <User className="w-5 h-5 mx-auto mb-1" />
-                  <span className="font-bold text-xs uppercase tracking-wider block">
+                  <span className="font-heading font-bold text-xs uppercase tracking-wider block">
                     Individual Entry
                   </span>
                   <span className="text-[11px] opacity-80">Single participant pass</span>
@@ -354,25 +571,38 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
                 <button
                   type="button"
+                  disabled={event.teamType === "Individual"}
                   onClick={() => setFormData({ ...formData, teamType: "Team" })}
                   className={`p-4 rounded-2xl border text-center transition-all cursor-pointer ${
                     formData.teamType === "Team"
                       ? "bg-[#17458F] border-[#E78023] text-white shadow-sm"
+                      : event.teamType === "Individual"
+                      ? "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-50"
                       : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
                   }`}
                 >
                   <Users className="w-5 h-5 mx-auto mb-1" />
-                  <span className="font-bold text-xs uppercase tracking-wider block">
+                  <span className="font-heading font-bold text-xs uppercase tracking-wider block">
                     Team Entry
                   </span>
-                  <span className="text-[11px] opacity-80">Squad with multiple members</span>
+                  <span className="text-[11px] opacity-80">
+                    Squad ({minTeamSize} - {maxTeamSize} Members)
+                  </span>
                 </button>
               </div>
+
+              {event.teamType !== "Both" && (
+                <p className="text-[11px] text-slate-500 font-medium">
+                  Note: This event is chartered specifically as a <strong>{event.teamType}</strong> competition.
+                </p>
+              )}
             </div>
 
-            {/* Team Specific Inputs */}
+            {/* Team Specific Inputs & Verified BT ID Lookup */}
             {formData.teamType === "Team" && (
               <div className="space-y-6 pt-4 border-t border-slate-100">
+                
+                {/* Team Name */}
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
                     Team / Squad Name *
@@ -382,40 +612,65 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                     required
                     value={formData.teamName}
                     onChange={(e) => setFormData({ ...formData, teamName: e.target.value })}
-                    placeholder="e.g. Phantom Protocol"
-                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
+                    placeholder="e.g. Code Ninjas or Team JDCOEM"
+                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F]"
                   />
                 </div>
 
-                {/* Team Members List */}
+                {/* Team Members Verified List */}
                 <div className="space-y-3">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                    Team Members ({formData.teamMembers.length})
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                      Team Roster ({teamMembers.length} of max {maxTeamSize})
+                    </label>
+                    <span className="text-[11px] font-bold text-[#E78023]">
+                      Requirement: {minTeamSize} – {maxTeamSize} Members
+                    </span>
+                  </div>
                   
-                  <div className="space-y-2">
-                    {formData.teamMembers.map((member, idx) => (
+                  <div className="space-y-2.5">
+                    {teamMembers.map((member, idx) => (
                       <div
-                        key={idx}
-                        className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-sm"
+                        key={member.btId || idx}
+                        className={`flex items-center justify-between p-4 rounded-2xl border text-sm transition-all ${
+                          idx === 0
+                            ? "bg-blue-50/70 border-[#17458F]/30 shadow-xs"
+                            : "bg-slate-50 border-slate-200"
+                        }`}
                       >
                         <div className="flex items-center gap-3">
-                          <span className="font-bold text-xs text-[#E78023]">
+                          <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center font-bold text-xs text-[#17458F] shrink-0">
                             0{idx + 1}
-                          </span>
-                          <span className="font-medium text-slate-800">{member}</span>
-                          {idx === 0 && (
-                            <Badge variant="navy" size="sm">
-                              Team Leader
-                            </Badge>
-                          )}
+                          </div>
+                          
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-slate-900">{member.name}</span>
+                              <span className="font-mono text-xs font-bold text-[#E78023] px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200">
+                                {member.btId}
+                              </span>
+                              {idx === 0 ? (
+                                <Badge variant="navy" size="sm">
+                                  Team Leader (Primary)
+                                </Badge>
+                              ) : (
+                                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                  Verified Teammate
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                              {member.department} {member.year ? `• ${member.year}` : ""}
+                            </p>
+                          </div>
                         </div>
 
                         {idx !== 0 && (
                           <button
                             type="button"
-                            onClick={() => handleRemoveMember(idx)}
-                            className="text-slate-400 hover:text-rose-600 transition-colors p-1"
+                            onClick={() => handleRemoveTeammate(idx)}
+                            className="text-slate-400 hover:text-rose-600 transition-colors p-2 rounded-lg hover:bg-rose-50 cursor-pointer"
+                            title="Remove Member"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -424,26 +679,58 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                     ))}
                   </div>
 
-                  {/* Add Member Row */}
-                  <div className="flex gap-2 pt-2">
-                    <input
-                      type="text"
-                      value={newMemberName}
-                      onChange={(e) => setNewMemberName(e.target.value)}
-                      placeholder="Add teammate full name..."
-                      className="flex-1 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
-                    />
-                    <Button
-                      type="button"
-                      onClick={handleAddMember}
-                      variant="secondary"
-                      size="sm"
-                      className="gap-1 cursor-pointer"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Add</span>
-                    </Button>
-                  </div>
+                  {/* Add Teammate by College BT ID */}
+                  {teamMembers.length < maxTeamSize ? (
+                    <div className="pt-3 space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <Search className="w-3.5 h-3.5 text-[#17458F]" />
+                        <span>Add Teammate by College BT ID</span>
+                      </label>
+
+                      <form onSubmit={handleVerifyAndAddTeammate} className="flex gap-2">
+                        <input
+                          type="text"
+                          value={teammateBtIdInput}
+                          onChange={(e) => setTeammateBtIdInput(e.target.value.toUpperCase())}
+                          placeholder="e.g. BT240115DS"
+                          className="flex-1 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-mono font-bold uppercase focus:outline-none focus:border-[#17458F]"
+                        />
+                        <Button
+                          type="submit"
+                          isLoading={isVerifyingTeammate}
+                          variant="primary"
+                          size="sm"
+                          className="gap-1.5 shrink-0 cursor-pointer"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Verify &amp; Add</span>
+                        </Button>
+                      </form>
+
+                      {lookupError && (
+                        <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2 animate-in fade-in duration-200 font-medium">
+                          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                          <span>{lookupError}</span>
+                        </div>
+                      )}
+
+                      {lookupSuccess && (
+                        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 animate-in fade-in duration-200 font-medium">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span>{lookupSuccess}</span>
+                        </div>
+                      )}
+
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        Enter your teammate&apos;s registered College BT ID. The system will automatically check their verified account and link them to your squad pass.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold text-center">
+                      Maximum squad limit of {maxTeamSize} members reached.
+                    </div>
+                  )}
+
                 </div>
               </div>
             )}
@@ -462,7 +749,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             </Button>
 
             <Button
-              onClick={() => setCurrentStep(3)}
+              onClick={handleProceedToStep3}
               variant="primary"
               size="md"
               className="gap-2 cursor-pointer"
@@ -481,11 +768,11 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             <span className="text-xs font-bold uppercase tracking-wider text-[#E78023]">
               Step 03 of 03
             </span>
-            <h3 className="font-extrabold text-2xl text-[#17458F] uppercase mt-1">
-              REVIEW & CONFIRM REGISTRATION
+            <h3 className="font-heading font-extrabold text-2xl text-[#17458F] uppercase mt-1">
+              REVIEW &amp; CONFIRM REGISTRATION
             </h3>
             <p className="text-xs text-slate-500 font-medium">
-              Please check your information before generating your official verified pass.
+              Please inspect your accredited details before generating your verified digital entry pass.
             </p>
           </div>
 
@@ -496,7 +783,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[#E78023]">
                   Selected Event
                 </span>
-                <h4 className="font-extrabold text-xl text-[#0F172A]">
+                <h4 className="font-heading font-extrabold text-xl text-[#0F172A]">
                   {event.name}
                 </h4>
                 <p className="text-xs text-slate-500 font-medium">
@@ -511,16 +798,17 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs font-medium">
               <div>
                 <span className="text-slate-500 uppercase text-[10px] font-bold">
-                  Participant Name
+                  Participant / Leader
                 </span>
                 <p className="font-bold text-slate-900">{formData.fullName}</p>
+                <p className="font-mono text-[11px] text-[#E78023] font-bold">{formData.btId}</p>
               </div>
 
               <div>
                 <span className="text-slate-500 uppercase text-[10px] font-bold">
                   Email
                 </span>
-                <p className="font-semibold text-slate-800">{formData.email}</p>
+                <p className="font-semibold text-slate-800 truncate">{formData.email}</p>
               </div>
 
               <div>
@@ -546,30 +834,40 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
               <div>
                 <span className="text-slate-500 uppercase text-[10px] font-bold">
-                  Participation
+                  Format
                 </span>
                 <p className="font-bold text-[#17458F]">
-                  {formData.teamType === "Team" ? formData.teamName : "Solo"}
+                  {formData.teamType === "Team" ? `Team: ${formData.teamName}` : "Solo Entry"}
                 </p>
               </div>
             </div>
 
             {formData.teamType === "Team" && (
-              <div className="pt-3 border-t border-slate-200 text-xs font-medium">
-                <span className="text-[10px] text-slate-500 uppercase font-bold">
-                  Team Members:
+              <div className="pt-4 border-t border-slate-200 text-xs space-y-2">
+                <span className="text-[10px] text-slate-500 uppercase font-bold block">
+                  Verified Team Squad ({teamMembers.length} Members):
                 </span>
-                <p className="text-slate-700 mt-0.5">
-                  {formData.teamMembers.join(" • ")}
-                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {teamMembers.map((m, idx) => (
+                    <div key={idx} className="p-2.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
+                      <div>
+                        <span className="font-bold text-slate-900">{m.name}</span>
+                        <span className="text-[10px] text-slate-500 block">{m.department}</span>
+                      </div>
+                      <span className="font-mono text-xs font-bold text-[#E78023] px-2 py-0.5 rounded-full bg-amber-50">
+                        {m.btId}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
 
           <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1 font-medium">
-            <p className="font-bold">Important Notice:</p>
+            <p className="font-bold">Accreditation Notice:</p>
             <p>
-              By proceeding, you confirm all details provided are authentic. Your digital pass with QR verification will be issued immediately.
+              By proceeding, your registration is locked and linked to the verified BT IDs. Digital passes with QR security codes are issued instantly.
             </p>
           </div>
 
@@ -610,7 +908,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           year={formData.year}
           teamType={formData.teamType}
           teamName={formData.teamName}
-          teamMembers={formData.teamType === "Team" ? formData.teamMembers : undefined}
+          teamMembers={formData.teamType === "Team" ? teamMembers.map((m) => `${m.name} (${m.btId})`) : undefined}
           ticketCode={generatedTicket.ticketCode}
         />
       )}

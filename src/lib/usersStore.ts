@@ -368,6 +368,42 @@ export function deleteRegisteredUser(uid: string): RegisteredUserRecord[] {
 }
 
 /**
+ * Find a registered user by their BT ID (synchronous, local storage only)
+ */
+export function findRegisteredUserByBtId(btId: string): RegisteredUserRecord | undefined {
+  if (!btId || !btId.trim()) return undefined;
+  const cleanBtId = btId.trim().toUpperCase();
+  const users = getStoredUsers();
+  return users.find((u) => u.btId && u.btId.trim().toUpperCase() === cleanBtId);
+}
+
+/**
+ * Look up a user by BT ID — async version that also checks Firestore
+ * Returns the user record if found, or null if the BT ID is not registered
+ */
+export async function lookupUserByBtId(btId: string): Promise<RegisteredUserRecord | null> {
+  if (!btId || !btId.trim()) return null;
+  const cleanBtId = btId.trim().toUpperCase();
+
+  // 1. Check local storage first
+  const localMatch = findRegisteredUserByBtId(cleanBtId);
+  if (localMatch) return localMatch;
+
+  // 2. Attempt Firestore sync and re-check
+  try {
+    const synced = await syncUsersFromFirestore();
+    const remoteMatch = synced.find(
+      (u) => u.btId && u.btId.trim().toUpperCase() === cleanBtId
+    );
+    if (remoteMatch) return remoteMatch;
+  } catch (e) {
+    console.warn("Firestore lookup fallback", e);
+  }
+
+  return null;
+}
+
+/**
  * Change user role (e.g. STUDENT <-> COUNCIL_ADMIN)
  */
 export function changeUserRole(uid: string, newRole: "STUDENT" | "COUNCIL_ADMIN"): RegisteredUserRecord[] {

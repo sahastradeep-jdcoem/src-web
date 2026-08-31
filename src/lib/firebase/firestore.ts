@@ -30,9 +30,20 @@ export interface StudentRegistrationRecord {
   teamSize: number;
   members?: Array<{
     name: string;
-    email: string;
-    phone: string;
-    role: string;
+    email?: string;
+    phone?: string;
+    role?: string;
+    btId?: string;
+    department?: string;
+    year?: string;
+  }>;
+  teamMembers?: Array<{
+    name: string;
+    btId: string;
+    department?: string;
+    year?: string;
+    email?: string;
+    isLeader?: boolean;
   }>;
   status: "CONFIRMED" | "WAITLISTED" | "CHECKED_IN" | "CANCELLED";
   checkInTimestamp?: any;

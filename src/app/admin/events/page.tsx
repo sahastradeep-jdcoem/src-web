@@ -75,6 +75,14 @@ export default function AdminEventsPage() {
     status: "Registration Open" as "Registration Open" | "Upcoming" | "Completed",
     poster: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
     description: "",
+    about: "",
+    whatToExpect: [""] as string[],
+    rules: [""] as string[],
+    teamType: "Both" as "Individual" | "Team" | "Both",
+    minTeamSize: 2,
+    maxTeamSize: 4,
+    registrationStartDate: new Date().toISOString().split("T")[0],
+    registrationDeadline: "",
   });
 
   // Edit Event Form State
@@ -88,6 +96,14 @@ export default function AdminEventsPage() {
     status: "Registration Open" as "Registration Open" | "Upcoming" | "Completed",
     poster: "",
     description: "",
+    about: "",
+    whatToExpect: [""] as string[],
+    rules: [""] as string[],
+    teamType: "Both" as "Individual" | "Team" | "Both",
+    minTeamSize: 2,
+    maxTeamSize: 4,
+    registrationStartDate: "",
+    registrationDeadline: "",
   });
 
   const loadData = () => {
@@ -169,6 +185,12 @@ export default function AdminEventsPage() {
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanWhatToExpect = newEvent.whatToExpect.filter((s) => s.trim());
+    const cleanRules = newEvent.rules.filter((s) => s.trim());
+    const regDeadlineFormatted = newEvent.registrationDeadline
+      ? formatDateToReadable(newEvent.registrationDeadline)
+      : "TBD";
+
     const created: EventItem = {
       id: `evt-${Date.now()}`,
       slug: newEvent.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
@@ -181,13 +203,15 @@ export default function AdminEventsPage() {
       status: newEvent.status,
       poster: newEvent.poster || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
       description: newEvent.description,
-      about: newEvent.description,
-      whatToExpect: ["High-impact collegiate showcase", "Cash awards and certificates"],
-      rules: ["College ID mandatory", "Reporting on time required"],
+      about: newEvent.about || newEvent.description,
+      whatToExpect: cleanWhatToExpect.length > 0 ? cleanWhatToExpect : ["High-impact collegiate showcase"],
+      rules: cleanRules.length > 0 ? cleanRules : ["College ID mandatory"],
       schedule: [],
       prizes: [],
-      teamType: "Both",
-      registrationDeadline: "TBD",
+      teamType: newEvent.teamType,
+      minTeamSize: newEvent.teamType !== "Individual" ? newEvent.minTeamSize : undefined,
+      maxTeamSize: newEvent.teamType !== "Individual" ? newEvent.maxTeamSize : undefined,
+      registrationDeadline: regDeadlineFormatted,
     };
 
     const updated = [created, ...eventsList];
@@ -206,6 +230,14 @@ export default function AdminEventsPage() {
       status: "Registration Open",
       poster: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
       description: "",
+      about: "",
+      whatToExpect: [""],
+      rules: [""],
+      teamType: "Both",
+      minTeamSize: 2,
+      maxTeamSize: 4,
+      registrationStartDate: new Date().toISOString().split("T")[0],
+      registrationDeadline: "",
     });
   };
 
@@ -221,12 +253,26 @@ export default function AdminEventsPage() {
       status: evt.status as any,
       poster: evt.poster || "",
       description: evt.description || "",
+      about: evt.about || evt.description || "",
+      whatToExpect: evt.whatToExpect && evt.whatToExpect.length > 0 ? [...evt.whatToExpect] : [""],
+      rules: evt.rules && evt.rules.length > 0 ? [...evt.rules] : [""],
+      teamType: evt.teamType || "Both",
+      minTeamSize: evt.minTeamSize || 2,
+      maxTeamSize: evt.maxTeamSize || 4,
+      registrationStartDate: "",
+      registrationDeadline: "",
     });
   };
 
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingEvent) return;
+
+    const cleanWhatToExpect = editForm.whatToExpect.filter((s) => s.trim());
+    const cleanRules = editForm.rules.filter((s) => s.trim());
+    const regDeadlineFormatted = editForm.registrationDeadline
+      ? formatDateToReadable(editForm.registrationDeadline)
+      : undefined;
 
     const updated = eventsList.map((item) =>
       item.id === editingEvent.id
@@ -240,7 +286,13 @@ export default function AdminEventsPage() {
             status: editForm.status,
             poster: editForm.poster || item.poster,
             description: editForm.description,
-            about: editForm.description,
+            about: editForm.about || editForm.description,
+            whatToExpect: cleanWhatToExpect.length > 0 ? cleanWhatToExpect : item.whatToExpect,
+            rules: cleanRules.length > 0 ? cleanRules : item.rules,
+            teamType: editForm.teamType,
+            minTeamSize: editForm.teamType !== "Individual" ? editForm.minTeamSize : undefined,
+            maxTeamSize: editForm.teamType !== "Individual" ? editForm.maxTeamSize : undefined,
+            registrationDeadline: regDeadlineFormatted || item.registrationDeadline,
           }
         : item
     );
@@ -683,6 +735,190 @@ export default function AdminEventsPage() {
               />
             </div>
 
+            {/* About The Event */}
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                About The Event
+              </label>
+              <textarea
+                rows={3}
+                value={newEvent.about}
+                onChange={(e) => setNewEvent({ ...newEvent, about: e.target.value })}
+                placeholder="Detailed description about what the event is, its significance, and goals..."
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F] resize-none"
+              />
+            </div>
+
+            {/* What To Expect (Dynamic List) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                  What To Expect
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setNewEvent({ ...newEvent, whatToExpect: [...newEvent.whatToExpect, ""] })}
+                  className="text-[10px] font-bold text-[#17458F] hover:text-[#E78023] flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" /> Add Item
+                </button>
+              </div>
+              {newEvent.whatToExpect.map((item, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-slate-400 w-5 shrink-0">0{idx + 1}</span>
+                  <input
+                    type="text"
+                    value={item}
+                    onChange={(e) => {
+                      const updated = [...newEvent.whatToExpect];
+                      updated[idx] = e.target.value;
+                      setNewEvent({ ...newEvent, whatToExpect: updated });
+                    }}
+                    placeholder="e.g. Industry-level competition experience"
+                    className="flex-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs focus:outline-none focus:border-[#17458F]"
+                  />
+                  {newEvent.whatToExpect.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = newEvent.whatToExpect.filter((_, i) => i !== idx);
+                        setNewEvent({ ...newEvent, whatToExpect: updated });
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Rules & Guidelines (Dynamic List) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Rules &amp; Guidelines
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setNewEvent({ ...newEvent, rules: [...newEvent.rules, ""] })}
+                  className="text-[10px] font-bold text-[#17458F] hover:text-[#E78023] flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" /> Add Rule
+                </button>
+              </div>
+              {newEvent.rules.map((item, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-slate-400 w-5 shrink-0">0{idx + 1}</span>
+                  <input
+                    type="text"
+                    value={item}
+                    onChange={(e) => {
+                      const updated = [...newEvent.rules];
+                      updated[idx] = e.target.value;
+                      setNewEvent({ ...newEvent, rules: updated });
+                    }}
+                    placeholder="e.g. College ID mandatory at entry"
+                    className="flex-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs focus:outline-none focus:border-[#17458F]"
+                  />
+                  {newEvent.rules.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = newEvent.rules.filter((_, i) => i !== idx);
+                        setNewEvent({ ...newEvent, rules: updated });
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Participation Format & Team Size */}
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                Participation Format *
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {(["Individual", "Team", "Both"] as const).map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setNewEvent({ ...newEvent, teamType: opt })}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer ${
+                      newEvent.teamType === opt
+                        ? "bg-[#17458F] text-white border-[#E78023] shadow-xs"
+                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+
+              {newEvent.teamType !== "Individual" && (
+                <div className="grid grid-cols-2 gap-4 pt-2">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Min Team Size
+                    </label>
+                    <input
+                      type="number"
+                      min={2}
+                      max={20}
+                      value={newEvent.minTeamSize}
+                      onChange={(e) => setNewEvent({ ...newEvent, minTeamSize: parseInt(e.target.value) || 2 })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Max Team Size
+                    </label>
+                    <input
+                      type="number"
+                      min={2}
+                      max={20}
+                      value={newEvent.maxTeamSize}
+                      onChange={(e) => setNewEvent({ ...newEvent, maxTeamSize: parseInt(e.target.value) || 4 })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Registration Deadline */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-[#E78023]" />
+                  <span>Registration Opens</span>
+                </label>
+                <input
+                  type="date"
+                  value={newEvent.registrationStartDate}
+                  onChange={(e) => setNewEvent({ ...newEvent, registrationStartDate: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-rose-500" />
+                  <span>Registration Closes</span>
+                </label>
+                <input
+                  type="date"
+                  value={newEvent.registrationDeadline}
+                  onChange={(e) => setNewEvent({ ...newEvent, registrationDeadline: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
+                />
+              </div>
+            </div>
+
             {/* Event Poster Photo / Direct URL */}
             <div className="space-y-2 pt-2 border-t border-slate-100">
               <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
@@ -868,6 +1104,190 @@ export default function AdminEventsPage() {
                 onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F] resize-none"
               />
+            </div>
+
+            {/* About The Event */}
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                About The Event
+              </label>
+              <textarea
+                rows={3}
+                value={editForm.about}
+                onChange={(e) => setEditForm({ ...editForm, about: e.target.value })}
+                placeholder="Detailed description about what the event is, its significance, and goals..."
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F] resize-none"
+              />
+            </div>
+
+            {/* What To Expect (Dynamic List) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                  What To Expect
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setEditForm({ ...editForm, whatToExpect: [...editForm.whatToExpect, ""] })}
+                  className="text-[10px] font-bold text-[#17458F] hover:text-[#E78023] flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" /> Add Item
+                </button>
+              </div>
+              {editForm.whatToExpect.map((item, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-slate-400 w-5 shrink-0">0{idx + 1}</span>
+                  <input
+                    type="text"
+                    value={item}
+                    onChange={(e) => {
+                      const updated = [...editForm.whatToExpect];
+                      updated[idx] = e.target.value;
+                      setEditForm({ ...editForm, whatToExpect: updated });
+                    }}
+                    placeholder="e.g. Industry-level competition experience"
+                    className="flex-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs focus:outline-none focus:border-[#17458F]"
+                  />
+                  {editForm.whatToExpect.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = editForm.whatToExpect.filter((_, i) => i !== idx);
+                        setEditForm({ ...editForm, whatToExpect: updated });
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Rules & Guidelines (Dynamic List) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Rules &amp; Guidelines
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setEditForm({ ...editForm, rules: [...editForm.rules, ""] })}
+                  className="text-[10px] font-bold text-[#17458F] hover:text-[#E78023] flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" /> Add Rule
+                </button>
+              </div>
+              {editForm.rules.map((item, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-slate-400 w-5 shrink-0">0{idx + 1}</span>
+                  <input
+                    type="text"
+                    value={item}
+                    onChange={(e) => {
+                      const updated = [...editForm.rules];
+                      updated[idx] = e.target.value;
+                      setEditForm({ ...editForm, rules: updated });
+                    }}
+                    placeholder="e.g. College ID mandatory at entry"
+                    className="flex-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs focus:outline-none focus:border-[#17458F]"
+                  />
+                  {editForm.rules.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = editForm.rules.filter((_, i) => i !== idx);
+                        setEditForm({ ...editForm, rules: updated });
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Participation Format & Team Size */}
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                Participation Format *
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {(["Individual", "Team", "Both"] as const).map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setEditForm({ ...editForm, teamType: opt })}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer ${
+                      editForm.teamType === opt
+                        ? "bg-[#17458F] text-white border-[#E78023] shadow-xs"
+                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+
+              {editForm.teamType !== "Individual" && (
+                <div className="grid grid-cols-2 gap-4 pt-2">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Min Team Size
+                    </label>
+                    <input
+                      type="number"
+                      min={2}
+                      max={20}
+                      value={editForm.minTeamSize}
+                      onChange={(e) => setEditForm({ ...editForm, minTeamSize: parseInt(e.target.value) || 2 })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Max Team Size
+                    </label>
+                    <input
+                      type="number"
+                      min={2}
+                      max={20}
+                      value={editForm.maxTeamSize}
+                      onChange={(e) => setEditForm({ ...editForm, maxTeamSize: parseInt(e.target.value) || 4 })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Registration Deadline */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-[#E78023]" />
+                  <span>Registration Opens</span>
+                </label>
+                <input
+                  type="date"
+                  value={editForm.registrationStartDate}
+                  onChange={(e) => setEditForm({ ...editForm, registrationStartDate: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-rose-500" />
+                  <span>Registration Closes</span>
+                </label>
+                <input
+                  type="date"
+                  value={editForm.registrationDeadline}
+                  onChange={(e) => setEditForm({ ...editForm, registrationDeadline: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
+                />
+              </div>
             </div>
 
             {/* Event Poster Photo / Direct URL */}
