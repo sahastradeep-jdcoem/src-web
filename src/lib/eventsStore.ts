@@ -47,6 +47,7 @@ export function saveStoredEvents(events: EventItem[]): void {
  */
 export async function syncEventsFromFirestore(): Promise<EventItem[]> {
   try {
+    if (hasPendingWritesFor("events")) return getStoredEvents();
     const remote = await getSiteContentFromFirestore<EventItem[]>("events");
     if (remote !== null && Array.isArray(remote)) {
       const current = getStoredEvents();

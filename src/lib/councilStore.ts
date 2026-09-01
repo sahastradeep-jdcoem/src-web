@@ -94,6 +94,7 @@ export function saveStoredCouncilMembers(members: TeamMember[]): void {
 
 export async function syncCouncilMembersFromFirestore(): Promise<TeamMember[]> {
   try {
+    if (hasPendingWritesFor("council_team")) return getStoredCouncilMembers();
     const remote = await getSiteContentFromFirestore<TeamMember[]>("council_team");
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
       const current = getStoredCouncilMembers();
@@ -139,6 +140,7 @@ export function saveStoredHostingCommittee(members: TeamMember[]): void {
 
 export async function syncHostingCommitteeFromFirestore(): Promise<TeamMember[]> {
   try {
+    if (hasPendingWritesFor("hosting_committee")) return getStoredHostingCommittee();
     const remote = await getSiteContentFromFirestore<TeamMember[]>("hosting_committee");
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
       const cleaned = stripCategoryAndLevel(remote);
@@ -196,6 +198,7 @@ export function saveStoredSpokespersons(members: TeamMember[]): void {
 
 export async function syncSpokespersonsFromFirestore(): Promise<TeamMember[]> {
   try {
+    if (hasPendingWritesFor("spokespersons")) return getStoredSpokespersons();
     const remote = await getSiteContentFromFirestore<TeamMember[]>("spokespersons");
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
       const cleaned = stripCategoryAndLevel(remote);
@@ -266,6 +269,7 @@ export function saveStoredClubs(clubs: ClubItem[]): void {
 
 export async function syncClubsFromFirestore(): Promise<ClubItem[]> {
   try {
+    if (hasPendingWritesFor("clubs")) return getStoredClubs();
     const remote = await getSiteContentFromFirestore<ClubItem[]>("clubs");
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
       const current = getStoredClubs();
@@ -298,15 +302,12 @@ export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => v
 
 // Helper to convert Founding Member to Council Admin Officer
 export function mapFoundingMemberToCouncilAdmin(founder: TeamMember, idx?: number): TeamMember {
-  let role = (founder.role || "Council Officer").trim();
-  if (role.toLowerCase().startsWith("founding ")) {
-    role = role.replace(/^Founding\s+/i, "");
-  }
+  const customIdx = idx !== undefined ? idx : 0;
   return {
     ...founder,
-    id: founder.id.startsWith("founder-") ? founder.id.replace("founder-", "admin-") : founder.id,
-    role: role || "Council Officer",
-    order: founder.order || (idx !== undefined ? idx + 1 : 1)
+    id: `council-admin-${founder.id || customIdx}`,
+    designation: founder.designation || "Council Admin Officer",
+    role: "Council Admin Officer",
   };
 }
 
@@ -314,12 +315,12 @@ export function syncFoundingToCouncilAdmins(foundingList?: TeamMember[]): TeamMe
   const founders = foundingList || getStoredFoundingMembers();
   if (!Array.isArray(founders) || founders.length === 0) return getStoredCouncilMembers();
   
-  const mapped = founders.map((f, i) => mapFoundingMemberToCouncilAdmin(f, i));
+  const mapped = founders.map((f, idx) => mapFoundingMemberToCouncilAdmin(f, idx));
   saveStoredCouncilMembers(mapped);
   return mapped;
 }
 
-// Founding Members of Sahastradeep Store
+// Founding Members Store
 export function getStoredFoundingMembers(): TeamMember[] {
   if (typeof window === "undefined") return stripCategoryAndLevel(initialFoundingMembers);
   try {
@@ -334,7 +335,7 @@ export function getStoredFoundingMembers(): TeamMember[] {
   return stripCategoryAndLevel(initialFoundingMembers);
 }
 
-export function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCouncil: boolean = true): void {
+export function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCouncil = true): void {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(stripCategoryAndLevel(members));
@@ -354,6 +355,7 @@ export function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCounc
 
 export async function syncFoundingMembersFromFirestore(): Promise<TeamMember[]> {
   try {
+    if (hasPendingWritesFor("founding_members")) return getStoredFoundingMembers();
     const remote = await getSiteContentFromFirestore<TeamMember[]>("founding_members");
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
       const cleaned = stripCategoryAndLevel(remote);

@@ -148,29 +148,38 @@ let isProcessingQueue = false;
 
 export async function processQueue(): Promise<boolean> {
   if (isProcessingQueue || typeof window === "undefined") return false;
-  const queue = getPendingQueue();
-  if (queue.length === 0) return true;
-
   isProcessingQueue = true;
   let allSuccess = true;
-  const remaining: PendingSyncItem[] = [];
 
-  for (const item of queue) {
-    try {
-      await saveSiteContentToFirestore(item.docId, item.payload);
-      // Success: do not re-add to remaining
-    } catch (err) {
-      console.warn(`[SyncEngine] Firestore write failed for ${item.docId}, queued for auto-retry`, err);
-      allSuccess = false;
-      remaining.push({
-        ...item,
-        retryCount: item.retryCount + 1,
-      });
+  try {
+    while (true) {
+      const currentQueue = getPendingQueue();
+      if (currentQueue.length === 0) break;
+
+      const item = currentQueue[0];
+      try {
+        await saveSiteContentToFirestore(item.docId, item.payload);
+        // Atomically remove this processed item from the latest queue
+        const latestQueue = getPendingQueue();
+        const updatedQueue = latestQueue.filter((q) => q.id !== item.id && q.docId !== item.docId);
+        savePendingQueue(updatedQueue);
+      } catch (err) {
+        console.warn(`[SyncEngine] Firestore write failed for ${item.docId}, queued for auto-retry`, err);
+        allSuccess = false;
+        // On error, increment retry count and stop current loop (will auto-retry on reconnect)
+        const latestQueue = getPendingQueue();
+        const itemIdx = latestQueue.findIndex((q) => q.id === item.id);
+        if (itemIdx >= 0) {
+          latestQueue[itemIdx].retryCount += 1;
+          savePendingQueue(latestQueue);
+        }
+        break;
+      }
     }
+  } finally {
+    isProcessingQueue = false;
   }
 
-  savePendingQueue(remaining);
-  isProcessingQueue = false;
   return allSuccess;
 }
 

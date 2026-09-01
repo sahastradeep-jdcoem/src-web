@@ -105,7 +105,7 @@ export default function AdminClubsPage() {
   const saveList = (updated: ClubItem[]) => {
     setClubs(updated);
     saveStoredClubs(updated);
-    if (selectedTenure?.id) {
+    if (selectedTenure?.id && !selectedTenure.isCurrent) {
       updateTenureRoster(selectedTenure.id, { clubs: updated });
     }
     setIsSaved(true);
@@ -380,13 +380,30 @@ export default function AdminClubsPage() {
                 </span>
               </div>
 
-              <div>
-                <h3 className="font-bold text-lg text-[#0F172A]">
-                  {club.name}
-                </h3>
-                <p className="text-xs text-[#E78023] font-semibold">
-                  {club.tagline}
-                </p>
+              <div className="flex items-center gap-3">
+                {club.logoImage ? (
+                  <div className="relative h-12 w-12 rounded-full overflow-hidden shrink-0 border border-slate-200 shadow-xs bg-slate-50">
+                    <Image
+                      src={club.logoImage}
+                      alt={club.name}
+                      fill
+                      unoptimized={true}
+                      className="object-cover w-full h-full rounded-full"
+                    />
+                  </div>
+                ) : (
+                  <div className="h-12 w-12 rounded-full bg-[#17458F]/5 border border-[#17458F]/10 flex items-center justify-center shrink-0 text-[#E78023]">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <h3 className="font-bold text-lg text-[#0F172A] truncate">
+                    {club.name}
+                  </h3>
+                  <p className="text-xs text-[#E78023] font-semibold truncate">
+                    {club.tagline}
+                  </p>
+                </div>
               </div>
 
               <p className="text-xs text-slate-600 font-medium line-clamp-2">

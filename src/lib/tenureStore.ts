@@ -341,6 +341,7 @@ export function createAndActivateNewTenure(
 
 export async function syncTenuresFromFirestore(): Promise<CouncilTenure[]> {
   try {
+    if (hasPendingWritesFor("council_tenures")) return getStoredTenures();
     const remote = await getSiteContentFromFirestore<CouncilTenure[]>("council_tenures");
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
       const filtered = remote.filter((t: CouncilTenure) => t.id !== "tenure-2024-25" && !t.label.includes("2024"));
