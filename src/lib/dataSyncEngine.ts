@@ -245,31 +245,45 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
     if (localItem.id) matchedLocalKeys.add(localItem.id.toLowerCase());
     if (localItem.slug) matchedLocalKeys.add(localItem.slug.toLowerCase());
 
-    // Start with remote, overlay local so local unsynced edits take priority
-    const result: any = { ...remoteItem, ...localItem };
+    // Remote is the authoritative cloud data source
+    const result: any = { ...remoteItem };
 
     const allKeys = new Set([...Object.keys(localItem as any), ...Object.keys(remoteItem as any)]);
     for (const k of allKeys) {
       const localVal = (localItem as any)[k];
       const remoteVal = (remoteItem as any)[k];
 
-      const isImageField = ["logoImage", "cardImage", "headerImage", "heroImage", "poster", "posterImage", "avatar", "imageUrl"].includes(k);
+      const isImageField = [
+        "logoImage",
+        "cardImage",
+        "headerImage",
+        "heroImage",
+        "poster",
+        "posterImage",
+        "avatar",
+        "imageUrl"
+      ].includes(k);
 
-      // Protect images: If local has an image and remote doesn't, NEVER erase it
       if (isImageField) {
-        if (localVal && typeof localVal === "string" && localVal.trim() !== "") {
-          if (!remoteVal || typeof remoteVal !== "string" || remoteVal.trim() === "") {
-            result[k] = localVal;
-            continue;
-          }
+        // 1. If remote has a valid non-empty image, remote ALWAYS wins
+        if (remoteVal && typeof remoteVal === "string" && remoteVal.trim() !== "") {
+          result[k] = remoteVal;
+          continue;
         }
+        // 2. If remote is empty but local has an image (e.g. freshly uploaded), keep local
+        if (localVal && typeof localVal === "string" && localVal.trim() !== "") {
+          result[k] = localVal;
+          continue;
+        }
+        result[k] = "";
+        continue;
       }
 
-      // If local has a non-empty value and remote is empty/missing, keep local
-      if (
-        localVal !== undefined && localVal !== null && localVal !== "" &&
-        (remoteVal === undefined || remoteVal === null || remoteVal === "")
-      ) {
+      // For standard text/number fields:
+      // If remote has a non-empty/defined value, keep remote
+      if (remoteVal !== undefined && remoteVal !== null && remoteVal !== "") {
+        result[k] = remoteVal;
+      } else if (localVal !== undefined && localVal !== null && localVal !== "") {
         result[k] = localVal;
       }
     }
