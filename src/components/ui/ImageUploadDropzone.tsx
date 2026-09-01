@@ -69,6 +69,7 @@ export function ImageUploadDropzone({
         outputFormat: "image/webp",
       });
 
+      // Immediately update preview & notify callbacks with compressed WebP
       setCompressionStats(result);
       setPreview(result.dataUrl);
       setManualUrl(result.dataUrl);
@@ -81,23 +82,29 @@ export function ImageUploadDropzone({
         onUrlChange(result.dataUrl);
       }
 
-      // Background upload to Firebase Cloud Storage
+      // Immediately unblock the UI so user can click Save without waiting for network
+      setIsProcessing(false);
+      onUploadStateChange?.(false);
+
+      // Background upload to Firebase Cloud Storage (best effort, non-blocking)
       const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_").replace(/\.[^/.]+$/, "");
       const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}.webp`;
-      const cloudUrl = await uploadImageToStorage(result.dataUrl, finalStoragePath);
-
-      if (cloudUrl && cloudUrl !== result.dataUrl) {
-        setManualUrl(cloudUrl);
-        if (onUrlChange) {
-          onUrlChange(cloudUrl);
+      uploadImageToStorage(result.dataUrl, finalStoragePath).then((cloudUrl) => {
+        if (cloudUrl && cloudUrl !== result.dataUrl && cloudUrl.startsWith("http")) {
+          setManualUrl(cloudUrl);
+          if (onUrlChange) {
+            onUrlChange(cloudUrl);
+          }
         }
-      }
+      }).catch((err) => {
+        console.warn("Storage background upload fallback to compressed dataUrl", err);
+      });
     } catch (err) {
       console.error("Image direct processing error", err);
       setError("Failed to process image.");
-    } finally {
       setIsProcessing(false);
       onUploadStateChange?.(false);
+    } finally {
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -146,24 +153,29 @@ export function ImageUploadDropzone({
         onUrlChange(result.dataUrl);
       }
 
-      // 2. Upload to Firebase Storage in the background
-      const cleanName = originalFileName.replace(/[^a-zA-Z0-9.-]/g, "_").replace(/\.[^/.]+$/, "");
-      const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}.webp`;
-      const cloudUrl = await uploadImageToStorage(result.dataUrl, finalStoragePath);
-
-      if (cloudUrl && cloudUrl !== result.dataUrl) {
-        setManualUrl(cloudUrl);
-        if (onUrlChange) {
-          onUrlChange(cloudUrl);
-        }
-      }
-    } catch (err) {
-      console.error("Image crop and compression error", err);
-      setError("Failed to save cropped image.");
-    } finally {
+      // Immediately unblock UI
       setIsProcessing(false);
       onUploadStateChange?.(false);
       setRawImageToCrop(null);
+
+      // 2. Upload to Firebase Storage in background (non-blocking)
+      const cleanName = originalFileName.replace(/[^a-zA-Z0-9.-]/g, "_").replace(/\.[^/.]+$/, "");
+      const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}.webp`;
+      uploadImageToStorage(result.dataUrl, finalStoragePath).then((cloudUrl) => {
+        if (cloudUrl && cloudUrl !== result.dataUrl && cloudUrl.startsWith("http")) {
+          setManualUrl(cloudUrl);
+          if (onUrlChange) {
+            onUrlChange(cloudUrl);
+          }
+        }
+      }).catch(() => {});
+    } catch (err) {
+      console.error("Image crop and compression error", err);
+      setError("Failed to save cropped image.");
+      setIsProcessing(false);
+      onUploadStateChange?.(false);
+      setRawImageToCrop(null);
+    } finally {
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }

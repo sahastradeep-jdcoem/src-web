@@ -475,7 +475,12 @@ export default function AdminClubsPage() {
               <button
                 onClick={() => {
                   setIsCreatingNew(false);
-                  setEditingClub(club);
+                  setEditingClub({
+                    ...club,
+                    logoImage: club.logoImage || "",
+                    cardImage: club.cardImage || "",
+                    headerImage: club.headerImage || "",
+                  });
                   setModalTab("identity");
                 }}
                 className="px-3.5 py-1.5 rounded-xl bg-[#17458F] hover:bg-[#0E2F66] text-white text-[11px] font-bold uppercase transition-colors cursor-pointer shadow-xs flex items-center gap-1"

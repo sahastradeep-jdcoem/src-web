@@ -50,6 +50,7 @@ export function ClubCard({ club }: ClubCardProps) {
           src={club.cardImage || club.heroImage}
           alt={`${club.name} cover`}
           fill
+          unoptimized={true}
           className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
@@ -61,6 +62,7 @@ export function ClubCard({ club }: ClubCardProps) {
                 src={club.logoImage} 
                 alt={`${club.name} emblem`} 
                 fill
+                unoptimized={true}
                 className="object-cover w-full h-full rounded-full" 
               />
             </div>
@@ -113,6 +115,7 @@ export function ClubCard({ club }: ClubCardProps) {
                     src={primaryLead.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"}
                     alt={primaryLead.name || club.name}
                     fill
+                    unoptimized={true}
                     className="object-cover"
                   />
                 </div>

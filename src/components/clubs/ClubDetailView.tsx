@@ -77,6 +77,7 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
           alt={club.name}
           fill
           priority
+          unoptimized={true}
           className="object-cover opacity-60"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
@@ -179,6 +180,7 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
                       src={leader.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"}
                       alt={leader.name}
                       fill
+                      unoptimized={true}
                       className="object-cover"
                     />
                   </div>
