@@ -276,13 +276,11 @@ export async function syncClubsFromFirestore(): Promise<ClubItem[]> {
   try {
     const remote = await getSiteContentFromFirestore<ClubItem[]>("clubs");
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
-      const current = getStoredClubs();
-      const merged = reconcileArrayDatasets(current, remote);
       if (typeof window !== "undefined") {
-        localStorage.setItem("src_clubs_roster", JSON.stringify(merged));
-        window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: merged }));
+        localStorage.setItem("src_clubs_roster", JSON.stringify(remote));
+        window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: remote }));
       }
-      return merged;
+      return remote;
     }
   } catch {}
   return getStoredClubs();
@@ -292,13 +290,11 @@ export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => v
   return subscribeToSiteContent<ClubItem[]>("clubs", (remote) => {
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
       if (hasPendingWritesFor("clubs")) return;
-      const current = getStoredClubs();
-      const merged = reconcileArrayDatasets(current, remote);
       if (typeof window !== "undefined") {
-        localStorage.setItem("src_clubs_roster", JSON.stringify(merged));
-        window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: merged }));
+        localStorage.setItem("src_clubs_roster", JSON.stringify(remote));
+        window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: remote }));
       }
-      callback(merged);
+      callback(remote);
     }
   });
 }
