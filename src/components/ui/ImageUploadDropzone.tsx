@@ -49,23 +49,65 @@ export function ImageUploadDropzone({
     setManualUrl(previewUrl || "");
   }, [previewUrl]);
 
+  const processFileDirectly = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setError("Please select a valid image file (JPG, PNG, WebP, SVG, HEIC).");
+      return;
+    }
+    setError(null);
+    setOriginalFileName(file.name);
+    setIsProcessing(true);
+    onUploadStateChange?.(true);
+
+    try {
+      const isSquare = aspectRatio === "1:1";
+      const isBanner = aspectRatio === "21:9";
+      const result = await compressImage(file, {
+        maxWidth: isSquare ? 360 : isBanner ? 1200 : 900,
+        maxHeight: isSquare ? 360 : isBanner ? 550 : 600,
+        quality: 0.80,
+        outputFormat: "image/webp",
+      });
+
+      setCompressionStats(result);
+      setPreview(result.dataUrl);
+      setManualUrl(result.dataUrl);
+
+      if (onImageCompressed) {
+        onImageCompressed(result);
+      }
+
+      if (onUrlChange) {
+        onUrlChange(result.dataUrl);
+      }
+
+      // Background upload to Firebase Cloud Storage
+      const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_").replace(/\.[^/.]+$/, "");
+      const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}.webp`;
+      const cloudUrl = await uploadImageToStorage(result.dataUrl, finalStoragePath);
+
+      if (cloudUrl && cloudUrl !== result.dataUrl) {
+        setManualUrl(cloudUrl);
+        if (onUrlChange) {
+          onUrlChange(cloudUrl);
+        }
+      }
+    } catch (err) {
+      console.error("Image direct processing error", err);
+      setError("Failed to process image.");
+    } finally {
+      setIsProcessing(false);
+      onUploadStateChange?.(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (!file.type.startsWith("image/")) {
-        setError("Please select a valid image file (JPG, PNG, WebP, HEIC).");
-        return;
-      }
-      setError(null);
-      setOriginalFileName(file.name);
-      
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const dataUrl = event.target?.result as string;
-        setRawImageToCrop(dataUrl);
-        setIsCropperOpen(true);
-      };
-      reader.readAsDataURL(file);
+      processFileDirectly(file);
     }
   };
 
@@ -74,20 +116,7 @@ export function ImageUploadDropzone({
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
     if (file) {
-      if (!file.type.startsWith("image/")) {
-        setError("Please select a valid image file (JPG, PNG, WebP, HEIC).");
-        return;
-      }
-      setError(null);
-      setOriginalFileName(file.name);
-
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const dataUrl = event.target?.result as string;
-        setRawImageToCrop(dataUrl);
-        setIsCropperOpen(true);
-      };
-      reader.readAsDataURL(file);
+      processFileDirectly(file);
     }
   };
 

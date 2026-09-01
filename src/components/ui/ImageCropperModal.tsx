@@ -161,9 +161,8 @@ export function ImageCropperModal({
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
 
-    // Fill canvas background
-    ctx.fillStyle = "#0F172A";
-    ctx.fillRect(0, 0, targetWidth, targetHeight);
+    // Clear canvas background to preserve transparency for PNG and WebP logos
+    ctx.clearRect(0, 0, targetWidth, targetHeight);
 
     // Coordinate transformation
     ctx.save();
