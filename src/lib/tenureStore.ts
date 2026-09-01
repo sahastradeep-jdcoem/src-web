@@ -114,6 +114,7 @@ export function getStoredTenures(): CouncilTenure[] {
     return {
       ...t,
       tenureNumber: tenureNum,
+      clubs: t.clubs && t.clubs.length > 0 ? t.clubs : activeClubs,
     };
   });
 }

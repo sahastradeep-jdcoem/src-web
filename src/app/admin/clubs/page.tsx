@@ -59,12 +59,8 @@ export default function AdminClubsPage() {
       : active?.id || "tenure-2025-26";
     setSelectedTenureId(currentId);
 
-    const targetTenure = tenureList.find((t) => t.id === currentId) || active;
-    if (targetTenure?.isCurrent || !targetTenure?.clubs || targetTenure.clubs.length === 0) {
-      setClubs(getStoredClubs());
-    } else {
-      setClubs(targetTenure.clubs);
-    }
+    // Always use stored active clubs roster as authoritative source of truth
+    setClubs(getStoredClubs());
   };
 
   useEffect(() => {
