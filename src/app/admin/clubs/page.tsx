@@ -568,60 +568,22 @@ export default function AdminClubsPage() {
             {/* Tab 1: Identity & Domain */}
             {modalTab === "identity" && (
               <div className="space-y-5 animate-in fade-in duration-200">
-                {/* Quick Logo & Primary Details Banner */}
                 <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/70 border border-slate-200 space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
-                    {/* Primary Club Logo Dropzone */}
-                    <div className="sm:col-span-1">
-                      <ImageUploadDropzone
-                        label="Official Club Logo"
-                        sublabel="Circle PNG / 1:1 format"
-                        aspectRatio="1:1"
-                        recommendedSize="500 x 500 px"
-                        storagePath="clubs/logos"
-                        previewUrl={editingClub.logoImage || ""}
-                        onUploadStateChange={handleUploadStateChange}
-                        onUrlChange={(url) => {
-                          setEditingClub((prev) => (prev ? { ...prev, logoImage: url } : null));
-                        }}
-                      />
-                    </div>
-
-                    {/* Club Full Name & Tagline */}
-                    <div className="sm:col-span-2 space-y-3">
-                      <div className="space-y-1.5">
-                        <label className="font-bold text-slate-800 text-xs">
-                          Club Full Name <span className="text-rose-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. AI & Robotics Society, Dance Club, Music Society..."
-                          value={editingClub.name}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setEditingClub((prev) => (prev ? { ...prev, name: val } : null));
-                          }}
-                          className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F] shadow-xs"
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="font-bold text-slate-800 text-xs">
-                          Short Tagline / Slogan
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Where Ideas Become Sound"
-                          value={editingClub.tagline}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setEditingClub((prev) => (prev ? { ...prev, tagline: val } : null));
-                          }}
-                          className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F] shadow-xs"
-                        />
-                      </div>
-                    </div>
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-800 text-xs">
+                      Club Full Name <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. AI & Robotics Society, Dance Club, Music Society..."
+                      value={editingClub.name}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditingClub((prev) => (prev ? { ...prev, name: val } : null));
+                      }}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F] shadow-xs"
+                    />
                   </div>
 
                   <div className="space-y-2">
