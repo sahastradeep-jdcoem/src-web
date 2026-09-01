@@ -15,19 +15,23 @@ export interface PendingSyncItem {
 }
 
 // -------------------------------------------------------------
-// 0. BASE64 IMAGE STRIPPING — prevents Firestore 1MB limit blowout
+// 0. BASE64 IMAGE SANITIZER — prevents Firestore 1MB limit blowout
 // -------------------------------------------------------------
 const BASE64_PREFIX = "data:image/";
+const MAX_SAFE_BASE64_LENGTH = 120000; // ~90 KB max per individual base64 image (safe for compressed WebP)
 
 /**
- * Recursively strips base64 data-URL strings from objects/arrays.
- * Replaces any string value starting with "data:image/" with "".
- * This ensures only permanent HTTPS URLs are written to Firestore.
+ * Recursively inspects base64 data-URL strings from objects/arrays.
+ * Preserves lightweight compressed WebP images (under ~90KB) so logos/photos are never lost if Storage is slow,
+ * while stripping massive raw DSLR base64 strings that could exceed Firestore's 1MB document limit.
  */
 export function stripBase64Images<T>(obj: T): T {
   if (obj === null || obj === undefined) return obj;
   if (typeof obj === "string") {
-    return (obj.startsWith(BASE64_PREFIX) ? "" : obj) as unknown as T;
+    if (obj.startsWith(BASE64_PREFIX)) {
+      return (obj.length > MAX_SAFE_BASE64_LENGTH ? "" : obj) as unknown as T;
+    }
+    return obj;
   }
   if (typeof obj !== "object") return obj;
   if (Array.isArray(obj)) {

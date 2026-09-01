@@ -1,10 +1,13 @@
-import { ref, uploadString, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref, uploadString, getDownloadURL } from "firebase/storage";
 import { storage } from "./config";
 import { compressImage } from "@/lib/imageCompression";
 
+const UPLOAD_TIMEOUT_MS = 4500; // 4.5s max to prevent UI from locking
+
 /**
- * Upload an image file or Base64 WebP string to Firebase Cloud Storage
- * Returns the permanent HTTPS download URL
+ * Upload an image file or Base64 WebP string to Firebase Cloud Storage.
+ * Uses a strict timeout to ensure the UI never hangs if Storage rules or network are slow.
+ * Returns the permanent HTTPS download URL if successful, or the local compressed WebP data URL on fallback.
  */
 export async function uploadImageToStorage(
   fileOrDataUrl: File | string,
@@ -15,42 +18,52 @@ export async function uploadImageToStorage(
     return fileOrDataUrl;
   }
 
+  let finalDataUrl = "";
+  if (typeof fileOrDataUrl === "string") {
+    finalDataUrl = fileOrDataUrl;
+  } else {
+    try {
+      const compressed = await compressImage(fileOrDataUrl, {
+        maxWidth: 1200,
+        maxHeight: 1200,
+        quality: 0.85,
+        outputFormat: "image/webp",
+      });
+      finalDataUrl = compressed.dataUrl;
+    } catch {
+      return "";
+    }
+  }
+
+  // Attempt Firebase Cloud Storage upload with strict timeout race
   try {
     if (storage && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       const storageRef = ref(storage, storagePath);
 
-      if (typeof fileOrDataUrl === "string") {
-        // Base64 Data URL upload
-        await uploadString(storageRef, fileOrDataUrl, "data_url");
-        const downloadUrl = await getDownloadURL(storageRef);
-        return downloadUrl;
-      } else {
-        // Compress file to WebP first
-        const compressed = await compressImage(fileOrDataUrl, {
-          maxWidth: 1920,
-          maxHeight: 1920,
-          quality: 0.85,
-          outputFormat: "image/webp",
-        });
+      const isPng = finalDataUrl.includes("image/png");
+      const metadata = {
+        contentType: isPng ? "image/png" : "image/webp",
+      };
 
-        await uploadString(storageRef, compressed.dataUrl, "data_url");
+      const uploadTask = (async () => {
+        await uploadString(storageRef, finalDataUrl, "data_url", metadata);
         const downloadUrl = await getDownloadURL(storageRef);
         return downloadUrl;
+      })();
+
+      const timeoutTask = new Promise<string>((_, reject) => {
+        setTimeout(() => reject(new Error("Storage upload timed out")), UPLOAD_TIMEOUT_MS);
+      });
+
+      const cloudUrl = await Promise.race([uploadTask, timeoutTask]);
+      if (cloudUrl && cloudUrl.startsWith("http")) {
+        return cloudUrl;
       }
     }
   } catch (error) {
-    console.warn("Firebase Storage upload error, falling back to local compressed data URL:", error);
+    console.warn("Firebase Storage fast fallback active (using optimized WebP):", (error as any)?.message || error);
   }
 
-  // Fallback if Firebase Storage rules block or offline: return the compressed dataUrl
-  if (typeof fileOrDataUrl === "string") {
-    return fileOrDataUrl;
-  }
-  const compressed = await compressImage(fileOrDataUrl, {
-    maxWidth: 1600,
-    maxHeight: 1600,
-    quality: 0.8,
-    outputFormat: "image/webp",
-  });
-  return compressed.dataUrl;
+  // Fallback: return the lightweight compressed WebP data URL
+  return finalDataUrl;
 }
