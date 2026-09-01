@@ -272,6 +272,10 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   };
 
   const handleProceedToStep2 = async () => {
+    if (event.status && event.status !== "Registration Open") {
+      alert(`Registrations are currently closed for this event (${event.status}).`);
+      return;
+    }
     if (!user) {
       openAuthModal();
       return;
@@ -280,8 +284,9 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       alert("Please ensure your College BT ID is saved in your profile.");
       return;
     }
-    if (!formData.phone.trim()) {
-      alert("Please provide a WhatsApp contact phone number for event coordinators.");
+    const cleanPhone = formData.phone.replace(/[^0-9]/g, "");
+    if (cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
+      alert("Please provide a valid 10-digit Indian mobile / WhatsApp number (e.g. 9876543210).");
       return;
     }
 
@@ -302,7 +307,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     // If user edited their phone or dept in step 1, persist to profile
     if (updateUserProfile) {
       updateUserProfile({
-        phone: formData.phone,
+        phone: cleanPhone,
         department: formData.department,
         year: formData.year,
         btId: formData.btId,
@@ -314,8 +319,13 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
   const handleProceedToStep3 = () => {
     if (formData.teamType === "Team") {
-      if (!formData.teamName.trim()) {
-        alert("Please enter your Team / Squad Name.");
+      const trimmedTeam = formData.teamName.trim();
+      if (!trimmedTeam || trimmedTeam.length < 2) {
+        alert("Please enter a valid Team / Squad Name (at least 2 characters).");
+        return;
+      }
+      if (trimmedTeam.length > 60) {
+        alert("Team name cannot exceed 60 characters.");
         return;
       }
       if (teamMembers.length < minTeamSize) {
@@ -457,6 +467,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   };
 
   const handleConfirmRegistration = async () => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
 
     // Safeguard duplicate check before processing registration
@@ -546,7 +557,6 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                   razorpay_order_id: response.razorpay_order_id,
                   razorpay_payment_id: response.razorpay_payment_id,
                   razorpay_signature: response.razorpay_signature,
-                  isMockMode: false,
                 }),
               });
               const verifyData = await verifyRes.json();

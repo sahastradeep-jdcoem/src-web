@@ -218,61 +218,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (auth && hasRealKey) {
         await signInWithEmailAndPassword(auth, email, pass);
       } else {
-        const normalizedEmail = email.toLowerCase().trim();
-        const isAdminUser = normalizedEmail.includes("admin") || normalizedEmail.startsWith("src.");
-        const namePart = normalizedEmail.split("@")[0].replace(".", " ");
-        const firstName = namePart.split(" ")[0] || "Aryan";
-        const lastName = namePart.split(" ").slice(1).join(" ") || "Sharma";
-        const btId = isAdminUser ? "EXEC-2026" : "BT22CSE045";
-        const desig = resolveDesignationByBtId(btId);
-
-        const mockUser: AuthUser = {
-          uid: `user-${Date.now()}`,
-          email: normalizedEmail,
-          displayName: `${firstName} ${lastName}`,
-          photoURL: null,
-          role: isAdminUser ? "COUNCIL_ADMIN" : "STUDENT",
-          isCollegeStudent: true,
-          firstName,
-          lastName,
-          btId,
-          department: "Computer Science and Engineering",
-          year: "3rd Year",
-          profileCompleted: true,
-          designationBadge: desig?.designationBadge,
-          isCouncilOfficer: Boolean(desig),
-        };
-        setUser(mockUser);
-        localStorage.setItem("src_auth_user", JSON.stringify(mockUser));
+        throw new Error("Institutional authentication services are currently undergoing maintenance. Please use Continue with Google.");
       }
       setIsAuthModalOpen(false);
     } catch (error: any) {
-      console.error("Email login notice", error);
-      // If Firebase failed, still provide friendly fallback
-      const normalizedEmail = email.toLowerCase().trim();
-      const isAdminUser = normalizedEmail.includes("admin") || normalizedEmail.startsWith("src.");
-      const btId = "BT22CSE045";
-      const desig = resolveDesignationByBtId(btId);
-
-      const mockUser: AuthUser = {
-        uid: `user-${Date.now()}`,
-        email: normalizedEmail,
-        displayName: normalizedEmail.split("@")[0].replace(".", " "),
-        photoURL: null,
-        role: isAdminUser ? "COUNCIL_ADMIN" : "STUDENT",
-        isCollegeStudent: true,
-        firstName: normalizedEmail.split("@")[0] || "Student",
-        lastName: "",
-        btId,
-        department: "Computer Science and Engineering",
-        year: "3rd Year",
-        profileCompleted: true,
-        designationBadge: desig?.designationBadge,
-        isCouncilOfficer: Boolean(desig),
-      };
-      setUser(mockUser);
-      localStorage.setItem("src_auth_user", JSON.stringify(mockUser));
-      setIsAuthModalOpen(false);
+      console.error("Authentication error:", error);
+      const message = error?.code === "auth/invalid-credential" || error?.code === "auth/wrong-password" || error?.code === "auth/user-not-found"
+        ? "Invalid email or password. Please verify your credentials or sign in with Google."
+        : (error?.message || "Failed to sign in. Please try again.");
+      throw new Error(message);
     } finally {
       setIsLoading(false);
     }
@@ -287,48 +241,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (auth && hasRealKey) {
         const cred = await createUserWithEmailAndPassword(auth, email, pass);
         await updateProfile(cred.user, { displayName: name });
+        setIsAuthModalOpen(false);
+        setIsProfileModalOpen(true);
+      } else {
+        throw new Error("Institutional account creation is currently undergoing maintenance. Please use Continue with Google.");
       }
-
-      const parts = name.trim().split(" ");
-      const newUser: AuthUser = {
-        uid: `student-${Date.now()}`,
-        email: email.trim(),
-        displayName: name.trim(),
-        photoURL: null,
-        role: "STUDENT",
-        isCollegeStudent: true,
-        firstName: parts[0] || "",
-        lastName: parts.slice(1).join(" ") || "",
-        btId: "",
-        department: "Computer Science and Engineering",
-        year: "1st Year",
-        profileCompleted: false,
-      };
-      setUser(newUser);
-      localStorage.setItem("src_auth_user", JSON.stringify(newUser));
-      setIsAuthModalOpen(false);
-      setIsProfileModalOpen(true);
-    } catch (error) {
-      console.error("Registration fallback active", error);
-      const parts = name.trim().split(" ");
-      const newUser: AuthUser = {
-        uid: `student-${Date.now()}`,
-        email: email.trim(),
-        displayName: name.trim(),
-        photoURL: null,
-        role: "STUDENT",
-        isCollegeStudent: true,
-        firstName: parts[0] || "",
-        lastName: parts.slice(1).join(" ") || "",
-        btId: "",
-        department: "Computer Science and Engineering",
-        year: "1st Year",
-        profileCompleted: false,
-      };
-      setUser(newUser);
-      localStorage.setItem("src_auth_user", JSON.stringify(newUser));
-      setIsAuthModalOpen(false);
-      setIsProfileModalOpen(true);
+    } catch (error: any) {
+      console.error("Registration error:", error);
+      const message = error?.code === "auth/email-already-in-use"
+        ? "An account with this email already exists. Please sign in instead."
+        : error?.code === "auth/weak-password"
+        ? "Password should be at least 6 characters."
+        : (error?.message || "Failed to create account.");
+      throw new Error(message);
     } finally {
       setIsLoading(false);
     }

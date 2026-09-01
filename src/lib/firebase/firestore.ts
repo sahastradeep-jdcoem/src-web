@@ -82,11 +82,7 @@ export async function checkIsAdminInFirestore(email: string): Promise<boolean> {
     "src.gensec@jdcoem.ac.in",
   ];
 
-  if (
-    DEFAULT_ADMINS.includes(normalizedEmail) || 
-    normalizedEmail.includes("admin") ||
-    normalizedEmail.startsWith("src.")
-  ) {
+  if (DEFAULT_ADMINS.includes(normalizedEmail)) {
     return true;
   }
 

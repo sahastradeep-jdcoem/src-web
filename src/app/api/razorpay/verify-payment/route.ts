@@ -8,13 +8,13 @@ export async function POST(req: NextRequest) {
       razorpay_order_id, 
       razorpay_payment_id, 
       razorpay_signature,
-      isMockMode
     } = body;
 
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
-    // In mock mode or if secret is not set yet
-    if (isMockMode || !keySecret || keySecret.includes("placeholder")) {
+    // Only allow sandbox mock verification if no real secret is configured on the server
+    const isMockEnv = !keySecret || keySecret.includes("placeholder") || keySecret === "your_razorpay_key_secret";
+    if (isMockEnv) {
       return NextResponse.json({
         verified: true,
         paymentId: razorpay_payment_id || `pay_mock_${Date.now()}`,
@@ -37,7 +37,10 @@ export async function POST(req: NextRequest) {
       .update(payload)
       .digest("hex");
 
-    const isAuthentic = expectedSignature === razorpay_signature;
+    const isAuthentic = crypto.timingSafeEqual(
+      Buffer.from(expectedSignature),
+      Buffer.from(razorpay_signature)
+    );
 
     if (!isAuthentic) {
       return NextResponse.json(
@@ -54,9 +57,9 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error("Razorpay verification failed:", error);
+    console.error("Razorpay verification error:", error);
     return NextResponse.json(
-      { verified: false, error: error?.message || "Internal payment verification error." },
+      { verified: false, error: "Internal payment verification error." },
       { status: 500 }
     );
   }

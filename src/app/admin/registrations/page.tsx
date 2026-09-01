@@ -742,22 +742,32 @@ export default function AdminRegistrationsPage() {
       (r) => r.teamType === "Team" || Boolean(r.teamName) || (Array.isArray(r.teamMembers) && r.teamMembers.length > 0)
     );
 
+    const sanitizeExcelCell = (val: any): any => {
+      if (typeof val === "number" || typeof val === "boolean") return val;
+      if (val === null || val === undefined) return "";
+      const str = String(val);
+      if (/^[=+\-@\t\r]/.test(str)) {
+        return `'${str}`;
+      }
+      return str;
+    };
+
     const rows = eventRegistrations.map((r) => {
       const rowData: Record<string, any> = {
-        "Timestamp": formatGoogleFormsTimestamp(r),
-        "Email Address": r.email || "",
-        "Full Name": r.participantName || "",
-        "College BT ID": r.btId || "",
-        "WhatsApp Contact": r.phone || "",
-        "Department / Branch": r.department || "",
-        "Academic Year": r.year || "",
-        "Event": r.eventName || "",
-        "Participation Format": r.teamType || "Individual",
+        "Timestamp": sanitizeExcelCell(formatGoogleFormsTimestamp(r)),
+        "Email Address": sanitizeExcelCell(r.email || ""),
+        "Full Name": sanitizeExcelCell(r.participantName || ""),
+        "College BT ID": sanitizeExcelCell(r.btId || ""),
+        "WhatsApp Contact": sanitizeExcelCell(r.phone || ""),
+        "Department / Branch": sanitizeExcelCell(r.department || ""),
+        "Academic Year": sanitizeExcelCell(r.year || ""),
+        "Event": sanitizeExcelCell(r.eventName || ""),
+        "Participation Format": sanitizeExcelCell(r.teamType || "Individual"),
       };
 
       if (hasAnyTeam) {
-        rowData["Team Name"] = r.teamName || "";
-        rowData["Team Members"] = Array.isArray(r.teamMembers) ? r.teamMembers.join("; ") : (r.teamMembers || "");
+        rowData["Team Name"] = sanitizeExcelCell(r.teamName || "");
+        rowData["Team Members"] = sanitizeExcelCell(Array.isArray(r.teamMembers) ? r.teamMembers.join("; ") : (r.teamMembers || ""));
       }
 
       // Each custom question gets its OWN dedicated column with its exact prompt text as header
@@ -776,19 +786,20 @@ export default function AdminRegistrationsPage() {
             }
           }
         }
-        rowData[qCol.title] = Array.isArray(answer) ? answer.join(", ") : String(answer ?? "");
+        const formattedAnswer = Array.isArray(answer) ? answer.join(", ") : String(answer ?? "");
+        rowData[qCol.title] = sanitizeExcelCell(formattedAnswer);
       });
 
-      rowData["Registration Pass ID"] = r.registrationId;
-      rowData["Ticket Code"] = r.ticketCode || `${r.registrationId}-TK`;
-      rowData["Pass Status"] = r.status || "CONFIRMED";
+      rowData["Registration Pass ID"] = sanitizeExcelCell(r.registrationId);
+      rowData["Ticket Code"] = sanitizeExcelCell(r.ticketCode || `${r.registrationId}-TK`);
+      rowData["Pass Status"] = sanitizeExcelCell(r.status || "CONFIRMED");
 
       // Only include payment tracking columns if the event is a paid event or contains paid registrations
       if (hasAnyPaid) {
-        rowData["Payment Status"] = r.paymentStatus || "FREE";
-        rowData["Amount Paid (INR)"] = r.amountPaid || 0;
-        rowData["Payment Transaction ID"] = r.paymentId || "N/A";
-        rowData["Order ID"] = r.orderId || "N/A";
+        rowData["Payment Status"] = sanitizeExcelCell(r.paymentStatus || "FREE");
+        rowData["Amount Paid (INR)"] = Number(r.amountPaid) || 0;
+        rowData["Payment Transaction ID"] = sanitizeExcelCell(r.paymentId || "N/A");
+        rowData["Order ID"] = sanitizeExcelCell(r.orderId || "N/A");
       }
 
       return rowData;
