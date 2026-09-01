@@ -15,16 +15,89 @@ export interface PendingSyncItem {
 }
 
 // -------------------------------------------------------------
-// 0. BASE64 IMAGE SANITIZER — prevents Firestore 1MB limit blowout
+// 0. BASE64 IMAGE SANITIZER & AUTO-COMPACTOR
 // -------------------------------------------------------------
 const BASE64_PREFIX = "data:image/";
-const MAX_SAFE_BASE64_LENGTH = 350000; // ~260 KB max per individual base64 image (safe for compressed WebP)
+const MAX_SAFE_BASE64_LENGTH = 120000; // ~90 KB max per individual image
 
 /**
- * Recursively inspects base64 data-URL strings from objects/arrays.
- * Preserves lightweight compressed WebP images (under ~260KB) so logos/photos are never lost even if Storage is offline,
- * while stripping massive raw DSLR base64 strings that could exceed Firestore's 1MB document limit.
+ * Downscales a base64 image data-url using HTML5 canvas
+ * Ensures circle logos are ~5-8KB so Firestore documents never exceed 100KB total.
  */
+export async function compactBase64Image(dataUrl: string, maxDim = 160, quality = 0.70): Promise<string> {
+  if (typeof window === "undefined" || !dataUrl.startsWith("data:image/")) return dataUrl;
+  if (dataUrl.length < 25000) return dataUrl; // Already compact
+
+  try {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width;
+        let h = img.height;
+        if (w > h) {
+          if (w > maxDim) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          }
+        } else {
+          if (h > maxDim) {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return resolve(dataUrl);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(img, 0, 0, w, h);
+        const compactUrl = canvas.toDataURL("image/webp", quality);
+        resolve(compactUrl);
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  } catch {
+    return dataUrl;
+  }
+}
+
+/**
+ * Recursively compacts any oversized base64 images in a club dataset
+ */
+export async function compactClubDataset<T extends { logoImage?: string; cardImage?: string; headerImage?: string }>(
+  clubs: T[]
+): Promise<T[]> {
+  if (!Array.isArray(clubs)) return clubs;
+  const processed = await Promise.all(
+    clubs.map(async (c) => {
+      let logo = c.logoImage;
+      let card = c.cardImage;
+      let header = c.headerImage;
+
+      if (logo && logo.startsWith("data:image/") && logo.length > 25000) {
+        logo = await compactBase64Image(logo, 160, 0.70);
+      }
+      if (card && card.startsWith("data:image/") && card.length > 60000) {
+        card = await compactBase64Image(card, 500, 0.70);
+      }
+      if (header && header.startsWith("data:image/") && header.length > 80000) {
+        header = await compactBase64Image(header, 700, 0.70);
+      }
+
+      return {
+        ...c,
+        logoImage: logo,
+        cardImage: card,
+        headerImage: header,
+      };
+    })
+  );
+  return processed;
+}
+
 export function stripBase64Images<T>(obj: T): T {
   if (obj === null || obj === undefined) return obj;
   if (typeof obj === "string") {

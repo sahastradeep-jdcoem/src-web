@@ -12,7 +12,7 @@ import {
   subscribeToSiteContent,
   cleanUndefined
 } from "./firebase/firestore";
-import { enqueueCloudWrite, reconcileArrayDatasets, hasPendingWritesFor } from "./dataSyncEngine";
+import { enqueueCloudWrite, reconcileArrayDatasets, hasPendingWritesFor, compactClubDataset } from "./dataSyncEngine";
 
 export function getClubLeaders(club: ClubItem): ClubLeader[] {
   if (!club) return [];
@@ -254,15 +254,17 @@ export function getStoredClubs(): ClubItem[] {
   return initialClubs;
 }
 
-export function saveStoredClubs(clubs: ClubItem[]): void {
+export async function saveStoredClubs(clubs: ClubItem[]): Promise<void> {
   if (typeof window === "undefined") return;
   try {
-    const sanitized = cleanUndefined(clubs);
+    const compacted = await compactClubDataset(clubs);
+    const sanitized = cleanUndefined(compacted);
     localStorage.setItem("src_clubs_roster", JSON.stringify(sanitized));
     window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: sanitized }));
     window.dispatchEvent(new CustomEvent("src_tenures_updated"));
     // Direct cloud write to Firestore site_content/clubs
-    saveSiteContentToFirestore("clubs", sanitized).catch(() => {
+    saveSiteContentToFirestore("clubs", sanitized).catch((err) => {
+      console.warn("Firestore direct write failed, enqueuing:", err);
       enqueueCloudWrite("clubs", sanitized, `Clubs Directory (${clubs.length} Clubs)`);
     });
   } catch (e) {

@@ -23,6 +23,7 @@ import {
   Loader2
 } from "lucide-react";
 import { getStoredClubs, saveStoredClubs, syncClubsFromFirestore, getClubLeaders } from "@/lib/councilStore";
+import { compactClubDataset } from "@/lib/dataSyncEngine";
 import { getStoredTenures, updateTenureRoster, CouncilTenure } from "@/lib/tenureStore";
 import { getStoredDepartments, syncDepartmentsFromFirestore, getDepartmentShortName } from "@/lib/departmentsStore";
 import { mockClubs } from "@/data/clubs";
@@ -68,7 +69,17 @@ export default function AdminClubsPage() {
     setDepartmentsList(getStoredDepartments());
 
     syncClubsFromFirestore().then((res) => {
-      if (res) loadData();
+      if (res && Array.isArray(res) && res.length > 0) {
+        loadData();
+        // Check and auto-compact any legacy oversized base64 images to free up Firestore space
+        compactClubDataset(res).then((compacted) => {
+          const oldLen = JSON.stringify(res).length;
+          const newLen = JSON.stringify(compacted).length;
+          if (oldLen > 250000 && newLen < oldLen) {
+            saveStoredClubs(compacted);
+          }
+        });
+      }
     });
     syncDepartmentsFromFirestore().then((res) => {
       if (res) setDepartmentsList(res);
@@ -90,17 +101,12 @@ export default function AdminClubsPage() {
 
   const handleSelectTenure = (tId: string) => {
     setSelectedTenureId(tId);
-    const targetTenure = tenures.find((t) => t.id === tId);
-    if (targetTenure?.isCurrent || !targetTenure?.clubs || targetTenure.clubs.length === 0) {
-      setClubs(getStoredClubs());
-    } else {
-      setClubs(targetTenure.clubs);
-    }
+    setClubs(getStoredClubs());
   };
 
-  const saveList = (updated: ClubItem[]) => {
+  const saveList = async (updated: ClubItem[]) => {
     setClubs(updated);
-    saveStoredClubs(updated);
+    await saveStoredClubs(updated);
     if (selectedTenure?.id && !selectedTenure.isCurrent) {
       updateTenureRoster(selectedTenure.id, { clubs: updated });
     }

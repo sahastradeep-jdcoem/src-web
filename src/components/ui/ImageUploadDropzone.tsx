@@ -63,9 +63,9 @@ export function ImageUploadDropzone({
       const isSquare = aspectRatio === "1:1";
       const isBanner = aspectRatio === "21:9";
       const result = await compressImage(file, {
-        maxWidth: isSquare ? 360 : isBanner ? 1200 : 900,
-        maxHeight: isSquare ? 360 : isBanner ? 550 : 600,
-        quality: 0.80,
+        maxWidth: isSquare ? 160 : isBanner ? 800 : 600,
+        maxHeight: isSquare ? 160 : isBanner ? 343 : 338,
+        quality: 0.70,
         outputFormat: "image/webp",
       });
 
@@ -135,9 +135,9 @@ export function ImageUploadDropzone({
       const isSquare = aspectRatio === "1:1";
       const isBanner = aspectRatio === "21:9";
       const result = await compressImage(croppedDataUrl, {
-        maxWidth: isSquare ? 360 : isBanner ? 1200 : 900,
-        maxHeight: isSquare ? 360 : isBanner ? 550 : 600,
-        quality: 0.80,
+        maxWidth: isSquare ? 160 : isBanner ? 800 : 600,
+        maxHeight: isSquare ? 160 : isBanner ? 343 : 338,
+        quality: 0.70,
         outputFormat: "image/webp",
       });
 
