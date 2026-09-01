@@ -571,15 +571,15 @@ export default function StudentDashboardPage() {
               <div className="space-y-6">
                 
                 {/* Official Digital Ticket Pass Card (Exportable Target) */}
-                <div className="w-full overflow-x-auto no-scrollbar py-2">
+                <div className="w-full py-2">
                   <div
                     id="src-dashboard-delegate-pass"
-                    className="relative min-w-[620px] sm:min-w-[680px] md:w-full max-w-[720px] rounded-3xl bg-white border border-slate-200 shadow-xl overflow-hidden text-left mx-auto font-sans"
+                    className="relative w-full max-w-[720px] rounded-3xl bg-white border border-slate-200 shadow-xl overflow-hidden text-left mx-auto font-sans"
                   >
                     {/* Ticket Top Strip */}
-                    <div className="bg-[#17458F] px-6 py-5 sm:px-8 sm:py-6 flex flex-row items-center justify-between gap-4">
+                    <div className="bg-[#17458F] px-5 py-4 sm:px-8 sm:py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
                       <div className="flex items-center gap-3.5 sm:gap-4">
-                        <div className="relative h-11 w-11 sm:h-12 sm:w-12 rounded-xl bg-white p-1 shrink-0">
+                        <div className="relative h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-white p-1 shrink-0">
                           <Image
                             src="/assets/SRC Logo.png"
                             alt="SRC Logo"
@@ -598,7 +598,7 @@ export default function StudentDashboardPage() {
                         </div>
                       </div>
 
-                      <div className="text-right shrink-0">
+                      <div className="text-left sm:text-right shrink-0">
                         <span className="text-[10px] font-bold uppercase tracking-widest text-slate-200 block">
                           Pass ID
                         </span>
@@ -615,8 +615,8 @@ export default function StudentDashboardPage() {
                       <div className="w-5 h-5 -mr-5 sm:-mr-7 rounded-full bg-[#F8FAFC] border border-slate-200" />
                     </div>
 
-                    {/* Ticket Body - Horizontal Layout */}
-                    <div className="p-6 sm:p-8 flex flex-row items-center justify-between gap-6 sm:gap-8 bg-white">
+                    {/* Ticket Body - Responsive Layout */}
+                    <div className="p-5 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6 sm:gap-8 bg-white">
                       
                       {/* Main Info */}
                       <div className="flex-1 min-w-0 space-y-5">

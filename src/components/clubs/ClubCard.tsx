@@ -48,7 +48,7 @@ export function ClubCard({ club }: ClubCardProps) {
       <div className="relative h-44 w-full overflow-hidden">
         <Image
           src={club.cardImage || club.heroImage}
-          alt={club.name}
+          alt={`${club.name} cover`}
           fill
           className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
         />
@@ -59,9 +59,8 @@ export function ClubCard({ club }: ClubCardProps) {
             <div className="relative h-9 w-9 rounded-full overflow-hidden shrink-0 shadow-xs">
               <Image 
                 src={club.logoImage} 
-                alt={club.name} 
+                alt={`${club.name} emblem`} 
                 fill
-                unoptimized={true}
                 className="object-cover w-full h-full rounded-full" 
               />
             </div>
@@ -125,7 +124,7 @@ export function ClubCard({ club }: ClubCardProps) {
 
               <Link
                 href={`/clubs/${club.slug}`}
-                className="inline-flex items-center gap-1 text-xs font-sans font-semibold uppercase tracking-wider text-[#17458F] group-hover:text-[#E78023] group-hover:translate-x-0.5 transition-all cursor-pointer shrink-0 ml-2"
+                className="inline-flex items-center gap-1 text-xs font-sans font-semibold uppercase tracking-wider text-[#17458F] group-hover:text-[#E78023] group-hover:translate-x-0.5 transition-all cursor-pointer shrink-0 ml-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#17458F] rounded-md px-1 py-0.5"
               >
                 <span>Explore</span>
                 <ArrowRight className="w-3.5 h-3.5" />
