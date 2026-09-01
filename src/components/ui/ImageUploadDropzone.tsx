@@ -99,9 +99,9 @@ export function ImageUploadDropzone({
       const isSquare = aspectRatio === "1:1";
       const isBanner = aspectRatio === "21:9";
       const result = await compressImage(croppedDataUrl, {
-        maxWidth: isSquare ? 500 : isBanner ? 1400 : 1000,
-        maxHeight: isSquare ? 500 : isBanner ? 600 : 1000,
-        quality: 0.85,
+        maxWidth: isSquare ? 360 : isBanner ? 1200 : 900,
+        maxHeight: isSquare ? 360 : isBanner ? 550 : 600,
+        quality: 0.80,
         outputFormat: "image/webp",
       });
 

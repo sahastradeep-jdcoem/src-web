@@ -18,11 +18,11 @@ export interface PendingSyncItem {
 // 0. BASE64 IMAGE SANITIZER — prevents Firestore 1MB limit blowout
 // -------------------------------------------------------------
 const BASE64_PREFIX = "data:image/";
-const MAX_SAFE_BASE64_LENGTH = 120000; // ~90 KB max per individual base64 image (safe for compressed WebP)
+const MAX_SAFE_BASE64_LENGTH = 350000; // ~260 KB max per individual base64 image (safe for compressed WebP)
 
 /**
  * Recursively inspects base64 data-URL strings from objects/arrays.
- * Preserves lightweight compressed WebP images (under ~90KB) so logos/photos are never lost if Storage is slow,
+ * Preserves lightweight compressed WebP images (under ~260KB) so logos/photos are never lost even if Storage is offline,
  * while stripping massive raw DSLR base64 strings that could exceed Firestore's 1MB document limit.
  */
 export function stripBase64Images<T>(obj: T): T {
@@ -213,16 +213,26 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
     const localItem = key ? localMap.get(key) : undefined;
     if (!localItem) return remoteItem;
 
-    // Start with remote as base, then selectively preserve local values
-    const result: any = { ...remoteItem };
+    // Start with local as base, overlay remote changes, but preserve local non-empty assets
+    const result: any = { ...localItem, ...remoteItem };
 
     for (const k of Object.keys(localItem as any)) {
       const localVal = (localItem as any)[k];
       const remoteVal = (remoteItem as any)[k];
 
+      const isImageField = ["logoImage", "cardImage", "headerImage", "heroImage", "poster", "posterImage", "avatar", "imageUrl"].includes(k);
+
+      // If local has a non-empty image asset and remote is empty or falsy, ALWAYS keep local
+      if (isImageField) {
+        if (localVal && typeof localVal === "string" && localVal.trim() !== "") {
+          if (!remoteVal || typeof remoteVal !== "string" || remoteVal.trim() === "") {
+            result[k] = localVal;
+            continue;
+          }
+        }
+      }
+
       // If local has a meaningful value and remote doesn't, keep local
-      // This covers: HTTPS URLs where Firestore write failed, base64 images not yet synced,
-      // and any non-empty field that remote lost
       if (
         localVal !== undefined && localVal !== null && localVal !== "" &&
         (remoteVal === undefined || remoteVal === null || remoteVal === "")
