@@ -197,32 +197,65 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
     return remoteList;
   }
 
-  // Create lookup maps for both directions
+  // Create multi-key lookup map for local items
   const localMap = new Map<string, T>();
+  const matchedLocalKeys = new Set<string>();
+
   localList.forEach((item) => {
-    const key = (item.id || item.slug || "").toLowerCase();
-    if (key) localMap.set(key, item);
+    if (item.id) localMap.set(item.id.toLowerCase(), item);
+    if (item.slug) localMap.set(item.slug.toLowerCase(), item);
+    if ((item as any).name) localMap.set((item as any).name.toLowerCase(), item);
+    // Also handle "club-" prefix variations
+    if (item.id && item.id.startsWith("club-")) {
+      localMap.set(item.id.replace("club-", "").toLowerCase(), item);
+    }
+    if (item.slug && !item.slug.startsWith("club-")) {
+      localMap.set(`club-${item.slug.toLowerCase()}`, item);
+    }
   });
 
-  const remoteKeys = new Set<string>();
+  const findMatchingLocal = (remoteItem: T): T | undefined => {
+    if (remoteItem.id && localMap.has(remoteItem.id.toLowerCase())) {
+      return localMap.get(remoteItem.id.toLowerCase());
+    }
+    if (remoteItem.slug && localMap.has(remoteItem.slug.toLowerCase())) {
+      return localMap.get(remoteItem.slug.toLowerCase());
+    }
+    if ((remoteItem as any).name && localMap.has((remoteItem as any).name.toLowerCase())) {
+      return localMap.get((remoteItem as any).name.toLowerCase());
+    }
+    if (remoteItem.id && remoteItem.id.startsWith("club-")) {
+      const stripped = remoteItem.id.replace("club-", "").toLowerCase();
+      if (localMap.has(stripped)) return localMap.get(stripped);
+    }
+    if (remoteItem.slug && !remoteItem.slug.startsWith("club-")) {
+      const prefixed = `club-${remoteItem.slug.toLowerCase()}`;
+      if (localMap.has(prefixed)) return localMap.get(prefixed);
+    }
+    return undefined;
+  };
 
-  // Smart Deep Merge: Merge remote items with local items
+  // Merge remote items with local items
   const merged = remoteList.map((remoteItem) => {
-    const key = (remoteItem.id || remoteItem.slug || "").toLowerCase();
-    if (key) remoteKeys.add(key);
-    const localItem = key ? localMap.get(key) : undefined;
+    const localItem = findMatchingLocal(remoteItem);
     if (!localItem) return remoteItem;
 
-    // Start with local as base, overlay remote changes, but preserve local non-empty assets
-    const result: any = { ...localItem, ...remoteItem };
+    const localKey = (localItem.id || localItem.slug || (localItem as any).name || "").toLowerCase();
+    if (localKey) matchedLocalKeys.add(localKey);
+    if (localItem.id) matchedLocalKeys.add(localItem.id.toLowerCase());
+    if (localItem.slug) matchedLocalKeys.add(localItem.slug.toLowerCase());
 
-    for (const k of Object.keys(localItem as any)) {
+    // Start with remote, overlay local so local unsynced edits take priority
+    const result: any = { ...remoteItem, ...localItem };
+
+    const allKeys = new Set([...Object.keys(localItem as any), ...Object.keys(remoteItem as any)]);
+    for (const k of allKeys) {
       const localVal = (localItem as any)[k];
       const remoteVal = (remoteItem as any)[k];
 
       const isImageField = ["logoImage", "cardImage", "headerImage", "heroImage", "poster", "posterImage", "avatar", "imageUrl"].includes(k);
 
-      // If local has a non-empty image asset and remote is empty or falsy, ALWAYS keep local
+      // Protect images: If local has an image and remote doesn't, NEVER erase it
       if (isImageField) {
         if (localVal && typeof localVal === "string" && localVal.trim() !== "") {
           if (!remoteVal || typeof remoteVal !== "string" || remoteVal.trim() === "") {
@@ -232,27 +265,26 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
         }
       }
 
-      // If local has a meaningful value and remote doesn't, keep local
+      // If local has a non-empty value and remote is empty/missing, keep local
       if (
         localVal !== undefined && localVal !== null && localVal !== "" &&
         (remoteVal === undefined || remoteVal === null || remoteVal === "")
       ) {
         result[k] = localVal;
       }
-
-      // If local has a key that remote doesn't have at all, add it
-      if (!(k in (remoteItem as any))) {
-        result[k] = localVal;
-      }
     }
     return result as T;
   });
 
-  // Add any local-only items not present in remote (newly added locally, not yet synced)
-  localList.forEach((item) => {
-    const key = (item.id || item.slug || "").toLowerCase();
-    if (key && !remoteKeys.has(key)) {
-      merged.push(item);
+  // Add any local-only items that were not matched in remote
+  localList.forEach((localItem) => {
+    const idKey = localItem.id ? localItem.id.toLowerCase() : "";
+    const slugKey = localItem.slug ? localItem.slug.toLowerCase() : "";
+    if (
+      (!idKey || !matchedLocalKeys.has(idKey)) &&
+      (!slugKey || !matchedLocalKeys.has(slugKey))
+    ) {
+      merged.push(localItem);
     }
   });
 
