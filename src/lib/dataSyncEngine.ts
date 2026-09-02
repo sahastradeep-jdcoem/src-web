@@ -98,6 +98,45 @@ export async function compactClubDataset<T extends { logoImage?: string; cardIma
   return processed;
 }
 
+/**
+ * Recursively compacts any oversized base64 images in an event dataset
+ */
+export async function compactEventDataset<T extends { poster?: string; cardImage?: string; posterImage?: string; headerImage?: string }>(
+  events: T[]
+): Promise<T[]> {
+  if (!Array.isArray(events)) return events;
+  const processed = await Promise.all(
+    events.map(async (e) => {
+      let poster = e.poster;
+      let card = e.cardImage;
+      let posterImg = e.posterImage;
+      let header = e.headerImage;
+
+      if (poster && poster.startsWith("data:image/") && poster.length > 60000) {
+        poster = await compactBase64Image(poster, 600, 0.70);
+      }
+      if (card && card.startsWith("data:image/") && card.length > 60000) {
+        card = await compactBase64Image(card, 600, 0.70);
+      }
+      if (posterImg && posterImg.startsWith("data:image/") && posterImg.length > 60000) {
+        posterImg = await compactBase64Image(posterImg, 600, 0.70);
+      }
+      if (header && header.startsWith("data:image/") && header.length > 80000) {
+        header = await compactBase64Image(header, 800, 0.70);
+      }
+
+      return {
+        ...e,
+        poster,
+        cardImage: card,
+        posterImage: posterImg,
+        headerImage: header,
+      };
+    })
+  );
+  return processed;
+}
+
 export function stripBase64Images<T>(obj: T): T {
   if (obj === null || obj === undefined) return obj;
   if (typeof obj === "string") {

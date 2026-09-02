@@ -6,7 +6,7 @@ import {
   subscribeToSiteContent,
   cleanUndefined
 } from "./firebase/firestore";
-import { enqueueCloudWrite, reconcileArrayDatasets, hasPendingWritesFor } from "./dataSyncEngine";
+import { enqueueCloudWrite, reconcileArrayDatasets, hasPendingWritesFor, compactEventDataset } from "./dataSyncEngine";
 
 const EVENTS_STORAGE_KEY = "src_events";
 
@@ -36,7 +36,11 @@ export function saveStoredEvents(events: EventItem[]): void {
     const sanitized = cleanUndefined(events);
     localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(sanitized));
     window.dispatchEvent(new CustomEvent("src_events_updated", { detail: sanitized }));
-    enqueueCloudWrite("events", sanitized, `Events Roster (${events.length} Events)`);
+    compactEventDataset(sanitized).then((compacted) => {
+      enqueueCloudWrite("events", compacted, `Events Roster (${events.length} Events)`);
+    }).catch(() => {
+      enqueueCloudWrite("events", sanitized, `Events Roster (${events.length} Events)`);
+    });
   } catch (e) {
     console.error("Could not save events to storage", e);
   }

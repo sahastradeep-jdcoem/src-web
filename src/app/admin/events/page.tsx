@@ -329,9 +329,9 @@ export default function AdminEventsPage() {
       organizerClubSlug: evt.organizerClubSlug || (evt.organizer === "SRC JDCOEM" ? "src-council" : ""),
       status: evt.status as any,
       poster: evt.poster || "",
-      cardImage: evt.cardImage || evt.poster || "",
-      posterImage: evt.posterImage || evt.poster || "",
-      headerImage: evt.headerImage || evt.poster || "",
+      cardImage: evt.cardImage || "",
+      posterImage: evt.posterImage || "",
+      headerImage: evt.headerImage || "",
       description: evt.description || "",
       about: evt.about || evt.description || "",
       whatToExpect: evt.whatToExpect && evt.whatToExpect.length > 0 ? [...evt.whatToExpect] : [""],
@@ -365,6 +365,9 @@ export default function AdminEventsPage() {
           : `₹${editForm.feeAmount} / person`)
       : "Free Entry";
 
+    const defaultFallback = "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop";
+    const primaryPoster = editForm.posterImage || editForm.cardImage || editForm.headerImage || editForm.poster || editingEvent.poster || defaultFallback;
+
     const updated = eventsList.map((item) =>
       item.id === editingEvent.id
         ? {
@@ -376,10 +379,10 @@ export default function AdminEventsPage() {
             organizer: editForm.organizer,
             organizerClubSlug: editForm.organizerClubSlug || item.organizerClubSlug,
             status: editForm.status,
-            poster: editForm.poster || editForm.cardImage || editForm.posterImage || item.poster,
-            cardImage: editForm.cardImage || item.cardImage || editForm.poster,
-            posterImage: editForm.posterImage || item.posterImage || editForm.poster,
-            headerImage: editForm.headerImage || item.headerImage || editForm.cardImage || editForm.poster,
+            poster: primaryPoster,
+            cardImage: editForm.cardImage || primaryPoster,
+            posterImage: editForm.posterImage || primaryPoster,
+            headerImage: editForm.headerImage || editForm.cardImage || primaryPoster,
             description: editForm.description,
             about: editForm.about || editForm.description,
             whatToExpect: cleanWhatToExpect.length > 0 ? cleanWhatToExpect : item.whatToExpect,
@@ -1178,10 +1181,10 @@ export default function AdminEventsPage() {
                     aspectRatio="16:9"
                     recommendedSize="1200 x 675 px (16:9)"
                     storagePath="events/cards"
-                    previewUrl={newEvent.cardImage || newEvent.poster}
+                    previewUrl={newEvent.cardImage}
                     onUploadStateChange={handleUploadStateChange}
                     onUrlChange={(url) => {
-                      setNewEvent({ ...newEvent, cardImage: url, poster: newEvent.poster || url });
+                      setNewEvent((prev) => ({ ...prev, cardImage: url }));
                     }}
                   />
                 </div>
@@ -1194,10 +1197,10 @@ export default function AdminEventsPage() {
                     aspectRatio="4:5"
                     recommendedSize="1080 x 1350 px (4:5)"
                     storagePath="events/posters"
-                    previewUrl={newEvent.posterImage || newEvent.poster}
+                    previewUrl={newEvent.posterImage}
                     onUploadStateChange={handleUploadStateChange}
                     onUrlChange={(url) => {
-                      setNewEvent({ ...newEvent, posterImage: url, poster: url });
+                      setNewEvent((prev) => ({ ...prev, posterImage: url, poster: url || prev.poster }));
                     }}
                   />
                 </div>
@@ -1210,10 +1213,10 @@ export default function AdminEventsPage() {
                     aspectRatio="21:9"
                     recommendedSize="1920 x 820 px (21:9)"
                     storagePath="events/headers"
-                    previewUrl={newEvent.headerImage || newEvent.cardImage || newEvent.poster}
+                    previewUrl={newEvent.headerImage}
                     onUploadStateChange={handleUploadStateChange}
                     onUrlChange={(url) => {
-                      setNewEvent({ ...newEvent, headerImage: url });
+                      setNewEvent((prev) => ({ ...prev, headerImage: url }));
                     }}
                   />
                 </div>
@@ -1724,10 +1727,10 @@ export default function AdminEventsPage() {
                     aspectRatio="16:9"
                     recommendedSize="1200 x 675 px (16:9)"
                     storagePath="events/cards"
-                    previewUrl={editForm.cardImage || editForm.poster}
+                    previewUrl={editForm.cardImage}
                     onUploadStateChange={handleUploadStateChange}
                     onUrlChange={(url) => {
-                      setEditForm({ ...editForm, cardImage: url, poster: editForm.poster || url });
+                      setEditForm((prev) => ({ ...prev, cardImage: url }));
                     }}
                   />
                 </div>
@@ -1740,10 +1743,10 @@ export default function AdminEventsPage() {
                     aspectRatio="4:5"
                     recommendedSize="1080 x 1350 px (4:5)"
                     storagePath="events/posters"
-                    previewUrl={editForm.posterImage || editForm.poster}
+                    previewUrl={editForm.posterImage}
                     onUploadStateChange={handleUploadStateChange}
                     onUrlChange={(url) => {
-                      setEditForm({ ...editForm, posterImage: url, poster: url });
+                      setEditForm((prev) => ({ ...prev, posterImage: url, poster: url || prev.poster }));
                     }}
                   />
                 </div>
@@ -1756,10 +1759,10 @@ export default function AdminEventsPage() {
                     aspectRatio="21:9"
                     recommendedSize="1920 x 820 px (21:9)"
                     storagePath="events/headers"
-                    previewUrl={editForm.headerImage || editForm.cardImage || editForm.poster}
+                    previewUrl={editForm.headerImage}
                     onUploadStateChange={handleUploadStateChange}
                     onUrlChange={(url) => {
-                      setEditForm({ ...editForm, headerImage: url });
+                      setEditForm((prev) => ({ ...prev, headerImage: url }));
                     }}
                   />
                 </div>
