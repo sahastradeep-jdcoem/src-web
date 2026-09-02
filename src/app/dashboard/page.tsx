@@ -75,63 +75,97 @@ export default function StudentDashboardPage() {
       const cleanBtId = user?.btId?.trim().toUpperCase();
       const cleanName = user?.displayName?.trim().toLowerCase();
 
-      // 1. Filter out records for deleted events (e.g. Code Strom or anything not matching active events)
+      // 1. Filter out records for deleted events (e.g. legacy Code Strom if it was deleted)
       const validRecords = rawRecords.filter((r: any) => {
+        if (!r || !r.id) return false;
         const eventId = (r.eventId || "").toLowerCase();
         const eventTitle = (r.eventTitle || "").toLowerCase().trim();
-        const regId = (r.id || "").toLowerCase();
 
-        // Explicitly purge Code Strom / codestorm if it was deleted
-        if (eventTitle.includes("strom") || eventId.includes("strom") || regId.includes("cod-")) {
+        // Explicitly purge legacy Code Strom / codestorm only if it is no longer published
+        if (eventTitle.includes("strom") || eventId.includes("strom")) {
           const isStillPublished = activeStoredEvents.some(e => 
             e.name.toLowerCase().includes("strom") || e.slug.toLowerCase().includes("strom")
           );
           if (!isStillPublished) return false;
         }
 
-        // Must match at least one published event in current system
-        return activeStoredEvents.some(e =>
-          e.id.toLowerCase() === eventId ||
-          e.slug.toLowerCase() === eventId ||
-          e.name.toLowerCase().trim() === eventTitle ||
-          eventId.includes(e.slug.toLowerCase()) ||
-          e.slug.toLowerCase().includes(eventId)
-        );
+        // Must match at least one published event in current system (or preserve valid registered events)
+        if (activeStoredEvents.length > 0) {
+          const matchesActive = activeStoredEvents.some(e =>
+            e.id.toLowerCase() === eventId ||
+            e.slug.toLowerCase() === eventId ||
+            e.name.toLowerCase().trim() === eventTitle ||
+            eventId.includes(e.slug.toLowerCase()) ||
+            e.slug.toLowerCase().includes(eventId) ||
+            e.name.toLowerCase().includes(eventTitle) ||
+            eventTitle.includes(e.name.toLowerCase())
+          );
+          return matchesActive || Boolean(r.eventTitle || r.eventName);
+        }
+
+        return true;
       });
 
-      // 2. Filter records that specifically belong to this authenticated student
+      // 2. Filter records that specifically belong to this authenticated student (as leader OR squad member)
       const userMatched = validRecords.filter((r: any) => {
-        if (!cleanEmail && !cleanBtId) return true;
+        if (!cleanEmail && !cleanBtId && !cleanName) return true;
 
         const rEmail = (r.email || "").trim().toLowerCase();
         const rBtId = (r.btId || "").trim().toUpperCase();
         const rLeader = (r.leaderName || r.participantName || "").trim().toLowerCase();
 
+        // Check if primary leader / registrant
         if (cleanEmail && rEmail === cleanEmail) return true;
         if (cleanBtId && rBtId === cleanBtId) return true;
-        if (cleanName && rLeader === cleanName) return true;
+        if (cleanName && (rLeader === cleanName || rLeader.includes(cleanName) || cleanName.includes(rLeader))) return true;
 
-        // Check if member of squad
-        if (Array.isArray(r.teamMembers)) {
-          return r.teamMembers.some((m: any) => {
+        // Check if member of squad / team roster
+        const membersList = Array.isArray(r.teamMembers) 
+          ? r.teamMembers 
+          : Array.isArray(r.members) 
+          ? r.members 
+          : [];
+
+        if (membersList.length > 0) {
+          const isMember = membersList.some((m: any) => {
+            if (!m) return false;
             if (typeof m === "string") {
-              return (cleanBtId && m.toUpperCase().includes(cleanBtId)) || (cleanName && m.toLowerCase().includes(cleanName));
+              const mUpper = m.toUpperCase().trim();
+              const mLower = m.toLowerCase().trim();
+              return (
+                (cleanBtId && mUpper.includes(cleanBtId)) ||
+                (cleanEmail && mLower.includes(cleanEmail)) ||
+                (cleanName && (mLower.includes(cleanName) || cleanName.includes(mLower)))
+              );
             }
-            if (typeof m === "object" && m !== null) {
-              return (cleanBtId && m.btId?.toUpperCase() === cleanBtId) || (cleanEmail && m.email?.toLowerCase() === cleanEmail);
+            if (typeof m === "object") {
+              const mBtId = (m.btId || "").toUpperCase().trim();
+              const mEmail = (m.email || "").toLowerCase().trim();
+              const mName = (m.name || m.displayName || "").toLowerCase().trim();
+              return (
+                (cleanBtId && (mBtId === cleanBtId || mBtId.includes(cleanBtId) || cleanBtId.includes(mBtId))) ||
+                (cleanEmail && (mEmail === cleanEmail || mEmail.includes(cleanEmail))) ||
+                (cleanName && (mName === cleanName || mName.includes(cleanName) || cleanName.includes(mName)))
+              );
             }
             return false;
           });
+          if (isMember) return true;
         }
+
         return false;
       });
 
       // 3. Deduplicate by event (if multiple exist for the same event, keep the latest or checked-in one)
       const eventMap = new Map<string, any>();
       userMatched.forEach((r: any) => {
-        const evKey = (r.eventId || r.eventTitle || r.id).toLowerCase();
+        const evKey = (r.eventId || r.eventTitle || r.id).toLowerCase().trim();
         const existing = eventMap.get(evKey);
-        if (!existing || r.status === "CHECKED_IN") {
+        if (!existing) {
+          eventMap.set(evKey, r);
+        } else if (r.status === "CHECKED_IN" && existing.status !== "CHECKED_IN") {
+          eventMap.set(evKey, r);
+        } else if (new Date(r.paidAt || r.registeredAt || 0).getTime() > new Date(existing.paidAt || existing.registeredAt || 0).getTime()) {
           eventMap.set(evKey, r);
         }
       });
@@ -148,7 +182,9 @@ export default function StudentDashboardPage() {
         year: r.year,
         teamType: (r.teamSize && r.teamSize > 1) || r.teamType === "Team" ? "Team" : "Individual",
         teamName: r.teamName,
-        teamMembers: r.teamMembers ? r.teamMembers.map((m: any) => typeof m === "string" ? m : `${m.name} (${m.btId})`) : r.members?.map((m: any) => m.name),
+        teamMembers: r.teamMembers 
+          ? r.teamMembers.map((m: any) => typeof m === "string" ? m : `${m.name}${m.btId ? ` (${m.btId})` : ""}`) 
+          : r.members?.map((m: any) => typeof m === "string" ? m : m.name),
         registeredAt: r.registeredAt || (r.paidAt ? new Date(r.paidAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]),
         status: r.status || "CONFIRMED",
         paymentStatus: r.paymentStatus || (r.amountPaid > 0 ? "PAID" : "FREE"),
@@ -170,13 +206,17 @@ export default function StudentDashboardPage() {
           remoteRecords = await getAllRegistrationsFromFirestore();
         }
 
-        if (remoteRecords && Array.isArray(remoteRecords)) {
-          allRecords = remoteRecords;
-          // Purge deleted records from local storage cache
-          localStorage.setItem("src_local_registrations", JSON.stringify(remoteRecords));
-        } else {
-          allRecords = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+        // Merge remote and local records by registration ID to guarantee no passes are lost
+        const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+        const map = new Map<string, any>();
+        if (Array.isArray(local)) {
+          local.forEach((r: any) => { if (r?.id) map.set(r.id, r); });
         }
+        if (remoteRecords && Array.isArray(remoteRecords)) {
+          remoteRecords.forEach((r: any) => { if (r?.id) map.set(r.id, r); });
+        }
+        allRecords = Array.from(map.values());
+        localStorage.setItem("src_local_registrations", JSON.stringify(allRecords));
 
         const formatted = formatStudentRecords(allRecords, storedEvents);
         setRegistrations(formatted);
