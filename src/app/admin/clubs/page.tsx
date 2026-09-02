@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { getStoredClubs, saveStoredClubs, syncClubsFromFirestore, getClubLeaders } from "@/lib/councilStore";
 import { compactClubDataset } from "@/lib/dataSyncEngine";
-import { getStoredTenures, updateTenureRoster, CouncilTenure } from "@/lib/tenureStore";
+import { getStoredTenures, updateTenureRoster, syncTenuresFromFirestore, CouncilTenure } from "@/lib/tenureStore";
 import { getStoredDepartments, syncDepartmentsFromFirestore, getDepartmentShortName } from "@/lib/departmentsStore";
 import { mockClubs } from "@/data/clubs";
 import { ClubItem } from "@/types";
@@ -67,6 +67,10 @@ export default function AdminClubsPage() {
   useEffect(() => {
     loadData();
     setDepartmentsList(getStoredDepartments());
+
+    syncTenuresFromFirestore().then((res) => {
+      if (res) loadData();
+    });
 
     syncClubsFromFirestore().then((res) => {
       if (res && Array.isArray(res) && res.length > 0) {

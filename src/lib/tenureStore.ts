@@ -53,6 +53,55 @@ export const initialDefaultTenures: CouncilTenure[] = [
     events: mockEvents,
     archiveNotes: "The 1st & Founding Tenure of Sahastradeep, uniting all 12 collegiate societies at JDCOEM under one central autonomous student council constitution.",
     createdAt: "2025-09-24T00:00:00Z"
+  },
+  {
+    id: "tenure-2026-27",
+    label: "2026-27",
+    academicYear: "2026 - 2027",
+    tenureNumber: "2nd Tenure",
+    theme: "Vibrance & Future Horizons",
+    isCurrent: false,
+    adminCouncil: [
+      {
+        id: "admin-2026-mentor",
+        name: "Mentor (Appointee)",
+        role: "Mentor",
+        department: "Computer Science and Engineering",
+        year: "4th Year",
+        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
+        bio: "Guiding 2026-27 institutional oversight and council governance.",
+        email: "mentor@jdcoem.ac.in",
+        order: 1
+      },
+      {
+        id: "admin-2026-president",
+        name: "President (Appointee)",
+        role: "President",
+        department: "Artificial Intelligence Engineering",
+        year: "4th Year",
+        avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
+        bio: "Presiding over the 2026-27 Student Representative Council.",
+        email: "president@jdcoem.ac.in",
+        order: 2
+      },
+      {
+        id: "admin-2026-vp",
+        name: "Vice President (Appointee)",
+        role: "Vice President",
+        department: "Information Technology",
+        year: "4th Year",
+        avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=600&auto=format&fit=crop",
+        bio: "Executive coordination and student council operations for 2026-27.",
+        email: "vp@jdcoem.ac.in",
+        order: 3
+      }
+    ],
+    hostingCommittee: [],
+    foundingMembers: foundingMembers,
+    clubs: mockClubs,
+    events: [],
+    archiveNotes: "Pre-configured roster for upcoming session 2026 - 2027.",
+    createdAt: "2026-09-01T00:00:00Z"
   }
 ];
 
@@ -72,6 +121,14 @@ export function getStoredTenures(): CouncilTenure[] {
         if (Array.isArray(parsed) && parsed.length > 0) {
           // Filter out any legacy pre-2025 mock tenures
           parsed = parsed.filter((t: CouncilTenure) => t.id !== "tenure-2024-25" && !t.label.includes("2024"));
+          
+          // Ensure standard default tenures (like 2026-27 draft) are never missing
+          for (const def of initialDefaultTenures) {
+            if (!parsed.some((p: CouncilTenure) => p.id === def.id || p.label === def.label)) {
+              parsed.push(def);
+            }
+          }
+
           if (parsed.length > 0) {
             list = parsed;
           }
@@ -305,8 +362,9 @@ export function createNewDraftTenure(
       ]
     : [];
 
+  const deterministicId = `tenure-${label.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
   const draftTenure: CouncilTenure = {
-    id: `tenure-${label.toLowerCase().replace(/[^a-z0-9]/g, "-")}-${Date.now()}`,
+    id: deterministicId,
     label,
     academicYear,
     tenureNumber,
@@ -321,9 +379,24 @@ export function createNewDraftTenure(
     createdAt: new Date().toISOString()
   };
 
-  const finalTenures = [...tenures, draftTenure];
+  const existingIdx = tenures.findIndex((t) => t.id === deterministicId || t.label.trim().toLowerCase() === label.trim().toLowerCase());
+  let finalTenures: CouncilTenure[];
+  if (existingIdx >= 0) {
+    finalTenures = [...tenures];
+    finalTenures[existingIdx] = {
+      ...finalTenures[existingIdx],
+      academicYear,
+      theme,
+      adminCouncil: finalTenures[existingIdx].adminCouncil && finalTenures[existingIdx].adminCouncil.length > 0 
+        ? finalTenures[existingIdx].adminCouncil 
+        : newAdminCouncil,
+    };
+  } else {
+    finalTenures = [...tenures, draftTenure];
+  }
+
   saveStoredTenures(finalTenures);
-  return draftTenure;
+  return existingIdx >= 0 ? finalTenures[existingIdx] : draftTenure;
 }
 
 /**
@@ -349,11 +422,17 @@ export async function syncTenuresFromFirestore(): Promise<CouncilTenure[]> {
       const current = getStoredTenures();
       const merged = reconcileArrayDatasets(current, filtered);
       
+      // CRITICAL: Ensure all standard default tenures are present
+      for (const def of initialDefaultTenures) {
+        if (!merged.some((m: CouncilTenure) => m.id === def.id || m.label === def.label)) {
+          merged.push(def);
+        }
+      }
+      
       // CRITICAL: Ensure locally-created draft tenures are NEVER dropped during sync
-      // Draft tenures (isCurrent === false) that exist locally but not in the merged result must be re-added
       const localDrafts = current.filter((t) => !t.isCurrent);
       for (const draft of localDrafts) {
-        if (!merged.some((m: any) => m.id === draft.id)) {
+        if (!merged.some((m: any) => m.id === draft.id || m.label === draft.label)) {
           merged.push(draft);
         }
       }
@@ -378,10 +457,17 @@ export function subscribeToTenures(callback: (tenures: CouncilTenure[]) => void)
       const current = getStoredTenures();
       const merged = reconcileArrayDatasets(current, filtered);
       
+      // CRITICAL: Ensure all standard default tenures are present
+      for (const def of initialDefaultTenures) {
+        if (!merged.some((m: CouncilTenure) => m.id === def.id || m.label === def.label)) {
+          merged.push(def);
+        }
+      }
+
       // CRITICAL: Preserve locally-created draft tenures during realtime sync
       const localDrafts = current.filter((t) => !t.isCurrent);
       for (const draft of localDrafts) {
-        if (!merged.some((m: any) => m.id === draft.id)) {
+        if (!merged.some((m: any) => m.id === draft.id || m.label === draft.label)) {
           merged.push(draft);
         }
       }

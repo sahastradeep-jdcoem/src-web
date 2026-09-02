@@ -54,6 +54,7 @@ import {
   getCurrentTenure, 
   switchActiveTenure, 
   updateTenureRoster,
+  syncTenuresFromFirestore,
   CouncilTenure 
 } from "@/lib/tenureStore";
 import { getStoredDepartments, syncDepartmentsFromFirestore, getDepartmentShortName } from "@/lib/departmentsStore";
@@ -126,6 +127,9 @@ export default function AdminTeamPage() {
     loadData();
     setDepartmentsList(getStoredDepartments());
 
+    syncTenuresFromFirestore().then((res) => {
+      if (res) loadData();
+    });
     syncCouncilMembersFromFirestore().then((res) => {
       if (res) loadData();
     });
@@ -183,15 +187,10 @@ export default function AdminTeamPage() {
       setHostingMembers(targetTenure.hostingCommittee || []);
       setFoundingMembersList(targetTenure.foundingMembers || getStoredFoundingMembers());
     }
-  };
-
-  const handleActivateThisTenure = () => {
-    if (!selectedTenure) return;
-    if (confirm(`Activate Tenure ${selectedTenure.label} live right now? The public website will immediately display this new council team and events!`)) {
-      switchActiveTenure(selectedTenure.id);
-      loadData();
-      setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 3000);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tenure", tId);
+      window.history.replaceState({}, "", url.toString());
     }
   };
 
@@ -265,6 +264,10 @@ export default function AdminTeamPage() {
       updateTenureRoster(selectedTenure.id, {
         [activeTab === "council" ? "adminCouncil" : activeTab === "hosting" ? "hostingCommittee" : "foundingMembers"]: indexed
       });
+      setTenures((prev) => prev.map((t) => t.id === selectedTenure.id ? {
+        ...t,
+        [activeTab === "council" ? "adminCouncil" : activeTab === "hosting" ? "hostingCommittee" : "foundingMembers"]: indexed
+      } : t));
     }
 
     setIsSaved(true);
@@ -621,13 +624,12 @@ export default function AdminTeamPage() {
               <p>
                 <strong>Draft Mode Active:</strong> You are editing the upcoming roster for <strong>{selectedTenure.label} ({selectedTenure.academicYear})</strong>. All additions and edits will be saved to this draft without affecting the live site.
               </p>
-              <button
-                type="button"
-                onClick={handleActivateThisTenure}
-                className="px-3 py-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] uppercase tracking-wider shrink-0 cursor-pointer"
+              <Link
+                href="/admin/tenures"
+                className="px-3 py-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] uppercase tracking-wider shrink-0 transition-colors"
               >
-                Publish &amp; Make Live Tenure &rarr;
-              </button>
+                Go to Tenures &amp; Archive to Activate &rarr;
+              </Link>
             </div>
             <p className="text-[11px] text-amber-700 leading-relaxed">
               Use the <strong>&quot;+ Add New Position / Officer&quot;</strong> button above to add President, VP, Mentors, and Heads. Edit existing members by clicking their <strong>&quot;Edit Details&quot;</strong> button. Changes are auto-saved to this draft.
