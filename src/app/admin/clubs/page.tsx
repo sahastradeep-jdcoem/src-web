@@ -181,9 +181,15 @@ export default function AdminClubsPage() {
       ? editingClub.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
       : editingClub.slug;
 
+    const defaultHero = editingClub.headerImage || editingClub.cardImage || editingClub.heroImage || "https://images.unsplash.com/photo-1547153760-18fc86324498?q=80&w=1600&auto=format&fit=crop";
+
     const clubToSave: ClubItem = {
       ...editingClub,
       slug: cleanSlug,
+      heroImage: defaultHero,
+      cardImage: editingClub.cardImage || defaultHero,
+      headerImage: editingClub.headerImage || defaultHero,
+      logoImage: editingClub.logoImage || "",
     };
 
     let updated: ClubItem[];
@@ -741,14 +747,14 @@ export default function AdminClubsPage() {
                   <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
                     <ImageUploadDropzone
                       label="1. Directory Card"
-                      sublabel="For /clubs directory grid"
+                      sublabel="For /clubs directory grid (16:9)"
                       aspectRatio="16:9"
                       recommendedSize="1200 x 675 px (16:9)"
                       storagePath="clubs/cards"
-                      previewUrl={editingClub.cardImage || editingClub.heroImage}
+                      previewUrl={editingClub.cardImage}
                       onUploadStateChange={handleUploadStateChange}
                       onUrlChange={(url) => {
-                        setEditingClub((prev) => (prev ? { ...prev, cardImage: url, heroImage: prev.heroImage || url } : null));
+                        setEditingClub((prev) => (prev ? { ...prev, cardImage: url } : null));
                       }}
                     />
                   </div>
@@ -757,14 +763,14 @@ export default function AdminClubsPage() {
                   <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
                     <ImageUploadDropzone
                       label="2. Header Banner"
-                      sublabel="Backdrop on /clubs/[slug]"
+                      sublabel="Cinematic backdrop on /clubs/[slug]"
                       aspectRatio="21:9"
                       recommendedSize="1920 x 820 px (21:9)"
                       storagePath="clubs/headers"
-                      previewUrl={editingClub.headerImage || editingClub.heroImage}
+                      previewUrl={editingClub.headerImage}
                       onUploadStateChange={handleUploadStateChange}
                       onUrlChange={(url) => {
-                        setEditingClub((prev) => (prev ? { ...prev, headerImage: url, heroImage: url } : null));
+                        setEditingClub((prev) => (prev ? { ...prev, headerImage: url } : null));
                       }}
                     />
                   </div>
@@ -773,11 +779,11 @@ export default function AdminClubsPage() {
                   <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
                     <ImageUploadDropzone
                       label="3. Official Club Logo"
-                      sublabel="Circle shape PNG without background"
+                      sublabel="Circular insignia emblem (1:1)"
                       aspectRatio="1:1"
                       recommendedSize="500 x 500 px (Circle PNG)"
                       storagePath="clubs/logos"
-                      previewUrl={editingClub.logoImage || ""}
+                      previewUrl={editingClub.logoImage}
                       onUploadStateChange={handleUploadStateChange}
                       onUrlChange={(url) => {
                         setEditingClub((prev) => (prev ? { ...prev, logoImage: url } : null));
