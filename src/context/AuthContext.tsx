@@ -91,19 +91,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ? designationInfo.designationBadge 
           : (storedProfile?.designationBadge || localProfile?.designationBadge || registeredUser?.designationBadge);
 
+        const baseObj = { ...registeredUser, ...localProfile, ...storedProfile };
+
+        const resolvedUserType = storedProfile?.userType || localProfile?.userType || registeredUser?.userType || 
+          (storedProfile?.role === "FACULTY" || localProfile?.role === "FACULTY" ? "FACULTY" : 
+          (storedProfile?.collegeName || localProfile?.collegeName || !fbUser.isCollegeStudent) ? "EXTERNAL_STUDENT" : "JDCOEM_STUDENT");
+
         const merged: AuthUser = {
+          ...baseObj,
           uid: fbUser.uid,
           email: fbUser.email,
-          displayName: storedProfile?.displayName || localProfile?.displayName || registeredUser?.displayName || fbUser.displayName || fbUser.email?.split("@")[0] || "JDCOEM Student",
+          displayName: storedProfile?.displayName || localProfile?.displayName || registeredUser?.displayName || fbUser.displayName || fbUser.email?.split("@")[0] || "Student",
           photoURL: fbUser.photoURL || storedProfile?.photoURL || localProfile?.photoURL || registeredUser?.photoURL || null,
           role: assignedRole,
-          isCollegeStudent: fbUser.isCollegeStudent,
+          userType: resolvedUserType as any,
+          isCollegeStudent: resolvedUserType === "EXTERNAL_STUDENT" ? false : fbUser.isCollegeStudent,
           firstName: storedProfile?.firstName || localProfile?.firstName || registeredUser?.firstName || (fbUser.displayName ? fbUser.displayName.split(" ")[0] : ""),
           lastName: storedProfile?.lastName || localProfile?.lastName || registeredUser?.lastName || (fbUser.displayName ? fbUser.displayName.split(" ").slice(1).join(" ") : ""),
           btId: cleanBt,
-          department: storedProfile?.department || localProfile?.department || registeredUser?.department || "Computer Science and Engineering",
+          department: storedProfile?.department || localProfile?.department || registeredUser?.department || (resolvedUserType === "EXTERNAL_STUDENT" ? (storedProfile?.degree || localProfile?.degree || "Undergraduate") : "Computer Science and Engineering"),
           year: storedProfile?.year || localProfile?.year || registeredUser?.year || "3rd Year",
           phone: storedProfile?.phone || localProfile?.phone || registeredUser?.phone || "",
+          collegeName: storedProfile?.collegeName || localProfile?.collegeName || registeredUser?.collegeName || "",
+          city: storedProfile?.city || localProfile?.city || registeredUser?.city || "",
+          degree: storedProfile?.degree || localProfile?.degree || registeredUser?.degree || storedProfile?.customBranch || localProfile?.customBranch || registeredUser?.customBranch || "",
+          customBranch: storedProfile?.customBranch || localProfile?.customBranch || registeredUser?.customBranch || storedProfile?.degree || localProfile?.degree || registeredUser?.degree || "",
+          title: storedProfile?.title || localProfile?.title || registeredUser?.title,
+          facultyDesignation: storedProfile?.facultyDesignation || localProfile?.facultyDesignation || registeredUser?.facultyDesignation,
+          facultyDepartment: storedProfile?.facultyDepartment || localProfile?.facultyDepartment || registeredUser?.facultyDepartment,
+          facultyApprovalStatus: storedProfile?.facultyApprovalStatus || localProfile?.facultyApprovalStatus || registeredUser?.facultyApprovalStatus,
+          employeeId: storedProfile?.employeeId || localProfile?.employeeId || registeredUser?.employeeId,
           profileCompleted: isCompleted,
           designationBadge: assignedBadge,
           isCouncilOfficer: designationInfo ? true : Boolean(storedProfile?.isCouncilOfficer || localProfile?.isCouncilOfficer || registeredUser?.isCouncilOfficer),
@@ -113,8 +130,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem("src_auth_user", JSON.stringify(merged));
         saveRegisteredUser(merged);
 
-        // Only open modal if user has NEVER set a BT ID or completed profile
-        if (!isCompleted && !resolvedBtId) {
+        const isExternalStudent = merged.userType === "EXTERNAL_STUDENT" || merged.isCollegeStudent === false;
+        if (!isCompleted && !resolvedBtId && !isExternalStudent) {
+          setIsProfileModalOpen(true);
+        } else if (!isCompleted) {
           setIsProfileModalOpen(true);
         } else {
           setIsProfileModalOpen(false);

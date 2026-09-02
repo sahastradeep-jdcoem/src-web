@@ -245,18 +245,31 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
       const assignedBadge = designationInfo ? designationInfo.designationBadge : r.designationBadge;
 
       const record: RegisteredUserRecord = {
+        ...r,
         uid: r.uid || `user-${Date.now()}`,
         email: r.email || "",
         displayName: r.displayName || `${r.firstName || ""} ${r.lastName || ""}`.trim() || "Student",
         photoURL: r.photoURL || null,
         role: assignedRole,
-        isCollegeStudent: r.isCollegeStudent ?? true,
+        userType: r.userType || (assignedRole === "FACULTY" ? "FACULTY" : cleanBtId ? "JDCOEM_STUDENT" : "EXTERNAL_STUDENT"),
+        isCollegeStudent: r.isCollegeStudent !== undefined ? r.isCollegeStudent : (assignedRole === "FACULTY" ? true : Boolean(cleanBtId)),
         firstName: r.firstName || "",
         lastName: r.lastName || "",
         btId: cleanBtId,
         department: r.department || "Computer Science and Engineering",
         year: r.year || "3rd Year",
         phone: r.phone || "",
+        collegeName: r.collegeName || "",
+        city: r.city || "",
+        degree: r.degree || r.customBranch || "",
+        customBranch: r.customBranch || r.degree || "",
+        title: r.title,
+        facultyDesignation: r.facultyDesignation,
+        facultyDepartment: r.facultyDepartment,
+        facultyApprovalStatus: r.facultyApprovalStatus,
+        facultyApprovedAt: r.facultyApprovedAt,
+        facultyApprovedBy: r.facultyApprovedBy,
+        employeeId: r.employeeId,
         profileCompleted: r.profileCompleted ?? true,
         designationBadge: assignedBadge,
         isCouncilOfficer: designationInfo ? true : Boolean(r.isCouncilOfficer),
@@ -306,50 +319,54 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
   try {
     const current = getStoredUsers();
     const existingIndex = current.findIndex((u) => u.uid === user.uid || (user.email && u.email === user.email));
+    const existing = existingIndex >= 0 ? current[existingIndex] : null;
     
     // Resolve designation badge based on BT ID
-    const cleanBtId = user.btId ? user.btId.trim().toUpperCase() : "";
+    const cleanBtId = (user.btId !== undefined ? user.btId : existing?.btId || "").trim().toUpperCase();
     const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId) : null;
 
-    const assignedRole = user.role || (existingIndex >= 0 ? current[existingIndex].role : "STUDENT");
-    const assignedBadge = designationInfo ? designationInfo.designationBadge : user.designationBadge;
-    const isOfficer = designationInfo ? true : Boolean(user.isCouncilOfficer);
+    const assignedRole = user.role || existing?.role || "STUDENT";
+    const assignedBadge = designationInfo ? designationInfo.designationBadge : (user.designationBadge || existing?.designationBadge);
+    const isOfficer = designationInfo ? true : Boolean(user.isCouncilOfficer || existing?.isCouncilOfficer);
 
     const now = new Date().toISOString();
     const record: RegisteredUserRecord = {
+      ...(existing || {}),
+      ...user,
       uid: user.uid,
-      email: user.email || "",
-      displayName: user.displayName || `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Student",
-      photoURL: user.photoURL || null,
+      email: user.email || existing?.email || "",
+      displayName: user.displayName || existing?.displayName || `${user.firstName || existing?.firstName || ""} ${user.lastName || existing?.lastName || ""}`.trim() || "Student",
+      photoURL: user.photoURL !== undefined ? user.photoURL : (existing?.photoURL || null),
       role: assignedRole,
-      userType: user.userType || (assignedRole === "FACULTY" ? "FACULTY" : cleanBtId ? "JDCOEM_STUDENT" : "EXTERNAL_STUDENT"),
-      isCollegeStudent: user.isCollegeStudent !== undefined ? user.isCollegeStudent : (assignedRole === "FACULTY" ? true : Boolean(cleanBtId)),
-      firstName: user.firstName || "",
-      lastName: user.lastName || "",
+      userType: user.userType || existing?.userType || (assignedRole === "FACULTY" ? "FACULTY" : cleanBtId ? "JDCOEM_STUDENT" : "EXTERNAL_STUDENT"),
+      isCollegeStudent: user.isCollegeStudent !== undefined ? user.isCollegeStudent : (existing?.isCollegeStudent !== undefined ? existing.isCollegeStudent : (assignedRole === "FACULTY" ? true : Boolean(cleanBtId))),
+      firstName: user.firstName !== undefined ? user.firstName : (existing?.firstName || ""),
+      lastName: user.lastName !== undefined ? user.lastName : (existing?.lastName || ""),
       btId: cleanBtId,
-      department: user.department || "Basic Science & Humanities Dept.",
-      year: user.year || "1st Year",
-      phone: user.phone || "",
-      profileCompleted: user.profileCompleted !== undefined ? user.profileCompleted : true,
+      department: user.department || existing?.department || "Basic Science & Humanities Dept.",
+      year: user.year || existing?.year || "1st Year",
+      phone: user.phone !== undefined ? user.phone : (existing?.phone || ""),
+      profileCompleted: user.profileCompleted !== undefined ? user.profileCompleted : (existing?.profileCompleted !== undefined ? existing.profileCompleted : true),
       designationBadge: assignedBadge,
       isCouncilOfficer: isOfficer,
 
       // Faculty fields
-      title: user.title,
-      facultyDesignation: user.facultyDesignation,
-      facultyDepartment: user.facultyDepartment,
-      facultyApprovalStatus: user.facultyApprovalStatus || (assignedRole === "FACULTY" ? "pending" : undefined),
-      facultyApprovedAt: user.facultyApprovedAt,
-      facultyApprovedBy: user.facultyApprovedBy,
-      employeeId: user.employeeId,
+      title: user.title !== undefined ? user.title : existing?.title,
+      facultyDesignation: user.facultyDesignation !== undefined ? user.facultyDesignation : existing?.facultyDesignation,
+      facultyDepartment: user.facultyDepartment !== undefined ? user.facultyDepartment : existing?.facultyDepartment,
+      facultyApprovalStatus: user.facultyApprovalStatus || existing?.facultyApprovalStatus || (assignedRole === "FACULTY" ? "pending" : undefined),
+      facultyApprovedAt: user.facultyApprovedAt || existing?.facultyApprovedAt,
+      facultyApprovedBy: user.facultyApprovedBy || existing?.facultyApprovedBy,
+      employeeId: user.employeeId !== undefined ? user.employeeId : existing?.employeeId,
 
       // External student fields
-      collegeName: user.collegeName,
-      city: user.city,
-      customBranch: user.customBranch,
+      collegeName: user.collegeName !== undefined ? user.collegeName : existing?.collegeName,
+      city: user.city !== undefined ? user.city : existing?.city,
+      degree: user.degree || user.customBranch || existing?.degree || existing?.customBranch || "",
+      customBranch: user.customBranch || user.degree || existing?.customBranch || existing?.degree || "",
 
       lastActive: now,
-      createdAt: existingIndex >= 0 ? current[existingIndex].createdAt || now : now,
+      createdAt: existing?.createdAt || now,
     };
 
     let updated: RegisteredUserRecord[];
