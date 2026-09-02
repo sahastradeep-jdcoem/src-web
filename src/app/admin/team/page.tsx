@@ -96,10 +96,19 @@ export default function AdminTeamPage() {
     setTenures(list);
     const active = list.find((t) => t.isCurrent) || list[0];
     
-    // Default to active tenure if not yet set or not in list
-    const currentId = selectedTenureId && list.some((t) => t.id === selectedTenureId)
-      ? selectedTenureId
-      : active?.id || "tenure-2025-26";
+    // Check URL query param for direct tenure navigation (e.g. /admin/team?tenure=xyz)
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlTenureId = urlParams.get("tenure");
+    
+    // Priority: URL param > already selected > active tenure > default
+    let currentId: string;
+    if (urlTenureId && list.some((t) => t.id === urlTenureId)) {
+      currentId = urlTenureId;
+    } else if (selectedTenureId && list.some((t) => t.id === selectedTenureId)) {
+      currentId = selectedTenureId;
+    } else {
+      currentId = active?.id || "tenure-2025-26";
+    }
       
     setSelectedTenureId(currentId);
 

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { 
   Calendar, 
   Sparkles, 
@@ -32,6 +33,7 @@ interface TenureSwitcherModalProps {
 }
 
 export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProps) {
+  const router = useRouter();
   const [tenures, setTenures] = useState<CouncilTenure[]>([]);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [newLabel, setNewLabel] = useState("2026-27");
@@ -70,12 +72,13 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
       return;
     }
 
-    createNewDraftTenure(newLabel.trim(), newAcademicYear.trim(), newTheme.trim(), startWithTemplate);
+    const newDraft = createNewDraftTenure(newLabel.trim(), newAcademicYear.trim(), newTheme.trim(), startWithTemplate);
     refresh();
-    setFeedback(`New draft tenure ${newLabel} created! You can now pre-configure its team roster in Council Leadership Studio.`);
+    setFeedback(`New draft tenure ${newLabel} created! Redirecting to team editor...`);
     setTimeout(() => {
       onClose();
-    }, 1500);
+      router.push(`/admin/team?tenure=${newDraft.id}`);
+    }, 1000);
   };
 
   const handleCreateAndActivate = (e: React.FormEvent) => {
@@ -181,7 +184,7 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
                     ) : (
                       <>
                         <Link
-                          href="/admin/team"
+                          href={`/admin/team?tenure=${t.id}`}
                           onClick={onClose}
                           className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-[#17458F] border border-slate-200 text-xs font-bold transition-all shadow-xs"
                         >

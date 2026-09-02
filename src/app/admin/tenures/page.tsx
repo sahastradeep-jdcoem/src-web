@@ -287,7 +287,7 @@ export default function AdminTenuresPage() {
                     <span>Admin Council ({selectedTenure.adminCouncil?.length || 0})</span>
                   </span>
                   <Link 
-                    href="/admin/team" 
+                    href={`/admin/team?tenure=${selectedTenure.id}`}
                     className="text-xs font-bold text-[#E78023] hover:underline flex items-center gap-1"
                   >
                     <span>{selectedTenure.isCurrent ? "Edit Live Team in Studio" : "Pre-Configure Team in Studio"} &rarr;</span>
