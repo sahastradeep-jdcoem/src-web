@@ -53,7 +53,6 @@ import {
   saveStoredTenures, 
   getCurrentTenure, 
   switchActiveTenure, 
-  createNewDraftTenure,
   updateTenureRoster,
   CouncilTenure 
 } from "@/lib/tenureStore";
@@ -82,9 +81,6 @@ export default function AdminTeamPage() {
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
-  const [isCreatingDraftTenure, setIsCreatingDraftTenure] = useState(false);
-  const [draftLabel, setDraftLabel] = useState("2026-27");
-  const [draftAcademicYear, setDraftAcademicYear] = useState("2026 - 2027");
   const [pendingUploads, setPendingUploads] = useState(0);
 
   const handleUploadStateChange = (uploading: boolean) => {
@@ -187,17 +183,6 @@ export default function AdminTeamPage() {
       setHostingMembers(targetTenure.hostingCommittee || []);
       setFoundingMembersList(targetTenure.foundingMembers || getStoredFoundingMembers());
     }
-  };
-
-  const handleCreateDraftTenure = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!draftLabel.trim()) return;
-    const newDraft = createNewDraftTenure(draftLabel.trim(), draftAcademicYear.trim(), "Empowerment & Innovation", true);
-    setIsCreatingDraftTenure(false);
-    setSelectedTenureId(newDraft.id);
-    loadData();
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
   };
 
   const handleActivateThisTenure = () => {
@@ -588,29 +573,16 @@ export default function AdminTeamPage() {
               SELECT TENURE SESSION:
             </span>
             <span className="text-[11px] text-slate-500 font-medium">
-              (Pre-configure upcoming teams in advance or edit live roster)
+              (Switch between live roster and draft sessions)
             </span>
           </div>
 
-          {isDraftTenure ? (
-            <button
-              type="button"
-              onClick={handleOpenAddModal}
-              className="px-3 py-2 rounded-xl text-xs font-bold text-white bg-[#E78023] hover:bg-[#D26E17] flex items-center gap-1.5 cursor-pointer transition-all shadow-xs"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Position to {selectedTenure?.label} Draft</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setIsCreatingDraftTenure(true)}
-              className="px-3 py-2 rounded-xl text-xs font-bold text-[#17458F] hover:text-white hover:bg-[#17458F] border border-[#17458F]/30 flex items-center gap-1.5 cursor-pointer transition-all"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Create Future Tenure Session</span>
-            </button>
-          )}
+          <Link
+            href="/admin/tenures"
+            className="text-[11px] font-bold text-slate-500 hover:text-[#17458F] flex items-center gap-1 transition-colors"
+          >
+            <span>Manage Tenures &rarr;</span>
+          </Link>
         </div>
 
         {/* Tenure Pills */}
@@ -1188,70 +1160,6 @@ export default function AdminTeamPage() {
               </div>
             </div>
 
-          </form>
-        </Modal>
-      )}
-
-      {/* Modal: Create Upcoming Tenure Session Draft */}
-      {isCreatingDraftTenure && (
-        <Modal
-          isOpen={isCreatingDraftTenure}
-          onClose={() => setIsCreatingDraftTenure(false)}
-          title="Create Upcoming Tenure Session Draft"
-          subtitle="Pre-build next year's council roster in advance without affecting the live website"
-        >
-          <form onSubmit={handleCreateDraftTenure} className="space-y-4 text-xs">
-            <div className="space-y-1.5">
-              <label className="font-bold text-slate-700">Tenure Label (Short Code)</label>
-              <input
-                type="text"
-                placeholder="e.g. 2026-27"
-                value={draftLabel}
-                onChange={(e) => setDraftLabel(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
-                required
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="font-bold text-slate-700">Academic Year</label>
-              <input
-                type="text"
-                placeholder="e.g. 2026 - 2027"
-                value={draftAcademicYear}
-                onChange={(e) => setDraftAcademicYear(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
-                required
-              />
-            </div>
-
-            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] leading-relaxed">
-              <p className="font-bold">Draft Mode Guarantee:</p>
-              <p>
-                This will create a draft session where you can appoint the next President, Vice President, Mentors, and Heads in advance. The live site will continue showing Tenure {tenures.find(t => t.isCurrent)?.label || "2025-26"}.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setIsCreatingDraftTenure(false)}
-              >
-                Cancel
-              </Button>
-
-              <Button
-                type="submit"
-                variant="primary"
-                size="sm"
-                className="gap-1.5 bg-[#E78023] hover:bg-[#D26E17] text-white border-none"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Create Draft Session</span>
-              </Button>
-            </div>
           </form>
         </Modal>
       )}

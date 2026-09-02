@@ -17,8 +17,6 @@ import {
 import { 
   getStoredTenures, 
   getCurrentTenure, 
-  switchActiveTenure, 
-  createAndActivateNewTenure, 
   createNewDraftTenure,
   CouncilTenure 
 } from "@/lib/tenureStore";
@@ -56,15 +54,6 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
 
   const currentTenure = tenures.find((t) => t.isCurrent) || tenures[0];
 
-  const handleSwitchTenure = (tenureId: string, label: string) => {
-    switchActiveTenure(tenureId);
-    refresh();
-    setFeedback(`Active tenure switched to ${label}! Live team & events updated.`);
-    setTimeout(() => {
-      onClose();
-    }, 1500);
-  };
-
   const handleCreateDraftOnly = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLabel.trim() || !newAcademicYear.trim()) {
@@ -79,21 +68,6 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
       onClose();
       router.push(`/admin/team?tenure=${newDraft.id}`);
     }, 1000);
-  };
-
-  const handleCreateAndActivate = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newLabel.trim() || !newAcademicYear.trim()) {
-      alert("Please provide both a Tenure Label (e.g. 2026-27) and Academic Year.");
-      return;
-    }
-
-    createAndActivateNewTenure(newLabel.trim(), newAcademicYear.trim(), newTheme.trim(), startWithTemplate);
-    refresh();
-    setFeedback(`New tenure ${newLabel} created & activated! Old tenure safely archived.`);
-    setTimeout(() => {
-      onClose();
-    }, 1500);
   };
 
   if (!isOpen) return null;
@@ -182,21 +156,13 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
                         <span>Serving Now</span>
                       </span>
                     ) : (
-                      <>
-                        <Link
-                          href={`/admin/team?tenure=${t.id}`}
-                          onClick={onClose}
-                          className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-[#17458F] border border-slate-200 text-xs font-bold transition-all shadow-xs"
-                        >
-                          Edit Roster
-                        </Link>
-                        <button
-                          onClick={() => handleSwitchTenure(t.id, t.label)}
-                          className="px-3 py-1.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
-                        >
-                          Activate Live
-                        </button>
-                      </>
+                      <Link
+                        href={`/admin/team?tenure=${t.id}`}
+                        onClick={onClose}
+                        className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-[#17458F] border border-slate-200 text-xs font-bold transition-all shadow-xs"
+                      >
+                        Edit Draft Roster
+                      </Link>
                     )}
                   </div>
                 </div>
@@ -280,20 +246,11 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
               <Button 
                 type="button" 
                 onClick={handleCreateDraftOnly}
-                variant="secondary" 
-                size="sm"
-                className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200"
-              >
-                Save as Draft Roster (Pre-configure)
-              </Button>
-
-              <Button 
-                type="button" 
-                onClick={handleCreateAndActivate}
                 variant="primary" 
                 size="sm"
+                className="gap-1.5 bg-[#E78023] hover:bg-[#D26E17] text-white border-none"
               >
-                Create &amp; Activate Live
+                Save as Draft Roster (Pre-configure)
               </Button>
             </div>
           </form>
