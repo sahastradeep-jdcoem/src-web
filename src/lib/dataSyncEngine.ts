@@ -137,6 +137,28 @@ export async function compactEventDataset<T extends { poster?: string; cardImage
   return processed;
 }
 
+/**
+ * Recursively compacts any oversized base64 avatars in a council/team dataset
+ */
+export async function compactCouncilDataset<T extends { avatar?: string }>(
+  members: T[]
+): Promise<T[]> {
+  if (!Array.isArray(members)) return members;
+  const processed = await Promise.all(
+    members.map(async (m) => {
+      let av = m.avatar;
+      if (av && av.startsWith("data:image/") && av.length > 30000) {
+        av = await compactBase64Image(av, 400, 0.84);
+      }
+      return {
+        ...m,
+        avatar: av,
+      };
+    })
+  );
+  return processed;
+}
+
 export function stripBase64Images<T>(obj: T): T {
   if (obj === null || obj === undefined) return obj;
   if (typeof obj === "string") {
@@ -377,14 +399,29 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
       ].includes(k);
 
       if (isImageField) {
-        // 1. If remote has a valid non-empty image, remote ALWAYS wins
-        if (remoteVal && typeof remoteVal === "string" && remoteVal.trim() !== "") {
+        const isLocalValid = localVal && typeof localVal === "string" && localVal.trim() !== "";
+        const isRemoteValid = remoteVal && typeof remoteVal === "string" && remoteVal.trim() !== "";
+
+        if (!isRemoteValid && isLocalValid) {
+          result[k] = localVal;
+          continue;
+        }
+        if (!isLocalValid && isRemoteValid) {
           result[k] = remoteVal;
           continue;
         }
-        // 2. If remote is empty but local has an image (e.g. freshly uploaded), keep local
-        if (localVal && typeof localVal === "string" && localVal.trim() !== "") {
-          result[k] = localVal;
+        if (isLocalValid && isRemoteValid) {
+          const isRemoteUnsplash = remoteVal.includes("images.unsplash.com");
+          const isLocalCustom = !localVal.includes("images.unsplash.com");
+
+          // If local has a custom user-uploaded image but remote still has stock unsplash placeholder, keep local!
+          if (isLocalCustom && isRemoteUnsplash) {
+            result[k] = localVal;
+            continue;
+          }
+
+          // Otherwise remote is authoritative
+          result[k] = remoteVal;
           continue;
         }
         result[k] = "";

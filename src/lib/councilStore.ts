@@ -12,7 +12,7 @@ import {
   subscribeToSiteContent,
   cleanUndefined
 } from "./firebase/firestore";
-import { enqueueCloudWrite, reconcileArrayDatasets, hasPendingWritesFor, compactClubDataset } from "./dataSyncEngine";
+import { enqueueCloudWrite, reconcileArrayDatasets, hasPendingWritesFor, compactClubDataset, compactCouncilDataset } from "./dataSyncEngine";
 
 export function getClubLeaders(club: ClubItem): ClubLeader[] {
   if (!club) return [];
@@ -83,11 +83,22 @@ export function saveStoredCouncilMembers(members: TeamMember[]): void {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(stripCategoryAndLevel(members));
-    localStorage.setItem("src_council_team", JSON.stringify(sanitized));
+    try {
+      localStorage.setItem("src_council_team", JSON.stringify(sanitized));
+    } catch (lsErr) {
+      console.warn("Direct localStorage write notice, auto-compacting...", lsErr);
+    }
     window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: sanitized }));
     window.dispatchEvent(new CustomEvent("src_tenures_updated"));
     window.dispatchEvent(new CustomEvent("src_users_updated"));
-    enqueueCloudWrite("council_team", sanitized, `Council Leadership (${members.length} Members)`);
+
+    compactCouncilDataset(sanitized).then((compacted) => {
+      const finalClean = cleanUndefined(compacted);
+      try {
+        localStorage.setItem("src_council_team", JSON.stringify(finalClean));
+      } catch {}
+      enqueueCloudWrite("council_team", finalClean, `Council Leadership (${members.length} Members)`);
+    });
   } catch (e) {
     console.error("Could not save council team to storage", e);
   }
@@ -101,7 +112,9 @@ export async function syncCouncilMembersFromFirestore(): Promise<TeamMember[]> {
       const current = getStoredCouncilMembers();
       const merged = stripCategoryAndLevel(reconcileArrayDatasets(current, remote));
       if (typeof window !== "undefined") {
-        localStorage.setItem("src_council_team", JSON.stringify(merged));
+        try {
+          localStorage.setItem("src_council_team", JSON.stringify(merged));
+        } catch {}
         window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: merged }));
         window.dispatchEvent(new CustomEvent("src_users_updated"));
       }
@@ -130,10 +143,19 @@ export function saveStoredHostingCommittee(members: TeamMember[]): void {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(stripCategoryAndLevel(members));
-    localStorage.setItem("src_hosting_committee", JSON.stringify(sanitized));
+    try {
+      localStorage.setItem("src_hosting_committee", JSON.stringify(sanitized));
+    } catch {}
     window.dispatchEvent(new CustomEvent("src_hosting_updated", { detail: sanitized }));
     window.dispatchEvent(new CustomEvent("src_users_updated"));
-    enqueueCloudWrite("hosting_committee", sanitized, `Hosting Committee (${members.length} Members)`);
+
+    compactCouncilDataset(sanitized).then((compacted) => {
+      const finalClean = cleanUndefined(compacted);
+      try {
+        localStorage.setItem("src_hosting_committee", JSON.stringify(finalClean));
+      } catch {}
+      enqueueCloudWrite("hosting_committee", finalClean, `Hosting Committee (${members.length} Members)`);
+    });
   } catch (e) {
     console.error("Could not save hosting committee to storage", e);
   }
@@ -144,13 +166,16 @@ export async function syncHostingCommitteeFromFirestore(): Promise<TeamMember[]>
     if (hasPendingWritesFor("hosting_committee")) return getStoredHostingCommittee();
     const remote = await getSiteContentFromFirestore<TeamMember[]>("hosting_committee");
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
-      const cleaned = stripCategoryAndLevel(remote);
+      const current = getStoredHostingCommittee();
+      const merged = stripCategoryAndLevel(reconcileArrayDatasets(current, remote));
       if (typeof window !== "undefined") {
-        localStorage.setItem("src_hosting_committee", JSON.stringify(cleaned));
-        window.dispatchEvent(new CustomEvent("src_hosting_updated", { detail: cleaned }));
+        try {
+          localStorage.setItem("src_hosting_committee", JSON.stringify(merged));
+        } catch {}
+        window.dispatchEvent(new CustomEvent("src_hosting_updated", { detail: merged }));
         window.dispatchEvent(new CustomEvent("src_users_updated"));
       }
-      return cleaned;
+      return merged;
     }
   } catch {}
   return getStoredHostingCommittee();
@@ -160,12 +185,15 @@ export function subscribeToHostingCommittee(callback: (members: TeamMember[]) =>
   return subscribeToSiteContent<TeamMember[]>("hosting_committee", (remote) => {
     if (remote !== null && Array.isArray(remote)) {
       if (hasPendingWritesFor("hosting_committee")) return;
-      const cleaned = stripCategoryAndLevel(remote);
+      const current = getStoredHostingCommittee();
+      const merged = stripCategoryAndLevel(reconcileArrayDatasets(current, remote));
       if (typeof window !== "undefined") {
-        localStorage.setItem("src_hosting_committee", JSON.stringify(cleaned));
-        window.dispatchEvent(new CustomEvent("src_hosting_updated", { detail: cleaned }));
+        try {
+          localStorage.setItem("src_hosting_committee", JSON.stringify(merged));
+        } catch {}
+        window.dispatchEvent(new CustomEvent("src_hosting_updated", { detail: merged }));
       }
-      callback(cleaned);
+      callback(merged);
     }
   });
 }
@@ -230,11 +258,15 @@ export function subscribeToCouncilMembers(callback: (members: TeamMember[]) => v
   return subscribeToSiteContent<TeamMember[]>("council_team", (remote) => {
     if (remote !== null && Array.isArray(remote)) {
       if (hasPendingWritesFor("council_team")) return;
+      const current = getStoredCouncilMembers();
+      const merged = stripCategoryAndLevel(reconcileArrayDatasets(current, remote));
       if (typeof window !== "undefined") {
-        localStorage.setItem("src_council_team", JSON.stringify(remote));
-        window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: remote }));
+        try {
+          localStorage.setItem("src_council_team", JSON.stringify(merged));
+        } catch {}
+        window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: merged }));
       }
-      callback(remote);
+      callback(merged);
     }
   });
 }
@@ -338,10 +370,19 @@ export function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCounc
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(stripCategoryAndLevel(members));
-    localStorage.setItem("src_founding_members", JSON.stringify(sanitized));
+    try {
+      localStorage.setItem("src_founding_members", JSON.stringify(sanitized));
+    } catch {}
     window.dispatchEvent(new CustomEvent("src_founding_members_updated", { detail: sanitized }));
     window.dispatchEvent(new CustomEvent("src_users_updated"));
-    enqueueCloudWrite("founding_members", sanitized, `Founding Members (${members.length} Members)`);
+
+    compactCouncilDataset(sanitized).then((compacted) => {
+      const finalClean = cleanUndefined(compacted);
+      try {
+        localStorage.setItem("src_founding_members", JSON.stringify(finalClean));
+      } catch {}
+      enqueueCloudWrite("founding_members", finalClean, `Founding Members (${members.length} Members)`);
+    });
 
     if (autoSyncToCouncil && Array.isArray(sanitized) && sanitized.length > 0) {
       const mapped = sanitized.map((f, i) => mapFoundingMemberToCouncilAdmin(f, i));
@@ -357,13 +398,16 @@ export async function syncFoundingMembersFromFirestore(): Promise<TeamMember[]> 
     if (hasPendingWritesFor("founding_members")) return getStoredFoundingMembers();
     const remote = await getSiteContentFromFirestore<TeamMember[]>("founding_members");
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
-      const cleaned = stripCategoryAndLevel(remote);
+      const current = getStoredFoundingMembers();
+      const merged = stripCategoryAndLevel(reconcileArrayDatasets(current, remote));
       if (typeof window !== "undefined") {
-        localStorage.setItem("src_founding_members", JSON.stringify(cleaned));
-        window.dispatchEvent(new CustomEvent("src_founding_members_updated", { detail: cleaned }));
+        try {
+          localStorage.setItem("src_founding_members", JSON.stringify(merged));
+        } catch {}
+        window.dispatchEvent(new CustomEvent("src_founding_members_updated", { detail: merged }));
         window.dispatchEvent(new CustomEvent("src_users_updated"));
       }
-      return cleaned;
+      return merged;
     }
   } catch {}
   return getStoredFoundingMembers();
@@ -373,13 +417,16 @@ export function subscribeToFoundingMembers(callback: (members: TeamMember[]) => 
   return subscribeToSiteContent<TeamMember[]>("founding_members", (remote) => {
     if (remote !== null && Array.isArray(remote)) {
       if (hasPendingWritesFor("founding_members")) return;
-      const cleaned = stripCategoryAndLevel(remote);
+      const current = getStoredFoundingMembers();
+      const merged = stripCategoryAndLevel(reconcileArrayDatasets(current, remote));
       if (typeof window !== "undefined") {
-        localStorage.setItem("src_founding_members", JSON.stringify(cleaned));
-        window.dispatchEvent(new CustomEvent("src_founding_members_updated", { detail: cleaned }));
+        try {
+          localStorage.setItem("src_founding_members", JSON.stringify(merged));
+        } catch {}
+        window.dispatchEvent(new CustomEvent("src_founding_members_updated", { detail: merged }));
         window.dispatchEvent(new CustomEvent("src_users_updated"));
       }
-      callback(cleaned);
+      callback(merged);
     }
   });
 }

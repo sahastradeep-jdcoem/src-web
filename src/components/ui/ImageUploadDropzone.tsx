@@ -90,52 +90,33 @@ export function ImageUploadDropzone({
       const localPreviewUrl = URL.createObjectURL(file);
       setPreview(localPreviewUrl);
 
-      const isPngOrSvg = file.type === "image/png" || file.type === "image/svg+xml";
-      // Threshold: 5 MB (5,242,880 bytes).
-      // Any photo <= 5MB is uploaded 100% UNTOUCHED without any compression!
-      // Only extreme heavy DSLR raw camera photos (> 5MB, like 10MB-35MB) are optimized to 2560px 2.5K Retina at 0.94
-      const isHeavyDslrPhoto = file.size > 5 * 1024 * 1024;
+      // Determine optimal resolution based on aspectRatio and storagePath
+      // Produces crystal-clear ~25KB-50KB WebP that never overflows localStorage or Firestore
+      const isSquare = aspectRatio === "1:1" || storagePath.includes("avatars") || storagePath.includes("logo");
+      const targetMaxWidth = isSquare ? 512 : 1280;
+      const targetMaxHeight = isSquare ? 512 : 720;
+      const targetQuality = isSquare ? 0.88 : 0.84;
 
-      let fileToUpload: File = file;
-      let fallbackDataUrl = "";
+      const compressed = await compressImage(file, {
+        maxWidth: targetMaxWidth,
+        maxHeight: targetMaxHeight,
+        quality: targetQuality,
+        outputFormat: "image/webp",
+      });
 
-      if (isHeavyDslrPhoto && !isPngOrSvg) {
-        // Smart DSLR optimization: downsizes 24MP-50MP raw photos to 2560px with progressive stepped halving
-        // Reduces a 25MB DSLR file down to ~750KB (97% space savings) with virtually zero visual loss on 4K screens!
-        const compressed = await compressImage(file, {
-          maxWidth: 2560,
-          maxHeight: 2560,
-          quality: 0.94,
-          outputFormat: "image/webp",
-        });
-        fileToUpload = compressed.file;
-        fallbackDataUrl = compressed.dataUrl;
-        setCompressionStats(compressed);
-      } else {
-        // Files <= 5MB: read original file bytes directly into base64 with ZERO COMPRESSION!
-        fallbackDataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-        setCompressionStats(null); // No compression applied!
-      }
-
+      const fallbackDataUrl = compressed.dataUrl;
+      setCompressionStats(compressed);
       setManualUrl(fallbackDataUrl);
 
       if (onUrlChange) {
         onUrlChange(fallbackDataUrl);
       }
 
-      // Immediately unblock the UI so user can click Save without waiting for network
-      setIsProcessing(false);
-      onUploadStateChange?.(false);
+      // 2. Upload to Firebase Cloud Storage in the background
+      const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_").replace(/\.[^/.]+$/, "");
+      const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}.webp`;
 
-      // 2. Upload fileToUpload to Firebase Cloud Storage (100% untouched for <= 5MB, or DSLR-optimized for > 5MB)
-      const cleanName = fileToUpload.name.replace(/[^a-zA-Z0-9.-]/g, "_");
-      const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}`;
-      uploadImageToStorage(fileToUpload, finalStoragePath).then((cloudUrl) => {
+      uploadImageToStorage(compressed.file, finalStoragePath).then((cloudUrl) => {
         if (cloudUrl && cloudUrl.startsWith("http")) {
           setPreview(cloudUrl);
           setManualUrl(cloudUrl);
@@ -144,7 +125,10 @@ export function ImageUploadDropzone({
           }
         }
       }).catch((err) => {
-        console.warn("Storage background upload fallback to compressed dataUrl", err);
+        console.warn("Storage background upload notice:", err);
+      }).finally(() => {
+        setIsProcessing(false);
+        onUploadStateChange?.(false);
       });
     } catch (err) {
       console.error("Image direct processing error", err);
@@ -178,25 +162,20 @@ export function ImageUploadDropzone({
     setIsProcessing(true);
     onUploadStateChange?.(true);
     try {
-      // 1. Cropped canvas is already exported at maximum resolution (up to 2560px, quality 0.96)
-      // Do NOT re-compress to eliminate generational blur
       setPreview(croppedDataUrl);
       setManualUrl(croppedDataUrl);
 
       if (onUrlChange) {
         onUrlChange(croppedDataUrl);
       }
-
-      // Immediately unblock UI
-      setIsProcessing(false);
-      onUploadStateChange?.(false);
       setRawImageToCrop(null);
 
-      // 2. Upload high-res crop directly to Firebase Storage in background
+      // Upload crop to Firebase Storage
       const cleanName = originalFileName.replace(/[^a-zA-Z0-9.-]/g, "_").replace(/\.[^/.]+$/, "");
       const isPng = croppedDataUrl.includes("image/png");
       const ext = isPng ? ".png" : ".webp";
       const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}${ext}`;
+
       uploadImageToStorage(croppedDataUrl, finalStoragePath).then((cloudUrl) => {
         if (cloudUrl && cloudUrl !== croppedDataUrl && cloudUrl.startsWith("http")) {
           setPreview(cloudUrl);
@@ -205,7 +184,12 @@ export function ImageUploadDropzone({
             onUrlChange(cloudUrl);
           }
         }
-      }).catch(() => {});
+      }).catch((err) => {
+        console.warn("Storage crop upload notice:", err);
+      }).finally(() => {
+        setIsProcessing(false);
+        onUploadStateChange?.(false);
+      });
     } catch (err) {
       console.error("Image crop and storage error", err);
       setError("Failed to save cropped image.");
