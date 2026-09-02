@@ -2,11 +2,11 @@ import { ref, uploadString, getDownloadURL } from "firebase/storage";
 import { storage } from "./config";
 import { compressImage } from "@/lib/imageCompression";
 
-const UPLOAD_TIMEOUT_MS = 4500; // 4.5s max to prevent UI from locking
+const UPLOAD_TIMEOUT_MS = 12000; // 12s so HD WebP uploads reliably over mobile networks
 
 /**
  * Upload an image file or Base64 WebP string to Firebase Cloud Storage.
- * Uses a strict timeout to ensure the UI never hangs if Storage rules or network are slow.
+ * Uses a safe timeout race to ensure the UI never hangs if Storage rules or network are slow.
  * Returns the permanent HTTPS download URL if successful, or the local compressed WebP data URL on fallback.
  */
 export async function uploadImageToStorage(
@@ -24,9 +24,9 @@ export async function uploadImageToStorage(
   } else {
     try {
       const compressed = await compressImage(fileOrDataUrl, {
-        maxWidth: 1200,
-        maxHeight: 1200,
-        quality: 0.85,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        quality: 0.88,
         outputFormat: "image/webp",
       });
       finalDataUrl = compressed.dataUrl;

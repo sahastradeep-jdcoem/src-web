@@ -49,6 +49,32 @@ export function ImageUploadDropzone({
     setManualUrl(previewUrl || "");
   }, [previewUrl]);
 
+  const getOptimalResolution = (ratio: string, path: string) => {
+    const isSquare = ratio === "1:1";
+    const isBanner = ratio === "21:9";
+    const isPoster = ratio === "4:5" || ratio === "3:4";
+    const isGallery = path.toLowerCase().includes("gallery");
+
+    if (isSquare) {
+      // 512x512 for logos, circular seals, profile avatars (high-DPI, ~35-50KB)
+      return { maxWidth: 512, maxHeight: 512, quality: 0.90 };
+    }
+    if (isBanner) {
+      // 1920x822 for wide cinematic banners across desktop screens (~180-260KB)
+      return { maxWidth: 1920, maxHeight: 822, quality: 0.86 };
+    }
+    if (isPoster) {
+      // 1200x1600 for vertical event posters and story formats (~160-240KB)
+      return { maxWidth: 1200, maxHeight: 1600, quality: 0.86 };
+    }
+    if (isGallery) {
+      // 1920x1280 for gallery photography and full-screen lightboxes (~200-350KB)
+      return { maxWidth: 1920, maxHeight: 1280, quality: 0.88 };
+    }
+    // 1600x900 for directory cards, event cards, showcases (~150-220KB)
+    return { maxWidth: 1600, maxHeight: 900, quality: 0.86 };
+  };
+
   const processFileDirectly = async (file: File) => {
     if (!file.type.startsWith("image/")) {
       setError("Please select a valid image file (JPG, PNG, WebP, SVG, HEIC).");
@@ -60,12 +86,11 @@ export function ImageUploadDropzone({
     onUploadStateChange?.(true);
 
     try {
-      const isSquare = aspectRatio === "1:1";
-      const isBanner = aspectRatio === "21:9";
+      const resConfig = getOptimalResolution(aspectRatio, storagePath);
       const result = await compressImage(file, {
-        maxWidth: isSquare ? 160 : isBanner ? 800 : 600,
-        maxHeight: isSquare ? 160 : isBanner ? 343 : 338,
-        quality: 0.70,
+        maxWidth: resConfig.maxWidth,
+        maxHeight: resConfig.maxHeight,
+        quality: resConfig.quality,
         outputFormat: "image/webp",
       });
 
@@ -132,12 +157,11 @@ export function ImageUploadDropzone({
     onUploadStateChange?.(true);
     try {
       // 1. Process & optimize the cropped canvas dataUrl
-      const isSquare = aspectRatio === "1:1";
-      const isBanner = aspectRatio === "21:9";
+      const resConfig = getOptimalResolution(aspectRatio, storagePath);
       const result = await compressImage(croppedDataUrl, {
-        maxWidth: isSquare ? 160 : isBanner ? 800 : 600,
-        maxHeight: isSquare ? 160 : isBanner ? 343 : 338,
-        quality: 0.70,
+        maxWidth: resConfig.maxWidth,
+        maxHeight: resConfig.maxHeight,
+        quality: resConfig.quality,
         outputFormat: "image/webp",
       });
 

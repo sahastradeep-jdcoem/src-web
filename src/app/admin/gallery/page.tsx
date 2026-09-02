@@ -444,8 +444,9 @@ export default function AdminGalleryPage() {
               <label className="font-bold text-slate-700">Photograph Upload / Image URL *</label>
               <ImageUploadDropzone
                 label="Drop Photograph Here"
-                sublabel="Raw DSLR photos are automatically compressed to WebP"
+                sublabel="Raw DSLR photos are automatically optimized to crystal-clear Full HD WebP"
                 storagePath="gallery"
+                aspectRatio={editingPhoto.aspectRatio === "portrait" ? "3:4" : editingPhoto.aspectRatio === "square" ? "1:1" : "16:9"}
                 previewUrl={editingPhoto.imageUrl}
                 onUploadStateChange={handleUploadStateChange}
                 onUrlChange={(url) => {
