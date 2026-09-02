@@ -58,6 +58,11 @@ export interface StudentRegistrationRecord {
   checkInTimestamp?: any;
   createdAt: any;
   qrPayload: string;
+  collegeName?: string;
+  city?: string;
+  customBranch?: string;
+  userType?: string;
+  isCollegeStudent?: boolean;
   customAnswers?: Record<string, any>;
 }
 

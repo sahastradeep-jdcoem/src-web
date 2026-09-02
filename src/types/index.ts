@@ -160,6 +160,11 @@ export interface RegistrationRecord {
   ticketCode: string;
   qrPayload: string;
   btId?: string;
+  collegeName?: string;
+  city?: string;
+  customBranch?: string;
+  userType?: string;
+  isCollegeStudent?: boolean;
   customAnswers?: Record<string, any>;
 }
 

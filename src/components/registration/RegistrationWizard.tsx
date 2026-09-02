@@ -79,6 +79,9 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   // Determine available format
   const initialFormat = event.teamType === "Team" ? "Team" : "Individual";
 
+  const isFaculty = user?.role === "FACULTY" || user?.userType === "FACULTY";
+  const isExternal = user?.userType === "EXTERNAL_STUDENT" || user?.isCollegeStudent === false || Boolean(user?.collegeName);
+
   // Form State
   const [formData, setFormData] = useState({
     fullName: "",
@@ -89,11 +92,19 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     year: "",
     teamType: initialFormat as "Individual" | "Team",
     teamName: "",
+    collegeName: "",
+    city: "",
   });
 
   // Team Roster State
   const [teamMembers, setTeamMembers] = useState<TeamMemberEntry[]>([]);
   const [teammateBtIdInput, setTeammateBtIdInput] = useState("");
+  const [manualTeammate, setManualTeammate] = useState({
+    name: "",
+    college: "",
+    department: "",
+  });
+  const [teamAddMode, setTeamAddMode] = useState<"external" | "btId">(isExternal ? "external" : "btId");
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [lookupSuccess, setLookupSuccess] = useState<string | null>(null);
   const [isVerifyingTeammate, setIsVerifyingTeammate] = useState(false);
@@ -113,7 +124,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     let isMounted = true;
     const checkDuplicate = async () => {
       const targetEmail = user?.email || formData.email;
-      const targetBtId = user?.btId || formData.btId;
+      const targetBtId = isExternal ? undefined : (user?.btId || formData.btId);
       if (!targetEmail && !targetBtId) return;
 
       setIsCheckingDuplicate(true);
@@ -135,7 +146,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     };
     checkDuplicate();
     return () => { isMounted = false; };
-  }, [user, event.id, event.slug, formData.btId, formData.email]);
+  }, [user, event.id, event.slug, formData.btId, formData.email, isExternal]);
 
   // Sync profile data directly from authenticated user
   useEffect(() => {
@@ -153,17 +164,19 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
   useEffect(() => {
     if (user) {
-      const isFaculty = user.role === "FACULTY" || user.userType === "FACULTY";
-      const isExternal = user.userType === "EXTERNAL_STUDENT" || user.isCollegeStudent === false || Boolean(user.collegeName);
+      const userIsFaculty = user.role === "FACULTY" || user.userType === "FACULTY";
+      const userIsExternal = user.userType === "EXTERNAL_STUDENT" || user.isCollegeStudent === false || Boolean(user.collegeName);
 
       const leaderName = user.displayName || `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email?.split("@")[0] || "Delegate";
-      const leaderBtId = user.btId || (isFaculty ? (user.employeeId || "FACULTY") : isExternal ? (user.collegeName || "EXTERNAL") : "");
-      const leaderDept = isFaculty 
+      const leaderBtId = userIsExternal ? "" : (user.btId || (userIsFaculty ? (user.employeeId || "FACULTY") : ""));
+      const leaderCollege = userIsExternal ? (user.collegeName || "") : "JDCOEM Nagpur";
+      const leaderCity = userIsExternal ? (user.city || "Nagpur") : "Nagpur";
+      const leaderDept = userIsFaculty 
         ? (user.facultyDepartment || user.department || "Academic Faculty") 
-        : isExternal 
-        ? (user.customBranch || user.department || `${user.collegeName || "College"} Delegate`) 
+        : userIsExternal 
+        ? (user.customBranch || user.department || "General Stream") 
         : (user.department || DEFAULT_DEPARTMENTS[0] || "Computer Science and Engineering");
-      const leaderYear = isFaculty ? (user.facultyDesignation || "Faculty Member") : (user.year || "3rd Year");
+      const leaderYear = userIsFaculty ? (user.facultyDesignation || "Faculty Member") : (user.year || "3rd Year");
       const leaderPhone = user.phone || "";
       const leaderEmail = user.email || "";
 
@@ -175,24 +188,63 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         phone: leaderPhone,
         department: leaderDept,
         year: leaderYear,
+        collegeName: leaderCollege,
+        city: leaderCity,
       }));
 
       // Initialize team leader in roster
       setTeamMembers([
         {
           name: leaderName,
-          btId: leaderBtId,
-          department: leaderDept,
+          btId: userIsExternal ? (leaderCollege || "External Delegate") : (leaderBtId || "Leader"),
+          department: userIsExternal ? `${leaderCollege} • ${leaderDept}` : leaderDept,
           year: leaderYear,
           email: leaderEmail,
           isLeader: true,
         },
       ]);
+
+      if (userIsExternal) {
+        setTeamAddMode("external");
+      }
     }
   }, [user]);
 
   const minTeamSize = event.minTeamSize || (event.teamType === "Individual" ? 1 : 2);
   const maxTeamSize = event.maxTeamSize || 4;
+
+  const handleAddExternalTeammate = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setLookupError(null);
+    setLookupSuccess(null);
+
+    const cleanName = manualTeammate.name.trim();
+    if (!cleanName || cleanName.length < 2) {
+      setLookupError("Please provide teammate's full name (at least 2 characters).");
+      return;
+    }
+
+    if (teamMembers.length >= maxTeamSize) {
+      setLookupError(`Maximum team size of ${maxTeamSize} members reached for this event.`);
+      return;
+    }
+
+    const memberCollege = manualTeammate.college.trim() || formData.collegeName || "Visiting College";
+    const memberDept = manualTeammate.department.trim() || "Visiting Student";
+
+    const newEntry: TeamMemberEntry = {
+      name: cleanName,
+      btId: memberCollege,
+      department: `${memberCollege} • ${memberDept}`,
+      year: "Delegate",
+      isLeader: false,
+    };
+
+    setTeamMembers((prev) => [...prev, newEntry]);
+    setManualTeammate({ name: "", college: formData.collegeName || "", department: "" });
+    setLookupSuccess(`Added ${cleanName} (${memberCollege}) to squad!`);
+    setTimeout(() => setLookupSuccess(null), 3000);
+  };
 
   const handleVerifyAndAddTeammate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -206,7 +258,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     }
 
     // 1. Check if same as leader
-    if (cleanBtId === formData.btId.trim().toUpperCase()) {
+    if (formData.btId && cleanBtId === formData.btId.trim().toUpperCase()) {
       setLookupError("You are already registered as the Team Leader for this entry.");
       return;
     }
@@ -230,7 +282,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
       if (!found) {
         setLookupError(
-          `BT ID "${cleanBtId}" is not registered on the portal. All team members must sign in to the Sahastradeep portal at least once to create their verified profile before joining a team.`
+          `BT ID "${cleanBtId}" is not registered on the portal. Please verify the BT ID or add them as a Visiting Teammate.`
         );
         setIsVerifyingTeammate(false);
         return;
@@ -246,7 +298,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
       if (teammateDuplicate) {
         setLookupError(
-          `Teammate "${found.displayName || cleanBtId}" is already registered for this event under Pass ID: ${teammateDuplicate.id}. A student cannot be registered multiple times for the same competition.`
+          `Teammate "${found.displayName || cleanBtId}" is already registered for this event under Pass ID: ${teammateDuplicate.id}.`
         );
         setIsVerifyingTeammate(false);
         return;
@@ -433,14 +485,21 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         leaderName: formData.fullName,
         email: formData.email,
         phone: formData.phone,
-        college: "JD College of Engineering & Management",
+        college: isExternal ? (formData.collegeName || user?.collegeName || "Other College") : "JD College of Engineering & Management",
+        collegeName: isExternal ? (formData.collegeName || user?.collegeName || "Other College") : undefined,
+        city: isExternal ? (formData.city || user?.city || "Nagpur") : undefined,
+        customBranch: isExternal ? (formData.department || user?.customBranch) : undefined,
+        userType: user?.userType || (isExternal ? "EXTERNAL_STUDENT" : isFaculty ? "FACULTY" : "JDCOEM_STUDENT"),
+        isCollegeStudent: !isExternal,
         department: formData.department,
         year: formData.year,
-        btId: formData.btId,
+        btId: isExternal ? undefined : formData.btId,
         teamSize: formData.teamType === "Team" ? teamMembers.length : 1,
         teamName: formData.teamType === "Team" ? formData.teamName : undefined,
         teamMembers: formData.teamType === "Team" ? teamMembers : undefined,
-        qrPayload: `SRC:JDCOEM:${regId}:${tkCode}:${event.id}:${formData.btId}`,
+        qrPayload: isExternal 
+          ? `SRC:EXTERNAL:${regId}:${tkCode}:${event.id}:${user?.uid || "EXT"}`
+          : `SRC:JDCOEM:${regId}:${tkCode}:${event.id}:${formData.btId}`,
         paymentStatus: paymentDetails?.paymentStatus || "FREE",
         paymentId: paymentDetails?.paymentId,
         orderId: paymentDetails?.orderId,
@@ -784,17 +843,17 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                     </div>
                     <div className="space-y-1">
                       <h4 className="font-bold text-sm text-[#17458F]">
-                        {user?.role === "FACULTY" || user?.userType === "FACULTY"
+                        {isFaculty
                           ? "Faculty / Staff Accreditation Details"
-                          : user?.userType === "EXTERNAL_STUDENT" || user?.isCollegeStudent === false || user?.collegeName
+                          : isExternal
                           ? "Inter-Collegiate Visiting Delegate Profile"
                           : "Authenticated JDCOEM Student Profile"}
                       </h4>
                       <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                        {user?.role === "FACULTY" || user?.userType === "FACULTY"
+                        {isFaculty
                           ? "Your institutional academic designation and department will be attached to your delegate pass."
-                          : user?.userType === "EXTERNAL_STUDENT" || user?.isCollegeStudent === false || user?.collegeName
-                          ? `Registered from ${user?.collegeName || "External Institution"} (City: ${user?.city || "Nagpur"}).`
+                          : isExternal
+                          ? `Registered as an external visiting delegate from ${formData.collegeName || "Other College"}. No JDCOEM BT ID is required.`
                           : "Your official college BT ID, department, and credentials will be encoded into your digital delegate entry pass."}
                       </p>
                     </div>
@@ -816,34 +875,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                       />
                     </div>
 
-                    {/* BT ID / Institution / Employee ID */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                        <Hash className="w-3.5 h-3.5 text-[#17458F]" />
-                        <span>
-                          {user?.role === "FACULTY" || user?.userType === "FACULTY"
-                            ? "Employee / Staff ID (Optional)"
-                            : user?.userType === "EXTERNAL_STUDENT" || user?.isCollegeStudent === false || user?.collegeName
-                            ? "College / University"
-                            : "College BT ID *"}
-                        </span>
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.btId}
-                        onChange={(e) => setFormData({ ...formData, btId: e.target.value.toUpperCase() })}
-                        placeholder={
-                          user?.role === "FACULTY" || user?.userType === "FACULTY"
-                            ? "Faculty Accreditation"
-                            : user?.userType === "EXTERNAL_STUDENT" || user?.collegeName
-                            ? (user?.collegeName || "Visiting College")
-                            : "e.g. BT230036CS"
-                        }
-                        className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-mono font-bold uppercase focus:outline-none focus:border-[#17458F]"
-                      />
-                    </div>
-
-                    {/* College / Personal Email */}
+                    {/* Email */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                         <Mail className="w-3.5 h-3.5 text-[#E78023]" />
@@ -856,6 +888,147 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                         className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-900 text-sm font-medium cursor-not-allowed"
                       />
                     </div>
+
+                    {/* INTER-COLLEGE SPECIFIC FIELDS: College & City (NO BT ID) */}
+                    {isExternal ? (
+                      <>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                            <Building2 className="w-3.5 h-3.5 text-[#17458F]" />
+                            <span>College / University Name *</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={formData.collegeName}
+                            onChange={(e) => setFormData({ ...formData, collegeName: e.target.value })}
+                            placeholder="e.g. VNIT Nagpur or Raisoni College"
+                            className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F]"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                            <Building2 className="w-3.5 h-3.5 text-[#E78023]" />
+                            <span>City / Location *</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={formData.city}
+                            onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                            placeholder="e.g. Nagpur, Pune, Mumbai"
+                            className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F]"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                            <GraduationCap className="w-3.5 h-3.5 text-[#17458F]" />
+                            <span>Degree &amp; Branch / Stream *</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={formData.department}
+                            onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                            placeholder="e.g. B.Tech Computer Engineering"
+                            className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F]"
+                          />
+                        </div>
+                      </>
+                    ) : isFaculty ? (
+                      /* FACULTY SPECIFIC FIELDS */
+                      <>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                            <GraduationCap className="w-3.5 h-3.5 text-[#E78023]" />
+                            <span>Academic Designation *</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.year}
+                            onChange={(e) => setFormData({ ...formData, year: e.target.value })}
+                            className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                            <Building2 className="w-3.5 h-3.5 text-[#17458F]" />
+                            <span>Academic Department *</span>
+                          </label>
+                          <select
+                            value={formData.department}
+                            onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                            className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
+                          >
+                            {departmentsList.map((dept) => (
+                              <option key={dept} value={dept} className="bg-white text-slate-900">
+                                {dept}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
+                    ) : (
+                      /* JDCOEM STUDENT SPECIFIC FIELDS (Requires BT ID) */
+                      <>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                            <Hash className="w-3.5 h-3.5 text-[#17458F]" />
+                            <span>College BT ID *</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={formData.btId}
+                            onChange={(e) => setFormData({ ...formData, btId: e.target.value.toUpperCase() })}
+                            placeholder="e.g. BT230036CS"
+                            className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-mono font-bold uppercase focus:outline-none focus:border-[#17458F]"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                            <Building2 className="w-3.5 h-3.5 text-[#17458F]" />
+                            <span>Department / Branch *</span>
+                          </label>
+                          <select
+                            value={formData.department}
+                            onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                            className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
+                          >
+                            {departmentsList.map((dept) => (
+                              <option key={dept} value={dept} className="bg-white text-slate-900">
+                                {dept}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Academic Year (For Students) */}
+                    {!isFaculty && (
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                          <GraduationCap className="w-3.5 h-3.5 text-[#E78023]" />
+                          <span>Academic Year *</span>
+                        </label>
+                        <select
+                          value={formData.year}
+                          onChange={(e) => setFormData({ ...formData, year: e.target.value })}
+                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
+                        >
+                          {YEARS.map((yr) => (
+                            <option key={yr} value={yr} className="bg-white text-slate-900">
+                              {yr}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
 
                     {/* WhatsApp Phone */}
                     <div className="space-y-1.5">
@@ -871,71 +1044,6 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                         placeholder="e.g. 9823011223"
                         className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
                       />
-                    </div>
-
-                    {/* Academic Year / Designation */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                        <GraduationCap className="w-3.5 h-3.5 text-[#E78023]" />
-                        <span>
-                          {user?.role === "FACULTY" || user?.userType === "FACULTY"
-                            ? "Academic Designation *"
-                            : "Academic Year *"}
-                        </span>
-                      </label>
-                      {user?.role === "FACULTY" || user?.userType === "FACULTY" ? (
-                        <input
-                          type="text"
-                          value={formData.year}
-                          onChange={(e) => setFormData({ ...formData, year: e.target.value })}
-                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
-                        />
-                      ) : (
-                        <select
-                          value={formData.year}
-                          onChange={(e) => setFormData({ ...formData, year: e.target.value })}
-                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
-                        >
-                          {YEARS.map((yr) => (
-                            <option key={yr} value={yr} className="bg-white text-slate-900">
-                              {yr}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                    </div>
-
-                    {/* Department / Stream */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                        <Building2 className="w-3.5 h-3.5 text-[#17458F]" />
-                        <span>
-                          {user?.userType === "EXTERNAL_STUDENT" || user?.collegeName
-                            ? "Degree & Branch / Stream *"
-                            : "Department / Branch *"}
-                        </span>
-                      </label>
-                      {user?.userType === "EXTERNAL_STUDENT" || user?.collegeName ? (
-                        <input
-                          type="text"
-                          value={formData.department}
-                          onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                          placeholder="e.g. B.Tech Computer Engineering"
-                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
-                        />
-                      ) : (
-                        <select
-                          value={formData.department}
-                          onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
-                        >
-                          {departmentsList.map((dept) => (
-                            <option key={dept} value={dept} className="bg-white text-slate-900">
-                              {dept}
-                            </option>
-                          ))}
-                        </select>
-                      )}
                     </div>
 
                   </div>
@@ -958,7 +1066,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         </div>
       )}
 
-      {/* STEP 2: PARTICIPATION FORMAT & VERIFIED TEAM ROSTER */}
+      {/* STEP 2: PARTICIPATION FORMAT & TEAM ROSTER */}
       {currentStep === 2 && (
         <div className="rounded-3xl bg-white border border-slate-200 p-6 sm:p-10 space-y-8 shadow-sm">
           <div className="border-b border-slate-100 pb-4">
@@ -969,7 +1077,9 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               PARTICIPATION FORMAT &amp; TEAM ROSTER
             </h3>
             <p className="text-xs text-slate-500 font-medium">
-              Configure solo registration or add verified team members by BT ID.
+              {isExternal 
+                ? "Configure solo entry or assemble an inter-collegiate squad with other college teammates." 
+                : "Configure solo registration or add verified team members by BT ID."}
             </p>
           </div>
 
@@ -1030,7 +1140,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               )}
             </div>
 
-            {/* Team Specific Inputs & Verified BT ID Lookup */}
+            {/* Team Specific Inputs & Squad Roster */}
             {formData.teamType === "Team" && (
               <div className="space-y-6 pt-4 border-t border-slate-100">
                 
@@ -1044,12 +1154,12 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                     required
                     value={formData.teamName}
                     onChange={(e) => setFormData({ ...formData, teamName: e.target.value })}
-                    placeholder="e.g. Code Ninjas or Team JDCOEM"
+                    placeholder="e.g. Code Ninjas or Matrix Squad"
                     className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F]"
                   />
                 </div>
 
-                {/* Team Members Verified List */}
+                {/* Team Members List */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
@@ -1078,16 +1188,18 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-bold text-slate-900">{member.name}</span>
-                              <span className="font-mono text-xs font-bold text-[#E78023] px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200">
-                                {member.btId}
-                              </span>
+                              {member.btId && !isExternal && (
+                                <span className="font-mono text-xs font-bold text-[#E78023] px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200">
+                                  {member.btId}
+                                </span>
+                              )}
                               {idx === 0 ? (
                                 <Badge variant="navy" size="sm">
                                   Team Leader (Primary)
                                 </Badge>
                               ) : (
                                 <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                                  Verified Teammate
+                                  Squad Member
                                 </span>
                               )}
                             </div>
@@ -1111,33 +1223,105 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                     ))}
                   </div>
 
-                  {/* Add Teammate by College BT ID */}
+                  {/* Add Teammate Section */}
                   {teamMembers.length < maxTeamSize ? (
-                    <div className="pt-3 space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                        <Search className="w-3.5 h-3.5 text-[#17458F]" />
-                        <span>Add Teammate by College BT ID</span>
-                      </label>
+                    <div className="pt-3 space-y-3 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                      
+                      {/* Mode Switcher for External vs BT ID lookup */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                          <Users className="w-3.5 h-3.5 text-[#17458F]" />
+                          <span>Add Squad Member</span>
+                        </span>
+                        
+                        <div className="flex gap-1.5 text-[11px] font-bold">
+                          <button
+                            type="button"
+                            onClick={() => setTeamAddMode("external")}
+                            className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                              teamAddMode === "external"
+                                ? "bg-[#17458F] text-white shadow-xs"
+                                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
+                            }`}
+                          >
+                            Visiting Teammate
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTeamAddMode("btId")}
+                            className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                              teamAddMode === "btId"
+                                ? "bg-[#17458F] text-white shadow-xs"
+                                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
+                            }`}
+                          >
+                            By JDCOEM BT ID
+                          </button>
+                        </div>
+                      </div>
 
-                      <form onSubmit={handleVerifyAndAddTeammate} className="flex gap-2">
-                        <input
-                          type="text"
-                          value={teammateBtIdInput}
-                          onChange={(e) => setTeammateBtIdInput(e.target.value.toUpperCase())}
-                          placeholder="e.g. BT240115DS"
-                          className="flex-1 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-mono font-bold uppercase focus:outline-none focus:border-[#17458F]"
-                        />
-                        <Button
-                          type="submit"
-                          isLoading={isVerifyingTeammate}
-                          variant="primary"
-                          size="sm"
-                          className="gap-1.5 shrink-0 cursor-pointer"
-                        >
-                          <Plus className="w-4 h-4" />
-                          <span>Verify &amp; Add</span>
-                        </Button>
-                      </form>
+                      {teamAddMode === "external" ? (
+                        /* Manual External Teammate Form (NO BT ID REQUIRED) */
+                        <form onSubmit={handleAddExternalTeammate} className="space-y-3 pt-1">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <input
+                              type="text"
+                              required
+                              value={manualTeammate.name}
+                              onChange={(e) => setManualTeammate({ ...manualTeammate, name: e.target.value })}
+                              placeholder="Teammate Full Name *"
+                              className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-semibold focus:outline-none focus:border-[#17458F]"
+                            />
+                            <input
+                              type="text"
+                              value={manualTeammate.college}
+                              onChange={(e) => setManualTeammate({ ...manualTeammate, college: e.target.value })}
+                              placeholder={`College (Defaults to ${formData.collegeName || "Same College"})`}
+                              className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-semibold focus:outline-none focus:border-[#17458F]"
+                            />
+                          </div>
+
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={manualTeammate.department}
+                              onChange={(e) => setManualTeammate({ ...manualTeammate, department: e.target.value })}
+                              placeholder="Branch / Stream (e.g. Mechanical, CSE)"
+                              className="flex-1 px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F]"
+                            />
+                            <Button
+                              type="submit"
+                              variant="primary"
+                              size="sm"
+                              className="gap-1.5 shrink-0 cursor-pointer text-xs"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Add to Squad</span>
+                            </Button>
+                          </div>
+                        </form>
+                      ) : (
+                        /* Lookup by JDCOEM BT ID */
+                        <form onSubmit={handleVerifyAndAddTeammate} className="flex gap-2 pt-1">
+                          <input
+                            type="text"
+                            value={teammateBtIdInput}
+                            onChange={(e) => setTeammateBtIdInput(e.target.value.toUpperCase())}
+                            placeholder="e.g. BT240115DS"
+                            className="flex-1 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-mono font-bold uppercase focus:outline-none focus:border-[#17458F]"
+                          />
+                          <Button
+                            type="submit"
+                            isLoading={isVerifyingTeammate}
+                            variant="primary"
+                            size="sm"
+                            className="gap-1.5 shrink-0 cursor-pointer text-xs"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Verify &amp; Add</span>
+                          </Button>
+                        </form>
+                      )}
 
                       {lookupError && (
                         <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2 animate-in fade-in duration-200 font-medium">
@@ -1152,10 +1336,6 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                           <span>{lookupSuccess}</span>
                         </div>
                       )}
-
-                      <p className="text-[11px] text-slate-500 font-medium">
-                        Enter your teammate&apos;s registered College BT ID. The system will automatically check their verified account and link them to your squad pass.
-                      </p>
                     </div>
                   ) : (
                     <div className="p-3 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold text-center">
@@ -1432,10 +1612,14 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs font-medium">
               <div>
                 <span className="text-slate-500 uppercase text-[10px] font-bold">
-                  Participant / Leader
+                  {isExternal ? "Visiting Delegate" : "Participant / Leader"}
                 </span>
                 <p className="font-bold text-slate-900">{formData.fullName}</p>
-                <p className="font-mono text-[11px] text-[#E78023] font-bold">{formData.btId}</p>
+                {isExternal ? (
+                  <p className="text-[11px] text-[#17458F] font-bold">📍 {formData.collegeName || "Visiting College"}</p>
+                ) : (
+                  <p className="font-mono text-[11px] text-[#E78023] font-bold">{formData.btId}</p>
+                )}
               </div>
 
               <div>
@@ -1454,16 +1638,18 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
               <div>
                 <span className="text-slate-500 uppercase text-[10px] font-bold">
-                  Department
+                  {isExternal ? "Stream / Branch" : "Department"}
                 </span>
                 <p className="font-semibold text-slate-800">{formData.department}</p>
               </div>
 
               <div>
                 <span className="text-slate-500 uppercase text-[10px] font-bold">
-                  Year
+                  {isExternal ? "City & Year" : "Year"}
                 </span>
-                <p className="font-semibold text-slate-800">{formData.year}</p>
+                <p className="font-semibold text-slate-800">
+                  {isExternal ? `${formData.city || "Nagpur"} • ${formData.year}` : formData.year}
+                </p>
               </div>
 
               <div>
@@ -1479,7 +1665,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             {formData.teamType === "Team" && (
               <div className="pt-4 border-t border-slate-200 text-xs space-y-2">
                 <span className="text-[10px] text-slate-500 uppercase font-bold block">
-                  Verified Team Squad ({teamMembers.length} Members):
+                  Team Squad Roster ({teamMembers.length} Members):
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {teamMembers.map((m, idx) => (
@@ -1488,9 +1674,11 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                         <span className="font-bold text-slate-900">{m.name}</span>
                         <span className="text-[10px] text-slate-500 block">{m.department}</span>
                       </div>
-                      <span className="font-mono text-xs font-bold text-[#E78023] px-2 py-0.5 rounded-full bg-amber-50">
-                        {m.btId}
-                      </span>
+                      {m.btId && !isExternal && (
+                        <span className="font-mono text-xs font-bold text-[#E78023] px-2 py-0.5 rounded-full bg-amber-50">
+                          {m.btId}
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1572,7 +1760,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs">
                 <span className="font-bold text-emerald-900 flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-emerald-600" />
-                  <span>Complimentary College Event — No Registration Fee</span>
+                  <span>Complimentary Event — No Registration Fee</span>
                 </span>
                 <Badge variant="success" size="sm">
                   FREE PASS
@@ -1584,7 +1772,9 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1 font-medium">
             <p className="font-bold">Accreditation Notice:</p>
             <p>
-              By proceeding, your registration is locked and linked to the verified BT IDs. Digital passes with QR security codes are issued instantly upon confirmation.
+              {isExternal 
+                ? "By proceeding, your inter-collegiate entry is confirmed. A digital delegate pass with a secure QR code will be generated instantly."
+                : "By proceeding, your registration is locked and linked to your verified BT ID. Digital passes with QR security codes are issued instantly upon confirmation."}
             </p>
           </div>
 
@@ -1630,11 +1820,11 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           eventDate={event.date}
           eventVenue={event.venue}
           participantName={formData.fullName}
-          department={formData.department}
-          year={formData.year}
+          department={isExternal ? (formData.collegeName ? `${formData.collegeName} • ${formData.department}` : formData.department) : formData.department}
+          year={isExternal ? (formData.city ? `📍 ${formData.city} • ${formData.year}` : formData.year) : formData.year}
           teamType={formData.teamType}
           teamName={formData.teamName}
-          teamMembers={formData.teamType === "Team" ? teamMembers.map((m) => `${m.name} (${m.btId})`) : undefined}
+          teamMembers={formData.teamType === "Team" ? teamMembers.map((m) => isExternal ? `${m.name} (${m.department})` : `${m.name} (${m.btId})`) : undefined}
           ticketCode={generatedTicket.ticketCode}
         />
       )}
