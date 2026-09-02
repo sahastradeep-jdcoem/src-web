@@ -36,13 +36,17 @@ import {
   resolveDesignationByBtId, 
   maskEmail 
 } from "@/lib/usersStore";
+import { SearchableDegreeSelect } from "@/components/ui/SearchableDegreeSelect";
 
 export const STUDY_YEARS = [
   "1st Year",
   "2nd Year",
   "3rd Year",
   "4th Year / Final Year",
-  "Postgraduate (MBA/MCA/M.Tech)",
+  "5th Year (Dual/Integrated)",
+  "Postgraduate (MBA/MCA/M.Tech/M.Sc/M.A.)",
+  "Doctoral / Ph.D. Scholar",
+  "Graduated / Alumni",
 ];
 
 export const FACULTY_TITLES = [
@@ -89,6 +93,7 @@ export function ProfileSetupModal() {
   // External Student Fields
   const [collegeName, setCollegeName] = useState("");
   const [city, setCity] = useState("");
+  const [degree, setDegree] = useState("");
   const [customBranch, setCustomBranch] = useState("");
   const [externalYear, setExternalYear] = useState(STUDY_YEARS[2]);
 
@@ -151,7 +156,10 @@ export function ProfileSetupModal() {
       if (user.employeeId) setEmployeeId(user.employeeId);
       if (user.collegeName) setCollegeName(user.collegeName);
       if (user.city) setCity(user.city);
-      if (user.customBranch) setCustomBranch(user.customBranch);
+      if (user.degree || user.customBranch) {
+        setDegree(user.degree || user.customBranch || "");
+        setCustomBranch(user.customBranch || user.degree || "");
+      }
     }
   }, [user]);
 
@@ -284,7 +292,7 @@ export function ProfileSetupModal() {
     if (accountType === "EXTERNAL_STUDENT") {
       const cleanCollege = collegeName.trim();
       const cleanCity = city.trim();
-      const cleanBranch = customBranch.trim();
+      const cleanDegree = degree.trim() || customBranch.trim();
 
       if (!cleanCollege) {
         setError("Please enter your College or University Name.");
@@ -294,8 +302,8 @@ export function ProfileSetupModal() {
         setError("Please enter your City / Location.");
         return;
       }
-      if (!cleanBranch) {
-        setError("Please enter your Degree & Branch / Stream (e.g. B.Tech Computer Science).");
+      if (!cleanDegree) {
+        setError("Please search and select your Degree.");
         return;
       }
 
@@ -310,8 +318,9 @@ export function ProfileSetupModal() {
           isCollegeStudent: false,
           collegeName: cleanCollege,
           city: cleanCity,
-          customBranch: cleanBranch,
-          department: `${cleanBranch} (${cleanCollege})`,
+          degree: cleanDegree,
+          customBranch: cleanDegree,
+          department: `${cleanDegree} • ${cleanCollege}`,
           year: externalYear,
           phone: cleanPhone,
           profileCompleted: true,
@@ -682,37 +691,37 @@ export function ProfileSetupModal() {
                     />
                   </div>
 
-                  {/* City & Branch 2-Col Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-[#E78023]" />
-                        <span>City / Location <span className="text-rose-500">*</span></span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. Nagpur, Pune, Mumbai"
-                        value={city}
-                        onChange={(e) => setCity(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
-                      />
-                    </div>
+                  {/* City */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-[#E78023]" />
+                      <span>City / Location <span className="text-rose-500">*</span></span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Nagpur, Pune, Mumbai"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                    />
+                  </div>
 
-                    <div className="space-y-1.5">
+                  {/* Degree Searchable Dropdown */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
                       <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                        <Building2 className="w-3.5 h-3.5 text-[#17458F]" />
-                        <span>Degree & Branch <span className="text-rose-500">*</span></span>
+                        <GraduationCap className="w-3.5 h-3.5 text-[#17458F]" />
+                        <span>Degree <span className="text-rose-500">*</span></span>
                       </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. B.Tech CSE, B.Sc, MCA"
-                        value={customBranch}
-                        onChange={(e) => setCustomBranch(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
-                      />
+                      <span className="text-[10px] text-slate-400">All India Recognized Degrees</span>
                     </div>
+                    <SearchableDegreeSelect
+                      value={degree}
+                      onChange={setDegree}
+                      placeholder="Search degree (e.g. B.Tech, BCA, MBA, B.Sc, MBBS, LL.B...)"
+                      required
+                    />
                   </div>
 
                   {/* Year of Study */}
@@ -736,7 +745,7 @@ export function ProfileSetupModal() {
 
                   <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-900 font-medium flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Instant access: Register for open competitions, hackathons, and cultural fests.</span>
+                    <span>Instant accreditation: Register for open competitions, hackathons, and cultural fests without BT ID.</span>
                   </div>
                 </>
               )}

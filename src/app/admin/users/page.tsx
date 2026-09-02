@@ -703,7 +703,7 @@ export default function AdminUsersPage() {
                           {isFaculty ? (
                             <span>{u.facultyDepartment || u.department || "Academic Department"}</span>
                           ) : isExternal ? (
-                            <span>{u.customBranch || u.department || "Academic Stream"}</span>
+                            <span>{u.degree || u.customBranch || u.department || "Academic Degree"}</span>
                           ) : (
                             <>
                               <span className="lg:hidden inline-block px-2 py-0.5 rounded-md bg-slate-100 text-[#17458F] font-mono text-[11px] font-bold">

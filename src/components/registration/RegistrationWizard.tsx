@@ -925,14 +925,14 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                         <div className="space-y-1.5">
                           <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                             <GraduationCap className="w-3.5 h-3.5 text-[#17458F]" />
-                            <span>Degree &amp; Branch / Stream *</span>
+                            <span>Degree *</span>
                           </label>
                           <input
                             type="text"
                             required
                             value={formData.department}
                             onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                            placeholder="e.g. B.Tech Computer Engineering"
+                            placeholder="e.g. B.Tech, BCA, MBA, B.Sc..."
                             className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F]"
                           />
                         </div>

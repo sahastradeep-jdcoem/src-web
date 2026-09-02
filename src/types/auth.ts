@@ -32,6 +32,7 @@ export interface UserProfile {
   // External / Non-JDCOEM Student fields
   collegeName?: string; // e.g. "VNIT Nagpur", "RCOEM", "GHRCE"
   city?: string; // e.g. "Nagpur", "Pune", "Mumbai"
+  degree?: string; // e.g. "B.Tech - Bachelor of Technology", "MBA", "BCA", etc.
   customBranch?: string; // e.g. "Computer Science & Design", "B.Sc Physics"
 }
 
