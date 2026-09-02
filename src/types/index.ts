@@ -152,6 +152,8 @@ export interface RegistrationRecord {
   teamName?: string;
   teamMembers?: string[];
   registeredAt: string;
+  createdAt?: any;
+  paidAt?: string;
   status: "CONFIRMED" | "PENDING" | "COMPLETED" | "CHECKED_IN" | "CANCELLED";
   paymentStatus?: "FREE" | "PAID" | "PENDING";
   paymentId?: string;

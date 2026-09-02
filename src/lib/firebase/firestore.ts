@@ -218,9 +218,11 @@ export function subscribeToUsersFromFirestore(callback: (users: UserProfile[]) =
 export async function saveRegistrationToFirestore(
   data: Omit<StudentRegistrationRecord, "createdAt" | "status">
 ): Promise<StudentRegistrationRecord> {
+  const nowIso = new Date().toISOString();
   const cleanData = cleanUndefined(data);
   const newRecord: StudentRegistrationRecord = {
     ...cleanData,
+    registeredAt: cleanData.registeredAt || nowIso,
     status: "CONFIRMED",
     createdAt: serverTimestamp(),
   };
@@ -237,7 +239,13 @@ export async function saveRegistrationToFirestore(
   // Also persist in localStorage for instant offline access and demo reliability
   try {
     const existing = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
-    localStorage.setItem("src_local_registrations", JSON.stringify([newRecord, ...existing]));
+    const localRecord = {
+      ...newRecord,
+      createdAt: nowIso,
+      registeredAt: cleanData.registeredAt || nowIso,
+      paidAt: cleanData.paidAt || (cleanData.amountPaid && cleanData.amountPaid > 0 ? nowIso : undefined),
+    };
+    localStorage.setItem("src_local_registrations", JSON.stringify([localRecord, ...existing]));
   } catch (e) {
     console.warn("LocalStorage save warning", e);
   }

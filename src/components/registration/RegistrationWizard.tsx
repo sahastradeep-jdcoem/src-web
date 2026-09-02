@@ -506,6 +506,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         amountPaid: paymentDetails?.amountPaid || 0,
         currency: "INR",
         paidAt: new Date().toISOString(),
+        registeredAt: new Date().toISOString(),
         tenureId: "tenure-2025-26",
         customAnswers: Object.keys(structuredAnswers).length > 0 ? structuredAnswers : undefined,
       });

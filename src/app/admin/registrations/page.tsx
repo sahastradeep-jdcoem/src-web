@@ -148,30 +148,55 @@ export default function AdminRegistrationsPage() {
   }, []);
 
   const formatRecords = (records: any[]): RegistrationRecord[] => {
-    return records.map((r: any) => ({
-      id: r.id,
-      registrationId: r.id,
-      eventSlug: r.eventId || r.eventSlug || "",
-      eventName: r.eventTitle || r.eventName || "Event Delegate Pass",
-      participantName: r.leaderName || r.participantName || "Delegate",
-      email: r.email,
-      phone: r.phone,
-      department: r.department,
-      year: r.year,
-      teamType: (r.teamSize && r.teamSize > 1) || r.teamType === "Team" ? "Team" : "Individual",
-      teamName: r.teamName,
-      teamMembers: r.teamMembers ? r.teamMembers.map((m: any) => `${m.name} (${m.btId})`) : r.members?.map((m: any) => m.name),
-      registeredAt: r.registeredAt || (r.createdAt ? new Date().toISOString().split("T")[0] : new Date().toISOString().split("T")[0]),
-      status: r.status || "CONFIRMED",
-      paymentStatus: r.paymentStatus || (r.amountPaid > 0 ? "PAID" : "FREE"),
-      paymentId: r.paymentId,
-      orderId: r.orderId,
-      amountPaid: r.amountPaid || 0,
-      ticketCode: `${r.id.slice(0, 7)}-TK`,
-      qrPayload: r.qrPayload || `SRC:PASS:${r.id}`,
-      btId: r.btId,
-      customAnswers: r.customAnswers,
-    }));
+    return records.map((r: any) => {
+      // Determine the best ISO time string from r.paidAt, r.registeredAt, or r.createdAt
+      let fullIsoTime = "";
+      if (typeof r.paidAt === "string" && r.paidAt.includes("T")) {
+        fullIsoTime = r.paidAt;
+      } else if (typeof r.registeredAt === "string" && r.registeredAt.includes("T")) {
+        fullIsoTime = r.registeredAt;
+      } else if (r.createdAt) {
+        if (typeof r.createdAt?.toDate === "function") {
+          fullIsoTime = r.createdAt.toDate().toISOString();
+        } else if (typeof r.createdAt?.seconds === "number") {
+          fullIsoTime = new Date(r.createdAt.seconds * 1000).toISOString();
+        } else if (typeof r.createdAt?._seconds === "number") {
+          fullIsoTime = new Date(r.createdAt._seconds * 1000).toISOString();
+        } else if (typeof r.createdAt === "string" && r.createdAt.includes("T")) {
+          fullIsoTime = r.createdAt;
+        }
+      }
+
+      const cleanRegisteredAt = fullIsoTime || r.registeredAt || (typeof r.createdAt === "string" ? r.createdAt : new Date().toISOString());
+
+      return {
+        ...r,
+        id: r.id,
+        registrationId: r.id,
+        eventSlug: r.eventId || r.eventSlug || "",
+        eventName: r.eventTitle || r.eventName || "Event Delegate Pass",
+        participantName: r.leaderName || r.participantName || "Delegate",
+        email: r.email,
+        phone: r.phone,
+        department: r.department,
+        year: r.year,
+        teamType: (r.teamSize && r.teamSize > 1) || r.teamType === "Team" ? "Team" : "Individual",
+        teamName: r.teamName,
+        teamMembers: r.teamMembers ? r.teamMembers.map((m: any) => typeof m === "string" ? m : `${m.name} (${m.btId})`) : r.members?.map((m: any) => typeof m === "string" ? m : m.name),
+        registeredAt: cleanRegisteredAt,
+        createdAt: r.createdAt || fullIsoTime,
+        paidAt: r.paidAt || (cleanRegisteredAt.includes("T") ? cleanRegisteredAt : undefined),
+        status: r.status || "CONFIRMED",
+        paymentStatus: r.paymentStatus || (r.amountPaid > 0 ? "PAID" : "FREE"),
+        paymentId: r.paymentId,
+        orderId: r.orderId,
+        amountPaid: r.amountPaid || 0,
+        ticketCode: r.ticketCode || `${r.id.slice(0, 7)}-TK`,
+        qrPayload: r.qrPayload || `SRC:PASS:${r.id}`,
+        btId: r.btId,
+        customAnswers: r.customAnswers,
+      };
+    });
   };
 
   const loadRegistrations = async () => {
@@ -707,25 +732,103 @@ export default function AdminRegistrationsPage() {
   };
 
   const formatGoogleFormsTimestamp = (r: any): string => {
-    const raw = r.paidAt || r.registeredAt || r.createdAt;
-    if (!raw) {
-      const now = new Date();
-      return `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
-    }
+    const candidates = [
+      r.paidAt,
+      r.createdAt,
+      r.registeredAt,
+      r.timestamp,
+    ];
 
-    if (typeof raw === "number" || /^\d{10,13}$/.test(String(raw))) {
-      const d = new Date(Number(raw));
-      if (!isNaN(d.getTime())) {
-        return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+    let dateObj: Date | null = null;
+
+    for (const val of candidates) {
+      if (!val) continue;
+
+      // 1. Firestore Timestamp instance
+      if (typeof val?.toDate === "function") {
+        const d = val.toDate();
+        if (!isNaN(d.getTime())) {
+          dateObj = d;
+          break;
+        }
+      }
+
+      // 2. Firestore Timestamp raw object
+      if (typeof val?.seconds === "number") {
+        const d = new Date(val.seconds * 1000 + (val.nanoseconds ? val.nanoseconds / 1000000 : 0));
+        if (!isNaN(d.getTime())) {
+          dateObj = d;
+          break;
+        }
+      }
+      if (typeof val?._seconds === "number") {
+        const d = new Date(val._seconds * 1000 + (val._nanoseconds ? val._nanoseconds / 1000000 : 0));
+        if (!isNaN(d.getTime())) {
+          dateObj = d;
+          break;
+        }
+      }
+
+      // 3. Numeric timestamp (epoch ms or s)
+      if (typeof val === "number") {
+        const d = new Date(val > 1e11 ? val : val * 1000);
+        if (!isNaN(d.getTime())) {
+          dateObj = d;
+          break;
+        }
+      }
+      if (typeof val === "string" && /^\d{10,13}$/.test(val.trim())) {
+        const num = Number(val.trim());
+        const d = new Date(num > 1e11 ? num : num * 1000);
+        if (!isNaN(d.getTime())) {
+          dateObj = d;
+          break;
+        }
+      }
+
+      // 4. ISO string containing time (e.g. 2026-09-02T19:45:00.000Z)
+      if (typeof val === "string" && val.includes("T")) {
+        const d = new Date(val);
+        if (!isNaN(d.getTime())) {
+          dateObj = d;
+          break;
+        }
+      }
+
+      // 5. String with time colon ":"
+      if (typeof val === "string" && val.includes(":")) {
+        const d = new Date(val);
+        if (!isNaN(d.getTime())) {
+          dateObj = d;
+          break;
+        }
       }
     }
 
-    const d = new Date(raw);
-    if (!isNaN(d.getTime())) {
-      return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+    // 6. If only date-only string was found (e.g. "2026-09-02"), parse without UTC midnight shift
+    if (!dateObj) {
+      for (const val of candidates) {
+        if (typeof val === "string" && /^\d{4}-\d{2}-\d{2}$/.test(val.trim())) {
+          const parts = val.trim().split("-");
+          dateObj = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+          break;
+        }
+      }
     }
 
-    return String(raw);
+    if (!dateObj || isNaN(dateObj.getTime())) {
+      dateObj = new Date();
+    }
+
+    // Format in standard Google Forms / Excel format: M/D/YYYY HH:MM:SS
+    const month = dateObj.getMonth() + 1;
+    const day = dateObj.getDate();
+    const year = dateObj.getFullYear();
+    const hours = String(dateObj.getHours()).padStart(2, "0");
+    const minutes = String(dateObj.getMinutes()).padStart(2, "0");
+    const seconds = String(dateObj.getSeconds()).padStart(2, "0");
+
+    return `${month}/${day}/${year} ${hours}:${minutes}:${seconds}`;
   };
 
   const generateExportData = () => {
