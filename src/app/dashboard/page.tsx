@@ -75,35 +75,9 @@ export default function StudentDashboardPage() {
       const cleanBtId = user?.btId?.trim().toUpperCase();
       const cleanName = user?.displayName?.trim().toLowerCase();
 
-      // 1. Filter out records for deleted events (e.g. legacy Code Strom if it was deleted)
+      // 1. All valid registration records (every event pass is included)
       const validRecords = rawRecords.filter((r: any) => {
-        if (!r || !r.id) return false;
-        const eventId = (r.eventId || "").toLowerCase();
-        const eventTitle = (r.eventTitle || "").toLowerCase().trim();
-
-        // Explicitly purge legacy Code Strom / codestorm only if it is no longer published
-        if (eventTitle.includes("strom") || eventId.includes("strom")) {
-          const isStillPublished = activeStoredEvents.some(e => 
-            e.name.toLowerCase().includes("strom") || e.slug.toLowerCase().includes("strom")
-          );
-          if (!isStillPublished) return false;
-        }
-
-        // Must match at least one published event in current system (or preserve valid registered events)
-        if (activeStoredEvents.length > 0) {
-          const matchesActive = activeStoredEvents.some(e =>
-            e.id.toLowerCase() === eventId ||
-            e.slug.toLowerCase() === eventId ||
-            e.name.toLowerCase().trim() === eventTitle ||
-            eventId.includes(e.slug.toLowerCase()) ||
-            e.slug.toLowerCase().includes(eventId) ||
-            e.name.toLowerCase().includes(eventTitle) ||
-            eventTitle.includes(e.name.toLowerCase())
-          );
-          return matchesActive || Boolean(r.eventTitle || r.eventName);
-        }
-
-        return true;
+        return Boolean(r && r.id);
       });
 
       // 2. Filter records that specifically belong to this authenticated student (as leader OR squad member)
@@ -156,21 +130,22 @@ export default function StudentDashboardPage() {
         return false;
       });
 
-      // 3. Deduplicate by event (if multiple exist for the same event, keep the latest or checked-in one)
-      const eventMap = new Map<string, any>();
+      // 3. Deduplicate by unique Registration Pass ID and sort by newest first
+      const passMap = new Map<string, any>();
       userMatched.forEach((r: any) => {
-        const evKey = (r.eventId || r.eventTitle || r.id).toLowerCase().trim();
-        const existing = eventMap.get(evKey);
-        if (!existing) {
-          eventMap.set(evKey, r);
-        } else if (r.status === "CHECKED_IN" && existing.status !== "CHECKED_IN") {
-          eventMap.set(evKey, r);
-        } else if (new Date(r.paidAt || r.registeredAt || 0).getTime() > new Date(existing.paidAt || existing.registeredAt || 0).getTime()) {
-          eventMap.set(evKey, r);
+        const passId = (r.id || "").trim();
+        if (!passId) return;
+        const existing = passMap.get(passId);
+        if (!existing || r.status === "CHECKED_IN") {
+          passMap.set(passId, r);
         }
       });
 
-      return Array.from(eventMap.values()).map((r: any) => ({
+      const sortedPasses = Array.from(passMap.values()).sort(
+        (a: any, b: any) => new Date(b.paidAt || b.registeredAt || 0).getTime() - new Date(a.paidAt || a.registeredAt || 0).getTime()
+      );
+
+      return sortedPasses.map((r: any) => ({
         id: r.id,
         registrationId: r.id,
         eventSlug: r.eventId || r.eventSlug || "",
