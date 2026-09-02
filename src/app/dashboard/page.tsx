@@ -223,27 +223,72 @@ export default function StudentDashboardPage() {
   const activeRegistrations = registrations.filter((r) => r.status !== "COMPLETED");
   const completedRegistrations = registrations.filter((r) => r.status === "COMPLETED");
 
-  const displayName = user?.displayName || "Aryan Sharma";
-  const displayDepartment = user?.department || "Computer Science & Engineering";
+  const isFaculty = user?.role === "FACULTY" || user?.userType === "FACULTY";
+  const isExternal = user?.userType === "EXTERNAL_STUDENT" || user?.isCollegeStudent === false || Boolean(user?.collegeName);
+  const isPendingFaculty = isFaculty && user?.facultyApprovalStatus === "pending";
+
+  const displayName = user?.displayName || (isFaculty ? "Faculty Member" : isExternal ? "Visiting Delegate" : "Aryan Sharma");
+  const displayDepartment = user?.facultyDepartment || user?.customBranch || user?.department || "Computer Science & Engineering";
   const displayEmail = user?.email || "aryan.sharma@jdcoem.ac.in";
-  const displayBtId = user?.btId || "BT22CSE045";
-  const displayYear = user?.year || "3rd Year";
+  const displayBtId = user?.btId || (isFaculty ? (user.employeeId || "Staff Access") : isExternal ? "External" : "BT22CSE045");
+  const displayYear = isFaculty ? (user?.facultyDesignation || "Faculty Member") : (user?.year || "3rd Year");
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto space-y-12">
         
+        {/* PENDING FACULTY ALERT BANNER */}
+        {isPendingFaculty && (
+          <div className="p-4 rounded-3xl bg-amber-50 border-2 border-amber-300 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-in fade-in">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                <Clock className="w-5 h-5 animate-pulse" />
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="font-heading font-extrabold text-sm text-slate-900">
+                  Faculty Verification Pending Admin Council Review
+                </h4>
+                <p className="text-xs text-slate-600 font-medium">
+                  Your profile has been created and submitted to SRC Administrators for institutional accreditation. You can browse all events and passes in the meantime.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={openProfileModal}
+              className="px-3.5 py-1.5 rounded-xl bg-amber-200 hover:bg-amber-300 text-amber-900 text-xs font-bold transition-all shrink-0 cursor-pointer self-start sm:self-center"
+            >
+              Review Details
+            </button>
+          </div>
+        )}
+
         {/* Dashboard Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-200 pb-8">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="orange" size="md">
-                STUDENT DELEGATE PORTAL
+              <Badge variant={isFaculty ? "navy" : isExternal ? "success" : "orange"} size="md">
+                {isFaculty 
+                  ? "FACULTY & ACADEMIC PORTAL" 
+                  : isExternal 
+                  ? "INTER-COLLEGIATE DELEGATE PORTAL" 
+                  : "STUDENT DELEGATE PORTAL"}
               </Badge>
               {user?.designationBadge ? (
                 <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-sm shadow-amber-500/25">
                   <Award className="w-3.5 h-3.5" />
                   <span>{user.designationBadge}</span>
+                </span>
+              ) : isFaculty ? (
+                <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${
+                  user?.facultyApprovalStatus === "approved"
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : "bg-amber-50 text-amber-700 border-amber-200"
+                }`}>
+                  {user?.facultyApprovalStatus === "approved" ? "Verified Faculty" : "Approval Pending"}
+                </span>
+              ) : isExternal ? (
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  {user?.collegeName ? `${user.collegeName} • ${user.city || "Delegate"}` : "External Student"}
                 </span>
               ) : user ? (
                 <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -255,7 +300,19 @@ export default function StudentDashboardPage() {
               WELCOME BACK, <span className="text-[#E78023]">{displayName.split(" ")[0]}</span>
             </h1>
             <p className="text-sm text-slate-600 font-medium font-sans">
-              BT ID: <strong className="font-mono text-[#E78023]">{displayBtId}</strong> • {displayDepartment} • {displayYear}
+              {isFaculty ? (
+                <>
+                  <strong className="text-[#17458F] font-bold">{user?.facultyDesignation || "Faculty Member"}</strong> • {displayDepartment}
+                </>
+              ) : isExternal ? (
+                <>
+                  <strong className="text-[#17458F] font-bold">{user?.collegeName || "Other College"}</strong> • 📍 {user?.city || "Nagpur"} • {displayDepartment} • {displayYear}
+                </>
+              ) : (
+                <>
+                  BT ID: <strong className="font-mono text-[#E78023]">{displayBtId}</strong> • {displayDepartment} • {displayYear}
+                </>
+              )}
             </p>
           </div>
 
@@ -471,16 +528,35 @@ export default function StudentDashboardPage() {
                   </div>
                   <div>
                     <span className="text-[9px] font-bold uppercase tracking-widest text-[#E78023]">
-                      JDCOEM SRC
+                      {isFaculty ? "ACADEMIC ACCREDITATION" : isExternal ? "VISITING DELEGATE" : "JDCOEM SRC"}
                     </span>
                     <h4 className="font-heading font-bold text-sm text-white">
-                      {user?.designationBadge ? "COUNCIL OFFICER" : "STUDENT DELEGATE"}
+                      {isFaculty 
+                        ? "FACULTY & STAFF PASS" 
+                        : isExternal 
+                        ? (user?.collegeName || "INTER-COLLEGIATE DELEGATE") 
+                        : user?.designationBadge 
+                        ? "COUNCIL OFFICER" 
+                        : "STUDENT DELEGATE"}
                     </h4>
                   </div>
                 </div>
 
-                <Badge variant="orange" size="sm">
-                  VERIFIED
+                <Badge 
+                  variant={
+                    isFaculty 
+                      ? (user?.facultyApprovalStatus === "approved" ? "success" : "orange")
+                      : isExternal 
+                      ? "success" 
+                      : "orange"
+                  } 
+                  size="sm"
+                >
+                  {isFaculty 
+                    ? (user?.facultyApprovalStatus === "approved" ? "VERIFIED FACULTY" : "PENDING REVIEW")
+                    : isExternal 
+                    ? "VISITING PASS" 
+                    : "VERIFIED"}
                 </Badge>
               </div>
 
@@ -502,31 +578,51 @@ export default function StudentDashboardPage() {
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div>
                     <span className="text-[10px] text-slate-300 font-medium uppercase tracking-wider">
-                      Department
+                      {isExternal ? "Institution" : "Department"}
                     </span>
-                    <p className="font-semibold text-slate-100 truncate" title={displayDepartment}>
-                      <span className="sm:hidden">{getDepartmentShortName(displayDepartment)}</span>
-                      <span className="hidden sm:inline">{displayDepartment.split("(")[0]}</span>
+                    <p className="font-semibold text-slate-100 truncate" title={isExternal ? user?.collegeName : displayDepartment}>
+                      {isExternal 
+                        ? (user?.collegeName || "Other College")
+                        : (
+                          <>
+                            <span className="sm:hidden">{getDepartmentShortName(displayDepartment)}</span>
+                            <span className="hidden sm:inline">{displayDepartment.split("(")[0]}</span>
+                          </>
+                        )}
                     </p>
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-300 font-medium uppercase tracking-wider">
-                      College BT ID
+                      {isFaculty ? "Staff / Employee ID" : isExternal ? "Location" : "College BT ID"}
                     </span>
-                    <p className="font-mono font-bold text-[#E78023]">{displayBtId}</p>
+                    <p className="font-mono font-bold text-[#E78023] truncate">
+                      {isFaculty 
+                        ? (user?.employeeId || "Faculty Member") 
+                        : isExternal 
+                        ? (user?.city ? `📍 ${user.city}` : "Visiting") 
+                        : displayBtId}
+                    </p>
                   </div>
                 </div>
 
                 <div className="text-xs pt-1 border-t border-white/10 flex justify-between">
-                  <span className="text-[10px] text-slate-300 uppercase tracking-wider font-medium">Year of Study:</span>
-                  <span className="text-slate-100 font-bold">{displayYear}</span>
+                  <span className="text-[10px] text-slate-300 uppercase tracking-wider font-medium">
+                    {isFaculty ? "Academic Role:" : isExternal ? "Degree & Year:" : "Year of Study:"}
+                  </span>
+                  <span className="text-slate-100 font-bold">
+                    {isFaculty 
+                      ? (user?.facultyDesignation || "Professor / Staff") 
+                      : isExternal 
+                      ? `${user?.customBranch || "Student"} • ${user?.year || displayYear}`
+                      : displayYear}
+                  </span>
                 </div>
               </div>
 
               <div className="p-4 rounded-2xl bg-white text-slate-900 flex items-center justify-between">
                 <div className="space-y-0.5">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-sans">
-                    Universal Check-In Pass
+                    {isFaculty ? "Faculty Accreditation Pass" : "Universal Check-In Pass"}
                   </span>
                   <p className="font-mono text-xs font-bold text-[#17458F]">
                     {user ? `SRC-${user.uid.slice(0, 8).toUpperCase()}` : "SRC-DELEGATE-2026"}
@@ -534,7 +630,7 @@ export default function StudentDashboardPage() {
                 </div>
                 <div className="p-1 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-center">
                   <ScannableQRCode
-                    value={user ? `SRC:STUDENT:${user.uid}:${displayBtId}` : "SRC:STUDENT:DELEGATE"}
+                    value={user ? `SRC:USER:${user.uid}:${user.role}:${displayBtId}` : "SRC:STUDENT:DELEGATE"}
                     size={38}
                     includeMargin={false}
                     renderAs="canvas"

@@ -33,18 +33,29 @@ import {
   saveRegisteredUser, 
   deleteRegisteredUser, 
   changeUserRole, 
+  approveFacultyUser,
+  rejectFacultyUser,
   mergeRemoteUsers,
   syncUsersFromFirestore,
   RegisteredUserRecord 
 } from "@/lib/usersStore";
 import { subscribeToUsersFromFirestore } from "@/lib/firebase/firestore";
 import { getStoredDepartments, getDepartmentShortName } from "@/lib/departmentsStore";
+import { 
+  School, 
+  MapPin, 
+  Briefcase, 
+  Clock, 
+  Check, 
+  X, 
+  Globe 
+} from "lucide-react";
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<RegisteredUserRecord[]>([]);
   const [departments, setDepartments] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState("All");
+  const [categoryFilter, setCategoryFilter] = useState<"All" | "PENDING_FACULTY" | "VERIFIED_FACULTY" | "JDCOEM_STUDENTS" | "EXTERNAL_STUDENTS" | "COUNCIL_ADMIN">("All");
   const [deptFilter, setDeptFilter] = useState("All");
   const [selectedUser, setSelectedUser] = useState<RegisteredUserRecord | null>(null);
   const [userToEdit, setUserToEdit] = useState<RegisteredUserRecord | null>(null);
@@ -61,6 +72,35 @@ export default function AdminUsersPage() {
         setUsers(synced);
       }
     } catch {}
+  };
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      const synced = await syncUsersFromFirestore();
+      if (synced && synced.length > 0) {
+        setUsers(synced);
+        showNotice(`Cloud sync complete. ${synced.length} user records updated.`);
+      } else {
+        showNotice("Local user directory is up to date with Cloud Firestore.");
+      }
+    } catch {
+      showNotice("Cloud sync encountered a network gap. Local cache active.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleApproveFaculty = (u: RegisteredUserRecord) => {
+    const updated = approveFacultyUser(u.uid);
+    setUsers(updated);
+    showNotice(`Approved faculty credentials for ${u.displayName || u.email}.`);
+  };
+
+  const handleRejectFaculty = (u: RegisteredUserRecord) => {
+    const updated = rejectFacultyUser(u.uid);
+    setUsers(updated);
+    showNotice(`Revoked faculty approval for ${u.displayName || u.email}.`);
   };
 
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
@@ -165,19 +205,6 @@ export default function AdminUsersPage() {
     });
   };
 
-  const handleManualSync = async () => {
-    setIsSyncing(true);
-    try {
-      const synced = await syncUsersFromFirestore();
-      setUsers(synced);
-      showNotice(`Successfully synced ${synced.length} active registered users from cloud database.`);
-    } catch (e) {
-      showNotice("Could not reach cloud database, displaying cached roster.");
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
   useEffect(() => {
     loadData();
 
@@ -247,29 +274,71 @@ export default function AdminUsersPage() {
     setTimeout(() => setNotice(null), 3500);
   };
 
+  const pendingFaculty = useMemo(() => {
+    return users.filter(
+      (u) => (u.role === "FACULTY" || u.userType === "FACULTY") && u.facultyApprovalStatus === "pending"
+    );
+  }, [users]);
+
+  const verifiedFaculty = useMemo(() => {
+    return users.filter(
+      (u) => (u.role === "FACULTY" || u.userType === "FACULTY") && u.facultyApprovalStatus === "approved"
+    );
+  }, [users]);
+
+  const jdcoemStudents = useMemo(() => {
+    return users.filter(
+      (u) => (u.userType === "JDCOEM_STUDENT" || (u.role === "STUDENT" && !u.collegeName && u.btId)) && u.role !== "FACULTY" && u.role !== "COUNCIL_ADMIN"
+    );
+  }, [users]);
+
+  const externalStudents = useMemo(() => {
+    return users.filter(
+      (u) => u.userType === "EXTERNAL_STUDENT" || u.isCollegeStudent === false || Boolean(u.collegeName)
+    );
+  }, [users]);
+
+  const adminUsers = useMemo(() => {
+    return users.filter((u) => u.role === "COUNCIL_ADMIN");
+  }, [users]);
+
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
       const name = (u.displayName || "").toLowerCase();
       const email = (u.email || "").toLowerCase();
       const btId = (u.btId || "").toLowerCase();
-      const dept = (u.department || "").toLowerCase();
+      const dept = (u.department || u.facultyDepartment || "").toLowerCase();
+      const college = (u.collegeName || "").toLowerCase();
+      const city = (u.city || "").toLowerCase();
       const query = searchQuery.toLowerCase();
 
       const matchesSearch =
         name.includes(query) ||
         email.includes(query) ||
         btId.includes(query) ||
-        dept.includes(query);
+        dept.includes(query) ||
+        college.includes(query) ||
+        city.includes(query);
 
-      const matchesRole =
-        roleFilter === "All" || u.role === roleFilter;
+      let matchesCategory = true;
+      if (categoryFilter === "PENDING_FACULTY") {
+        matchesCategory = (u.role === "FACULTY" || u.userType === "FACULTY") && u.facultyApprovalStatus === "pending";
+      } else if (categoryFilter === "VERIFIED_FACULTY") {
+        matchesCategory = (u.role === "FACULTY" || u.userType === "FACULTY") && u.facultyApprovalStatus === "approved";
+      } else if (categoryFilter === "JDCOEM_STUDENTS") {
+        matchesCategory = (u.userType === "JDCOEM_STUDENT" || (u.role === "STUDENT" && !u.collegeName)) && u.role !== "FACULTY";
+      } else if (categoryFilter === "EXTERNAL_STUDENTS") {
+        matchesCategory = u.userType === "EXTERNAL_STUDENT" || u.isCollegeStudent === false || Boolean(u.collegeName);
+      } else if (categoryFilter === "COUNCIL_ADMIN") {
+        matchesCategory = u.role === "COUNCIL_ADMIN";
+      }
 
       const matchesDept =
-        deptFilter === "All" || u.department === deptFilter;
+        deptFilter === "All" || u.department === deptFilter || u.facultyDepartment === deptFilter;
 
-      return matchesSearch && matchesRole && matchesDept;
+      return matchesSearch && matchesCategory && matchesDept;
     });
-  }, [users, searchQuery, roleFilter, deptFilter]);
+  }, [users, searchQuery, categoryFilter, deptFilter]);
 
   const handleExportExcel = () => {
     if (filteredUsers.length === 0) {
@@ -278,13 +347,17 @@ export default function AdminUsersPage() {
     }
 
     const rows = filteredUsers.map((u) => ({
+      "User Type": u.role === "FACULTY" || u.userType === "FACULTY" ? "FACULTY" : u.userType === "EXTERNAL_STUDENT" ? "EXTERNAL STUDENT" : "JDCOEM STUDENT",
       "Full Name": u.displayName || "",
       "Email Address": u.email || "",
-      "College BT ID": u.btId || "",
-      "Department / Branch": u.department || "",
-      "Academic Year": u.year || "",
+      "College BT ID": u.btId || "N/A",
+      "College / University": u.collegeName || "JDCOEM Nagpur",
+      "City": u.city || "Nagpur",
+      "Department / Branch": u.facultyDepartment || u.department || u.customBranch || "",
+      "Academic Year / Role": u.facultyDesignation || u.year || "",
+      "Faculty Status": u.facultyApprovalStatus || "N/A",
       "WhatsApp Contact": u.phone || "",
-      "Role": u.role,
+      "Access Role": u.role,
       "Profile Completed": u.profileCompleted ? "YES" : "NO",
       "Registration Date": u.createdAt || "",
     }));
@@ -304,9 +377,6 @@ export default function AdminUsersPage() {
     XLSX.writeFile(wb, `SRC_Active_Users_Roster_${Date.now()}.xlsx`);
   };
 
-  const studentCount = users.filter((u) => u.role === "STUDENT").length;
-  const adminCount = users.filter((u) => u.role === "COUNCIL_ADMIN").length;
-
   return (
     <div className="space-y-8 max-w-7xl mx-auto text-[#0F172A]">
       
@@ -315,14 +385,14 @@ export default function AdminUsersPage() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#0F172A] uppercase tracking-tight">
-              ACTIVE USERS &amp; STUDENT DIRECTORY
+              USER ROSTER &amp; ACADEMIC DIRECTORY
             </h1>
             <Badge variant="orange" size="sm">
               {users.length} REGISTERED
             </Badge>
           </div>
           <p className="text-xs text-slate-500 font-medium mt-1">
-            Real-time roster of authenticated students, college BT IDs, academic branches, and council access.
+            Real-time roster of authenticated students, faculty credentials, external college delegates, and council access.
           </p>
         </div>
 
@@ -368,30 +438,68 @@ export default function AdminUsersPage() {
         </div>
       )}
 
-      {/* Summary KPI Badges */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Active Users</span>
+      {/* PENDING FACULTY APPROVAL ALERT BANNER */}
+      {pendingFaculty.length > 0 && (
+        <div className="p-4 rounded-3xl bg-amber-500/10 border-2 border-amber-400/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <Clock className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <h4 className="font-heading font-extrabold text-sm text-slate-900">
+                {pendingFaculty.length} Faculty Verification Request{pendingFaculty.length > 1 ? "s" : ""} Pending Review
+              </h4>
+              <p className="text-[11px] text-slate-600 font-medium">
+                Academic staff members have signed in and are awaiting council accreditation approval.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setCategoryFilter("PENDING_FACULTY")}
+            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-all shadow-xs shrink-0 cursor-pointer text-center"
+          >
+            View Pending Requests ({pendingFaculty.length})
+          </button>
+        </div>
+      )}
+
+      {/* Summary KPI Badges (5 Cards) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Users</span>
           <p className="font-hero font-extrabold text-2xl text-[#0F172A]">{users.length}</p>
-          <span className="text-[10px] text-slate-500 font-medium">Google Authenticated</span>
+          <span className="text-[10px] text-slate-500 font-medium">All Accounts</span>
         </div>
 
-        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Enrolled Students</span>
-          <p className="font-hero font-extrabold text-2xl text-[#17458F]">{studentCount}</p>
-          <span className="text-[10px] text-slate-500 font-medium">General Delegates</span>
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">JDCOEM Students</span>
+          <p className="font-hero font-extrabold text-2xl text-[#17458F]">{jdcoemStudents.length}</p>
+          <span className="text-[10px] text-slate-500 font-medium">Verified BT IDs</span>
         </div>
 
-        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Admins</span>
-          <p className="font-hero font-extrabold text-2xl text-[#E78023]">{adminCount}</p>
-          <span className="text-[10px] text-slate-500 font-medium">Admin Studio Privileges</span>
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Faculty &amp; Staff</span>
+            {pendingFaculty.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold text-[9px]">
+                {pendingFaculty.length} Pending
+              </span>
+            )}
+          </div>
+          <p className="font-hero font-extrabold text-2xl text-[#E78023]">{verifiedFaculty.length + pendingFaculty.length}</p>
+          <span className="text-[10px] text-slate-500 font-medium">{verifiedFaculty.length} Approved</span>
         </div>
 
-        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Academic Branches</span>
-          <p className="font-hero font-extrabold text-2xl text-emerald-600">{departments.length}</p>
-          <span className="text-[10px] text-slate-500 font-medium">Official Departments</span>
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Other Colleges</span>
+          <p className="font-hero font-extrabold text-2xl text-emerald-600">{externalStudents.length}</p>
+          <span className="text-[10px] text-slate-500 font-medium">Visiting Delegates</span>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Council Admins</span>
+          <p className="font-hero font-extrabold text-2xl text-slate-900">{adminUsers.length}</p>
+          <span className="text-[10px] text-slate-500 font-medium">Full Studio Access</span>
         </div>
       </div>
 
@@ -403,29 +511,71 @@ export default function AdminUsersPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by student name, BT ID, email, or branch..."
+            placeholder="Search by name, BT ID, email, college, or branch..."
             className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs focus:outline-none focus:border-[#17458F]"
           />
         </div>
 
-        <div className="flex items-center gap-3 w-full lg:w-auto flex-wrap">
-          {/* Role Filter */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-bold text-slate-500">Role:</span>
-            {["All", "STUDENT", "COUNCIL_ADMIN"].map((r) => (
-              <button
-                key={r}
-                onClick={() => setRoleFilter(r)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  roleFilter === r
-                    ? "bg-[#E78023] text-white shadow-xs"
-                    : "bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100"
-                }`}
-              >
-                {r === "COUNCIL_ADMIN" ? "Admins" : r === "STUDENT" ? "Students" : "All"}
-              </button>
-            ))}
-          </div>
+        <div className="flex items-center gap-2 w-full lg:w-auto flex-wrap">
+          {/* Category Filter Pills */}
+          <button
+            onClick={() => setCategoryFilter("All")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              categoryFilter === "All"
+                ? "bg-[#17458F] text-white shadow-xs"
+                : "bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100"
+            }`}
+          >
+            All ({users.length})
+          </button>
+
+          <button
+            onClick={() => setCategoryFilter("PENDING_FACULTY")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              categoryFilter === "PENDING_FACULTY"
+                ? "bg-amber-500 text-white shadow-xs"
+                : "bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100"
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>Pending Approvals ({pendingFaculty.length})</span>
+          </button>
+
+          <button
+            onClick={() => setCategoryFilter("VERIFIED_FACULTY")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              categoryFilter === "VERIFIED_FACULTY"
+                ? "bg-[#E78023] text-white shadow-xs"
+                : "bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100"
+            }`}
+          >
+            <School className="w-3.5 h-3.5" />
+            <span>Faculty ({verifiedFaculty.length})</span>
+          </button>
+
+          <button
+            onClick={() => setCategoryFilter("JDCOEM_STUDENTS")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              categoryFilter === "JDCOEM_STUDENTS"
+                ? "bg-[#17458F] text-white shadow-xs"
+                : "bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100"
+            }`}
+          >
+            <GraduationCap className="w-3.5 h-3.5" />
+            <span>JDCOEM ({jdcoemStudents.length})</span>
+          </button>
+
+          <button
+            onClick={() => setCategoryFilter("EXTERNAL_STUDENTS")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              categoryFilter === "EXTERNAL_STUDENTS"
+                ? "bg-emerald-600 text-white shadow-xs"
+                : "bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100"
+            }`}
+          >
+            <Globe className="w-3.5 h-3.5" />
+            <span>Other Colleges ({externalStudents.length})</span>
+          </button>
 
           {/* Department Filter */}
           <select
@@ -452,12 +602,12 @@ export default function AdminUsersPage() {
             </div>
             <div className="space-y-1">
               <h3 className="font-heading font-bold text-base text-slate-800">
-                No Active User Records Found
+                No User Records Found in Selected Filter
               </h3>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
                 {users.length === 0
-                  ? "As students and council members log in via Google OAuth and complete their profiles, their verified student accounts will appear here."
-                  : "No registered users match your search query."}
+                  ? "As students, faculty, and visiting delegates sign in via Google OAuth, their records will appear here."
+                  : "No registered users match your search query or selected category filter."}
               </p>
             </div>
           </div>
@@ -466,153 +616,254 @@ export default function AdminUsersPage() {
             <table className="w-full text-left text-xs border-collapse">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] tracking-wider font-bold">
                 <tr>
-                  <th className="py-4 px-6">Student / Officer</th>
-                  <th className="py-4 px-6">College BT ID</th>
-                  <th className="py-4 px-6">Department & Year</th>
-                  <th className="py-4 px-6">Role</th>
-                  <th className="py-4 px-6">Profile Status</th>
+                  <th className="py-4 px-6">User / Delegate</th>
+                  <th className="py-4 px-6">Affiliation / BT ID</th>
+                  <th className="py-4 px-6">Department &amp; Specialization</th>
+                  <th className="py-4 px-6">Account Category</th>
+                  <th className="py-4 px-6">Verification Status</th>
                   <th className="py-4 px-6 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-800 font-medium">
-                {filteredUsers.map((u) => (
-                  <tr key={u.uid} className="hover:bg-slate-50 transition-colors">
-                    
-                    {/* User Column */}
-                    <td className="py-4 px-6">
-                      <div className="flex items-center gap-3">
-                        <div className="relative h-9 w-9 rounded-full bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center text-slate-600 font-bold text-xs shrink-0">
-                          {u.photoURL ? (
-                            <Image
-                              src={u.photoURL}
-                              alt={u.displayName || "User"}
-                              fill
-                              className="object-cover"
-                            />
-                          ) : (
-                            <span>{(u.displayName || "S").charAt(0).toUpperCase()}</span>
-                          )}
-                        </div>
-                        <div>
-                          <span className="font-bold text-slate-900 block text-sm">
-                            {u.displayName || "JDCOEM Student"}
-                          </span>
-                          <span className="text-[11px] text-slate-500 font-mono">
-                            {u.email}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
+                {filteredUsers.map((u) => {
+                  const isFaculty = u.role === "FACULTY" || u.userType === "FACULTY";
+                  const isExternal = u.userType === "EXTERNAL_STUDENT" || u.isCollegeStudent === false || Boolean(u.collegeName);
+                  const isPendingFaculty = isFaculty && u.facultyApprovalStatus === "pending";
 
-                    {/* BT ID */}
-                    <td className="py-4 px-6">
-                      {u.btId ? (
-                        <span className="font-mono font-bold text-[#E78023] px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200">
-                          {u.btId}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 text-xs italic font-sans">
-                          Not set
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Department & Year */}
-                    <td className="py-4 px-6">
-                      <div className="text-slate-900 font-bold max-w-xs truncate" title={u.department}>
-                        <span className="lg:hidden inline-block px-2 py-0.5 rounded-md bg-slate-100 text-[#17458F] font-mono text-[11px] font-bold">
-                          {getDepartmentShortName(u.department || "Basic Science & Humanities Dept.")}
-                        </span>
-                        <span className="hidden lg:inline">
-                          {u.department || "Basic Science & Humanities"}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-500 font-sans">
-                        {u.year || "—"}
-                      </div>
-                    </td>
-
-                    {/* Role & Designation */}
-                    <td className="py-4 px-6">
-                      <div className="space-y-1">
-                        <Badge
-                          variant={u.role === "COUNCIL_ADMIN" ? "orange" : "slate"}
-                          size="sm"
-                        >
-                          {u.role === "COUNCIL_ADMIN" ? "Admin" : "Student"}
-                        </Badge>
-                        {u.designationBadge && (
-                          <div className="pt-0.5">
-                            <span className="inline-block text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-md max-w-xs truncate">
-                              🏅 {u.designationBadge}
+                  return (
+                    <tr 
+                      key={u.uid} 
+                      className={`hover:bg-slate-50 transition-colors ${
+                        isPendingFaculty ? "bg-amber-50/40" : ""
+                      }`}
+                    >
+                      
+                      {/* User Column */}
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-3">
+                          <div className="relative h-9 w-9 rounded-full bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center text-slate-600 font-bold text-xs shrink-0">
+                            {u.photoURL ? (
+                              <Image
+                                src={u.photoURL}
+                                alt={u.displayName || "User"}
+                                fill
+                                className="object-cover"
+                              />
+                            ) : (
+                              <span>{(u.displayName || "U").charAt(0).toUpperCase()}</span>
+                            )}
+                          </div>
+                          <div>
+                            <span className="font-bold text-slate-900 block text-sm">
+                              {u.displayName || (isFaculty ? "Faculty Member" : isExternal ? "External Delegate" : "JDCOEM Student")}
+                            </span>
+                            <span className="text-[11px] text-slate-500 font-mono">
+                              {u.email}
                             </span>
                           </div>
+                        </div>
+                      </td>
+
+                      {/* Affiliation / BT ID */}
+                      <td className="py-4 px-6">
+                        {isFaculty ? (
+                          <div className="space-y-0.5">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 font-bold text-xs">
+                              <School className="w-3.5 h-3.5 text-[#E78023]" />
+                              <span>Faculty / Staff</span>
+                            </span>
+                            {u.employeeId && (
+                              <span className="block text-[10px] font-mono text-slate-400">ID: {u.employeeId}</span>
+                            )}
+                          </div>
+                        ) : isExternal ? (
+                          <div className="space-y-0.5">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 font-bold text-xs">
+                              <Globe className="w-3.5 h-3.5 text-emerald-600" />
+                              <span className="max-w-[140px] truncate">{u.collegeName || "Other College"}</span>
+                            </span>
+                            {u.city && (
+                              <span className="block text-[10px] text-slate-400 font-medium">📍 {u.city}</span>
+                            )}
+                          </div>
+                        ) : u.btId ? (
+                          <span className="font-mono font-bold text-[#17458F] px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200">
+                            {u.btId}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-xs italic font-sans">
+                            Pending BT ID
+                          </span>
                         )}
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Profile Status */}
-                    <td className="py-4 px-6">
-                      {u.profileCompleted ? (
-                        <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-semibold">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Verified</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5 text-amber-700 text-xs font-semibold">
-                          <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-                          <span>Pending BT ID</span>
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Actions */}
-                    <td className="py-4 px-6 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => setSelectedUser(u)}
-                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-[#17458F] transition-colors cursor-pointer"
-                          title="Inspect Student Profile"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-
-                        <button
-                          onClick={() => openEditModal(u)}
-                          className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#17458F] transition-colors cursor-pointer"
-                          title="Edit Student Profile & Year"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-
-                        <button
-                          onClick={() => handleRoleToggle(u)}
-                          className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                            u.role === "COUNCIL_ADMIN"
-                              ? "bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200"
-                              : "bg-slate-100 hover:bg-slate-200 text-slate-600"
-                          }`}
-                          title={u.role === "COUNCIL_ADMIN" ? "Demote to Student" : "Promote to Admin"}
-                        >
-                          {u.role === "COUNCIL_ADMIN" ? (
-                            <ShieldCheck className="w-3.5 h-3.5 text-[#E78023]" />
+                      {/* Department & Specialization */}
+                      <td className="py-4 px-6">
+                        <div className="text-slate-900 font-bold max-w-xs truncate" title={u.facultyDepartment || u.department || u.customBranch}>
+                          {isFaculty ? (
+                            <span>{u.facultyDepartment || u.department || "Academic Department"}</span>
+                          ) : isExternal ? (
+                            <span>{u.customBranch || u.department || "Academic Stream"}</span>
                           ) : (
-                            <ShieldAlert className="w-3.5 h-3.5" />
+                            <>
+                              <span className="lg:hidden inline-block px-2 py-0.5 rounded-md bg-slate-100 text-[#17458F] font-mono text-[11px] font-bold">
+                                {getDepartmentShortName(u.department || "Basic Science & Humanities Dept.")}
+                              </span>
+                              <span className="hidden lg:inline">
+                                {u.department || "Basic Science & Humanities"}
+                              </span>
+                            </>
                           )}
-                        </button>
+                        </div>
+                        <div className="text-[11px] text-slate-500 font-sans">
+                          {isFaculty ? (u.facultyDesignation || "Professor / Staff") : (u.year || "—")}
+                        </div>
+                      </td>
 
-                        <button
-                          onClick={() => setUserToDelete(u)}
-                          className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors cursor-pointer"
-                          title="Delete User Record"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
+                      {/* Account Category */}
+                      <td className="py-4 px-6">
+                        <div className="space-y-1">
+                          <Badge
+                            variant={
+                              u.role === "COUNCIL_ADMIN"
+                                ? "orange"
+                                : isFaculty
+                                ? "navy"
+                                : isExternal
+                                ? "success"
+                                : "slate"
+                            }
+                            size="sm"
+                          >
+                            {u.role === "COUNCIL_ADMIN"
+                              ? "Admin"
+                              : isFaculty
+                              ? "Faculty"
+                              : isExternal
+                              ? "Other College"
+                              : "JDCOEM Student"}
+                          </Badge>
+                          {u.designationBadge && (
+                            <div className="pt-0.5">
+                              <span className="inline-block text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-md max-w-xs truncate">
+                                🏅 {u.designationBadge}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </td>
 
-                  </tr>
-                ))}
+                      {/* Verification Status */}
+                      <td className="py-4 px-6">
+                        {isFaculty ? (
+                          u.facultyApprovalStatus === "pending" ? (
+                            <div className="flex items-center gap-1.5 text-amber-700 text-xs font-bold bg-amber-100/80 px-2.5 py-1 rounded-xl border border-amber-300 w-fit animate-pulse">
+                              <Clock className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Pending Approval</span>
+                            </div>
+                          ) : u.facultyApprovalStatus === "rejected" ? (
+                            <div className="flex items-center gap-1.5 text-rose-700 text-xs font-semibold">
+                              <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                              <span>Revoked</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-semibold">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Verified Faculty</span>
+                            </div>
+                          )
+                        ) : isExternal ? (
+                          <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-semibold">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Verified Delegate</span>
+                          </div>
+                        ) : u.profileCompleted ? (
+                          <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-semibold">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Verified BT ID</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-amber-700 text-xs font-semibold">
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Pending Profile</span>
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-4 px-6 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          
+                          {/* 1-Click Approve / Reject for Faculty */}
+                          {isFaculty && (
+                            <>
+                              {u.facultyApprovalStatus !== "approved" ? (
+                                <button
+                                  onClick={() => handleApproveFaculty(u)}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-xs"
+                                  title="Approve Faculty Verification"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>Approve</span>
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleRejectFaculty(u)}
+                                  className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                                  title="Revoke Faculty Verification"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                  <span>Revoke</span>
+                                </button>
+                              )}
+                            </>
+                          )}
+
+                          <button
+                            onClick={() => setSelectedUser(u)}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-[#17458F] transition-colors cursor-pointer"
+                            title="Inspect User Profile"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            onClick={() => openEditModal(u)}
+                            className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#17458F] transition-colors cursor-pointer"
+                            title="Edit User Profile"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            onClick={() => handleRoleToggle(u)}
+                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                              u.role === "COUNCIL_ADMIN"
+                                ? "bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200"
+                                : "bg-slate-100 hover:bg-slate-200 text-slate-600"
+                            }`}
+                            title={u.role === "COUNCIL_ADMIN" ? "Demote to Student" : "Promote to Admin"}
+                          >
+                            {u.role === "COUNCIL_ADMIN" ? (
+                              <ShieldCheck className="w-3.5 h-3.5 text-[#E78023]" />
+                            ) : (
+                              <ShieldAlert className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+
+                          <button
+                            onClick={() => setUserToDelete(u)}
+                            className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors cursor-pointer"
+                            title="Delete User Record"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -624,11 +875,11 @@ export default function AdminUsersPage() {
         <Modal
           isOpen={!!selectedUser}
           onClose={() => setSelectedUser(null)}
-          title="Student Profile Inspection"
+          title="User Profile & Accreditation Inspection"
           subtitle={`UID: ${selectedUser.uid}`}
           maxWidth="lg"
         >
-          <div className="space-y-6 pt-2 text-[#0F172A]">
+          <div className="space-y-5 pt-2 text-[#0F172A]">
             <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-200">
               <div className="relative h-16 w-16 rounded-2xl bg-white border border-slate-200 overflow-hidden flex items-center justify-center font-bold text-xl text-[#17458F] shrink-0">
                 {selectedUser.photoURL ? (
@@ -639,7 +890,7 @@ export default function AdminUsersPage() {
                     className="object-cover"
                   />
                 ) : (
-                  <span>{(selectedUser.displayName || "S").charAt(0).toUpperCase()}</span>
+                  <span>{(selectedUser.displayName || "U").charAt(0).toUpperCase()}</span>
                 )}
               </div>
               <div className="space-y-1">
@@ -647,8 +898,25 @@ export default function AdminUsersPage() {
                   <h3 className="font-heading font-extrabold text-lg text-slate-900">
                     {selectedUser.displayName}
                   </h3>
-                  <Badge variant={selectedUser.role === "COUNCIL_ADMIN" ? "orange" : "slate"} size="sm">
-                    {selectedUser.role}
+                  <Badge 
+                    variant={
+                      selectedUser.role === "COUNCIL_ADMIN" 
+                        ? "orange" 
+                        : selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY" 
+                        ? "navy" 
+                        : selectedUser.userType === "EXTERNAL_STUDENT" 
+                        ? "success" 
+                        : "slate"
+                    } 
+                    size="sm"
+                  >
+                    {selectedUser.role === "COUNCIL_ADMIN" 
+                      ? "Council Admin" 
+                      : selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY" 
+                      ? "Faculty Member" 
+                      : selectedUser.userType === "EXTERNAL_STUDENT" 
+                      ? "Visiting Delegate" 
+                      : "JDCOEM Student"}
                   </Badge>
                   {selectedUser.designationBadge && (
                     <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-full">
@@ -660,29 +928,101 @@ export default function AdminUsersPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 text-xs">
-              <div className="p-3.5 rounded-xl bg-slate-50 space-y-1 border border-slate-100">
-                <span className="text-slate-400 uppercase text-[10px] font-bold">College BT ID</span>
-                <p className="font-mono font-bold text-[#E78023] text-sm">
-                  {selectedUser.btId || "Not registered"}
-                </p>
-              </div>
+            {/* FACULTY APPROVAL ACTION CARD IF PENDING */}
+            {(selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY") && (
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <School className="w-4 h-4 text-[#E78023]" />
+                    <span className="text-xs font-bold text-amber-950">Faculty Verification Status:</span>
+                  </div>
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
+                    selectedUser.facultyApprovalStatus === "approved" 
+                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                      : selectedUser.facultyApprovalStatus === "rejected"
+                      ? "bg-rose-100 text-rose-800 border border-rose-300"
+                      : "bg-amber-200 text-amber-900 border border-amber-300 animate-pulse"
+                  }`}>
+                    {selectedUser.facultyApprovalStatus || "pending"}
+                  </span>
+                </div>
 
+                <div className="flex gap-2 pt-1">
+                  {selectedUser.facultyApprovalStatus !== "approved" ? (
+                    <button
+                      onClick={() => {
+                        handleApproveFaculty(selectedUser);
+                        setSelectedUser({ ...selectedUser, facultyApprovalStatus: "approved" });
+                      }}
+                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>Approve Faculty Credentials</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        handleRejectFaculty(selectedUser);
+                        setSelectedUser({ ...selectedUser, facultyApprovalStatus: "rejected" });
+                      }}
+                      className="px-4 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                      <span>Revoke Faculty Approval</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              {/* Box 1: Affiliation / College */}
               <div className="p-3.5 rounded-xl bg-slate-50 space-y-1 border border-slate-100">
-                <span className="text-slate-400 uppercase text-[10px] font-bold">Academic Branch</span>
+                <span className="text-slate-400 uppercase text-[10px] font-bold">Institution / College</span>
                 <p className="font-bold text-slate-900">
-                  {selectedUser.department || "Basic Science & Humanities"}
+                  {selectedUser.collegeName || "JDCOEM Nagpur"}
+                </p>
+                {selectedUser.city && (
+                  <p className="text-[11px] text-slate-500 font-medium">📍 {selectedUser.city}</p>
+                )}
+              </div>
+
+              {/* Box 2: BT ID or Staff ID */}
+              <div className="p-3.5 rounded-xl bg-slate-50 space-y-1 border border-slate-100">
+                <span className="text-slate-400 uppercase text-[10px] font-bold">
+                  {selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY" ? "Staff / Employee ID" : "College BT ID"}
+                </span>
+                <p className="font-mono font-bold text-[#E78023] text-sm">
+                  {selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY"
+                    ? (selectedUser.employeeId || "No ID Required")
+                    : (selectedUser.btId || (selectedUser.userType === "EXTERNAL_STUDENT" ? "External Delegate" : "Not registered"))}
                 </p>
               </div>
 
+              {/* Box 3: Department / Branch */}
               <div className="p-3.5 rounded-xl bg-slate-50 space-y-1 border border-slate-100">
-                <span className="text-slate-400 uppercase text-[10px] font-bold">Year of Study</span>
-                <p className="font-bold text-slate-900">{selectedUser.year || "—"}</p>
+                <span className="text-slate-400 uppercase text-[10px] font-bold">Department / Stream</span>
+                <p className="font-bold text-slate-900">
+                  {selectedUser.facultyDepartment || selectedUser.customBranch || selectedUser.department || "General Stream"}
+                </p>
               </div>
 
+              {/* Box 4: Academic Year / Designation */}
               <div className="p-3.5 rounded-xl bg-slate-50 space-y-1 border border-slate-100">
-                <span className="text-slate-400 uppercase text-[10px] font-bold">Contact Phone</span>
-                <p className="font-mono text-slate-800">{selectedUser.phone || "Not provided"}</p>
+                <span className="text-slate-400 uppercase text-[10px] font-bold">
+                  {selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY" ? "Academic Title & Role" : "Year of Study"}
+                </span>
+                <p className="font-bold text-slate-900">
+                  {selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY"
+                    ? (selectedUser.facultyDesignation || "Faculty Member")
+                    : (selectedUser.year || "—")}
+                </p>
+              </div>
+
+              {/* Box 5: Contact */}
+              <div className="p-3.5 rounded-xl bg-slate-50 space-y-1 border border-slate-100 sm:col-span-2">
+                <span className="text-slate-400 uppercase text-[10px] font-bold">WhatsApp Contact Phone</span>
+                <p className="font-mono text-slate-800 font-semibold">{selectedUser.phone || "Not provided"}</p>
               </div>
             </div>
 
@@ -753,13 +1093,13 @@ export default function AdminUsersPage() {
         </Modal>
       )}
 
-      {/* Modal: Add Registered Student */}
+      {/* Modal: Add Registered User */}
       {isAddUserOpen && (
         <Modal
           isOpen={isAddUserOpen}
           onClose={() => setIsAddUserOpen(false)}
-          title="Add Student / Officer to Directory"
-          subtitle="Manually register or sync an authenticated student account with college BT ID and branch."
+          title="Add User to Directory"
+          subtitle="Manually register or sync an authenticated student or faculty member account."
           maxWidth="lg"
         >
           <form onSubmit={handleCreateUser} className="space-y-4 pt-2">
@@ -779,7 +1119,7 @@ export default function AdminUsersPage() {
 
             <div>
               <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                College Email Address <span className="text-rose-500">*</span>
+                Email Address <span className="text-rose-500">*</span>
               </label>
               <input
                 type="email"
@@ -794,7 +1134,7 @@ export default function AdminUsersPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  College BT ID
+                  College BT ID (Leave empty for Faculty)
                 </label>
                 <input
                   type="text"
@@ -815,7 +1155,7 @@ export default function AdminUsersPage() {
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
                 >
                   <option value="STUDENT">Student (Delegate)</option>
-                  <option value="COUNCIL_ADMIN">Admin</option>
+                  <option value="COUNCIL_ADMIN">Council Admin</option>
                 </select>
               </div>
             </div>
@@ -876,12 +1216,12 @@ export default function AdminUsersPage() {
         </Modal>
       )}
 
-      {/* Modal: Edit Student Record */}
+      {/* Modal: Edit User Record */}
       {userToEdit && (
         <Modal
           isOpen={!!userToEdit}
           onClose={() => setUserToEdit(null)}
-          title="Edit Student Record"
+          title="Edit User Record"
           subtitle={`Update profile details for ${userToEdit.displayName}`}
           maxWidth="lg"
         >
@@ -901,7 +1241,7 @@ export default function AdminUsersPage() {
 
             <div>
               <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                College Email Address <span className="text-rose-500">*</span>
+                Email Address <span className="text-rose-500">*</span>
               </label>
               <input
                 type="email"
@@ -915,7 +1255,7 @@ export default function AdminUsersPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  College BT ID
+                  College BT ID (Optional for Faculty)
                 </label>
                 <input
                   type="text"
@@ -986,7 +1326,7 @@ export default function AdminUsersPage() {
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
               >
                 <option value="STUDENT">Student (Delegate)</option>
-                <option value="COUNCIL_ADMIN">Admin</option>
+                <option value="COUNCIL_ADMIN">Council Admin</option>
               </select>
             </div>
 

@@ -322,16 +322,32 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
       displayName: user.displayName || `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Student",
       photoURL: user.photoURL || null,
       role: assignedRole,
-      isCollegeStudent: user.isCollegeStudent ?? true,
+      userType: user.userType || (assignedRole === "FACULTY" ? "FACULTY" : cleanBtId ? "JDCOEM_STUDENT" : "EXTERNAL_STUDENT"),
+      isCollegeStudent: user.isCollegeStudent !== undefined ? user.isCollegeStudent : (assignedRole === "FACULTY" ? true : Boolean(cleanBtId)),
       firstName: user.firstName || "",
       lastName: user.lastName || "",
       btId: cleanBtId,
       department: user.department || "Basic Science & Humanities Dept.",
       year: user.year || "1st Year",
       phone: user.phone || "",
-      profileCompleted: user.profileCompleted !== undefined ? user.profileCompleted : Boolean(cleanBtId),
+      profileCompleted: user.profileCompleted !== undefined ? user.profileCompleted : true,
       designationBadge: assignedBadge,
       isCouncilOfficer: isOfficer,
+
+      // Faculty fields
+      title: user.title,
+      facultyDesignation: user.facultyDesignation,
+      facultyDepartment: user.facultyDepartment,
+      facultyApprovalStatus: user.facultyApprovalStatus || (assignedRole === "FACULTY" ? "pending" : undefined),
+      facultyApprovedAt: user.facultyApprovedAt,
+      facultyApprovedBy: user.facultyApprovedBy,
+      employeeId: user.employeeId,
+
+      // External student fields
+      collegeName: user.collegeName,
+      city: user.city,
+      customBranch: user.customBranch,
+
       lastActive: now,
       createdAt: existingIndex >= 0 ? current[existingIndex].createdAt || now : now,
     };
@@ -351,6 +367,75 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
   } catch (e) {
     console.error("Could not save registered user", e);
   }
+}
+
+/**
+ * Approve a pending faculty registration
+ */
+export function approveFacultyUser(uid: string, adminEmail = "SRC Central Council"): RegisteredUserRecord[] {
+  const current = getStoredUsers();
+  const now = new Date().toISOString();
+  const updated = current.map((u) => {
+    if (u.uid === uid) {
+      return {
+        ...u,
+        role: "FACULTY" as const,
+        userType: "FACULTY" as const,
+        facultyApprovalStatus: "approved" as const,
+        facultyApprovedAt: now,
+        facultyApprovedBy: adminEmail,
+      };
+    }
+    return u;
+  });
+
+  if (typeof window !== "undefined") {
+    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent("src_users_updated", { detail: updated }));
+    saveUserProfileToFirestore(uid, {
+      role: "FACULTY",
+      userType: "FACULTY",
+      facultyApprovalStatus: "approved",
+      facultyApprovedAt: now,
+      facultyApprovedBy: adminEmail,
+    });
+  }
+  return updated;
+}
+
+/**
+ * Reject or Revoke a faculty registration
+ */
+export function rejectFacultyUser(uid: string): RegisteredUserRecord[] {
+  const current = getStoredUsers();
+  const updated = current.map((u) => {
+    if (u.uid === uid) {
+      return {
+        ...u,
+        facultyApprovalStatus: "rejected" as const,
+      };
+    }
+    return u;
+  });
+
+  if (typeof window !== "undefined") {
+    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent("src_users_updated", { detail: updated }));
+    saveUserProfileToFirestore(uid, {
+      facultyApprovalStatus: "rejected",
+    });
+  }
+  return updated;
+}
+
+/**
+ * Get all users currently pending faculty approval
+ */
+export function getPendingFacultyApprovals(): RegisteredUserRecord[] {
+  const users = getStoredUsers();
+  return users.filter(
+    (u) => (u.role === "FACULTY" || u.userType === "FACULTY") && u.facultyApprovalStatus === "pending"
+  );
 }
 
 /**

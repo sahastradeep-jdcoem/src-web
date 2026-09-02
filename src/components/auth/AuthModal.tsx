@@ -54,10 +54,10 @@ export function AuthModal() {
               <span>SAHASTRADEEP PORTAL</span>
             </span>
             <h3 className="font-heading font-extrabold text-2xl text-[#0F172A]">
-              Student & Council Sign In
+              Sahastradeep Sign In
             </h3>
             <p className="text-xs text-slate-500 font-medium max-w-xs mx-auto">
-              Access your digital event passes, student council ballots, and collegiate accreditation.
+              For JDCOEM Students, Academic Faculty, and Visiting College Delegates.
             </p>
           </div>
         </div>
@@ -96,16 +96,16 @@ export function AuthModal() {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
               />
             </svg>
-            <span className="truncate">{isSubmitting ? "Signing In..." : <><span>Continue with Google</span> <span className="hidden sm:inline text-slate-500 font-normal">(@jdcoem.ac.in)</span></>}</span>
+            <span className="truncate">{isSubmitting ? "Signing In..." : <><span>Continue with Google</span> <span className="hidden sm:inline text-slate-500 font-normal">(@jdcoem.ac.in or personal)</span></>}</span>
           </button>
 
           <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 space-y-1.5 text-center">
             <div className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-[#17458F]">
               <ShieldCheck className="w-3.5 h-3.5 text-[#E78023]" />
-              <span>Official Institutional Authentication</span>
+              <span>Universal Collegiate Authentication</span>
             </div>
             <p className="text-[10px] text-slate-500 leading-relaxed">
-              Sign in with your official college email or personal Google account. First-time users will complete their student profile onboarding with BT ID.
+              Sign in with your college or personal Google account. You can complete your profile as a JDCOEM Student, Faculty Member, or Visiting College Delegate.
             </p>
           </div>
         </div>

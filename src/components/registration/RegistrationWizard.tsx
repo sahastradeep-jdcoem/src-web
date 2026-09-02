@@ -153,10 +153,17 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
   useEffect(() => {
     if (user) {
-      const leaderName = user.displayName || `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email?.split("@")[0] || "Student";
-      const leaderBtId = user.btId || "";
-      const leaderDept = user.department || DEFAULT_DEPARTMENTS[0] || "Computer Science and Engineering";
-      const leaderYear = user.year || "3rd Year";
+      const isFaculty = user.role === "FACULTY" || user.userType === "FACULTY";
+      const isExternal = user.userType === "EXTERNAL_STUDENT" || user.isCollegeStudent === false || Boolean(user.collegeName);
+
+      const leaderName = user.displayName || `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email?.split("@")[0] || "Delegate";
+      const leaderBtId = user.btId || (isFaculty ? (user.employeeId || "FACULTY") : isExternal ? (user.collegeName || "EXTERNAL") : "");
+      const leaderDept = isFaculty 
+        ? (user.facultyDepartment || user.department || "Academic Faculty") 
+        : isExternal 
+        ? (user.customBranch || user.department || `${user.collegeName || "College"} Delegate`) 
+        : (user.department || DEFAULT_DEPARTMENTS[0] || "Computer Science and Engineering");
+      const leaderYear = isFaculty ? (user.facultyDesignation || "Faculty Member") : (user.year || "3rd Year");
       const leaderPhone = user.phone || "";
       const leaderEmail = user.email || "";
 
@@ -280,7 +287,10 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       openAuthModal();
       return;
     }
-    if (!formData.btId.trim()) {
+
+    const isNonBtIdUser = user?.role === "FACULTY" || user?.userType === "FACULTY" || user?.userType === "EXTERNAL_STUDENT" || user?.isCollegeStudent === false || Boolean(user?.collegeName);
+
+    if (!isNonBtIdUser && !formData.btId.trim()) {
       alert("Please ensure your College BT ID is saved in your profile.");
       return;
     }
@@ -300,7 +310,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
     if (dup) {
       setExistingRegistration(dup);
-      alert(`You are already registered for this event (Registration ID: ${dup.id}). Duplicate registrations for the same student are not permitted.`);
+      alert(`You are already registered for this event (Registration ID: ${dup.id}). Duplicate registrations for the same participant are not permitted.`);
       return;
     }
 
@@ -310,7 +320,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         phone: cleanPhone,
         department: formData.department,
         year: formData.year,
-        btId: formData.btId,
+        ...(formData.btId ? { btId: formData.btId } : {}),
       });
     }
 
@@ -774,10 +784,18 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                     </div>
                     <div className="space-y-1">
                       <h4 className="font-bold text-sm text-[#17458F]">
-                        Authenticated JDCOEM Student Profile
+                        {user?.role === "FACULTY" || user?.userType === "FACULTY"
+                          ? "Faculty / Staff Accreditation Details"
+                          : user?.userType === "EXTERNAL_STUDENT" || user?.isCollegeStudent === false || user?.collegeName
+                          ? "Inter-Collegiate Visiting Delegate Profile"
+                          : "Authenticated JDCOEM Student Profile"}
                       </h4>
                       <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                        Your official college BT ID, department, and credentials will be encoded into your digital delegate entry pass.
+                        {user?.role === "FACULTY" || user?.userType === "FACULTY"
+                          ? "Your institutional academic designation and department will be attached to your delegate pass."
+                          : user?.userType === "EXTERNAL_STUDENT" || user?.isCollegeStudent === false || user?.collegeName
+                          ? `Registered from ${user?.collegeName || "External Institution"} (City: ${user?.city || "Nagpur"}).`
+                          : "Your official college BT ID, department, and credentials will be encoded into your digital delegate entry pass."}
                       </p>
                     </div>
                   </div>
@@ -798,26 +816,38 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                       />
                     </div>
 
-                    {/* BT ID */}
+                    {/* BT ID / Institution / Employee ID */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                         <Hash className="w-3.5 h-3.5 text-[#17458F]" />
-                        <span>College BT ID *</span>
+                        <span>
+                          {user?.role === "FACULTY" || user?.userType === "FACULTY"
+                            ? "Employee / Staff ID (Optional)"
+                            : user?.userType === "EXTERNAL_STUDENT" || user?.isCollegeStudent === false || user?.collegeName
+                            ? "College / University"
+                            : "College BT ID *"}
+                        </span>
                       </label>
                       <input
                         type="text"
                         value={formData.btId}
                         onChange={(e) => setFormData({ ...formData, btId: e.target.value.toUpperCase() })}
-                        placeholder="e.g. BT230036CS"
+                        placeholder={
+                          user?.role === "FACULTY" || user?.userType === "FACULTY"
+                            ? "Faculty Accreditation"
+                            : user?.userType === "EXTERNAL_STUDENT" || user?.collegeName
+                            ? (user?.collegeName || "Visiting College")
+                            : "e.g. BT230036CS"
+                        }
                         className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-mono font-bold uppercase focus:outline-none focus:border-[#17458F]"
                       />
                     </div>
 
-                    {/* College Email */}
+                    {/* College / Personal Email */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                         <Mail className="w-3.5 h-3.5 text-[#E78023]" />
-                        <span>Official College Email *</span>
+                        <span>Email Address *</span>
                       </label>
                       <input
                         type="email"
@@ -843,42 +873,69 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                       />
                     </div>
 
-                    {/* Academic Year */}
+                    {/* Academic Year / Designation */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                         <GraduationCap className="w-3.5 h-3.5 text-[#E78023]" />
-                        <span>Academic Year *</span>
+                        <span>
+                          {user?.role === "FACULTY" || user?.userType === "FACULTY"
+                            ? "Academic Designation *"
+                            : "Academic Year *"}
+                        </span>
                       </label>
-                      <select
-                        value={formData.year}
-                        onChange={(e) => setFormData({ ...formData, year: e.target.value })}
-                        className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
-                      >
-                        {YEARS.map((yr) => (
-                          <option key={yr} value={yr} className="bg-white text-slate-900">
-                            {yr}
-                          </option>
-                        ))}
-                      </select>
+                      {user?.role === "FACULTY" || user?.userType === "FACULTY" ? (
+                        <input
+                          type="text"
+                          value={formData.year}
+                          onChange={(e) => setFormData({ ...formData, year: e.target.value })}
+                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
+                        />
+                      ) : (
+                        <select
+                          value={formData.year}
+                          onChange={(e) => setFormData({ ...formData, year: e.target.value })}
+                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
+                        >
+                          {YEARS.map((yr) => (
+                            <option key={yr} value={yr} className="bg-white text-slate-900">
+                              {yr}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </div>
 
-                    {/* Department */}
+                    {/* Department / Stream */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                         <Building2 className="w-3.5 h-3.5 text-[#17458F]" />
-                        <span>Department / Branch *</span>
+                        <span>
+                          {user?.userType === "EXTERNAL_STUDENT" || user?.collegeName
+                            ? "Degree & Branch / Stream *"
+                            : "Department / Branch *"}
+                        </span>
                       </label>
-                      <select
-                        value={formData.department}
-                        onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                        className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
-                      >
-                        {departmentsList.map((dept) => (
-                          <option key={dept} value={dept} className="bg-white text-slate-900">
-                            {dept}
-                          </option>
-                        ))}
-                      </select>
+                      {user?.userType === "EXTERNAL_STUDENT" || user?.collegeName ? (
+                        <input
+                          type="text"
+                          value={formData.department}
+                          onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                          placeholder="e.g. B.Tech Computer Engineering"
+                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
+                        />
+                      ) : (
+                        <select
+                          value={formData.department}
+                          onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
+                        >
+                          {departmentsList.map((dept) => (
+                            <option key={dept} value={dept} className="bg-white text-slate-900">
+                              {dept}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </div>
 
                   </div>
