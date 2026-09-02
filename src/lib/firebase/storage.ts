@@ -1,13 +1,14 @@
-import { ref, uploadString, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytes, uploadString, getDownloadURL } from "firebase/storage";
 import { storage } from "./config";
 import { compressImage } from "@/lib/imageCompression";
 
-const UPLOAD_TIMEOUT_MS = 12000; // 12s so HD WebP uploads reliably over mobile networks
+const UPLOAD_TIMEOUT_MS = 25000; // 25s for pristine high-res uploads
 
 /**
  * Upload an image file or Base64 WebP string to Firebase Cloud Storage.
  * Uses a safe timeout race to ensure the UI never hangs if Storage rules or network are slow.
- * Returns the permanent HTTPS download URL if successful, or the local compressed WebP data URL on fallback.
+ * Uploads pristine original files directly to preserve 100% camera clarity with zero compression loss.
+ * Returns the permanent HTTPS download URL if successful, or the local data URL on fallback.
  */
 export async function uploadImageToStorage(
   fileOrDataUrl: File | string,
@@ -18,35 +19,24 @@ export async function uploadImageToStorage(
     return fileOrDataUrl;
   }
 
-  let finalDataUrl = "";
-  if (typeof fileOrDataUrl === "string") {
-    finalDataUrl = fileOrDataUrl;
-  } else {
-    try {
-      const compressed = await compressImage(fileOrDataUrl, {
-        maxWidth: 1920,
-        maxHeight: 1920,
-        quality: 0.88,
-        outputFormat: "image/webp",
-      });
-      finalDataUrl = compressed.dataUrl;
-    } catch {
-      return "";
-    }
-  }
-
-  // Attempt Firebase Cloud Storage upload with strict timeout race
+  // Attempt Firebase Cloud Storage upload with pristine fidelity
   try {
     if (storage && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       const storageRef = ref(storage, storagePath);
 
-      const isPng = finalDataUrl.includes("image/png");
-      const metadata = {
-        contentType: isPng ? "image/png" : "image/webp",
-      };
-
       const uploadTask = (async () => {
-        await uploadString(storageRef, finalDataUrl, "data_url", metadata);
+        if (fileOrDataUrl instanceof File) {
+          // UPLOAD ORIGINAL FILE DIRECTLY TO FIREBASE STORAGE (100% UNCOMPRESSED CRISPNESS)
+          await uploadBytes(storageRef, fileOrDataUrl, {
+            contentType: fileOrDataUrl.type || "image/jpeg",
+          });
+        } else {
+          // It's a high-res Data URL string
+          const isPng = fileOrDataUrl.includes("image/png");
+          await uploadString(storageRef, fileOrDataUrl, "data_url", {
+            contentType: isPng ? "image/png" : "image/webp",
+          });
+        }
         const downloadUrl = await getDownloadURL(storageRef);
         return downloadUrl;
       })();
@@ -61,9 +51,24 @@ export async function uploadImageToStorage(
       }
     }
   } catch (error) {
-    console.warn("Firebase Storage fast fallback active (using optimized WebP):", (error as any)?.message || error);
+    console.warn("Firebase Storage direct upload notice:", (error as any)?.message || error);
   }
 
-  // Fallback: return the lightweight compressed WebP data URL
-  return finalDataUrl;
+  // Fallback: if it was a file and storage is unreachable, generate ultra high-res data URL
+  if (fileOrDataUrl instanceof File) {
+    try {
+      const isPng = fileOrDataUrl.type === "image/png" || fileOrDataUrl.type === "image/svg+xml";
+      const compressed = await compressImage(fileOrDataUrl, {
+        maxWidth: 2560,
+        maxHeight: 2560,
+        quality: 0.95,
+        outputFormat: isPng ? "image/png" : "image/webp",
+      });
+      return compressed.dataUrl;
+    } catch {
+      return "";
+    }
+  }
+
+  return fileOrDataUrl;
 }

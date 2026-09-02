@@ -31,6 +31,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
             src={event.cardImage || event.poster}
             alt={event.name}
             fill
+            unoptimized={true}
             className="object-cover transition-transform duration-500 group-hover:scale-[1.02]"
           />
           <div className="absolute inset-0 bg-gradient-to-t lg:bg-gradient-to-r from-black/60 via-transparent to-transparent" />
@@ -114,6 +115,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
           src={event.cardImage || event.poster}
           alt={event.name}
           fill
+          unoptimized={true}
           className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />

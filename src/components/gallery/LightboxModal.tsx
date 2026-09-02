@@ -70,6 +70,7 @@ export function LightboxModal({ photo, onClose, onPrev, onNext }: LightboxModalP
             src={photo.imageUrl}
             alt={photo.title}
             fill
+            unoptimized={true}
             className="object-contain"
             priority
           />

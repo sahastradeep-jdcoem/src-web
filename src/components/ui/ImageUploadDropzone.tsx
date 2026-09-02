@@ -86,15 +86,16 @@ export function ImageUploadDropzone({
     onUploadStateChange?.(true);
 
     try {
-      const resConfig = getOptimalResolution(aspectRatio, storagePath);
+      // 1. High-fidelity immediate preview & fallback
+      const isPng = file.type === "image/png" || file.type === "image/svg+xml";
       const result = await compressImage(file, {
-        maxWidth: resConfig.maxWidth,
-        maxHeight: resConfig.maxHeight,
-        quality: resConfig.quality,
-        outputFormat: "image/webp",
+        maxWidth: 2400,
+        maxHeight: 2400,
+        quality: 0.94,
+        outputFormat: isPng ? "image/png" : "image/webp",
       });
 
-      // Immediately update preview & notify callbacks with compressed WebP
+      // Immediately update preview & notify callbacks with pristine visual
       setCompressionStats(result);
       setPreview(result.dataUrl);
       setManualUrl(result.dataUrl);
@@ -111,11 +112,12 @@ export function ImageUploadDropzone({
       setIsProcessing(false);
       onUploadStateChange?.(false);
 
-      // Background upload to Firebase Cloud Storage (best effort, non-blocking)
-      const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_").replace(/\.[^/.]+$/, "");
-      const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}.webp`;
-      uploadImageToStorage(result.dataUrl, finalStoragePath).then((cloudUrl) => {
-        if (cloudUrl && cloudUrl !== result.dataUrl && cloudUrl.startsWith("http")) {
+      // 2. Upload the PRISTINE ORIGINAL FILE directly to Firebase Cloud Storage (100% full fidelity)
+      const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+      const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}`;
+      uploadImageToStorage(file, finalStoragePath).then((cloudUrl) => {
+        if (cloudUrl && cloudUrl.startsWith("http")) {
+          setPreview(cloudUrl);
           setManualUrl(cloudUrl);
           if (onUrlChange) {
             onUrlChange(cloudUrl);
@@ -156,25 +158,13 @@ export function ImageUploadDropzone({
     setIsProcessing(true);
     onUploadStateChange?.(true);
     try {
-      // 1. Process & optimize the cropped canvas dataUrl
-      const resConfig = getOptimalResolution(aspectRatio, storagePath);
-      const result = await compressImage(croppedDataUrl, {
-        maxWidth: resConfig.maxWidth,
-        maxHeight: resConfig.maxHeight,
-        quality: resConfig.quality,
-        outputFormat: "image/webp",
-      });
-
-      setCompressionStats(result);
-      setPreview(result.dataUrl);
-      setManualUrl(result.dataUrl);
-
-      if (onImageCompressed) {
-        onImageCompressed(result);
-      }
+      // 1. Cropped canvas is already exported at maximum resolution (up to 2560px, quality 0.96)
+      // Do NOT re-compress to eliminate generational blur
+      setPreview(croppedDataUrl);
+      setManualUrl(croppedDataUrl);
 
       if (onUrlChange) {
-        onUrlChange(result.dataUrl);
+        onUrlChange(croppedDataUrl);
       }
 
       // Immediately unblock UI
@@ -182,11 +172,14 @@ export function ImageUploadDropzone({
       onUploadStateChange?.(false);
       setRawImageToCrop(null);
 
-      // 2. Upload to Firebase Storage in background (non-blocking)
+      // 2. Upload high-res crop directly to Firebase Storage in background
       const cleanName = originalFileName.replace(/[^a-zA-Z0-9.-]/g, "_").replace(/\.[^/.]+$/, "");
-      const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}.webp`;
-      uploadImageToStorage(result.dataUrl, finalStoragePath).then((cloudUrl) => {
-        if (cloudUrl && cloudUrl !== result.dataUrl && cloudUrl.startsWith("http")) {
+      const isPng = croppedDataUrl.includes("image/png");
+      const ext = isPng ? ".png" : ".webp";
+      const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}${ext}`;
+      uploadImageToStorage(croppedDataUrl, finalStoragePath).then((cloudUrl) => {
+        if (cloudUrl && cloudUrl !== croppedDataUrl && cloudUrl.startsWith("http")) {
+          setPreview(cloudUrl);
           setManualUrl(cloudUrl);
           if (onUrlChange) {
             onUrlChange(cloudUrl);
@@ -194,7 +187,7 @@ export function ImageUploadDropzone({
         }
       }).catch(() => {});
     } catch (err) {
-      console.error("Image crop and compression error", err);
+      console.error("Image crop and storage error", err);
       setError("Failed to save cropped image.");
       setIsProcessing(false);
       onUploadStateChange?.(false);

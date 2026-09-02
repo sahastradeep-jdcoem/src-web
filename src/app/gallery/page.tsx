@@ -138,6 +138,7 @@ export default function GalleryPage() {
                   src={photo.imageUrl}
                   alt={photo.title}
                   fill
+                  unoptimized={true}
                   className="object-cover transition-transform duration-500 group-hover:scale-105"
                 />
                 

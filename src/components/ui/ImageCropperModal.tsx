@@ -140,14 +140,15 @@ export function ImageCropperModal({
     const img = imageRef.current;
     const cropBox = containerRef.current.getBoundingClientRect();
     
-    // Output target dimensions based on target ratio
-    let targetWidth = 1920;
-    let targetHeight = Math.round(1920 / currentRatio);
+    // Output target dimensions based on target ratio (preserve maximum natural resolution)
+    const baseDimension = Math.max(img.naturalWidth || 1920, 2560);
+    let targetWidth = baseDimension;
+    let targetHeight = Math.round(baseDimension / currentRatio);
 
     if (currentRatio < 1) {
       // Portrait like 4:5 or 3:4
-      targetHeight = 1920;
-      targetWidth = Math.round(1920 * currentRatio);
+      targetHeight = baseDimension;
+      targetWidth = Math.round(baseDimension * currentRatio);
     }
 
     const canvas = document.createElement("canvas");
@@ -157,7 +158,7 @@ export function ImageCropperModal({
 
     if (!ctx) return;
 
-    // Background smoothing
+    // Highest quality image smoothing
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
 
@@ -180,7 +181,6 @@ export function ImageCropperModal({
 
     // Compute base image rendered dimensions relative to the crop box
     // Center the image draw
-    const isSideways = rotation % 180 !== 0;
     const renderedImgWidth = cropBox.width * scaleFactor;
     const renderedImgHeight = (cropBox.width / (img.naturalWidth / img.naturalHeight)) * scaleFactor;
 
@@ -195,9 +195,11 @@ export function ImageCropperModal({
 
     ctx.restore();
 
-    // Export as clean WebP
+    // Export as clean, crystal-clear WebP / PNG
     try {
-      const croppedDataUrl = canvas.toDataURL("image/webp", 0.9);
+      const isPng = imageSrc.includes("image/png") || imageSrc.includes(".png");
+      const exportType = isPng ? "image/png" : "image/webp";
+      const croppedDataUrl = canvas.toDataURL(exportType, isPng ? 1.0 : 0.96);
       onCropComplete(croppedDataUrl);
       onClose();
     } catch (e) {
