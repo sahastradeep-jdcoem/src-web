@@ -110,6 +110,29 @@ export async function compressImage(
           }
         }
 
+        // High-fidelity progressive step-down scaling to preserve tack-sharp details and avoid aliasing blur
+        let curWidth = img.width;
+        let curHeight = img.height;
+        let sourceElement: CanvasImageSource = img;
+
+        while (curWidth * 0.5 > width) {
+          curWidth = Math.round(curWidth * 0.5);
+          curHeight = Math.round(curHeight * 0.5);
+
+          const stepCanvas = document.createElement("canvas");
+          stepCanvas.width = curWidth;
+          stepCanvas.height = curHeight;
+          const stepCtx = stepCanvas.getContext("2d");
+          if (stepCtx) {
+            stepCtx.imageSmoothingEnabled = true;
+            stepCtx.imageSmoothingQuality = "high";
+            stepCtx.drawImage(sourceElement, 0, 0, curWidth, curHeight);
+            sourceElement = stepCanvas;
+          } else {
+            break;
+          }
+        }
+
         const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;
@@ -120,10 +143,10 @@ export async function compressImage(
           return;
         }
 
-        // High quality image smoothing
+        // Highest quality image smoothing
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = "high";
-        ctx.drawImage(img, 0, 0, width, height);
+        ctx.drawImage(sourceElement, 0, 0, width, height);
 
         // Convert canvas to Blob in WebP format
         canvas.toBlob(
