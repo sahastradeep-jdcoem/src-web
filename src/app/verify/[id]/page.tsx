@@ -21,15 +21,20 @@ import {
   UserCheck, 
   RefreshCw,
   QrCode,
-  Building
+  Building,
+  Lock,
+  ShieldAlert,
+  LogIn
 } from "lucide-react";
 import { getRegistrationById, checkInStudentPass, StudentRegistrationRecord } from "@/lib/firebase/firestore";
+import { useAuth } from "@/context/AuthContext";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 
 export default function PassVerificationPage() {
   const params = useParams();
   const passId = typeof params?.id === "string" ? decodeURIComponent(params.id) : "";
+  const { user, isAdmin, openAuthModal } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [record, setRecord] = useState<StudentRegistrationRecord | null>(null);
@@ -66,6 +71,10 @@ export default function PassVerificationPage() {
 
   const handleMarkCheckIn = async () => {
     if (!record) return;
+    if (!isAdmin) {
+      setErrorNotice("Unauthorized: Only authenticated SRC Council Administrators can record gate attendance.");
+      return;
+    }
     setCheckingIn(true);
     try {
       const success = await checkInStudentPass(record.id);
@@ -218,28 +227,71 @@ export default function PassVerificationPage() {
             </p>
           </div>
 
-          {/* Quick Action Button */}
+          {/* Quick Action Button / Verification Card */}
           {!isAlreadyCheckedIn ? (
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={handleMarkCheckIn}
-                disabled={checkingIn}
-                className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm uppercase tracking-wider transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
-              >
-                {checkingIn ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Recording Gate Attendance...</span>
-                  </>
-                ) : (
-                  <>
-                    <UserCheck className="w-5 h-5" />
-                    <span>Confirm &amp; Check-In Delegate</span>
-                  </>
-                )}
-              </button>
-            </div>
+            isAdmin ? (
+              /* Admin Check-In Action Allowed */
+              <div className="pt-2 space-y-2">
+                <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider px-1">
+                  <span className="flex items-center gap-1.5 text-emerald-700">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Admin Gatekeeper Mode</span>
+                  </span>
+                  <span className="font-mono text-[10px] text-slate-400 truncate max-w-[200px]">
+                    {user?.email}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleMarkCheckIn}
+                  disabled={checkingIn}
+                  className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm uppercase tracking-wider transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
+                >
+                  {checkingIn ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Recording Gate Attendance...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserCheck className="w-5 h-5" />
+                      <span>Confirm &amp; Check-In Delegate</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            ) : (
+              /* Public / Student View - Check-In Restricted Notice */
+              <div className="pt-2 space-y-3">
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-left space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                    <Lock className="w-4 h-4 text-[#17458F] shrink-0" />
+                    <span>Gate Check-In Restricted to Admins</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
+                    This delegate pass is 100% authentic and registered. Recording gate attendance is restricted to authorized SRC Council Administrators.
+                  </p>
+                  {!user ? (
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={openAuthModal}
+                        className="px-3.5 py-2 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white font-bold text-[11px] uppercase tracking-wider inline-flex items-center gap-1.5 shadow-xs cursor-pointer transition-all"
+                      >
+                        <LogIn className="w-3.5 h-3.5 text-[#E78023]" />
+                        <span>Admin Sign In to Check-In</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="pt-1">
+                      <span className="text-[10px] font-mono font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 inline-block">
+                        Signed in as {user.email} (View-Only Delegate Mode)
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
           ) : (
             <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-200 text-[#17458F] text-xs font-semibold flex items-center justify-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-[#17458F] shrink-0" />
@@ -273,10 +325,16 @@ export default function PassVerificationPage() {
                 Primary Participant / Lead
               </span>
               <p className="font-extrabold text-base text-slate-900">{record.leaderName}</p>
-              <p className="text-slate-600 font-medium">{record.department} ({record.year})</p>
-              {record.teamMembers?.[0]?.btId && (
+              <p className="text-slate-600 font-medium">
+                {record.collegeName || (record.college && !record.college.includes("JDCOEM") ? `${record.college} • ` : "")}
+                {record.customBranch || record.department} ({record.year})
+              </p>
+              {record.city && (
+                <p className="text-[11px] text-slate-500 font-medium">📍 {record.city}</p>
+              )}
+              {record.btId && (
                 <p className="text-[11px] font-mono text-[#E78023] font-bold">
-                  BT ID: {record.teamMembers[0].btId}
+                  BT ID: {record.btId}
                 </p>
               )}
             </div>
@@ -378,15 +436,25 @@ export default function PassVerificationPage() {
             className="w-full py-3.5 rounded-2xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider text-center transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
           >
             <QrCode className="w-4 h-4 text-[#E78023]" />
-            <span>Scan Next Pass</span>
+            <span>Scan Another Pass</span>
           </Link>
-          <Link
-            href="/admin/registrations"
-            className="w-full py-3.5 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-bold uppercase tracking-wider text-center transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
-          >
-            <Building className="w-4 h-4 text-[#17458F]" />
-            <span>Admin Roster Console</span>
-          </Link>
+          {isAdmin ? (
+            <Link
+              href="/admin/registrations"
+              className="w-full py-3.5 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-bold uppercase tracking-wider text-center transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+            >
+              <Building className="w-4 h-4 text-[#17458F]" />
+              <span>Admin Roster Console</span>
+            </Link>
+          ) : (
+            <Link
+              href="/events"
+              className="w-full py-3.5 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-bold uppercase tracking-wider text-center transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+            >
+              <Calendar className="w-4 h-4 text-[#17458F]" />
+              <span>Browse Campus Events</span>
+            </Link>
+          )}
         </div>
 
       </div>

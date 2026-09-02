@@ -13,13 +13,16 @@ import {
   Clock, 
   Sparkles,
   Users,
-  AlertCircle
+  AlertCircle,
+  Lock
 } from "lucide-react";
 import { getAllRegistrationsFromFirestore, StudentRegistrationRecord } from "@/lib/firebase/firestore";
+import { useAuth } from "@/context/AuthContext";
 import { Badge } from "@/components/ui/Badge";
 
 export default function GateScannerHubPage() {
   const router = useRouter();
+  const { user, isAdmin } = useAuth();
   const [passInput, setPassInput] = useState("");
   const [recentCheckedIn, setRecentCheckedIn] = useState<StudentRegistrationRecord[]>([]);
   const [stats, setStats] = useState({ total: 0, checkedIn: 0, pending: 0 });
@@ -84,9 +87,11 @@ export default function GateScannerHubPage() {
           >
             &larr; SRC JDCOEM
           </Link>
-          <span className="px-3.5 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-[11px] font-bold text-[#17458F] flex items-center gap-1.5 shadow-xs">
-            <ShieldCheck className="w-3.5 h-3.5 text-[#E78023]" />
-            <span>Gate Accreditation Hub</span>
+          <span className={`px-3.5 py-1.5 rounded-full border text-[11px] font-bold flex items-center gap-1.5 shadow-xs ${
+            isAdmin ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-blue-50 border-blue-200 text-[#17458F]"
+          }`}>
+            {isAdmin ? <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> : <Lock className="w-3.5 h-3.5 text-[#E78023]" />}
+            <span>{isAdmin ? "Admin Gatekeeper Scanner" : "Public Pass Authenticator"}</span>
           </span>
         </div>
 
@@ -101,7 +106,9 @@ export default function GateScannerHubPage() {
               Pass Verification &amp; Check-In
             </h1>
             <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed font-medium">
-              Scan participant QR passes with your smartphone camera or enter the pass ID below to authenticate genuine credentials.
+              {isAdmin 
+                ? "Scan participant QR passes to verify authenticity and record gate attendance in real time." 
+                : "Scan participant QR passes with your smartphone camera to verify official event accreditation."}
             </p>
           </div>
 
