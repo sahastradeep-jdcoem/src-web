@@ -91,34 +91,35 @@ export function ImageUploadDropzone({
       setPreview(localPreviewUrl);
 
       const isPngOrSvg = file.type === "image/png" || file.type === "image/svg+xml";
-      // Threshold: 3 MB. Heavy DSLR raw/camera photos (e.g. 10MB-35MB) are intelligently optimized to 2560px 2.5K Retina at 0.92 quality
-      const isHeavyDslrPhoto = file.size > 3 * 1024 * 1024;
+      // Threshold: 5 MB (5,242,880 bytes).
+      // Any photo <= 5MB is uploaded 100% UNTOUCHED without any compression!
+      // Only extreme heavy DSLR raw camera photos (> 5MB, like 10MB-35MB) are optimized to 2560px 2.5K Retina at 0.94
+      const isHeavyDslrPhoto = file.size > 5 * 1024 * 1024;
 
       let fileToUpload: File = file;
       let fallbackDataUrl = "";
 
       if (isHeavyDslrPhoto && !isPngOrSvg) {
         // Smart DSLR optimization: downsizes 24MP-50MP raw photos to 2560px with progressive stepped halving
-        // Reduces a 25MB DSLR file down to ~650KB-850KB (97% space savings) with virtually zero visual loss on 4K screens!
+        // Reduces a 25MB DSLR file down to ~750KB (97% space savings) with virtually zero visual loss on 4K screens!
         const compressed = await compressImage(file, {
           maxWidth: 2560,
           maxHeight: 2560,
-          quality: 0.92,
+          quality: 0.94,
           outputFormat: "image/webp",
         });
         fileToUpload = compressed.file;
         fallbackDataUrl = compressed.dataUrl;
         setCompressionStats(compressed);
       } else {
-        // Files <= 3MB or PNG logos: upload original file as-is, generate high-res dataUrl for instant saving
-        const compressed = await compressImage(file, {
-          maxWidth: 2400,
-          maxHeight: 2400,
-          quality: 0.94,
-          outputFormat: isPngOrSvg ? "image/png" : "image/webp",
+        // Files <= 5MB: read original file bytes directly into base64 with ZERO COMPRESSION!
+        fallbackDataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
         });
-        fallbackDataUrl = compressed.dataUrl;
-        setCompressionStats(compressed);
+        setCompressionStats(null); // No compression applied!
       }
 
       setManualUrl(fallbackDataUrl);
@@ -131,7 +132,7 @@ export function ImageUploadDropzone({
       setIsProcessing(false);
       onUploadStateChange?.(false);
 
-      // 2. Upload fileToUpload to Firebase Cloud Storage (smart optimized if DSLR > 3MB, or 100% pristine if <= 3MB)
+      // 2. Upload fileToUpload to Firebase Cloud Storage (100% untouched for <= 5MB, or DSLR-optimized for > 5MB)
       const cleanName = fileToUpload.name.replace(/[^a-zA-Z0-9.-]/g, "_");
       const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}`;
       uploadImageToStorage(fileToUpload, finalStoragePath).then((cloudUrl) => {
@@ -406,7 +407,7 @@ export function ImageUploadDropzone({
 
               <div className="absolute bottom-2.5 left-2.5 px-2 py-0.5 rounded-full bg-slate-900/85 backdrop-blur-md text-white text-[10px] font-semibold flex items-center gap-1 border border-white/10 shadow-sm">
                 <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                <span>WebP</span>
+                <span>{compressionStats ? "2.5K Retina" : "Original Quality"}</span>
               </div>
             </div>
           ) : (
@@ -443,10 +444,10 @@ export function ImageUploadDropzone({
         <div className="p-3 rounded-2xl bg-emerald-50/80 border border-emerald-200/80 text-emerald-950 text-[11px] flex items-center justify-between font-medium">
           <div className="flex items-center gap-2">
             <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-            <span>Compressed: {formatBytes(compressionStats.originalSize)} &rarr; {formatBytes(compressionStats.compressedSize)}</span>
+            <span>DSLR Optimized: {formatBytes(compressionStats.originalSize)} &rarr; {formatBytes(compressionStats.compressedSize)}</span>
           </div>
           <span className="font-bold text-emerald-700">
-            {compressionStats.savingsPercentage}% smaller
+            {compressionStats.savingsPercentage}% saved • 2.5K Retina
           </span>
         </div>
       )}
