@@ -592,14 +592,25 @@ export default function AdminTeamPage() {
             </span>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsCreatingDraftTenure(true)}
-            className="text-xs font-bold text-[#17458F] hover:text-[#E78023] flex items-center gap-1"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Create Future Tenure Session</span>
-          </button>
+          {isDraftTenure ? (
+            <button
+              type="button"
+              onClick={handleOpenAddModal}
+              className="px-3 py-2 rounded-xl text-xs font-bold text-white bg-[#E78023] hover:bg-[#D26E17] flex items-center gap-1.5 cursor-pointer transition-all shadow-xs"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Position to {selectedTenure?.label} Draft</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsCreatingDraftTenure(true)}
+              className="px-3 py-2 rounded-xl text-xs font-bold text-[#17458F] hover:text-white hover:bg-[#17458F] border border-[#17458F]/30 flex items-center gap-1.5 cursor-pointer transition-all"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Create Future Tenure Session</span>
+            </button>
+          )}
         </div>
 
         {/* Tenure Pills */}
@@ -633,17 +644,22 @@ export default function AdminTeamPage() {
 
         {/* Banner if editing an upcoming draft tenure */}
         {isDraftTenure && selectedTenure && (
-          <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <p>
-              Editing <strong>{selectedTenure.label} ({selectedTenure.academicYear})</strong>. Changes stay in draft until activated.
+          <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex flex-col gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <p>
+                <strong>Draft Mode Active:</strong> You are editing the upcoming roster for <strong>{selectedTenure.label} ({selectedTenure.academicYear})</strong>. All additions and edits will be saved to this draft without affecting the live site.
+              </p>
+              <button
+                type="button"
+                onClick={handleActivateThisTenure}
+                className="px-3 py-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] uppercase tracking-wider shrink-0 cursor-pointer"
+              >
+                Publish &amp; Make Live Tenure &rarr;
+              </button>
+            </div>
+            <p className="text-[11px] text-amber-700 leading-relaxed">
+              Use the <strong>&quot;+ Add New Position / Officer&quot;</strong> button above to add President, VP, Mentors, and Heads. Edit existing members by clicking their <strong>&quot;Edit Details&quot;</strong> button. Changes are auto-saved to this draft.
             </p>
-            <button
-              type="button"
-              onClick={handleActivateThisTenure}
-              className="px-3 py-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] uppercase tracking-wider shrink-0 cursor-pointer"
-            >
-              Publish & Make Live Tenure &rarr;
-            </button>
           </div>
         )}
       </div>
