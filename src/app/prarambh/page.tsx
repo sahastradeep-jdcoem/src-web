@@ -54,7 +54,7 @@ export default function PrarambhPage() {
 
   const highlights = [
     {
-      stat: "1,500+",
+      stat: "200+",
       label: "Students in Attendance",
       desc: "Electrifying gathering at the central amphitheatre",
     },
@@ -64,7 +64,7 @@ export default function PrarambhPage() {
       desc: "United under one central autonomous council",
     },
     {
-      stat: "16",
+      stat: "13",
       label: "Admin Sashes Conferred",
       desc: "Sworn to uphold student democratic representation",
     },
