@@ -26,7 +26,10 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
-  Loader2
+  Loader2,
+  Copy,
+  History,
+  Layers
 } from "lucide-react";
 import { 
   getStoredCouncilMembers, 
@@ -84,8 +87,114 @@ export default function AdminTeamPage() {
   const [isSaved, setIsSaved] = useState(false);
   const [pendingUploads, setPendingUploads] = useState(0);
 
+  // Copy positions from past tenure state
+  const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
+  const [copySourceTenureId, setCopySourceTenureId] = useState<string>("");
+  const [copyMode, setCopyMode] = useState<"appointees" | "full">("appointees");
+  const [copyIncludeHosting, setCopyIncludeHosting] = useState<boolean>(true);
+
   const handleUploadStateChange = (uploading: boolean) => {
     setPendingUploads((prev) => Math.max(0, prev + (uploading ? 1 : -1)));
+  };
+
+  const handleExecuteCopyPositions = (sourceId?: string, mode?: "appointees" | "full", includeHosting?: boolean) => {
+    const sId = sourceId || copySourceTenureId;
+    const m = mode || copyMode;
+    const incHost = includeHosting !== undefined ? includeHosting : copyIncludeHosting;
+
+    const sourceTenure = tenures.find((t) => t.id === sId) || tenures.find((t) => t.isCurrent) || tenures[0];
+    if (!sourceTenure || !selectedTenure) return;
+
+    // Get source council list
+    let rawCouncil: TeamMember[] = [];
+    if (sourceTenure.isCurrent) {
+      rawCouncil = getStoredCouncilMembers();
+    } else if (sourceTenure.adminCouncil && sourceTenure.adminCouncil.length > 0) {
+      rawCouncil = sourceTenure.adminCouncil;
+    } else {
+      rawCouncil = adminCouncilMembers;
+    }
+
+    // Get source hosting list
+    let rawHosting: TeamMember[] = [];
+    if (sourceTenure.isCurrent) {
+      rawHosting = getStoredHostingCommittee();
+    } else if (sourceTenure.hostingCommittee && sourceTenure.hostingCommittee.length > 0) {
+      rawHosting = sourceTenure.hostingCommittee;
+    } else {
+      rawHosting = hostingCommitteeMembers;
+    }
+
+    if (!Array.isArray(rawCouncil) || rawCouncil.length === 0) {
+      alert("No positions found in selected tenure to copy.");
+      return;
+    }
+
+    const newCouncil: TeamMember[] = rawCouncil.map((member, idx) => {
+      const cleanRoleSlug = (member.role || "officer").toLowerCase().replace(/[^a-z0-9]/g, "-");
+      const newId = `admin-${selectedTenure.label.replace(/[^a-zA-Z0-9]/g, "_")}-${cleanRoleSlug}-${idx + 1}_${Date.now()}`;
+      
+      if (m === "appointees") {
+        return {
+          ...member,
+          id: newId,
+          name: `${member.role} (Appointee)`,
+          bio: `Council officer representing ${member.role} for the ${selectedTenure.label} tenure.`,
+          email: `${cleanRoleSlug.replace(/-/g, "")}@jdcoem.ac.in`,
+          order: idx + 1,
+        };
+      } else {
+        return {
+          ...member,
+          id: newId,
+          order: idx + 1,
+        };
+      }
+    });
+
+    const newHosting: TeamMember[] = incHost && rawHosting.length > 0
+      ? rawHosting.map((member, idx) => {
+          const cleanRoleSlug = (member.role || "member").toLowerCase().replace(/[^a-z0-9]/g, "-");
+          const newId = `hosting-${selectedTenure.label.replace(/[^a-zA-Z0-9]/g, "_")}-${cleanRoleSlug}-${idx + 1}_${Date.now()}`;
+          if (m === "appointees") {
+            return {
+              ...member,
+              id: newId,
+              name: `${member.role || "Committee Member"} (Appointee)`,
+              order: idx + 1,
+            };
+          } else {
+            return {
+              ...member,
+              id: newId,
+              order: idx + 1,
+            };
+          }
+        })
+      : (selectedTenure.hostingCommittee || []);
+
+    // Apply to state
+    setCouncilMembers(newCouncil);
+    if (incHost) {
+      setHostingMembers(newHosting);
+    }
+
+    // Save to draft tenure store
+    const updatePayload: Partial<CouncilTenure> = {
+      adminCouncil: newCouncil,
+      ...(incHost ? { hostingCommittee: newHosting } : {})
+    };
+
+    updateTenureRoster(selectedTenure.id, updatePayload);
+
+    setTenures((prev) => prev.map((t) => t.id === selectedTenure.id ? {
+      ...t,
+      ...updatePayload
+    } : t));
+
+    setIsCopyModalOpen(false);
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 4000);
   };
 
   const loadData = () => {
@@ -578,6 +687,22 @@ export default function AdminTeamPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {isDraftTenure && (
+            <button
+              type="button"
+              onClick={() => {
+                const past = tenures.find((t) => t.id !== selectedTenure?.id);
+                if (past) setCopySourceTenureId(past.id);
+                setIsCopyModalOpen(true);
+              }}
+              className="px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+              title="Copy positions and structure from past tenure"
+            >
+              <Copy className="w-3.5 h-3.5 text-[#E78023]" />
+              <span>Copy Past Positions</span>
+            </button>
+          )}
+
           <button
             onClick={handleResetDefaults}
             className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
@@ -670,21 +795,66 @@ export default function AdminTeamPage() {
 
         {/* Banner if editing an upcoming draft tenure */}
         {isDraftTenure && selectedTenure && (
-          <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex flex-col gap-2">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <p>
-                <strong>Draft Mode Active:</strong> You are editing the upcoming roster for <strong>{selectedTenure.label} ({selectedTenure.academicYear})</strong>. All additions and edits will be saved to this draft without affecting the live site.
-              </p>
-              <Link
-                href="/admin/tenures"
-                className="px-3 py-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] uppercase tracking-wider shrink-0 transition-colors"
-              >
-                Go to Tenures &amp; Archive to Activate &rarr;
-              </Link>
+          <div className="p-4 sm:p-5 rounded-3xl bg-linear-to-r from-amber-50 to-orange-50/60 border border-amber-200/80 text-amber-950 text-xs shadow-xs space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white font-black text-[10px] uppercase tracking-wider">
+                    Draft Session
+                  </span>
+                  <span className="font-heading font-extrabold text-sm text-[#0F172A]">
+                    {selectedTenure.tenureNumber || "Upcoming"} ({selectedTenure.label})
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-800 leading-relaxed max-w-2xl">
+                  You are staging positions for <strong>{selectedTenure.academicYear}</strong>. All additions, edits, and hierarchy adjustments are safely isolated in this draft until you activate it.
+                </p>
+              </div>
+
+              {/* Action Buttons inside Draft Banner */}
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const past = tenures.find((t) => t.id !== selectedTenure.id);
+                    if (past) setCopySourceTenureId(past.id);
+                    setIsCopyModalOpen(true);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 border border-amber-300 text-amber-900 font-extrabold text-xs transition-all shadow-xs hover:shadow-sm cursor-pointer flex items-center gap-1.5"
+                >
+                  <Copy className="w-3.5 h-3.5 text-[#E78023]" />
+                  <span>Copy Positions from Past Tenure</span>
+                </button>
+
+                <Link
+                  href="/admin/tenures"
+                  className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs transition-colors shadow-xs hover:shadow-sm cursor-pointer flex items-center gap-1"
+                >
+                  <span>Activate Tenure &rarr;</span>
+                </Link>
+              </div>
             </div>
-            <p className="text-[11px] text-amber-700 leading-relaxed">
-              Use the <strong>&quot;+ Add New Position / Officer&quot;</strong> button above to add President, VP, Mentors, and Heads. Edit existing members by clicking their <strong>&quot;Edit Details&quot;</strong> button. Changes are auto-saved to this draft.
-            </p>
+
+            {/* Quick 1-Click Import Helper */}
+            <div className="pt-2.5 border-t border-amber-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-amber-900">
+              <span className="flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
+                <span>Save time: One-click import copies all 13 official council roles (Secretary, Tech Affairs, Cultural, etc.) ready for editing.</span>
+              </span>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const pastTenure = tenures.find((t) => t.isCurrent) || tenures.find((t) => t.id !== selectedTenure.id);
+                  if (pastTenure && confirm(`Import all 13 positions from ${pastTenure.label} into this draft? You can then edit student names, photos, and credentials.`)) {
+                    handleExecuteCopyPositions(pastTenure.id, "appointees", true);
+                  }
+                }}
+                className="font-extrabold text-[#E78023] hover:text-[#D26E17] hover:underline cursor-pointer flex items-center gap-1 self-start sm:self-auto shrink-0"
+              >
+                <span>1-Click Import from 1st Tenure (2025-26) &rarr;</span>
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -1216,6 +1386,168 @@ export default function AdminTeamPage() {
             </div>
 
           </form>
+        </Modal>
+      )}
+
+      {/* Copy Positions from Past Tenure Modal */}
+      {isCopyModalOpen && (
+        <Modal
+          isOpen={isCopyModalOpen}
+          onClose={() => setIsCopyModalOpen(false)}
+          title="Import Positions from Past Tenure"
+          subtitle={`Copy official council positions, hierarchy rank ordering, and roles into ${selectedTenure?.label || "this draft tenure"}.`}
+          maxWidth="lg"
+        >
+          <div className="space-y-5">
+            {/* Step 1: Select Source Tenure */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <History className="w-3.5 h-3.5 text-[#17458F]" />
+                <span>1. Select Source Past Tenure to Copy From</span>
+              </label>
+              <div className="grid grid-cols-1 gap-2">
+                {tenures
+                  .filter((t) => t.id !== selectedTenure?.id)
+                  .map((t) => {
+                    const councilCount = t.isCurrent 
+                      ? getStoredCouncilMembers().length 
+                      : (t.adminCouncil?.length || 13);
+                    const hostingCount = t.isCurrent 
+                      ? getStoredHostingCommittee().length 
+                      : (t.hostingCommittee?.length || 0);
+                    const isSelected = (copySourceTenureId || (t.isCurrent ? t.id : "")) === t.id;
+
+                    return (
+                      <div
+                        key={t.id}
+                        onClick={() => setCopySourceTenureId(t.id)}
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                          isSelected
+                            ? "bg-[#17458F]/5 border-[#17458F] ring-2 ring-[#17458F]/20"
+                            : "bg-slate-50 hover:bg-slate-100 border-slate-200"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                            isSelected ? "border-[#17458F] bg-[#17458F]" : "border-slate-300 bg-white"
+                          }`}>
+                            {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-heading font-extrabold text-xs text-[#0F172A]">
+                                {t.tenureNumber || "Tenure"} ({t.label})
+                              </span>
+                              {t.isCurrent && (
+                                <span className="px-1.5 py-0.5 rounded-full bg-emerald-500 text-white text-[9px] font-black uppercase">
+                                  Live Roster
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              {t.academicYear} • {councilCount} Admin Roles {hostingCount > 0 ? `• ${hostingCount} Hosting Members` : ""}
+                            </p>
+                          </div>
+                        </div>
+                        <Badge variant="navy" size="sm">
+                          {councilCount} Positions
+                        </Badge>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+
+            {/* Step 2: Choose Import Strategy */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-[#E78023]" />
+                <span>2. Choose Copy &amp; Import Strategy</span>
+              </label>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* Mode A: Clean Appointees */}
+                <div
+                  onClick={() => setCopyMode("appointees")}
+                  className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                    copyMode === "appointees"
+                      ? "bg-[#E78023]/5 border-[#E78023] ring-2 ring-[#E78023]/20"
+                      : "bg-slate-50 hover:bg-slate-100 border-slate-200"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-heading font-extrabold text-xs text-[#0F172A]">
+                      Clean Appointees (Recommended)
+                    </span>
+                    <span className="text-[10px] font-bold text-[#E78023] bg-[#E78023]/10 px-2 py-0.5 rounded-full">
+                      New Batch
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    Imports the exact official position titles (Secretary, Tech Affairs, Cultural, etc.), department recommendations, and ranks with clean appointee placeholders ready for appointing the new batch.
+                  </p>
+                </div>
+
+                {/* Mode B: Full Duplicate */}
+                <div
+                  onClick={() => setCopyMode("full")}
+                  className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                    copyMode === "full"
+                      ? "bg-[#17458F]/5 border-[#17458F] ring-2 ring-[#17458F]/20"
+                      : "bg-slate-50 hover:bg-slate-100 border-slate-200"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-heading font-extrabold text-xs text-[#0F172A]">
+                      Full Duplicate Template
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-600 bg-slate-200 px-2 py-0.5 rounded-full">
+                      Keep Details
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    Copies all past members with their existing names and credentials as starting templates, allowing you to click &quot;Edit Details&quot; to swap names and photos.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Step 3: Include Hosting Committee */}
+            <label className="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
+              <input
+                type="checkbox"
+                checked={copyIncludeHosting}
+                onChange={(e) => setCopyIncludeHosting(e.target.checked)}
+                className="w-4 h-4 rounded text-[#17458F] focus:ring-[#17458F] cursor-pointer"
+              />
+              <span className="text-xs font-semibold text-slate-800">
+                Also copy Hosting Committee positions (if any exist in source tenure)
+              </span>
+            </label>
+
+            {/* Footer Buttons */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-200">
+              <Button
+                type="button"
+                variant="outline"
+                size="md"
+                onClick={() => setIsCopyModalOpen(false)}
+              >
+                Cancel
+              </Button>
+
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                onClick={() => handleExecuteCopyPositions()}
+                className="gap-2 bg-[#E78023] hover:bg-[#D26E17] text-white font-extrabold shadow-md hover:shadow-lg transition-all"
+              >
+                <Copy className="w-4 h-4" />
+                <span>Import Positions to {selectedTenure?.label || "Draft"}</span>
+              </Button>
+            </div>
+          </div>
         </Modal>
       )}
 
