@@ -110,14 +110,15 @@ export default function AdminTeamPage() {
     setSelectedTenureId(currentId);
 
     const targetTenure = list.find((t) => t.id === currentId) || active;
+    const isFirst = targetTenure?.id === "tenure-2025-26" || targetTenure?.label?.includes("2025") || targetTenure?.tenureNumber?.includes("1st");
     if (targetTenure?.isCurrent) {
       setCouncilMembers(getStoredCouncilMembers());
       setHostingMembers(getStoredHostingCommittee());
-      setFoundingMembersList(getStoredFoundingMembers());
+      setFoundingMembersList(isFirst ? getStoredFoundingMembers() : []);
     } else if (targetTenure) {
       setCouncilMembers(targetTenure.adminCouncil || []);
       setHostingMembers(targetTenure.hostingCommittee || []);
-      setFoundingMembersList(targetTenure.foundingMembers || getStoredFoundingMembers());
+      setFoundingMembersList(isFirst ? (targetTenure.foundingMembers || getStoredFoundingMembers()) : []);
     }
 
     setClubsList(getStoredClubs());
@@ -174,18 +175,26 @@ export default function AdminTeamPage() {
 
   const selectedTenure = tenures.find((t) => t.id === selectedTenureId) || tenures.find((t) => t.isCurrent) || tenures[0];
   const isDraftTenure = selectedTenure && !selectedTenure.isCurrent;
+  const isFirstTenure = selectedTenure?.id === "tenure-2025-26" || selectedTenure?.label?.includes("2025") || selectedTenure?.tenureNumber?.includes("1st");
+
+  useEffect(() => {
+    if (!isFirstTenure && activeTab === "founding") {
+      setActiveTab("council");
+    }
+  }, [isFirstTenure, activeTab]);
 
   const handleSelectTenure = (tId: string) => {
     setSelectedTenureId(tId);
     const targetTenure = tenures.find((t) => t.id === tId);
+    const isFirst = targetTenure?.id === "tenure-2025-26" || targetTenure?.label?.includes("2025") || targetTenure?.tenureNumber?.includes("1st");
     if (targetTenure?.isCurrent) {
       setCouncilMembers(getStoredCouncilMembers());
       setHostingMembers(getStoredHostingCommittee());
-      setFoundingMembersList(getStoredFoundingMembers());
+      setFoundingMembersList(isFirst ? getStoredFoundingMembers() : []);
     } else if (targetTenure) {
       setCouncilMembers(targetTenure.adminCouncil || []);
       setHostingMembers(targetTenure.hostingCommittee || []);
-      setFoundingMembersList(targetTenure.foundingMembers || getStoredFoundingMembers());
+      setFoundingMembersList(isFirst ? (targetTenure.foundingMembers || getStoredFoundingMembers()) : []);
     }
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
@@ -497,12 +506,54 @@ export default function AdminTeamPage() {
 
   const handleResetDefaults = () => {
     if (confirm("Reset roster to default templates?")) {
-      if (activeTab === "council") {
-        saveCurrentList(adminCouncilMembers);
-      } else if (activeTab === "hosting") {
-        saveCurrentList(hostingCommitteeMembers);
+      if (isFirstTenure) {
+        if (activeTab === "council") {
+          saveCurrentList(adminCouncilMembers);
+        } else if (activeTab === "hosting") {
+          saveCurrentList(hostingCommitteeMembers);
+        } else {
+          saveCurrentList(defaultFoundingMembers);
+        }
       } else {
-        saveCurrentList(defaultFoundingMembers);
+        if (activeTab === "council") {
+          saveCurrentList([
+            {
+              id: `admin-${selectedTenure?.label || "draft"}-mentor`,
+              name: "Mentor (Appointee)",
+              role: "Mentor",
+              department: "Computer Science and Engineering",
+              year: "4th Year",
+              avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
+              bio: `Guiding ${selectedTenure?.label} institutional oversight and council governance.`,
+              email: "mentor@jdcoem.ac.in",
+              order: 1
+            },
+            {
+              id: `admin-${selectedTenure?.label || "draft"}-president`,
+              name: "President (Appointee)",
+              role: "President",
+              department: "Artificial Intelligence Engineering",
+              year: "4th Year",
+              avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
+              bio: `Presiding over the ${selectedTenure?.label} Student Representative Council.`,
+              email: "president@jdcoem.ac.in",
+              order: 2
+            },
+            {
+              id: `admin-${selectedTenure?.label || "draft"}-vp`,
+              name: "Vice President (Appointee)",
+              role: "Vice President",
+              department: "Information Technology",
+              year: "4th Year",
+              avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=600&auto=format&fit=crop",
+              bio: `Executive coordination and student council operations for ${selectedTenure?.label}.`,
+              email: "vp@jdcoem.ac.in",
+              order: 3
+            }
+          ]);
+        } else {
+          saveCurrentList([]);
+        }
       }
     }
   };
@@ -664,17 +715,19 @@ export default function AdminTeamPage() {
           <span>Hosting Committee ({hostingMembers.length})</span>
         </button>
 
-        <button
-          onClick={() => setActiveTab("founding")}
-          className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === "founding"
-              ? "bg-[#17458F] text-white shadow-xs"
-              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-          }`}
-        >
-          <Sparkles className="w-4 h-4 text-[#E78023]" />
-          <span>Founding Members ({foundingMembersList.length})</span>
-        </button>
+        {isFirstTenure && (
+          <button
+            onClick={() => setActiveTab("founding")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === "founding"
+                ? "bg-[#17458F] text-white shadow-xs"
+                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-[#E78023]" />
+            <span>Founding Members ({foundingMembersList.length})</span>
+          </button>
+        )}
 
         <button
           onClick={() => setActiveTab("clubs")}
@@ -702,7 +755,7 @@ export default function AdminTeamPage() {
           />
         </div>
 
-        {activeTab === "council" && (
+        {isFirstTenure && activeTab === "council" && (
           <button
             type="button"
             onClick={handleSyncFromFounding}
