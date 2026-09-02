@@ -448,6 +448,7 @@ export function ImageUploadDropzone({
           }}
           imageSrc={rawImageToCrop}
           initialAspectRatio={aspectRatio === "auto" ? "16:9" : (aspectRatio as AspectRatioType)}
+          isAvatar={aspectRatio === "1:1" || storagePath.includes("avatars") || storagePath.includes("logo")}
           onCropComplete={handleCropComplete}
           title={`Crop & Frame ${label}`}
         />
