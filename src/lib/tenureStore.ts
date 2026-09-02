@@ -348,6 +348,16 @@ export async function syncTenuresFromFirestore(): Promise<CouncilTenure[]> {
       const filtered = remote.filter((t: CouncilTenure) => t.id !== "tenure-2024-25" && !t.label.includes("2024"));
       const current = getStoredTenures();
       const merged = reconcileArrayDatasets(current, filtered);
+      
+      // CRITICAL: Ensure locally-created draft tenures are NEVER dropped during sync
+      // Draft tenures (isCurrent === false) that exist locally but not in the merged result must be re-added
+      const localDrafts = current.filter((t) => !t.isCurrent);
+      for (const draft of localDrafts) {
+        if (!merged.some((m: any) => m.id === draft.id)) {
+          merged.push(draft);
+        }
+      }
+      
       if (typeof window !== "undefined") {
         localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(merged));
         window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: merged }));
@@ -367,6 +377,15 @@ export function subscribeToTenures(callback: (tenures: CouncilTenure[]) => void)
       const filtered = remote.filter((t: CouncilTenure) => t.id !== "tenure-2024-25" && !t.label.includes("2024"));
       const current = getStoredTenures();
       const merged = reconcileArrayDatasets(current, filtered);
+      
+      // CRITICAL: Preserve locally-created draft tenures during realtime sync
+      const localDrafts = current.filter((t) => !t.isCurrent);
+      for (const draft of localDrafts) {
+        if (!merged.some((m: any) => m.id === draft.id)) {
+          merged.push(draft);
+        }
+      }
+      
       if (typeof window !== "undefined") {
         localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(merged));
         window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: merged }));
