@@ -22,18 +22,30 @@ export async function downloadPassAsImage(
       return { success: false };
     }
 
+    // Ensure all web fonts and document fonts are fully loaded before capturing
+    if (typeof document !== "undefined" && document.fonts) {
+      try {
+        await document.fonts.ready;
+      } catch (e) {
+        console.warn("Font loading wait notice", e);
+      }
+    }
+
+    // Small delay to ensure any layout calculations or SVG/canvas QR codes are flushed
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
     // Dynamically load html2canvas
     const html2canvas = (await import("html2canvas")).default;
 
     const canvas = await html2canvas(element, {
-      scale: 2, // 2x gives crisp 150-200 DPI without exhausting mobile GPU memory
+      scale: 3, // 3x ultra-HD resolution (300 DPI equivalent) for razor-sharp text and QR codes
       useCORS: true,
       allowTaint: true,
       backgroundColor: "#FFFFFF",
       logging: false,
-      imageTimeout: 3000,
+      imageTimeout: 8000,
       removeContainer: true,
-      windowWidth: 1024, // Fix viewport width during clone so layout always renders in desktop landscape
+      windowWidth: 1024, // Consistent landscape viewport for render stability
       onclone: (clonedDoc) => {
         const clonedEl = clonedDoc.getElementById(elementId);
         if (clonedEl) {
@@ -42,7 +54,41 @@ export async function downloadPassAsImage(
           clonedEl.style.width = "720px";
           clonedEl.style.minWidth = "720px";
           clonedEl.style.maxWidth = "720px";
-          clonedEl.style.margin = "0";
+          clonedEl.style.margin = "0 auto";
+          clonedEl.style.letterSpacing = "normal";
+
+          // Prevent text clipping by resetting line-heights and removing restrictive overflows
+          const textElements = clonedEl.querySelectorAll("h1, h2, h3, h4, h5, h6, p, span, div, strong");
+          textElements.forEach((el) => {
+            const htmlEl = el as HTMLElement;
+            // Prevent truncation clipping in canvas
+            if (htmlEl.classList.contains("truncate")) {
+              htmlEl.style.overflow = "visible";
+              htmlEl.style.textOverflow = "clip";
+              htmlEl.style.whiteSpace = "normal";
+            }
+            // Add padding-bottom breathing room for letter descenders (g, j, p, q, y)
+            if (htmlEl.tagName.startsWith("H") || htmlEl.classList.contains("font-heading")) {
+              htmlEl.style.lineHeight = "1.3";
+              htmlEl.style.paddingBottom = "4px";
+              htmlEl.style.display = "block";
+            } else if (htmlEl.tagName === "P" || htmlEl.tagName === "SPAN") {
+              htmlEl.style.lineHeight = "1.4";
+            }
+          });
+
+          // Ensure logo img tags are rendered with explicit dimensions and no distortion
+          const images = clonedEl.querySelectorAll("img");
+          images.forEach((img) => {
+            img.style.objectFit = "contain";
+            img.style.display = "block";
+            if (img.alt === "SRC Logo") {
+              img.style.width = "48px";
+              img.style.height = "48px";
+              img.style.minWidth = "48px";
+              img.style.minHeight = "48px";
+            }
+          });
         }
       },
     });
@@ -51,7 +97,7 @@ export async function downloadPassAsImage(
 
     // Convert to Blob
     const blob: Blob = await new Promise((resolve) => {
-      canvas.toBlob((b) => resolve(b || new Blob()), "image/png", 0.95);
+      canvas.toBlob((b) => resolve(b || new Blob()), "image/png", 1.0);
     });
 
     const isMobile = typeof navigator !== "undefined" && (

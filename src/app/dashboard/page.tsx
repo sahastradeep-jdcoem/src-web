@@ -673,32 +673,35 @@ export default function StudentDashboardPage() {
                     className="relative w-full max-w-[720px] rounded-3xl bg-white border border-slate-200 shadow-xl overflow-hidden text-left mx-auto font-sans"
                   >
                     {/* Ticket Top Strip */}
-                    <div className="bg-[#17458F] px-5 py-4 sm:px-8 sm:py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+                    <div className="bg-[#17458F] px-5 py-4 sm:px-8 sm:py-6 flex flex-row items-center justify-between gap-4">
                       <div className="flex items-center gap-3.5 sm:gap-4">
-                        <div className="relative h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-white p-1 shrink-0">
-                          <Image
+                        <div className="h-11 w-11 sm:h-12 sm:w-12 rounded-xl bg-white p-1 shrink-0 flex items-center justify-center overflow-hidden">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
                             src="/assets/SRC Logo.png"
                             alt="SRC Logo"
-                            fill
-                            className="object-contain"
+                            width={48}
+                            height={48}
+                            className="w-full h-full object-contain"
+                            crossOrigin="anonymous"
                           />
                         </div>
                         <div>
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-[#E78023] block">
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-[#E78023] block leading-normal">
                             Official Delegate Pass
                           </span>
-                          <h3 className="font-bold text-lg sm:text-2xl text-white font-heading leading-tight">
+                          <h3 className="font-bold text-lg sm:text-2xl text-white font-sans leading-snug pb-0.5">
                             SAHASTRADEEP
                           </h3>
-                          <p className="text-[11px] sm:text-xs text-slate-200 font-sans">Student Representative Council • JDCOEM</p>
+                          <p className="text-[11px] sm:text-xs text-slate-200 font-sans leading-normal">Student Representative Council • JDCOEM</p>
                         </div>
                       </div>
 
-                      <div className="text-left sm:text-right shrink-0">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-200 block">
+                      <div className="text-right shrink-0">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-200 block leading-normal">
                           Pass ID
                         </span>
-                        <p className="font-mono font-bold text-sm sm:text-lg text-[#E78023]">
+                        <p className="font-mono font-bold text-sm sm:text-lg text-[#E78023] leading-normal">
                           {selectedTicket.registrationId}
                         </p>
                       </div>
@@ -712,38 +715,38 @@ export default function StudentDashboardPage() {
                     </div>
 
                     {/* Ticket Body - Responsive Layout */}
-                    <div className="p-5 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6 sm:gap-8 bg-white">
+                    <div className="p-5 sm:p-8 flex flex-row items-center justify-between gap-6 sm:gap-8 bg-white">
                       
                       {/* Main Info */}
-                      <div className="flex-1 min-w-0 space-y-5">
+                      <div className="flex-1 min-w-0 space-y-4">
                         <div>
-                          <span className="text-[11px] sm:text-xs font-bold uppercase tracking-widest text-[#E78023] block">
+                          <span className="text-[11px] sm:text-xs font-bold uppercase tracking-widest text-[#E78023] block leading-normal">
                             Event Selection
                           </span>
-                          <h4 className="font-extrabold text-xl sm:text-2xl text-[#0F172A] mt-0.5 font-heading truncate">
+                          <h4 className="font-extrabold text-xl sm:text-2xl text-[#0F172A] mt-0.5 font-sans leading-snug pb-1">
                             {selectedTicket.eventName}
                           </h4>
-                          <p className="text-xs text-slate-500 mt-1 font-medium font-sans truncate">
+                          <p className="text-xs text-slate-500 mt-0.5 font-medium font-sans leading-normal">
                             {eventDateStr} • {eventVenueStr}
                           </p>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4 text-xs">
                           <div className="min-w-0">
-                            <span className="text-slate-500 uppercase font-bold text-[10px] block">
+                            <span className="text-slate-500 uppercase font-bold text-[10px] block leading-normal">
                               Participant
                             </span>
-                            <p className="font-bold text-slate-900 text-sm font-sans truncate">{selectedTicket.participantName}</p>
-                            <p className="text-slate-600 text-[11px] font-medium font-sans truncate">
+                            <p className="font-bold text-slate-900 text-sm font-sans leading-snug pb-0.5">{selectedTicket.participantName}</p>
+                            <p className="text-slate-600 text-[11px] font-medium font-sans leading-normal">
                               {selectedTicket.department || displayDepartment} ({selectedTicket.year || displayYear})
                             </p>
                           </div>
 
                           <div className="min-w-0">
-                            <span className="text-slate-500 uppercase font-bold text-[10px] block">
+                            <span className="text-slate-500 uppercase font-bold text-[10px] block leading-normal">
                               Category / Squad
                             </span>
-                            <p className="font-bold text-slate-900 text-sm font-sans truncate">
+                            <p className="font-bold text-slate-900 text-sm font-sans leading-snug pb-0.5">
                               {selectedTicket.teamType === "Team" ? selectedTicket.teamName || "Team Entry" : "Individual Entry"}
                             </p>
                             <Badge variant={selectedTicket.status === "CHECKED_IN" ? "success" : "orange"} size="sm" className="mt-1">
@@ -754,10 +757,10 @@ export default function StudentDashboardPage() {
 
                         {selectedTicket.teamMembers && selectedTicket.teamMembers.length > 0 && (
                           <div className="pt-2 border-t border-slate-100 font-medium">
-                            <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">
+                            <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block leading-normal">
                               Roster Members:
                             </span>
-                            <p className="text-xs text-slate-700 mt-0.5 font-sans truncate">
+                            <p className="text-xs text-slate-700 mt-0.5 font-sans leading-relaxed">
                               {selectedTicket.teamMembers.join(" • ")}
                             </p>
                           </div>
@@ -783,10 +786,10 @@ export default function StudentDashboardPage() {
                         </div>
 
                         <div className="space-y-0.5">
-                          <span className="font-mono text-[11px] font-bold text-[#E78023] block tracking-wider">
+                          <span className="font-mono text-[11px] font-bold text-[#E78023] block tracking-wider leading-normal">
                             {selectedTicket.ticketCode}
                           </span>
-                          <p className="text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1 font-sans">
+                          <p className="text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1 font-sans leading-normal">
                             <ShieldCheck className="w-3 h-3 text-emerald-600" />
                             <span>Scan for Gate Check-In</span>
                           </p>
@@ -796,7 +799,7 @@ export default function StudentDashboardPage() {
                     </div>
 
                     {/* Ticket Bottom Endorsement Footer */}
-                    <div className="px-6 py-3.5 sm:px-8 sm:py-4 bg-slate-50 border-t border-slate-200 flex flex-row items-center justify-between text-[11px] sm:text-xs text-slate-500 font-medium gap-2 font-sans">
+                    <div className="px-6 py-3.5 sm:px-8 sm:py-4 bg-slate-50 border-t border-slate-200 flex flex-row items-center justify-between text-[11px] sm:text-xs text-slate-500 font-medium gap-2 font-sans leading-normal">
                       <p>Entry permitted only with valid physical College ID card.</p>
                       <p className="font-semibold text-slate-700">JDCOEM Nagpur • SRC Sahastradeep</p>
                     </div>
