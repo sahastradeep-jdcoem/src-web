@@ -23,7 +23,8 @@ import {
   Users,
   RefreshCw,
   Image as ImageIcon,
-  Loader2
+  Loader2,
+  Layers
 } from "lucide-react";
 import { EventItem, ClubItem, CustomQuestion } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -121,6 +122,11 @@ export default function AdminEventsPage() {
     feePricingModel: "per_person" as "per_person" | "per_team",
     teamFeeAmount: 300,
     customQuestions: [] as CustomQuestion[],
+    isParentFest: false,
+    parentEventId: "",
+    parentEventSlug: "",
+    parentEventName: "",
+    subEventBadge: "",
   });
 
   // Edit Event Form State
@@ -151,6 +157,11 @@ export default function AdminEventsPage() {
     feePricingModel: "per_person" as "per_person" | "per_team",
     teamFeeAmount: 300,
     customQuestions: [] as CustomQuestion[],
+    isParentFest: false,
+    parentEventId: "",
+    parentEventSlug: "",
+    parentEventName: "",
+    subEventBadge: "",
   });
 
   const loadData = () => {
@@ -279,6 +290,11 @@ export default function AdminEventsPage() {
       teamFeeAmount: newEvent.isPaid && newEvent.feePricingModel === "per_team" ? Number(newEvent.teamFeeAmount) || 0 : undefined,
       feePricingModel: newEvent.isPaid ? newEvent.feePricingModel : undefined,
       customQuestions: newEvent.customQuestions && newEvent.customQuestions.length > 0 ? newEvent.customQuestions : undefined,
+      isParentFest: newEvent.isParentFest,
+      parentEventId: newEvent.parentEventId || undefined,
+      parentEventSlug: newEvent.parentEventSlug || undefined,
+      parentEventName: newEvent.parentEventName || undefined,
+      subEventBadge: newEvent.subEventBadge || undefined,
     };
 
     const updated = [created, ...eventsList];
@@ -314,6 +330,11 @@ export default function AdminEventsPage() {
       feePricingModel: "per_person",
       teamFeeAmount: 300,
       customQuestions: [],
+      isParentFest: false,
+      parentEventId: "",
+      parentEventSlug: "",
+      parentEventName: "",
+      subEventBadge: "",
     });
   };
 
@@ -350,6 +371,11 @@ export default function AdminEventsPage() {
       feePricingModel: evt.feePricingModel || "per_person",
       teamFeeAmount: evt.teamFeeAmount || 300,
       customQuestions: evt.customQuestions ? JSON.parse(JSON.stringify(evt.customQuestions)) : [],
+      isParentFest: Boolean(evt.isParentFest),
+      parentEventId: evt.parentEventId || "",
+      parentEventSlug: evt.parentEventSlug || "",
+      parentEventName: evt.parentEventName || "",
+      subEventBadge: evt.subEventBadge || "",
     });
   };
 
@@ -394,14 +420,19 @@ export default function AdminEventsPage() {
             teamType: editForm.teamType,
             minTeamSize: editForm.teamType !== "Individual" ? editForm.minTeamSize : undefined,
             maxTeamSize: editForm.teamType !== "Individual" ? editForm.maxTeamSize : undefined,
-            registrationStartDate: editForm.registrationStartDate || (item as any).registrationStartDate || undefined,
-            registrationDeadline: regDeadlineFormatted || item.registrationDeadline,
+            registrationStartDate: editForm.registrationStartDate,
+            registrationDeadline: regDeadlineFormatted || editForm.date,
             entryFee: entryFeeText,
             isPaid: editForm.isPaid,
             feeAmount: editForm.isPaid ? Number(editForm.feeAmount) || 0 : 0,
             teamFeeAmount: editForm.isPaid && editForm.feePricingModel === "per_team" ? Number(editForm.teamFeeAmount) || 0 : undefined,
             feePricingModel: editForm.isPaid ? editForm.feePricingModel : undefined,
             customQuestions: editForm.customQuestions && editForm.customQuestions.length > 0 ? editForm.customQuestions : undefined,
+            isParentFest: editForm.isParentFest,
+            parentEventId: editForm.parentEventId || undefined,
+            parentEventSlug: editForm.parentEventSlug || undefined,
+            parentEventName: editForm.parentEventName || undefined,
+            subEventBadge: editForm.subEventBadge || undefined,
           }
         : item
     );
@@ -601,7 +632,19 @@ export default function AdminEventsPage() {
                 {filteredEvents.map((evt) => (
                   <tr key={evt.id || evt.slug} className="hover:bg-slate-50/80 transition-colors">
                     <td className="py-4 px-6">
-                      <span className="font-bold text-slate-900 block text-sm">{evt.name}</span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-bold text-slate-900 block text-sm">{evt.name}</span>
+                        {evt.isParentFest && (
+                          <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 text-[#17458F] border border-indigo-200">
+                            Umbrella Fest
+                          </span>
+                        )}
+                        {evt.parentEventName && (
+                          <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                            Part of {evt.parentEventName}
+                          </span>
+                        )}
+                      </div>
                       <span className="text-[11px] text-slate-400 font-sans">{evt.venue}</span>
                     </td>
                     <td className="py-4 px-6">
@@ -788,6 +831,76 @@ export default function AdminEventsPage() {
               <p className="text-[10px] text-slate-400">
                 Select whether this is an institutional council flagship event or organized by one of the 12 chartered student clubs.
               </p>
+            </div>
+
+            {/* Dynamic Festival & Competition Hierarchy */}
+            <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-[#E78023]" />
+                    <span>Festival &amp; Competition Hierarchy</span>
+                  </label>
+                  <p className="text-[11px] text-amber-800">
+                    Configure whether this is an umbrella mega-festival or a sub-competition/segment under another event.
+                  </p>
+                </div>
+                <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={newEvent.isParentFest}
+                    onChange={(e) => setNewEvent({ ...newEvent, isParentFest: e.target.checked })}
+                    className="w-4 h-4 rounded text-[#17458F] focus:ring-[#17458F] border-slate-300"
+                  />
+                  <span className="text-xs font-bold text-amber-950">Is Umbrella Festival</span>
+                </label>
+              </div>
+
+              {!newEvent.isParentFest && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-amber-200/60">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
+                      Part of Umbrella Festival (Optional)
+                    </label>
+                    <select
+                      value={newEvent.parentEventId}
+                      onChange={(e) => {
+                        const pid = e.target.value;
+                        const parentEvt = eventsList.find((ev) => ev.id === pid || ev.slug === pid);
+                        setNewEvent({
+                          ...newEvent,
+                          parentEventId: pid,
+                          parentEventSlug: parentEvt ? parentEvt.slug : "",
+                          parentEventName: parentEvt ? parentEvt.name : "",
+                        });
+                      }}
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-semibold focus:outline-none focus:border-[#17458F]"
+                    >
+                      <option value="">None (Standalone Event)</option>
+                      {eventsList
+                        .filter((ev) => ev.isParentFest || !ev.parentEventId)
+                        .map((ev) => (
+                          <option key={ev.id} value={ev.id}>
+                            {ev.name} ({ev.category})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
+                      Sub-Event Badge / Tag (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={newEvent.subEventBadge}
+                      onChange={(e) => setNewEvent({ ...newEvent, subEventBadge: e.target.value.toUpperCase() })}
+                      placeholder="e.g. CONTESTANT, AUDITION, SOLO"
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-bold tracking-wider uppercase focus:outline-none focus:border-[#17458F]"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1335,6 +1448,76 @@ export default function AdminEventsPage() {
                   ))}
                 </optgroup>
               </select>
+            </div>
+
+            {/* Dynamic Festival & Competition Hierarchy */}
+            <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-[#E78023]" />
+                    <span>Festival &amp; Competition Hierarchy</span>
+                  </label>
+                  <p className="text-[11px] text-amber-800">
+                    Configure whether this is an umbrella mega-festival or a sub-competition/segment under another event.
+                  </p>
+                </div>
+                <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={editForm.isParentFest}
+                    onChange={(e) => setEditForm({ ...editForm, isParentFest: e.target.checked })}
+                    className="w-4 h-4 rounded text-[#17458F] focus:ring-[#17458F] border-slate-300"
+                  />
+                  <span className="text-xs font-bold text-amber-950">Is Umbrella Festival</span>
+                </label>
+              </div>
+
+              {!editForm.isParentFest && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-amber-200/60">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
+                      Part of Umbrella Festival (Optional)
+                    </label>
+                    <select
+                      value={editForm.parentEventId}
+                      onChange={(e) => {
+                        const pid = e.target.value;
+                        const parentEvt = eventsList.find((ev) => ev.id === pid || ev.slug === pid);
+                        setEditForm({
+                          ...editForm,
+                          parentEventId: pid,
+                          parentEventSlug: parentEvt ? parentEvt.slug : "",
+                          parentEventName: parentEvt ? parentEvt.name : "",
+                        });
+                      }}
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-semibold focus:outline-none focus:border-[#17458F]"
+                    >
+                      <option value="">None (Standalone Event)</option>
+                      {eventsList
+                        .filter((ev) => ev.id !== editingEvent?.id && (ev.isParentFest || !ev.parentEventId))
+                        .map((ev) => (
+                          <option key={ev.id} value={ev.id}>
+                            {ev.name} ({ev.category})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
+                      Sub-Event Badge / Tag (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.subEventBadge}
+                      onChange={(e) => setEditForm({ ...editForm, subEventBadge: e.target.value.toUpperCase() })}
+                      placeholder="e.g. CONTESTANT, AUDITION, SOLO"
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-bold tracking-wider uppercase focus:outline-none focus:border-[#17458F]"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

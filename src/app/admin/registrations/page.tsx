@@ -263,8 +263,8 @@ export default function AdminRegistrationsPage() {
 
     const eventOptions = filteredDropdownEvents.map((evt) => ({
       slug: evt.slug,
-      name: evt.name,
-      category: evt.category || "Event",
+      name: evt.parentEventName ? `${evt.name} (Part of ${evt.parentEventName})` : evt.name,
+      category: evt.isParentFest ? "Umbrella Fest" : (evt.category || "Event"),
       count: registrations.filter(
         (r) =>
           r.eventName.toLowerCase() === evt.name.toLowerCase() ||
@@ -346,7 +346,7 @@ export default function AdminRegistrationsPage() {
     );
   }, [selectedEventSlug, eventsList]);
 
-  // Filter registrations by currently selected tenure & event
+  // Filter registrations by currently selected tenure & event (including umbrella fest aggregation)
   const eventRegistrations = useMemo(() => {
     let list = registrations;
 
@@ -366,17 +366,35 @@ export default function AdminRegistrationsPage() {
 
     // Filter by event
     if (selectedEventSlug !== "all") {
+      const childNames = new Set<string>();
+      if (currentSelectedEventObj && currentSelectedEventObj.isParentFest) {
+        eventsList.forEach((e) => {
+          if (
+            (e.parentEventId && (e.parentEventId === currentSelectedEventObj.id || e.parentEventId === currentSelectedEventObj.slug)) ||
+            (e.parentEventSlug && (e.parentEventSlug === currentSelectedEventObj.slug || e.parentEventSlug === currentSelectedEventObj.id))
+          ) {
+            childNames.add(e.name.toLowerCase());
+            childNames.add(e.slug.toLowerCase());
+          }
+        });
+      }
+
       list = list.filter((r) => {
-        return (
-          r.eventName.toLowerCase() === selectedEventSlug.toLowerCase() ||
-          (r.eventSlug && r.eventSlug.toLowerCase() === selectedEventSlug.toLowerCase()) ||
-          (currentSelectedEventObj && r.eventName.toLowerCase() === currentSelectedEventObj.name.toLowerCase())
-        );
+        const rName = r.eventName.toLowerCase();
+        const rSlug = (r.eventSlug || "").toLowerCase();
+        const matchesDirect =
+          rName === selectedEventSlug.toLowerCase() ||
+          rSlug === selectedEventSlug.toLowerCase() ||
+          (currentSelectedEventObj && rName === currentSelectedEventObj.name.toLowerCase());
+
+        const matchesChild = childNames.has(rName) || childNames.has(rSlug);
+
+        return matchesDirect || matchesChild;
       });
     }
 
     return list;
-  }, [registrations, selectedEventSlug, selectedTenureId, currentSelectedEventObj, tenuresList]);
+  }, [registrations, selectedEventSlug, selectedTenureId, currentSelectedEventObj, eventsList, tenuresList]);
 
   // Export Excel button is enabled only after selecting a specific event filter
   const isExportDisabled = selectedEventSlug === "all" || eventRegistrations.length === 0;

@@ -35,6 +35,8 @@ interface TicketPassProps {
   teamName?: string;
   teamMembers?: string[];
   ticketCode: string;
+  parentEventName?: string;
+  subEventBadge?: string;
 }
 
 export function TicketPass({
@@ -49,6 +51,8 @@ export function TicketPass({
   teamName,
   teamMembers,
   ticketCode,
+  parentEventName,
+  subEventBadge,
 }: TicketPassProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
@@ -156,9 +160,21 @@ export function TicketPass({
             {/* Main Info */}
             <div className="flex-1 min-w-0 space-y-4">
               <div>
-                <span className="text-[11px] sm:text-xs font-bold uppercase tracking-widest text-[#E78023] block leading-normal">
-                  Event Selection
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] sm:text-xs font-bold uppercase tracking-widest text-[#E78023] block leading-normal">
+                    Event Selection
+                  </span>
+                  {parentEventName && (
+                    <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                      🎪 Part of {parentEventName}
+                    </span>
+                  )}
+                  {subEventBadge && (
+                    <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-900 text-white">
+                      {subEventBadge}
+                    </span>
+                  )}
+                </div>
                 <h4 className="font-extrabold text-xl sm:text-2xl text-[#0F172A] mt-0.5 font-sans leading-snug pb-1">
                   {eventName}
                 </h4>

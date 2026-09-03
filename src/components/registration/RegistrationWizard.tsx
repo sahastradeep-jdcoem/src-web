@@ -1827,6 +1827,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           teamName={formData.teamName}
           teamMembers={formData.teamType === "Team" ? teamMembers.map((m) => isExternal ? `${m.name} (${m.department})` : `${m.name} (${m.btId})`) : undefined}
           ticketCode={generatedTicket.ticketCode}
+          parentEventName={event.parentEventName}
+          subEventBadge={event.subEventBadge}
         />
       )}
 

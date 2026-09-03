@@ -80,6 +80,11 @@ export interface EventItem {
     phone: string;
   };
   customQuestions?: CustomQuestion[];
+  isParentFest?: boolean;
+  parentEventId?: string;
+  parentEventSlug?: string;
+  parentEventName?: string;
+  subEventBadge?: string;
 }
 
 export interface ClubLeader {

@@ -16,7 +16,8 @@ import {
   Phone, 
   Sparkles, 
   Trophy,
-  AlertCircle
+  AlertCircle,
+  Layers
 } from "lucide-react";
 import { mockEvents } from "@/data/events";
 import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
@@ -31,6 +32,7 @@ export default function EventDetailPage() {
   const slug = params?.slug as string;
 
   const [event, setEvent] = useState<EventItem | null>(null);
+  const [subEvents, setSubEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const findEvent = (allEvents: EventItem[], targetSlug: string): EventItem | null => {
@@ -47,6 +49,17 @@ export default function EventDetailPage() {
     );
   };
 
+  const findSubEvents = (allEvents: EventItem[], parent: EventItem): EventItem[] => {
+    return allEvents
+      .filter((e) => e.isLive !== false && e.status !== "draft")
+      .filter(
+        (e) =>
+          e.id !== parent.id &&
+          ((e.parentEventId && (e.parentEventId === parent.id || e.parentEventId === parent.slug)) ||
+           (e.parentEventSlug && (e.parentEventSlug === parent.slug || e.parentEventSlug === parent.id)))
+      );
+  };
+
   useEffect(() => {
     if (!slug) return;
 
@@ -57,15 +70,18 @@ export default function EventDetailPage() {
 
     if (match) {
       setEvent(match);
+      setSubEvents(findSubEvents(combined, match));
       setIsLoading(false);
     }
 
     // 2. Fetch latest from Firestore in case event was just created on another device
     syncEventsFromFirestore().then((remote) => {
       if (remote) {
-        const remoteMatch = findEvent([...remote, ...mockEvents], slug);
+        const remoteCombined = [...remote, ...mockEvents];
+        const remoteMatch = findEvent(remoteCombined, slug);
         if (remoteMatch) {
           setEvent(remoteMatch);
+          setSubEvents(findSubEvents(remoteCombined, remoteMatch));
         }
       }
       setIsLoading(false);
@@ -73,9 +89,11 @@ export default function EventDetailPage() {
 
     const unsub = subscribeToEvents((remoteEvents) => {
       if (remoteEvents) {
-        const remoteMatch = findEvent([...remoteEvents, ...mockEvents], slug);
-        if (remoteMatch) {
-          setEvent(remoteMatch);
+        const streamCombined = [...remoteEvents, ...mockEvents];
+        const streamMatch = findEvent(streamCombined, slug);
+        if (streamMatch) {
+          setEvent(streamMatch);
+          setSubEvents(findSubEvents(streamCombined, streamMatch));
         }
       }
     });
@@ -161,6 +179,21 @@ export default function EventDetailPage() {
               <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/90 text-slate-900 shadow-xs">
                 {event.status}
               </span>
+              {event.parentEventName && (
+                <Link
+                  href={`/events/${event.parentEventSlug || event.parentEventId}`}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 text-white border border-white/30 backdrop-blur-xs transition-colors shadow-xs"
+                >
+                  <Layers className="w-3.5 h-3.5 text-[#E78023]" />
+                  <span>Part of {event.parentEventName}</span>
+                  <ArrowRight className="w-3 h-3 text-white/70" />
+                </Link>
+              )}
+              {event.subEventBadge && (
+                <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-slate-900/80 text-white border border-white/20 shadow-xs">
+                  {event.subEventBadge}
+                </span>
+              )}
               {event.tagline && (
                 <span className="text-xs font-extrabold uppercase tracking-widest text-[#E78023] ml-2">
                   • {event.tagline}
@@ -215,6 +248,95 @@ export default function EventDetailPage() {
                 {event.about || event.description}
               </p>
             </section>
+
+            {/* DYNAMIC FESTIVAL SUB-EVENTS & COMPETITIONS */}
+            {subEvents.length > 0 && (
+              <section className="space-y-6 pt-6 border-t border-slate-200">
+                <div className="space-y-1">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#E78023] flex items-center gap-1.5">
+                    <Layers className="w-4 h-4" />
+                    <span>Festival Lineup &amp; Segments</span>
+                  </span>
+                  <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase">
+                    Competitions Under {event.name}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-500 font-medium">
+                    Explore specialized competitions, pageants, and tournaments happening under {event.name}. Each competition features dedicated prizes and rules.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  {subEvents.map((sub) => {
+                    const topPrize = sub.prizes && sub.prizes[0] ? sub.prizes[0].amount : null;
+                    return (
+                      <div
+                        key={sub.id}
+                        className="group relative rounded-3xl bg-white border border-slate-200 p-5 flex flex-col justify-between hover:border-[#17458F] hover:shadow-lg transition-all"
+                      >
+                        <div className="space-y-4">
+                          <div className="relative h-44 rounded-2xl overflow-hidden bg-slate-100">
+                            <Image
+                              src={sub.cardImage || sub.poster || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop"}
+                              alt={sub.name}
+                              fill
+                              unoptimized={true}
+                              className="object-cover group-hover:scale-105 transition-transform duration-500"
+                            />
+                            <div className="absolute top-3 left-3 flex items-center gap-1.5">
+                              <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full bg-[#E78023] text-white shadow-xs">
+                                {sub.category}
+                              </span>
+                              {sub.subEventBadge && (
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full bg-slate-900/80 text-white backdrop-blur-xs shadow-xs">
+                                  {sub.subEventBadge}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <h3 className="font-heading font-extrabold text-lg text-[#0F172A] uppercase group-hover:text-[#17458F] transition-colors">
+                              {sub.name}
+                            </h3>
+                            {sub.tagline && (
+                              <p className="text-xs text-slate-500 line-clamp-1 font-medium">
+                                {sub.tagline}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 font-medium pt-2 border-t border-slate-100">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="w-3.5 h-3.5 text-[#E78023]" />
+                              <span>{sub.date}</span>
+                            </div>
+                            {topPrize && (
+                              <div className="flex items-center gap-1 text-[#17458F] font-bold">
+                                <Trophy className="w-3.5 h-3.5 text-[#E78023]" />
+                                <span>Prize: {topPrize}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="pt-5 mt-4 border-t border-slate-100 flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-700">
+                            {sub.isPaid && sub.feeAmount ? `₹${sub.feeAmount}` : "Free Entry"}
+                          </span>
+                          <Link
+                            href={`/events/${sub.slug}`}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-xs"
+                          >
+                            <span>Explore &amp; Register</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
             {/* WHAT TO EXPECT */}
             {event.whatToExpect && event.whatToExpect.length > 0 && (
