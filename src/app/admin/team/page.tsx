@@ -58,6 +58,10 @@ import {
   switchActiveTenure, 
   updateTenureRoster,
   syncTenuresFromFirestore,
+  getStoredDraftCouncil,
+  saveStoredDraftCouncil,
+  getStoredDraftHosting,
+  saveStoredDraftHosting,
   CouncilTenure 
 } from "@/lib/tenureStore";
 import { getStoredDepartments, syncDepartmentsFromFirestore, getDepartmentShortName } from "@/lib/departmentsStore";
@@ -188,6 +192,12 @@ export default function AdminTeamPage() {
       setHostingMembers(newHosting);
     }
 
+    // Save to dedicated draft stores immediately (bulletproof persistence across refresh)
+    saveStoredDraftCouncil(selectedTenure.id, newCouncil);
+    if (incHost) {
+      saveStoredDraftHosting(selectedTenure.id, newHosting);
+    }
+
     // Save to draft tenure store
     const updatePayload: Partial<CouncilTenure> = {
       adminCouncil: newCouncil,
@@ -247,8 +257,10 @@ export default function AdminTeamPage() {
       setHostingMembers(getStoredHostingCommittee());
       setFoundingMembersList(isFirst ? getStoredFoundingMembers() : []);
     } else if (targetTenure) {
-      setCouncilMembers(targetTenure.adminCouncil || []);
-      setHostingMembers(targetTenure.hostingCommittee || []);
+      const draftCouncil = getStoredDraftCouncil(targetTenure.id);
+      const draftHosting = getStoredDraftHosting(targetTenure.id);
+      setCouncilMembers(draftCouncil.length > 0 ? draftCouncil : (targetTenure.adminCouncil || []));
+      setHostingMembers(draftHosting.length > 0 ? draftHosting : (targetTenure.hostingCommittee || []));
       setFoundingMembersList(isFirst ? (targetTenure.foundingMembers || getStoredFoundingMembers()) : []);
     }
 
@@ -329,8 +341,10 @@ export default function AdminTeamPage() {
       setHostingMembers(getStoredHostingCommittee());
       setFoundingMembersList(isFirst ? getStoredFoundingMembers() : []);
     } else if (targetTenure) {
-      setCouncilMembers(targetTenure.adminCouncil || []);
-      setHostingMembers(targetTenure.hostingCommittee || []);
+      const draftCouncil = getStoredDraftCouncil(targetTenure.id);
+      const draftHosting = getStoredDraftHosting(targetTenure.id);
+      setCouncilMembers(draftCouncil.length > 0 ? draftCouncil : (targetTenure.adminCouncil || []));
+      setHostingMembers(draftHosting.length > 0 ? draftHosting : (targetTenure.hostingCommittee || []));
       setFoundingMembersList(isFirst ? (targetTenure.foundingMembers || getStoredFoundingMembers()) : []);
     }
   };
@@ -341,38 +355,36 @@ export default function AdminTeamPage() {
     clubsList.forEach((club, clubIndex) => {
       const leaders = getClubLeaders(club);
       leaders.forEach((leader, leaderIndex) => {
-        const isCoLead = leader.roleType === "coLead" || (leader.role && leader.role.toLowerCase().includes("co-head"));
         list.push({
-          id: leader.id || `${club.id || club.slug}-leader-${leaderIndex}`,
+          id: leader.id || `lead-${club.id}-${leaderIndex}-${Date.now()}`,
           name: leader.name || "",
-          role: leader.role || (isCoLead ? `${club.name} Co-Head` : `${club.name} Head`),
-          clubSlug: club.slug,
-          clubId: club.id,
-          clubName: club.name,
-          roleType: isCoLead ? "coLead" : "lead",
+          role: leader.role || (leader.roleType === "coLead" ? `${club.name} Co-Lead` : `${club.name} Head`),
           department: leader.department || "Computer Science & Engineering",
-          year: leader.year || (isCoLead ? "3rd Year" : "4th Year"),
-          avatar: leader.avatar || (isCoLead ? "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop" : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"),
-          bio: leader.bio || "",
+          year: leader.year || (leader.roleType === "coLead" ? "3rd Year" : "4th Year"),
+          avatar: leader.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
+          bio: leader.bio || `Leading ${club.name} society operations, student chapters, and collegiate events.`,
           email: leader.email || "",
           linkedin: leader.linkedin || "",
           btId: leader.btId || "",
-          order: clubIndex * 10 + leaderIndex + 1
+          order: clubIndex * 2 + (leader.roleType === "coLead" ? 2 : 1),
+          clubId: club.id,
+          clubSlug: club.slug,
+          clubName: club.name,
+          roleType: leader.roleType || (leaderIndex === 0 ? "lead" : "coLead")
         });
       });
     });
     return list;
   }, [clubsList]);
 
-  // Determine current active list
-  const currentMembers = 
-    activeTab === "council" 
-      ? councilMembers 
-      : activeTab === "hosting"
-      ? hostingMembers
-      : activeTab === "founding"
-      ? foundingMembersList
-      : clubLeadMembers;
+  // Current active list depending on tab
+  const currentMembers = activeTab === "council"
+    ? councilMembers
+    : activeTab === "hosting"
+    ? hostingMembers
+    : activeTab === "founding"
+    ? foundingMembersList
+    : clubLeadMembers;
 
   const saveCurrentList = (updated: TeamMember[]) => {
     if (activeTab === "clubs") return;
@@ -401,7 +413,12 @@ export default function AdminTeamPage() {
         saveStoredFoundingMembers(indexed);
       }
     } else if (selectedTenure) {
-      // Draft / upcoming tenure: save to draft tenure record
+      // Draft / upcoming tenure: save to dedicated draft store first!
+      if (activeTab === "council") {
+        saveStoredDraftCouncil(selectedTenure.id, indexed);
+      } else if (activeTab === "hosting") {
+        saveStoredDraftHosting(selectedTenure.id, indexed);
+      }
       updateTenureRoster(selectedTenure.id, {
         [activeTab === "council" ? "adminCouncil" : activeTab === "hosting" ? "hostingCommittee" : "foundingMembers"]: indexed
       });

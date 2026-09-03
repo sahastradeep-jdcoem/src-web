@@ -4,7 +4,7 @@ import { saveSiteContentToFirestore, getSiteContentFromFirestore, cleanUndefined
 
 const QUEUE_STORAGE_KEY = "src_pending_cloud_sync_queue";
 const BACKUP_HISTORY_KEY = "src_rolling_snapshot_history";
-const MAX_HISTORY_SNAPSHOTS = 20;
+const MAX_HISTORY_SNAPSHOTS = 3;
 
 export interface PendingSyncItem {
   id: string;
@@ -214,7 +214,14 @@ export function recordRollingSnapshot(docId: string, label: string, data: any): 
     };
 
     const updated = [newSnapshot, ...existing].slice(0, MAX_HISTORY_SNAPSHOTS);
-    localStorage.setItem(BACKUP_HISTORY_KEY, JSON.stringify(updated));
+    try {
+      localStorage.setItem(BACKUP_HISTORY_KEY, JSON.stringify(updated));
+    } catch (quotaErr) {
+      // If quota exceeded, store only the single most recent snapshot
+      try {
+        localStorage.setItem(BACKUP_HISTORY_KEY, JSON.stringify([newSnapshot]));
+      } catch {}
+    }
     window.dispatchEvent(new CustomEvent("src_snapshot_history_updated", { detail: updated }));
   } catch (e) {
     console.warn("Could not record rolling backup snapshot", e);
