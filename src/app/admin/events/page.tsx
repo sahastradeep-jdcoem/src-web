@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { 
   Plus, 
@@ -223,11 +223,14 @@ export default function AdminEventsPage() {
     }
   };
 
-  const filteredEvents = eventsList.filter((e) =>
-    e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    e.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (e.organizer && e.organizer.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredEvents = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    return eventsList.filter((e) =>
+      e.name.toLowerCase().includes(q) ||
+      e.category.toLowerCase().includes(q) ||
+      (e.organizer && e.organizer.toLowerCase().includes(q))
+    );
+  }, [eventsList, searchQuery]);
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();

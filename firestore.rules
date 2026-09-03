@@ -1,0 +1,60 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email in [
+          'admin@jdcoem.ac.in',
+          'harshxfr@gmail.com',
+          'shendeha@jdcoem.ac.in',
+          'src.president@jdcoem.ac.in',
+          'src.mentor@jdcoem.ac.in',
+          'src.gensec@jdcoem.ac.in'
+        ] ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.token.email))
+      );
+    }
+
+    // Public site content (events, clubs, council, hero, gallery, departments, tenures)
+    match /site_content/{docId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // Admin authorization records
+    match /admins/{email} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Student & user profiles
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId) || isAdmin();
+    }
+
+    // Event registrations & pass records
+    match /registrations/{regId} {
+      allow read: if isAuthenticated();
+      allow create: if true;
+      allow update, delete: if isAdmin();
+    }
+
+    // Contact form submissions
+    match /contact_submissions/{submissionId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+  }
+}

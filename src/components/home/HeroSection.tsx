@@ -116,7 +116,7 @@ export default function HeroSection() {
 
         {/* Volumetric Clouds matching the exact off-white/ivory color of the loop video */}
         <div 
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[540px] sm:w-[680px] lg:w-[780px] h-[440px] sm:h-[540px] rounded-full blur-[70px] opacity-95"
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-w-[92vw] w-[540px] sm:w-[680px] lg:w-[780px] h-[440px] sm:h-[540px] rounded-full blur-[70px] opacity-95"
           style={{
             background: "radial-gradient(ellipse at center, #F5F4EF 0%, rgba(245,244,239,0.92) 42%, rgba(245,244,239,0.45) 68%, transparent 100%)",
           }}
@@ -124,7 +124,7 @@ export default function HeroSection() {
 
         {/* Soft Golden Sunbeam Burst behind logo */}
         <div 
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[750px] h-[750px] rounded-full opacity-30 mix-blend-soft-light animate-pulse"
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-w-[95vw] w-[750px] h-[750px] rounded-full opacity-30 mix-blend-soft-light animate-pulse"
           style={{
             background: "conic-gradient(from 0deg at 50% 50%, rgba(230,101,25,0.35) 0deg, transparent 45deg, rgba(30,49,91,0.2) 90deg, transparent 135deg, rgba(230,101,25,0.35) 180deg, transparent 225deg, rgba(30,49,91,0.2) 270deg, transparent 315deg, rgba(230,101,25,0.35) 360deg)",
             animationDuration: "14s",

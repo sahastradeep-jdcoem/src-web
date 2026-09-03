@@ -20,7 +20,13 @@ export const DEFAULT_HERO_SETTINGS: HeroSettings = {
   tickerText: "Who ARE WE SRC!",
 };
 
-export const PRESET_HERO_BG_IMAGES = [
+export interface HeroPreset {
+  name: string;
+  url: string;
+  category: string;
+}
+
+export const PRESET_HERO_BG_IMAGES: HeroPreset[] = [
   {
     name: "SRC Student Council Inauguration Squad",
     url: "/images/DSC_8361.JPG",

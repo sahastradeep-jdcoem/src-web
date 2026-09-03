@@ -506,7 +506,7 @@ export default function AdminRegistrationsPage() {
   const getQuestionInfo = (key: string, eventName?: string, r?: RegistrationRecord) => {
     // 1. Check if structured inside registration
     if (r?.customAnswers && typeof r.customAnswers[key] === "object" && r.customAnswers[key] !== null) {
-      const obj = r.customAnswers[key];
+      const obj = r.customAnswers[key] as any;
       if (obj.question && !obj.question.startsWith("q-")) {
         return {
           id: key,

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { 
@@ -479,12 +479,15 @@ export default function AdminTeamPage() {
     saveCurrentList(newMembers);
   };
 
-  const filteredMembers = currentMembers.filter(
-    (m) =>
-      (m.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (m.role || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (m.department || "").toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredMembers = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    return currentMembers.filter(
+      (m) =>
+        (m.name || "").toLowerCase().includes(q) ||
+        (m.role || "").toLowerCase().includes(q) ||
+        (m.department || "").toLowerCase().includes(q)
+    );
+  }, [currentMembers, searchQuery]);
 
   const handleOpenAddModal = () => {
     setIsCreatingNew(true);

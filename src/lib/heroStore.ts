@@ -1,4 +1,4 @@
-import { DEFAULT_HERO_SETTINGS, HeroSettings, PRESET_HERO_BG_IMAGES } from "@/data/heroSettings";
+import { DEFAULT_HERO_SETTINGS, HeroSettings, PRESET_HERO_BG_IMAGES, HeroPreset } from "@/data/heroSettings";
 import { 
   getSiteContentFromFirestore, 
   subscribeToSiteContent,
@@ -65,7 +65,7 @@ export function subscribeToHeroSettings(callback: (settings: HeroSettings) => vo
   });
 }
 
-export function getStoredHeroPresets(): any[] {
+export function getStoredHeroPresets(): HeroPreset[] {
   if (typeof window === "undefined") return PRESET_HERO_BG_IMAGES;
   try {
     const stored = localStorage.getItem(PRESETS_STORAGE_KEY);
@@ -79,7 +79,7 @@ export function getStoredHeroPresets(): any[] {
   return PRESET_HERO_BG_IMAGES;
 }
 
-export function saveStoredHeroPresets(presets: any[]): void {
+export function saveStoredHeroPresets(presets: HeroPreset[]): void {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(presets);
@@ -92,9 +92,9 @@ export function saveStoredHeroPresets(presets: any[]): void {
   }
 }
 
-export async function syncHeroPresetsFromFirestore(): Promise<any[]> {
+export async function syncHeroPresetsFromFirestore(): Promise<HeroPreset[]> {
   try {
-    const remote = await getSiteContentFromFirestore<any[]>("hero_presets");
+    const remote = await getSiteContentFromFirestore<HeroPreset[]>("hero_presets");
     if (remote && Array.isArray(remote) && remote.length > 0) {
       if (typeof window !== "undefined") {
         localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(remote));

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { 
@@ -118,20 +118,22 @@ export default function AdminClubsPage() {
     setTimeout(() => setIsSaved(false), 3000);
   };
 
-  const domains = ["All", ...Array.from(new Set(clubs.map((c) => c.category).filter(Boolean)))];
+  const domains = useMemo(() => ["All", ...Array.from(new Set(clubs.map((c) => c.category).filter(Boolean)))], [clubs]);
 
-  const filteredClubs = clubs.filter((club) => {
+  const filteredClubs = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    const leaders = getClubLeaders(club);
-    const matchesLeader = leaders.some((l) => l.name?.toLowerCase().includes(q) || l.department?.toLowerCase().includes(q));
-    const matchesSearch =
-      !q ||
-      club.name?.toLowerCase().includes(q) ||
-      club.description?.toLowerCase().includes(q) ||
-      matchesLeader;
-    const matchesDomain = selectedDomain === "All" || club.category === selectedDomain;
-    return matchesSearch && matchesDomain;
-  });
+    return clubs.filter((club) => {
+      const leaders = getClubLeaders(club);
+      const matchesLeader = leaders.some((l) => l.name?.toLowerCase().includes(q) || l.department?.toLowerCase().includes(q));
+      const matchesSearch =
+        !q ||
+        club.name?.toLowerCase().includes(q) ||
+        club.description?.toLowerCase().includes(q) ||
+        matchesLeader;
+      const matchesDomain = selectedDomain === "All" || club.category === selectedDomain;
+      return matchesSearch && matchesDomain;
+    });
+  }, [clubs, searchQuery, selectedDomain]);
 
   const handleOpenAddModal = () => {
     setIsCreatingNew(true);

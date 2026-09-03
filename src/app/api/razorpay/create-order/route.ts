@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Razorpay from "razorpay";
+import { mockEvents } from "@/data/events";
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,6 +23,28 @@ export async function POST(req: NextRequest) {
         { error: "Invalid registration fee amount." },
         { status: 400 }
       );
+    }
+
+    // Server-side price validation to prevent price tampering
+    if (eventId) {
+      const canonicalEvent = mockEvents.find(
+        (e) => e.id === eventId || e.slug === eventId
+      );
+      if (canonicalEvent && canonicalEvent.isPaid) {
+        let expectedFee = canonicalEvent.feeAmount || 0;
+        if (teamType === "Team" && canonicalEvent.feePricingModel === "per_team" && canonicalEvent.teamFeeAmount) {
+          expectedFee = canonicalEvent.teamFeeAmount;
+        } else if (teamType === "Team" && canonicalEvent.feePricingModel === "per_person") {
+          expectedFee = (canonicalEvent.feeAmount || 0) * (Number(teamSize) || 1);
+        }
+
+        if (expectedFee > 0 && Math.abs(Number(amount) - expectedFee) > 0.01) {
+          return NextResponse.json(
+            { error: `Registration fee mismatch detected. Expected ₹${expectedFee}, received ₹${amount}.` },
+            { status: 400 }
+          );
+        }
+      }
     }
 
     const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;

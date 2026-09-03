@@ -1,4 +1,5 @@
 import React from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { 
@@ -20,6 +21,17 @@ import HomeClubsSection from "@/components/home/HomeClubsSection";
 import HomeEventsSection from "@/components/home/HomeEventsSection";
 import { mockClubs } from "@/data/clubs";
 import { Badge } from "@/components/ui/Badge";
+
+export const metadata: Metadata = {
+  title: "SAHASTRADEEP | Student Representative Council • JDCOEM",
+  description: "Official digital gateway to the Student Representative Council (SRC) of JD College of Engineering & Management. Explore flagship collegiate fests, 12 student clubs, and campus leadership.",
+  openGraph: {
+    title: "SAHASTRADEEP | Student Representative Council • JDCOEM",
+    description: "Official portal of SRC JDCOEM Nagpur. Flagship fests, 12 chartered clubs, and digital delegate passes.",
+    url: "https://src-jdcoem.vercel.app",
+    siteName: "SRC JDCOEM",
+  },
+};
 
 export default function HomePage() {
   return (

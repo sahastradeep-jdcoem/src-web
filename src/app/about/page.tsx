@@ -1,4 +1,5 @@
 import React from "react";
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { 
@@ -16,6 +17,17 @@ import {
 import { Badge } from "@/components/ui/Badge";
 import BrandStrip from "@/components/layout/BrandStrip";
 import { PillarsOfStrengthSection } from "@/components/team/PillarsOfStrengthSection";
+
+export const metadata: Metadata = {
+  title: "About Us | SAHASTRADEEP • SRC JDCOEM",
+  description: "Learn about the mission, vision, history, and patron leadership of the Student Representative Council (SRC) at JD College of Engineering & Management, Nagpur.",
+  openGraph: {
+    title: "About Us | SAHASTRADEEP • SRC JDCOEM",
+    description: "Discover the governance, institutional pillars, and founding history of the Student Representative Council of JDCOEM Nagpur.",
+    url: "https://src-jdcoem.vercel.app/about",
+    siteName: "SRC JDCOEM",
+  },
+};
 
 export default function AboutPage() {
   const missionPillars = [

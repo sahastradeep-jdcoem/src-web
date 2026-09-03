@@ -175,7 +175,11 @@ export default function AdminOverviewPage() {
         if (data.hero) saveStoredHeroSettings(data.hero);
 
         if (Array.isArray(data.localRegistrations)) {
-          localStorage.setItem("src_local_registrations", JSON.stringify(data.localRegistrations));
+          try {
+            localStorage.setItem("src_local_registrations", JSON.stringify(data.localRegistrations));
+          } catch (regErr) {
+            console.warn("Quota exceeded restoring local registrations:", regErr);
+          }
         }
 
         refreshCounts();

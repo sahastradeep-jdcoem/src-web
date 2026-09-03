@@ -114,11 +114,7 @@ export default function AdminHeroSettingsPage() {
     e.stopPropagation();
     const updatedPresets = presets.filter((p) => p.url !== presetToDelete.url);
     setPresets(updatedPresets);
-    try {
-      localStorage.setItem("src_hero_presets", JSON.stringify(updatedPresets));
-    } catch (err) {
-      console.error("Failed to persist presets", err);
-    }
+    saveStoredHeroPresets(updatedPresets);
 
     // If the active background was this deleted image, immediately switch to the next preset or council photo!
     if (settings.bgImageUrl === presetToDelete.url) {
@@ -153,21 +149,13 @@ export default function AdminHeroSettingsPage() {
     };
     const updated = [newPreset, ...presets];
     setPresets(updated);
-    try {
-      localStorage.setItem("src_hero_presets", JSON.stringify(updated));
-    } catch (err) {
-      console.error("Failed to save preset", err);
-    }
+    saveStoredHeroPresets(updated);
     showNotice(`Added current backdrop to presets gallery.`);
   };
 
   const handleResetPresets = () => {
     setPresets(PRESET_HERO_BG_IMAGES);
-    try {
-      localStorage.setItem("src_hero_presets", JSON.stringify(PRESET_HERO_BG_IMAGES));
-    } catch (err) {
-      console.error("Failed to reset presets", err);
-    }
+    saveStoredHeroPresets(PRESET_HERO_BG_IMAGES);
     showNotice("Restored default landmark presets.");
   };
 

@@ -169,7 +169,7 @@ export interface RegistrationRecord {
   teamName?: string;
   teamMembers?: string[];
   registeredAt: string;
-  createdAt?: any;
+  createdAt?: string | Date | { seconds: number; nanoseconds?: number };
   paidAt?: string;
   status: "CONFIRMED" | "PENDING" | "COMPLETED" | "CHECKED_IN" | "CANCELLED";
   paymentStatus?: "FREE" | "PAID" | "PENDING";
@@ -184,7 +184,7 @@ export interface RegistrationRecord {
   customBranch?: string;
   userType?: string;
   isCollegeStudent?: boolean;
-  customAnswers?: Record<string, any>;
+  customAnswers?: Record<string, string | number | boolean | string[] | { question?: string; answer?: any; type?: string; options?: string[] } | any>;
 }
 
 export interface GalleryPhoto {
