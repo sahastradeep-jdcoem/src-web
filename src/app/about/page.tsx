@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import BrandStrip from "@/components/layout/BrandStrip";
+import { PillarsOfStrengthSection } from "@/components/team/PillarsOfStrengthSection";
 
 export default function AboutPage() {
   const missionPillars = [
@@ -62,6 +63,9 @@ export default function AboutPage() {
             The official Student Representative Council (Sahastradeep) of JD College of Engineering & Management, Nagpur.
           </p>
         </div>
+
+        {/* INSTITUTIONAL PATRONS & FACULTY MENTORS (4 PILLARS OF STRENGTH OF SRC) */}
+        <PillarsOfStrengthSection />
 
         {/* SECTION 1: WHAT IS SAHASTRADEEP? */}
         <section className="p-8 sm:p-12 rounded-3xl bg-white border border-slate-200 space-y-6 shadow-sm relative overflow-hidden">

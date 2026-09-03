@@ -32,7 +32,6 @@ import {
 import { getCurrentTenure, CouncilTenure } from "@/lib/tenureStore";
 import { TeamMember, ClubItem } from "@/types";
 import { CouncilMemberCard } from "@/components/team/CouncilMemberCard";
-import { PillarsOfStrengthSection } from "@/components/team/PillarsOfStrengthSection";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 
@@ -172,9 +171,6 @@ export default function TeamPage() {
             Meet the {councilMembers.length} Admins, {clubLeadMembers.length} Heads &amp; Co-Heads, and {unifiedHostingMembers.length} Hosting Committee members steering JDCOEM Nagpur in Tenure {currentTenure?.label || "2025-26"}.
           </p>
         </div>
-
-        {/* INSTITUTIONAL PATRONS & FACULTY MENTORS (4 PILLARS OF STRENGTH OF SRC) */}
-        <PillarsOfStrengthSection />
 
         {/* SECTION 1: SRC ADMIN POSITIONS */}
         <section className="space-y-8">

@@ -811,10 +811,10 @@ export default function AdminTeamPage() {
           )}
 
           <Link
-            href="/team"
+            href={activeTab === "pillars" ? "/about" : "/team"}
             target="_blank"
             className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
-            title="Preview Live /team Page in New Tab"
+            title={`Preview Live ${activeTab === "pillars" ? "/about" : "/team"} Page in New Tab`}
           >
             <Eye className="w-4 h-4" />
           </Link>
@@ -827,8 +827,8 @@ export default function AdminTeamPage() {
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             <span>Council team changes saved successfully! {isDraftTenure ? `(Saved to draft session ${selectedTenure?.label})` : "(Published live to website)"}</span>
           </div>
-          <Link href="/team" target="_blank" className="text-emerald-700 underline font-bold uppercase tracking-wider">
-            View Live Public Team Page &rarr;
+          <Link href={activeTab === "pillars" ? "/about" : "/team"} target="_blank" className="text-emerald-700 underline font-bold uppercase tracking-wider">
+            View Live Public {activeTab === "pillars" ? "About" : "Team"} Page &rarr;
           </Link>
         </div>
       )}
@@ -1051,7 +1051,7 @@ export default function AdminTeamPage() {
                 <span>The 4 Pillars of Strength of SRC</span>
               </div>
               <p className="text-slate-600 leading-relaxed max-w-3xl">
-                These 4 institutional patrons and faculty mentors (Principal, Dean IQAC, and 2 Faculty Coordinators) represent the foundational pillars of the Student Representative Council (Sahastradeep). They are showcased in the postcard gallery on the public <code>/team</code> page. You can edit their names, designations, roles, guidance quotes, and upload high-res photos below.
+                These 4 institutional patrons and faculty mentors (Principal, Dean IQAC, and 2 Faculty Coordinators) represent the foundational pillars of the Student Representative Council (Sahastradeep). They are showcased in the postcard gallery at the top of the public <code>/about</code> page. You can edit their names, designations, roles, guidance quotes, and upload high-res photos below.
               </p>
             </div>
           </div>
