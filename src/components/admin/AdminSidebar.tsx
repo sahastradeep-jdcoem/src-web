@@ -18,7 +18,8 @@ import {
   ChevronRight,
   Sliders,
   Building2,
-  UserCheck
+  UserCheck,
+  Vote
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,7 +27,8 @@ const ADMIN_NAV = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { name: "Active Users", href: "/admin/users", icon: UserCheck },
   { name: "Hero Settings", href: "/admin/hero", icon: Sliders },
-  { name: "Events & Listings", href: "/admin/events", icon: Calendar },
+  { name: "Events & Fests", href: "/admin/events", icon: Calendar },
+  { name: "Engagement Hub", href: "/admin/listings", icon: Vote },
   { name: "Registrations", href: "/admin/registrations", icon: FileText },
   { name: "Departments", href: "/admin/departments", icon: Building2 },
   { name: "Clubs", href: "/admin/clubs", icon: Sparkles },

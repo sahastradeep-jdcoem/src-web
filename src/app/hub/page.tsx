@@ -252,7 +252,7 @@ export default function StudentHubPage() {
 
                   {/* Header Image if present */}
                   {item.coverImage && (
-                    <div className="relative h-40 rounded-2xl overflow-hidden bg-slate-100">
+                    <Link href={`/hub/${item.slug}`} className="block relative h-40 rounded-2xl overflow-hidden bg-slate-100">
                       <Image
                         src={item.coverImage}
                         alt={item.title}
@@ -260,14 +260,16 @@ export default function StudentHubPage() {
                         unoptimized={true}
                         className="object-cover group-hover:scale-105 transition-transform duration-500"
                       />
-                    </div>
+                    </Link>
                   )}
 
                   {/* Title & Summary */}
                   <div className="space-y-1.5">
-                    <h3 className="font-heading font-extrabold text-lg text-[#0F172A] uppercase group-hover:text-[#17458F] transition-colors line-clamp-2">
-                      {item.title}
-                    </h3>
+                    <Link href={`/hub/${item.slug}`}>
+                      <h3 className="font-heading font-extrabold text-lg text-[#0F172A] uppercase group-hover:text-[#17458F] transition-colors line-clamp-2">
+                        {item.title}
+                      </h3>
+                    </Link>
                     <p className="text-xs text-slate-500 leading-relaxed font-sans line-clamp-3">
                       {item.summary}
                     </p>
@@ -298,9 +300,14 @@ export default function StudentHubPage() {
                           );
                         })}
                       </div>
-                      <p className="text-[10px] text-slate-400 font-bold text-center uppercase tracking-wider">
-                        {totalPollVotes} verified student votes recorded
-                      </p>
+                      <div className="flex items-center justify-between text-[11px] pt-1">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                          {totalPollVotes} student votes recorded
+                        </span>
+                        <Link href={`/hub/${item.slug}`} className="text-[#17458F] hover:underline font-bold">
+                          Dedicated Page &rarr;
+                        </Link>
+                      </div>
                     </div>
                   )}
 
@@ -339,6 +346,14 @@ export default function StudentHubPage() {
                       </span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
+                    <div className="pt-2 text-center">
+                      <Link
+                        href={`/hub/${item.slug}`}
+                        className="text-[11px] font-bold text-slate-500 hover:text-[#17458F] transition-colors"
+                      >
+                        View Full Details &amp; Share &rarr;
+                      </Link>
+                    </div>
                   </div>
                 )}
               </div>
