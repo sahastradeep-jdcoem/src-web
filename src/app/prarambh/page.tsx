@@ -202,6 +202,7 @@ export default function PrarambhPage() {
                 src="https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=800&auto=format&fit=crop"
                 alt="Lamp Lighting"
                 fill
+                unoptimized={true}
                 className="object-cover"
               />
             </div>
@@ -210,6 +211,7 @@ export default function PrarambhPage() {
                 src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=800&auto=format&fit=crop"
                 alt="Council Oath"
                 fill
+                unoptimized={true}
                 className="object-cover"
               />
             </div>
@@ -218,6 +220,7 @@ export default function PrarambhPage() {
                 src="https://images.unsplash.com/photo-1531482615713-2afd69097998?q=80&w=800&auto=format&fit=crop"
                 alt="Investiture Assembly"
                 fill
+                unoptimized={true}
                 className="object-cover"
               />
             </div>

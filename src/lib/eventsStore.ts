@@ -34,7 +34,7 @@ export function saveStoredEvents(events: EventItem[]): void {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(events);
-    localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(sanitized));
+    try { localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(sanitized)); } catch (lsErr) { console.warn("localStorage quota exceeded for events:", lsErr); }
     window.dispatchEvent(new CustomEvent("src_events_updated", { detail: sanitized }));
     compactEventDataset(sanitized).then((compacted) => {
       saveSiteContentToFirestore("events", compacted).catch((err) => {

@@ -228,6 +228,7 @@ export default function ArchivePage() {
                             src={evt.poster}
                             alt={evt.name}
                             fill
+                            unoptimized={true}
                             className="object-cover"
                           />
                           <div className="absolute top-2.5 left-2.5">

@@ -37,7 +37,7 @@ export default function ClubsDirectoryPage() {
   }, []);
 
   const filteredClubs = useMemo(() => {
-    return clubs.filter((club) => {
+    return clubs.filter(c => c.isLive !== false).filter((club) => {
       const matchesSearch =
         club.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         club.description.toLowerCase().includes(searchQuery.toLowerCase()) ||

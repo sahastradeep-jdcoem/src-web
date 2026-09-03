@@ -12,14 +12,18 @@ import {
   CheckCircle2, 
   Clock, 
   ShieldCheck, 
-  Sparkles 
+  Sparkles,
+  Loader2
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Accordion } from "@/components/ui/Accordion";
+import { saveSiteContentToFirestore, cleanUndefined } from "@/lib/firebase/firestore";
 
 export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [formState, setFormState] = useState({
     name: "",
     email: "",
@@ -28,9 +32,57 @@ export default function ContactPage() {
     message: "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    // Basic validation
+    if (!formState.name.trim() || !formState.email.trim() || !formState.subject.trim() || !formState.message.trim()) {
+      setSubmitError("Please fill in all required fields.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formState.email.trim())) {
+      setSubmitError("Please enter a valid email address.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      const submissionId = `contact_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
+      const submission = cleanUndefined({
+        id: submissionId,
+        name: formState.name.trim(),
+        email: formState.email.trim().toLowerCase(),
+        department: formState.department,
+        subject: formState.subject.trim(),
+        message: formState.message.trim(),
+        submittedAt: new Date().toISOString(),
+        status: "new",
+      });
+
+      // Persist to Firestore contact_submissions collection
+      await saveSiteContentToFirestore(`contact_${submissionId}`, submission);
+
+      // Also save locally as backup
+      try {
+        const existing = JSON.parse(localStorage.getItem("src_contact_submissions") || "[]");
+        existing.push(submission);
+        localStorage.setItem("src_contact_submissions", JSON.stringify(existing));
+      } catch {}
+
+      setSubmitted(true);
+      setFormState({ name: "", email: "", department: "Computer Science & Engineering", subject: "", message: "" });
+    } catch (err) {
+      console.error("Contact form submission failed:", err);
+      setSubmitError("Failed to send your message. Please try again or email us directly at srcjdcoem@gmail.com.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const faqs = [
@@ -301,15 +353,31 @@ export default function ContactPage() {
                     />
                   </div>
 
+                  {submitError && (
+                    <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium">
+                      {submitError}
+                    </div>
+                  )}
+
                   <div className="flex justify-end pt-2">
                     <Button
                       type="submit"
                       variant="primary"
                       size="md"
                       className="gap-2"
+                      disabled={isSubmitting}
                     >
-                      <Send className="w-4 h-4" />
-                      <span>Transmit Message</span>
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Sending...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          <span>Transmit Message</span>
+                        </>
+                      )}
                     </Button>
                   </div>
                 </form>

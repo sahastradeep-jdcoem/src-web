@@ -6,7 +6,7 @@ export type EventCategory =
   | "Workshops"
   | "Fest";
 
-export type EventStatus = "Registration Open" | "Upcoming" | "Completed";
+export type EventStatus = "Registration Open" | "Upcoming" | "Completed" | "draft";
 
 export interface EventScheduleItem {
   time: string;
@@ -52,6 +52,7 @@ export interface EventItem {
   organizer: string;
   organizerClubSlug?: string;
   status: EventStatus;
+  isLive?: boolean;
   isFeatured?: boolean;
   poster: string; // Base / fallback poster
   posterImage?: string; // Vertical portrait poster (3:4 or 4:5) for official notices & sidebar
@@ -117,6 +118,8 @@ export interface ClubItem {
   upcomingEvents?: string[];
   pastHighlights: string[];
   galleryImages: string[];
+  isLive?: boolean;
+  status?: "active" | "draft" | string;
 }
 
 export interface TeamMember {
@@ -136,6 +139,7 @@ export interface TeamMember {
   badgeNumber?: string;
   btId?: string; // College BT ID for designation badge linkage
   clubSlug?: string; // Optional slug to navigate to club profile
+  isLive?: boolean;
 }
 
 export interface InstitutionalPillar {

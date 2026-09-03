@@ -48,7 +48,8 @@ export default function HomeClubsSection() {
   };
 
   // Duplicate clubs for seamless infinite loop ticker
-  const displayClubs = clubs.length > 0 ? clubs : [];
+  const liveClubs = clubs.filter(c => c.isLive !== false);
+  const displayClubs = liveClubs.length > 0 ? liveClubs : [];
   const loopedClubs = [...displayClubs, ...displayClubs, ...displayClubs];
 
   return (

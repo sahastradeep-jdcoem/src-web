@@ -32,7 +32,7 @@ export default function HomePage() {
       <BrandStrip />
 
       {/* 3. CLEAN INSTITUTIONAL PILLARS */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 border-b border-slate-200 bg-white">
+      <section id="explore" className="py-16 px-4 sm:px-6 lg:px-8 border-b border-slate-200 bg-white">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
             

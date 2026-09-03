@@ -2,7 +2,8 @@ import { DEFAULT_HERO_SETTINGS, HeroSettings, PRESET_HERO_BG_IMAGES } from "@/da
 import { 
   getSiteContentFromFirestore, 
   subscribeToSiteContent,
-  cleanUndefined 
+  cleanUndefined,
+  saveSiteContentToFirestore
 } from "./firebase/firestore";
 import { enqueueCloudWrite, hasPendingWritesFor } from "./dataSyncEngine";
 
@@ -26,8 +27,9 @@ export function saveStoredHeroSettings(settings: HeroSettings): void {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(settings);
-    localStorage.setItem(HERO_STORAGE_KEY, JSON.stringify(sanitized));
+    try { localStorage.setItem(HERO_STORAGE_KEY, JSON.stringify(sanitized)); } catch {}
     window.dispatchEvent(new CustomEvent("src_hero_updated", { detail: sanitized }));
+    saveSiteContentToFirestore("hero_settings", sanitized).catch((err) => { console.warn("Firestore direct write for hero settings failed, enqueuing:", err); });
     enqueueCloudWrite("hero_settings", sanitized, "Hero Banner Settings");
   } catch (e) {
     console.error("Could not save hero settings to storage", e);
@@ -81,8 +83,9 @@ export function saveStoredHeroPresets(presets: any[]): void {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(presets);
-    localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(sanitized));
+    try { localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(sanitized)); } catch {}
     window.dispatchEvent(new CustomEvent("src_hero_presets_updated", { detail: sanitized }));
+    saveSiteContentToFirestore("hero_presets", sanitized).catch((err) => { console.warn("Firestore direct write for hero presets failed, enqueuing:", err); });
     enqueueCloudWrite("hero_presets", sanitized, `Hero Presets (${presets.length} Presets)`);
   } catch (e) {
     console.error("Could not save hero presets to storage", e);

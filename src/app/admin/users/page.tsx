@@ -647,6 +647,7 @@ export default function AdminUsersPage() {
                                 src={u.photoURL}
                                 alt={u.displayName || "User"}
                                 fill
+                                unoptimized={true}
                                 className="object-cover"
                               />
                             ) : (

@@ -37,7 +37,7 @@ export default function EventDetailPage() {
     if (!targetSlug) return null;
     const cleanSlug = targetSlug.toLowerCase().trim();
     return (
-      allEvents.find(
+      allEvents.filter(e => e.isLive !== false && e.status !== 'draft').find(
         (e) =>
           e.slug === cleanSlug ||
           e.id === cleanSlug ||
@@ -139,6 +139,7 @@ export default function EventDetailPage() {
           alt={event.name}
           fill
           priority
+          unoptimized={true}
           className="object-cover opacity-60"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
@@ -304,6 +305,7 @@ export default function EventDetailPage() {
                     src={event.posterImage || event.poster}
                     alt={`${event.name} Official Poster`}
                     fill
+                    unoptimized={true}
                     className="object-cover transition-transform duration-500 group-hover:scale-105"
                   />
                 </div>

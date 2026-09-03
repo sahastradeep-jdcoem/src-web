@@ -1,6 +1,7 @@
 import { 
   getSiteContentFromFirestore,
-  cleanUndefined
+  cleanUndefined,
+  saveSiteContentToFirestore
 } from "./firebase/firestore";
 import { enqueueCloudWrite } from "./dataSyncEngine";
 
@@ -120,8 +121,9 @@ export function saveStoredDepartments(departments: string[]): void {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(departments);
-    localStorage.setItem("src_departments", JSON.stringify(sanitized));
+    try { localStorage.setItem("src_departments", JSON.stringify(sanitized)); } catch {}
     window.dispatchEvent(new CustomEvent("src_departments_updated", { detail: sanitized }));
+    saveSiteContentToFirestore("departments", sanitized).catch((err) => { console.warn("Firestore direct write for departments failed, enqueuing:", err); });
     enqueueCloudWrite("departments", sanitized, `Academic Departments (${departments.length} Branches)`);
   } catch (e) {
     console.error("Could not save departments", e);

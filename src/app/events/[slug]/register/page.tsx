@@ -21,7 +21,7 @@ export default function EventRegisterPage() {
     if (!targetSlug) return null;
     const cleanSlug = targetSlug.toLowerCase().trim();
     return (
-      allEvents.find(
+      allEvents.filter(e => e.isLive !== false && e.status !== 'draft').find(
         (e) =>
           e.slug === cleanSlug ||
           e.id === cleanSlug ||

@@ -42,7 +42,7 @@ export default function EventsPage() {
   }, []);
 
   const filteredEvents = useMemo(() => {
-    return eventsList.filter((event) => {
+    return eventsList.filter(e => e.isLive !== false && e.status !== 'draft').filter((event) => {
       const matchesSearch =
         event.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         event.description.toLowerCase().includes(searchQuery.toLowerCase()) ||

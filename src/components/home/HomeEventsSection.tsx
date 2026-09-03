@@ -39,10 +39,11 @@ export default function HomeEventsSection() {
     };
   }, []);
 
-  const featuredEvent = eventsList[0];
-  const otherEvents = eventsList.slice(1);
+  const liveEvents = eventsList.filter(e => e.isLive !== false && e.status !== 'draft');
+  const featuredEvent = liveEvents[0];
+  const otherEvents = liveEvents.slice(1);
 
-  if (eventsList.length === 0) {
+  if (liveEvents.length === 0) {
     return <LeadershipSpotlightSection />;
   }
 

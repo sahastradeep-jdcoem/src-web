@@ -224,7 +224,7 @@ export function saveStoredSpokespersons(members: TeamMember[]): void {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(stripCategoryAndLevel(members));
-    localStorage.setItem("src_spokespersons", JSON.stringify(sanitized));
+    try { localStorage.setItem("src_spokespersons", JSON.stringify(sanitized)); } catch {}
     window.dispatchEvent(new CustomEvent("src_spokespersons_updated", { detail: sanitized }));
     saveSiteContentToFirestore("spokespersons", sanitized).catch((err) => {
       console.warn("Firestore direct write for spokespersons failed, enqueuing:", err);

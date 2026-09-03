@@ -3,7 +3,8 @@ import { mockGalleryPhotos as initialPhotos } from "@/data/gallery";
 import { 
   getSiteContentFromFirestore, 
   subscribeToSiteContent,
-  cleanUndefined 
+  cleanUndefined,
+  saveSiteContentToFirestore
 } from "./firebase/firestore";
 import { enqueueCloudWrite, hasPendingWritesFor, reconcileArrayDatasets } from "./dataSyncEngine";
 
@@ -27,8 +28,9 @@ export function saveStoredGalleryPhotos(photos: GalleryPhoto[]): void {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(photos);
-    localStorage.setItem(GALLERY_STORAGE_KEY, JSON.stringify(sanitized));
+    try { localStorage.setItem(GALLERY_STORAGE_KEY, JSON.stringify(sanitized)); } catch {}
     window.dispatchEvent(new CustomEvent("src_gallery_updated", { detail: sanitized }));
+    saveSiteContentToFirestore("gallery_photos", sanitized).catch((err) => { console.warn("Firestore direct write for gallery photos failed, enqueuing:", err); });
     enqueueCloudWrite("gallery_photos", sanitized, `Gallery Photos (${photos.length} Photos)`);
   } catch (e) {
     console.error("Could not save gallery photos to storage", e);

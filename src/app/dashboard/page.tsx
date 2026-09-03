@@ -538,6 +538,7 @@ export default function StudentDashboardPage() {
                       src="/assets/SRC Logo.png"
                       alt="SRC Seal"
                       fill
+                      unoptimized={true}
                       className="object-contain"
                     />
                   </div>

@@ -296,7 +296,7 @@ export function saveStoredTenures(tenures: CouncilTenure[]): void {
         clubs: [],
         events: [],
       }));
-      localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(compacted));
+      try { localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(compacted)); } catch {}
     }
     window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: sanitized }));
     saveSiteContentToFirestore("council_tenures", sanitized).catch((err) => {
