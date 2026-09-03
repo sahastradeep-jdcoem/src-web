@@ -74,7 +74,16 @@ type TeamCategoryTab = "council" | "hosting" | "founding" | "clubs";
 export default function AdminTeamPage() {
   const [activeTab, setActiveTab] = useState<TeamCategoryTab>("council");
   const [tenures, setTenures] = useState<CouncilTenure[]>([]);
-  const [selectedTenureId, setSelectedTenureId] = useState<string>("");
+  const [selectedTenureId, setSelectedTenureId] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlTenureId = urlParams.get("tenure");
+      if (urlTenureId) return urlTenureId;
+      const saved = sessionStorage.getItem("src_admin_selected_tenure");
+      if (saved) return saved;
+    }
+    return "";
+  });
   const [councilMembers, setCouncilMembers] = useState<TeamMember[]>([]);
   const [hostingMembers, setHostingMembers] = useState<TeamMember[]>([]);
   const [foundingMembersList, setFoundingMembersList] = useState<TeamMember[]>([]);
@@ -192,6 +201,13 @@ export default function AdminTeamPage() {
       ...updatePayload
     } : t));
 
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("src_admin_selected_tenure", selectedTenure.id);
+      const url = new URL(window.location.href);
+      url.searchParams.set("tenure", selectedTenure.id);
+      window.history.replaceState({}, "", url.toString());
+    }
+
     setIsCopyModalOpen(false);
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 4000);
@@ -202,14 +218,17 @@ export default function AdminTeamPage() {
     setTenures(list);
     const active = list.find((t) => t.isCurrent) || list[0];
     
-    // Check URL query param for direct tenure navigation (e.g. /admin/team?tenure=xyz)
+    // Check URL query param and sessionStorage for direct tenure navigation (e.g. /admin/team?tenure=xyz)
     const urlParams = new URLSearchParams(window.location.search);
     const urlTenureId = urlParams.get("tenure");
+    const savedTenureId = typeof window !== "undefined" ? sessionStorage.getItem("src_admin_selected_tenure") : null;
     
-    // Priority: URL param > already selected > active tenure > default
+    // Priority: URL param > saved in session > already selected in state > active tenure > default
     let currentId: string;
     if (urlTenureId && list.some((t) => t.id === urlTenureId)) {
       currentId = urlTenureId;
+    } else if (savedTenureId && list.some((t) => t.id === savedTenureId)) {
+      currentId = savedTenureId;
     } else if (selectedTenureId && list.some((t) => t.id === selectedTenureId)) {
       currentId = selectedTenureId;
     } else {
@@ -217,6 +236,9 @@ export default function AdminTeamPage() {
     }
       
     setSelectedTenureId(currentId);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("src_admin_selected_tenure", currentId);
+    }
 
     const targetTenure = list.find((t) => t.id === currentId) || active;
     const isFirst = targetTenure?.id === "tenure-2025-26" || targetTenure?.label?.includes("2025") || targetTenure?.tenureNumber?.includes("1st");
@@ -294,6 +316,12 @@ export default function AdminTeamPage() {
 
   const handleSelectTenure = (tId: string) => {
     setSelectedTenureId(tId);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("src_admin_selected_tenure", tId);
+      const url = new URL(window.location.href);
+      url.searchParams.set("tenure", tId);
+      window.history.replaceState({}, "", url.toString());
+    }
     const targetTenure = tenures.find((t) => t.id === tId);
     const isFirst = targetTenure?.id === "tenure-2025-26" || targetTenure?.label?.includes("2025") || targetTenure?.tenureNumber?.includes("1st");
     if (targetTenure?.isCurrent) {
@@ -304,11 +332,6 @@ export default function AdminTeamPage() {
       setCouncilMembers(targetTenure.adminCouncil || []);
       setHostingMembers(targetTenure.hostingCommittee || []);
       setFoundingMembersList(isFirst ? (targetTenure.foundingMembers || getStoredFoundingMembers()) : []);
-    }
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-      url.searchParams.set("tenure", tId);
-      window.history.replaceState({}, "", url.toString());
     }
   };
 
@@ -386,6 +409,9 @@ export default function AdminTeamPage() {
         ...t,
         [activeTab === "council" ? "adminCouncil" : activeTab === "hosting" ? "hostingCommittee" : "foundingMembers"]: indexed
       } : t));
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("src_admin_selected_tenure", selectedTenure.id);
+      }
     }
 
     setIsSaved(true);

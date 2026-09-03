@@ -428,6 +428,44 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
         continue;
       }
 
+      // For nested array fields (e.g. adminCouncil, hostingCommittee, clubs, events):
+      if (Array.isArray(localVal) || Array.isArray(remoteVal)) {
+        const localArr = Array.isArray(localVal) ? localVal : [];
+        const remoteArr = Array.isArray(remoteVal) ? remoteVal : [];
+
+        // For draft tenure sessions (!isCurrent): local draft roster is active staged work
+        const isDraftTenure = (remoteItem as any)?.isCurrent === false || (localItem as any)?.isCurrent === false;
+        if (isDraftTenure && localArr.length > 0) {
+          // If local draft has imported positions or custom additions, keep local draft array!
+          if (localArr.length >= remoteArr.length) {
+            result[k] = localArr;
+            continue;
+          }
+        }
+
+        if (localArr.length > 0 && remoteArr.length === 0) {
+          result[k] = localArr;
+          continue;
+        }
+        if (remoteArr.length > 0 && localArr.length === 0) {
+          result[k] = remoteArr;
+          continue;
+        }
+        if (localArr.length >= remoteArr.length && localArr.length > 0) {
+          result[k] = reconcileArrayDatasets(localArr, remoteArr);
+          continue;
+        }
+        result[k] = reconcileArrayDatasets(localArr, remoteArr);
+        continue;
+      }
+
+      // For draft sessions: local edits to draft properties take precedence over older remote templates
+      const isDraftSession = (remoteItem as any)?.isCurrent === false || (localItem as any)?.isCurrent === false;
+      if (isDraftSession && localVal !== undefined && localVal !== null && localVal !== "") {
+        result[k] = localVal;
+        continue;
+      }
+
       // For standard text/number fields:
       // If remote has a non-empty/defined value, keep remote
       if (remoteVal !== undefined && remoteVal !== null && remoteVal !== "") {

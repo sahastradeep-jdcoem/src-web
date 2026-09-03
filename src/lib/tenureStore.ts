@@ -430,12 +430,32 @@ export async function syncTenuresFromFirestore(): Promise<CouncilTenure[]> {
         }
       }
       
-      // CRITICAL: Ensure locally-created draft tenures are NEVER dropped during sync
+      // CRITICAL: Ensure locally-created and imported draft tenure rosters are NEVER dropped or overwritten
       const localDrafts = current.filter((t) => !t.isCurrent);
       for (const draft of localDrafts) {
-        if (!merged.some((m: any) => m.id === draft.id || m.label === draft.label)) {
+        const matchIdx = merged.findIndex((m) => m.id === draft.id || m.label === draft.label);
+        if (matchIdx >= 0) {
+          const target = merged[matchIdx];
+          const localCouncil = draft.adminCouncil || [];
+          const remoteCouncil = target.adminCouncil || [];
+          // If local draft has imported/staged council positions, preserve local draft council
+          if (localCouncil.length > 0 && localCouncil.length >= remoteCouncil.length) {
+            target.adminCouncil = localCouncil;
+          }
+          const localHosting = draft.hostingCommittee || [];
+          const remoteHosting = target.hostingCommittee || [];
+          if (localHosting.length > 0 && localHosting.length >= remoteHosting.length) {
+            target.hostingCommittee = localHosting;
+          }
+          if (draft.theme && !target.theme) target.theme = draft.theme;
+        } else {
           merged.push(draft);
         }
+      }
+
+      // Persist any imported/updated draft rosters back to Firestore
+      if (localDrafts.some((d) => (d.adminCouncil?.length || 0) > 3)) {
+        enqueueCloudWrite("council_tenures", cleanUndefined(merged), "Synced Draft Council Tenures");
       }
       
       if (typeof window !== "undefined") {
@@ -468,7 +488,21 @@ export function subscribeToTenures(callback: (tenures: CouncilTenure[]) => void)
       // CRITICAL: Preserve locally-created draft tenures during realtime sync
       const localDrafts = current.filter((t) => !t.isCurrent);
       for (const draft of localDrafts) {
-        if (!merged.some((m: any) => m.id === draft.id || m.label === draft.label)) {
+        const matchIdx = merged.findIndex((m) => m.id === draft.id || m.label === draft.label);
+        if (matchIdx >= 0) {
+          const target = merged[matchIdx];
+          const localCouncil = draft.adminCouncil || [];
+          const remoteCouncil = target.adminCouncil || [];
+          if (localCouncil.length > 0 && localCouncil.length >= remoteCouncil.length) {
+            target.adminCouncil = localCouncil;
+          }
+          const localHosting = draft.hostingCommittee || [];
+          const remoteHosting = target.hostingCommittee || [];
+          if (localHosting.length > 0 && localHosting.length >= remoteHosting.length) {
+            target.hostingCommittee = localHosting;
+          }
+          if (draft.theme && !target.theme) target.theme = draft.theme;
+        } else {
           merged.push(draft);
         }
       }
