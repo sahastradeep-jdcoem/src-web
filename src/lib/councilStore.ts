@@ -13,7 +13,7 @@ import {
   subscribeToSiteContent,
   cleanUndefined
 } from "./firebase/firestore";
-import { enqueueCloudWrite, reconcileArrayDatasets, hasPendingWritesFor, compactClubDataset, compactCouncilDataset } from "./dataSyncEngine";
+import { enqueueCloudWrite, reconcileArrayDatasets, hasPendingWritesFor, compactClubDataset, compactCouncilDataset, compactPillarsDataset } from "./dataSyncEngine";
 
 export function getClubLeaders(club: ClubItem): ClubLeader[] {
   if (!club) return [];
@@ -447,13 +447,23 @@ export function getStoredInstitutionalPillars(): InstitutionalPillar[] {
   return initialPillars;
 }
 
-export function saveStoredInstitutionalPillars(pillars: InstitutionalPillar[]): void {
+export async function saveStoredInstitutionalPillars(pillars: InstitutionalPillar[]): Promise<void> {
   if (typeof window === "undefined") return;
   try {
-    const sanitized = cleanUndefined(pillars);
-    localStorage.setItem("src_pillars_of_strength", JSON.stringify(sanitized));
+    const compacted = await compactPillarsDataset(pillars);
+    const sanitized = cleanUndefined(compacted);
+    try {
+      localStorage.setItem("src_pillars_of_strength", JSON.stringify(sanitized));
+    } catch (lsErr) {
+      console.warn("Direct localStorage write notice for pillars, auto-compacting...", lsErr);
+    }
     window.dispatchEvent(new CustomEvent("src_pillars_updated", { detail: sanitized }));
-    enqueueCloudWrite("pillars_of_strength", sanitized, `4 Pillars of Strength (${pillars.length} Patrons)`);
+
+    // Direct cloud write to Firestore site_content/pillars_of_strength
+    saveSiteContentToFirestore("pillars_of_strength", sanitized).catch((err) => {
+      console.warn("Firestore direct write for pillars failed, enqueuing:", err);
+      enqueueCloudWrite("pillars_of_strength", sanitized, `4 Pillars of Strength (${pillars.length} Patrons)`);
+    });
   } catch (e) {
     console.error("Could not save pillars to storage", e);
   }

@@ -94,6 +94,7 @@ export function PillarsOfStrengthSection({ className = "" }: PillarsOfStrengthSe
                     src={pillar.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"}
                     alt={pillar.name}
                     fill
+                    unoptimized={true}
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                     className="object-cover object-top group-hover:scale-104 transition-transform duration-500 ease-out"
                   />

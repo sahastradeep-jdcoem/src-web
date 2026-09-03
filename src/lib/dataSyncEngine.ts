@@ -18,7 +18,7 @@ export interface PendingSyncItem {
 // 0. BASE64 IMAGE SANITIZER & AUTO-COMPACTOR
 // -------------------------------------------------------------
 const BASE64_PREFIX = "data:image/";
-const MAX_SAFE_BASE64_LENGTH = 120000; // ~90 KB max per individual image
+const MAX_SAFE_BASE64_LENGTH = 350000; // ~250 KB max per individual image
 
 /**
  * Downscales a base64 image data-url using HTML5 canvas
@@ -152,6 +152,30 @@ export async function compactCouncilDataset<T extends { avatar?: string }>(
       }
       return {
         ...m,
+        avatar: av,
+      };
+    })
+  );
+  return processed;
+}
+
+/**
+ * Recursively compacts any oversized base64 avatars in the institutional pillars dataset
+ * Optimizes to 4:5 portrait (600px height at 0.85 WebP, ~25-35KB), perfectly sized for postcards
+ * and guaranteed to never exceed localStorage or Firestore quotas.
+ */
+export async function compactPillarsDataset<T extends { avatar?: string }>(
+  pillars: T[]
+): Promise<T[]> {
+  if (!Array.isArray(pillars)) return pillars;
+  const processed = await Promise.all(
+    pillars.map(async (p) => {
+      let av = p.avatar;
+      if (av && av.startsWith("data:image/") && av.length > 25000) {
+        av = await compactBase64Image(av, 600, 0.85);
+      }
+      return {
+        ...p,
         avatar: av,
       };
     })

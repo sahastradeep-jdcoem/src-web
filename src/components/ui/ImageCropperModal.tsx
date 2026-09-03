@@ -245,16 +245,18 @@ export function ImageCropperModal({
     const img = imageRef.current;
     const cropBox = containerRef.current.getBoundingClientRect();
     
-    // Output target dimensions based on target ratio (maximum crisp clarity):
+    // Output target dimensions based on target ratio (maximum crisp clarity without quota bloat):
     let baseDimension = 1920;
     if (selectedRatio === "1:1") {
-      baseDimension = 1200; // 1200x1200 pristine crisp avatar / logo
+      baseDimension = 800; // 800x800 pristine crisp avatar / logo (~30KB)
+    } else if (isAvatar && (selectedRatio === "4:5" || selectedRatio === "3:4")) {
+      baseDimension = 1000; // 800x1000 high-density portrait postcard avatar (~40KB)
     } else if (selectedRatio === "4:5" || selectedRatio === "3:4") {
-      baseDimension = 1600; // 1600x2000 high-res event poster
+      baseDimension = 1200; // 960x1200 high-res event poster (~70KB)
     } else if (selectedRatio === "21:9") {
       baseDimension = 2560; // 2.5K Retina cinematic banner
     } else {
-      baseDimension = 1920; // 1080p-1440p crisp card/banner
+      baseDimension = 1600; // 1080p crisp card/banner
     }
 
     let targetWidth = baseDimension;
@@ -316,7 +318,7 @@ export function ImageCropperModal({
     try {
       const isPng = imageSrc.includes("image/png") || imageSrc.includes(".png");
       const exportType = isPng ? "image/png" : "image/webp";
-      const croppedDataUrl = canvas.toDataURL(exportType, isPng ? 1.0 : 0.95);
+      const croppedDataUrl = canvas.toDataURL(exportType, isPng ? 0.95 : 0.90);
       onCropComplete(croppedDataUrl);
       onClose();
     } catch (e) {

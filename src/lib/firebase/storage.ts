@@ -2,7 +2,7 @@ import { ref, uploadBytes, uploadString, getDownloadURL } from "firebase/storage
 import { storage } from "./config";
 import { compressImage } from "@/lib/imageCompression";
 
-const UPLOAD_TIMEOUT_MS = 25000; // 25s for pristine high-res uploads
+const UPLOAD_TIMEOUT_MS = 8000; // 8s safe timeout so UI is always responsive
 
 /**
  * Upload an image file or Base64 WebP string to Firebase Cloud Storage.

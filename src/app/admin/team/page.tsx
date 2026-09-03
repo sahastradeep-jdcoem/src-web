@@ -524,7 +524,7 @@ export default function AdminTeamPage() {
     }
   };
 
-  const handleSaveMember = (e: React.FormEvent) => {
+  const handleSaveMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingMember) return;
 
@@ -546,7 +546,7 @@ export default function AdminTeamPage() {
             role: editingMember.role,
             designation: editingMember.designation || (editingMember as any).level || p.designation,
             department: editingMember.department,
-            avatar: editingMember.avatar,
+            avatar: editingMember.avatar || p.avatar,
             quote: editingMember.bio || p.quote,
             email: editingMember.email,
             linkedin: editingMember.linkedin,
@@ -555,7 +555,7 @@ export default function AdminTeamPage() {
         return p;
       });
 
-      saveStoredInstitutionalPillars(updatedPillars);
+      await saveStoredInstitutionalPillars(updatedPillars);
       setPillarsList(updatedPillars);
       setEditingMember(null);
       setIsCreatingNew(false);
@@ -1068,6 +1068,7 @@ export default function AdminTeamPage() {
                       src={pillar.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"}
                       alt={pillar.name}
                       fill
+                      unoptimized={true}
                       className="object-cover object-top"
                     />
                     <div className="absolute top-2.5 right-2.5">
@@ -1111,6 +1112,7 @@ export default function AdminTeamPage() {
                       avatar: pillar.avatar,
                       bio: pillar.quote || "",
                       email: pillar.email || "",
+                      linkedin: pillar.linkedin || "",
                       order: pillar.order
                     });
                     setIsCreatingNew(false);

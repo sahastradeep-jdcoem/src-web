@@ -86,57 +86,34 @@ export function ImageUploadDropzone({
     onUploadStateChange?.(true);
 
     try {
-      // 1. Instant pristine local preview (zero quality loss)
-      const localPreviewUrl = URL.createObjectURL(file);
-      setPreview(localPreviewUrl);
-
+      // 1. Instant high-fidelity local optimization and state sync so the photo is NEVER lost
       const isPngOrSvg = file.type === "image/png" || file.type === "image/svg+xml";
-      // Threshold: 5 MB (5,242,880 bytes).
-      // Any photo <= 5MB is uploaded 100% UNTOUCHED without any compression for maximum crispness!
-      // Only extreme heavy DSLR raw camera photos (> 5MB, like 10MB-35MB) are optimized to 2560px 2.5K Retina at 0.95
-      const isHeavyDslrPhoto = file.size > 5 * 1024 * 1024;
+      const isAvatar = storagePath.includes("avatars") || storagePath.includes("pillars") || storagePath.includes("leads") || aspectRatio === "1:1" || aspectRatio === "4:5";
 
-      let fileToUpload: File = file;
+      const immediateOptimized = await compressImage(file, {
+        maxWidth: isAvatar ? (aspectRatio === "1:1" ? 600 : 800) : 1600,
+        maxHeight: isAvatar ? (aspectRatio === "1:1" ? 600 : 1000) : 1200,
+        quality: 0.90,
+        outputFormat: isPngOrSvg ? "image/png" : "image/webp",
+      });
 
-      if (isHeavyDslrPhoto && !isPngOrSvg) {
-        // Smart DSLR optimization: downsizes 24MP-50MP raw photos to 2560px
-        const compressed = await compressImage(file, {
-          maxWidth: 2560,
-          maxHeight: 2560,
-          quality: 0.95,
-          outputFormat: "image/webp",
-        });
-        fileToUpload = compressed.file;
-        setCompressionStats(compressed);
-      } else {
-        // Below 5MB: ZERO COMPRESSION! Pristine original photo clarity.
-        setCompressionStats(null);
+      setPreview(immediateOptimized.dataUrl);
+      setManualUrl(immediateOptimized.dataUrl);
+      if (onUrlChange) {
+        onUrlChange(immediateOptimized.dataUrl);
       }
 
-      // 2. Upload fileToUpload to Firebase Cloud Storage with 100% untouched crispness
-      const cleanName = fileToUpload.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+      // 2. Upload file to Firebase Cloud Storage in background
+      const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
       const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}`;
 
-      const cloudUrl = await uploadImageToStorage(fileToUpload, finalStoragePath);
+      const cloudUrl = await uploadImageToStorage(file, finalStoragePath);
 
       if (cloudUrl && cloudUrl.startsWith("http")) {
         setPreview(cloudUrl);
         setManualUrl(cloudUrl);
         if (onUrlChange) {
           onUrlChange(cloudUrl);
-        }
-      } else {
-        // Fallback: if storage upload is unreachable, generate high-resolution crisp fallback data URL
-        const fallback = await compressImage(fileToUpload, {
-          maxWidth: 1600,
-          maxHeight: 1600,
-          quality: 0.94,
-          outputFormat: isPngOrSvg ? "image/png" : "image/webp",
-        });
-        setPreview(fallback.dataUrl);
-        setManualUrl(fallback.dataUrl);
-        if (onUrlChange) {
-          onUrlChange(fallback.dataUrl);
         }
       }
     } catch (err) {
@@ -171,10 +148,14 @@ export function ImageUploadDropzone({
     setIsProcessing(true);
     onUploadStateChange?.(true);
     try {
+      // 1. Immediately sync cropped image to state so user can save anytime
       setPreview(croppedDataUrl);
       setManualUrl(croppedDataUrl);
+      if (onUrlChange) {
+        onUrlChange(croppedDataUrl);
+      }
 
-      // Upload crop to Firebase Storage
+      // 2. Upload crop to Firebase Storage in background
       const cleanName = originalFileName.replace(/[^a-zA-Z0-9.-]/g, "_").replace(/\.[^/.]+$/, "");
       const isPng = croppedDataUrl.includes("image/png");
       const ext = isPng ? ".png" : ".webp";
@@ -186,10 +167,6 @@ export function ImageUploadDropzone({
         setManualUrl(cloudUrl);
         if (onUrlChange) {
           onUrlChange(cloudUrl);
-        }
-      } else {
-        if (onUrlChange) {
-          onUrlChange(croppedDataUrl);
         }
       }
     } catch (err) {
