@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
-import * as XLSX from "xlsx";
 import { 
   Search, 
   Download, 
@@ -340,11 +339,13 @@ export default function AdminUsersPage() {
     });
   }, [users, searchQuery, categoryFilter, deptFilter]);
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (filteredUsers.length === 0) {
       alert("No user records available to export.");
       return;
     }
+
+    const XLSX = await import("xlsx");
 
     const rows = filteredUsers.map((u) => ({
       "User Type": u.role === "FACULTY" || u.userType === "FACULTY" ? "FACULTY" : u.userType === "EXTERNAL_STUDENT" ? "EXTERNAL STUDENT" : "JDCOEM STUDENT",

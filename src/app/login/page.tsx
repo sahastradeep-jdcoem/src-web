@@ -62,8 +62,9 @@ export default function LoginPage() {
     try {
       await loginWithGoogle();
       router.push("/dashboard");
-    } catch (e: any) {
-      setError(e.message || "Google sign-in could not be completed.");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Google sign-in could not be completed.";
+      setError(msg);
     } finally {
       setIsSubmitting(false);
     }

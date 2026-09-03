@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
-import * as XLSX from "xlsx";
 import { 
   Search, 
   Filter, 
@@ -713,8 +712,11 @@ export default function AdminRegistrationsPage() {
         if (selectedRecord && (selectedRecord.id === regId || selectedRecord.registrationId === regId)) {
           setSelectedRecord(null);
         }
+        setCheckInNotice(`Deleted registration for ${name} (${regId}).`);
+        setTimeout(() => setCheckInNotice(null), 4000);
       } catch (e) {
         console.error("Error deleting registration", e);
+        alert("Failed to delete registration from cloud. Please try again.");
       }
     }
   };
@@ -911,11 +913,12 @@ export default function AdminRegistrationsPage() {
     return { rows, customQCols };
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (eventRegistrations.length === 0) {
       alert("No registrations available to export.");
       return;
     }
+    const XLSX = await import("xlsx");
     const { rows } = generateExportData();
     const ws = XLSX.utils.json_to_sheet(rows);
 

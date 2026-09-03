@@ -17,7 +17,8 @@ import {
   Clock,
   Layers,
   Archive,
-  Users
+  Users,
+  Loader2
 } from "lucide-react";
 import { 
   getStoredTenures, 
@@ -88,6 +89,7 @@ export default function AdminTenuresPage() {
   const [isActivateModalOpen, setIsActivateModalOpen] = useState(false);
   const [activatingTenure, setActivatingTenure] = useState<CouncilTenure | null>(null);
   const [tenureBeginDate, setTenureBeginDate] = useState(new Date().toISOString().split("T")[0]);
+  const [isActivating, setIsActivating] = useState(false);
 
   const handleOpenActivate = (tenure: CouncilTenure) => {
     setActivatingTenure(tenure);
@@ -95,14 +97,22 @@ export default function AdminTenuresPage() {
     setIsActivateModalOpen(true);
   };
 
-  const handleConfirmActivate = () => {
+  const handleConfirmActivate = async () => {
     if (!activatingTenure) return;
-    switchActiveTenure(activatingTenure.id, tenureBeginDate);
-    refresh();
-    setIsActivateModalOpen(false);
-    setActivatingTenure(null);
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+    setIsActivating(true);
+    try {
+      await switchActiveTenure(activatingTenure.id, tenureBeginDate);
+      refresh();
+      setIsActivateModalOpen(false);
+      setActivatingTenure(null);
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch (err) {
+      console.error("Failed to activate tenure:", err);
+      alert("Failed to activate tenure. Please try again.");
+    } finally {
+      setIsActivating(false);
+    }
   };
 
   return (
@@ -466,9 +476,17 @@ export default function AdminTenuresPage() {
               variant="primary"
               size="sm"
               onClick={handleConfirmActivate}
-              className="bg-[#17458F] hover:bg-[#123670] text-white cursor-pointer"
+              disabled={isActivating}
+              className="bg-[#17458F] hover:bg-[#123670] text-white cursor-pointer inline-flex items-center gap-1.5"
             >
-              Confirm &amp; Launch Live Now &rarr;
+              {isActivating ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Activating...</span>
+                </>
+              ) : (
+                <span>Confirm &amp; Launch Live Now &rarr;</span>
+              )}
             </Button>
           </div>
         </div>

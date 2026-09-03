@@ -44,6 +44,7 @@ export default function AdminClubsPage() {
   const [editingClub, setEditingClub] = useState<ClubItem | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [isSavingList, setIsSavingList] = useState(false);
   const [modalTab, setModalTab] = useState<"identity" | "about" | "media">("identity");
   const [pendingUploads, setPendingUploads] = useState(0);
 
@@ -109,13 +110,21 @@ export default function AdminClubsPage() {
   };
 
   const saveList = async (updated: ClubItem[]) => {
-    setClubs(updated);
-    await saveStoredClubs(updated);
-    if (selectedTenure?.id && !selectedTenure.isCurrent) {
-      updateTenureRoster(selectedTenure.id, { clubs: updated });
+    setIsSavingList(true);
+    try {
+      setClubs(updated);
+      await saveStoredClubs(updated);
+      if (selectedTenure?.id && !selectedTenure.isCurrent) {
+        updateTenureRoster(selectedTenure.id, { clubs: updated });
+      }
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch (error) {
+      console.error("Failed to save clubs:", error);
+      alert("Failed to save changes to cloud. Please try again.");
+    } finally {
+      setIsSavingList(false);
     }
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
   };
 
   const domains = useMemo(() => ["All", ...Array.from(new Set(clubs.map((c) => c.category).filter(Boolean)))], [clubs]);

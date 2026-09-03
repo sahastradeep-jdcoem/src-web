@@ -85,6 +85,7 @@ export default function AdminEventsPage() {
   const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
   const [eventToDelete, setEventToDelete] = useState<EventItem | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [isDeletingEvent, setIsDeletingEvent] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [pendingUploads, setPendingUploads] = useState(0);
 
@@ -426,21 +427,29 @@ export default function AdminEventsPage() {
 
   const confirmDelete = async () => {
     if (!eventToDelete) return;
-    const deletedName = eventToDelete.name;
-    const deletedId = eventToDelete.id;
-    const deletedSlug = eventToDelete.slug;
+    setIsDeletingEvent(true);
+    try {
+      const deletedName = eventToDelete.name;
+      const deletedId = eventToDelete.id;
+      const deletedSlug = eventToDelete.slug;
 
-    const updated = eventsList.filter(
-      (e) => e.id !== deletedId && e.slug !== deletedSlug
-    );
-    setEventsList(updated);
-    saveStoredEvents(updated);
-    
-    // Cascade-delete registrations & passes for this deleted event
-    await deleteRegistrationsForEvent(deletedId, deletedSlug, deletedName);
+      const updated = eventsList.filter(
+        (e) => e.id !== deletedId && e.slug !== deletedSlug
+      );
+      setEventsList(updated);
+      saveStoredEvents(updated);
+      
+      // Cascade-delete registrations & passes for this deleted event
+      await deleteRegistrationsForEvent(deletedId, deletedSlug, deletedName);
 
-    setEventToDelete(null);
-    showNotice(`Deleted event "${deletedName}" and purged all associated passes.`);
+      setEventToDelete(null);
+      showNotice(`Deleted event "${deletedName}" and purged all associated passes.`);
+    } catch (err) {
+      console.error("Failed to delete event:", err);
+      showNotice("Failed to delete event. Please try again.");
+    } finally {
+      setIsDeletingEvent(false);
+    }
   };
 
   const handleResetDefaults = () => {
@@ -702,9 +711,17 @@ export default function AdminEventsPage() {
               <button
                 type="button"
                 onClick={confirmDelete}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
+                disabled={isDeletingEvent}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-bold transition-all cursor-pointer shadow-xs inline-flex items-center gap-1.5"
               >
-                Yes, Delete Event
+                {isDeletingEvent ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <span>Yes, Delete Event</span>
+                )}
               </button>
             </div>
           </div>
