@@ -16,7 +16,7 @@ import {
   Users
 } from "lucide-react";
 import { 
-  getStoredTenures, 
+  getPublicTenures, 
   syncTenuresFromFirestore, 
   subscribeToTenures, 
   CouncilTenure 
@@ -30,16 +30,18 @@ export default function ArchivePage() {
   const [selectedTenureId, setSelectedTenureId] = useState<string>("ALL");
 
   useEffect(() => {
-    setTenures(getStoredTenures());
+    setTenures(getPublicTenures());
 
     syncTenuresFromFirestore().then((res) => {
-      if (res) setTenures(res);
+      if (res) setTenures(res.filter((t) => !t.isDraft && (t.isCurrent || t.status === "active" || t.status === "archived")));
     });
 
-    const unsub = subscribeToTenures((t) => setTenures(t));
+    const unsub = subscribeToTenures((t) => {
+      setTenures(t.filter((item) => !item.isDraft && (item.isCurrent || item.status === "active" || item.status === "archived")));
+    });
 
     const handleUpdate = () => {
-      setTenures(getStoredTenures());
+      setTenures(getPublicTenures());
     };
 
     window.addEventListener("src_tenures_updated", handleUpdate);
@@ -64,8 +66,9 @@ export default function ArchivePage() {
 
   const activeTenure = tenures.find((t) => t.isCurrent) || tenures[0];
   const displayedTenures = useMemo(() => {
-    if (selectedTenureId === "ALL") return tenures;
-    return tenures.filter((t) => t.id === selectedTenureId);
+    const publishedOnly = tenures.filter((t) => !t.isDraft);
+    if (selectedTenureId === "ALL") return publishedOnly;
+    return publishedOnly.filter((t) => t.id === selectedTenureId);
   }, [tenures, selectedTenureId]);
 
   return (
@@ -158,8 +161,16 @@ export default function ArchivePage() {
                       </Badge>
                     )}
                   </div>
-                  <p className="text-xs sm:text-sm font-semibold text-[#E78023]">
-                    Academic Year {tenure.academicYear}
+                  <p className="text-xs sm:text-sm font-semibold text-[#E78023] flex items-center gap-2 flex-wrap">
+                    <span>Academic Year {tenure.academicYear}</span>
+                    {tenure.startDate && (
+                      <>
+                        <span className="text-slate-300">•</span>
+                        <span className="text-slate-500 font-medium font-sans">
+                          Commenced {new Date(tenure.startDate).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}
+                        </span>
+                      </>
+                    )}
                   </p>
                   {tenure.archiveNotes && (
                     <p className="text-xs text-slate-600 max-w-3xl leading-relaxed pt-1 font-medium font-sans">

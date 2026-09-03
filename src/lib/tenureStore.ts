@@ -27,6 +27,10 @@ export interface CouncilTenure {
   tenureNumber: string; // e.g. "1st Tenure", "2nd Tenure"
   theme?: string;
   isCurrent: boolean;
+  isDraft?: boolean;
+  status?: "active" | "archived" | "draft";
+  startDate?: string; // Date when tenure begins / began (ISO string or YYYY-MM-DD)
+  endDate?: string;   // Date when tenure ended / was archived (ISO string or YYYY-MM-DD)
   adminCouncil: TeamMember[];
   hostingCommittee: TeamMember[];
   foundingMembers?: TeamMember[];
@@ -109,6 +113,9 @@ export const initialDefaultTenures: CouncilTenure[] = [
     academicYear: "2025 - 2026",
     tenureNumber: "1st Tenure",
     isCurrent: true,
+    isDraft: false,
+    status: "active",
+    startDate: "2025-09-24T00:00:00Z",
     adminCouncil: adminCouncilMembers,
     hostingCommittee: hostingCommitteeMembers,
     foundingMembers: foundingMembers,
@@ -123,6 +130,8 @@ export const initialDefaultTenures: CouncilTenure[] = [
     academicYear: "2026 - 2027",
     tenureNumber: "2nd Tenure",
     isCurrent: false,
+    isDraft: true,
+    status: "draft",
     adminCouncil: [
       {
         id: "admin-2026-mentor",
@@ -222,6 +231,9 @@ export function getStoredTenures(): CouncilTenure[] {
       return {
         ...t,
         isCurrent: true,
+        isDraft: false,
+        status: "active" as const,
+        startDate: t.startDate || "2025-09-24T00:00:00Z",
         tenureNumber: tenureNum,
         adminCouncil: activeAdmins,
         hostingCommittee: activeHosting,
@@ -235,8 +247,16 @@ export function getStoredTenures(): CouncilTenure[] {
     const draftCouncil = getStoredDraftCouncil(t.id);
     const draftHosting = getStoredDraftHosting(t.id);
 
+    // Determine if it's a draft or an archived past session:
+    // If it has never been marked as live, has no startDate, or explicitly has isDraft / status === "draft"
+    const isDraft = t.isDraft !== undefined
+      ? t.isDraft
+      : (t.status === "draft" || (!t.startDate && t.id !== "tenure-2025-26" && !t.label.includes("2025")));
+
     return {
       ...t,
+      isDraft,
+      status: isDraft ? ("draft" as const) : ("archived" as const),
       tenureNumber: tenureNum,
       adminCouncil: draftCouncil.length > 0 ? draftCouncil : (t.adminCouncil && t.adminCouncil.length > 0 ? t.adminCouncil : []),
       hostingCommittee: draftHosting.length > 0 ? draftHosting : (t.hostingCommittee && t.hostingCommittee.length > 0 ? t.hostingCommittee : []),
@@ -244,6 +264,15 @@ export function getStoredTenures(): CouncilTenure[] {
       clubs: t.clubs && t.clubs.length > 0 ? t.clubs : activeClubs,
     };
   });
+}
+
+/**
+ * Public tenures: strictly excludes draft/pre-configured sessions.
+ * Returns only currently active tenure and past archived tenures.
+ */
+export function getPublicTenures(): CouncilTenure[] {
+  const all = getStoredTenures();
+  return all.filter((t) => !t.isDraft && (t.isCurrent || t.status === "active" || t.status === "archived"));
 }
 
 export function saveStoredTenures(tenures: CouncilTenure[]): void {
@@ -336,14 +365,19 @@ export function updateTenureRoster(
 /**
  * Switch Active Tenure (e.g. from 2025-26 to 2026-27)
  * 1. Synchronizes current active state into old tenure's archive snapshot
- * 2. Activates the target tenure
+ * 2. Activates target tenure, recording begin date and removing draft status
  * 3. Restores target tenure's pre-configured team, clubs & events into active stores
  */
-export function switchActiveTenure(targetTenureId: string): void {
+export function switchActiveTenure(targetTenureId: string, tenureBeginDate?: string): void {
   if (typeof window === "undefined") return;
   const tenures = getStoredTenures();
   
-  // 1. Snapshot current active data into currently active tenure record
+  const beginIso = tenureBeginDate 
+    ? new Date(tenureBeginDate).toISOString() 
+    : new Date().toISOString();
+  const endIso = new Date().toISOString();
+
+  // 1. Snapshot current active data into currently active tenure record and mark as archived
   const currentActiveTeam = getStoredCouncilMembers();
   const currentActiveHosting = getStoredHostingCommittee();
   const currentActiveFounders = getStoredFoundingMembers();
@@ -355,6 +389,9 @@ export function switchActiveTenure(targetTenureId: string): void {
       return {
         ...tenure,
         isCurrent: false,
+        isDraft: false,
+        status: "archived" as const,
+        endDate: tenure.endDate || endIso,
         adminCouncil: currentActiveTeam,
         hostingCommittee: currentActiveHosting,
         foundingMembers: currentActiveFounders,
@@ -365,11 +402,15 @@ export function switchActiveTenure(targetTenureId: string): void {
     return tenure;
   });
 
-  // 2. Set target tenure as current
+  // 2. Set target tenure as current and mark as live (no longer draft)
   const targetTenure = updatedTenures.find((t) => t.id === targetTenureId);
   if (!targetTenure) return;
 
   targetTenure.isCurrent = true;
+  targetTenure.isDraft = false;
+  targetTenure.status = "active";
+  targetTenure.startDate = beginIso;
+
   saveStoredTenures(updatedTenures);
 
   // 3. Load target tenure's pre-configured team, clubs and events into current active memory
@@ -458,6 +499,8 @@ export function createNewDraftTenure(
     tenureNumber,
     theme: theme || undefined,
     isCurrent: false, // Remains in draft / upcoming status
+    isDraft: true,
+    status: "draft",
     adminCouncil: newAdminCouncil,
     hostingCommittee: [],
     foundingMembers: [],
@@ -475,6 +518,8 @@ export function createNewDraftTenure(
       ...finalTenures[existingIdx],
       academicYear,
       theme: theme || finalTenures[existingIdx].theme,
+      isDraft: finalTenures[existingIdx].isCurrent ? false : true,
+      status: finalTenures[existingIdx].isCurrent ? "active" : "draft",
       adminCouncil: finalTenures[existingIdx].adminCouncil && finalTenures[existingIdx].adminCouncil.length > 0 
         ? finalTenures[existingIdx].adminCouncil 
         : newAdminCouncil,

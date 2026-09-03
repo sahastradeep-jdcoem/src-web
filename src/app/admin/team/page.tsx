@@ -850,7 +850,7 @@ export default function AdminTeamPage() {
                   </span>
                 </div>
                 <p className="text-[11px] text-amber-800 leading-relaxed max-w-2xl">
-                  You are staging positions for <strong>{selectedTenure.academicYear}</strong>. All additions, edits, and hierarchy adjustments are safely isolated in this draft until you activate it.
+                  You are staging positions for <strong>{selectedTenure.academicYear}</strong>. This session is completely hidden from the public website (including <code>/archive</code> and <code>/team</code>) and is accessible only on this admin console until you activate it.
                 </p>
               </div>
 

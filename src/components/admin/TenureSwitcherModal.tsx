@@ -132,14 +132,23 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
                         <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">
                           ● Active Live
                         </span>
+                      ) : t.isDraft ? (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200 text-[10px] font-bold uppercase tracking-wider">
+                          Draft (Admin Only)
+                        </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[10px] font-bold uppercase tracking-wider">
-                          Draft / Pre-Configured
+                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold uppercase tracking-wider">
+                          Archived Session
                         </span>
                       )}
                     </div>
                     <p className="text-[11px] text-slate-600 font-medium">
                       Academic Year {t.academicYear}
+                      {t.startDate && (
+                        <span className="ml-1.5 text-slate-400 font-sans">
+                          • Commenced {new Date(t.startDate).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}
+                        </span>
+                      )}
                     </p>
                     <div className="flex items-center gap-3 text-[10px] text-slate-400 font-sans">
                       <span>{t.adminCouncil?.length || 0} Admins</span>
