@@ -138,6 +138,19 @@ export interface TeamMember {
   clubSlug?: string; // Optional slug to navigate to club profile
 }
 
+export interface InstitutionalPillar {
+  id: string;
+  name: string;
+  designation: string;
+  role: string;
+  department: string;
+  avatar: string;
+  quote?: string;
+  email?: string;
+  linkedin?: string;
+  order: number;
+}
+
 export interface RegistrationRecord {
   id: string;
   registrationId: string;

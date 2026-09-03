@@ -29,7 +29,9 @@ import {
   Loader2,
   Copy,
   History,
-  Layers
+  Layers,
+  GraduationCap,
+  Award
 } from "lucide-react";
 import { 
   getStoredCouncilMembers, 
@@ -49,7 +51,11 @@ import {
   syncFoundingMembersFromFirestore,
   subscribeToFoundingMembers,
   syncClubsFromFirestore,
-  subscribeToClubs
+  subscribeToClubs,
+  getStoredInstitutionalPillars,
+  saveStoredInstitutionalPillars,
+  syncInstitutionalPillarsFromFirestore,
+  subscribeToInstitutionalPillars
 } from "@/lib/councilStore";
 import { 
   getStoredTenures, 
@@ -66,14 +72,14 @@ import {
 } from "@/lib/tenureStore";
 import { getStoredDepartments, syncDepartmentsFromFirestore, getDepartmentShortName } from "@/lib/departmentsStore";
 import { adminCouncilMembers, hostingCommitteeMembers, foundingMembers as defaultFoundingMembers } from "@/data/team";
-import { TeamMember, ClubItem, ClubLeader } from "@/types";
+import { TeamMember, ClubItem, ClubLeader, InstitutionalPillar } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
 import { cn } from "@/lib/utils";
 
-type TeamCategoryTab = "council" | "hosting" | "founding" | "clubs";
+type TeamCategoryTab = "council" | "hosting" | "founding" | "clubs" | "pillars";
 
 export default function AdminTeamPage() {
   const [activeTab, setActiveTab] = useState<TeamCategoryTab>("council");
@@ -93,6 +99,7 @@ export default function AdminTeamPage() {
   const [foundingMembersList, setFoundingMembersList] = useState<TeamMember[]>([]);
   const [clubsList, setClubsList] = useState<ClubItem[]>([]);
   const [departmentsList, setDepartmentsList] = useState<string[]>([]);
+  const [pillarsList, setPillarsList] = useState<InstitutionalPillar[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
@@ -265,6 +272,7 @@ export default function AdminTeamPage() {
     }
 
     setClubsList(getStoredClubs());
+    setPillarsList(getStoredInstitutionalPillars());
   };
 
   useEffect(() => {
@@ -289,9 +297,15 @@ export default function AdminTeamPage() {
     syncDepartmentsFromFirestore().then((res) => {
       if (res) setDepartmentsList(res);
     });
+    syncInstitutionalPillarsFromFirestore().then((res) => {
+      if (res && res.length > 0) setPillarsList(res);
+    });
 
     const unsubClubs = subscribeToClubs((updated) => {
       setClubsList(updated);
+    });
+    const unsubPillars = subscribeToInstitutionalPillars((updated) => {
+      if (updated && updated.length > 0) setPillarsList(updated);
     });
 
     const handleUpdate = () => {
@@ -304,15 +318,18 @@ export default function AdminTeamPage() {
     window.addEventListener("src_hosting_updated", handleUpdate);
     window.addEventListener("src_founding_members_updated", handleUpdate);
     window.addEventListener("src_clubs_updated", handleUpdate);
+    window.addEventListener("src_pillars_updated", handleUpdate);
 
     return () => {
       unsubClubs();
+      unsubPillars();
       window.removeEventListener("src_tenures_updated", handleUpdate);
       window.removeEventListener("src_tenure_changed", handleUpdate);
       window.removeEventListener("src_council_team_updated", handleUpdate);
       window.removeEventListener("src_hosting_updated", handleUpdate);
       window.removeEventListener("src_founding_members_updated", handleUpdate);
       window.removeEventListener("src_clubs_updated", handleUpdate);
+      window.removeEventListener("src_pillars_updated", handleUpdate);
     };
   }, [selectedTenureId]);
 
@@ -517,6 +534,33 @@ export default function AdminTeamPage() {
     }
     if (activeTab !== "clubs" && !editingMember.role.trim()) {
       alert("Please provide a Position / Role Title.");
+      return;
+    }
+
+    if (activeTab === "pillars") {
+      const updatedPillars = pillarsList.map((p) => {
+        if (p.id === editingMember.id) {
+          return {
+            ...p,
+            name: editingMember.name,
+            role: editingMember.role,
+            designation: editingMember.designation || (editingMember as any).level || p.designation,
+            department: editingMember.department,
+            avatar: editingMember.avatar,
+            quote: editingMember.bio || p.quote,
+            email: editingMember.email,
+            linkedin: editingMember.linkedin,
+          };
+        }
+        return p;
+      });
+
+      saveStoredInstitutionalPillars(updatedPillars);
+      setPillarsList(updatedPillars);
+      setEditingMember(null);
+      setIsCreatingNew(false);
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
       return;
     }
 
@@ -754,15 +798,17 @@ export default function AdminTeamPage() {
             <span>Reset Defaults</span>
           </button>
 
-          <Button
-            onClick={handleOpenAddModal}
-            variant="primary"
-            size="sm"
-            className="gap-1.5"
-          >
-            <Plus className="w-4 h-4" />
-            <span>{activeTab === "clubs" ? "Add Club Head / Co-Head" : "Add New Position / Officer"}</span>
-          </Button>
+          {activeTab !== "pillars" && (
+            <Button
+              onClick={handleOpenAddModal}
+              variant="primary"
+              size="sm"
+              className="gap-1.5"
+            >
+              <Plus className="w-4 h-4" />
+              <span>{activeTab === "clubs" ? "Add Club Head / Co-Head" : "Add New Position / Officer"}</span>
+            </Button>
+          )}
 
           <Link
             href="/team"
@@ -953,36 +999,136 @@ export default function AdminTeamPage() {
           <Users className="w-4 h-4 text-[#E78023]" />
           <span>Club Heads &amp; Co-Heads ({clubLeadMembers.length})</span>
         </button>
+
+        <button
+          onClick={() => setActiveTab("pillars")}
+          className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === "pillars"
+              ? "bg-[#17458F] text-white shadow-xs"
+              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+          }`}
+        >
+          <GraduationCap className="w-4 h-4 text-[#E78023]" />
+          <span>4 Pillars of Strength ({pillarsList.length})</span>
+        </button>
       </div>
 
-      {/* Search & Actions Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={`Search ${activeTab === "clubs" ? "club leadership" : activeTab} members by name, position, department...`}
-            className="w-full pl-11 pr-4 py-3 rounded-2xl bg-white border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F] shadow-xs"
-          />
+      {/* Search & Actions Bar (for Council, Hosting, Founding, Clubs) */}
+      {activeTab !== "pillars" && (
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={`Search ${activeTab === "clubs" ? "club leadership" : activeTab} members by name, position, department...`}
+              className="w-full pl-11 pr-4 py-3 rounded-2xl bg-white border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F] shadow-xs"
+            />
+          </div>
+
+          {isFirstTenure && activeTab === "council" && (
+            <button
+              type="button"
+              onClick={handleSyncFromFounding}
+              className="px-4 py-3 rounded-2xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 shadow-xs"
+              title="Sync 2025-26 Council Admins with Founding Members list"
+            >
+              <Sparkles className="w-4 h-4 text-[#E78023]" />
+              <span>Sync from Founding Members ({foundingMembersList.length})</span>
+            </button>
+          )}
         </div>
+      )}
 
-        {isFirstTenure && activeTab === "council" && (
-          <button
-            type="button"
-            onClick={handleSyncFromFounding}
-            className="px-4 py-3 rounded-2xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 shadow-xs"
-            title="Sync 2025-26 Council Admins with Founding Members list"
-          >
-            <Sparkles className="w-4 h-4 text-[#E78023]" />
-            <span>Sync from Founding Members ({foundingMembersList.length})</span>
-          </button>
-        )}
-      </div>
+      {/* 4 PILLARS OF STRENGTH MANAGEMENT VIEW */}
+      {activeTab === "pillars" && (
+        <div className="space-y-6">
+          <div className="p-5 rounded-3xl bg-linear-to-r from-blue-50 to-indigo-50/50 border border-blue-200 text-blue-950 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div className="space-y-1">
+              <div className="font-bold flex items-center gap-1.5 text-sm text-[#17458F]">
+                <GraduationCap className="w-4 h-4 text-[#E78023]" />
+                <span>The 4 Pillars of Strength of SRC</span>
+              </div>
+              <p className="text-slate-600 leading-relaxed max-w-3xl">
+                These 4 institutional patrons and faculty mentors (Principal, Dean IQAC, and 2 Faculty Coordinators) represent the foundational pillars of the Student Representative Council (Sahastradeep). They are showcased in the postcard gallery on the public <code>/team</code> page. You can edit their names, designations, roles, guidance quotes, and upload high-res photos below.
+              </p>
+            </div>
+          </div>
 
-      {/* Roster Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {pillarsList.map((pillar) => (
+              <div
+                key={pillar.id}
+                className="p-4 sm:p-5 rounded-3xl bg-white border border-slate-200 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4"
+              >
+                <div className="space-y-3">
+                  <div className="relative aspect-[4/5] rounded-2xl overflow-hidden bg-slate-100 border border-slate-200/80 shadow-inner">
+                    <Image
+                      src={pillar.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"}
+                      alt={pillar.name}
+                      fill
+                      className="object-cover object-top"
+                    />
+                    <div className="absolute top-2.5 right-2.5">
+                      <span className="px-2 py-0.5 rounded-md bg-white/95 text-[#17458F] font-black text-[9px] uppercase tracking-wider border border-slate-200 shadow-xs flex items-center gap-1">
+                        <Award className="w-2.5 h-2.5 text-[#E78023]" />
+                        <span>{pillar.role}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <h4 className="font-heading font-extrabold text-sm sm:text-base text-[#0F172A] leading-snug">
+                      {pillar.name}
+                    </h4>
+                    <p className="text-xs font-bold text-[#E78023] leading-tight">
+                      {pillar.designation}
+                    </p>
+                    <p className="text-[10px] font-medium text-slate-500 font-sans">
+                      {pillar.department}
+                    </p>
+                  </div>
+
+                  {pillar.quote && (
+                    <div className="pt-2 border-t border-dashed border-slate-200">
+                      <p className="text-[11px] text-slate-600 italic line-clamp-3 leading-relaxed font-serif">
+                        &ldquo;{pillar.quote}&rdquo;
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => {
+                    setEditingMember({
+                      id: pillar.id,
+                      name: pillar.name,
+                      role: pillar.role,
+                      designation: pillar.designation,
+                      level: pillar.designation,
+                      department: pillar.department,
+                      avatar: pillar.avatar,
+                      bio: pillar.quote || "",
+                      email: pillar.email || "",
+                      order: pillar.order
+                    });
+                    setIsCreatingNew(false);
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-[#17458F] hover:text-white text-[#17458F] font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Edit Postcard &amp; Photo</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Roster Grid (for Council, Hosting, Founding, Clubs) */}
+      {activeTab !== "pillars" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
         {filteredMembers.map((member) => {
           const actualIndex = currentMembers.findIndex((m) => m.id === member.id);
           return (
@@ -1111,8 +1257,9 @@ export default function AdminTeamPage() {
           );
         })}
       </div>
+      )}
 
-      {filteredMembers.length === 0 && (
+      {activeTab !== "pillars" && filteredMembers.length === 0 && (
         <div className="p-12 text-center rounded-3xl bg-white border border-slate-200 space-y-3">
           <Users className="w-8 h-8 text-[#E78023] mx-auto opacity-70" />
           <h4 className="font-bold text-base text-slate-800">No positions found</h4>
@@ -1134,7 +1281,9 @@ export default function AdminTeamPage() {
             setIsCreatingNew(false);
           }}
           title={
-            activeTab === "clubs"
+            activeTab === "pillars"
+              ? `Edit Postcard: ${editingMember.name || "Pillar"}`
+              : activeTab === "clubs"
               ? isCreatingNew
                 ? "Add Club Head / Co-Head"
                 : `Edit Club Leader: ${editingMember.name || "Leader"}`
@@ -1143,7 +1292,9 @@ export default function AdminTeamPage() {
               : `Edit: ${editingMember.role || "Position"}`
           }
           subtitle={
-            activeTab === "clubs"
+            activeTab === "pillars"
+              ? "Edit official designation, institutional role, guidance quote, and high-res portrait photo for this pillar."
+              : activeTab === "clubs"
               ? "Crop & upload avatar photo (PFP), student credentials, and BT ID for this chartered society."
               : "Configure position title, student officer credentials, hierarchy rank, and photo."
           }
@@ -1151,6 +1302,83 @@ export default function AdminTeamPage() {
         >
           <form onSubmit={handleSaveMember} className="space-y-5 text-xs text-slate-900">
             
+            {/* Pillars Form (When in 4 Pillars of Strength tab) */}
+            {activeTab === "pillars" && (
+              <div className="space-y-4 p-4 rounded-2xl bg-blue-50/50 border border-blue-200/70">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-800">
+                      Full Name &amp; Academic Title <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Dr. Shrikant Sonekar"
+                      value={editingMember.name}
+                      onChange={(e) => setEditingMember({ ...editingMember, name: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-800">
+                      Official Designation <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Principal, JDCOEM / Dean (IQAC) / Faculty Coordinator, SRC"
+                      value={(editingMember as any).designation || (editingMember as any).level || ""}
+                      onChange={(e) => setEditingMember({ ...editingMember, designation: e.target.value, level: e.target.value } as any)}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-800">
+                      Role / Category Stamp <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Chief Patron / Institutional Advisor / Faculty In-Charge"
+                      value={editingMember.role}
+                      onChange={(e) => setEditingMember({ ...editingMember, role: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-800">
+                      Department / Institutional Wing
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. JDCOEM, Nagpur / Internal Quality Assurance Cell"
+                      value={editingMember.department}
+                      onChange={(e) => setEditingMember({ ...editingMember, department: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-800">
+                    Guidance Creed / Vision Message (Displayed on Postcard)
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="e.g. Guiding student potential toward technical eminence, ethical innovation, and collaborative leadership."
+                    value={editingMember.bio || ""}
+                    onChange={(e) => setEditingMember({ ...editingMember, bio: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-xs text-slate-900 focus:outline-none focus:border-[#17458F]"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Club Name Dropdown Menu (When in Club Leadership tab) */}
             {activeTab === "clubs" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3.5 rounded-2xl bg-[#17458F]/5 border border-[#17458F]/15">
@@ -1208,8 +1436,8 @@ export default function AdminTeamPage() {
               </div>
             )}
 
-            {/* Position Title & Member Name */}
-            {activeTab !== "clubs" ? (
+            {/* Position Title & Member Name (When in Council, Hosting, Founding) */}
+            {activeTab !== "clubs" && activeTab !== "pillars" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="font-bold text-slate-700">
@@ -1239,7 +1467,9 @@ export default function AdminTeamPage() {
                   />
                 </div>
               </div>
-            ) : (
+            )}
+
+            {activeTab === "clubs" && (
               <div className="space-y-1.5">
                 <label className="font-bold text-slate-700">
                   Student Full Name <span className="text-rose-500">*</span>
@@ -1256,7 +1486,7 @@ export default function AdminTeamPage() {
             )}
 
             {/* Hierarchy Rank (Only for Council & Admins) */}
-            {activeTab !== "clubs" && (
+            {activeTab !== "clubs" && activeTab !== "pillars" && (
               <div className="space-y-1.5">
                 <label className="font-bold text-slate-700 flex items-center justify-between">
                   <span>Hierarchy Priority / Rank #</span>
@@ -1273,57 +1503,61 @@ export default function AdminTeamPage() {
               </div>
             )}
 
-            {/* Department & Year */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="font-bold text-slate-700">Department / Branch</label>
-                <input
-                  type="text"
-                  list="team-depts-list"
-                  placeholder="e.g. Computer Science & Engineering"
-                  value={editingMember.department}
-                  onChange={(e) => setEditingMember({ ...editingMember, department: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
-                />
-                <datalist id="team-depts-list">
-                  {departmentsList.map((d) => (
-                    <option key={d} value={d} />
-                  ))}
-                </datalist>
-              </div>
+            {/* Department & Year (For students / club heads) */}
+            {activeTab !== "pillars" && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-700">Department / Branch</label>
+                    <input
+                      type="text"
+                      list="team-depts-list"
+                      placeholder="e.g. Computer Science & Engineering"
+                      value={editingMember.department}
+                      onChange={(e) => setEditingMember({ ...editingMember, department: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
+                    />
+                    <datalist id="team-depts-list">
+                      {departmentsList.map((d) => (
+                        <option key={d} value={d} />
+                      ))}
+                    </datalist>
+                  </div>
 
-              <div className="space-y-1.5">
-                <label className="font-bold text-slate-700">Academic Year / Level</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 4th Year / Final Year"
-                  value={editingMember.year}
-                  onChange={(e) => setEditingMember({ ...editingMember, year: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
-                />
-              </div>
-            </div>
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-700">Academic Year / Level</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 4th Year / Final Year"
+                      value={editingMember.year}
+                      onChange={(e) => setEditingMember({ ...editingMember, year: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
+                    />
+                  </div>
+                </div>
 
-            {/* College BT ID for Badge Linkage */}
-            <div className="space-y-1.5 p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/80">
-              <div className="flex items-center justify-between">
-                <label className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                  <Hash className="w-3.5 h-3.5 text-[#E78023]" />
-                  <span>College BT ID (For Account Badge Linkage)</span>
-                </label>
-                <span className="text-[10px] text-[#E78023] font-bold uppercase">Automated Badge Sync</span>
-              </div>
-              <input
-                type="text"
-                placeholder="e.g. BT22CSE045"
-                value={editingMember.btId || ""}
-                onChange={(e) => setEditingMember({ ...editingMember, btId: e.target.value.toUpperCase() })}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-amber-300 text-xs font-mono font-bold text-[#E78023] uppercase tracking-wider focus:outline-none focus:border-[#17458F]"
-              />
-              <p className="text-[10px] text-slate-500">
-                When the student logs in with Google and enters this BT ID, their student pass and profile will automatically receive official council designation badging.
-              </p>
-            </div>
+                {/* College BT ID for Badge Linkage */}
+                <div className="space-y-1.5 p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/80">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                      <Hash className="w-3.5 h-3.5 text-[#E78023]" />
+                      <span>College BT ID (For Account Badge Linkage)</span>
+                    </label>
+                    <span className="text-[10px] text-[#E78023] font-bold uppercase">Automated Badge Sync</span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="e.g. BT22CSE045"
+                    value={editingMember.btId || ""}
+                    onChange={(e) => setEditingMember({ ...editingMember, btId: e.target.value.toUpperCase() })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-amber-300 text-xs font-mono font-bold text-[#E78023] uppercase tracking-wider focus:outline-none focus:border-[#17458F]"
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    When the student logs in with Google and enters this BT ID, their student pass and profile will automatically receive official council designation badging.
+                  </p>
+                </div>
+              </>
+            )}
 
             {/* Email & LinkedIn */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1331,7 +1565,7 @@ export default function AdminTeamPage() {
                 <label className="font-bold text-slate-700">Official College Email</label>
                 <input
                   type="email"
-                  placeholder="e.g. student@jdcoem.ac.in"
+                  placeholder={activeTab === "pillars" ? "e.g. principal@jdcoem.ac.in" : "e.g. student@jdcoem.ac.in"}
                   value={editingMember.email || ""}
                   onChange={(e) => setEditingMember({ ...editingMember, email: e.target.value })}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
@@ -1353,15 +1587,29 @@ export default function AdminTeamPage() {
             {/* Avatar Photo Upload / URL */}
             <div className="space-y-2 pt-2 border-t border-slate-100">
               <label className="font-bold text-slate-700">
-                {activeTab === "clubs" ? "Club Head / Co-Head Portrait Photo (PFP)" : "Officer Avatar Photo (Auto-Compressed WebP)"}
+                {activeTab === "pillars"
+                  ? "Postcard Portrait Photo (4:5 Aspect Ratio)"
+                  : activeTab === "clubs"
+                  ? "Club Head / Co-Head Portrait Photo (PFP)"
+                  : "Officer Avatar Photo (Auto-Compressed WebP)"}
               </label>
               
               <ImageUploadDropzone
-                label={activeTab === "clubs" ? "Club Head / Co-Head Portrait Photo" : "Officer Portrait / Headshot"}
-                sublabel="Crop, zoom & frame headshot to square (1:1)"
-                aspectRatio="1:1"
-                recommendedSize="600 x 600 px (1:1)"
-                storagePath={activeTab === "clubs" ? "clubs/leads" : "team/avatars"}
+                label={
+                  activeTab === "pillars"
+                    ? "Postcard Portrait Photo"
+                    : activeTab === "clubs"
+                    ? "Club Head / Co-Head Portrait Photo"
+                    : "Officer Portrait / Headshot"
+                }
+                sublabel={
+                  activeTab === "pillars"
+                    ? "Crop, zoom & frame headshot to portrait (4:5)"
+                    : "Crop, zoom & frame headshot to square (1:1)"
+                }
+                aspectRatio={activeTab === "pillars" ? "4:5" : "1:1"}
+                recommendedSize={activeTab === "pillars" ? "800 x 1000 px (4:5)" : "600 x 600 px (1:1)"}
+                storagePath={activeTab === "pillars" ? "pillars/portraits" : activeTab === "clubs" ? "clubs/leads" : "team/avatars"}
                 previewUrl={editingMember.avatar}
                 onUploadStateChange={handleUploadStateChange}
                 onUrlChange={(url) => {
@@ -1373,7 +1621,7 @@ export default function AdminTeamPage() {
             {/* Actions */}
             <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-100">
               <div>
-                {!isCreatingNew && (
+                {!isCreatingNew && activeTab !== "pillars" && (
                   <Button
                     type="button"
                     variant="danger"

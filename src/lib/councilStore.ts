@@ -1,9 +1,10 @@
-import { TeamMember, ClubItem, ClubLeader } from "@/types";
+import { TeamMember, ClubItem, ClubLeader, InstitutionalPillar } from "@/types";
 import { 
   adminCouncilMembers as initialAdminCouncil, 
   hostingCommitteeMembers as initialHosting, 
   spokespersonMembers as initialSpokespersons,
-  foundingMembers as initialFoundingMembers
+  foundingMembers as initialFoundingMembers,
+  institutionalPillars as initialPillars
 } from "@/data/team";
 import { mockClubs as initialClubs } from "@/data/clubs";
 import { 
@@ -425,6 +426,69 @@ export function subscribeToFoundingMembers(callback: (members: TeamMember[]) => 
         } catch {}
         window.dispatchEvent(new CustomEvent("src_founding_members_updated", { detail: merged }));
         window.dispatchEvent(new CustomEvent("src_users_updated"));
+      }
+      callback(merged);
+    }
+  });
+}
+
+// 5. 4 PILLARS OF STRENGTH (INSTITUTIONAL PATRONS & FACULTY MENTORS)
+export function getStoredInstitutionalPillars(): InstitutionalPillar[] {
+  if (typeof window === "undefined") return initialPillars;
+  try {
+    const stored = localStorage.getItem("src_pillars_of_strength");
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.warn("Could not read pillars from storage", e);
+  }
+  return initialPillars;
+}
+
+export function saveStoredInstitutionalPillars(pillars: InstitutionalPillar[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    const sanitized = cleanUndefined(pillars);
+    localStorage.setItem("src_pillars_of_strength", JSON.stringify(sanitized));
+    window.dispatchEvent(new CustomEvent("src_pillars_updated", { detail: sanitized }));
+    enqueueCloudWrite("pillars_of_strength", sanitized, `4 Pillars of Strength (${pillars.length} Patrons)`);
+  } catch (e) {
+    console.error("Could not save pillars to storage", e);
+  }
+}
+
+export async function syncInstitutionalPillarsFromFirestore(): Promise<InstitutionalPillar[]> {
+  try {
+    if (hasPendingWritesFor("pillars_of_strength")) return getStoredInstitutionalPillars();
+    const remote = await getSiteContentFromFirestore<InstitutionalPillar[]>("pillars_of_strength");
+    if (remote !== null && Array.isArray(remote) && remote.length > 0) {
+      const current = getStoredInstitutionalPillars();
+      const merged = reconcileArrayDatasets(current, remote);
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("src_pillars_of_strength", JSON.stringify(merged));
+        } catch {}
+        window.dispatchEvent(new CustomEvent("src_pillars_updated", { detail: merged }));
+      }
+      return merged;
+    }
+  } catch {}
+  return getStoredInstitutionalPillars();
+}
+
+export function subscribeToInstitutionalPillars(callback: (pillars: InstitutionalPillar[]) => void): () => void {
+  return subscribeToSiteContent<InstitutionalPillar[]>("pillars_of_strength", (remote) => {
+    if (remote !== null && Array.isArray(remote) && remote.length > 0) {
+      if (hasPendingWritesFor("pillars_of_strength")) return;
+      const current = getStoredInstitutionalPillars();
+      const merged = reconcileArrayDatasets(current, remote);
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("src_pillars_of_strength", JSON.stringify(merged));
+        } catch {}
+        window.dispatchEvent(new CustomEvent("src_pillars_updated", { detail: merged }));
       }
       callback(merged);
     }
