@@ -15,6 +15,7 @@ import {
 import { getStoredEvents, saveStoredEvents } from "./eventsStore";
 import { 
   getSiteContentFromFirestore, 
+  saveSiteContentToFirestore,
   subscribeToSiteContent,
   cleanUndefined
 } from "./firebase/firestore";
@@ -69,6 +70,9 @@ export function saveStoredDraftCouncil(tenureId: string, members: TeamMember[]):
     }
     window.dispatchEvent(new CustomEvent("src_draft_roster_updated", { detail: { tenureId, members: sanitized } }));
     window.dispatchEvent(new CustomEvent("src_tenures_updated"));
+    saveSiteContentToFirestore(`draft_council_${tenureId}`, sanitized).catch((err) => {
+      console.warn(`Firestore direct write for draft council (${tenureId}) failed, enqueuing:`, err);
+    });
     enqueueCloudWrite(`draft_council_${tenureId}`, sanitized, `Draft Council Roster (${tenureId})`);
   } catch (e) {
     console.error("Could not save draft council to storage", e);
@@ -100,6 +104,9 @@ export function saveStoredDraftHosting(tenureId: string, members: TeamMember[]):
     }
     window.dispatchEvent(new CustomEvent("src_draft_roster_updated", { detail: { tenureId, members: sanitized } }));
     window.dispatchEvent(new CustomEvent("src_tenures_updated"));
+    saveSiteContentToFirestore(`draft_hosting_${tenureId}`, sanitized).catch((err) => {
+      console.warn(`Firestore direct write for draft hosting (${tenureId}) failed, enqueuing:`, err);
+    });
     enqueueCloudWrite(`draft_hosting_${tenureId}`, sanitized, `Draft Hosting Roster (${tenureId})`);
   } catch (e) {
     console.error("Could not save draft hosting to storage", e);
@@ -292,6 +299,9 @@ export function saveStoredTenures(tenures: CouncilTenure[]): void {
       localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(compacted));
     }
     window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: sanitized }));
+    saveSiteContentToFirestore("council_tenures", sanitized).catch((err) => {
+      console.warn("Firestore direct write for tenures failed, enqueuing:", err);
+    });
     enqueueCloudWrite("council_tenures", sanitized, `Council Tenures (${tenures.length} Sessions)`);
   } catch (e) {
     console.error("Could not save tenures to storage", e);

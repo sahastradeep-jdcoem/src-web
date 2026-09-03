@@ -37,10 +37,15 @@
    - The sync engine must never wipe user data without replacement.
    - The `MAX_SAFE_BASE64_LENGTH` threshold must accommodate properly compacted WebP images (minimum 350,000 bytes) so legitimate user-uploaded photos are never replaced with empty strings (`""`).
 
-3. **Two-Tier Synchronization Pattern**:
-   Whenever updating site content:
-   - **Tier 1 (Instant Local Write)**: Sanitize data with `cleanUndefined()`, write to `localStorage`, and fire `window.dispatchEvent` so the UI responds in 0 milliseconds.
-   - **Tier 2 (Asynchronous Cloud Sync)**: Compact the dataset, invoke direct cloud write `saveSiteContentToFirestore(collection, data)`, and enqueue to the offline-resilient `enqueueCloudWrite` queue as a guaranteed fallback.
+3. **Instant Cloud Synchronization Invariant (Zero-Latency Cloud Sync)**:
+   - **All data must be instantly synced to the cloud upon every user action**:
+     - Never delay, defer, or batch cloud writes until navigation or page unmount. The exact millisecond an edit, creation, deletion, import, or reorder occurs, it must immediately write to Firestore.
+     - **Parallel Dual-Write Architecture**:
+       1. **Instant Local Cache Write (0ms)**: Write immediately to `localStorage` and dispatch `window.dispatchEvent` so all local components and open browser tabs update with zero perceived latency.
+       2. **Instant Direct Cloud Write (Firestore)**: Simultaneously execute a direct non-blocking write to Firebase Cloud Firestore via `saveSiteContentToFirestore(collection, sanitized)`.
+       3. **Atomic Resilience & Retry Queue**: In the same operation, enqueue the sanitized payload into the persistent `enqueueCloudWrite` queue so that if the user's connection drops or fluctuates, writes are guaranteed to be retried automatically with zero data loss.
+   - **Real-Time Multi-Device Reflection**:
+     - Stores must implement real-time Firestore document listeners (`subscribeToSiteContent`) so that cloud changes made on one device or tab immediately reflect across all active sessions without requiring a manual page refresh.
 
 4. **Data Integrity & Field Preservation**:
    - When updating an object in a store or admin form, **never drop optional fields**.

@@ -98,6 +98,9 @@ export function saveStoredCouncilMembers(members: TeamMember[]): void {
       try {
         localStorage.setItem("src_council_team", JSON.stringify(finalClean));
       } catch {}
+      saveSiteContentToFirestore("council_team", finalClean).catch((err) => {
+        console.warn("Firestore direct write for council team failed, enqueuing:", err);
+      });
       enqueueCloudWrite("council_team", finalClean, `Council Leadership (${members.length} Members)`);
     });
   } catch (e) {
@@ -155,6 +158,9 @@ export function saveStoredHostingCommittee(members: TeamMember[]): void {
       try {
         localStorage.setItem("src_hosting_committee", JSON.stringify(finalClean));
       } catch {}
+      saveSiteContentToFirestore("hosting_committee", finalClean).catch((err) => {
+        console.warn("Firestore direct write for hosting committee failed, enqueuing:", err);
+      });
       enqueueCloudWrite("hosting_committee", finalClean, `Hosting Committee (${members.length} Members)`);
     });
   } catch (e) {
@@ -220,6 +226,9 @@ export function saveStoredSpokespersons(members: TeamMember[]): void {
     const sanitized = cleanUndefined(stripCategoryAndLevel(members));
     localStorage.setItem("src_spokespersons", JSON.stringify(sanitized));
     window.dispatchEvent(new CustomEvent("src_spokespersons_updated", { detail: sanitized }));
+    saveSiteContentToFirestore("spokespersons", sanitized).catch((err) => {
+      console.warn("Firestore direct write for spokespersons failed, enqueuing:", err);
+    });
     enqueueCloudWrite("spokespersons", sanitized, `Spokespersons (${members.length} Members)`);
   } catch (e) {
     console.error("Could not save spokespersons to storage", e);
@@ -382,6 +391,9 @@ export function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCounc
       try {
         localStorage.setItem("src_founding_members", JSON.stringify(finalClean));
       } catch {}
+      saveSiteContentToFirestore("founding_members", finalClean).catch((err) => {
+        console.warn("Firestore direct write for founding members failed, enqueuing:", err);
+      });
       enqueueCloudWrite("founding_members", finalClean, `Founding Members (${members.length} Members)`);
     });
 

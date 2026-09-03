@@ -37,8 +37,14 @@ export function saveStoredEvents(events: EventItem[]): void {
     localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(sanitized));
     window.dispatchEvent(new CustomEvent("src_events_updated", { detail: sanitized }));
     compactEventDataset(sanitized).then((compacted) => {
+      saveSiteContentToFirestore("events", compacted).catch((err) => {
+        console.warn("Firestore direct write for events failed, enqueuing:", err);
+      });
       enqueueCloudWrite("events", compacted, `Events Roster (${events.length} Events)`);
     }).catch(() => {
+      saveSiteContentToFirestore("events", sanitized).catch((err) => {
+        console.warn("Firestore direct write for events failed, enqueuing:", err);
+      });
       enqueueCloudWrite("events", sanitized, `Events Roster (${events.length} Events)`);
     });
   } catch (e) {
