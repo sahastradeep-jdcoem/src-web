@@ -26,7 +26,7 @@ const ADMIN_NAV = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { name: "Active Users", href: "/admin/users", icon: UserCheck },
   { name: "Hero Settings", href: "/admin/hero", icon: Sliders },
-  { name: "Events", href: "/admin/events", icon: Calendar },
+  { name: "Events & Listings", href: "/admin/events", icon: Calendar },
   { name: "Registrations", href: "/admin/registrations", icon: FileText },
   { name: "Departments", href: "/admin/departments", icon: Building2 },
   { name: "Clubs", href: "/admin/clubs", icon: Sparkles },

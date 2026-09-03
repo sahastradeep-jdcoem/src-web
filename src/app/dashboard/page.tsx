@@ -23,7 +23,8 @@ import {
   RefreshCw,
   Check,
   Printer,
-  Share2
+  Share2,
+  FileText
 } from "lucide-react";
 import { mockRegistrations } from "@/data/registrations";
 import { Badge } from "@/components/ui/Badge";
@@ -31,6 +32,8 @@ import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { RegistrationRecord, EventItem } from "@/types";
+import { ListingResponseRecord } from "@/types/listings";
+import { getStoredListingResponses } from "@/lib/listingsStore";
 import { useAuth } from "@/context/AuthContext";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { downloadPassAsImage } from "@/lib/passExport";
@@ -45,6 +48,7 @@ export default function StudentDashboardPage() {
   const { user, openAuthModal, openProfileModal, logout } = useAuth();
   const [registrations, setRegistrations] = useState<RegistrationRecord[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [hubResponses, setHubResponses] = useState<ListingResponseRecord[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<RegistrationRecord | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
@@ -216,12 +220,32 @@ export default function StudentDashboardPage() {
       syncAndLoadRegistrations();
     };
 
+    const updateResponses = () => {
+      const allResp = getStoredListingResponses();
+      if (!user) {
+        setHubResponses(allResp.slice(0, 3));
+      } else {
+        const uEmail = (user.email || "").toLowerCase().trim();
+        const uId = user.uid;
+        const matched = allResp.filter(
+          (r) => (r.userEmail && r.userEmail.toLowerCase().trim() === uEmail) || (r.userId && r.userId === uId)
+        );
+        setHubResponses(matched.length > 0 ? matched : allResp.slice(0, 3));
+      }
+    };
+    updateResponses();
+
     const handleRegsUpdate = (e: any) => {
       syncAndLoadRegistrations(e?.detail);
     };
 
+    const handleHubUpdate = () => {
+      updateResponses();
+    };
+
     window.addEventListener("src_events_updated", handleEventsUpdate);
     window.addEventListener("src_registrations_updated", handleRegsUpdate);
+    window.addEventListener("src_listing_responses_updated", handleHubUpdate);
     window.addEventListener("storage", handleEventsUpdate);
 
     return () => {
@@ -229,6 +253,7 @@ export default function StudentDashboardPage() {
       unsubRegistrations();
       window.removeEventListener("src_events_updated", handleEventsUpdate);
       window.removeEventListener("src_registrations_updated", handleRegsUpdate);
+      window.removeEventListener("src_listing_responses_updated", handleHubUpdate);
       window.removeEventListener("storage", handleEventsUpdate);
     };
   }, [user]);
@@ -661,6 +686,85 @@ export default function StudentDashboardPage() {
           </div>
 
         </div>
+
+        {/* Hub Engagements, Applications & Grievances */}
+        <section className="space-y-6 pt-6 border-t border-slate-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#E78023]">
+                  Student Engagement
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                  {hubResponses.length} Submissions
+                </span>
+              </div>
+              <h3 className="font-heading font-extrabold text-2xl text-[#17458F] uppercase">
+                My Applications, Fellowships &amp; Tickets
+              </h3>
+            </div>
+            <Link
+              href="/hub"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-xs self-start sm:self-center"
+            >
+              <span>Explore Engagement Hub</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          {hubResponses.length === 0 ? (
+            <div className="p-8 rounded-3xl bg-white border border-slate-200 text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-200 mx-auto flex items-center justify-center text-slate-400">
+                <FileText className="w-6 h-6" />
+              </div>
+              <p className="text-xs text-slate-500 font-medium max-w-sm mx-auto">
+                You haven&apos;t submitted any club applications, fellowships, or grievance tickets yet. Check out the Student Hub for active opportunities!
+              </p>
+              <Link
+                href="/hub"
+                className="inline-block text-xs font-bold text-[#17458F] hover:underline"
+              >
+                Browse Student Hub &rarr;
+              </Link>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {hubResponses.map((item) => (
+                <div
+                  key={item.id}
+                  className="p-5 rounded-3xl bg-white border border-slate-200 space-y-3 shadow-xs flex flex-col justify-between"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-[#17458F] text-white">
+                        {item.listingType.toUpperCase()}
+                      </span>
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 uppercase">
+                        {item.status || "RECEIVED"}
+                      </span>
+                    </div>
+
+                    <h4 className="font-heading font-extrabold text-sm text-[#0F172A] uppercase line-clamp-2">
+                      {item.listingTitle}
+                    </h4>
+
+                    {item.ticketCode && (
+                      <div className="p-2 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase">Reference Ticket</span>
+                        <span className="font-mono font-bold text-[#17458F]">{item.ticketCode}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400 font-medium">
+                    <span>Submitted {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "Recently"}</span>
+                    <span className="text-slate-600 font-bold">Logged to Council</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
         {/* Modal: View Participant Official Delegate Pass */}
         {selectedTicket && (() => {

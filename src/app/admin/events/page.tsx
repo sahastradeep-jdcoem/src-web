@@ -32,6 +32,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
 import { CustomQuestionsBuilder } from "@/components/admin/events/CustomQuestionsBuilder";
+import { CreateListingModal } from "@/components/admin/listings/CreateListingModal";
 import { 
   getStoredEvents, 
   saveStoredEvents, 
@@ -83,6 +84,7 @@ export default function AdminEventsPage() {
   const [clubsList, setClubsList] = useState<ClubItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isCreateListingPickerOpen, setIsCreateListingPickerOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
   const [eventToDelete, setEventToDelete] = useState<EventItem | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -535,13 +537,13 @@ export default function AdminEventsPage() {
           </button>
 
           <Button
-            onClick={() => setIsCreateOpen(true)}
+            onClick={() => setIsCreateListingPickerOpen(true)}
             variant="primary"
             size="sm"
-            className="gap-1.5 cursor-pointer shadow-xs"
+            className="gap-1.5 cursor-pointer shadow-xs bg-[#17458F] hover:bg-[#123670]"
           >
             <Plus className="w-4 h-4" />
-            <span>Create New Event</span>
+            <span>+ Create Listing</span>
           </Button>
 
           <Link
@@ -769,6 +771,18 @@ export default function AdminEventsPage() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Polymorphic Listing Type Picker Modal */}
+      {isCreateListingPickerOpen && (
+        <CreateListingModal
+          isOpen={isCreateListingPickerOpen}
+          onClose={() => setIsCreateListingPickerOpen(false)}
+          onOpenEventModal={() => setIsCreateOpen(true)}
+          onSuccess={(item) => {
+            showNotice(`Published "${item.title}" to student engagement hub.`);
+          }}
+        />
       )}
 
       {/* Modal: Create Event */}
