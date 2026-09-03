@@ -158,7 +158,7 @@ export default function AdminTenuresPage() {
             <span className="text-xs text-blue-200 font-mono">Academic Year {currentTenure?.academicYear}</span>
           </div>
           <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-white">
-            {currentTenure?.tenureNumber ? `${currentTenure.tenureNumber} (${currentTenure.label})` : `Tenure ${currentTenure?.label}`} — {currentTenure?.theme || "Annual Council"}
+            {currentTenure?.tenureNumber ? `${currentTenure.tenureNumber} (${currentTenure.label})` : `Tenure ${currentTenure?.label}`}
           </h2>
           <p className="text-xs text-blue-100 max-w-2xl leading-relaxed">
             {currentTenure?.archiveNotes || "Currently serving leadership body across all campus operations."}
@@ -218,10 +218,6 @@ export default function AdminTenuresPage() {
                     </span>
                   </div>
 
-                  <p className="text-xs text-slate-600 font-medium line-clamp-1">
-                    {t.theme}
-                  </p>
-
                   <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[10px] text-slate-500">
                     <span>{t.adminCouncil?.length || 0} Admins</span>
                     <span>{t.events?.length || 0} Events</span>
@@ -258,7 +254,7 @@ export default function AdminTenuresPage() {
                     )}
                   </div>
                   <p className="text-xs text-slate-500 font-medium mt-0.5">
-                    {selectedTenure.theme || selectedTenure.academicYear}
+                    Academic Year {selectedTenure.academicYear}
                   </p>
                 </div>
 

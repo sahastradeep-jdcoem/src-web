@@ -36,7 +36,6 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [newLabel, setNewLabel] = useState("2026-27");
   const [newAcademicYear, setNewAcademicYear] = useState("2026 - 2027");
-  const [newTheme, setNewTheme] = useState("Vibrance & Future Horizons");
   const [startWithTemplate, setStartWithTemplate] = useState(true);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -61,7 +60,7 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
       return;
     }
 
-    const newDraft = createNewDraftTenure(newLabel.trim(), newAcademicYear.trim(), newTheme.trim(), startWithTemplate);
+    const newDraft = createNewDraftTenure(newLabel.trim(), newAcademicYear.trim(), undefined, startWithTemplate);
     refresh();
     setFeedback(`New draft tenure ${newLabel} created! Redirecting to team editor...`);
     setTimeout(() => {
@@ -140,7 +139,7 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
                       )}
                     </div>
                     <p className="text-[11px] text-slate-600 font-medium">
-                      {t.theme || t.academicYear}
+                      Academic Year {t.academicYear}
                     </p>
                     <div className="flex items-center gap-3 text-[10px] text-slate-400 font-sans">
                       <span>{t.adminCouncil?.length || 0} Admins</span>
@@ -207,17 +206,6 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
                 />
               </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="font-bold text-slate-700">Tenure Theme / Motto</label>
-              <input
-                type="text"
-                placeholder="e.g. Vibrance &amp; Future Horizons"
-                value={newTheme}
-                onChange={(e) => setNewTheme(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
-              />
             </div>
 
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-2">

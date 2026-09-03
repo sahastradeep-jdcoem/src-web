@@ -159,7 +159,7 @@ export default function ArchivePage() {
                     )}
                   </div>
                   <p className="text-xs sm:text-sm font-semibold text-[#E78023]">
-                    {tenure.theme} • Academic Year {tenure.academicYear}
+                    Academic Year {tenure.academicYear}
                   </p>
                   {tenure.archiveNotes && (
                     <p className="text-xs text-slate-600 max-w-3xl leading-relaxed pt-1 font-medium font-sans">

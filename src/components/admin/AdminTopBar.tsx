@@ -64,7 +64,7 @@ export function AdminTopBar() {
               </span>
               <span className="text-slate-400 text-xs">•</span>
               <span className="text-xs text-slate-600 font-medium">
-                {currentTenure?.theme || currentTenure?.academicYear || "Sahastradeep"}
+                Academic Year {currentTenure?.academicYear || "2025 - 2026"}
               </span>
             </div>
           </div>

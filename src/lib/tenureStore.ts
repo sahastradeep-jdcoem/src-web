@@ -108,7 +108,6 @@ export const initialDefaultTenures: CouncilTenure[] = [
     label: "2025-26",
     academicYear: "2025 - 2026",
     tenureNumber: "1st Tenure",
-    theme: "Prarambh: The Genesis of Sahastradeep",
     isCurrent: true,
     adminCouncil: adminCouncilMembers,
     hostingCommittee: hostingCommitteeMembers,
@@ -123,7 +122,6 @@ export const initialDefaultTenures: CouncilTenure[] = [
     label: "2026-27",
     academicYear: "2026 - 2027",
     tenureNumber: "2nd Tenure",
-    theme: "Vibrance & Future Horizons",
     isCurrent: false,
     adminCouncil: [
       {
@@ -405,7 +403,7 @@ export function switchActiveTenure(targetTenureId: string): void {
 export function createNewDraftTenure(
   label: string, 
   academicYear: string, 
-  theme: string, 
+  theme?: string, 
   startWithTemplateTeam: boolean = true
 ): CouncilTenure {
   const tenures = getStoredTenures();
@@ -458,7 +456,7 @@ export function createNewDraftTenure(
     label,
     academicYear,
     tenureNumber,
-    theme,
+    theme: theme || undefined,
     isCurrent: false, // Remains in draft / upcoming status
     adminCouncil: newAdminCouncil,
     hostingCommittee: [],
@@ -476,7 +474,7 @@ export function createNewDraftTenure(
     finalTenures[existingIdx] = {
       ...finalTenures[existingIdx],
       academicYear,
-      theme,
+      theme: theme || finalTenures[existingIdx].theme,
       adminCouncil: finalTenures[existingIdx].adminCouncil && finalTenures[existingIdx].adminCouncil.length > 0 
         ? finalTenures[existingIdx].adminCouncil 
         : newAdminCouncil,
@@ -495,7 +493,7 @@ export function createNewDraftTenure(
 export function createAndActivateNewTenure(
   label: string, 
   academicYear: string, 
-  theme: string, 
+  theme?: string, 
   startWithTemplateTeam: boolean = true
 ): CouncilTenure {
   const draft = createNewDraftTenure(label, academicYear, theme, startWithTemplateTeam);
@@ -537,7 +535,6 @@ export async function syncTenuresFromFirestore(): Promise<CouncilTenure[]> {
           if (localHosting.length > 0 && localHosting.length >= remoteHosting.length) {
             target.hostingCommittee = localHosting;
           }
-          if (draft.theme && !target.theme) target.theme = draft.theme;
         } else {
           merged.push(draft);
         }
@@ -595,7 +592,6 @@ export function subscribeToTenures(callback: (tenures: CouncilTenure[]) => void)
           if (localHosting.length > 0 && localHosting.length >= remoteHosting.length) {
             target.hostingCommittee = localHosting;
           }
-          if (draft.theme && !target.theme) target.theme = draft.theme;
         } else {
           merged.push(draft);
         }
