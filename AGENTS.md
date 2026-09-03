@@ -40,3 +40,8 @@ For detailed standards and implementation examples, refer to [DEVELOPMENT_RULES.
    - Before completing any task, run `npm run build`. The build must succeed with code 0 and 0 errors.
    - Test data persistence across full page refreshes.
    - Commit all changes with clean Conventional Commits.
+
+8. **Dynamic Hierarchy & Polymorphic Engagement Invariant**:
+   - Never hardcode festival, event, or competition names in codebase logic.
+   - Any event can be an umbrella festival (`isParentFest: true`), and any sub-competition dynamically references its parent via `parentEventId`.
+   - All engagement primitives (Events, Applications, Polls, Opportunities, Submissions, Grievances) must follow the polymorphic `ListingItem` data architecture with instant Firestore dual-write, 5MB quota compaction, and real-time cross-tab reflection.

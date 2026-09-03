@@ -137,3 +137,21 @@
      - `refactor(...)`: Performance and architectural hardening
      - `docs(...)`: Documentation and rule updates
    - Never leave uncommitted or unstaged changes after concluding a development task.
+
+---
+
+## 7. Event Hierarchy & Polymorphic Engagement Engine Standards
+
+1. **Dynamic Parent-Child Festival Hierarchy (Zero Hardcoding)**:
+   - **Never hardcode festival or competition names** in application logic or views.
+   - Any event can be an **Umbrella Festival** by toggling `isParentFest: true`.
+   - Sub-competitions or segments must link dynamically via `parentEventId`, `parentEventSlug`, and `parentEventName`.
+   - Parent event detail pages (`/events/[slug]`) must automatically query child events and render a dedicated lineup grid (`Competitions Under [Event Name]`).
+   - Sub-event pages must render dynamic parent breadcrumb badges (`🎪 Part of [Parent Name]`), isolated custom Q&A forms, and distinct delegate passes (`PASS: [SUB-EVENT] — [PARENT EVENT]`).
+   - In `/admin/registrations`, selecting an Umbrella Festival must aggregate registrations across all its sub-events, while selecting a specific sub-event must isolate registrations and format custom Q&A responses for evaluation.
+
+2. **Polymorphic Listing & Response Invariants**:
+   - All 10 student interaction types (Events, Registrations, Applications, Polls, Q&A, Surveys, Announcements, Opportunities, Submissions, and Issues) must use the unified `ListingItem` and `ListingResponseRecord` schemas (`src/types/listings.ts`).
+   - All store operations in `listingsStore.ts` must maintain the **Parallel Dual-Write Invariant** (`saveSiteContentToFirestore("listings", ...)` + `enqueueCloudWrite`), quota-safe compaction (`compactListingsDataset`), and cross-tab custom event dispatch (`src_listings_updated`).
+   - Live polls must strictly enforce **1-vote-per-student integrity**, real-time percentage animation, and option-level vote tallies.
+   - Grievance submissions must support encrypted/confidential routing and generate unique reference ticket IDs.
