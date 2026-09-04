@@ -218,14 +218,7 @@ function getSectionsForType(type?: ListingType): ListingSectionDef[] {
           label: "Drive Details",
           shortLabel: "Details",
           icon: FileText,
-          description: "Drive headline, recruiting entity, eligibility, and deadline.",
-        },
-        {
-          id: "setup",
-          label: "Recruitment Setup",
-          shortLabel: "Setup",
-          icon: Users,
-          description: "Designated role, committee wing, and prerequisites.",
+          description: "Drive headline, recruiting entity, campus eligibility, and schedule.",
         },
         {
           id: "visuals",
@@ -239,7 +232,7 @@ function getSectionsForType(type?: ListingType): ListingSectionDef[] {
           label: "Candidate Q&A",
           shortLabel: "Q&A",
           icon: HelpCircle,
-          description: "Candidate questionnaire, statement of purpose, and custom inquiries.",
+          description: "Candidate questionnaire, open positions, statement of purpose, and custom inquiries.",
         },
       ];
     case "submission":
@@ -372,11 +365,6 @@ export function CreateListingModal({
   const [oppOpenings, setOppOpenings] = useState(2);
   const [oppLocation, setOppLocation] = useState<"On Campus" | "Remote" | "Hybrid" | "Nagpur">("On Campus");
   const [oppPerks, setOppPerks] = useState<string>("");
-  // Application (Recruitment)
-  const [appRole, setAppRole] = useState("");
-  const [appWing, setAppWing] = useState("Technical Activities");
-  const [appCommitment, setAppCommitment] = useState("4-6 Hours / Week");
-  const [appPrereqs, setAppPrereqs] = useState("");
   // Submission
   const [subAllowedTypes, setSubAllowedTypes] = useState<("image" | "pdf" | "zip" | "link")[]>(["image", "pdf"]);
   const [subMaxMb, setSubMaxMb] = useState<number>(20);
@@ -465,10 +453,6 @@ export function CreateListingModal({
       setOppLocation("On Campus");
       setOppOpenings(2);
       setOppPerks("");
-      setAppRole("");
-      setAppWing("Technical Activities");
-      setAppCommitment("4-6 Hours / Week");
-      setAppPrereqs("");
       setSubAllowedTypes(["image", "pdf"]);
       setSubMaxMb(20);
       setSubRules("");
@@ -583,16 +567,6 @@ export function CreateListingModal({
           openings: Number(oppOpenings) || 1,
           perks: oppPerks ? oppPerks.split("\n").filter((p) => p.trim()) : undefined,
         };
-      } else if (selectedPillarOption.type === "application") {
-        if (appRole || appWing || appCommitment || appPrereqs) {
-          updatedListing.description = [
-            description.trim(),
-            appRole ? `\n\n**Designated Role:** ${appRole}` : "",
-            appWing ? `\n**Wing/Committee:** ${appWing}` : "",
-            appCommitment ? `\n**Time Commitment:** ${appCommitment}` : "",
-            appPrereqs ? `\n**Prerequisites:** ${appPrereqs}` : "",
-          ].filter(Boolean).join("");
-        }
       } else if (selectedPillarOption.type === "submission") {
         updatedListing.submissionConfig = {
           allowedFileTypes: subAllowedTypes,
@@ -660,16 +634,6 @@ export function CreateListingModal({
         openings: Number(oppOpenings) || 1,
         perks: oppPerks ? oppPerks.split("\n").filter((p) => p.trim()) : undefined,
       };
-    } else if (selectedPillarOption.type === "application") {
-      if (appRole || appWing || appCommitment || appPrereqs) {
-        newListing.description = [
-          description.trim(),
-          appRole ? `\n\n**Designated Role:** ${appRole}` : "",
-          appWing ? `\n**Wing/Committee:** ${appWing}` : "",
-          appCommitment ? `\n**Time Commitment:** ${appCommitment}` : "",
-          appPrereqs ? `\n**Prerequisites:** ${appPrereqs}` : "",
-        ].filter(Boolean).join("");
-      }
     } else if (selectedPillarOption.type === "submission") {
       newListing.submissionConfig = {
         allowedFileTypes: subAllowedTypes,
@@ -1204,70 +1168,6 @@ export function CreateListingModal({
                           placeholder="Certificate of Excellence&#10;Letter of Recommendation&#10;Direct Council Mentorship"
                           className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-medium"
                         />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* RECRUITMENT / APPLICATION SETUP */}
-                  {selectedPillarOption.type === "application" && (
-                    <div className="p-5 rounded-2xl bg-purple-50/70 border border-purple-200 space-y-4">
-                      <span className="text-xs font-extrabold uppercase tracking-wider text-purple-950 flex items-center gap-1.5">
-                        <Users className="w-4 h-4 text-purple-600" />
-                        <span>Recruitment Parameters &amp; Role Setup</span>
-                      </span>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
-                            Designated Role Title
-                          </label>
-                          <input
-                            type="text"
-                            value={appRole}
-                            onChange={(e) => setAppRole(e.target.value)}
-                            placeholder="e.g. Technical Coordinator, Graphic Lead"
-                            className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
-                            Recruiting Wing / Committee
-                          </label>
-                          <input
-                            type="text"
-                            value={appWing}
-                            onChange={(e) => setAppWing(e.target.value)}
-                            placeholder="e.g. Media & Documentation, Tech Cell"
-                            className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                        <div>
-                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
-                            Time Commitment
-                          </label>
-                          <input
-                            type="text"
-                            value={appCommitment}
-                            onChange={(e) => setAppCommitment(e.target.value)}
-                            placeholder="e.g. 4-6 Hours / Week"
-                            className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-medium"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
-                            Prerequisites / Skills
-                          </label>
-                          <input
-                            type="text"
-                            value={appPrereqs}
-                            onChange={(e) => setAppPrereqs(e.target.value)}
-                            placeholder="e.g. Next.js, Figma, or Event Management"
-                            className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-medium"
-                          />
-                        </div>
                       </div>
                     </div>
                   )}
