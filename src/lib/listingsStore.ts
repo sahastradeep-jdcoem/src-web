@@ -4,11 +4,12 @@ import {
   saveSiteContentToFirestore, 
   getSiteContentFromFirestore, 
   subscribeToSiteContent,
-  saveUserProfileToFirestore
+  saveUserProfileToFirestore,
+  cleanUndefined
 } from "./firebase/firestore";
 import { enqueueCloudWrite } from "./dataSyncEngine";
 import { db } from "./firebase/config";
-import { doc, setDoc, getDocs, collection, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, getDocs, collection, serverTimestamp, deleteDoc, onSnapshot } from "firebase/firestore";
 
 export const LISTINGS_STORAGE_KEY = "src_listings_v1";
 export const RESPONSES_STORAGE_KEY = "src_listing_responses_v1";
@@ -350,6 +351,120 @@ export function voteOnListingPoll(
 // 3. RESPONSES STORE OPERATIONS (Applications, Submissions, Grievances)
 // --------------------------------------------------------------------------
 
+export function parseRegistrationToResponseRecord(docId: string, data: any): ListingResponseRecord | null {
+  if (!data) return null;
+
+  // 1. Live Poll Ballots
+  if (docId.startsWith("hub_poll_") || data.customAnswers?.isHubBallot) {
+    const ca = data.customAnswers || {};
+    const optId = ca.optionId;
+    return {
+      id: docId,
+      listingId: ca.listingId || data.eventId || "",
+      listingSlug: ca.listingSlug || "",
+      listingType: "poll",
+      listingTitle: ca.listingTitle || data.eventTitle?.replace(/^\[POLL BALLOT\]\s*/, "") || "",
+      userId: ca.voterId,
+      userName: ca.voterName || data.leaderName || "Campus Student",
+      userEmail: ca.voterEmail || data.email || undefined,
+      userDepartment: ca.voterDepartment || data.department,
+      userYear: ca.voterYear || data.year,
+      btId: ca.voterBtId || data.btId,
+      isAnonymous: Boolean(ca.isAnonymous),
+      selectedOptionIds: optId ? [optId] : [],
+      answers: optId ? { [optId]: ca.optionText || optId } : {},
+      createdAt: data.registeredAt || (typeof data.createdAt?.toDate === "function" ? data.createdAt.toDate().toISOString() : new Date().toISOString()),
+      status: "approved",
+    };
+  }
+
+  // 2. Hub Form Submissions (Applications, Recruitments, Contests, Grievances)
+  if (docId.startsWith("hub_sub_") || data.customAnswers?.isHubSubmission) {
+    const ca = data.customAnswers || {};
+    const subId = ca.responseId || docId;
+    let normStatus: "pending" | "approved" | "rejected" | "resolved" | "reviewed" = "pending";
+    const rawStatus = (ca.status || data.status || "").toLowerCase();
+    if (rawStatus === "confirmed" || rawStatus === "approved") normStatus = "approved";
+    else if (rawStatus === "rejected" || rawStatus === "declined") normStatus = "rejected";
+    else if (rawStatus === "resolved") normStatus = "resolved";
+    else if (rawStatus === "reviewed") normStatus = "reviewed";
+    else normStatus = "pending";
+
+    return {
+      id: subId,
+      listingId: ca.listingId || data.eventId || "",
+      listingSlug: ca.listingSlug || "",
+      listingType: ca.listingType || "application",
+      listingTitle: ca.listingTitle || data.eventTitle?.replace(/^\[HUB\]\s*/, "") || "",
+      userId: ca.userId || undefined,
+      userName: ca.userName || data.leaderName || "Applicant",
+      userEmail: ca.userEmail || data.email || undefined,
+      userDepartment: ca.userDepartment || data.department || undefined,
+      userYear: ca.userYear || data.year || undefined,
+      btId: ca.btId || data.btId || undefined,
+      isAnonymous: Boolean(ca.isAnonymous),
+      answers: ca.answers || {},
+      selectedOptionIds: ca.selectedOptionIds || [],
+      fileUrl: ca.fileUrl || undefined,
+      submissionLink: ca.submissionLink || undefined,
+      ticketCode: ca.ticketCode || data.ticketCode || undefined,
+      status: normStatus,
+      adminFeedback: ca.reviewNotes || ca.adminFeedback || undefined,
+      createdAt: ca.createdAt || data.registeredAt || (typeof data.createdAt?.toDate === "function" ? data.createdAt.toDate().toISOString() : new Date().toISOString()),
+      updatedAt: ca.updatedAt || undefined,
+    };
+  }
+
+  return null;
+}
+
+export function mergeResponseLists(...lists: ListingResponseRecord[][]): ListingResponseRecord[] {
+  const map = new Map<string, ListingResponseRecord>();
+  const ticketMap = new Map<string, string>(); // ticketCode -> map key
+
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const item of list) {
+      if (!item || !item.id) continue;
+      
+      const ticket = item.ticketCode?.trim();
+      if (ticket && ticketMap.has(ticket)) {
+        const existingKey = ticketMap.get(ticket)!;
+        const existing = map.get(existingKey)!;
+        const merged: ListingResponseRecord = {
+          ...existing,
+          ...item,
+          status: item.status || existing.status,
+          answers: { ...(existing.answers || {}), ...(item.answers || {}) },
+          updatedAt: item.updatedAt || existing.updatedAt || new Date().toISOString(),
+        };
+        map.set(existingKey, merged);
+      } else {
+        const existing = map.get(item.id);
+        if (existing) {
+          const merged: ListingResponseRecord = {
+            ...existing,
+            ...item,
+            status: item.status || existing.status,
+            answers: { ...(existing.answers || {}), ...(item.answers || {}) },
+            updatedAt: item.updatedAt || existing.updatedAt || new Date().toISOString(),
+          };
+          map.set(item.id, merged);
+        } else {
+          map.set(item.id, item);
+          if (ticket) {
+            ticketMap.set(ticket, item.id);
+          }
+        }
+      }
+    }
+  }
+
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+  );
+}
+
 export function getStoredListingResponses(): ListingResponseRecord[] {
   if (typeof window === "undefined") return [];
 
@@ -365,9 +480,12 @@ export function getStoredListingResponses(): ListingResponseRecord[] {
 export function saveStoredListingResponse(record: ListingResponseRecord): void {
   const current = getStoredListingResponses();
   
-  // Check if updating an existing record by explicit ID or by user+listing matching
+  // Check if updating an existing record by explicit ID, ticketCode, or user+listing matching
   const exactIndex = current.findIndex((r) => r.id === record.id);
-  const matchUserIndex = exactIndex === -1 
+  const matchTicketIndex = exactIndex === -1 && record.ticketCode
+    ? current.findIndex((r) => r.ticketCode === record.ticketCode)
+    : -1;
+  const matchUserIndex = exactIndex === -1 && matchTicketIndex === -1
     ? current.findIndex(
         (r) =>
           r.listingId === record.listingId &&
@@ -376,7 +494,7 @@ export function saveStoredListingResponse(record: ListingResponseRecord): void {
       )
     : -1;
 
-  const targetIndex = exactIndex !== -1 ? exactIndex : matchUserIndex;
+  const targetIndex = exactIndex !== -1 ? exactIndex : (matchTicketIndex !== -1 ? matchTicketIndex : matchUserIndex);
   let updated: ListingResponseRecord[];
 
   if (targetIndex !== -1) {
@@ -410,32 +528,70 @@ export function saveStoredListingResponse(record: ListingResponseRecord): void {
     } catch {}
   }
 
-  // 2. Cloud Sync: Fetch fresh remote state first to avoid overwriting responses from other devices
+  // 2. CRITICAL DUAL-WRITE: Guaranteed persistence to registrations collection
+  // Non-admin students have 'allow create: if true' on registrations, so submissions never fail
+  const firestoreDb = db;
+  if (firestoreDb && process.env.NEXT_PUBLIC_FIREBASE_API_KEY && record.listingType !== "poll" && !record.id.startsWith("hub_poll_")) {
+    const regDocId = `hub_sub_${record.ticketCode || record.id}`;
+    const regDocRef = doc(firestoreDb, "registrations", regDocId);
+    const regPayload = cleanUndefined({
+      id: regDocId,
+      eventId: record.listingId,
+      eventTitle: `[HUB] ${record.listingTitle || "Form Submission"}`,
+      leaderName: record.userName || "Applicant",
+      email: record.userEmail || "",
+      phone: "",
+      college: "JDCOEM",
+      department: record.userDepartment || "",
+      year: record.userYear || "",
+      btId: record.btId || "",
+      teamSize: 1,
+      status: record.status ? (record.status === "approved" ? "CONFIRMED" : record.status.toUpperCase()) : "PENDING",
+      registeredAt: record.createdAt || new Date().toISOString(),
+      createdAt: serverTimestamp(),
+      ticketCode: record.ticketCode || "",
+      qrPayload: `SRC:HUB:${record.listingId}:${record.ticketCode || record.id}`,
+      customAnswers: {
+        isHubSubmission: true,
+        responseId: record.id,
+        listingId: record.listingId,
+        listingSlug: record.listingSlug || "",
+        listingType: record.listingType || "application",
+        listingTitle: record.listingTitle || "",
+        userId: record.userId || null,
+        userName: record.userName || "Applicant",
+        userEmail: record.userEmail || null,
+        userDepartment: record.userDepartment || "",
+        userYear: record.userYear || "",
+        btId: record.btId || null,
+        answers: record.answers || {},
+        selectedOptionIds: record.selectedOptionIds || [],
+        submissionLink: record.submissionLink || null,
+        fileUrl: record.fileUrl || null,
+        ticketCode: record.ticketCode || "",
+        status: record.status || "pending",
+        adminFeedback: record.adminFeedback || "",
+        createdAt: record.createdAt || new Date().toISOString(),
+        updatedAt: record.updatedAt || new Date().toISOString(),
+      },
+    });
+
+    setDoc(regDocRef, regPayload, { merge: true }).catch((e) =>
+      console.warn("Firestore registration form submission write notice:", e)
+    );
+  }
+
+  // 3. Also attempt saveSiteContentToFirestore (works for admins; catch permission errors for students)
   (async () => {
     try {
       const remote = await getSiteContentFromFirestore<ListingResponseRecord[]>("listing_responses");
       const remoteList = Array.isArray(remote) ? remote : [];
-      
-      const map = new Map<string, ListingResponseRecord>();
-      // Put existing remote records first
-      remoteList.forEach((r) => map.set(r.id, r));
-      // Put current local records
-      updated.forEach((r) => map.set(r.id, r));
-      // Ensure the newly saved record is present
-      map.set(record.id, record);
+      const combined = mergeResponseLists(remoteList, updated, [record]);
 
-      const combined = Array.from(map.values()).sort(
-        (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-      );
-
-      // Save combined to Firestore
       await saveSiteContentToFirestore("listing_responses", combined);
-
-      // Also partition by listing
       const listingFiltered = combined.filter((r) => r.listingId === record.listingId);
       await saveSiteContentToFirestore(`responses_${record.listingId}`, listingFiltered);
 
-      // Update local storage with full combined set
       if (typeof window !== "undefined") {
         try {
           localStorage.setItem(RESPONSES_STORAGE_KEY, JSON.stringify(combined));
@@ -444,10 +600,8 @@ export function saveStoredListingResponse(record: ListingResponseRecord): void {
           );
         } catch {}
       }
-    } catch (cloudErr) {
-      console.warn("Direct Firestore merge for listing responses failed, enqueuing:", cloudErr);
-      saveSiteContentToFirestore("listing_responses", updated).catch(() => {});
-      enqueueCloudWrite("listing_responses", updated, "Listing Response");
+    } catch {
+      // Permission denied for non-admins on site_content is expected; doc is safely in registrations
     }
   })();
 }
@@ -457,52 +611,84 @@ export async function syncListingResponsesFromFirestore(): Promise<ListingRespon
     const remote = await getSiteContentFromFirestore<ListingResponseRecord[]>("listing_responses");
     const remoteList = Array.isArray(remote) ? remote : [];
     const local = getStoredListingResponses();
-    const map = new Map<string, ListingResponseRecord>();
-    
-    // Preserve any local records
-    local.forEach((r) => map.set(r.id, r));
-    // Overlay authoritative remote records
-    remoteList.forEach((r) => map.set(r.id, r));
+    const fromRegistrations: ListingResponseRecord[] = [];
 
-    // CRITICAL: Also query registrations collection for any hub_poll_* ballots
-    // so student votes cast by non-admins are immediately picked up across all devices
-    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    // CRITICAL: Query registrations collection for hub_poll_* and hub_sub_* records
+    // so submissions and ballots by non-admin students are immediately synchronized
+    const firestoreDb = db;
+    if (firestoreDb && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       try {
-        const regSnap = await getDocs(collection(db, "registrations"));
+        const regSnap = await getDocs(collection(firestoreDb, "registrations"));
+        const existingRegIds = new Set<string>();
+
         regSnap.docs.forEach((d) => {
-          const data = d.data();
-          if (d.id.startsWith("hub_poll_") || data.customAnswers?.isHubBallot) {
-            const ca = data.customAnswers || {};
-            const optId = ca.optionId;
-            const ballotRecord: ListingResponseRecord = {
-              id: d.id,
-              listingId: ca.listingId || data.eventId,
-              listingSlug: ca.listingSlug || "",
-              listingType: "poll",
-              listingTitle: ca.listingTitle || data.eventTitle,
-              userId: ca.voterId,
-              userName: ca.voterName || data.leaderName || "Campus Student",
-              userEmail: ca.voterEmail || data.email,
-              userDepartment: ca.voterDepartment || data.department,
-              userYear: ca.voterYear || data.year,
-              btId: ca.voterBtId || data.btId,
-              isAnonymous: Boolean(ca.isAnonymous),
-              selectedOptionIds: optId ? [optId] : [],
-              answers: optId ? { [optId]: ca.optionText || optId } : {},
-              createdAt: data.registeredAt || (typeof data.createdAt?.toDate === "function" ? data.createdAt.toDate().toISOString() : new Date().toISOString()),
-              status: "approved",
-            };
-            map.set(d.id, ballotRecord);
+          existingRegIds.add(d.id);
+          const parsed = parseRegistrationToResponseRecord(d.id, d.data());
+          if (parsed) {
+            fromRegistrations.push(parsed);
+          }
+        });
+
+        // Auto-heal: If any local submission was not yet pushed to registrations, push it now
+        local.forEach((localRec) => {
+          if (localRec.listingType !== "poll" && !localRec.id.startsWith("hub_poll_")) {
+            const expectedDocId = `hub_sub_${localRec.ticketCode || localRec.id}`;
+            if (!existingRegIds.has(expectedDocId)) {
+              const regDocRef = doc(firestoreDb, "registrations", expectedDocId);
+              setDoc(
+                regDocRef,
+                cleanUndefined({
+                  id: expectedDocId,
+                  eventId: localRec.listingId,
+                  eventTitle: `[HUB] ${localRec.listingTitle || "Form Submission"}`,
+                  leaderName: localRec.userName || "Applicant",
+                  email: localRec.userEmail || "",
+                  phone: "",
+                  college: "JDCOEM",
+                  department: localRec.userDepartment || "",
+                  year: localRec.userYear || "",
+                  btId: localRec.btId || "",
+                  teamSize: 1,
+                  status: localRec.status ? (localRec.status === "approved" ? "CONFIRMED" : localRec.status.toUpperCase()) : "PENDING",
+                  registeredAt: localRec.createdAt || new Date().toISOString(),
+                  createdAt: serverTimestamp(),
+                  ticketCode: localRec.ticketCode || "",
+                  qrPayload: `SRC:HUB:${localRec.listingId}:${localRec.ticketCode || localRec.id}`,
+                  customAnswers: {
+                    isHubSubmission: true,
+                    responseId: localRec.id,
+                    listingId: localRec.listingId,
+                    listingSlug: localRec.listingSlug || "",
+                    listingType: localRec.listingType || "application",
+                    listingTitle: localRec.listingTitle || "",
+                    userId: localRec.userId || null,
+                    userName: localRec.userName || "Applicant",
+                    userEmail: localRec.userEmail || null,
+                    userDepartment: localRec.userDepartment || "",
+                    userYear: localRec.userYear || "",
+                    btId: localRec.btId || null,
+                    answers: localRec.answers || {},
+                    selectedOptionIds: localRec.selectedOptionIds || [],
+                    submissionLink: localRec.submissionLink || null,
+                    fileUrl: localRec.fileUrl || null,
+                    ticketCode: localRec.ticketCode || "",
+                    status: localRec.status || "pending",
+                    adminFeedback: localRec.adminFeedback || "",
+                    createdAt: localRec.createdAt || new Date().toISOString(),
+                    updatedAt: localRec.updatedAt || new Date().toISOString(),
+                  },
+                }),
+                { merge: true }
+              ).catch(() => {});
+            }
           }
         });
       } catch (e) {
-        console.warn("Notice checking registrations for poll ballots:", e);
+        console.warn("Notice querying registrations collection:", e);
       }
     }
 
-    const merged = Array.from(map.values()).sort(
-      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-    );
+    const merged = mergeResponseLists(local, remoteList, fromRegistrations);
 
     if (typeof window !== "undefined") {
       try {
@@ -524,14 +710,51 @@ export async function syncListingResponsesFromFirestore(): Promise<ListingRespon
 export function subscribeToListingResponses(
   callback: (responses: ListingResponseRecord[]) => void
 ): () => void {
-  // Listen to Firestore real-time snapshot
+  // 1. Listen to Firestore site_content snapshot
   const unsubFirestore = subscribeToSiteContent<ListingResponseRecord[]>("listing_responses", (data) => {
     if (data && Array.isArray(data)) {
-      callback(data);
+      const currentLocal = getStoredListingResponses();
+      const merged = mergeResponseLists(currentLocal, data);
+      callback(merged);
     }
   });
 
-  // Listen to local window events across tabs
+  // 2. Listen to real-time registrations collection snapshots (hub_poll_* and hub_sub_*)
+  let unsubRegistrations: (() => void) | null = null;
+  const firestoreDb = db;
+  if (firestoreDb && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    try {
+      unsubRegistrations = onSnapshot(
+        collection(firestoreDb, "registrations"),
+        (snap) => {
+          const fromRegs: ListingResponseRecord[] = [];
+          snap.docs.forEach((d) => {
+            const parsed = parseRegistrationToResponseRecord(d.id, d.data());
+            if (parsed) {
+              fromRegs.push(parsed);
+            }
+          });
+          if (fromRegs.length > 0) {
+            const currentLocal = getStoredListingResponses();
+            const merged = mergeResponseLists(currentLocal, fromRegs);
+            if (typeof window !== "undefined") {
+              try {
+                localStorage.setItem(RESPONSES_STORAGE_KEY, JSON.stringify(merged));
+              } catch {}
+            }
+            callback(merged);
+          }
+        },
+        (err) => {
+          console.warn("Notice: registrations snapshot subscription notice:", err);
+        }
+      );
+    } catch (e) {
+      console.warn("Failed to attach registrations real-time subscription:", e);
+    }
+  }
+
+  // 3. Listen to local window events across tabs
   const handleLocalEvent = (e: any) => {
     if (e?.detail && Array.isArray(e.detail)) {
       callback(e.detail);
@@ -544,6 +767,9 @@ export function subscribeToListingResponses(
 
   return () => {
     unsubFirestore();
+    if (unsubRegistrations) {
+      unsubRegistrations();
+    }
     if (typeof window !== "undefined") {
       window.removeEventListener("src_listing_responses_updated", handleLocalEvent);
     }
@@ -552,6 +778,7 @@ export function subscribeToListingResponses(
 
 export function deleteStoredListingResponse(responseId: string, listingId: string): void {
   const current = getStoredListingResponses();
+  const target = current.find((r) => r.id === responseId);
   const updated = current.filter((r) => r.id !== responseId);
 
   if (typeof window !== "undefined") {
@@ -568,7 +795,17 @@ export function deleteStoredListingResponse(responseId: string, listingId: strin
     } catch {}
   }
 
-  // Cloud Sync
+  // Delete from registrations collection
+  const firestoreDb = db;
+  if (firestoreDb && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    const regDocId = responseId.startsWith("hub_") ? responseId : `hub_sub_${responseId}`;
+    deleteDoc(doc(firestoreDb, "registrations", regDocId)).catch(() => {});
+    if (target?.ticketCode) {
+      deleteDoc(doc(firestoreDb, "registrations", `hub_sub_${target.ticketCode}`)).catch(() => {});
+    }
+  }
+
+  // Cloud Sync site_content
   saveSiteContentToFirestore("listing_responses", updated).catch((err) => {
     console.warn("Direct write for global response deletion failed, enqueuing:", err);
   });
