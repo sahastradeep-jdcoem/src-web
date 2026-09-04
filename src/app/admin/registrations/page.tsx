@@ -53,7 +53,9 @@ import {
   getAllRegistrationsFromFirestore, 
   subscribeToRegistrationsFromFirestore, 
   deleteRegistrationFromFirestore,
-  subscribeToSiteContent
+  subscribeToSiteContent,
+  isTestPassRecord,
+  isHubRecord
 } from "@/lib/firebase/firestore";
 
 type ActiveTab = "summary" | "question" | "individual" | "table";
@@ -204,14 +206,19 @@ export default function AdminRegistrationsPage() {
     try {
       const localRecords = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
       if (Array.isArray(localRecords) && localRecords.length > 0) {
-        setRegistrations(formatRecords(localRecords));
+        const cleaned = localRecords.filter((r: any) => !isTestPassRecord(r) && !isHubRecord(r));
+        setRegistrations(formatRecords(cleaned));
       }
     } catch {}
 
     try {
       const cloud = await getAllRegistrationsFromFirestore();
-      if (cloud && cloud.length > 0) {
-        setRegistrations(formatRecords(cloud));
+      if (cloud) {
+        const cleaned = cloud.filter((r: any) => !isTestPassRecord(r) && !isHubRecord(r));
+        setRegistrations(formatRecords(cleaned));
+        try {
+          localStorage.setItem("src_local_registrations", JSON.stringify(cleaned));
+        } catch {}
       }
     } catch {}
   };
@@ -220,8 +227,9 @@ export default function AdminRegistrationsPage() {
     loadRegistrations();
 
     const unsubscribe = subscribeToRegistrationsFromFirestore((cloudRegs) => {
-      if (cloudRegs && cloudRegs.length > 0) {
-        setRegistrations(formatRecords(cloudRegs));
+      if (cloudRegs) {
+        const cleaned = cloudRegs.filter((r: any) => !isTestPassRecord(r) && !isHubRecord(r));
+        setRegistrations(formatRecords(cleaned));
       }
     });
 

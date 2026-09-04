@@ -51,6 +51,8 @@ import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/l
 import { 
   getAllRegistrationsFromFirestore, 
   subscribeToRegistrationsFromFirestore, 
+  isTestPassRecord,
+  isHubRecord,
   StudentRegistrationRecord 
 } from "@/lib/firebase/firestore";
 import { cn } from "@/lib/utils";
@@ -111,9 +113,11 @@ export default function StudentDashboardPage() {
       const cleanName = (effUser.displayName || "").trim().toLowerCase();
       const cleanUid = (effUser.uid || "").trim();
 
-      // 1. All valid event registration records (strictly exclude all hub items: submissions, applications, polls - NO PASS FOR HUB)
+      // 1. All valid event registration records (strictly exclude test passes and all hub items: NO PASS FOR HUB)
       const validRecords = rawRecords.filter((r: any) => {
         if (!r || !r.id) return false;
+        if (isTestPassRecord(r)) return false;
+        if (isHubRecord(r)) return false;
         if (typeof r.id === "string" && r.id.startsWith("hub_")) return false;
         if (r.customAnswers?.isHubBallot || r.customAnswers?.isHubSubmission) return false;
         if (r.isPass === false) return false;
@@ -133,15 +137,15 @@ export default function StudentDashboardPage() {
         // Check UID match
         if (cleanUid && rUid && rUid === cleanUid) return true;
 
-        // Check primary leader / registrant match
-        if (cleanEmail && rEmail === cleanEmail) return true;
-        if (cleanBtId && rBtId === cleanBtId) return true;
-        if (cleanName && (rLeader === cleanName || rLeader.includes(cleanName) || cleanName.includes(rLeader))) return true;
+        // Check primary leader / registrant match (require valid non-empty values)
+        if (cleanEmail && rEmail && rEmail === cleanEmail) return true;
+        if (cleanBtId && rBtId && rBtId === cleanBtId) return true;
+        if (cleanName && rLeader && rLeader.length > 2 && (rLeader === cleanName || rLeader.includes(cleanName) || cleanName.includes(rLeader))) return true;
 
         // Check QR payload if it contains BT ID, email, or UID
-        if (cleanBtId && rQr && rQr.toUpperCase().includes(cleanBtId)) return true;
-        if (cleanUid && rQr && rQr.includes(cleanUid)) return true;
-        if (cleanEmail && rQr && rQr.toLowerCase().includes(cleanEmail)) return true;
+        if (cleanBtId && cleanBtId.length > 3 && rQr && rQr.toUpperCase().includes(cleanBtId)) return true;
+        if (cleanUid && cleanUid.length > 5 && rQr && rQr.includes(cleanUid)) return true;
+        if (cleanEmail && cleanEmail.length > 4 && rQr && rQr.toLowerCase().includes(cleanEmail)) return true;
 
         // Check if member of squad / team roster
         const membersList = Array.isArray(r.teamMembers) 
@@ -157,9 +161,9 @@ export default function StudentDashboardPage() {
               const mUpper = m.toUpperCase().trim();
               const mLower = m.toLowerCase().trim();
               return (
-                (cleanBtId && mUpper.includes(cleanBtId)) ||
-                (cleanEmail && mLower.includes(cleanEmail)) ||
-                (cleanName && (mLower.includes(cleanName) || cleanName.includes(mLower)))
+                (cleanBtId && cleanBtId.length > 3 && mUpper.includes(cleanBtId)) ||
+                (cleanEmail && cleanEmail.length > 4 && mLower.includes(cleanEmail)) ||
+                (cleanName && mLower.length > 2 && (mLower.includes(cleanName) || cleanName.includes(mLower)))
               );
             }
             if (typeof m === "object") {
@@ -168,10 +172,10 @@ export default function StudentDashboardPage() {
               const mName = (m.name || m.displayName || "").toLowerCase().trim();
               const mUid = (m.userId || m.uid || "").trim();
               return (
-                (cleanUid && mUid && mUid === cleanUid) ||
-                (cleanBtId && (mBtId === cleanBtId || mBtId.includes(cleanBtId) || cleanBtId.includes(mBtId))) ||
-                (cleanEmail && (mEmail === cleanEmail || mEmail.includes(cleanEmail))) ||
-                (cleanName && (mName === cleanName || mName.includes(cleanName) || cleanName.includes(mName)))
+                (cleanUid && mUid && cleanUid.length > 5 && mUid === cleanUid) ||
+                (cleanBtId && mBtId && cleanBtId.length > 3 && (mBtId === cleanBtId || mBtId.includes(cleanBtId) || cleanBtId.includes(mBtId))) ||
+                (cleanEmail && mEmail && cleanEmail.length > 4 && (mEmail === cleanEmail || mEmail.includes(cleanEmail))) ||
+                (cleanName && mName && mName.length > 2 && (mName === cleanName || mName.includes(cleanName) || cleanName.includes(mName)))
               );
             }
             return false;
@@ -227,7 +231,7 @@ export default function StudentDashboardPage() {
       const initialLocal = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
       if (Array.isArray(initialLocal) && initialLocal.length > 0) {
         const cleanedLocal = initialLocal.filter(
-          (r: any) => !r?.id?.startsWith("hub_") && !r?.customAnswers?.isHubBallot && !r?.customAnswers?.isHubSubmission && !r?.eventTitle?.startsWith("[HUB]")
+          (r: any) => !isTestPassRecord(r) && !isHubRecord(r) && !r?.id?.startsWith("hub_") && !r?.customAnswers?.isHubBallot && !r?.customAnswers?.isHubSubmission && !r?.eventTitle?.startsWith("[HUB]")
         );
         if (cleanedLocal.length !== initialLocal.length) {
           try {
@@ -255,31 +259,25 @@ export default function StudentDashboardPage() {
 
         if (!isCurrent) return;
 
-        // Merge remote and local records by registration ID to guarantee no passes are lost
-        let local: any[] = [];
-        try {
-          local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
-        } catch {}
-
-        const map = new Map<string, any>();
-        if (Array.isArray(local)) {
-          local.forEach((r: any) => { 
-            if (r?.id && !r.id.startsWith("hub_") && !r.customAnswers?.isHubBallot && !r.customAnswers?.isHubSubmission && !r.eventTitle?.startsWith("[HUB]")) {
-              map.set(r.id, r); 
-            }
-          });
-        }
+        // Rule #9: Remote Firestore state is strictly authoritative for presence or deletion of records!
+        // When cloud state is received, we do NOT resurrect local-only deleted records.
         if (remoteRecords && Array.isArray(remoteRecords)) {
-          remoteRecords.forEach((r: any) => { 
-            if (r?.id && !r.id.startsWith("hub_") && !r.customAnswers?.isHubBallot && !r.customAnswers?.isHubSubmission && !r.eventTitle?.startsWith("[HUB]")) {
-              map.set(r.id, r); 
-            }
-          });
+          allRecords = remoteRecords.filter(
+            (r: any) => !isTestPassRecord(r) && !isHubRecord(r)
+          );
+          try {
+            localStorage.setItem("src_local_registrations", JSON.stringify(allRecords));
+          } catch {}
+        } else {
+          // Fallback to local cache only if completely offline / fetch error
+          let local: any[] = [];
+          try {
+            local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+          } catch {}
+          allRecords = Array.isArray(local)
+            ? local.filter((r: any) => !isTestPassRecord(r) && !isHubRecord(r))
+            : [];
         }
-        allRecords = Array.from(map.values());
-        try {
-          localStorage.setItem("src_local_registrations", JSON.stringify(allRecords));
-        } catch {}
 
         const formatted = formatStudentRecords(allRecords, storedEvents);
         if (isCurrent) {

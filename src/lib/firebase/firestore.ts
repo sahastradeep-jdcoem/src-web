@@ -364,11 +364,29 @@ export async function checkInStudentPass(id: string): Promise<boolean> {
 }
 
 /**
+ * Helper to identify test, dummy, or debug registration passes (e.g. test_ping, test_rule_check)
+ */
+export function isTestPassRecord(r: any): boolean {
+  if (!r) return true;
+  const id = String(typeof r === "string" ? r : (r.id || "")).toLowerCase().trim();
+  const code = String(r.ticketCode || r.registrationCode || "").toLowerCase().trim();
+  const title = String(r.eventTitle || r.eventName || "").toLowerCase().trim();
+  const name = String(r.participantName || r.leaderName || "").toLowerCase().trim();
+
+  if (id.startsWith("test_") || id.startsWith("test-") || id === "test" || id.includes("test_ping") || id.includes("test_rule")) return true;
+  if (code.startsWith("test_") || code.startsWith("test-") || code.includes("test_ping") || code.includes("test_rule")) return true;
+  if (title === "test" || (title.startsWith("test ") && !title.includes("contest"))) return true;
+  if (name.startsWith("test_") || name === "test user" || name === "test student") return true;
+  return false;
+}
+
+/**
  * Helper to identify Hub engagement records (polls, applications, recruitment, grievances).
  * Hub records are NOT event passes, have no check-in tickets, and must never appear as event passes.
  */
 export function isHubRecord(r: any): boolean {
   if (!r) return false;
+  if (isTestPassRecord(r)) return true;
   const id = typeof r === "string" ? r : (r.id || "");
   if (typeof id === "string" && id.startsWith("hub_")) return true;
   if (r.customAnswers?.isHubBallot || r.customAnswers?.isHubSubmission) return true;
@@ -387,7 +405,7 @@ export async function getAllRegistrationsFromFirestore(): Promise<StudentRegistr
       const snapshot = await getDocs(colRef);
       if (!snapshot.empty) {
         return snapshot.docs
-          .filter((d) => !isHubRecord({ id: d.id, ...d.data() }))
+          .filter((d) => !isHubRecord({ id: d.id, ...d.data() }) && !isTestPassRecord({ id: d.id, ...d.data() }))
           .map((d) => ({ id: d.id, ...d.data() } as StudentRegistrationRecord));
       }
     }
@@ -398,7 +416,7 @@ export async function getAllRegistrationsFromFirestore(): Promise<StudentRegistr
   try {
     const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
     if (Array.isArray(local)) {
-      return local.filter((r: any) => !isHubRecord(r));
+      return local.filter((r: any) => !isHubRecord(r) && !isTestPassRecord(r));
     }
   } catch {}
   return [];
@@ -419,7 +437,7 @@ export function subscribeToRegistrationsFromFirestore(
       colRef,
       (snapshot) => {
         const list = snapshot.docs
-          .filter((d) => !isHubRecord({ id: d.id, ...d.data() }))
+          .filter((d) => !isHubRecord({ id: d.id, ...d.data() }) && !isTestPassRecord({ id: d.id, ...d.data() }))
           .map((d) => ({ id: d.id, ...d.data() } as StudentRegistrationRecord));
         callback(list);
       },

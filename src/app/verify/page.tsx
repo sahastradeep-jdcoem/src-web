@@ -16,7 +16,12 @@ import {
   AlertCircle,
   Lock
 } from "lucide-react";
-import { getAllRegistrationsFromFirestore, StudentRegistrationRecord } from "@/lib/firebase/firestore";
+import { 
+  getAllRegistrationsFromFirestore, 
+  isTestPassRecord, 
+  isHubRecord, 
+  StudentRegistrationRecord 
+} from "@/lib/firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
 import { Badge } from "@/components/ui/Badge";
 
@@ -33,7 +38,7 @@ export default function GateScannerHubPage() {
       try {
         const rawLocal = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
         const local = Array.isArray(rawLocal) 
-          ? rawLocal.filter((r: any) => !r?.id?.startsWith("hub_") && !r?.customAnswers?.isHubBallot && !r?.customAnswers?.isHubSubmission && !r?.eventTitle?.startsWith("[HUB]")) 
+          ? rawLocal.filter((r: any) => !isTestPassRecord(r) && !isHubRecord(r) && !r?.id?.startsWith("hub_") && !r?.customAnswers?.isHubBallot && !r?.customAnswers?.isHubSubmission && !r?.eventTitle?.startsWith("[HUB]")) 
           : [];
         const cloud = await getAllRegistrationsFromFirestore();
         const all: StudentRegistrationRecord[] = cloud && cloud.length > 0 ? cloud : local;
