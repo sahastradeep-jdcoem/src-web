@@ -42,6 +42,8 @@ export const MOCK_LISTING_IDS = new Set([
   "aeromodelling-club-core-team-selection",
   "monsoon-campus-photography-challenge",
   "campus-amenities-canteen-grievance-desk",
+  "list-1788524431164",
+  "which-pill-1164",
 ]);
 
 export function getStoredListings(): ListingItem[] {
@@ -56,7 +58,7 @@ export function getStoredListings(): ListingItem[] {
     if (!Array.isArray(parsed)) {
       return initialListings;
     }
-    // Filter out any stale mock items cached in localStorage
+    // Filter out any stale mock or deleted items cached in localStorage
     const clean = parsed.filter((l) => !MOCK_LISTING_IDS.has(l.id) && !MOCK_LISTING_IDS.has(l.slug));
     if (clean.length === 0 && initialListings.length > 0) {
       return initialListings;
@@ -101,20 +103,13 @@ export async function syncListingsFromFirestore(): Promise<ListingItem[] | null>
   try {
     const remote = await getSiteContentFromFirestore<ListingItem[]>("listings");
     if (remote && Array.isArray(remote)) {
-      // Purge any legacy hardcoded mock items if found in cloud
+      // Purge any legacy hardcoded mock or deleted items if found in cloud
       const hasMockItems = remote.some((l) => MOCK_LISTING_IDS.has(l.id) || MOCK_LISTING_IDS.has(l.slug));
       let cleanRemote = remote.filter((l) => !MOCK_LISTING_IDS.has(l.id) && !MOCK_LISTING_IDS.has(l.slug));
 
-      // If all manual items were wiped by previous mock overwrite, restore from initialListings
+      // If all items were wiped, fallback to initialListings
       if (cleanRemote.length === 0 && initialListings.length > 0) {
         cleanRemote = [...initialListings];
-      } else {
-        // Ensure verified manual listings from initialListings are retained if missing from remote
-        for (const item of initialListings) {
-          if (!cleanRemote.some((r) => r.id === item.id || r.slug === item.slug)) {
-            cleanRemote.push(item);
-          }
-        }
       }
 
       if (typeof window !== "undefined") {
@@ -126,7 +121,7 @@ export async function syncListingsFromFirestore(): Promise<ListingItem[] | null>
         }
       }
 
-      // If mock items were detected in remote, sync clean dataset back to Firestore
+      // If mock or deleted items were detected in remote, immediately flush clean dataset back to Firestore
       if (hasMockItems) {
         saveSiteContentToFirestore("listings", compactListingsDataset(cleanRemote)).catch(() => {});
       }
