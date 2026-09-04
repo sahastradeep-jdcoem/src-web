@@ -99,12 +99,6 @@ export function PillarsOfStrengthSection({ className = "" }: PillarsOfStrengthSe
                     className="object-cover object-top group-hover:scale-104 transition-transform duration-500 ease-out"
                   />
                   
-                  {/* Subtle Postal Cancellation Watermark in bottom corner */}
-                  <div className="absolute bottom-2 left-2 pointer-events-none opacity-40 group-hover:opacity-70 transition-opacity">
-                    <div className="border border-white/80 rounded-full px-1.5 py-0.5 text-[8px] font-mono tracking-widest text-white uppercase bg-black/30 backdrop-blur-2xs">
-                      JDCOEM • PATRON
-                    </div>
-                  </div>
                 </div>
 
                 {/* Postcard Details */}
