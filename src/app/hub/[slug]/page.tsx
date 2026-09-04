@@ -512,7 +512,7 @@ export default function ListingDetailPage() {
 
           {/* APPLICATION / SUBMISSION / GRIEVANCE FORM */}
           {!isPoll && (
-            <div className="p-6 sm:p-8 border-t border-slate-200 space-y-6">
+            <div id="apply" className="p-6 sm:p-8 border-t border-slate-200 space-y-6 scroll-mt-24">
               <h3 className="font-heading font-extrabold text-lg text-[#17458F] uppercase">
                 {isIssue ? "Submit Confidential Inquiry" : "Participant Application"}
               </h3>

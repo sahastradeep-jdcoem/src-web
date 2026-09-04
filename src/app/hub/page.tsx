@@ -15,10 +15,8 @@ import {
   Clock, 
   Sparkles, 
   Search, 
-  X, 
   Check, 
   AlertCircle,
-  FileText,
   Lock,
   ExternalLink,
   GraduationCap,
@@ -28,10 +26,9 @@ import {
   getStoredListings, 
   subscribeToListings, 
   voteOnListingPoll, 
-  saveStoredListingResponse,
   getStoredVotedPolls
 } from "@/lib/listingsStore";
-import { ListingItem, ListingPillar, ListingResponseRecord } from "@/types/listings";
+import { ListingItem, ListingPillar } from "@/types/listings";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import confetti from "canvas-confetti";
@@ -45,18 +42,6 @@ export default function StudentHubPage() {
   const [selectedPillar, setSelectedPillar] = useState<ListingPillar | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [votedPolls, setVotedPolls] = useState<Record<string, string>>({});
-
-  // Modal / Form state for responding to an application/submission/grievance
-  const [activeListingModal, setActiveListingModal] = useState<ListingItem | null>(null);
-  const [applicantName, setApplicantName] = useState("");
-  const [applicantEmail, setApplicantEmail] = useState("");
-  const [applicantDepartment, setApplicantDepartment] = useState("Computer Science & Engineering");
-  const [applicantYear, setApplicantYear] = useState("3rd Year");
-  const [applicantBtId, setApplicantBtId] = useState("");
-  const [customAnswers, setCustomAnswers] = useState<Record<string, any>>({});
-  const [submissionLink, setSubmissionLink] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [completedTicketCode, setCompletedTicketCode] = useState<string | null>(null);
   const [feedbackNotice, setFeedbackNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -70,16 +55,6 @@ export default function StudentHubPage() {
     });
     return () => unsub();
   }, []);
-
-  useEffect(() => {
-    if (user) {
-      setApplicantName(user.displayName || "");
-      setApplicantEmail(user.email || "");
-      if (user.department) setApplicantDepartment(user.department);
-      if (user.year) setApplicantYear(user.year);
-      if (user.btId) setApplicantBtId(user.btId);
-    }
-  }, [user]);
 
   const showToast = (msg: string) => {
     setFeedbackNotice(msg);
@@ -120,78 +95,6 @@ export default function StudentHubPage() {
     } else {
       showToast(res.error || "Failed to submit vote.");
     }
-  };
-
-  const handleOpenActionModal = (item: ListingItem) => {
-    if ((item.targetAudience === "jdcoem_only" || item.isInterCollege === false) && isExternalUser) {
-      showToast("Applications for this listing are reserved for JDCOEM students.");
-      return;
-    }
-    setActiveListingModal(item);
-    setCustomAnswers({});
-    setSubmissionLink("");
-    setCompletedTicketCode(null);
-  };
-
-  const handleFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeListingModal) return;
-    if ((activeListingModal.targetAudience === "jdcoem_only" || activeListingModal.isInterCollege === false) && isExternalUser) {
-      showToast("Submissions for this listing are restricted to JDCOEM students.");
-      return;
-    }
-
-    // Validate required dynamic custom questions
-    if (activeListingModal.customQuestions) {
-      for (const q of activeListingModal.customQuestions) {
-        if (q.required && q.type !== "note") {
-          const val = customAnswers[q.id];
-          if (q.type === "checkboxes") {
-            if (!Array.isArray(val) || val.length === 0) {
-              showToast(`Please select at least one option for "${q.question}"`);
-              return;
-            }
-          } else if (!val || !String(val).trim()) {
-            showToast(`Please answer "${q.question}"`);
-            return;
-          }
-        }
-      }
-    }
-
-    setIsSubmitting(true);
-
-    const ticketCode = `SRC-${activeListingModal.type.toUpperCase().slice(0, 3)}-${Math.floor(10000 + Math.random() * 90000)}`;
-
-    const responseRecord: ListingResponseRecord = {
-      id: `resp-${Date.now()}`,
-      listingId: activeListingModal.id,
-      listingSlug: activeListingModal.slug,
-      listingType: activeListingModal.type,
-      listingTitle: activeListingModal.title,
-      userId: user?.uid,
-      userEmail: applicantEmail,
-      userName: applicantName,
-      userDepartment: applicantDepartment,
-      userYear: applicantYear,
-      btId: applicantBtId || undefined,
-      isAnonymous: Boolean(activeListingModal.issueConfig?.allowAnonymous),
-      answers: Object.keys(customAnswers).length > 0 ? customAnswers : undefined,
-      submissionLink: submissionLink || undefined,
-      ticketCode,
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    };
-
-    saveStoredListingResponse(responseRecord);
-
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setCompletedTicketCode(ticketCode);
-      try {
-        confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
-      } catch {}
-    }, 400);
   };
 
   return (
@@ -437,16 +340,15 @@ export default function StudentHubPage() {
                         <span>JDCOEM Students Only</span>
                       </div>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => handleOpenActionModal(item)}
-                        className="w-full py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                      <Link
+                        href={`/hub/${item.slug}`}
+                        className="w-full py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer group/btn"
                       >
                         <span>
                           {isOpp ? "Apply for Fellowship" : isSub ? "Submit Entry" : isIssue ? "File Confidential Concern" : "Apply / Audition"}
                         </span>
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
+                        <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-0.5 transition-transform" />
+                      </Link>
                     )}
                     <div className="pt-2 text-center">
                       <Link
@@ -463,311 +365,6 @@ export default function StudentHubPage() {
           })}
         </div>
       </div>
-
-      {/* MODAL: SUBMISSION / APPLICATION FORM */}
-      {activeListingModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200">
-          <div className="relative w-full max-w-2xl rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden my-8 font-sans text-left">
-            
-            {/* Modal Header */}
-            <div className="px-6 py-5 bg-[#17458F] text-white flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-[#E78023] text-white">
-                  {activeListingModal.type.toUpperCase()}
-                </span>
-                <h2 className="font-heading font-extrabold text-xl text-white uppercase tracking-tight line-clamp-1">
-                  {activeListingModal.title}
-                </h2>
-              </div>
-              <button
-                onClick={() => setActiveListingModal(null)}
-                className="p-1.5 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* If completed, show success ticket receipt */}
-            {completedTicketCode ? (
-              <div className="p-8 text-center space-y-6">
-                <div className="inline-flex p-4 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200">
-                  <CheckCircle2 className="w-12 h-12" />
-                </div>
-                <div className="space-y-2">
-                  <h3 className="font-heading font-extrabold text-2xl text-slate-900 uppercase">
-                    SUBMISSION CONFIRMED
-                  </h3>
-                  <p className="text-xs sm:text-sm text-slate-500 font-sans max-w-md mx-auto">
-                    Your response for <strong>{activeListingModal.title}</strong> has been logged to the central database and synced with council coordinators.
-                  </p>
-                </div>
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 max-w-xs mx-auto space-y-1">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Official Reference Ticket ID
-                  </span>
-                  <p className="font-mono font-extrabold text-xl text-[#17458F] tracking-wider">
-                    {completedTicketCode}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveListingModal(null)}
-                  className="px-6 py-2.5 rounded-xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#123670] transition-colors"
-                >
-                  Done &amp; Return to Hub
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleFormSubmit} className="p-6 sm:p-8 space-y-5 max-h-[75vh] overflow-y-auto">
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600 font-sans leading-relaxed">
-                  {activeListingModal.description}
-                </div>
-
-                {/* Candidate Info */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                      Full Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={applicantName}
-                      onChange={(e) => setApplicantName(e.target.value)}
-                      placeholder="e.g. Rahul Sharma"
-                      className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                      Email Address *
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      value={applicantEmail}
-                      onChange={(e) => setApplicantEmail(e.target.value)}
-                      placeholder="student@jdcoem.ac.in"
-                      className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
-                      Department
-                    </label>
-                    <input
-                      type="text"
-                      value={applicantDepartment}
-                      onChange={(e) => setApplicantDepartment(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
-                      Academic Year
-                    </label>
-                    <input
-                      type="text"
-                      value={applicantYear}
-                      onChange={(e) => setApplicantYear(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
-                      BT ID (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={applicantBtId}
-                      onChange={(e) => setApplicantBtId(e.target.value.toUpperCase())}
-                      placeholder="BT23..."
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold"
-                    />
-                  </div>
-                </div>
-
-                {/* External Link or File submission */}
-                {activeListingModal.type === "submission" && (
-                  <div className="space-y-1 pt-2">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
-                      Submission Portfolio / Drive Link *
-                    </label>
-                    <input
-                      type="url"
-                      required
-                      value={submissionLink}
-                      onChange={(e) => setSubmissionLink(e.target.value)}
-                      placeholder="https://drive.google.com/... or Behance/GitHub link"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-none focus:border-[#17458F]"
-                    />
-                  </div>
-                )}
-
-                {/* Dynamic Questions (if defined) */}
-                {activeListingModal.customQuestions && activeListingModal.customQuestions.map((q) => {
-                  if (q.type === "note") {
-                    return (
-                      <div key={q.id} className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-1 my-2">
-                        <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
-                          <AlertCircle className="w-4 h-4 text-[#E78023] shrink-0" />
-                          <span>{q.question || "Important Notice"}</span>
-                        </div>
-                        {q.noteContent && (
-                          <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-line pl-6">
-                            {q.noteContent}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div key={q.id} className="space-y-1.5 pt-2">
-                      <div className="space-y-0.5">
-                        <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
-                          <span>{q.question}</span>
-                          {q.required && <span className="text-rose-500 font-bold">*</span>}
-                        </label>
-                        {q.description && (
-                          <p className="text-[11px] text-slate-500 font-medium leading-normal">
-                            {q.description}
-                          </p>
-                        )}
-                      </div>
-
-                      {q.type === "long_text" ? (
-                        <textarea
-                          rows={3}
-                          required={q.required}
-                          placeholder={q.placeholder || "Enter detailed response..."}
-                          value={customAnswers[q.id] || ""}
-                          onChange={(e) => setCustomAnswers({ ...customAnswers, [q.id]: e.target.value })}
-                          className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium focus:outline-none focus:border-[#17458F]"
-                        />
-                      ) : q.type === "checkboxes" ? (
-                        <div className="space-y-2 pt-1">
-                          {(q.options || []).map((opt) => {
-                            const selectedList: string[] = Array.isArray(customAnswers[q.id])
-                              ? customAnswers[q.id]
-                              : [];
-                            const isChecked = selectedList.includes(opt);
-                            return (
-                              <button
-                                key={opt}
-                                type="button"
-                                onClick={() => {
-                                  const next = isChecked
-                                    ? selectedList.filter((item) => item !== opt)
-                                    : [...selectedList, opt];
-                                  setCustomAnswers({ ...customAnswers, [q.id]: next });
-                                }}
-                                className={cn(
-                                  "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-left text-xs font-semibold transition-all cursor-pointer",
-                                  isChecked
-                                    ? "bg-[#17458F]/5 border-[#17458F] text-[#17458F] shadow-2xs"
-                                    : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300"
-                                )}
-                              >
-                                <div
-                                  className={cn(
-                                    "w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition-all",
-                                    isChecked
-                                      ? "bg-[#17458F] border-[#17458F] text-white"
-                                      : "bg-white border-slate-300"
-                                  )}
-                                >
-                                  {isChecked && <Check className="w-3 h-3 text-white stroke-[3]" />}
-                                </div>
-                                <span className="flex-1">{opt}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ) : q.type === "multiple_choice" ? (
-                        <div className="space-y-2 pt-1">
-                          {(q.options || []).map((opt) => {
-                            const isSelected = customAnswers[q.id] === opt;
-                            return (
-                              <button
-                                key={opt}
-                                type="button"
-                                onClick={() => setCustomAnswers({ ...customAnswers, [q.id]: opt })}
-                                className={cn(
-                                  "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-left text-xs font-semibold transition-all cursor-pointer",
-                                  isSelected
-                                    ? "bg-[#17458F]/5 border-[#17458F] text-[#17458F] shadow-2xs"
-                                    : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300"
-                                )}
-                              >
-                                <div
-                                  className={cn(
-                                    "w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-all",
-                                    isSelected
-                                      ? "border-[#17458F] bg-[#17458F]"
-                                      : "border-slate-300 bg-white"
-                                  )}
-                                >
-                                  {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                                </div>
-                                <span className="flex-1">{opt}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ) : q.type === "dropdown" ? (
-                        <select
-                          required={q.required}
-                          value={customAnswers[q.id] || ""}
-                          onChange={(e) => setCustomAnswers({ ...customAnswers, [q.id]: e.target.value })}
-                          className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-none focus:border-[#17458F]"
-                        >
-                          <option value="">Select an option...</option>
-                          {q.options?.map((opt) => (
-                            <option key={opt} value={opt}>{opt}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type="text"
-                          required={q.required}
-                          placeholder={q.placeholder || "Your answer..."}
-                          value={customAnswers[q.id] || ""}
-                          onChange={(e) => setCustomAnswers({ ...customAnswers, [q.id]: e.target.value })}
-                          className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium focus:outline-none focus:border-[#17458F]"
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-
-                {/* Footer Buttons */}
-                <div className="pt-6 border-t border-slate-200 flex items-center justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setActiveListingModal(null)}
-                    className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold uppercase tracking-wider hover:bg-slate-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="px-6 py-2 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-xs"
-                  >
-                    {isSubmitting ? "Submitting..." : "Confirm & Send"}
-                  </button>
-                </div>
-              </form>
-            )}
-
-          </div>
-        </div>
-      )}
 
     </div>
   );
