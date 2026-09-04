@@ -123,7 +123,7 @@ export default function HomePage() {
               </div>
 
               <p className="text-sm text-slate-600 leading-relaxed font-sans font-normal">
-                The inaugural foundation ceremony that unified all twelve collegiate societies under a single, autonomous student council — badging the first council admins and lighting the perpetual lamp of student leadership.
+                The inaugural foundation ceremony that unified all twelve clubs under a single, autonomous student council — badging the first council admins and lighting the perpetual lamp of student leadership.
               </p>
 
               <div className="pt-2">

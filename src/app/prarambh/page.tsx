@@ -56,7 +56,7 @@ export default function PrarambhPage() {
     {
       stat: "200+",
       label: "Students in Attendance",
-      desc: "Electrifying gathering at the central amphitheatre",
+      desc: "Electrifying gathering at APJ Abdul Kalam Auditorium",
     },
     {
       stat: "12",
@@ -81,7 +81,7 @@ export default function PrarambhPage() {
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 shadow-sm">
             <Flame className="w-4 h-4 text-[#E78023]" />
             <span className="text-xs font-bold uppercase tracking-wider text-[#17458F]">
-              The Genesis of Sahastradeep • 24 September 2025
+              Sahastradeep Foundation Day - 24th Sep 2025
             </span>
           </div>
 
@@ -95,7 +95,7 @@ export default function PrarambhPage() {
           </div>
 
           <p className="max-w-2xl mx-auto text-base sm:text-lg text-slate-600 leading-relaxed font-medium">
-            The foundation ceremony that unified all twelve collegiate societies under a single, autonomous student council — igniting a thousand lights of leadership across JDCOEM Nagpur.
+            The foundation ceremony that unified all twelve clubs under a single, autonomous student council — igniting a thousand lights of leadership across JDCOEM Nagpur.
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-6 text-xs text-slate-600 pt-4 border-t border-slate-200 font-semibold">
@@ -105,7 +105,7 @@ export default function PrarambhPage() {
             </span>
             <span className="flex items-center gap-1.5">
               <MapPin className="w-4 h-4 text-[#17458F]" />
-              <span>Central Amphitheatre, JDCOEM</span>
+              <span>APJ Abdual Kalam Auditoruim JDCOEM</span>
             </span>
           </div>
 
