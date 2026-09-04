@@ -448,25 +448,36 @@ export function subscribeToFoundingMembers(callback: (members: TeamMember[]) => 
   });
 }
 
+function stripPillarRole(pillars: any[]): InstitutionalPillar[] {
+  if (!Array.isArray(pillars)) return [];
+  return pillars.map((p) => {
+    if (!p || typeof p !== "object") return p;
+    const copy = { ...p };
+    delete copy.role;
+    return copy as InstitutionalPillar;
+  });
+}
+
 // 5. 4 PILLARS OF STRENGTH (INSTITUTIONAL PATRONS & FACULTY MENTORS)
 export function getStoredInstitutionalPillars(): InstitutionalPillar[] {
-  if (typeof window === "undefined") return initialPillars;
+  if (typeof window === "undefined") return stripPillarRole(initialPillars);
   try {
     const stored = localStorage.getItem("src_pillars_of_strength");
     if (stored) {
       const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) return stripPillarRole(parsed);
     }
   } catch (e) {
     console.warn("Could not read pillars from storage", e);
   }
-  return initialPillars;
+  return stripPillarRole(initialPillars);
 }
 
 export async function saveStoredInstitutionalPillars(pillars: InstitutionalPillar[]): Promise<void> {
   if (typeof window === "undefined") return;
   try {
-    const compacted = await compactPillarsDataset(pillars);
+    const cleanedPillars = stripPillarRole(pillars);
+    const compacted = await compactPillarsDataset(cleanedPillars);
     const sanitized = cleanUndefined(compacted);
     try {
       localStorage.setItem("src_pillars_of_strength", JSON.stringify(sanitized));
@@ -491,7 +502,7 @@ export async function syncInstitutionalPillarsFromFirestore(): Promise<Instituti
     const remote = await getSiteContentFromFirestore<InstitutionalPillar[]>("pillars_of_strength");
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
       const current = getStoredInstitutionalPillars();
-      const merged = reconcileArrayDatasets(current, remote);
+      const merged = stripPillarRole(reconcileArrayDatasets(current, remote));
       if (typeof window !== "undefined") {
         try {
           localStorage.setItem("src_pillars_of_strength", JSON.stringify(merged));
@@ -509,7 +520,7 @@ export function subscribeToInstitutionalPillars(callback: (pillars: Institutiona
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
       if (hasPendingWritesFor("pillars_of_strength")) return;
       const current = getStoredInstitutionalPillars();
-      const merged = reconcileArrayDatasets(current, remote);
+      const merged = stripPillarRole(reconcileArrayDatasets(current, remote));
       if (typeof window !== "undefined") {
         try {
           localStorage.setItem("src_pillars_of_strength", JSON.stringify(merged));
