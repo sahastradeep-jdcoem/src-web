@@ -260,7 +260,7 @@ export async function saveRegistrationToFirestore(
  * Get registration details by ID
  */
 export async function getRegistrationById(id: string): Promise<StudentRegistrationRecord | null> {
-  if (!id || id.startsWith("hub_poll_")) return null;
+  if (!id || id.startsWith("hub_")) return null;
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       const docRef = doc(db, REGISTRATIONS_COLLECTION, id);
@@ -340,7 +340,7 @@ export async function checkExistingStudentRegistration(
  * Mark a student registration as CHECKED-IN during gate entry QR scanning
  */
 export async function checkInStudentPass(id: string): Promise<boolean> {
-  if (!id || id.startsWith("hub_poll_")) return false;
+  if (!id || id.startsWith("hub_")) return false;
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       const docRef = doc(db, REGISTRATIONS_COLLECTION, id);
@@ -364,7 +364,21 @@ export async function checkInStudentPass(id: string): Promise<boolean> {
 }
 
 /**
- * Fetch all registrations from Firestore (excluding poll ballots)
+ * Helper to identify Hub engagement records (polls, applications, recruitment, grievances).
+ * Hub records are NOT event passes, have no check-in tickets, and must never appear as event passes.
+ */
+export function isHubRecord(r: any): boolean {
+  if (!r) return false;
+  const id = typeof r === "string" ? r : (r.id || "");
+  if (typeof id === "string" && id.startsWith("hub_")) return true;
+  if (r.customAnswers?.isHubBallot || r.customAnswers?.isHubSubmission) return true;
+  if (typeof r.eventTitle === "string" && (r.eventTitle.startsWith("[HUB]") || r.eventTitle.startsWith("[POLL BALLOT]"))) return true;
+  if (typeof r.eventName === "string" && (r.eventName.startsWith("[HUB]") || r.eventName.startsWith("[POLL BALLOT]"))) return true;
+  return false;
+}
+
+/**
+ * Fetch all registrations from Firestore (strictly excluding hub submissions & poll ballots)
  */
 export async function getAllRegistrationsFromFirestore(): Promise<StudentRegistrationRecord[]> {
   try {
@@ -373,7 +387,7 @@ export async function getAllRegistrationsFromFirestore(): Promise<StudentRegistr
       const snapshot = await getDocs(colRef);
       if (!snapshot.empty) {
         return snapshot.docs
-          .filter((d) => !d.id.startsWith("hub_poll_") && !(d.data() as any).customAnswers?.isHubBallot)
+          .filter((d) => !isHubRecord({ id: d.id, ...d.data() }))
           .map((d) => ({ id: d.id, ...d.data() } as StudentRegistrationRecord));
       }
     }
@@ -384,14 +398,14 @@ export async function getAllRegistrationsFromFirestore(): Promise<StudentRegistr
   try {
     const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
     if (Array.isArray(local)) {
-      return local.filter((r: any) => !r.id?.startsWith("hub_poll_") && !r.customAnswers?.isHubBallot);
+      return local.filter((r: any) => !isHubRecord(r));
     }
   } catch {}
   return [];
 }
 
 /**
- * Subscribe to real-time updates of event registrations in Firestore (excluding poll ballots)
+ * Subscribe to real-time updates of event registrations in Firestore (strictly excluding hub submissions & poll ballots)
  */
 export function subscribeToRegistrationsFromFirestore(
   callback: (regs: StudentRegistrationRecord[]) => void
@@ -405,7 +419,7 @@ export function subscribeToRegistrationsFromFirestore(
       colRef,
       (snapshot) => {
         const list = snapshot.docs
-          .filter((d) => !d.id.startsWith("hub_poll_") && !(d.data() as any).customAnswers?.isHubBallot)
+          .filter((d) => !isHubRecord({ id: d.id, ...d.data() }))
           .map((d) => ({ id: d.id, ...d.data() } as StudentRegistrationRecord));
         callback(list);
       },

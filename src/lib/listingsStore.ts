@@ -550,9 +550,10 @@ export function saveStoredListingResponse(record: ListingResponseRecord): void {
       registeredAt: record.createdAt || new Date().toISOString(),
       createdAt: serverTimestamp(),
       ticketCode: record.ticketCode || "",
-      qrPayload: `SRC:HUB:${record.listingId}:${record.ticketCode || record.id}`,
+      isPass: false,
       customAnswers: {
         isHubSubmission: true,
+        isPass: false,
         responseId: record.id,
         listingId: record.listingId,
         listingSlug: record.listingSlug || "",
@@ -653,9 +654,10 @@ export async function syncListingResponsesFromFirestore(): Promise<ListingRespon
                   registeredAt: localRec.createdAt || new Date().toISOString(),
                   createdAt: serverTimestamp(),
                   ticketCode: localRec.ticketCode || "",
-                  qrPayload: `SRC:HUB:${localRec.listingId}:${localRec.ticketCode || localRec.id}`,
+                  isPass: false,
                   customAnswers: {
                     isHubSubmission: true,
+                    isPass: false,
                     responseId: localRec.id,
                     listingId: localRec.listingId,
                     listingSlug: localRec.listingSlug || "",

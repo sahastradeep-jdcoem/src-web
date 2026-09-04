@@ -148,7 +148,7 @@ export default function AdminRegistrationsPage() {
 
   const formatRecords = (records: any[]): RegistrationRecord[] => {
     return records
-      .filter((r: any) => !r.id?.startsWith("hub_poll_") && !r.customAnswers?.isHubBallot)
+      .filter((r: any) => !r.id?.startsWith("hub_") && !r.customAnswers?.isHubBallot && !r.customAnswers?.isHubSubmission && !r.eventTitle?.startsWith("[HUB]"))
       .map((r: any) => {
       // Determine the best ISO time string from r.paidAt, r.registeredAt, or r.createdAt
       let fullIsoTime = "";

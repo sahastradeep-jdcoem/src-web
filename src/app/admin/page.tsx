@@ -71,7 +71,7 @@ export default function AdminOverviewPage() {
     try {
       const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
       const eventRegs = Array.isArray(local) 
-        ? local.filter((r: any) => !r.id?.startsWith("hub_poll_") && !r.customAnswers?.isHubBallot) 
+        ? local.filter((r: any) => !r.id?.startsWith("hub_") && !r.customAnswers?.isHubBallot && !r.customAnswers?.isHubSubmission && !r.eventTitle?.startsWith("[HUB]")) 
         : [];
       setRegistrationsCount(eventRegs.length);
     } catch {

@@ -33,7 +33,7 @@ export default function GateScannerHubPage() {
       try {
         const rawLocal = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
         const local = Array.isArray(rawLocal) 
-          ? rawLocal.filter((r: any) => !r?.id?.startsWith("hub_poll_") && !r?.customAnswers?.isHubBallot) 
+          ? rawLocal.filter((r: any) => !r?.id?.startsWith("hub_") && !r?.customAnswers?.isHubBallot && !r?.customAnswers?.isHubSubmission && !r?.eventTitle?.startsWith("[HUB]")) 
           : [];
         const cloud = await getAllRegistrationsFromFirestore();
         const all: StudentRegistrationRecord[] = cloud && cloud.length > 0 ? cloud : local;
