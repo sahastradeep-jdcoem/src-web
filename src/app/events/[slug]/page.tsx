@@ -459,48 +459,99 @@ export default function EventDetailPage() {
             )}
 
             {event.isParentFest || subEvents.length > 0 ? (
-              <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-6">
-                <div className="space-y-2">
-                  <span className="text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 inline-flex items-center gap-1">
-                    <Layers className="w-3 h-3" />
-                    <span>UMBRELLA FESTIVAL</span>
-                  </span>
-                  <h3 className="font-heading font-extrabold text-2xl text-[#0F172A]">
+              <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200/90 shadow-xl shadow-slate-200/50 space-y-6 relative overflow-hidden">
+                {/* Brand top accent gradient stripe */}
+                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#17458F] via-[#E78023] to-[#17458F]" />
+
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-full bg-[#17458F]/10 text-[#17458F] border border-[#17458F]/20 inline-flex items-center gap-1.5">
+                      <Layers className="w-3 h-3 text-[#E78023]" />
+                      <span>UMBRELLA FESTIVAL</span>
+                    </span>
+                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200/80 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Registrations Open
+                    </span>
+                  </div>
+
+                  <h3 className="font-heading font-extrabold text-2xl text-[#0F172A] tracking-tight">
                     Festival Competitions
                   </h3>
-                  <p className="text-xs text-slate-500 font-medium">
-                    {event.name} is an umbrella festival hosting {subEvents.length} specialized competition{subEvents.length === 1 ? "" : "s"}. Registrations are managed per competition.
+                  <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                    {event.name} hosts <strong className="text-slate-800 font-semibold">{subEvents.length} specialized competition{subEvents.length === 1 ? "" : "s"}</strong>. Choose a competition to configure your category and official delegate entry.
                   </p>
                 </div>
 
                 {/* Specs Breakdown */}
-                <div className="space-y-3 pt-4 border-t border-slate-100 text-xs">
-                  <div className="flex justify-between items-center py-1 border-b border-slate-100">
-                    <span className="text-slate-500">Active Competitions:</span>
-                    <span className="font-bold text-[#17458F] font-mono">{subEvents.length} Events</span>
+                <div className="space-y-2.5 pt-4 border-t border-slate-100 text-xs">
+                  <div className="flex justify-between items-center py-1 border-b border-slate-100/80">
+                    <span className="text-slate-500 font-medium">Active Competitions</span>
+                    <span className="font-bold text-[#17458F] font-mono px-2 py-0.5 rounded-md bg-blue-50 border border-blue-100/80">
+                      {subEvents.length} {subEvents.length === 1 ? "Segment" : "Segments"}
+                    </span>
                   </div>
-                  <div className="flex justify-between items-center py-1 border-b border-slate-100">
-                    <span className="text-slate-500">Festival Date:</span>
+                  <div className="flex justify-between items-center py-1 border-b border-slate-100/80">
+                    <span className="text-slate-500 font-medium">Festival Date</span>
                     <span className="font-bold text-slate-900">{event.date}</span>
                   </div>
+                  <div className="flex justify-between items-center py-1 border-b border-slate-100/80">
+                    <span className="text-slate-500 font-medium">Festival Venue</span>
+                    <span className="font-bold text-slate-900 truncate max-w-[170px] text-right">{event.venue}</span>
+                  </div>
                   <div className="flex justify-between items-center py-1">
-                    <span className="text-slate-500">Festival Venue:</span>
-                    <span className="font-bold text-slate-900">{event.venue}</span>
+                    <span className="text-slate-500 font-medium">Entry Authorization</span>
+                    <span className="font-bold text-[#E78023] flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      Official Delegate Pass
+                    </span>
                   </div>
                 </div>
 
-                {/* Action Button: Jump to competitions lineup */}
+                {/* Action Buttons: Enhanced Pro Max CTA Stack */}
                 {subEvents.length > 0 ? (
-                  <a
-                    href="#competitions"
-                    className="w-full py-3.5 rounded-2xl bg-[#17458F] hover:bg-[#123670] text-white text-xs sm:text-sm font-bold uppercase tracking-wider text-center transition-all shadow-md shadow-[#17458F]/25 flex items-center justify-center gap-2 group cursor-pointer"
-                  >
-                    <span>Choose Competition to Register ({subEvents.length})</span>
-                    <ArrowDown className="w-4 h-4 transition-transform group-hover:translate-y-0.5" />
-                  </a>
+                  <div className="space-y-2.5 pt-1">
+                    {/* Primary High-Impact CTA: Choose Competition & Register */}
+                    <Link
+                      href={`/events/${event.slug}/register`}
+                      className="group relative w-full py-4 px-5 rounded-2xl bg-gradient-to-r from-[#E78023] via-[#F28E2B] to-[#D26E17] hover:brightness-105 active:scale-[0.98] text-white text-xs sm:text-sm font-bold uppercase tracking-wider text-center transition-all shadow-lg shadow-[#E78023]/25 hover:shadow-xl hover:shadow-[#E78023]/35 flex items-center justify-between cursor-pointer overflow-hidden"
+                    >
+                      {/* Interactive shimmer sweep on hover */}
+                      <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-white/0 via-white/20 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out pointer-events-none" />
+                      
+                      <div className="flex items-center gap-3 text-left relative z-10">
+                        <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center shrink-0 shadow-inner">
+                          <Sparkles className="w-4 h-4 text-amber-100" />
+                        </div>
+                        <div>
+                          <div className="font-extrabold text-white leading-tight tracking-wide text-xs sm:text-sm">
+                            Register for Competition
+                          </div>
+                          <div className="text-[10px] text-white/85 font-medium lowercase tracking-normal">
+                            select from {subEvents.length} active {subEvents.length === 1 ? "event" : "events"}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="w-8 h-8 rounded-xl bg-white/20 group-hover:bg-white/30 flex items-center justify-center shrink-0 transition-all relative z-10">
+                        <ArrowRight className="w-4 h-4 text-white transition-transform group-hover:translate-x-0.5" />
+                      </div>
+                    </Link>
+
+                    {/* Secondary Clean CTA: Quick Jump to Lineup & Details */}
+                    <a
+                      href="#competitions"
+                      className="w-full py-3 px-4 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200/80 border border-slate-200 text-[#17458F] text-xs font-bold uppercase tracking-wider text-center transition-all flex items-center justify-center gap-2 group cursor-pointer"
+                    >
+                      <Layers className="w-3.5 h-3.5 text-[#17458F]" />
+                      <span>Explore Lineup &amp; Prizes ({subEvents.length})</span>
+                      <ArrowDown className="w-3.5 h-3.5 transition-transform group-hover:translate-y-0.5 text-[#E78023]" />
+                    </a>
+                  </div>
                 ) : (
-                  <div className="w-full py-3.5 rounded-2xl bg-slate-100 text-slate-400 text-xs font-bold uppercase tracking-wider text-center">
-                    Competitions Announcing Soon
+                  <div className="w-full py-4 rounded-2xl bg-slate-100 border border-slate-200 text-slate-400 text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2">
+                    <Clock className="w-4 h-4 text-slate-400" />
+                    <span>Competitions Announcing Soon</span>
                   </div>
                 )}
 
