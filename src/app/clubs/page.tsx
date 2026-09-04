@@ -54,9 +54,6 @@ export default function ClubsDirectoryPage() {
         
         {/* Page Header */}
         <div className="space-y-4 max-w-3xl">
-          <Badge variant="orange" size="md">
-            COUNCIL ECOSYSTEM
-          </Badge>
           <h1 className="font-extrabold text-4xl sm:text-6xl text-[#0F172A] tracking-tight uppercase leading-none font-heading">
             {clubs.length} CLUBS.
             <br />
