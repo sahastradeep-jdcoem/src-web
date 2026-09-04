@@ -363,37 +363,36 @@ export const institutionalPillars: InstitutionalPillar[] = [
     id: "pillar-1",
     name: "Dr. Shrikant Sonekar",
     designation: "Principal, JDCOEM",
-    role: "Chief Patron",
     department: "JD College of Engineering & Management, Nagpur",
     avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
     quote: "Fostering leadership autonomy, technical eminence, and collaborative collegiate governance.",
     order: 1
   },
+
   {
     id: "pillar-2",
     name: "Dr. Ujwala S. Dange",
     designation: "Dean (IQAC), JDCOEM",
-    role: "Institutional Advisor",
     department: "Internal Quality Assurance Cell",
     avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=600&auto=format&fit=crop",
     quote: "Upholding institutional quality benchmarks, student development, and academic excellence.",
     order: 2
   },
+
   {
     id: "pillar-3",
     name: "Faculty Coordinator",
     designation: "Faculty Coordinator, SRC",
-    role: "Faculty In-Charge",
     department: "Student Representative Council",
     avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
     quote: "Guiding council officers across annual fest milestones, club affairs, and campus-wide student engagement.",
     order: 3
   },
+
   {
     id: "pillar-4",
     name: "Faculty Coordinator",
     designation: "Faculty Coordinator, SRC",
-    role: "Faculty Co-Coordinator",
     department: "Student Representative Council",
     avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=600&auto=format&fit=crop",
     quote: "Facilitating inter-departmental harmony, club logistics, student welfare, and event execution.",

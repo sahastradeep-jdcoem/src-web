@@ -155,7 +155,6 @@ export interface InstitutionalPillar {
   id: string;
   name: string;
   designation: string;
-  role: string;
   department: string;
   avatar: string;
   quote?: string;
