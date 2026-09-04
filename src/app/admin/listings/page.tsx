@@ -495,7 +495,7 @@ export default function AdminListingsPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-6">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
-            <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase tracking-tight">
+            <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-black uppercase tracking-tight">
               Engagement &amp; Hub Studio
             </h1>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-50 border border-slate-200 shadow-2xs">
