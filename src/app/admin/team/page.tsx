@@ -1101,6 +1101,7 @@ export default function AdminTeamPage() {
                     setEditingMember({
                       id: pillar.id,
                       name: pillar.name,
+                      role: pillar.designation || "Pillar",
                       designation: pillar.designation,
                       level: pillar.designation,
                       department: pillar.department,
