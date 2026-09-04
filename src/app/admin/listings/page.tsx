@@ -266,37 +266,59 @@ export default function AdminListingsPage() {
     if (!inspectingListing) return;
     try {
       const XLSX = await import("xlsx");
-      const exportRows = activeListingResponses.map((r) => {
-        const flatRow: Record<string, any> = {
-          "Ticket / Ref ID": r.ticketCode || r.id,
-          "Candidate Name": r.userName || "Anonymous",
-          "Email Address": r.userEmail || "N/A",
-          "Department": r.userDepartment || "N/A",
-          "Year": r.userYear || "N/A",
-          "BT ID": r.btId || "N/A",
-          "Status": (r.status || "PENDING").toUpperCase(),
-          "Submission Link": r.submissionLink || "N/A",
-          "Submitted Date": r.createdAt ? new Date(r.createdAt).toLocaleDateString() : "N/A",
-        };
-
-        if (r.answers) {
-          Object.entries(r.answers).forEach(([qKey, ansVal]) => {
-            const matchedQ = inspectingListing.customQuestions?.find((q) => q.id === qKey);
-            const colHeader = matchedQ ? matchedQ.question : `Q: ${qKey}`;
-            flatRow[colHeader] = Array.isArray(ansVal)
-              ? ansVal.join(", ")
-              : typeof ansVal === "object"
-              ? JSON.stringify(ansVal)
-              : String(ansVal);
-          });
-        }
-        return flatRow;
-      });
-
-      const ws = XLSX.utils.json_to_sheet(exportRows);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Responses");
-      XLSX.writeFile(wb, `${inspectingListing.slug}-responses.xlsx`);
+
+      if (inspectingListing.type === "poll" && inspectingListing.pollConfig) {
+        const totalVotes = inspectingListing.pollConfig.totalVotes || 0;
+        const sortedOptions = [...inspectingListing.pollConfig.options].sort((a, b) => b.votes - a.votes);
+        const pollRows = sortedOptions.map((opt, idx) => {
+          const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
+          return {
+            "Rank": idx + 1,
+            "Option Choice": opt.text,
+            "Votes Counted": opt.votes,
+            "Percentage Share": `${pct}%`,
+            "Total Ballots": totalVotes,
+            "Status": (inspectingListing.status || "ACTIVE").toUpperCase(),
+          };
+        });
+        const pollWs = XLSX.utils.json_to_sheet(pollRows);
+        XLSX.utils.book_append_sheet(wb, pollWs, "Poll Results");
+      }
+
+      if (activeListingResponses.length > 0 || inspectingListing.type !== "poll") {
+        const exportRows = activeListingResponses.map((r) => {
+          const flatRow: Record<string, any> = {
+            "Ticket / Ref ID": r.ticketCode || r.id,
+            "Candidate Name": r.userName || "Anonymous",
+            "Email Address": r.userEmail || "N/A",
+            "Department": r.userDepartment || "N/A",
+            "Year": r.userYear || "N/A",
+            "BT ID": r.btId || "N/A",
+            "Status": (r.status || "PENDING").toUpperCase(),
+            "Submission Link": r.submissionLink || "N/A",
+            "Submitted Date": r.createdAt ? new Date(r.createdAt).toLocaleDateString() : "N/A",
+          };
+
+          if (r.answers) {
+            Object.entries(r.answers).forEach(([qKey, ansVal]) => {
+              const matchedQ = inspectingListing.customQuestions?.find((q) => q.id === qKey);
+              const colHeader = matchedQ ? matchedQ.question : `Q: ${qKey}`;
+              flatRow[colHeader] = Array.isArray(ansVal)
+                ? ansVal.join(", ")
+                : typeof ansVal === "object"
+                ? JSON.stringify(ansVal)
+                : String(ansVal);
+            });
+          }
+          return flatRow;
+        });
+
+        const ws = XLSX.utils.json_to_sheet(exportRows);
+        XLSX.utils.book_append_sheet(wb, ws, inspectingListing.type === "poll" ? "Voter Log" : "Responses");
+      }
+
+      XLSX.writeFile(wb, `${inspectingListing.slug}-report.xlsx`);
       showToast("Excel spreadsheet downloaded successfully.");
     } catch (err) {
       console.error(err);
