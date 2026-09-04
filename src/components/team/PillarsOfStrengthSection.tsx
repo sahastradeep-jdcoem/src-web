@@ -74,13 +74,6 @@ export function PillarsOfStrengthSection({ className = "", boxed = true }: Pilla
                 key={pillar.id}
                 className="group bg-white rounded-2xl border border-slate-200/90 hover:border-[#17458F]/30 shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between relative overflow-hidden"
               >
-                {/* Postage Stamp Role Badge */}
-                <div className="absolute top-4 right-4 z-10">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/95 backdrop-blur-xs text-[#17458F] border border-slate-200 text-[9px] font-black uppercase tracking-wider shadow-xs">
-                    <Award className="w-2.5 h-2.5 text-[#E78023]" />
-                    <span>{pillar.role}</span>
-                  </span>
-                </div>
 
                 {/* Framed Portrait Photo (matching Team card) */}
                 <div className="relative h-44 sm:h-72 w-full overflow-hidden bg-slate-100">
@@ -159,13 +152,6 @@ export function PillarsOfStrengthSection({ className = "", boxed = true }: Pilla
             key={pillar.id}
             className="group bg-white rounded-2xl border border-slate-200/90 hover:border-[#17458F]/30 shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between relative overflow-hidden"
           >
-            {/* Postage Stamp Role Badge */}
-            <div className="absolute top-4 right-4 z-10">
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/95 backdrop-blur-xs text-[#17458F] border border-slate-200 text-[9px] font-black uppercase tracking-wider shadow-xs">
-                <Award className="w-2.5 h-2.5 text-[#E78023]" />
-                <span>{pillar.role}</span>
-              </span>
-            </div>
 
             {/* Framed Portrait Photo (matching Team card) */}
             <div className="relative h-44 sm:h-72 w-full overflow-hidden bg-slate-100">

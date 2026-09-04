@@ -535,7 +535,7 @@ export default function AdminTeamPage() {
       alert("Please provide the Student Full Name.");
       return;
     }
-    if (activeTab !== "clubs" && !editingMember.role.trim()) {
+    if (activeTab !== "clubs" && activeTab !== "pillars" && !editingMember.role.trim()) {
       alert("Please provide a Position / Role Title.");
       return;
     }
@@ -546,7 +546,6 @@ export default function AdminTeamPage() {
           return {
             ...p,
             name: editingMember.name,
-            role: editingMember.role,
             designation: editingMember.designation || (editingMember as any).level || p.designation,
             department: editingMember.department,
             avatar: editingMember.avatar || p.avatar,
@@ -1074,13 +1073,7 @@ export default function AdminTeamPage() {
                       unoptimized={true}
                       className="object-cover object-top"
                     />
-                    <div className="absolute top-2.5 right-2.5">
-                      <span className="px-2 py-0.5 rounded-md bg-white/95 text-[#17458F] font-black text-[9px] uppercase tracking-wider border border-slate-200 shadow-xs flex items-center gap-1">
-                        <Award className="w-2.5 h-2.5 text-[#E78023]" />
-                        <span>{pillar.role}</span>
-                      </span>
                     </div>
-                  </div>
 
                   <div className="space-y-1">
                     <h4 className="font-heading font-extrabold text-sm sm:text-base text-[#0F172A] leading-snug">
@@ -1108,7 +1101,6 @@ export default function AdminTeamPage() {
                     setEditingMember({
                       id: pillar.id,
                       name: pillar.name,
-                      role: pillar.role,
                       designation: pillar.designation,
                       level: pillar.designation,
                       department: pillar.department,
@@ -1341,19 +1333,21 @@ export default function AdminTeamPage() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="font-bold text-slate-800">
-                      Role / Category Stamp <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Chief Patron / Institutional Advisor / Faculty In-Charge"
-                      value={editingMember.role}
-                      onChange={(e) => setEditingMember({ ...editingMember, role: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
-                    />
-                  </div>
+                  {activeTab !== "pillars" && (
+                    <div className="space-y-1.5">
+                      <label className="font-bold text-slate-800">
+                        Role / Category Stamp <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Chief Patron / Institutional Advisor / Faculty In-Charge"
+                        value={editingMember.role}
+                        onChange={(e) => setEditingMember({ ...editingMember, role: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                      />
+                    </div>
+                  )}
 
                   <div className="space-y-1.5">
                     <label className="font-bold text-slate-800">
