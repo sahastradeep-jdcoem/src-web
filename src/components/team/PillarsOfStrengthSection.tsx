@@ -50,19 +50,19 @@ export function PillarsOfStrengthSection({ className = "", boxed = true }: Pilla
       <section className={`space-y-4 ${className}`}>
         {/* Postcard Container with Subtle Academic Aesthetic */}
         <div className="p-5 sm:p-7 rounded-3xl bg-linear-to-b from-white via-slate-50/40 to-slate-50/80 border border-slate-200/90 shadow-2xs space-y-5">
-          {/* Understated Section Header */}
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 border-b border-slate-200/80 pb-4">
-            <div className="space-y-1">
-              <h2 className="font-heading font-extrabold text-xl sm:text-2xl text-[#17458F] uppercase tracking-tight">
+          {/* Section Header */}
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-200/80 pb-5">
+            <div className="space-y-2">
+              <h2 className="font-heading font-extrabold text-2xl sm:text-3xl lg:text-4xl text-[#17458F] uppercase tracking-tight">
                 4 PILLARS OF STRENGTH
               </h2>
-              <p className="text-xs text-slate-500 font-medium max-w-2xl">
+              <p className="text-sm sm:text-base text-slate-600 font-normal leading-relaxed max-w-3xl">
                 Visionary institutional patronship and dedicated faculty mentorship guiding the Student Representative Council at JDCOEM Nagpur.
               </p>
             </div>
 
-            <div className="hidden sm:flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 bg-white px-3 py-1 rounded-full border border-slate-200/70 shadow-2xs">
-              <ShieldCheck className="w-3.5 h-3.5 text-[#E78023]" />
+            <div className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0 bg-white px-3.5 py-1.5 rounded-full border border-slate-200/70 shadow-2xs">
+              <ShieldCheck className="w-4 h-4 text-[#E78023]" />
               <span>Guiding Sahastradeep</span>
             </div>
           </div>
@@ -121,20 +121,20 @@ export function PillarsOfStrengthSection({ className = "", boxed = true }: Pilla
 
   // unboxed / open layout (used by team/about pages that want full-bleed placement)
   return (
-    <section className={`space-y-4 ${className}`}>
-      {/* Understated Section Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pb-4">
-        <div className="space-y-1">
-          <h2 className="font-heading font-extrabold text-xl sm:text-2xl text-[#17458F] uppercase tracking-tight">
+    <section className={`space-y-6 ${className}`}>
+      {/* Section Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-2">
+        <div className="space-y-2">
+          <h2 className="font-heading font-extrabold text-3xl sm:text-4xl lg:text-5xl text-[#17458F] uppercase tracking-tight">
             4 PILLARS OF STRENGTH
           </h2>
-          <p className="text-xs text-slate-500 font-medium max-w-2xl">
+          <p className="text-sm sm:text-base text-slate-600 font-normal leading-relaxed max-w-3xl">
             Visionary institutional patronship and dedicated faculty mentorship guiding the Student Representative Council at JDCOEM Nagpur.
           </p>
         </div>
 
-        <div className="hidden sm:flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 bg-white px-3 py-1 rounded-full border border-slate-200/70 shadow-2xs">
-          <ShieldCheck className="w-3.5 h-3.5 text-[#E78023]" />
+        <div className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0 bg-white px-3.5 py-1.5 rounded-full border border-slate-200/70 shadow-2xs">
+          <ShieldCheck className="w-4 h-4 text-[#E78023]" />
           <span>Guiding Sahastradeep</span>
         </div>
       </div>
