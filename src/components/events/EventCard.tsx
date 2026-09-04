@@ -41,7 +41,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
             {event.isParentFest ? (
               <span className="text-[10px] font-sans font-extrabold uppercase tracking-wider px-3 py-1 rounded-full bg-indigo-600 text-white shadow-md flex items-center gap-1">
                 <Layers className="w-3 h-3" />
-                <span>Umbrella Festival</span>
+                <span>Umbrella Event</span>
               </span>
             ) : (
               <span className="text-[10px] font-sans font-semibold uppercase tracking-wider px-3 py-1 rounded-full bg-[#E78023] text-white shadow-md">
@@ -108,11 +108,9 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
             {event.isParentFest ? (
               <Link
                 href={`/events/${event.slug}#competitions`}
-                className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-[#17458F] to-[#0f2d5c] hover:from-[#123670] hover:to-[#0a2244] text-white text-xs font-sans font-bold uppercase tracking-wider text-center transition-all shadow-md shadow-[#17458F]/20 flex items-center justify-center gap-2 cursor-pointer group/btn"
+                className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-[#17458F] to-[#0f2d5c] hover:from-[#123670] hover:to-[#0a2244] text-white text-xs font-sans font-bold uppercase tracking-wider text-center transition-all shadow-md shadow-[#17458F]/20 flex items-center justify-center cursor-pointer"
               >
-                <Layers className="w-3.5 h-3.5 text-[#E78023]" />
-                <span>Explore Lineup</span>
-                <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover/btn:translate-x-1" />
+                <span>Explore</span>
               </Link>
             ) : isRegistrationOpen ? (
               <Link
@@ -149,7 +147,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
           {event.isParentFest ? (
             <span className="text-[10px] font-sans font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-600 text-white shadow-xs flex items-center gap-1">
               <Layers className="w-3 h-3" />
-              <span>Umbrella Fest</span>
+              <span>Umbrella Event</span>
             </span>
           ) : (
             <span className="text-[10px] font-sans font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#E78023] text-white shadow-xs">
@@ -211,11 +209,9 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
           {event.isParentFest ? (
             <Link
               href={`/events/${event.slug}#competitions`}
-              className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#17458F] to-[#0f2d5c] hover:from-[#123670] hover:to-[#0a2244] text-white text-xs font-sans font-bold uppercase tracking-wider text-center transition-all shadow-xs hover:shadow-md flex items-center justify-center gap-1.5 cursor-pointer group/btn"
+              className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#17458F] to-[#0f2d5c] hover:from-[#123670] hover:to-[#0a2244] text-white text-xs font-sans font-bold uppercase tracking-wider text-center transition-all shadow-xs hover:shadow-md flex items-center justify-center cursor-pointer"
             >
-              <Layers className="w-3.5 h-3.5 text-[#E78023]" />
-              <span>Explore Lineup</span>
-              <ArrowRight className="w-3 h-3 transition-transform group-hover/btn:translate-x-0.5" />
+              <span>Explore</span>
             </Link>
           ) : isRegistrationOpen ? (
             <Link

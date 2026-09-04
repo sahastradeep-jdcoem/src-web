@@ -520,7 +520,7 @@ export default function AdminEventsPage() {
                         <span className="font-bold text-slate-900 block text-sm">{evt.name}</span>
                         {evt.isParentFest && (
                           <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 text-[#17458F] border border-indigo-200">
-                            Umbrella Fest
+                            Umbrella Event
                           </span>
                         )}
                         {evt.parentEventName && (

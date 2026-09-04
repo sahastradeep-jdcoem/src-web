@@ -193,13 +193,13 @@ export default function EventRegisterPage() {
             <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#17458F] via-[#123670] to-slate-900 text-white space-y-3 shadow-md">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-xs font-bold uppercase tracking-wider text-amber-300">
                 <Layers className="w-3.5 h-3.5" />
-                <span>Umbrella Festival Registration</span>
+                <span>Umbrella Event Registration</span>
               </div>
               <h1 className="font-heading font-extrabold text-2xl sm:text-4xl uppercase tracking-tight text-white">
                 {event.name}
               </h1>
               <p className="text-xs sm:text-sm text-slate-200 font-medium max-w-2xl leading-relaxed">
-                {event.name} is the central umbrella festival hosting {subEvents.length} specialized competition{subEvents.length === 1 ? "" : "s"} and segments. 
+                {event.name} is the central umbrella event hosting {subEvents.length} specialized competition{subEvents.length === 1 ? "" : "s"} and segments. 
                 Please choose which specific competition you wish to register for below.
               </p>
             </div>

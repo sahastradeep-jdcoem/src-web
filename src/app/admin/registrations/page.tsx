@@ -264,7 +264,7 @@ export default function AdminRegistrationsPage() {
     const eventOptions = filteredDropdownEvents.map((evt) => ({
       slug: evt.slug,
       name: evt.parentEventName ? `${evt.name} (Part of ${evt.parentEventName})` : evt.name,
-      category: evt.isParentFest ? "Umbrella Fest" : (evt.category || "Event"),
+      category: evt.isParentFest ? "Umbrella Event" : (evt.category || "Event"),
       count: registrations.filter(
         (r) =>
           r.eventName.toLowerCase() === evt.name.toLowerCase() ||
@@ -346,7 +346,7 @@ export default function AdminRegistrationsPage() {
     );
   }, [selectedEventSlug, eventsList]);
 
-  // Filter registrations by currently selected tenure & event (including umbrella fest aggregation)
+  // Filter registrations by currently selected tenure & event (including umbrella event aggregation)
   const eventRegistrations = useMemo(() => {
     let list = registrations;
 

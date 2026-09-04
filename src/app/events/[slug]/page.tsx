@@ -496,7 +496,7 @@ export default function EventDetailPage() {
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-full bg-[#17458F]/10 text-[#17458F] border border-[#17458F]/20 inline-flex items-center gap-1.5">
                       <Layers className="w-3 h-3 text-[#E78023]" />
-                      <span>UMBRELLA FESTIVAL</span>
+                      <span>UMBRELLA EVENT</span>
                     </span>
                     <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200/80 flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />

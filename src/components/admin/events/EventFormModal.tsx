@@ -409,10 +409,10 @@ export function EventFormModal({
                 <div className="space-y-0.5">
                   <label className="text-xs font-bold uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
                     <Layers className="w-4 h-4 text-[#E78023]" />
-                    <span>Festival &amp; Competition Hierarchy</span>
+                    <span>Event &amp; Competition Hierarchy</span>
                   </label>
                   <p className="text-[11px] text-amber-800">
-                    Configure whether this is an umbrella mega-festival or a sub-competition/segment under another event.
+                    Configure whether this is an umbrella event or a sub-competition/segment under another event.
                   </p>
                 </div>
                 <label className="inline-flex items-center gap-2 cursor-pointer select-none">
@@ -422,7 +422,7 @@ export function EventFormModal({
                     onChange={(e) => setForm({ ...form, isParentFest: e.target.checked })}
                     className="w-4 h-4 rounded text-[#17458F] focus:ring-[#17458F] border-slate-300"
                   />
-                  <span className="text-xs font-bold text-amber-950">Is Umbrella Festival</span>
+                  <span className="text-xs font-bold text-amber-950">Is Umbrella Event</span>
                 </label>
               </div>
 
@@ -430,7 +430,7 @@ export function EventFormModal({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-amber-200/60">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
-                      Part of Umbrella Festival (Optional)
+                      Part of Umbrella Event (Optional)
                     </label>
                     <select
                       value={form.parentEventId}
