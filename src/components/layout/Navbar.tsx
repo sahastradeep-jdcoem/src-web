@@ -96,7 +96,7 @@ export default function Navbar() {
                 SAHASTRADEEP
               </span>
               <span className="text-[10px] sm:text-[11px] font-sans font-medium text-slate-500 uppercase tracking-widest leading-tight">
-                SRC • JDCOEM
+                SRC JDCOEM
               </span>
             </div>
           </Link>
