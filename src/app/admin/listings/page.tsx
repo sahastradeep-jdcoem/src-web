@@ -22,7 +22,8 @@ import {
   ChevronRight,
   MessageSquare,
   Sparkles,
-  Inbox
+  Inbox,
+  Pencil
 } from "lucide-react";
 import { 
   getStoredListings, 
@@ -56,6 +57,8 @@ export default function AdminListingsPage() {
   // Inspection Modal for Responses (Applications / Submissions / Grievances / Polls)
   const [inspectingListing, setInspectingListing] = useState<ListingItem | null>(null);
   const [listingToDelete, setListingToDelete] = useState<ListingItem | null>(null);
+  const [editingListing, setEditingListing] = useState<ListingItem | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const handleUploadStateChange = (uploading: boolean) => {
     setPendingUploads((prev) => Math.max(0, prev + (uploading ? 1 : -1)));
@@ -471,7 +474,18 @@ export default function AdminListingsPage() {
                       </td>
 
                       <td className="py-4 px-6 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingListing(item);
+                              setIsEditModalOpen(true);
+                            }}
+                            className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-[#E78023] transition-colors cursor-pointer"
+                            title="Edit Listing"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             type="button"
                             onClick={() => setInspectingListing(item)}
@@ -511,6 +525,25 @@ export default function AdminListingsPage() {
           onSuccess={(item) => {
             setListings([item, ...listings]);
             showToast(`Published "${item.title}" successfully.`);
+          }}
+        />
+      )}
+
+      {/* EDIT LISTING MODAL */}
+      {isEditModalOpen && editingListing && (
+        <CreateListingModal
+          isOpen={isEditModalOpen}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setEditingListing(null);
+          }}
+          mode="edit"
+          initialData={editingListing}
+          onSuccess={(updated) => {
+            setListings((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+            showToast(`Listing "${updated.title}" updated successfully.`);
+            setIsEditModalOpen(false);
+            setEditingListing(null);
           }}
         />
       )}

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   X, 
   Calendar, 
@@ -43,6 +43,8 @@ interface CreateListingModalProps {
   onClose: () => void;
   onOpenEventModal?: () => void;
   onSuccess?: (item: ListingItem) => void;
+  mode?: "create" | "edit";
+  initialData?: ListingItem | null;
 }
 
 interface PillarOption {
@@ -341,6 +343,8 @@ export function CreateListingModal({
   onClose,
   onOpenEventModal,
   onSuccess,
+  mode = "create",
+  initialData,
 }: CreateListingModalProps) {
   const [step, setStep] = useState<"select_type" | "configure_form">("select_type");
   const [selectedPillarOption, setSelectedPillarOption] = useState<PillarOption | null>(null);
@@ -388,6 +392,92 @@ export function CreateListingModal({
 
   // 4. Q&A Section State
   const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (mode === "edit" && initialData) {
+      const matchedOpt = PILLAR_OPTIONS.find((p) => p.type === initialData.type) || PILLAR_OPTIONS[1];
+      setSelectedPillarOption(matchedOpt);
+      setStep("configure_form");
+      setActiveSection("details");
+      setFormError(null);
+
+      setTitle(initialData.title || "");
+      setSummary(initialData.summary || "");
+      setDescription(initialData.description || "");
+      setOrganizer(initialData.organizer || "SRC JDCOEM");
+      setDeadline(initialData.deadline || "");
+      setTargetAudience(initialData.targetAudience || (initialData.isInterCollege ? "inter_college" : "jdcoem_only"));
+      setCoverImage(initialData.coverImage || PRESET_COVERS[0].url);
+      setCustomQuestions(initialData.customQuestions || []);
+
+      if (initialData.pollConfig) {
+        setPollOptions(
+          initialData.pollConfig.options && initialData.pollConfig.options.length > 0
+            ? initialData.pollConfig.options.map((o) => o.text)
+            : ["Option A", "Option B"]
+        );
+        setPollAnonymous(!!initialData.pollConfig.isAnonymous);
+        setPollMultipleChoices(!!initialData.pollConfig.allowMultipleChoices);
+      }
+
+      if (initialData.opportunityConfig) {
+        setOppRoleType(initialData.opportunityConfig.opportunityType || "Internship");
+        setOppStipend(initialData.opportunityConfig.stipend || "");
+        setOppDuration(initialData.opportunityConfig.duration || "");
+        setOppLocation(initialData.opportunityConfig.location || "On Campus");
+        setOppOpenings(initialData.opportunityConfig.openings || 2);
+        setOppPerks(initialData.opportunityConfig.perks?.join("\n") || "");
+      }
+
+      if (initialData.submissionConfig) {
+        setSubAllowedTypes(initialData.submissionConfig.allowedFileTypes || ["image", "pdf"]);
+        setSubMaxMb(initialData.submissionConfig.maxFileSizeMB || 20);
+        setSubRules(initialData.submissionConfig.evaluationCriteria?.join("\n") || "");
+      }
+
+      if (initialData.issueConfig) {
+        setIssueDept(initialData.issueConfig.targetDepartment || "Central Campus Amenities");
+        setIssueConfidential(initialData.issueConfig.isConfidential ?? true);
+        setIssueAnonymous(initialData.issueConfig.allowAnonymous ?? true);
+        setIssuePriority(initialData.issueConfig.priorityLevel || "Medium");
+      }
+    } else {
+      setStep("select_type");
+      setSelectedPillarOption(null);
+      setActiveSection("details");
+      setFormError(null);
+      setTitle("");
+      setSummary("");
+      setDescription("");
+      setOrganizer("SRC JDCOEM");
+      setDeadline("");
+      setTargetAudience("inter_college");
+      setCoverImage("https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1200&auto=format&fit=crop");
+      setCustomQuestions([]);
+      setPollOptions(["Option A", "Option B"]);
+      setPollAnonymous(false);
+      setPollMultipleChoices(false);
+      setOppRoleType("Internship");
+      setOppStipend("");
+      setOppDuration("");
+      setOppLocation("On Campus");
+      setOppOpenings(2);
+      setOppPerks("");
+      setAppRole("");
+      setAppWing("Technical Activities");
+      setAppCommitment("4-6 Hours / Week");
+      setAppPrereqs("");
+      setSubAllowedTypes(["image", "pdf"]);
+      setSubMaxMb(20);
+      setSubRules("");
+      setIssueDept("Central Campus Amenities");
+      setIssueConfidential(true);
+      setIssueAnonymous(true);
+      setIssuePriority("Medium");
+    }
+  }, [isOpen, mode, initialData]);
 
   if (!isOpen) return null;
 
@@ -449,10 +539,85 @@ export function CreateListingModal({
 
     if (!title.trim()) {
       setActiveSection("details");
-      setFormError("Please provide a Title / Headline in the Details section before publishing.");
+      setFormError("Please provide a Title / Headline in the Details section before saving.");
       return;
     }
 
+    // EDIT MODE: Update existing item in place
+    if (mode === "edit" && initialData) {
+      const updatedListing: ListingItem = {
+        ...initialData,
+        title: title.trim(),
+        targetAudience,
+        isInterCollege: targetAudience === "inter_college",
+        summary: summary.trim() || title.trim(),
+        description: description.trim() || summary.trim() || title.trim(),
+        organizer: organizer.trim() || "SRC JDCOEM",
+        coverImage: coverImage || PRESET_COVERS[0].url,
+        deadline: deadline || undefined,
+        customQuestions: customQuestions.length > 0 ? customQuestions : undefined,
+      };
+
+      if (selectedPillarOption.type === "poll") {
+        const existingOpts = initialData.pollConfig?.options || [];
+        updatedListing.pollConfig = {
+          ...initialData.pollConfig,
+          options: pollOptions.filter((o) => o.trim()).map((text, idx) => {
+            const prev = existingOpts[idx];
+            return {
+              id: prev?.id || `opt-${idx + 1}`,
+              text: text.trim(),
+              votes: prev?.votes || 0,
+            };
+          }),
+          isAnonymous: pollAnonymous,
+          allowMultipleChoices: pollMultipleChoices,
+          totalVotes: initialData.pollConfig?.totalVotes || 0,
+        };
+      } else if (selectedPillarOption.type === "opportunity") {
+        updatedListing.opportunityConfig = {
+          opportunityType: oppRoleType,
+          stipend: oppStipend.trim() || undefined,
+          duration: oppDuration.trim() || undefined,
+          location: oppLocation,
+          openings: Number(oppOpenings) || 1,
+          perks: oppPerks ? oppPerks.split("\n").filter((p) => p.trim()) : undefined,
+        };
+      } else if (selectedPillarOption.type === "application") {
+        if (appRole || appWing || appCommitment || appPrereqs) {
+          updatedListing.description = [
+            description.trim(),
+            appRole ? `\n\n**Designated Role:** ${appRole}` : "",
+            appWing ? `\n**Wing/Committee:** ${appWing}` : "",
+            appCommitment ? `\n**Time Commitment:** ${appCommitment}` : "",
+            appPrereqs ? `\n**Prerequisites:** ${appPrereqs}` : "",
+          ].filter(Boolean).join("");
+        }
+      } else if (selectedPillarOption.type === "submission") {
+        updatedListing.submissionConfig = {
+          allowedFileTypes: subAllowedTypes,
+          maxFileSizeMB: Number(subMaxMb) || 20,
+          evaluationCriteria: subRules ? subRules.split("\n").filter((r) => r.trim()) : undefined,
+        };
+      } else if (selectedPillarOption.type === "issue") {
+        updatedListing.issueConfig = {
+          targetDepartment: issueDept.trim() || "Central Campus Administration",
+          isConfidential: issueConfidential,
+          allowAnonymous: issueAnonymous,
+          priorityLevel: issuePriority,
+        };
+      }
+
+      const current = getStoredListings();
+      const updated = current.map((item) => (item.id === initialData.id ? updatedListing : item));
+      saveStoredListings(updated);
+
+      if (onSuccess) onSuccess(updatedListing);
+      onClose();
+      return;
+    }
+
+    // CREATE MODE: Create fresh listing item
     const baseSlug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
     const uniqueSlug = `${baseSlug}-${Date.now().toString().slice(-4)}`;
 
@@ -496,7 +661,6 @@ export function CreateListingModal({
         perks: oppPerks ? oppPerks.split("\n").filter((p) => p.trim()) : undefined,
       };
     } else if (selectedPillarOption.type === "application") {
-      // Store recruitment parameters in description or custom questions
       if (appRole || appWing || appCommitment || appPrereqs) {
         newListing.description = [
           description.trim(),
@@ -538,7 +702,7 @@ export function CreateListingModal({
           <div className="space-y-0.5">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-[#E78023] text-white shadow-xs">
-                SRC ENGAGEMENT STUDIO
+                {mode === "edit" ? "EDIT ACTIVE LISTING" : "SRC ENGAGEMENT STUDIO"}
               </span>
               {step === "configure_form" && selectedPillarOption && (
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300">
@@ -547,7 +711,11 @@ export function CreateListingModal({
               )}
             </div>
             <h2 className="font-heading font-extrabold text-lg sm:text-xl text-white uppercase tracking-tight">
-              {step === "select_type" ? "What would you like to publish?" : `Create ${selectedPillarOption?.title}`}
+              {mode === "edit"
+                ? `Edit ${selectedPillarOption?.title || "Listing"}`
+                : step === "select_type"
+                ? "What would you like to publish?"
+                : `Create ${selectedPillarOption?.title}`}
             </h2>
           </div>
           <button
@@ -615,19 +783,25 @@ export function CreateListingModal({
             {/* Top Navigation & Segmented Tabs Strip */}
             <div className="p-4 sm:px-6 bg-slate-50/90 border-b border-slate-200 shrink-0 space-y-3">
               <div className="flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={handleBackToSelect}
-                  className="text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-[#17458F] flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  &larr; Choose Different Type
-                </button>
+                {mode !== "edit" ? (
+                  <button
+                    type="button"
+                    onClick={handleBackToSelect}
+                    className="text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-[#17458F] flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    &larr; Choose Different Type
+                  </button>
+                ) : (
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                    Editing Mode ({selectedPillarOption.title})
+                  </span>
+                )}
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#17458F]/10 text-[#17458F]">
                     {selectedPillarOption.pillar}
                   </span>
                   <span className="text-xs font-bold text-[#E78023] uppercase tracking-wider hidden sm:inline">
-                    Publishing to Live Hub
+                    {mode === "edit" ? "Direct Cloud Update" : "Publishing to Live Hub"}
                   </span>
                 </div>
               </div>
@@ -1391,7 +1565,7 @@ export function CreateListingModal({
                 ) : (
                   <>
                     <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-                    <span>Publish {selectedPillarOption.title}</span>
+                    <span>{mode === "edit" ? "Save Listing Changes" : `Publish ${selectedPillarOption.title}`}</span>
                   </>
                 )}
               </button>
