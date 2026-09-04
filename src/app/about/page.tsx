@@ -60,20 +60,8 @@ export default function AboutPage() {
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] py-12 px-4 sm:px-6 lg:px-8 space-y-20">
       <div className="max-w-7xl mx-auto space-y-16">
         
-        {/* Page Header */}
-        <div className="space-y-4 max-w-3xl">
-          <h1 className="font-extrabold text-4xl sm:text-6xl text-[#0F172A] tracking-tight uppercase leading-none">
-            BUILT BY STUDENTS.
-            <br />
-            <span className="text-[#E78023]">FOR STUDENTS.</span>
-          </h1>
-          <p className="text-base sm:text-lg text-slate-600 font-medium">
-            The official Student Representative Council (Sahastradeep) of JD College of Engineering & Management, Nagpur.
-          </p>
-        </div>
-
-        {/* INSTITUTIONAL PATRONS & FACULTY MENTORS (4 PILLARS OF STRENGTH OF SRC) */}
-        <PillarsOfStrengthSection />
+        {/* Pillars header + cards (open layout) */}
+        <PillarsOfStrengthSection boxed={false} />
 
         {/* SECTION 1: WHAT IS SAHASTRADEEP? */}
         <section className="p-8 sm:p-12 rounded-3xl bg-white border border-slate-200 space-y-6 shadow-sm relative overflow-hidden">
