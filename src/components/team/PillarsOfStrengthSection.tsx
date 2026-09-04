@@ -77,7 +77,7 @@ export function PillarsOfStrengthSection({ className = "" }: PillarsOfStrengthSe
           {sortedPillars.map((pillar) => (
             <div
               key={pillar.id}
-              className="group bg-white rounded-2xl border border-slate-200/90 hover:border-[#17458F]/30 p-3.5 sm:p-6 shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between relative overflow-hidden"
+              className="group bg-white rounded-2xl border border-slate-200/90 hover:border-[#17458F]/30 shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between relative overflow-hidden"
             >
               {/* Postage Stamp Role Badge */}
               <div className="absolute top-4 right-4 z-10">
@@ -87,40 +87,41 @@ export function PillarsOfStrengthSection({ className = "" }: PillarsOfStrengthSe
                 </span>
               </div>
 
-              {/* Framed Portrait Photo (Postcard Aspect Ratio) */}
-              <div className="space-y-3">
-                <div className="relative h-44 sm:h-72 rounded-xl overflow-hidden bg-slate-100 border border-slate-200/70 shadow-inner">
-                  <Image
-                    src={pillar.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"}
-                    alt={pillar.name}
-                    fill
-                    unoptimized={true}
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                    className="object-cover object-top group-hover:scale-104 transition-transform duration-500 ease-out"
-                  />
-                  
-                </div>
+              {/* Framed Portrait Photo (matching Team card) */}
+              <div className="relative h-44 sm:h-72 w-full overflow-hidden bg-slate-100">
+                <Image
+                  src={pillar.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"}
+                  alt={pillar.name}
+                  fill
+                  unoptimized={true}
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                  className="object-cover object-top transition-transform duration-500 group-hover:scale-[1.02]"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+              </div>
 
-                {/* Postcard Details */}
-                <div className="space-y-1">
-                  <h3 className="font-heading font-extrabold text-sm sm:text-base text-[#0F172A] group-hover:text-[#17458F] transition-colors line-clamp-1 leading-snug">
+              {/* Postcard Details — mirror Team card spacing & typographic scale */}
+              <div className="p-3.5 sm:p-6 flex-grow flex flex-col justify-between space-y-3 sm:space-y-4 bg-white">
+                <div className="space-y-0.5 sm:space-y-1">
+                  <span className="text-[9px] sm:text-[11px] font-sans font-semibold uppercase tracking-wider text-[#E78023] block line-clamp-1">
+                    {pillar.designation}
+                  </span>
+
+                  <h3 className="font-heading font-bold text-sm sm:text-xl text-[#0F172A] line-clamp-1">
                     {pillar.name}
                   </h3>
-                  <p className="text-xs font-bold text-[#E78023] line-clamp-1 leading-tight">
-                    {pillar.designation}
-                  </p>
-                  <p className="text-[10px] font-medium text-slate-500 line-clamp-1 font-sans">
+
+                  <p className="text-[10px] sm:text-xs text-slate-500 font-sans font-medium pt-0.5 line-clamp-1">
                     {pillar.department}
                   </p>
                 </div>
-              </div>
 
-              {/* Quote / Creed (Postcard Backside Note) */}
-              {pillar.quote && (
-                <div className="pt-2.5 mt-2.5 border-t border-dashed border-slate-200 text-[11px] text-slate-600 italic line-clamp-2 leading-relaxed font-serif">
-                  &ldquo;{pillar.quote}&rdquo;
-                </div>
-              )}
+                {pillar.quote && (
+                  <p className="text-[11px] text-slate-600 italic leading-relaxed font-serif line-clamp-2 mt-2 border-t border-slate-100 pt-3">
+                    &ldquo;{pillar.quote}&rdquo;
+                  </p>
+                )}
+              </div>
             </div>
           ))}
         </div>
