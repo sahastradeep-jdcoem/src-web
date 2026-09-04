@@ -27,7 +27,8 @@ import {
   getStoredListings, 
   subscribeToListings, 
   voteOnListingPoll, 
-  saveStoredListingResponse 
+  saveStoredListingResponse,
+  getStoredVotedPolls
 } from "@/lib/listingsStore";
 import { ListingItem, ListingResponseRecord } from "@/types/listings";
 import { useAuth } from "@/context/AuthContext";
@@ -57,8 +58,10 @@ export default function ListingDetailPage() {
   const [customAnswers, setCustomAnswers] = useState<Record<string, any>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [receiptCode, setReceiptCode] = useState<string | null>(null);
+  const [votedPolls, setVotedPolls] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    setVotedPolls(getStoredVotedPolls());
     const resolveListing = (list: ListingItem[]) => {
       if (!slug) return;
       const clean = slug.toLowerCase().trim();
@@ -74,6 +77,7 @@ export default function ListingDetailPage() {
     const unsub = subscribeToListings((updated) => {
       if (updated && Array.isArray(updated)) {
         resolveListing(updated);
+        setVotedPolls(getStoredVotedPolls());
       }
     });
     return () => unsub();
@@ -112,6 +116,7 @@ export default function ListingDetailPage() {
     const voterKey = user?.email || `anon-${Date.now()}`;
     const res = voteOnListingPoll(listing.id, optionId, voterKey);
     if (res.success) {
+      setVotedPolls(getStoredVotedPolls());
       showToast("Vote recorded successfully!");
       try {
         confetti({ particleCount: 60, spread: 70, origin: { y: 0.6 } });
@@ -337,56 +342,102 @@ export default function ListingDetailPage() {
           </div>
 
           {/* LIVE POLL PARTICIPATION */}
-          {isPoll && listing.pollConfig && (
-            <div className="p-6 sm:p-8 border-t border-slate-200 space-y-5">
-              <div className="flex items-center justify-between">
-                <h3 className="font-heading font-extrabold text-lg text-[#17458F] uppercase">
-                  Cast Your Vote
-                </h3>
-                <span className="text-xs font-bold text-slate-400">
-                  {totalPollVotes} votes submitted
-                </span>
-              </div>
+          {isPoll && listing.pollConfig && (() => {
+            const userVotedOptionId = listing ? votedPolls[listing.id] : null;
+            const hasVoted = Boolean(userVotedOptionId);
 
-              {isJdcoemOnly && isExternalUser && (
-                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center gap-2.5 text-amber-800 text-xs font-bold">
-                  <Lock className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>Voting is restricted to JDCOEM students. Live results are shown below.</span>
+            return (
+              <div className="p-6 sm:p-8 border-t border-slate-200 space-y-5">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-heading font-extrabold text-lg text-[#17458F] uppercase">
+                    {hasVoted ? "Poll Results" : "Cast Your Vote"}
+                  </h3>
+                  <span className="text-xs font-bold text-slate-400">
+                    {hasVoted ? "✓ Vote Submitted" : "Select an option below"}
+                  </span>
                 </div>
-              )}
 
-              <div className="space-y-3">
-                {listing.pollConfig.options.map((opt) => {
-                  const pct = totalPollVotes > 0 ? Math.round((opt.votes / totalPollVotes) * 100) : 0;
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      disabled={isJdcoemOnly && isExternalUser}
-                      onClick={() => handleVote(opt.id)}
-                      className={cn(
-                        "w-full relative overflow-hidden rounded-2xl border p-4 text-left transition-all",
-                        isJdcoemOnly && isExternalUser
-                          ? "border-slate-200 bg-slate-50/70 opacity-80 cursor-not-allowed"
-                          : "border-slate-200 bg-slate-50 hover:bg-white hover:border-[#17458F] cursor-pointer group"
-                      )}
-                    >
-                      <div
-                        className="absolute left-0 top-0 bottom-0 bg-blue-100/70 -z-10 transition-all duration-500"
-                        style={{ width: `${pct}%` }}
-                      />
-                      <div className="flex items-center justify-between text-xs sm:text-sm font-bold text-slate-800">
-                        <span className={cn(isJdcoemOnly && isExternalUser ? "" : "group-hover:text-[#17458F] transition-colors")}>
-                          {opt.text}
-                        </span>
-                        <span className="font-mono text-[#17458F]">{pct}% ({opt.votes} votes)</span>
-                      </div>
-                    </button>
-                  );
-                })}
+                {isJdcoemOnly && isExternalUser && (
+                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center gap-2.5 text-amber-800 text-xs font-bold">
+                    <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Voting is restricted to JDCOEM students.</span>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  {listing.pollConfig.options.map((opt) => {
+                    const pct = totalPollVotes > 0 ? Math.round((opt.votes / totalPollVotes) * 100) : 0;
+                    const isSelectedByUser = userVotedOptionId === opt.id;
+
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        disabled={(isJdcoemOnly && isExternalUser) || hasVoted}
+                        onClick={() => !hasVoted && handleVote(opt.id)}
+                        className={cn(
+                          "w-full relative overflow-hidden rounded-2xl border p-4 text-left transition-all",
+                          isJdcoemOnly && isExternalUser
+                            ? "border-slate-200 bg-slate-50/70 opacity-80 cursor-not-allowed"
+                            : hasVoted
+                            ? isSelectedByUser
+                              ? "border-[#17458F] bg-blue-50/40 cursor-default"
+                              : "border-slate-200 bg-slate-50/60 cursor-default"
+                            : "border-slate-200 bg-slate-50 hover:bg-white hover:border-[#17458F] cursor-pointer group"
+                        )}
+                      >
+                        {/* Background percentage fill bar — ONLY shown after selecting your vote */}
+                        {hasVoted && (
+                          <div
+                            className={cn(
+                              "absolute left-0 top-0 bottom-0 -z-10 transition-all duration-700",
+                              isSelectedByUser ? "bg-[#17458F]/15" : "bg-slate-200/60"
+                            )}
+                            style={{ width: `${pct}%` }}
+                          />
+                        )}
+
+                        <div className="flex items-center justify-between text-xs sm:text-sm font-bold text-slate-800">
+                          <div className="flex items-center gap-3">
+                            {!hasVoted ? (
+                              <span className="w-4 h-4 rounded-full border-2 border-slate-300 group-hover:border-[#17458F] flex items-center justify-center shrink-0">
+                                <span className="w-2 h-2 rounded-full bg-transparent group-hover:bg-[#17458F] transition-colors" />
+                              </span>
+                            ) : isSelectedByUser ? (
+                              <span className="w-4 h-4 rounded-full bg-[#17458F] text-white flex items-center justify-center shrink-0 text-[10px]">
+                                ✓
+                              </span>
+                            ) : (
+                              <span className="w-4 h-4 rounded-full border border-slate-200 shrink-0" />
+                            )}
+                            <span className={cn(
+                              hasVoted
+                                ? isSelectedByUser ? "text-[#17458F] font-extrabold" : "text-slate-700"
+                                : (isJdcoemOnly && isExternalUser ? "" : "group-hover:text-[#17458F] transition-colors")
+                            )}>
+                              {opt.text}
+                            </span>
+                          </div>
+
+                          {/* ONLY show percent, and ONLY after selecting your vote. NO no of votes! */}
+                          {hasVoted && (
+                            <div className="flex items-center gap-2 shrink-0">
+                              {isSelectedByUser && (
+                                <span className="text-[10px] font-mono font-bold text-[#17458F] bg-blue-100 px-2 py-0.5 rounded-md">
+                                  Your Vote
+                                </span>
+                              )}
+                              <span className="font-mono text-sm font-extrabold text-[#17458F]">{pct}%</span>
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* APPLICATION / SUBMISSION / GRIEVANCE FORM */}
           {!isPoll && (

@@ -28,7 +28,8 @@ import {
   getStoredListings, 
   subscribeToListings, 
   voteOnListingPoll, 
-  saveStoredListingResponse 
+  saveStoredListingResponse,
+  getStoredVotedPolls
 } from "@/lib/listingsStore";
 import { ListingItem, ListingPillar, ListingResponseRecord } from "@/types/listings";
 import { useAuth } from "@/context/AuthContext";
@@ -43,6 +44,7 @@ export default function StudentHubPage() {
   const [listings, setListings] = useState<ListingItem[]>([]);
   const [selectedPillar, setSelectedPillar] = useState<ListingPillar | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [votedPolls, setVotedPolls] = useState<Record<string, string>>({});
 
   // Modal / Form state for responding to an application/submission/grievance
   const [activeListingModal, setActiveListingModal] = useState<ListingItem | null>(null);
@@ -59,9 +61,11 @@ export default function StudentHubPage() {
 
   useEffect(() => {
     setListings(getStoredListings());
+    setVotedPolls(getStoredVotedPolls());
     const unsub = subscribeToListings((updated) => {
       if (updated && Array.isArray(updated)) {
         setListings(updated);
+        setVotedPolls(getStoredVotedPolls());
       }
     });
     return () => unsub();
@@ -108,6 +112,7 @@ export default function StudentHubPage() {
     const voterKey = user?.email || `anon-${Date.now()}`;
     const res = voteOnListingPoll(listingId, optionId, voterKey);
     if (res.success) {
+      setVotedPolls(getStoredVotedPolls());
       showToast("Your vote has been cast successfully!");
       try {
         confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
@@ -323,21 +328,68 @@ export default function StudentHubPage() {
                     <div className="space-y-3 pt-2 border-t border-slate-100">
                       <div className="space-y-2">
                         {item.pollConfig.options.map((opt) => {
+                          const userVotedOptionId = votedPolls[item.id];
+                          const hasVoted = Boolean(userVotedOptionId);
+                          const isSelectedByUser = userVotedOptionId === opt.id;
                           const pct = totalPollVotes > 0 ? Math.round((opt.votes / totalPollVotes) * 100) : 0;
+
                           return (
                             <button
                               key={opt.id}
                               type="button"
-                              onClick={() => handleVote(item.id, opt.id)}
-                              className="w-full relative overflow-hidden rounded-xl border border-slate-200 p-3 text-left hover:border-[#17458F] transition-all group/opt bg-slate-50 hover:bg-white cursor-pointer"
+                              disabled={hasVoted}
+                              onClick={() => !hasVoted && handleVote(item.id, opt.id)}
+                              className={cn(
+                                "w-full relative overflow-hidden rounded-xl border p-3 text-left transition-all",
+                                hasVoted
+                                  ? isSelectedByUser
+                                    ? "border-[#17458F] bg-blue-50/40 cursor-default"
+                                    : "border-slate-200 bg-slate-50/60 cursor-default"
+                                  : "border-slate-200 bg-slate-50 hover:bg-white hover:border-[#17458F] hover:shadow-2xs cursor-pointer group/opt"
+                              )}
                             >
-                              <div
-                                className="absolute left-0 top-0 bottom-0 bg-blue-100/70 -z-10 transition-all duration-500"
-                                style={{ width: `${pct}%` }}
-                              />
+                              {/* Background percentage fill bar — ONLY shown after selecting your vote */}
+                              {hasVoted && (
+                                <div
+                                  className={cn(
+                                    "absolute left-0 top-0 bottom-0 -z-10 transition-all duration-700",
+                                    isSelectedByUser ? "bg-[#17458F]/15" : "bg-slate-200/60"
+                                  )}
+                                  style={{ width: `${pct}%` }}
+                                />
+                              )}
+                              
                               <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                                <span className="group-hover/opt:text-[#17458F] transition-colors">{opt.text}</span>
-                                <span className="font-mono text-[#17458F]">{pct}% ({opt.votes})</span>
+                                <div className="flex items-center gap-2">
+                                  {!hasVoted ? (
+                                    <span className="w-3.5 h-3.5 rounded-full border border-slate-300 group-hover/opt:border-[#17458F] flex items-center justify-center shrink-0">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-transparent group-hover/opt:bg-[#17458F] transition-colors" />
+                                    </span>
+                                  ) : isSelectedByUser ? (
+                                    <span className="w-3.5 h-3.5 rounded-full bg-[#17458F] text-white flex items-center justify-center shrink-0 text-[9px]">
+                                      ✓
+                                    </span>
+                                  ) : (
+                                    <span className="w-3.5 h-3.5 rounded-full border border-slate-200 shrink-0" />
+                                  )}
+                                  <span className={cn(
+                                    hasVoted ? (isSelectedByUser ? "text-[#17458F] font-extrabold" : "text-slate-700") : "group-hover/opt:text-[#17458F] transition-colors"
+                                  )}>
+                                    {opt.text}
+                                  </span>
+                                </div>
+
+                                {/* ONLY show percent, and ONLY after selecting your vote. NO no of votes! */}
+                                {hasVoted && (
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {isSelectedByUser && (
+                                      <span className="text-[10px] font-mono font-bold text-[#17458F] bg-blue-100/70 px-1.5 py-0.2 rounded-md">
+                                        Your Vote
+                                      </span>
+                                    )}
+                                    <span className="font-mono text-xs font-extrabold text-[#17458F]">{pct}%</span>
+                                  </div>
+                                )}
                               </div>
                             </button>
                           );
@@ -345,7 +397,7 @@ export default function StudentHubPage() {
                       </div>
                       <div className="flex items-center justify-between text-[11px] pt-1">
                         <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                          {totalPollVotes} student votes recorded
+                          {votedPolls[item.id] ? "✓ Your vote recorded" : "Select an option to vote"}
                         </span>
                         <Link href={`/hub/${item.slug}`} className="text-[#17458F] hover:underline font-bold">
                           Dedicated Page &rarr;

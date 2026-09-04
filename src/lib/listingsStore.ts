@@ -129,6 +129,15 @@ export function subscribeToListings(callback: (listings: ListingItem[]) => void)
 // 2. POLL VOTING ENGINE
 // --------------------------------------------------------------------------
 
+export function getStoredVotedPolls(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(localStorage.getItem("src_voted_polls") || "{}");
+  } catch {
+    return {};
+  }
+}
+
 export function voteOnListingPoll(
   listingId: string, 
   optionId: string, 
