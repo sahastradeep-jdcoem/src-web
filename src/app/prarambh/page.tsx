@@ -105,7 +105,7 @@ export default function PrarambhPage() {
             </span>
             <span className="flex items-center gap-1.5">
               <MapPin className="w-4 h-4 text-[#17458F]" />
-              <span>APJ Abdual Kalam Auditoruim JDCOEM</span>
+              <span>APJ Abdul Kalam Auditoruim JDCOEM</span>
             </span>
           </div>
 
