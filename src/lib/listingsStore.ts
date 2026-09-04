@@ -31,21 +31,37 @@ export function compactListingsDataset(listings: ListingItem[]): ListingItem[] {
 // 1. LISTINGS STORE OPERATIONS
 // --------------------------------------------------------------------------
 
+export const MOCK_LISTING_IDS = new Set([
+  "list-poll-01",
+  "list-opp-01",
+  "list-app-01",
+  "list-sub-01",
+  "list-issue-01",
+  "choose-annual-fest-theme-2026",
+  "src-digital-media-fellowship-2026",
+  "aeromodelling-club-core-team-selection",
+  "monsoon-campus-photography-challenge",
+  "campus-amenities-canteen-grievance-desk",
+]);
+
 export function getStoredListings(): ListingItem[] {
   if (typeof window === "undefined") return initialListings;
 
   try {
     const raw = localStorage.getItem(LISTINGS_STORAGE_KEY);
     if (!raw) {
-      saveStoredListings(initialListings);
       return initialListings;
     }
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      saveStoredListings(initialListings);
+    if (!Array.isArray(parsed)) {
       return initialListings;
     }
-    return parsed;
+    // Filter out any stale mock items cached in localStorage
+    const clean = parsed.filter((l) => !MOCK_LISTING_IDS.has(l.id) && !MOCK_LISTING_IDS.has(l.slug));
+    if (clean.length === 0 && initialListings.length > 0) {
+      return initialListings;
+    }
+    return clean;
   } catch (err) {
     console.warn("Failed to read listings from localStorage, fallback to initial:", err);
     return initialListings;
@@ -84,16 +100,38 @@ export function saveStoredListings(listings: ListingItem[]): void {
 export async function syncListingsFromFirestore(): Promise<ListingItem[] | null> {
   try {
     const remote = await getSiteContentFromFirestore<ListingItem[]>("listings");
-    if (remote && Array.isArray(remote) && remote.length > 0) {
+    if (remote && Array.isArray(remote)) {
+      // Purge any legacy hardcoded mock items if found in cloud
+      const hasMockItems = remote.some((l) => MOCK_LISTING_IDS.has(l.id) || MOCK_LISTING_IDS.has(l.slug));
+      let cleanRemote = remote.filter((l) => !MOCK_LISTING_IDS.has(l.id) && !MOCK_LISTING_IDS.has(l.slug));
+
+      // If all manual items were wiped by previous mock overwrite, restore from initialListings
+      if (cleanRemote.length === 0 && initialListings.length > 0) {
+        cleanRemote = [...initialListings];
+      } else {
+        // Ensure verified manual listings from initialListings are retained if missing from remote
+        for (const item of initialListings) {
+          if (!cleanRemote.some((r) => r.id === item.id || r.slug === item.slug)) {
+            cleanRemote.push(item);
+          }
+        }
+      }
+
       if (typeof window !== "undefined") {
         try {
-          localStorage.setItem(LISTINGS_STORAGE_KEY, JSON.stringify(remote));
-          window.dispatchEvent(new CustomEvent("src_listings_updated", { detail: remote }));
+          localStorage.setItem(LISTINGS_STORAGE_KEY, JSON.stringify(cleanRemote));
+          window.dispatchEvent(new CustomEvent("src_listings_updated", { detail: cleanRemote }));
         } catch (e) {
           console.warn("Failed to update localStorage with remote listings:", e);
         }
       }
-      return remote;
+
+      // If mock items were detected in remote, sync clean dataset back to Firestore
+      if (hasMockItems) {
+        saveSiteContentToFirestore("listings", compactListingsDataset(cleanRemote)).catch(() => {});
+      }
+
+      return cleanRemote;
     }
   } catch (err) {
     console.warn("Error syncing listings from Firestore:", err);
@@ -105,21 +143,23 @@ export function subscribeToListings(callback: (listings: ListingItem[]) => void)
   // Listen to Firestore real-time snapshot
   const unsubFirestore = subscribeToSiteContent<ListingItem[]>("listings", (data) => {
     if (data && Array.isArray(data)) {
+      const cleanData = data.filter((l) => !MOCK_LISTING_IDS.has(l.id) && !MOCK_LISTING_IDS.has(l.slug));
       if (typeof window !== "undefined") {
         try {
-          localStorage.setItem(LISTINGS_STORAGE_KEY, JSON.stringify(data));
+          localStorage.setItem(LISTINGS_STORAGE_KEY, JSON.stringify(cleanData));
         } catch (e) {
           console.warn("Failed to cache listings snapshot to localStorage:", e);
         }
       }
-      callback(data);
+      callback(cleanData);
     }
   });
 
   // Listen to local window events across tabs
   const handleLocalEvent = (e: any) => {
     if (e?.detail && Array.isArray(e.detail)) {
-      callback(e.detail);
+      const cleanData = e.detail.filter((l: ListingItem) => !MOCK_LISTING_IDS.has(l.id) && !MOCK_LISTING_IDS.has(l.slug));
+      callback(cleanData);
     }
   };
 
