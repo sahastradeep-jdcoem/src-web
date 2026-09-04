@@ -73,11 +73,11 @@ export function PillarsOfStrengthSection({ className = "" }: PillarsOfStrengthSe
         </div>
 
         {/* 4 Postcards Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
           {sortedPillars.map((pillar) => (
             <div
               key={pillar.id}
-              className="group bg-white rounded-2xl border border-slate-200/90 hover:border-[#17458F]/30 p-3 sm:p-3.5 shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between relative overflow-hidden"
+              className="group bg-white rounded-2xl border border-slate-200/90 hover:border-[#17458F]/30 p-3.5 sm:p-6 shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between relative overflow-hidden"
             >
               {/* Postage Stamp Role Badge */}
               <div className="absolute top-4 right-4 z-10">
@@ -89,7 +89,7 @@ export function PillarsOfStrengthSection({ className = "" }: PillarsOfStrengthSe
 
               {/* Framed Portrait Photo (Postcard Aspect Ratio) */}
               <div className="space-y-3">
-                <div className="relative aspect-[4/5] rounded-xl overflow-hidden bg-slate-100 border border-slate-200/70 shadow-inner">
+                <div className="relative h-44 sm:h-72 rounded-xl overflow-hidden bg-slate-100 border border-slate-200/70 shadow-inner">
                   <Image
                     src={pillar.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"}
                     alt={pillar.name}
