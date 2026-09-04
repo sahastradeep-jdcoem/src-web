@@ -144,9 +144,6 @@ export default function TeamPage() {
         {/* Page Header */}
         <div className="space-y-4 max-w-3xl">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="orange" size="md">
-              LEADERSHIP & GOVERNANCE
-            </Badge>
             {currentTenure && (
               <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-[#17458F] text-white shadow-xs">
                 <span>{currentTenure.tenureNumber ? `${currentTenure.tenureNumber} (${currentTenure.label})` : `Tenure ${currentTenure.label}`}</span>
