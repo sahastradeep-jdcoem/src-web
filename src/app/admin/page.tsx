@@ -66,7 +66,10 @@ export default function AdminOverviewPage() {
     setUsersCount(getStoredUsers().length);
     try {
       const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
-      setRegistrationsCount(Array.isArray(local) ? local.length : 0);
+      const eventRegs = Array.isArray(local) 
+        ? local.filter((r: any) => !r.id?.startsWith("hub_poll_") && !r.customAnswers?.isHubBallot) 
+        : [];
+      setRegistrationsCount(eventRegs.length);
     } catch {
       setRegistrationsCount(0);
     }

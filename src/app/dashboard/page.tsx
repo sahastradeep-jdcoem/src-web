@@ -111,9 +111,14 @@ export default function StudentDashboardPage() {
       const cleanName = (effUser.displayName || "").trim().toLowerCase();
       const cleanUid = (effUser.uid || "").trim();
 
-      // 1. All valid registration records (every event pass is included)
+      // 1. All valid registration records (exclude poll ballots - polls do not require event passes)
       const validRecords = rawRecords.filter((r: any) => {
-        return Boolean(r && r.id);
+        if (!r || !r.id) return false;
+        if (typeof r.id === "string" && r.id.startsWith("hub_poll_")) return false;
+        if (r.customAnswers?.isHubBallot) return false;
+        if (typeof r.eventTitle === "string" && r.eventTitle.startsWith("[POLL BALLOT]")) return false;
+        if (typeof r.eventName === "string" && r.eventName.startsWith("[POLL BALLOT]")) return false;
+        return true;
       });
 
       // 2. Filter records that specifically belong to this authenticated student (as leader OR squad member)
@@ -220,7 +225,15 @@ export default function StudentDashboardPage() {
     try {
       const initialLocal = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
       if (Array.isArray(initialLocal) && initialLocal.length > 0) {
-        const instantFormatted = formatStudentRecords(initialLocal, getStoredEvents());
+        const cleanedLocal = initialLocal.filter(
+          (r: any) => !r?.id?.startsWith("hub_poll_") && !r?.customAnswers?.isHubBallot
+        );
+        if (cleanedLocal.length !== initialLocal.length) {
+          try {
+            localStorage.setItem("src_local_registrations", JSON.stringify(cleanedLocal));
+          } catch {}
+        }
+        const instantFormatted = formatStudentRecords(cleanedLocal, getStoredEvents());
         if (instantFormatted.length > 0) {
           setRegistrations(instantFormatted);
           setIsInitialLoading(false);
@@ -249,10 +262,18 @@ export default function StudentDashboardPage() {
 
         const map = new Map<string, any>();
         if (Array.isArray(local)) {
-          local.forEach((r: any) => { if (r?.id) map.set(r.id, r); });
+          local.forEach((r: any) => { 
+            if (r?.id && !r.id.startsWith("hub_poll_") && !r.customAnswers?.isHubBallot) {
+              map.set(r.id, r); 
+            }
+          });
         }
         if (remoteRecords && Array.isArray(remoteRecords)) {
-          remoteRecords.forEach((r: any) => { if (r?.id) map.set(r.id, r); });
+          remoteRecords.forEach((r: any) => { 
+            if (r?.id && !r.id.startsWith("hub_poll_") && !r.customAnswers?.isHubBallot) {
+              map.set(r.id, r); 
+            }
+          });
         }
         allRecords = Array.from(map.values());
         try {
@@ -313,6 +334,9 @@ export default function StudentDashboardPage() {
       const uName = (effUser.displayName || "").toLowerCase().trim();
 
       const matched = allResp.filter((r) => {
+        // Polls are live votes, not actionable hub submissions requiring passes or ticket codes
+        if (r.listingType === "poll" || r.id?.startsWith("hub_poll_")) return false;
+
         const rEmail = (r.userEmail || "").toLowerCase().trim();
         const rId = r.userId;
         const rBtId = (r.btId || "").toUpperCase().trim();

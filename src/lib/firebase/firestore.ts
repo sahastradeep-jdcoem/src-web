@@ -260,6 +260,7 @@ export async function saveRegistrationToFirestore(
  * Get registration details by ID
  */
 export async function getRegistrationById(id: string): Promise<StudentRegistrationRecord | null> {
+  if (!id || id.startsWith("hub_poll_")) return null;
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       const docRef = doc(db, REGISTRATIONS_COLLECTION, id);
@@ -339,6 +340,7 @@ export async function checkExistingStudentRegistration(
  * Mark a student registration as CHECKED-IN during gate entry QR scanning
  */
 export async function checkInStudentPass(id: string): Promise<boolean> {
+  if (!id || id.startsWith("hub_poll_")) return false;
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       const docRef = doc(db, REGISTRATIONS_COLLECTION, id);
@@ -362,7 +364,7 @@ export async function checkInStudentPass(id: string): Promise<boolean> {
 }
 
 /**
- * Fetch all registrations from Firestore
+ * Fetch all registrations from Firestore (excluding poll ballots)
  */
 export async function getAllRegistrationsFromFirestore(): Promise<StudentRegistrationRecord[]> {
   try {
@@ -370,7 +372,9 @@ export async function getAllRegistrationsFromFirestore(): Promise<StudentRegistr
       const colRef = collection(db, REGISTRATIONS_COLLECTION);
       const snapshot = await getDocs(colRef);
       if (!snapshot.empty) {
-        return snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as StudentRegistrationRecord));
+        return snapshot.docs
+          .filter((d) => !d.id.startsWith("hub_poll_") && !(d.data() as any).customAnswers?.isHubBallot)
+          .map((d) => ({ id: d.id, ...d.data() } as StudentRegistrationRecord));
       }
     }
   } catch (error) {
@@ -379,13 +383,15 @@ export async function getAllRegistrationsFromFirestore(): Promise<StudentRegistr
 
   try {
     const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
-    if (Array.isArray(local)) return local;
+    if (Array.isArray(local)) {
+      return local.filter((r: any) => !r.id?.startsWith("hub_poll_") && !r.customAnswers?.isHubBallot);
+    }
   } catch {}
   return [];
 }
 
 /**
- * Subscribe to real-time updates of event registrations in Firestore
+ * Subscribe to real-time updates of event registrations in Firestore (excluding poll ballots)
  */
 export function subscribeToRegistrationsFromFirestore(
   callback: (regs: StudentRegistrationRecord[]) => void
@@ -398,7 +404,9 @@ export function subscribeToRegistrationsFromFirestore(
     return onSnapshot(
       colRef,
       (snapshot) => {
-        const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as StudentRegistrationRecord));
+        const list = snapshot.docs
+          .filter((d) => !d.id.startsWith("hub_poll_") && !(d.data() as any).customAnswers?.isHubBallot)
+          .map((d) => ({ id: d.id, ...d.data() } as StudentRegistrationRecord));
         callback(list);
       },
       (error) => {
