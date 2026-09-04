@@ -31,6 +31,7 @@ import {
 import { 
   getStoredListings, 
   subscribeToListings, 
+  syncListingsFromFirestore,
   voteOnListingPoll, 
   saveStoredListingResponse,
   getStoredVotedPolls,
@@ -53,6 +54,7 @@ export default function ListingDetailPage() {
   );
 
   const [listing, setListing] = useState<ListingItem | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [copiedLink, setCopiedLink] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [allResponses, setAllResponses] = useState<ListingResponseRecord[]>([]);
@@ -90,21 +92,50 @@ export default function ListingDetailPage() {
     }
 
     const resolveListing = (list: ListingItem[]) => {
-      if (!slug) return;
+      if (!slug) return null;
       const clean = slug.toLowerCase().trim();
       const matched = list.find(
-        (l) => l.isLive !== false && l.status !== "draft" && (l.slug === clean || l.id === clean)
+        (l) =>
+          l.isLive !== false &&
+          l.status !== "draft" &&
+          (l.slug.toLowerCase().trim() === clean ||
+           l.id.toLowerCase().trim() === clean ||
+           l.title.toLowerCase().replace(/[^a-z0-9]+/g, "-") === clean)
       );
-      if (matched) setListing(matched);
+      if (matched) {
+        setListing(matched);
+        return matched;
+      }
+      return null;
     };
 
+    // 1. Check local storage
     const initial = getStoredListings();
-    resolveListing(initial);
+    const foundInitial = resolveListing(initial);
+    if (foundInitial) {
+      setIsLoading(false);
+    }
 
+    // 2. Fetch fresh from Firestore (CRITICAL for shared direct links e.g. via WhatsApp)
+    syncListingsFromFirestore()
+      .then((remote) => {
+        if (remote && Array.isArray(remote)) {
+          const match = resolveListing(remote);
+          if (match) setListing(match);
+        }
+        setIsLoading(false);
+      })
+      .catch(() => {
+        setIsLoading(false);
+      });
+
+    // 3. Real-time live listener
     const unsubListings = subscribeToListings((updated) => {
       if (updated && Array.isArray(updated)) {
-        resolveListing(updated);
+        const match = resolveListing(updated);
+        if (match) setListing(match);
         setVotedPolls(getStoredVotedPolls());
+        setIsLoading(false);
       }
     });
 
@@ -257,6 +288,19 @@ export default function ListingDetailPage() {
       } catch {}
     }, 450);
   };
+
+  if (isLoading && !listing) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4">
+        <div className="space-y-4 text-center">
+          <div className="w-10 h-10 rounded-full border-3 border-[#17458F]/20 border-t-[#17458F] animate-spin mx-auto" />
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            Loading Engagement Listing...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!listing) {
     return (

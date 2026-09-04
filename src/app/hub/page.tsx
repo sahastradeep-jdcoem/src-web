@@ -25,6 +25,7 @@ import {
 import { 
   getStoredListings, 
   subscribeToListings, 
+  syncListingsFromFirestore,
   voteOnListingPoll, 
   getStoredVotedPolls
 } from "@/lib/listingsStore";
@@ -47,6 +48,14 @@ export default function StudentHubPage() {
   useEffect(() => {
     setListings(getStoredListings());
     setVotedPolls(getStoredVotedPolls());
+
+    // CRITICAL: Fetch fresh from Firestore on mount
+    syncListingsFromFirestore().then((remote) => {
+      if (remote && Array.isArray(remote)) {
+        setListings(remote);
+      }
+    });
+
     const unsub = subscribeToListings((updated) => {
       if (updated && Array.isArray(updated)) {
         setListings(updated);
