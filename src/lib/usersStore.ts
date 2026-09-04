@@ -205,19 +205,18 @@ export function getStoredUsers(): RegisteredUserRecord[] {
     }
   }
 
-  // Dynamically resolve designation badge & council status if not already authoritative
+  // Dynamically resolve designation badge & council status from live rosters
   return list.map((user) => {
     const cleanBtId = user.btId ? user.btId.trim().toUpperCase() : "";
     const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId) : null;
-    if (designationInfo) {
-      return {
-        ...user,
-        btId: cleanBtId,
-        designationBadge: user.designationBadge || designationInfo.designationBadge,
-        isCouncilOfficer: true,
-      };
-    }
-    return user;
+    return {
+      ...user,
+      btId: cleanBtId,
+      designationBadge: designationInfo 
+        ? designationInfo.designationBadge 
+        : (cleanBtId ? undefined : user.designationBadge),
+      isCouncilOfficer: designationInfo ? true : (cleanBtId ? false : Boolean(user.isCouncilOfficer)),
+    };
   });
 }
 
@@ -243,8 +242,11 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
       const cleanBtId = r.btId ? r.btId.trim().toUpperCase() : "";
       const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId) : null;
       const assignedRole = r.role || "STUDENT";
-      // Firestore badge is authoritative; fallback to dynamic resolution if absent
-      const assignedBadge = r.designationBadge || (designationInfo ? designationInfo.designationBadge : undefined);
+      // Dynamic roster resolution takes precedence for linked BT IDs to prevent stale cloud badges
+      const assignedBadge = designationInfo 
+        ? designationInfo.designationBadge 
+        : (cleanBtId ? undefined : (r.designationBadge || undefined));
+      const isOfficer = designationInfo ? true : (cleanBtId ? false : Boolean(r.isCouncilOfficer));
 
       const localMatch = (r.uid ? localMap.get(r.uid) : null) || (r.email ? localMap.get(r.email.toLowerCase()) : null);
 
@@ -276,8 +278,8 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
         facultyApprovedBy: r.facultyApprovedBy || localMatch?.facultyApprovedBy,
         employeeId: r.employeeId || localMatch?.employeeId,
         profileCompleted: r.profileCompleted ?? localMatch?.profileCompleted ?? true,
-        designationBadge: assignedBadge || localMatch?.designationBadge,
-        isCouncilOfficer: (assignedBadge || designationInfo) ? true : Boolean(r.isCouncilOfficer || localMatch?.isCouncilOfficer),
+        designationBadge: assignedBadge,
+        isCouncilOfficer: isOfficer,
         lastActive: r.lastActive || localMatch?.lastActive || new Date().toISOString(),
         createdAt: r.createdAt || localMatch?.createdAt || new Date().toISOString(),
       };
@@ -331,8 +333,10 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
     const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId) : null;
 
     const assignedRole = user.role || existing?.role || "STUDENT";
-    const assignedBadge = designationInfo ? designationInfo.designationBadge : (user.designationBadge || existing?.designationBadge);
-    const isOfficer = designationInfo ? true : Boolean(user.isCouncilOfficer || existing?.isCouncilOfficer);
+    const assignedBadge = designationInfo 
+      ? designationInfo.designationBadge 
+      : (cleanBtId ? undefined : (user.designationBadge || existing?.designationBadge));
+    const isOfficer = designationInfo ? true : (cleanBtId ? false : Boolean(user.isCouncilOfficer || existing?.isCouncilOfficer));
 
     const now = new Date().toISOString();
     const record: RegisteredUserRecord = {
@@ -520,5 +524,47 @@ export function changeUserRole(uid: string, newRole: "STUDENT" | "COUNCIL_ADMIN"
     window.dispatchEvent(new CustomEvent("src_users_updated", { detail: updated }));
     saveUserProfileToFirestore(uid, { role: newRole });
   }
+  return updated;
+}
+
+/**
+ * Reconcile all registered student user designation badges against the live council and club rosters.
+ * Heals local storage and persists updated badges to Cloud Firestore.
+ */
+export async function reconcileAllUserDesignations(): Promise<RegisteredUserRecord[]> {
+  const current = getStoredUsers();
+  let changedCount = 0;
+  const updated = current.map((u) => {
+    const cleanBtId = u.btId ? u.btId.trim().toUpperCase() : "";
+    const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId) : null;
+    const newBadge = designationInfo ? designationInfo.designationBadge : (cleanBtId ? undefined : u.designationBadge);
+    const newOfficer = designationInfo ? true : (cleanBtId ? false : Boolean(u.isCouncilOfficer));
+
+    if (u.designationBadge !== newBadge || u.isCouncilOfficer !== newOfficer) {
+      changedCount++;
+      const fixed: RegisteredUserRecord = {
+        ...u,
+        btId: cleanBtId,
+        designationBadge: newBadge,
+        isCouncilOfficer: newOfficer,
+      };
+      if (u.uid) {
+        saveUserProfileToFirestore(u.uid, {
+          designationBadge: newBadge || (null as any),
+          isCouncilOfficer: newOfficer,
+        }).catch((err) => console.warn("Failed to heal cloud user badge:", err));
+      }
+      return fixed;
+    }
+    return u;
+  });
+
+  if (changedCount > 0 && typeof window !== "undefined") {
+    try {
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
+    } catch {}
+    window.dispatchEvent(new CustomEvent("src_users_updated", { detail: updated }));
+  }
+
   return updated;
 }

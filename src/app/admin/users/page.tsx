@@ -36,6 +36,8 @@ import {
   rejectFacultyUser,
   mergeRemoteUsers,
   syncUsersFromFirestore,
+  reconcileAllUserDesignations,
+  resolveDesignationByBtId,
   RegisteredUserRecord 
 } from "@/lib/usersStore";
 import { subscribeToUsersFromFirestore } from "@/lib/firebase/firestore";
@@ -70,6 +72,10 @@ export default function AdminUsersPage() {
       if (synced && synced.length > 0) {
         setUsers(synced);
       }
+      const reconciled = await reconcileAllUserDesignations();
+      if (reconciled && reconciled.length > 0) {
+        setUsers(reconciled);
+      }
     } catch {}
   };
 
@@ -77,9 +83,11 @@ export default function AdminUsersPage() {
     setIsSyncing(true);
     try {
       const synced = await syncUsersFromFirestore();
-      if (synced && synced.length > 0) {
-        setUsers(synced);
-        showNotice(`Cloud sync complete. ${synced.length} user records updated.`);
+      const reconciled = await reconcileAllUserDesignations();
+      const finalList = (reconciled && reconciled.length > 0) ? reconciled : synced;
+      if (finalList && finalList.length > 0) {
+        setUsers(finalList);
+        showNotice(`Cloud sync & roster reconciliation complete. ${finalList.length} user records synchronized.`);
       } else {
         showNotice("Local user directory is up to date with Cloud Firestore.");
       }
@@ -745,13 +753,17 @@ export default function AdminUsersPage() {
                               ? "Other College"
                               : "JDCOEM Student"}
                           </Badge>
-                          {u.designationBadge && (
-                            <div className="pt-0.5">
-                              <span className="inline-block text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-md max-w-xs truncate">
-                                🏅 {u.designationBadge}
-                              </span>
-                            </div>
-                          )}
+                          {(() => {
+                            const effectiveBadge = (u.btId ? resolveDesignationByBtId(u.btId)?.designationBadge : null) || u.designationBadge;
+                            if (!effectiveBadge) return null;
+                            return (
+                              <div className="pt-0.5">
+                                <span className="inline-block text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-md max-w-xs truncate">
+                                  🏅 {effectiveBadge}
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </td>
 
@@ -920,11 +932,15 @@ export default function AdminUsersPage() {
                       ? "Visiting Delegate" 
                       : "JDCOEM Student"}
                   </Badge>
-                  {selectedUser.designationBadge && (
-                    <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-full">
-                      🏅 {selectedUser.designationBadge}
-                    </span>
-                  )}
+                  {(() => {
+                    const effectiveBadge = (selectedUser.btId ? resolveDesignationByBtId(selectedUser.btId)?.designationBadge : null) || selectedUser.designationBadge;
+                    if (!effectiveBadge) return null;
+                    return (
+                      <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-full">
+                        🏅 {effectiveBadge}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <p className="text-xs text-slate-500 font-mono">{selectedUser.email}</p>
               </div>

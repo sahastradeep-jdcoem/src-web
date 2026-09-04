@@ -226,6 +226,7 @@ export function saveStoredSpokespersons(members: TeamMember[]): void {
     const sanitized = cleanUndefined(stripCategoryAndLevel(members));
     try { localStorage.setItem("src_spokespersons", JSON.stringify(sanitized)); } catch {}
     window.dispatchEvent(new CustomEvent("src_spokespersons_updated", { detail: sanitized }));
+    window.dispatchEvent(new CustomEvent("src_users_updated"));
     saveSiteContentToFirestore("spokespersons", sanitized).catch((err) => {
       console.warn("Firestore direct write for spokespersons failed, enqueuing:", err);
     });
@@ -304,6 +305,7 @@ export async function saveStoredClubs(clubs: ClubItem[]): Promise<void> {
     localStorage.setItem("src_clubs_roster", JSON.stringify(sanitized));
     window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: sanitized }));
     window.dispatchEvent(new CustomEvent("src_tenures_updated"));
+    window.dispatchEvent(new CustomEvent("src_users_updated"));
     // Direct cloud write to Firestore site_content/clubs
     saveSiteContentToFirestore("clubs", sanitized).catch((err) => {
       console.warn("Firestore direct write failed, enqueuing:", err);
@@ -321,6 +323,7 @@ export async function syncClubsFromFirestore(): Promise<ClubItem[]> {
       if (typeof window !== "undefined") {
         localStorage.setItem("src_clubs_roster", JSON.stringify(remote));
         window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: remote }));
+        window.dispatchEvent(new CustomEvent("src_users_updated"));
       }
       return remote;
     }
@@ -335,6 +338,7 @@ export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => v
       if (typeof window !== "undefined") {
         localStorage.setItem("src_clubs_roster", JSON.stringify(remote));
         window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: remote }));
+        window.dispatchEvent(new CustomEvent("src_users_updated"));
       }
       callback(remote);
     }
