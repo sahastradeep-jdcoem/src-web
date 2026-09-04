@@ -310,7 +310,7 @@ export default function ListingDetailPage() {
       answers: Object.keys(customAnswers).length > 0 ? customAnswers : undefined,
       submissionLink: submissionLink || undefined,
       ticketCode,
-      status: existingResponse?.status || "pending",
+      status: existingResponse?.status || (listing.requiresApproval === false ? "reviewed" : "pending"),
       createdAt: existingResponse?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

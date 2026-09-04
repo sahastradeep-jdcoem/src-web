@@ -446,6 +446,26 @@ export default function AdminListingsPage() {
     return listings.find((l) => l.id === inspectingListing.id || l.slug === inspectingListing.slug) || inspectingListing;
   }, [inspectingListing, listings]);
 
+  const handleToggleApprovalWorkflow = (enabled: boolean) => {
+    if (!liveInspectingListing) return;
+    const updated: ListingItem = { ...liveInspectingListing, requiresApproval: enabled };
+    const nextListings = listings.map((l) => (l.id === updated.id ? updated : l));
+    setListings(nextListings);
+    setInspectingListing(updated);
+    saveStoredListings(nextListings);
+    showToast(
+      enabled
+        ? `Response Approval Workflow enabled for "${updated.title}".`
+        : `Approval workflow disabled for "${updated.title}". Responses are now auto-recorded.`
+    );
+  };
+
+  const handleEditInspectingListing = () => {
+    if (!liveInspectingListing) return;
+    setEditingListing(liveInspectingListing);
+    setIsEditModalOpen(true);
+  };
+
   return (
     <div className="space-y-8 font-sans text-left">
       
@@ -466,6 +486,8 @@ export default function AdminListingsPage() {
           onDeleteResponse={handleDeleteResponse}
           onExportExcel={handleExportExcel}
           onResetPollVotes={() => handleResetPollVotes(liveInspectingListing)}
+          onToggleApprovalWorkflow={handleToggleApprovalWorkflow}
+          onEditListing={handleEditInspectingListing}
         />
       ) : (
         <>

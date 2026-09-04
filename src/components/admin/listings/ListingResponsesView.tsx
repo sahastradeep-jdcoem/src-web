@@ -47,6 +47,8 @@ export interface ListingResponsesViewProps {
   onDeleteResponse?: (respId: string) => void;
   onExportExcel: () => void;
   onResetPollVotes?: () => void;
+  onToggleApprovalWorkflow?: (enabled: boolean) => void;
+  onEditListing?: () => void;
 }
 
 export function ListingResponsesView({
@@ -57,6 +59,8 @@ export function ListingResponsesView({
   onDeleteResponse,
   onExportExcel,
   onResetPollVotes,
+  onToggleApprovalWorkflow,
+  onEditListing,
 }: ListingResponsesViewProps) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("summary");
   const [selectedQuestionIndex, setSelectedQuestionIndex] = useState<number>(0);
@@ -204,7 +208,7 @@ export function ListingResponsesView({
   const tableFilteredResponses = useMemo(() => {
     return responses.filter((r) => {
       if (statusFilter !== "all") {
-        const itemStatus = (r.status || "pending").toLowerCase();
+        const itemStatus = (r.status || (listing.requiresApproval === false ? "recorded" : "pending")).toLowerCase();
         if (itemStatus !== statusFilter.toLowerCase()) return false;
       }
 
@@ -220,7 +224,7 @@ export function ListingResponsesView({
 
       return true;
     });
-  }, [responses, statusFilter, searchQuery]);
+  }, [responses, statusFilter, searchQuery, listing.requiresApproval]);
 
   const currentIndividual = responses[individualIndex] || null;
 
@@ -300,6 +304,17 @@ export function ListingResponsesView({
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
+            {onEditListing && (
+              <button
+                type="button"
+                onClick={onEditListing}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all shadow-xs cursor-pointer"
+                title="Open full poll configuration & ballot details"
+              >
+                <span>Listing Details</span>
+              </button>
+            )}
+
             {onResetPollVotes && (
               <button
                 type="button"
@@ -710,6 +725,51 @@ export function ListingResponsesView({
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          {onToggleApprovalWorkflow && (
+            <div className="inline-flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white border border-slate-200 shadow-2xs">
+              <span className="text-xs font-bold text-slate-700">Approval Workflow</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={listing.requiresApproval !== false}
+                onClick={() => onToggleApprovalWorkflow(listing.requiresApproval === false)}
+                className={cn(
+                  "relative inline-flex h-5 w-10 items-center rounded-full transition-colors cursor-pointer focus:outline-none",
+                  listing.requiresApproval !== false ? "bg-[#17458F]" : "bg-slate-300"
+                )}
+                title={
+                  listing.requiresApproval !== false
+                    ? "Approval workflow is currently ON. Click to disable (responses will be automatically recorded without pending review)."
+                    : "Approval workflow is currently OFF. Click to enable response approvals."
+                }
+              >
+                <span
+                  className={cn(
+                    "inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow-xs",
+                    listing.requiresApproval !== false ? "translate-x-5" : "translate-x-1"
+                  )}
+                />
+              </button>
+              <span className={cn(
+                "text-[10px] font-extrabold uppercase font-mono px-1.5 py-0.5 rounded",
+                listing.requiresApproval !== false ? "text-emerald-700 bg-emerald-50 border border-emerald-200" : "text-slate-500 bg-slate-100 border border-slate-200"
+              )}>
+                {listing.requiresApproval !== false ? "REQUIRED" : "OFF"}
+              </span>
+            </div>
+          )}
+
+          {onEditListing && (
+            <button
+              type="button"
+              onClick={onEditListing}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all shadow-xs cursor-pointer"
+              title="Open full listing configuration & form details"
+            >
+              <span>Listing Details</span>
+            </button>
+          )}
+
           <button
             type="button"
             disabled={responses.length === 0}
@@ -721,7 +781,7 @@ export function ListingResponsesView({
           </button>
 
           <Link
-            href={`/engagement/${listing.slug}`}
+            href={`/hub/${listing.slug}`}
             target="_blank"
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all shadow-xs cursor-pointer"
           >
@@ -783,37 +843,72 @@ export function ListingResponsesView({
               </div>
             </div>
 
-            <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">
-                Approved / Resolved
-              </span>
-              <div className="flex items-baseline justify-between">
-                <span className="font-heading font-extrabold text-2xl text-emerald-600">
-                  {metrics.approved}
-                </span>
-                <span className="text-xs text-emerald-700 font-semibold">
-                  {metrics.approvedPct}% Processed
-                </span>
-              </div>
-              <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden mt-2">
-                <div 
-                  className="bg-emerald-500 h-full rounded-full transition-all duration-500"
-                  style={{ width: `${metrics.approvedPct}%` }}
-                />
-              </div>
-            </div>
+            {listing.requiresApproval !== false ? (
+              <>
+                <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">
+                    Approved / Resolved
+                  </span>
+                  <div className="flex items-baseline justify-between">
+                    <span className="font-heading font-extrabold text-2xl text-emerald-600">
+                      {metrics.approved}
+                    </span>
+                    <span className="text-xs text-emerald-700 font-semibold">
+                      {metrics.approvedPct}% Processed
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden mt-2">
+                    <div 
+                      className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                      style={{ width: `${metrics.approvedPct}%` }}
+                    />
+                  </div>
+                </div>
 
-            <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">
-                Pending Review
-              </span>
-              <div className="flex items-baseline justify-between">
-                <span className="font-heading font-extrabold text-2xl text-amber-600">
-                  {metrics.pending}
-                </span>
-                <span className="text-xs text-amber-700 font-semibold">Awaiting</span>
-              </div>
-            </div>
+                <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">
+                    Pending Review
+                  </span>
+                  <div className="flex items-baseline justify-between">
+                    <span className="font-heading font-extrabold text-2xl text-amber-600">
+                      {metrics.pending}
+                    </span>
+                    <span className="text-xs text-amber-700 font-semibold">Awaiting</span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">
+                    Workflow Mode
+                  </span>
+                  <div className="flex items-baseline justify-between">
+                    <span className="font-heading font-extrabold text-xl text-emerald-600">
+                      Direct Ingest
+                    </span>
+                    <span className="text-xs text-emerald-700 font-bold font-mono">
+                      Auto-Recorded
+                    </span>
+                  </div>
+                  <div className="w-full bg-emerald-100 rounded-full h-1.5 overflow-hidden mt-2">
+                    <div className="bg-emerald-500 h-full rounded-full w-full" />
+                  </div>
+                </div>
+
+                <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">
+                    Review Requirement
+                  </span>
+                  <div className="flex items-baseline justify-between">
+                    <span className="font-heading font-extrabold text-xl text-slate-800">
+                      None
+                    </span>
+                    <span className="text-xs text-slate-500 font-semibold">No Approval Needed</span>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">
@@ -1237,44 +1332,53 @@ export function ListingResponsesView({
                 {/* Status Change Toolbar */}
                 {currentIndividual && (
                   <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => onUpdateStatus(currentIndividual.id, "approved")}
-                      className={cn(
-                        "px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer",
-                        currentIndividual.status === "approved"
-                          ? "bg-emerald-600 text-white shadow-xs"
-                          : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
-                      )}
-                    >
-                      ✓ Approve
-                    </button>
+                    {listing.requiresApproval !== false ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => onUpdateStatus(currentIndividual.id, "approved")}
+                          className={cn(
+                            "px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                            currentIndividual.status === "approved"
+                              ? "bg-emerald-600 text-white shadow-xs"
+                              : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
+                          )}
+                        >
+                          ✓ Approve
+                        </button>
 
-                    <button
-                      type="button"
-                      onClick={() => onUpdateStatus(currentIndividual.id, "resolved")}
-                      className={cn(
-                        "px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer",
-                        currentIndividual.status === "resolved"
-                          ? "bg-[#17458F] text-white shadow-xs"
-                          : "bg-blue-50 text-[#17458F] hover:bg-blue-100 border border-blue-200"
-                      )}
-                    >
-                      ✓ Resolve
-                    </button>
+                        <button
+                          type="button"
+                          onClick={() => onUpdateStatus(currentIndividual.id, "resolved")}
+                          className={cn(
+                            "px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                            currentIndividual.status === "resolved"
+                              ? "bg-[#17458F] text-white shadow-xs"
+                              : "bg-blue-50 text-[#17458F] hover:bg-blue-100 border border-blue-200"
+                          )}
+                        >
+                          ✓ Resolve
+                        </button>
 
-                    <button
-                      type="button"
-                      onClick={() => onUpdateStatus(currentIndividual.id, "rejected")}
-                      className={cn(
-                        "px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer",
-                        currentIndividual.status === "rejected"
-                          ? "bg-rose-600 text-white shadow-xs"
-                          : "bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200"
-                      )}
-                    >
-                      ✕ Reject
-                    </button>
+                        <button
+                          type="button"
+                          onClick={() => onUpdateStatus(currentIndividual.id, "rejected")}
+                          className={cn(
+                            "px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                            currentIndividual.status === "rejected"
+                              ? "bg-rose-600 text-white shadow-xs"
+                              : "bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200"
+                          )}
+                        >
+                          ✕ Reject
+                        </button>
+                      </>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600 border border-slate-200 text-xs font-semibold">
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Approval Not Required</span>
+                      </span>
+                    )}
 
                     {onDeleteResponse && (
                       <button
@@ -1325,9 +1429,19 @@ export function ListingResponsesView({
                             ? "bg-cyan-500 text-white"
                             : currentIndividual.status === "rejected"
                             ? "bg-rose-500 text-white"
+                            : listing.requiresApproval === false
+                            ? "bg-emerald-500 text-white"
                             : "bg-amber-400 text-slate-900"
                         )}>
-                          {currentIndividual.status || "PENDING"}
+                          {currentIndividual.status === "approved"
+                            ? "APPROVED"
+                            : currentIndividual.status === "resolved"
+                            ? "RESOLVED"
+                            : currentIndividual.status === "rejected"
+                            ? "REJECTED"
+                            : listing.requiresApproval === false
+                            ? "RECORDED"
+                            : "PENDING"}
                         </span>
                       </div>
                     </div>
@@ -1467,7 +1581,10 @@ export function ListingResponsesView({
             </div>
 
             <div className="flex items-center gap-1 overflow-x-auto">
-              {["all", "pending", "approved", "resolved", "rejected"].map((st) => (
+              {(listing.requiresApproval !== false
+                ? ["all", "pending", "approved", "resolved", "rejected"]
+                : ["all", "recorded"]
+              ).map((st) => (
                 <button
                   key={st}
                   type="button"
@@ -1495,7 +1612,7 @@ export function ListingResponsesView({
             <div className="rounded-2xl border border-slate-200 overflow-hidden bg-white shadow-xs">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                  <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
                       <th className="py-3 px-4 font-bold text-slate-600 uppercase tracking-wider text-[10px]">#</th>
                       <th className="py-3 px-4 font-bold text-slate-600 uppercase tracking-wider text-[10px]">Ticket</th>
@@ -1530,9 +1647,19 @@ export function ListingResponsesView({
                               ? "bg-cyan-50 text-cyan-700 border border-cyan-200"
                               : r.status === "rejected"
                               ? "bg-rose-50 text-rose-700 border border-rose-200"
+                              : listing.requiresApproval === false
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                               : "bg-amber-50 text-amber-700 border border-amber-200"
                           )}>
-                            {r.status || "PENDING"}
+                            {r.status === "approved"
+                              ? "APPROVED"
+                              : r.status === "resolved"
+                              ? "RESOLVED"
+                              : r.status === "rejected"
+                              ? "REJECTED"
+                              : listing.requiresApproval === false
+                              ? "RECORDED"
+                              : "PENDING"}
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px] whitespace-nowrap">

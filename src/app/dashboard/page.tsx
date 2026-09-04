@@ -763,6 +763,7 @@ export default function StudentDashboardPage() {
                   hubResponses.map((item) => {
                     const targetListing = listings.find((l) => l.id === item.listingId || l.slug === item.listingSlug);
                     const canEdit = targetListing ? targetListing.allowResponseEditing !== false : true;
+                    const requiresApproval = targetListing ? targetListing.requiresApproval !== false : true;
                     const isResolved = item.status === "approved" || item.status === "resolved";
                     const isRejected = item.status === "rejected";
 
@@ -785,9 +786,11 @@ export default function StudentDashboardPage() {
                                 ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                                 : isRejected
                                 ? "bg-rose-50 text-rose-700 border-rose-200"
+                                : !requiresApproval
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                                 : "bg-amber-50 text-amber-800 border-amber-200"
                             )}>
-                              {item.status?.toUpperCase() || "PENDING REVIEW"}
+                              {item.status?.toUpperCase() || (!requiresApproval ? "SUBMITTED" : "PENDING REVIEW")}
                             </span>
                           </div>
                           <span className="text-[11px] text-slate-400 font-medium font-sans">
@@ -1024,7 +1027,10 @@ export default function StudentDashboardPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {hubResponses.map((item) => (
+              {hubResponses.map((item) => {
+                const targetListing = listings.find((l) => l.id === item.listingId || l.slug === item.listingSlug);
+                const requiresApproval = targetListing ? targetListing.requiresApproval !== false : true;
+                return (
                 <div
                   key={item.id}
                   className="p-5 rounded-3xl bg-white border border-slate-200 space-y-3 shadow-xs flex flex-col justify-between"
@@ -1034,8 +1040,17 @@ export default function StudentDashboardPage() {
                       <span className="text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-[#17458F] text-white">
                         {item.listingType.toUpperCase()}
                       </span>
-                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 uppercase">
-                        {item.status || "RECEIVED"}
+                      <span className={cn(
+                        "text-[10px] font-bold px-2 py-0.5 rounded border uppercase",
+                        item.status === "approved" || item.status === "resolved"
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : item.status === "rejected"
+                          ? "bg-rose-50 text-rose-700 border-rose-200"
+                          : !requiresApproval
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : "bg-amber-50 text-amber-800 border-amber-200"
+                      )}>
+                        {item.status?.toUpperCase() || (!requiresApproval ? "SUBMITTED" : "RECEIVED")}
                       </span>
                     </div>
 
@@ -1079,7 +1094,8 @@ export default function StudentDashboardPage() {
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
@@ -1424,24 +1440,40 @@ export default function StudentDashboardPage() {
               </div>
 
               {/* Status & Timing */}
-              <div className="p-3.5 rounded-2xl bg-white border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase text-slate-400">Current Status:</span>
-                  <span className={cn(
-                    "text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full border",
-                    selectedHubSubmission.status === "approved" || selectedHubSubmission.status === "resolved"
-                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      : selectedHubSubmission.status === "rejected"
-                      ? "bg-rose-50 text-rose-700 border-rose-200"
-                      : "bg-amber-50 text-amber-800 border-amber-200"
-                  )}>
-                    {selectedHubSubmission.status?.toUpperCase() || "PENDING REVIEW"}
-                  </span>
-                </div>
-                <div className="text-[11px] text-slate-400 font-medium">
-                  Reference: <span className="font-mono font-bold text-slate-700">{selectedHubSubmission.ticketCode}</span>
-                </div>
-              </div>
+              {(() => {
+                const modalListing = listings.find((l) => l.id === selectedHubSubmission.listingId || l.slug === selectedHubSubmission.listingSlug);
+                const modalRequiresApproval = modalListing ? modalListing.requiresApproval !== false : true;
+                return (
+                  <div className="p-3.5 rounded-2xl bg-white border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold uppercase text-slate-400">Current Status:</span>
+                      <span className={cn(
+                        "text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full border",
+                        selectedHubSubmission.status === "approved" || selectedHubSubmission.status === "resolved"
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : selectedHubSubmission.status === "rejected"
+                          ? "bg-rose-50 text-rose-700 border-rose-200"
+                          : !modalRequiresApproval
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : "bg-amber-50 text-amber-800 border-amber-200"
+                      )}>
+                        {selectedHubSubmission.status === "approved"
+                          ? "APPROVED"
+                          : selectedHubSubmission.status === "resolved"
+                          ? "RESOLVED"
+                          : selectedHubSubmission.status === "rejected"
+                          ? "REJECTED"
+                          : !modalRequiresApproval
+                          ? "RECORDED"
+                          : "PENDING REVIEW"}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-400 font-medium">
+                      Reference: <span className="font-mono font-bold text-slate-700">{selectedHubSubmission.ticketCode}</span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* External link if provided */}
               {selectedHubSubmission.submissionLink && (

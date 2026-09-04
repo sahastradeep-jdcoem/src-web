@@ -381,6 +381,7 @@ export function CreateListingModal({
   // 4. Q&A Section State
   const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
   const [allowResponseEditing, setAllowResponseEditing] = useState(true);
+  const [requiresApproval, setRequiresApproval] = useState(true);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -401,6 +402,7 @@ export function CreateListingModal({
       setCoverImage(initialData.coverImage || PRESET_COVERS[0].url);
       setCustomQuestions(initialData.customQuestions || []);
       setAllowResponseEditing(initialData.allowResponseEditing !== false);
+      setRequiresApproval(initialData.requiresApproval !== false);
 
       if (initialData.pollConfig) {
         setPollOptions(
@@ -551,6 +553,7 @@ export function CreateListingModal({
         coverImage: coverImage || PRESET_COVERS[0].url,
         deadline: deadline || undefined,
         allowResponseEditing: selectedPillarOption.type === "poll" ? false : allowResponseEditing,
+        requiresApproval: selectedPillarOption.type === "poll" ? false : requiresApproval,
         customQuestions: customQuestions.length > 0 ? customQuestions : undefined,
       };
 
@@ -640,6 +643,7 @@ export function CreateListingModal({
       coverImage: coverImage || PRESET_COVERS[0].url,
       deadline: deadline || undefined,
       allowResponseEditing: selectedPillarOption.type === "poll" ? false : allowResponseEditing,
+      requiresApproval: selectedPillarOption.type === "poll" ? false : requiresApproval,
       customQuestions: customQuestions.length > 0 ? customQuestions : undefined,
     };
 
@@ -1038,6 +1042,46 @@ export function CreateListingModal({
                           className={cn(
                             "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out",
                             allowResponseEditing ? "translate-x-5" : "translate-x-0"
+                          )}
+                        />
+                      </button>
+                    </div>
+                  )}
+
+                  {selectedPillarOption?.type !== "poll" && (
+                    <div className="flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-200">
+                      <div className="space-y-0.5 pr-4">
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-[#17458F]" />
+                            <span>Response Approval Workflow</span>
+                          </label>
+                          <span className={cn(
+                            "text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full border transition-all",
+                            requiresApproval
+                              ? "bg-amber-50 text-amber-700 border-amber-200"
+                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          )}>
+                            {requiresApproval ? "Approval Required" : "No Approval Needed"}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 font-medium leading-normal">
+                          Enable to review, approve, resolve, or reject candidate responses. Turn off if responses do not require approval.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setRequiresApproval(!requiresApproval)}
+                        className={cn(
+                          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                          requiresApproval ? "bg-[#17458F]" : "bg-slate-300"
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out",
+                            requiresApproval ? "translate-x-5" : "translate-x-0"
                           )}
                         />
                       </button>

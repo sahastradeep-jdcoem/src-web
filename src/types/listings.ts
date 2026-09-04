@@ -109,6 +109,7 @@ export interface ListingItem {
 
   // Form & Response Settings
   allowResponseEditing?: boolean; // Controlled from admin: allows students to revise/edit submitted responses
+  requiresApproval?: boolean; // Controlled from admin: whether responses require approval / resolution workflow
 
   // Polymorphic Subtype Configs
   pollConfig?: PollConfig;
