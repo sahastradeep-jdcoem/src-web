@@ -453,6 +453,10 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     orderId?: string;
     amountPaid?: number;
   }) => {
+    if (!user) {
+      openAuthModal();
+      return;
+    }
     const regId = `SRC-${event.slug.slice(0, 3).toUpperCase()}-26-${Math.floor(10000 + Math.random() * 90000)}`;
     const tkCode = `${event.slug.slice(0, 3).toUpperCase()}26-TK-${Math.floor(1000 + Math.random() * 9000)}`;
 

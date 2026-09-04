@@ -26,8 +26,10 @@ import {
   FileText,
   Sliders,
   ArrowRight,
-  ExternalLink
+  ExternalLink,
+  LogIn
 } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 import { 
   getStoredListings, 
   subscribeToListings, 
@@ -255,6 +257,11 @@ export default function ListingDetailPage() {
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!listing) return;
+    if (!user) {
+      openAuthModal();
+      showToast("Please sign in with your student account to submit this form.");
+      return;
+    }
     if ((listing.targetAudience === "jdcoem_only" || listing.isInterCollege === false) && isExternalUser) {
       showToast("Submissions are strictly reserved for JDCOEM students.");
       return;
@@ -358,6 +365,7 @@ export default function ListingDetailPage() {
 
   const isPoll = listing.type === "poll";
   const isOpp = listing.type === "opportunity";
+  const isSub = listing.type === "submission";
   const isIssue = listing.type === "issue";
   const totalPollVotes = listing.pollConfig?.totalVotes || 0;
   const isJdcoemOnly = listing.targetAudience === "jdcoem_only" || listing.isInterCollege === false;
@@ -642,6 +650,32 @@ export default function ListingDetailPage() {
                     >
                       <span>Sign in with JDCOEM Account</span>
                     </Link>
+                  </div>
+                </div>
+              ) : !user ? (
+                /* Unauthenticated Guard: Student Sign-In Required */
+                <div className="p-8 sm:p-10 rounded-3xl bg-blue-50/70 border border-blue-200 text-center space-y-4 max-w-lg mx-auto shadow-xs animate-in fade-in duration-300">
+                  <div className="w-14 h-14 rounded-2xl bg-[#17458F] text-white flex items-center justify-center mx-auto shadow-md">
+                    <Lock className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <h4 className="font-heading font-extrabold text-xl text-[#0F172A] uppercase">
+                      Student Authentication Required
+                    </h4>
+                    <p className="text-xs text-slate-600 font-medium leading-relaxed max-w-sm mx-auto">
+                      Please sign in with your student Google account to fill out and submit this {isIssue ? "confidential inquiry" : isSub ? "submission" : isOpp ? "application" : "form"}.
+                    </p>
+                  </div>
+                  <div className="pt-2">
+                    <Button
+                      onClick={openAuthModal}
+                      variant="primary"
+                      size="md"
+                      className="gap-2 mx-auto cursor-pointer"
+                    >
+                      <LogIn className="w-4 h-4" />
+                      <span>Sign In with Student Account</span>
+                    </Button>
                   </div>
                 </div>
               ) : receiptCode ? (

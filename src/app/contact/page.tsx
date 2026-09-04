@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { 
   MapPin, 
@@ -19,8 +19,10 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Accordion } from "@/components/ui/Accordion";
 import { saveSiteContentToFirestore, cleanUndefined } from "@/lib/firebase/firestore";
+import { useAuth } from "@/context/AuthContext";
 
 export default function ContactPage() {
+  const { user } = useAuth();
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -31,6 +33,17 @@ export default function ContactPage() {
     subject: "",
     message: "",
   });
+
+  useEffect(() => {
+    if (user) {
+      setFormState((prev) => ({
+        ...prev,
+        name: prev.name || user.displayName || `${user.firstName || ""} ${user.lastName || ""}`.trim(),
+        email: prev.email || user.email || "",
+        department: prev.department || user.department || "Computer Science & Engineering",
+      }));
+    }
+  }, [user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

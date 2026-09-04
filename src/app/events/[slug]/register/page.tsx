@@ -14,7 +14,8 @@ import {
   Sparkles,
   Lock,
   GraduationCap,
-  Globe
+  Globe,
+  LogIn
 } from "lucide-react";
 import { mockEvents } from "@/data/events";
 import { getStoredEvents, syncEventsFromFirestore } from "@/lib/eventsStore";
@@ -27,7 +28,7 @@ import { cn } from "@/lib/utils";
 export default function EventRegisterPage() {
   const params = useParams();
   const slug = params?.slug as string;
-  const { user } = useAuth();
+  const { user, openAuthModal } = useAuth();
   const isExternal = Boolean(
     user && (user.userType === "EXTERNAL_STUDENT" || user.isCollegeStudent === false || (user.collegeName && !user.email?.endsWith("@jdcoem.ac.in")))
   );
@@ -149,8 +150,43 @@ export default function EventRegisterPage() {
           </div>
         </div>
 
-        {/* SCENARIO A: UMBRELLA FESTIVAL WITH SUB-EVENTS (USER MUST SELECT WHICH COMPETITION) */}
-        {isUmbrella && !selectedSubEvent ? (
+        {!user ? (
+          /* Prominent Authentication Barrier */
+          <div className="p-8 sm:p-12 rounded-3xl bg-white border border-slate-200 text-center space-y-6 max-w-xl mx-auto shadow-sm animate-in fade-in duration-300">
+            <div className="w-16 h-16 rounded-3xl bg-[#17458F] text-white flex items-center justify-center mx-auto shadow-lg shadow-[#17458F]/20">
+              <Lock className="w-8 h-8" />
+            </div>
+            <div className="space-y-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider px-3 py-1 rounded-full bg-blue-50 text-[#17458F] border border-blue-200">
+                Official Event Registration
+              </span>
+              <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#0F172A] uppercase">
+                Student Sign-In Required
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed max-w-md mx-auto">
+                Official event accreditation, eligibility verification, and entry pass generation require an authenticated student account. Please sign in with your Google account to proceed with registering for <strong>{event.name}</strong>.
+              </p>
+            </div>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={openAuthModal}
+                className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2.5 mx-auto cursor-pointer"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>Sign In with Student Account</span>
+              </button>
+            </div>
+            <div className="pt-4 border-t border-slate-100">
+              <Link
+                href={`/events/${event.slug}`}
+                className="text-xs font-bold text-slate-500 hover:text-[#17458F] transition-colors"
+              >
+                &larr; Return to Event Overview
+              </Link>
+            </div>
+          </div>
+        ) : isUmbrella && !selectedSubEvent ? (
           <div className="space-y-8 animate-in fade-in duration-300">
             
             {/* Umbrella Header Banner */}
@@ -276,7 +312,13 @@ export default function EventRegisterPage() {
                           ) : (
                             <button
                               type="button"
-                              onClick={() => setSelectedSubEvent(sub)}
+                              onClick={() => {
+                                if (!user) {
+                                  openAuthModal();
+                                  return;
+                                }
+                                setSelectedSubEvent(sub);
+                              }}
                               className="px-5 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
                             >
                               <span>Select &amp; Register</span>
