@@ -136,10 +136,11 @@ export function subscribeToListings(callback: (listings: ListingItem[]) => void)
 // 2. POLL VOTING ENGINE
 // --------------------------------------------------------------------------
 
-export function getStoredVotedPolls(): Record<string, string> {
-  if (typeof window === "undefined") return {};
+export function getStoredVotedPolls(userId?: string): Record<string, string> {
+  if (typeof window === "undefined" || !userId) return {};
   try {
-    return JSON.parse(localStorage.getItem("src_voted_polls") || "{}");
+    localStorage.removeItem("src_voted_polls");
+    return JSON.parse(localStorage.getItem(`src_voted_polls_${userId}`) || "{}");
   } catch {
     return {};
   }
@@ -159,6 +160,12 @@ export function voteOnListingPoll(
     isAnonymous?: boolean;
   }
 ): { success: boolean; updatedListing?: ListingItem; error?: string } {
+  // STRICT: Require authentication to cast a vote on campus polls
+  const voterId = voterInfo?.userId;
+  if (!voterId || userVoterKey.startsWith("anon-")) {
+    return { success: false, error: "Please sign in with your student account to cast your vote." };
+  }
+
   const currentListings = getStoredListings();
   const index = currentListings.findIndex((l) => l.id === listingId);
 
@@ -171,12 +178,13 @@ export function voteOnListingPoll(
     return { success: false, error: "Target is not an active poll" };
   }
 
-  // Prevent multiple votes from same voter key in localStorage
-  const votedPollsKey = "src_voted_polls";
+  // Prevent multiple votes from same voter in user-scoped localStorage
+  const votedPollsKey = `src_voted_polls_${voterId}`;
   let votedMap: Record<string, string> = {};
   if (typeof window !== "undefined") {
     try {
       votedMap = JSON.parse(localStorage.getItem(votedPollsKey) || "{}");
+      localStorage.removeItem("src_voted_polls");
     } catch {}
   }
 
@@ -218,6 +226,7 @@ export function voteOnListingPoll(
     try {
       votedMap[listingId] = optionId;
       localStorage.setItem(votedPollsKey, JSON.stringify(votedMap));
+      localStorage.removeItem("src_voted_polls");
     } catch {}
   }
 

@@ -48,7 +48,7 @@ export default function ListingDetailPage() {
   const params = useParams();
   const router = useRouter();
   const slug = params?.slug as string;
-  const { user } = useAuth();
+  const { user, openAuthModal } = useAuth();
   const isExternalUser = Boolean(
     user && (user.userType === "EXTERNAL_STUDENT" || user.isCollegeStudent === false)
   );
@@ -73,7 +73,21 @@ export default function ListingDetailPage() {
   const [votedPolls, setVotedPolls] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    setVotedPolls(getStoredVotedPolls());
+    // Purge any obsolete un-scoped legacy voted key from storage
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("src_voted_polls");
+      } catch {}
+    }
+
+    if (user?.uid) {
+      setVotedPolls(getStoredVotedPolls(user.uid));
+    } else {
+      setVotedPolls({});
+    }
+  }, [user]);
+
+  useEffect(() => {
     setAllResponses(getStoredListingResponses());
 
     syncListingResponsesFromFirestore().then((res) => {
@@ -204,18 +218,23 @@ export default function ListingDetailPage() {
 
   const handleVote = (optionId: string) => {
     if (!listing) return;
+    if (!user) {
+      openAuthModal();
+      showToast("Please sign in with your student account to cast your vote.");
+      return;
+    }
     if ((listing.targetAudience === "jdcoem_only" || listing.isInterCollege === false) && isExternalUser) {
       showToast("Voting is strictly reserved for JDCOEM students.");
       return;
     }
-    const voterKey = user?.email || `anon-${Date.now()}`;
+    const voterKey = user.email || user.uid;
     const voterInfo = {
-      userId: user?.uid,
-      userName: user?.displayName || (user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : undefined),
-      userEmail: user?.email,
-      userDepartment: user?.department,
-      userYear: user?.year,
-      btId: user?.btId,
+      userId: user.uid,
+      userName: user.displayName || (user.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : undefined),
+      userEmail: user.email,
+      userDepartment: user.department,
+      userYear: user.year,
+      btId: user.btId,
       isAnonymous: Boolean(listing.pollConfig?.isAnonymous),
     };
     const res = voteOnListingPoll(listing.id, optionId, voterKey, voterInfo);
@@ -223,7 +242,7 @@ export default function ListingDetailPage() {
       if (res.updatedListing) {
         setListing(res.updatedListing);
       }
-      setVotedPolls(getStoredVotedPolls());
+      setVotedPolls(getStoredVotedPolls(user.uid));
       showToast("Vote recorded successfully!");
       try {
         confetti({ particleCount: 60, spread: 70, origin: { y: 0.6 } });
@@ -470,9 +489,9 @@ export default function ListingDetailPage() {
 
           {/* LIVE POLL PARTICIPATION */}
           {isPoll && listing.pollConfig && (() => {
-            const userVotedOptionId = listing ? votedPolls[listing.id] : null;
+            const userVotedOptionId = user && listing ? votedPolls[listing.id] : null;
             const isOptionValid = Boolean(listing && userVotedOptionId && listing.pollConfig.options.some((o) => o.id === userVotedOptionId));
-            const hasVoted = Boolean(userVotedOptionId) && isOptionValid && totalPollVotes > 0;
+            const hasVoted = Boolean(user) && Boolean(userVotedOptionId) && isOptionValid && totalPollVotes > 0;
 
             return (
               <div className="p-6 sm:p-8 border-t border-slate-200 space-y-5">
@@ -481,9 +500,29 @@ export default function ListingDetailPage() {
                     {hasVoted ? "Poll Results" : "Cast Your Vote"}
                   </h3>
                   <span className="text-xs font-bold text-slate-400">
-                    {hasVoted ? "✓ Vote Submitted" : "Select an option below"}
+                    {!user
+                      ? "Sign in to vote"
+                      : hasVoted
+                      ? "✓ Vote Submitted"
+                      : "Select an option below"}
                   </span>
                 </div>
+
+                {!user && (
+                  <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-bold text-[#17458F]">
+                    <div className="flex items-center gap-2.5">
+                      <Lock className="w-4 h-4 text-[#17458F] shrink-0" />
+                      <span>Sign in with your student account to participate in this poll.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={openAuthModal}
+                      className="px-4 py-2 rounded-xl bg-[#17458F] text-white hover:bg-[#123670] transition-colors shrink-0 cursor-pointer text-xs font-bold text-center"
+                    >
+                      Sign In to Vote
+                    </button>
+                  </div>
+                )}
 
                 {isJdcoemOnly && isExternalUser && (
                   <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center gap-2.5 text-amber-800 text-xs font-bold">
@@ -502,7 +541,16 @@ export default function ListingDetailPage() {
                         key={opt.id}
                         type="button"
                         disabled={(isJdcoemOnly && isExternalUser) || hasVoted}
-                        onClick={() => !hasVoted && handleVote(opt.id)}
+                        onClick={() => {
+                          if (!user) {
+                            openAuthModal();
+                            showToast("Please sign in with your student account to cast your vote.");
+                            return;
+                          }
+                          if (!hasVoted) {
+                            handleVote(opt.id);
+                          }
+                        }}
                         className={cn(
                           "w-full relative overflow-hidden rounded-2xl border p-4 text-left transition-all",
                           isJdcoemOnly && isExternalUser

@@ -27,7 +27,8 @@ import {
   subscribeToListings, 
   syncListingsFromFirestore,
   voteOnListingPoll, 
-  getStoredVotedPolls
+  getStoredVotedPolls,
+  syncListingResponsesFromFirestore
 } from "@/lib/listingsStore";
 import { ListingItem, ListingPillar } from "@/types/listings";
 import { useAuth } from "@/context/AuthContext";
@@ -35,7 +36,7 @@ import { cn } from "@/lib/utils";
 import confetti from "canvas-confetti";
 
 export default function StudentHubPage() {
-  const { user } = useAuth();
+  const { user, openAuthModal } = useAuth();
   const isExternalUser = Boolean(
     user && (user.userType === "EXTERNAL_STUDENT" || user.isCollegeStudent === false)
   );
@@ -46,8 +47,43 @@ export default function StudentHubPage() {
   const [feedbackNotice, setFeedbackNotice] = useState<string | null>(null);
 
   useEffect(() => {
+    // Purge any obsolete un-scoped legacy voted key from storage
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("src_voted_polls");
+      } catch {}
+    }
+
+    if (user?.uid) {
+      setVotedPolls(getStoredVotedPolls(user.uid));
+      // Reconcile user's votes from remote Firestore ballot records for cross-device consistency
+      syncListingResponsesFromFirestore().then((res) => {
+        if (res && Array.isArray(res)) {
+          const userVotes = res.filter(
+            (r) => r.listingType === "poll" && (r.userId === user.uid || (r.userEmail && r.userEmail === user.email))
+          );
+          if (userVotes.length > 0) {
+            const map: Record<string, string> = { ...getStoredVotedPolls(user.uid) };
+            userVotes.forEach((r) => {
+              if (r.listingId && r.selectedOptionIds?.[0]) {
+                map[r.listingId] = r.selectedOptionIds[0];
+              }
+            });
+            setVotedPolls(map);
+            try {
+              localStorage.setItem(`src_voted_polls_${user.uid}`, JSON.stringify(map));
+            } catch {}
+          }
+        }
+      });
+    } else {
+      // Unauthenticated: Strictly clear all voted state
+      setVotedPolls({});
+    }
+  }, [user]);
+
+  useEffect(() => {
     setListings(getStoredListings());
-    setVotedPolls(getStoredVotedPolls());
 
     // CRITICAL: Fetch fresh from Firestore on mount
     syncListingsFromFirestore().then((remote) => {
@@ -59,11 +95,13 @@ export default function StudentHubPage() {
     const unsub = subscribeToListings((updated) => {
       if (updated && Array.isArray(updated)) {
         setListings(updated);
-        setVotedPolls(getStoredVotedPolls());
+        if (user?.uid) {
+          setVotedPolls(getStoredVotedPolls(user.uid));
+        }
       }
     });
     return () => unsub();
-  }, []);
+  }, [user]);
 
   const showToast = (msg: string) => {
     setFeedbackNotice(msg);
@@ -88,19 +126,24 @@ export default function StudentHubPage() {
   }, [listings, selectedPillar, searchQuery]);
 
   const handleVote = (listingId: string, optionId: string) => {
+    if (!user) {
+      openAuthModal();
+      showToast("Please sign in with your student account to cast your vote.");
+      return;
+    }
     const matched = listings.find((l) => l.id === listingId);
     if (matched && (matched.targetAudience === "jdcoem_only" || matched.isInterCollege === false) && isExternalUser) {
       showToast("Voting on this listing is restricted to JDCOEM campus students.");
       return;
     }
-    const voterKey = user?.email || `anon-${Date.now()}`;
+    const voterKey = user.email || user.uid;
     const voterInfo = {
-      userId: user?.uid,
-      userName: user?.displayName || (user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : undefined),
-      userEmail: user?.email,
-      userDepartment: user?.department,
-      userYear: user?.year,
-      btId: user?.btId,
+      userId: user.uid,
+      userName: user.displayName || (user.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : undefined),
+      userEmail: user.email,
+      userDepartment: user.department,
+      userYear: user.year,
+      btId: user.btId,
       isAnonymous: Boolean(matched?.pollConfig?.isAnonymous),
     };
     const res = voteOnListingPoll(listingId, optionId, voterKey, voterInfo);
@@ -108,7 +151,7 @@ export default function StudentHubPage() {
       if (res.updatedListing) {
         setListings((prev) => prev.map((l) => (l.id === listingId ? res.updatedListing! : l)));
       }
-      setVotedPolls(getStoredVotedPolls());
+      setVotedPolls(getStoredVotedPolls(user.uid));
       showToast("Your vote has been cast successfully!");
       try {
         confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
@@ -252,9 +295,9 @@ export default function StudentHubPage() {
                     <div className="space-y-3 pt-2 border-t border-slate-100">
                       <div className="space-y-2">
                         {item.pollConfig.options.map((opt) => {
-                          const userVotedOptionId = votedPolls[item.id];
+                          const userVotedOptionId = user ? votedPolls[item.id] : null;
                           const isOptionValid = Boolean(item.pollConfig?.options.some((o) => o.id === userVotedOptionId));
-                          const hasVoted = Boolean(userVotedOptionId) && isOptionValid && totalPollVotes > 0;
+                          const hasVoted = Boolean(user) && Boolean(userVotedOptionId) && isOptionValid && totalPollVotes > 0;
                           const isSelectedByUser = hasVoted && userVotedOptionId === opt.id;
                           const pct = totalPollVotes > 0 ? Math.round((opt.votes / totalPollVotes) * 100) : 0;
 
@@ -263,7 +306,16 @@ export default function StudentHubPage() {
                               key={opt.id}
                               type="button"
                               disabled={hasVoted}
-                              onClick={() => !hasVoted && handleVote(item.id, opt.id)}
+                              onClick={() => {
+                                if (!user) {
+                                  openAuthModal();
+                                  showToast("Please sign in with your student account to vote.");
+                                  return;
+                                }
+                                if (!hasVoted) {
+                                  handleVote(item.id, opt.id);
+                                }
+                              }}
                               className={cn(
                                 "w-full relative overflow-hidden rounded-xl border p-3 text-left transition-all",
                                 hasVoted
@@ -322,7 +374,9 @@ export default function StudentHubPage() {
                       </div>
                       <div className="flex items-center justify-between text-[11px] pt-1">
                         <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                          {votedPolls[item.id] && item.pollConfig?.options.some((o) => o.id === votedPolls[item.id]) && totalPollVotes > 0 
+                          {!user
+                            ? "🔒 Sign in to vote"
+                            : votedPolls[item.id] && item.pollConfig?.options.some((o) => o.id === votedPolls[item.id]) && totalPollVotes > 0 
                             ? "✓ Your vote recorded" 
                             : "Select an option to vote"}
                         </span>
