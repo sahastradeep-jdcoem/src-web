@@ -13,7 +13,6 @@ import {
   Plus, 
   Trash2, 
   CheckCircle2,
-  Sparkles,
   HelpCircle,
   FileText,
   ImageIcon,
@@ -1427,18 +1426,6 @@ export function CreateListingModal({
               {/* ========================================================= */}
               {activeSection === "visuals" && (
                 <div className="space-y-6 animate-in fade-in duration-200">
-                  <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-100 flex items-start gap-3">
-                    <Sparkles className="w-5 h-5 text-[#17458F] shrink-0 mt-0.5" />
-                    <div className="space-y-0.5">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-[#17458F]">
-                        Visual Presentation &amp; Cover Media
-                      </h4>
-                      <p className="text-slate-600 text-[11px]">
-                        Upload a branded banner (16:9 ratio) or choose a campus-themed preset. Uploaded images are compressed into lightweight WebP with zero latency.
-                      </p>
-                    </div>
-                  </div>
-
                   {/* Dropzone Component */}
                   <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
                     <ImageUploadDropzone
@@ -1511,18 +1498,6 @@ export function CreateListingModal({
               {/* ========================================================= */}
               {activeSection === "qa" && selectedPillarOption.type !== "poll" && (
                 <div className="space-y-5 animate-in fade-in duration-200">
-                  <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 flex items-start gap-3">
-                    <HelpCircle className="w-5 h-5 text-[#E78023] shrink-0 mt-0.5" />
-                    <div className="space-y-0.5">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-amber-950">
-                        Custom Inquiry &amp; Intake Questionnaire
-                      </h4>
-                      <p className="text-amber-900/80 text-[11px]">
-                        Add questions for delegates, candidates, or submitters. Responses are collected and exported in the admin console.
-                      </p>
-                    </div>
-                  </div>
-
                   <CustomQuestionsBuilder
                     questions={customQuestions}
                     onChange={(qs) => setCustomQuestions(qs)}
