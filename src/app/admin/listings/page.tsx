@@ -272,7 +272,13 @@ export default function AdminListingsPage() {
 
         if (r.answers) {
           Object.entries(r.answers).forEach(([qKey, ansVal]) => {
-            flatRow[`Q: ${qKey}`] = typeof ansVal === "object" ? JSON.stringify(ansVal) : String(ansVal);
+            const matchedQ = inspectingListing.customQuestions?.find((q) => q.id === qKey);
+            const colHeader = matchedQ ? matchedQ.question : `Q: ${qKey}`;
+            flatRow[colHeader] = Array.isArray(ansVal)
+              ? ansVal.join(", ")
+              : typeof ansVal === "object"
+              ? JSON.stringify(ansVal)
+              : String(ansVal);
           });
         }
         return flatRow;
@@ -710,12 +716,21 @@ export default function AdminListingsPage() {
                             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
                               Candidate Responses
                             </span>
-                            {Object.entries(record.answers).map(([key, val]) => (
-                              <div key={key} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2">
-                                <span className="text-slate-500 font-medium sm:w-1/3">{key}:</span>
-                                <span className="font-semibold text-slate-800 sm:w-2/3">{String(val)}</span>
-                              </div>
-                            ))}
+                            {Object.entries(record.answers).map(([key, val]) => {
+                              const matchedQ = inspectingListing.customQuestions?.find((q) => q.id === key);
+                              const qLabel = matchedQ ? matchedQ.question : key;
+                              const formattedVal = Array.isArray(val)
+                                ? val.join(", ")
+                                : typeof val === "object"
+                                ? JSON.stringify(val)
+                                : String(val);
+                              return (
+                                <div key={key} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2">
+                                  <span className="text-slate-500 font-medium sm:w-1/3">{qLabel}:</span>
+                                  <span className="font-semibold text-slate-800 sm:w-2/3">{formattedVal}</span>
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
 

@@ -135,6 +135,25 @@ export default function StudentHubPage() {
       showToast("Submissions for this listing are restricted to JDCOEM students.");
       return;
     }
+
+    // Validate required dynamic custom questions
+    if (activeListingModal.customQuestions) {
+      for (const q of activeListingModal.customQuestions) {
+        if (q.required && q.type !== "note") {
+          const val = customAnswers[q.id];
+          if (q.type === "checkboxes") {
+            if (!Array.isArray(val) || val.length === 0) {
+              showToast(`Please select at least one option for "${q.question}"`);
+              return;
+            }
+          } else if (!val || !String(val).trim()) {
+            showToast(`Please answer "${q.question}"`);
+            return;
+          }
+        }
+      }
+    }
+
     setIsSubmitting(true);
 
     const ticketCode = `SRC-${activeListingModal.type.toUpperCase().slice(0, 3)}-${Math.floor(10000 + Math.random() * 90000)}`;
@@ -538,42 +557,141 @@ export default function StudentHubPage() {
                 )}
 
                 {/* Dynamic Questions (if defined) */}
-                {activeListingModal.customQuestions && activeListingModal.customQuestions.map((q) => (
-                  <div key={q.id} className="space-y-1.5 pt-2">
-                    <label className="text-xs font-bold text-slate-800">
-                      {q.question}
-                    </label>
-                    {q.type === "long_text" ? (
-                      <textarea
-                        rows={3}
-                        required={q.required}
-                        value={customAnswers[q.id] || ""}
-                        onChange={(e) => setCustomAnswers({ ...customAnswers, [q.id]: e.target.value })}
-                        className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium focus:outline-none focus:border-[#17458F]"
-                      />
-                    ) : q.type === "dropdown" || q.type === "multiple_choice" ? (
-                      <select
-                        required={q.required}
-                        value={customAnswers[q.id] || ""}
-                        onChange={(e) => setCustomAnswers({ ...customAnswers, [q.id]: e.target.value })}
-                        className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold"
-                      >
-                        <option value="">Select an option...</option>
-                        {q.options?.map((opt) => (
-                          <option key={opt} value={opt}>{opt}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type="text"
-                        required={q.required}
-                        value={customAnswers[q.id] || ""}
-                        onChange={(e) => setCustomAnswers({ ...customAnswers, [q.id]: e.target.value })}
-                        className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium focus:outline-none focus:border-[#17458F]"
-                      />
-                    )}
-                  </div>
-                ))}
+                {activeListingModal.customQuestions && activeListingModal.customQuestions.map((q) => {
+                  if (q.type === "note") {
+                    return (
+                      <div key={q.id} className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-1 my-2">
+                        <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                          <AlertCircle className="w-4 h-4 text-[#E78023] shrink-0" />
+                          <span>{q.question || "Important Notice"}</span>
+                        </div>
+                        {q.noteContent && (
+                          <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-line pl-6">
+                            {q.noteContent}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={q.id} className="space-y-1.5 pt-2">
+                      <div className="space-y-0.5">
+                        <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
+                          <span>{q.question}</span>
+                          {q.required && <span className="text-rose-500 font-bold">*</span>}
+                        </label>
+                        {q.description && (
+                          <p className="text-[11px] text-slate-500 font-medium leading-normal">
+                            {q.description}
+                          </p>
+                        )}
+                      </div>
+
+                      {q.type === "long_text" ? (
+                        <textarea
+                          rows={3}
+                          required={q.required}
+                          placeholder={q.placeholder || "Enter detailed response..."}
+                          value={customAnswers[q.id] || ""}
+                          onChange={(e) => setCustomAnswers({ ...customAnswers, [q.id]: e.target.value })}
+                          className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium focus:outline-none focus:border-[#17458F]"
+                        />
+                      ) : q.type === "checkboxes" ? (
+                        <div className="space-y-2 pt-1">
+                          {(q.options || []).map((opt) => {
+                            const selectedList: string[] = Array.isArray(customAnswers[q.id])
+                              ? customAnswers[q.id]
+                              : [];
+                            const isChecked = selectedList.includes(opt);
+                            return (
+                              <button
+                                key={opt}
+                                type="button"
+                                onClick={() => {
+                                  const next = isChecked
+                                    ? selectedList.filter((item) => item !== opt)
+                                    : [...selectedList, opt];
+                                  setCustomAnswers({ ...customAnswers, [q.id]: next });
+                                }}
+                                className={cn(
+                                  "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-left text-xs font-semibold transition-all cursor-pointer",
+                                  isChecked
+                                    ? "bg-[#17458F]/5 border-[#17458F] text-[#17458F] shadow-2xs"
+                                    : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300"
+                                )}
+                              >
+                                <div
+                                  className={cn(
+                                    "w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition-all",
+                                    isChecked
+                                      ? "bg-[#17458F] border-[#17458F] text-white"
+                                      : "bg-white border-slate-300"
+                                  )}
+                                >
+                                  {isChecked && <Check className="w-3 h-3 text-white stroke-[3]" />}
+                                </div>
+                                <span className="flex-1">{opt}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : q.type === "multiple_choice" ? (
+                        <div className="space-y-2 pt-1">
+                          {(q.options || []).map((opt) => {
+                            const isSelected = customAnswers[q.id] === opt;
+                            return (
+                              <button
+                                key={opt}
+                                type="button"
+                                onClick={() => setCustomAnswers({ ...customAnswers, [q.id]: opt })}
+                                className={cn(
+                                  "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-left text-xs font-semibold transition-all cursor-pointer",
+                                  isSelected
+                                    ? "bg-[#17458F]/5 border-[#17458F] text-[#17458F] shadow-2xs"
+                                    : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300"
+                                )}
+                              >
+                                <div
+                                  className={cn(
+                                    "w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-all",
+                                    isSelected
+                                      ? "border-[#17458F] bg-[#17458F]"
+                                      : "border-slate-300 bg-white"
+                                  )}
+                                >
+                                  {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                </div>
+                                <span className="flex-1">{opt}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : q.type === "dropdown" ? (
+                        <select
+                          required={q.required}
+                          value={customAnswers[q.id] || ""}
+                          onChange={(e) => setCustomAnswers({ ...customAnswers, [q.id]: e.target.value })}
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-none focus:border-[#17458F]"
+                        >
+                          <option value="">Select an option...</option>
+                          {q.options?.map((opt) => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          required={q.required}
+                          placeholder={q.placeholder || "Your answer..."}
+                          value={customAnswers[q.id] || ""}
+                          onChange={(e) => setCustomAnswers({ ...customAnswers, [q.id]: e.target.value })}
+                          className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium focus:outline-none focus:border-[#17458F]"
+                        />
+                      )}
+                    </div>
+                  );
+                })}
 
                 {/* Footer Buttons */}
                 <div className="pt-6 border-t border-slate-200 flex items-center justify-end gap-3">
