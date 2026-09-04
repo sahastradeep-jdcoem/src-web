@@ -119,6 +119,10 @@ export default function ListingDetailPage() {
            l.title.toLowerCase().replace(/[^a-z0-9]+/g, "-") === clean)
       );
       if (matched) {
+        if (matched.type === "poll") {
+          router.replace("/hub");
+          return null;
+        }
         setListing(matched);
         return matched;
       }

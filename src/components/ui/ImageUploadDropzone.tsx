@@ -15,6 +15,7 @@ interface ImageUploadDropzoneProps {
   sublabel?: string;
   recommendedSize?: string;
   aspectRatio?: "16:9" | "3:4" | "4:5" | "21:9" | "1:1" | "auto";
+  allowedAspectRatios?: AspectRatioType[];
   previewUrl?: string;
   storagePath?: string;
   className?: string;
@@ -28,6 +29,7 @@ export function ImageUploadDropzone({
   sublabel = "Auto-compressed to high-speed WebP format",
   recommendedSize,
   aspectRatio = "16:9",
+  allowedAspectRatios,
   previewUrl,
   storagePath = "uploads",
   className = "",
@@ -425,6 +427,7 @@ export function ImageUploadDropzone({
           }}
           imageSrc={rawImageToCrop}
           initialAspectRatio={aspectRatio === "auto" ? "16:9" : (aspectRatio as AspectRatioType)}
+          allowedAspectRatios={allowedAspectRatios}
           isAvatar={aspectRatio === "1:1" || storagePath.includes("avatars") || storagePath.includes("logo")}
           onCropComplete={handleCropComplete}
           title={`Crop & Frame ${label}`}

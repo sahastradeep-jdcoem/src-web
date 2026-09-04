@@ -1401,6 +1401,7 @@ export function CreateListingModal({
                       label="Cover Banner (16:9)"
                       sublabel="Displayed on listing cards, discovery hub, and share previews"
                       aspectRatio="16:9"
+                      allowedAspectRatios={selectedPillarOption?.type === "poll" ? ["16:9"] : undefined}
                       recommendedSize="1200 x 675 px (16:9)"
                       storagePath="listings/covers"
                       previewUrl={coverImage}

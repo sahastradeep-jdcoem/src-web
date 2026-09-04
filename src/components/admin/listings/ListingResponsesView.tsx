@@ -298,11 +298,11 @@ export function ListingResponsesView({
             </button>
 
             <Link
-              href={`/hub/${listing.slug}`}
+              href={listing.type === "poll" ? "/hub" : `/hub/${listing.slug}`}
               target="_blank"
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all shadow-xs cursor-pointer"
             >
-              <span>View Public Poll</span>
+              <span>{listing.type === "poll" ? "View on Student Hub" : "View Public Page"}</span>
               <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
             </Link>
           </div>

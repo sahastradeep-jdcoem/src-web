@@ -33,6 +33,7 @@ interface ImageCropperModalProps {
   onClose: () => void;
   imageSrc: string;
   initialAspectRatio?: AspectRatioType;
+  allowedAspectRatios?: AspectRatioType[];
   isAvatar?: boolean;
   onCropComplete: (croppedDataUrl: string) => void;
   title?: string;
@@ -52,6 +53,7 @@ export function ImageCropperModal({
   onClose,
   imageSrc,
   initialAspectRatio = "16:9",
+  allowedAspectRatios,
   isAvatar = false,
   onCropComplete,
   title = "Crop & Frame Photo",
@@ -77,7 +79,11 @@ export function ImageCropperModal({
   // Sync initial state when modal opens
   useEffect(() => {
     if (isOpen) {
-      const initial = initialAspectRatio === "auto" ? "16:9" : initialAspectRatio;
+      let initial: AspectRatioType = initialAspectRatio === "auto" ? "16:9" : initialAspectRatio;
+      if (allowedAspectRatios && allowedAspectRatios.length > 0 && !allowedAspectRatios.includes(initial)) {
+        const first = allowedAspectRatios[0];
+        initial = first === "auto" ? "16:9" : first;
+      }
       setSelectedRatio(initial);
       setZoom(1);
       setRotationSteps(0);
@@ -88,7 +94,7 @@ export function ImageCropperModal({
       setImageLoaded(false);
       setShowCircleMask(isAvatar || initial === "1:1");
     }
-  }, [isOpen, initialAspectRatio, isAvatar]);
+  }, [isOpen, initialAspectRatio, allowedAspectRatios, isAvatar]);
 
   // Compute aspect ratio numerical value
   const getRatioMultiplier = useCallback((ratio: AspectRatioType): number => {
@@ -330,7 +336,7 @@ export function ImageCropperModal({
 
   if (!isOpen || !imageSrc) return null;
 
-  const ratioOptions: RatioPreset[] = [
+  const allRatioOptions: RatioPreset[] = [
     { id: "1:1", label: "1:1 Square", sublabel: "Avatar / Logo / Badge", ratio: 1, width: 14, height: 14 },
     { id: "16:9", label: "16:9 Banner", sublabel: "Landscape Hero / Card", ratio: 16 / 9, width: 18, height: 10 },
     { id: "4:5", label: "4:5 Poster", sublabel: "Event Story / Feed", ratio: 4 / 5, width: 12, height: 15 },
@@ -338,6 +344,10 @@ export function ImageCropperModal({
     { id: "21:9", label: "21:9 Panoramic", sublabel: "Ultrawide Banner", ratio: 21 / 9, width: 22, height: 9 },
     { id: "free", label: "Original Ratio", sublabel: "Natural Dimensions", ratio: 0, width: 14, height: 12 },
   ];
+
+  const ratioOptions = allowedAspectRatios && allowedAspectRatios.length > 0
+    ? allRatioOptions.filter((r) => allowedAspectRatios.includes(r.id))
+    : allRatioOptions;
 
   return (
     <Modal
@@ -392,7 +402,11 @@ export function ImageCropperModal({
           </div>
 
           {/* Ratio Pills Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+          <div className={
+            ratioOptions.length === 1
+              ? "grid grid-cols-1 sm:grid-cols-2 max-w-sm gap-2"
+              : "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2"
+          }>
             {ratioOptions.map((opt) => {
               const isSelected = selectedRatio === opt.id;
               return (
