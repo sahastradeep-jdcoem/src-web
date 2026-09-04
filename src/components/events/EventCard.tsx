@@ -48,6 +48,14 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
                 Featured Fest
               </span>
             )}
+            <span className={cn(
+              "text-[10px] font-sans font-bold uppercase tracking-wider px-2.5 py-1 rounded-full shadow-md flex items-center gap-1",
+              event.targetAudience === "jdcoem_only" || event.isInterCollege === false
+                ? "bg-amber-500 text-white"
+                : "bg-teal-600 text-white"
+            )}>
+              {event.targetAudience === "jdcoem_only" || event.isInterCollege === false ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
+            </span>
             <Badge variant={statusVariant} size="sm">
               {event.status}
             </Badge>
@@ -148,6 +156,14 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
               {event.category}
             </span>
           )}
+          <span className={cn(
+            "text-[10px] font-sans font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full shadow-xs flex items-center gap-1",
+            event.targetAudience === "jdcoem_only" || event.isInterCollege === false
+              ? "bg-amber-500 text-white"
+              : "bg-teal-600 text-white"
+          )}>
+            {event.targetAudience === "jdcoem_only" || event.isInterCollege === false ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
+          </span>
           <Badge variant={statusVariant} size="sm">
             {event.status}
           </Badge>

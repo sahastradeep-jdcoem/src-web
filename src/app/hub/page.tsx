@@ -20,20 +20,26 @@ import {
   AlertCircle,
   FileText,
   Lock,
-  ExternalLink
+  ExternalLink,
+  GraduationCap,
+  Globe
 } from "lucide-react";
 import { 
   getStoredListings, 
   subscribeToListings, 
-  voteOnListingPoll,
+  voteOnListingPoll, 
   saveStoredListingResponse 
 } from "@/lib/listingsStore";
 import { ListingItem, ListingPillar, ListingResponseRecord } from "@/types/listings";
 import { useAuth } from "@/context/AuthContext";
+import { cn } from "@/lib/utils";
 import confetti from "canvas-confetti";
 
 export default function StudentHubPage() {
   const { user } = useAuth();
+  const isExternalUser = Boolean(
+    user && (user.userType === "EXTERNAL_STUDENT" || user.isCollegeStudent === false || (user.collegeName && !user.email?.endsWith("@jdcoem.ac.in")))
+  );
   const [listings, setListings] = useState<ListingItem[]>([]);
   const [selectedPillar, setSelectedPillar] = useState<ListingPillar | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -94,6 +100,11 @@ export default function StudentHubPage() {
   }, [listings, selectedPillar, searchQuery]);
 
   const handleVote = (listingId: string, optionId: string) => {
+    const matched = listings.find((l) => l.id === listingId);
+    if (matched && (matched.targetAudience === "jdcoem_only" || matched.isInterCollege === false) && isExternalUser) {
+      showToast("Voting on this listing is restricted to JDCOEM campus students.");
+      return;
+    }
     const voterKey = user?.email || `anon-${Date.now()}`;
     const res = voteOnListingPoll(listingId, optionId, voterKey);
     if (res.success) {
@@ -107,6 +118,10 @@ export default function StudentHubPage() {
   };
 
   const handleOpenActionModal = (item: ListingItem) => {
+    if ((item.targetAudience === "jdcoem_only" || item.isInterCollege === false) && isExternalUser) {
+      showToast("Applications for this listing are reserved for JDCOEM students.");
+      return;
+    }
     setActiveListingModal(item);
     setCustomAnswers({});
     setSubmissionLink("");
@@ -116,6 +131,10 @@ export default function StudentHubPage() {
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeListingModal) return;
+    if ((activeListingModal.targetAudience === "jdcoem_only" || activeListingModal.isInterCollege === false) && isExternalUser) {
+      showToast("Submissions for this listing are restricted to JDCOEM students.");
+      return;
+    }
     setIsSubmitting(true);
 
     const ticketCode = `SRC-${activeListingModal.type.toUpperCase().slice(0, 3)}-${Math.floor(10000 + Math.random() * 90000)}`;
@@ -234,9 +253,19 @@ export default function StudentHubPage() {
                 <div className="space-y-4">
                   {/* Top Badges */}
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full bg-[#17458F] text-white">
-                      {item.type.toUpperCase()}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full bg-[#17458F] text-white">
+                        {item.type.toUpperCase()}
+                      </span>
+                      <span className={cn(
+                        "text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full border",
+                        (item.targetAudience === "jdcoem_only" || item.isInterCollege === false)
+                          ? "bg-amber-50 text-amber-800 border-amber-200"
+                          : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                      )}>
+                        {(item.targetAudience === "jdcoem_only" || item.isInterCollege === false) ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
+                      </span>
+                    </div>
                     {item.deadline && (
                       <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
                         <Clock className="w-3 h-3 text-[#E78023]" />
@@ -331,16 +360,23 @@ export default function StudentHubPage() {
                 {/* Card Action Button */}
                 {!isPoll && (
                   <div className="pt-4 border-t border-slate-100">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenActionModal(item)}
-                      className="w-full py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
-                    >
-                      <span>
-                        {isOpp ? "Apply for Fellowship" : isSub ? "Submit Entry" : isIssue ? "File Confidential Concern" : "Apply / Audition"}
-                      </span>
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
+                    {(item.targetAudience === "jdcoem_only" || item.isInterCollege === false) && isExternalUser ? (
+                      <div className="w-full py-2.5 px-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2">
+                        <Lock className="w-3.5 h-3.5 text-amber-700" />
+                        <span>JDCOEM Students Only</span>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenActionModal(item)}
+                        className="w-full py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                      >
+                        <span>
+                          {isOpp ? "Apply for Fellowship" : isSub ? "Submit Entry" : isIssue ? "File Confidential Concern" : "Apply / Audition"}
+                        </span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    )}
                     <div className="pt-2 text-center">
                       <Link
                         href={`/hub/${item.slug}`}

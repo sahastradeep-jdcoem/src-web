@@ -8,6 +8,8 @@ export type EventCategory =
 
 export type EventStatus = "Registration Open" | "Upcoming" | "Completed" | "draft";
 
+export type TargetAudience = "jdcoem_only" | "inter_college";
+
 export interface EventScheduleItem {
   time: string;
   title: string;
@@ -85,6 +87,8 @@ export interface EventItem {
   parentEventSlug?: string;
   parentEventName?: string;
   subEventBadge?: string;
+  targetAudience?: TargetAudience; // "jdcoem_only" | "inter_college"
+  isInterCollege?: boolean;
 }
 
 export interface ClubLeader {

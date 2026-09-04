@@ -22,6 +22,8 @@ export type ListingPillar =
 
 export type ListingStatus = "draft" | "active" | "closed" | "archived";
 
+export type TargetAudience = "jdcoem_only" | "inter_college";
+
 export interface PollOption {
   id: string;
   text: string;
@@ -78,6 +80,8 @@ export interface ListingItem {
   type: ListingType;
   status: ListingStatus;
   isLive?: boolean;
+  targetAudience?: TargetAudience; // "jdcoem_only" | "inter_college"
+  isInterCollege?: boolean; // true if open to other colleges, false if campus exclusive
   summary: string;
   description: string;
   organizer: string;

@@ -18,10 +18,11 @@ import {
   HelpCircle,
   FileText
 } from "lucide-react";
-import { ListingItem, ListingType, ListingPillar } from "@/types/listings";
+import { ListingItem, ListingType, ListingPillar, TargetAudience } from "@/types/listings";
 import { CustomQuestionsBuilder } from "@/components/admin/events/CustomQuestionsBuilder";
 import { CustomQuestion } from "@/types";
 import { saveStoredListings, getStoredListings } from "@/lib/listingsStore";
+import { cn } from "@/lib/utils";
 
 interface CreateListingModalProps {
   isOpen: boolean;
@@ -115,6 +116,7 @@ export function CreateListingModal({
   const [organizer, setOrganizer] = useState("SRC JDCOEM");
   const [coverImage, setCoverImage] = useState("https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1200&auto=format&fit=crop");
   const [deadline, setDeadline] = useState("");
+  const [targetAudience, setTargetAudience] = useState<TargetAudience>("inter_college");
   const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
 
   // Subtype-Specific State
@@ -161,6 +163,8 @@ export function CreateListingModal({
       type: selectedPillarOption.type,
       status: "active",
       isLive: true,
+      targetAudience,
+      isInterCollege: targetAudience === "inter_college",
       summary: summary.trim() || title.trim(),
       description: description.trim() || summary.trim() || title.trim(),
       organizer,
@@ -345,6 +349,62 @@ export function CreateListingModal({
                     className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
                   />
                 </div>
+              </div>
+
+              {/* Target Audience & Eligibility Toggle Switch */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-[#17458F]" />
+                      <span>Target Audience &amp; Eligibility</span>
+                    </label>
+                    <p className="text-[11px] text-slate-500 font-medium">
+                      Visible to everyone publicly. Control whether registration is campus-only or open.
+                    </p>
+                  </div>
+                  <span className={cn(
+                    "text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full border transition-all",
+                    targetAudience === "jdcoem_only"
+                      ? "bg-amber-50 text-amber-800 border-amber-200"
+                      : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                  )}>
+                    {targetAudience === "jdcoem_only" ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
+                  </span>
+                </div>
+
+                {/* Tactile 2-Segment Toggle */}
+                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-200/70 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setTargetAudience("jdcoem_only")}
+                    className={cn(
+                      "py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+                      targetAudience === "jdcoem_only"
+                        ? "bg-white text-[#17458F] shadow-xs"
+                        : "text-slate-600 hover:text-slate-900"
+                    )}
+                  >
+                    <span>🎓 JDCOEM Students Only</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTargetAudience("inter_college")}
+                    className={cn(
+                      "py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+                      targetAudience === "inter_college"
+                        ? "bg-white text-[#E78023] shadow-xs"
+                        : "text-slate-600 hover:text-slate-900"
+                    )}
+                  >
+                    <span>🌐 Inter-College (Open to All)</span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-500 font-medium italic">
+                  {targetAudience === "jdcoem_only"
+                    ? "ℹ️ External non-JDCOEM students can view details, but registration & submission will be restricted."
+                    : "ℹ️ Open to students and external delegates across all colleges and institutions."}
+                </p>
               </div>
 
               <div className="space-y-1.5">

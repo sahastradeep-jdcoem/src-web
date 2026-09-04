@@ -81,6 +81,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
   const isFaculty = user?.role === "FACULTY" || user?.userType === "FACULTY";
   const isExternal = user?.userType === "EXTERNAL_STUDENT" || user?.isCollegeStudent === false || Boolean(user?.collegeName);
+  const isJdcoemOnly = event.targetAudience === "jdcoem_only" || event.isInterCollege === false;
 
   // Form State
   const [formData, setFormData] = useState({
@@ -754,10 +755,12 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               </div>
               <div className="space-y-1.5">
                 <h4 className="font-heading font-extrabold text-lg text-[#0F172A]">
-                  Student Sign-In Required
+                  {isJdcoemOnly ? "JDCOEM Student Sign-In Required" : "Student Sign-In Required"}
                 </h4>
                 <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                  Primary participation details are verified directly from your college Google profile. Please sign in to continue your event accreditation.
+                  {isJdcoemOnly
+                    ? "This event is exclusively reserved for JDCOEM students. Please sign in with your official @jdcoem.ac.in Google account to verify your student credentials."
+                    : "Primary participation details are verified directly from your student Google profile. Please sign in to continue your event accreditation."}
                 </p>
               </div>
               <Button
@@ -769,6 +772,43 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                 <LogIn className="w-4 h-4" />
                 <span>Sign In with College Account</span>
               </Button>
+            </div>
+          ) : isJdcoemOnly && isExternal ? (
+            /* Ineligible External Student Alert */
+            <div className="p-8 sm:p-10 rounded-3xl bg-amber-50/90 border-2 border-amber-300 text-amber-950 space-y-5 max-w-xl mx-auto text-center shadow-md animate-in fade-in">
+              <div className="w-14 h-14 rounded-3xl bg-amber-500 text-white flex items-center justify-center mx-auto shadow-lg shadow-amber-500/25">
+                <GraduationCap className="w-7 h-7" />
+              </div>
+              <div className="space-y-2">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                  Campus Exclusive Listing
+                </span>
+                <h4 className="font-heading font-extrabold text-2xl text-[#0F172A] tracking-tight">
+                  JDCOEM Students Only
+                </h4>
+                <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed">
+                  This listing is strictly reserved for verified students of <strong>JD College of Engineering &amp; Management (JDCOEM)</strong>. 
+                  Your signed-in profile is registered as an external delegate from <strong className="text-slate-800">{formData.collegeName || user?.collegeName || "another institution"}</strong>.
+                </p>
+                <p className="text-xs text-slate-500 font-medium pt-1">
+                  Registration for this event is unavailable for non-JDCOEM students. You can explore and register for institutional events that are open to all colleges!
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                <Link
+                  href="/events"
+                  className="px-5 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-all shadow-xs"
+                >
+                  Browse Inter-College Events
+                </Link>
+                <Link
+                  href={`/events/${event.slug}`}
+                  className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider transition-all"
+                >
+                  Return to Event Details
+                </Link>
+              </div>
             </div>
           ) : (
             /* Verified Student Profile Display */

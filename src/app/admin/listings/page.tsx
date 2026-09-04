@@ -31,7 +31,7 @@ import {
   getStoredListingResponses,
   saveStoredListingResponse
 } from "@/lib/listingsStore";
-import { ListingItem, ListingType, ListingPillar, ListingResponseRecord } from "@/types/listings";
+import { ListingItem, ListingType, ListingPillar, ListingResponseRecord, TargetAudience } from "@/types/listings";
 import { CreateListingModal } from "@/components/admin/listings/CreateListingModal";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
@@ -108,6 +108,14 @@ export default function AdminListingsPage() {
     setListings(updated as ListingItem[]);
     saveStoredListings(updated as ListingItem[]);
     showToast(`Marked "${item.title}" as ${nextStatus.toUpperCase()}.`);
+  };
+
+  const handleToggleAudience = (item: ListingItem) => {
+    const nextAudience: TargetAudience = item.targetAudience === "jdcoem_only" ? "inter_college" : "jdcoem_only";
+    const updated = listings.map((l) => (l.id === item.id ? { ...l, targetAudience: nextAudience, isInterCollege: nextAudience === "inter_college" } : l));
+    setListings(updated as ListingItem[]);
+    saveStoredListings(updated as ListingItem[]);
+    showToast(`Updated audience for "${item.title}" to ${nextAudience === "inter_college" ? "INTER-COLLEGE" : "JDCOEM ONLY"}.`);
   };
 
   const handleUpdateResponseStatus = (
@@ -277,6 +285,7 @@ export default function AdminListingsPage() {
                   <th className="py-3.5 px-6">Type &amp; Pillar</th>
                   <th className="py-3.5 px-6">Organizing Entity</th>
                   <th className="py-3.5 px-6">Responses / Votes</th>
+                  <th className="py-3.5 px-6">Audience</th>
                   <th className="py-3.5 px-6">Status</th>
                   <th className="py-3.5 px-6 text-right">Actions</th>
                 </tr>
@@ -315,6 +324,21 @@ export default function AdminListingsPage() {
                             {respCount} Submissions
                           </span>
                         )}
+                      </td>
+
+                      <td className="py-4 px-6">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleAudience(item)}
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer border ${
+                            item.targetAudience === "jdcoem_only"
+                              ? "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
+                              : "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"
+                          }`}
+                          title="Click to toggle between JDCOEM Only and Inter-College"
+                        >
+                          {item.targetAudience === "jdcoem_only" ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
+                        </button>
                       </td>
 
                       <td className="py-4 px-6">

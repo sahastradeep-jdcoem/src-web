@@ -11,17 +11,26 @@ import {
   Trophy, 
   Users, 
   ArrowRight, 
-  Sparkles 
+  Sparkles,
+  Lock,
+  GraduationCap,
+  Globe
 } from "lucide-react";
 import { mockEvents } from "@/data/events";
 import { getStoredEvents, syncEventsFromFirestore } from "@/lib/eventsStore";
 import { EventItem } from "@/types";
 import { RegistrationWizard } from "@/components/registration/RegistrationWizard";
 import { Badge } from "@/components/ui/Badge";
+import { useAuth } from "@/context/AuthContext";
+import { cn } from "@/lib/utils";
 
 export default function EventRegisterPage() {
   const params = useParams();
   const slug = params?.slug as string;
+  const { user } = useAuth();
+  const isExternal = Boolean(
+    user && (user.userType === "EXTERNAL_STUDENT" || user.isCollegeStudent === false || (user.collegeName && !user.email?.endsWith("@jdcoem.ac.in")))
+  );
 
   const [event, setEvent] = useState<EventItem | null>(null);
   const [subEvents, setSubEvents] = useState<EventItem[]>([]);
@@ -193,21 +202,34 @@ export default function EventRegisterPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {subEvents.map((sub) => {
                     const topPrize = sub.prizes && sub.prizes[0] ? sub.prizes[0].amount : null;
+                    const subIsJdcoemOnly = sub.targetAudience === "jdcoem_only" || sub.isInterCollege === false;
+                    const subIsRestricted = subIsJdcoemOnly && isExternal;
+
                     return (
                       <div
                         key={sub.id}
                         className="rounded-3xl bg-white border border-slate-200 hover:border-[#17458F] p-6 flex flex-col justify-between space-y-5 hover:shadow-xl transition-all group"
                       >
                         <div className="space-y-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full bg-[#E78023] text-white">
-                              {sub.category}
-                            </span>
-                            {sub.subEventBadge && (
-                              <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full bg-slate-900 text-white">
-                                {sub.subEventBadge}
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full bg-[#E78023] text-white">
+                                {sub.category}
                               </span>
-                            )}
+                              {sub.subEventBadge && (
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full bg-slate-900 text-white">
+                                  {sub.subEventBadge}
+                                </span>
+                              )}
+                            </div>
+                            <span className={cn(
+                              "text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full border",
+                              subIsJdcoemOnly
+                                ? "bg-amber-50 text-amber-800 border-amber-200"
+                                : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                            )}>
+                              {subIsJdcoemOnly ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
+                            </span>
                           </div>
 
                           <h3 className="font-heading font-extrabold text-xl text-[#0F172A] uppercase group-hover:text-[#17458F] transition-colors">
@@ -246,14 +268,21 @@ export default function EventRegisterPage() {
                             </span>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => setSelectedSubEvent(sub)}
-                            className="px-5 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <span>Select &amp; Register</span>
-                            <ArrowRight className="w-3.5 h-3.5" />
-                          </button>
+                          {subIsRestricted ? (
+                            <div className="px-3.5 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold flex items-center gap-1.5">
+                              <Lock className="w-3.5 h-3.5 text-amber-700" />
+                              <span>JDCOEM Only</span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedSubEvent(sub)}
+                              className="px-5 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <span>Select &amp; Register</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     );

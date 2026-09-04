@@ -18,7 +18,10 @@ import {
   Trophy,
   AlertCircle,
   Layers,
-  ArrowDown
+  ArrowDown,
+  Lock,
+  GraduationCap,
+  Globe
 } from "lucide-react";
 import { mockEvents } from "@/data/events";
 import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, sanitizeEventItem } from "@/lib/eventsStore";
@@ -27,14 +30,21 @@ import { Badge } from "@/components/ui/Badge";
 import { Accordion } from "@/components/ui/Accordion";
 import { ScheduleTimeline } from "@/components/events/ScheduleTimeline";
 import { PrizeCard } from "@/components/events/PrizeCard";
+import { useAuth } from "@/context/AuthContext";
+import { cn } from "@/lib/utils";
 
 export default function EventDetailPage() {
   const params = useParams();
   const slug = params?.slug as string;
+  const { user, openAuthModal } = useAuth();
 
   const [event, setEvent] = useState<EventItem | null>(null);
   const [subEvents, setSubEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const isExternalStudent = Boolean(
+    user && (user.userType === "EXTERNAL_STUDENT" || user.isCollegeStudent === false || (user.collegeName && !user.email?.endsWith("@jdcoem.ac.in")))
+  );
 
   const findEvent = (allEvents: EventItem[], targetSlug: string): EventItem | null => {
     if (!targetSlug) return null;
@@ -145,6 +155,7 @@ export default function EventDetailPage() {
   }
 
   const isRegistrationOpen = event.status === "Registration Open";
+  const isJdcoemOnly = event.targetAudience === "jdcoem_only" || event.isInterCollege === false;
 
   const displayRules = Array.from(
     new Set((event.rules || []).map((s) => (typeof s === "string" ? s.trim() : s)).filter(Boolean))
@@ -185,6 +196,24 @@ export default function EventDetailPage() {
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-[#E78023] text-white shadow-xs">
                 {event.category}
+              </span>
+              <span className={cn(
+                "text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full shadow-xs flex items-center gap-1.5",
+                isJdcoemOnly
+                  ? "bg-amber-500 text-white"
+                  : "bg-teal-600 text-white"
+              )}>
+                {isJdcoemOnly ? (
+                  <>
+                    <GraduationCap className="w-3.5 h-3.5" />
+                    <span>JDCOEM Students Only</span>
+                  </>
+                ) : (
+                  <>
+                    <Globe className="w-3.5 h-3.5" />
+                    <span>Inter-College (Open to All)</span>
+                  </>
+                )}
               </span>
               <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/90 text-slate-900 shadow-xs">
                 {event.status}
@@ -499,6 +528,25 @@ export default function EventDetailPage() {
                     <span className="text-slate-500 font-medium">Festival Venue</span>
                     <span className="font-bold text-slate-900 truncate max-w-[170px] text-right">{event.venue}</span>
                   </div>
+                  <div className="flex justify-between items-center py-1 border-b border-slate-100/80">
+                    <span className="text-slate-500 font-medium">Audience Eligibility</span>
+                    <span className={cn(
+                      "font-bold text-xs flex items-center gap-1",
+                      isJdcoemOnly ? "text-amber-700" : "text-emerald-700"
+                    )}>
+                      {isJdcoemOnly ? (
+                        <>
+                          <GraduationCap className="w-3.5 h-3.5" />
+                          <span>JDCOEM Campus Only</span>
+                        </>
+                      ) : (
+                        <>
+                          <Globe className="w-3.5 h-3.5" />
+                          <span>Open to All Colleges</span>
+                        </>
+                      )}
+                    </span>
+                  </div>
                   <div className="flex justify-between items-center py-1">
                     <span className="text-slate-500 font-medium">Entry Authorization</span>
                     <span className="font-bold text-[#E78023] flex items-center gap-1">
@@ -509,7 +557,17 @@ export default function EventDetailPage() {
                 </div>
 
                 {/* Action Buttons: Enhanced Pro Max CTA Stack */}
-                {subEvents.length > 0 ? (
+                {isJdcoemOnly && isExternalStudent ? (
+                  <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 space-y-2 text-center">
+                    <div className="flex items-center justify-center gap-1.5 font-bold text-xs text-amber-900 uppercase tracking-wider">
+                      <Lock className="w-4 h-4 text-amber-700" />
+                      <span>JDCOEM Campus Exclusive</span>
+                    </div>
+                    <p className="text-[11px] text-amber-800 font-medium leading-relaxed">
+                      This festival is reserved exclusively for JDCOEM students. Non-JDCOEM / external delegates cannot register.
+                    </p>
+                  </div>
+                ) : subEvents.length > 0 ? (
                   <div className="space-y-2.5 pt-1">
                     {/* Primary High-Impact CTA: Choose Competition & Register */}
                     <Link
@@ -599,6 +657,25 @@ export default function EventDetailPage() {
                     <span className="text-slate-500">Registration Closes:</span>
                     <span className="font-bold text-[#E78023]">{event.registrationDeadline || "Open until slots filled"}</span>
                   </div>
+                  <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Audience Eligibility:</span>
+                    <span className={cn(
+                      "font-bold text-xs flex items-center gap-1",
+                      isJdcoemOnly ? "text-amber-700" : "text-emerald-700"
+                    )}>
+                      {isJdcoemOnly ? (
+                        <>
+                          <GraduationCap className="w-3.5 h-3.5" />
+                          <span>JDCOEM Students Only</span>
+                        </>
+                      ) : (
+                        <>
+                          <Globe className="w-3.5 h-3.5" />
+                          <span>Open to All Colleges</span>
+                        </>
+                      )}
+                    </span>
+                  </div>
                   <div className="flex justify-between items-center py-1">
                     <span className="text-slate-500">Fee:</span>
                     <span className="font-bold text-emerald-600">{event.entryFee || "Free Entry"}</span>
@@ -607,13 +684,25 @@ export default function EventDetailPage() {
 
                 {/* Action Button */}
                 {isRegistrationOpen ? (
-                  <Link
-                    href={`/events/${event.slug}/register`}
-                    className="w-full py-3.5 rounded-2xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs sm:text-sm font-bold uppercase tracking-wider text-center transition-all shadow-md shadow-[#E78023]/25 flex items-center justify-center gap-2 group cursor-pointer"
-                  >
-                    <span>REGISTER NOW</span>
-                    <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-                  </Link>
+                  isJdcoemOnly && isExternalStudent ? (
+                    <div className="space-y-2">
+                      <div className="w-full py-3.5 px-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2">
+                        <Lock className="w-4 h-4 text-amber-700 shrink-0" />
+                        <span>JDCOEM Students Only</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 text-center font-medium leading-relaxed">
+                        Registration is strictly reserved for enrolled JDCOEM students. Non-JDCOEM visiting delegates cannot register for this specific listing.
+                      </p>
+                    </div>
+                  ) : (
+                    <Link
+                      href={`/events/${event.slug}/register`}
+                      className="w-full py-3.5 rounded-2xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs sm:text-sm font-bold uppercase tracking-wider text-center transition-all shadow-md shadow-[#E78023]/25 flex items-center justify-center gap-2 group cursor-pointer"
+                    >
+                      <span>REGISTER NOW</span>
+                      <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                    </Link>
+                  )
                 ) : (
                   <div className="w-full py-3.5 rounded-2xl bg-slate-100 text-slate-400 text-xs font-bold uppercase tracking-wider text-center">
                     Registration Closed

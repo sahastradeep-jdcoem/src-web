@@ -24,15 +24,18 @@ import {
   RefreshCw,
   Image as ImageIcon,
   Loader2,
-  Layers
+  Layers,
+  Globe,
+  GraduationCap
 } from "lucide-react";
-import { EventItem, ClubItem, CustomQuestion } from "@/types";
+import { EventItem, ClubItem, CustomQuestion, TargetAudience } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
 import { CustomQuestionsBuilder } from "@/components/admin/events/CustomQuestionsBuilder";
 import { CreateListingModal } from "@/components/admin/listings/CreateListingModal";
+import { cn } from "@/lib/utils";
 import { 
   getStoredEvents, 
   saveStoredEvents, 
@@ -129,6 +132,8 @@ export default function AdminEventsPage() {
     parentEventSlug: "",
     parentEventName: "",
     subEventBadge: "",
+    targetAudience: "inter_college" as TargetAudience,
+    isInterCollege: true,
   });
 
   // Edit Event Form State
@@ -164,6 +169,8 @@ export default function AdminEventsPage() {
     parentEventSlug: "",
     parentEventName: "",
     subEventBadge: "",
+    targetAudience: "inter_college" as TargetAudience,
+    isInterCollege: true,
   });
 
   const loadData = () => {
@@ -297,6 +304,8 @@ export default function AdminEventsPage() {
       parentEventSlug: newEvent.parentEventSlug || undefined,
       parentEventName: newEvent.parentEventName || undefined,
       subEventBadge: newEvent.subEventBadge || undefined,
+      targetAudience: newEvent.targetAudience || "inter_college",
+      isInterCollege: newEvent.targetAudience === "inter_college",
     };
 
     const updated = [created, ...eventsList];
@@ -337,7 +346,29 @@ export default function AdminEventsPage() {
       parentEventSlug: "",
       parentEventName: "",
       subEventBadge: "",
+      targetAudience: "inter_college",
+      isInterCollege: true,
     });
+  };
+
+  const handleToggleAudience = (evt: EventItem) => {
+    const nextAudience: TargetAudience = evt.targetAudience === "jdcoem_only" ? "inter_college" : "jdcoem_only";
+    const updated = eventsList.map((e) =>
+      e.id === evt.id || e.slug === evt.slug
+        ? {
+            ...e,
+            targetAudience: nextAudience,
+            isInterCollege: nextAudience === "inter_college",
+          }
+        : e
+    );
+    setEventsList(updated);
+    saveStoredEvents(updated);
+    showNotice(
+      `Updated eligibility for "${evt.name}" to ${
+        nextAudience === "inter_college" ? "INTER-COLLEGE (OPEN TO ALL)" : "JDCOEM STUDENTS ONLY"
+      }.`
+    );
   };
 
   const handleStartEdit = (evt: EventItem) => {
@@ -382,6 +413,8 @@ export default function AdminEventsPage() {
       parentEventSlug: evt.parentEventSlug || "",
       parentEventName: evt.parentEventName || "",
       subEventBadge: evt.subEventBadge || "",
+      targetAudience: (evt.targetAudience || (evt.isInterCollege === false ? "jdcoem_only" : "inter_college")) as TargetAudience,
+      isInterCollege: evt.targetAudience ? evt.targetAudience === "inter_college" : evt.isInterCollege !== false,
     });
   };
 
@@ -439,6 +472,8 @@ export default function AdminEventsPage() {
             parentEventSlug: editForm.parentEventSlug || undefined,
             parentEventName: editForm.parentEventName || undefined,
             subEventBadge: editForm.subEventBadge || undefined,
+            targetAudience: editForm.targetAudience || "inter_college",
+            isInterCollege: editForm.targetAudience === "inter_college",
           }
         : item
     );
@@ -630,6 +665,7 @@ export default function AdminEventsPage() {
                   <th className="py-3.5 px-6">Organized By</th>
                   <th className="py-3.5 px-6">Category</th>
                   <th className="py-3.5 px-6">Scheduled Date</th>
+                  <th className="py-3.5 px-6">Audience</th>
                   <th className="py-3.5 px-6">Status</th>
                   <th className="py-3.5 px-6 text-right">Actions</th>
                 </tr>
@@ -669,6 +705,20 @@ export default function AdminEventsPage() {
                         <CalendarIcon className="w-3.5 h-3.5 text-[#E78023]" />
                         <span>{evt.date}</span>
                       </div>
+                    </td>
+                    <td className="py-4 px-6">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleAudience(evt)}
+                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer border ${
+                          evt.targetAudience === "jdcoem_only"
+                            ? "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
+                            : "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"
+                        }`}
+                        title="Click to toggle between JDCOEM Only and Inter-College"
+                      >
+                        {evt.targetAudience === "jdcoem_only" ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
+                      </button>
                     </td>
                     <td className="py-4 px-6">
                       <Badge
@@ -919,6 +969,64 @@ export default function AdminEventsPage() {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Target Audience & Eligibility Toggle Switch */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-[#17458F]" />
+                    <span>Target Audience &amp; Eligibility</span>
+                  </label>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Visible to everyone publicly. Control whether registration is campus-only or open.
+                  </p>
+                </div>
+                <span className={cn(
+                  "text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full border transition-all",
+                  newEvent.targetAudience === "jdcoem_only"
+                    ? "bg-amber-50 text-amber-800 border-amber-200"
+                    : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                )}>
+                  {newEvent.targetAudience === "jdcoem_only" ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
+                </span>
+              </div>
+
+              {/* Tactile 2-Segment Toggle */}
+              <div className="grid grid-cols-2 gap-2 p-1 bg-slate-200/70 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setNewEvent({ ...newEvent, targetAudience: "jdcoem_only", isInterCollege: false })}
+                  className={cn(
+                    "py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+                    newEvent.targetAudience === "jdcoem_only"
+                      ? "bg-white text-[#17458F] shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  )}
+                >
+                  <GraduationCap className="w-3.5 h-3.5" />
+                  <span>JDCOEM Students Only</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewEvent({ ...newEvent, targetAudience: "inter_college", isInterCollege: true })}
+                  className={cn(
+                    "py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+                    newEvent.targetAudience === "inter_college"
+                      ? "bg-white text-[#E78023] shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  )}
+                >
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>Inter-College (Open to All)</span>
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-500 font-medium italic">
+                {newEvent.targetAudience === "jdcoem_only"
+                  ? "ℹ️ External non-JDCOEM students can view details, but registration will be restricted to verified campus students."
+                  : "ℹ️ Open to students and delegates across all colleges and institutions."}
+              </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1536,6 +1644,64 @@ export default function AdminEventsPage() {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Target Audience & Eligibility Toggle Switch */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-[#17458F]" />
+                    <span>Target Audience &amp; Eligibility</span>
+                  </label>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Visible to everyone publicly. Control whether registration is campus-only or open.
+                  </p>
+                </div>
+                <span className={cn(
+                  "text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full border transition-all",
+                  editForm.targetAudience === "jdcoem_only"
+                    ? "bg-amber-50 text-amber-800 border-amber-200"
+                    : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                )}>
+                  {editForm.targetAudience === "jdcoem_only" ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
+                </span>
+              </div>
+
+              {/* Tactile 2-Segment Toggle */}
+              <div className="grid grid-cols-2 gap-2 p-1 bg-slate-200/70 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setEditForm({ ...editForm, targetAudience: "jdcoem_only", isInterCollege: false })}
+                  className={cn(
+                    "py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+                    editForm.targetAudience === "jdcoem_only"
+                      ? "bg-white text-[#17458F] shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  )}
+                >
+                  <GraduationCap className="w-3.5 h-3.5" />
+                  <span>JDCOEM Students Only</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditForm({ ...editForm, targetAudience: "inter_college", isInterCollege: true })}
+                  className={cn(
+                    "py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+                    editForm.targetAudience === "inter_college"
+                      ? "bg-white text-[#E78023] shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  )}
+                >
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>Inter-College (Open to All)</span>
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-500 font-medium italic">
+                {editForm.targetAudience === "jdcoem_only"
+                  ? "ℹ️ External non-JDCOEM students can view details, but registration will be restricted to verified campus students."
+                  : "ℹ️ Open to students and delegates across all colleges and institutions."}
+              </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

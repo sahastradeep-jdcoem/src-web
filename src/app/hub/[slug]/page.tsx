@@ -19,7 +19,9 @@ import {
   Send,
   Building,
   Check,
-  AlertCircle
+  AlertCircle,
+  GraduationCap,
+  Globe
 } from "lucide-react";
 import { 
   getStoredListings, 
@@ -29,6 +31,7 @@ import {
 } from "@/lib/listingsStore";
 import { ListingItem, ListingResponseRecord } from "@/types/listings";
 import { useAuth } from "@/context/AuthContext";
+import { cn } from "@/lib/utils";
 import confetti from "canvas-confetti";
 
 export default function ListingDetailPage() {
@@ -36,6 +39,9 @@ export default function ListingDetailPage() {
   const router = useRouter();
   const slug = params?.slug as string;
   const { user } = useAuth();
+  const isExternalUser = Boolean(
+    user && (user.userType === "EXTERNAL_STUDENT" || user.isCollegeStudent === false || (user.collegeName && !user.email?.endsWith("@jdcoem.ac.in")))
+  );
 
   const [listing, setListing] = useState<ListingItem | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -99,6 +105,10 @@ export default function ListingDetailPage() {
 
   const handleVote = (optionId: string) => {
     if (!listing) return;
+    if ((listing.targetAudience === "jdcoem_only" || listing.isInterCollege === false) && isExternalUser) {
+      showToast("Voting is strictly reserved for JDCOEM students.");
+      return;
+    }
     const voterKey = user?.email || `anon-${Date.now()}`;
     const res = voteOnListingPoll(listing.id, optionId, voterKey);
     if (res.success) {
@@ -114,6 +124,10 @@ export default function ListingDetailPage() {
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!listing) return;
+    if ((listing.targetAudience === "jdcoem_only" || listing.isInterCollege === false) && isExternalUser) {
+      showToast("Submissions are strictly reserved for JDCOEM students.");
+      return;
+    }
     setIsSubmitting(true);
 
     const ticketCode = `SRC-${listing.type.toUpperCase().slice(0, 3)}-${Math.floor(10000 + Math.random() * 90000)}`;
@@ -176,6 +190,7 @@ export default function ListingDetailPage() {
   const isOpp = listing.type === "opportunity";
   const isIssue = listing.type === "issue";
   const totalPollVotes = listing.pollConfig?.totalVotes || 0;
+  const isJdcoemOnly = listing.targetAudience === "jdcoem_only" || listing.isInterCollege === false;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans pb-24">
@@ -226,9 +241,18 @@ export default function ListingDetailPage() {
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
               <div className="absolute bottom-6 left-6 right-6 text-white space-y-2">
-                <span className="text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full bg-[#E78023] text-white">
-                  {listing.type.toUpperCase()}
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full bg-[#E78023] text-white">
+                    {listing.type.toUpperCase()}
+                  </span>
+                  <span className={cn(
+                    "text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full text-white inline-flex items-center gap-1",
+                    isJdcoemOnly ? "bg-amber-600/90" : "bg-emerald-600/90"
+                  )}>
+                    {isJdcoemOnly ? <GraduationCap className="w-3 h-3" /> : <Globe className="w-3 h-3" />}
+                    <span>{isJdcoemOnly ? "JDCOEM Only" : "Inter-College"}</span>
+                  </span>
+                </div>
                 <h1 className="font-heading font-extrabold text-2xl sm:text-4xl uppercase tracking-tight text-white">
                   {listing.title}
                 </h1>
@@ -236,9 +260,18 @@ export default function ListingDetailPage() {
             </div>
           ) : (
             <div className="p-8 bg-gradient-to-br from-[#17458F] to-slate-900 text-white space-y-3">
-              <span className="text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full bg-[#E78023] text-white">
-                {listing.type.toUpperCase()}
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full bg-[#E78023] text-white">
+                  {listing.type.toUpperCase()}
+                </span>
+                <span className={cn(
+                  "text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full text-white inline-flex items-center gap-1",
+                  isJdcoemOnly ? "bg-amber-600" : "bg-emerald-600"
+                )}>
+                  {isJdcoemOnly ? <GraduationCap className="w-3 h-3" /> : <Globe className="w-3 h-3" />}
+                  <span>{isJdcoemOnly ? "JDCOEM Only" : "Inter-College"}</span>
+                </span>
+              </div>
               <h1 className="font-heading font-extrabold text-2xl sm:text-4xl uppercase tracking-tight text-white">
                 {listing.title}
               </h1>
@@ -246,13 +279,22 @@ export default function ListingDetailPage() {
           )}
 
           {/* Metadata Badges */}
-          <div className="px-6 sm:px-8 flex flex-wrap items-center gap-4 text-xs font-bold text-slate-500">
-            <span className="flex items-center gap-1.5 text-slate-700">
+          <div className="px-6 sm:px-8 flex flex-wrap items-center gap-3 text-xs font-bold text-slate-500">
+            <span className={cn(
+              "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border",
+              isJdcoemOnly
+                ? "bg-amber-50 text-amber-800 border-amber-200"
+                : "bg-emerald-50 text-emerald-800 border-emerald-200"
+            )}>
+              {isJdcoemOnly ? <GraduationCap className="w-3.5 h-3.5 text-amber-600" /> : <Globe className="w-3.5 h-3.5 text-emerald-600" />}
+              <span>{isJdcoemOnly ? "JDCOEM Students Only" : "Open Inter-College"}</span>
+            </span>
+            <span className="flex items-center gap-1.5 text-slate-700 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">
               <Building className="w-4 h-4 text-[#17458F]" />
               <span>Organized by {listing.organizer}</span>
             </span>
             {listing.deadline && (
-              <span className="flex items-center gap-1.5 text-slate-700">
+              <span className="flex items-center gap-1.5 text-slate-700 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">
                 <Clock className="w-4 h-4 text-[#E78023]" />
                 <span>Deadline: {listing.deadline}</span>
               </span>
@@ -287,6 +329,13 @@ export default function ListingDetailPage() {
                 </span>
               </div>
 
+              {isJdcoemOnly && isExternalUser && (
+                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center gap-2.5 text-amber-800 text-xs font-bold">
+                  <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Voting is restricted to JDCOEM students. Live results are shown below.</span>
+                </div>
+              )}
+
               <div className="space-y-3">
                 {listing.pollConfig.options.map((opt) => {
                   const pct = totalPollVotes > 0 ? Math.round((opt.votes / totalPollVotes) * 100) : 0;
@@ -294,15 +343,23 @@ export default function ListingDetailPage() {
                     <button
                       key={opt.id}
                       type="button"
+                      disabled={isJdcoemOnly && isExternalUser}
                       onClick={() => handleVote(opt.id)}
-                      className="w-full relative overflow-hidden rounded-2xl border border-slate-200 p-4 text-left hover:border-[#17458F] transition-all bg-slate-50 hover:bg-white cursor-pointer group"
+                      className={cn(
+                        "w-full relative overflow-hidden rounded-2xl border p-4 text-left transition-all",
+                        isJdcoemOnly && isExternalUser
+                          ? "border-slate-200 bg-slate-50/70 opacity-80 cursor-not-allowed"
+                          : "border-slate-200 bg-slate-50 hover:bg-white hover:border-[#17458F] cursor-pointer group"
+                      )}
                     >
                       <div
                         className="absolute left-0 top-0 bottom-0 bg-blue-100/70 -z-10 transition-all duration-500"
                         style={{ width: `${pct}%` }}
                       />
                       <div className="flex items-center justify-between text-xs sm:text-sm font-bold text-slate-800">
-                        <span className="group-hover:text-[#17458F] transition-colors">{opt.text}</span>
+                        <span className={cn(isJdcoemOnly && isExternalUser ? "" : "group-hover:text-[#17458F] transition-colors")}>
+                          {opt.text}
+                        </span>
                         <span className="font-mono text-[#17458F]">{pct}% ({opt.votes} votes)</span>
                       </div>
                     </button>
@@ -319,7 +376,29 @@ export default function ListingDetailPage() {
                 {isIssue ? "Submit Confidential Inquiry" : "Participant Application"}
               </h3>
 
-              {receiptCode ? (
+              {isJdcoemOnly && isExternalUser ? (
+                <div className="p-8 rounded-3xl bg-amber-50/80 border border-amber-200/80 text-center space-y-4">
+                  <div className="inline-flex p-3 rounded-2xl bg-amber-100 text-amber-700">
+                    <Lock className="w-8 h-8" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="font-heading font-extrabold text-lg text-amber-950 uppercase">
+                      Restricted to JDCOEM Students
+                    </h4>
+                    <p className="text-xs text-amber-800 max-w-md mx-auto leading-relaxed">
+                      This initiative is reserved exclusively for enrolled students of JDCOEM. While external guests can view the guidelines and announcements, submissions and voting require a verified JDCOEM student account.
+                    </p>
+                  </div>
+                  <div className="pt-2">
+                    <Link
+                      href="/login"
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-xs"
+                    >
+                      <span>Sign in with JDCOEM Account</span>
+                    </Link>
+                  </div>
+                </div>
+              ) : receiptCode ? (
                 <div className="p-8 rounded-3xl bg-emerald-50 border border-emerald-200 text-center space-y-4">
                   <div className="inline-flex p-3 rounded-full bg-emerald-100 text-emerald-600">
                     <CheckCircle2 className="w-10 h-10" />
