@@ -58,6 +58,7 @@ import { cn } from "@/lib/utils";
 export default function StudentDashboardPage() {
   const { user, openAuthModal, openProfileModal, logout } = useAuth();
   const [registrations, setRegistrations] = useState<RegistrationRecord[]>([]);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [listings, setListings] = useState<ListingItem[]>([]);
   const [hubResponses, setHubResponses] = useState<ListingResponseRecord[]>([]);
@@ -69,6 +70,8 @@ export default function StudentDashboardPage() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   useEffect(() => {
+    let isCurrent = true;
+
     // Legacy Backwards Compatibility:
     // If an older pass QR code with `/dashboard?passId=...` is scanned, seamlessly forward to `/verify/[passId]`
     if (typeof window !== "undefined") {
@@ -82,16 +85,31 @@ export default function StudentDashboardPage() {
     // Load dynamic events from store & cloud
     setEvents(getStoredEvents());
     syncEventsFromFirestore().then((res) => {
-      if (res) setEvents(res);
+      if (res && isCurrent) setEvents(res);
     });
     const unsub = subscribeToEvents((remote) => {
-      if (remote) setEvents(remote);
+      if (remote && isCurrent) setEvents(remote);
     });
 
+    const getEffectiveUser = () => {
+      if (user) return user;
+      if (typeof window !== "undefined") {
+        try {
+          const c = localStorage.getItem("src_auth_user");
+          if (c) return JSON.parse(c);
+        } catch {}
+      }
+      return null;
+    };
+
     const formatStudentRecords = (rawRecords: any[], activeStoredEvents: EventItem[]): RegistrationRecord[] => {
-      const cleanEmail = user?.email?.trim().toLowerCase();
-      const cleanBtId = user?.btId?.trim().toUpperCase();
-      const cleanName = user?.displayName?.trim().toLowerCase();
+      const effUser = getEffectiveUser();
+      if (!effUser) return [];
+
+      const cleanEmail = (effUser.email || "").trim().toLowerCase();
+      const cleanBtId = (effUser.btId || "").trim().toUpperCase();
+      const cleanName = (effUser.displayName || "").trim().toLowerCase();
+      const cleanUid = (effUser.uid || "").trim();
 
       // 1. All valid registration records (every event pass is included)
       const validRecords = rawRecords.filter((r: any) => {
@@ -100,16 +118,24 @@ export default function StudentDashboardPage() {
 
       // 2. Filter records that specifically belong to this authenticated student (as leader OR squad member)
       const userMatched = validRecords.filter((r: any) => {
-        if (!cleanEmail && !cleanBtId && !cleanName) return true;
-
         const rEmail = (r.email || "").trim().toLowerCase();
         const rBtId = (r.btId || "").trim().toUpperCase();
         const rLeader = (r.leaderName || r.participantName || "").trim().toLowerCase();
+        const rUid = (r.userId || r.uid || r.userUid || "").trim();
+        const rQr = (r.qrPayload || "").trim();
 
-        // Check if primary leader / registrant
+        // Check UID match
+        if (cleanUid && rUid && rUid === cleanUid) return true;
+
+        // Check primary leader / registrant match
         if (cleanEmail && rEmail === cleanEmail) return true;
         if (cleanBtId && rBtId === cleanBtId) return true;
         if (cleanName && (rLeader === cleanName || rLeader.includes(cleanName) || cleanName.includes(rLeader))) return true;
+
+        // Check QR payload if it contains BT ID, email, or UID
+        if (cleanBtId && rQr && rQr.toUpperCase().includes(cleanBtId)) return true;
+        if (cleanUid && rQr && rQr.includes(cleanUid)) return true;
+        if (cleanEmail && rQr && rQr.toLowerCase().includes(cleanEmail)) return true;
 
         // Check if member of squad / team roster
         const membersList = Array.isArray(r.teamMembers) 
@@ -134,7 +160,9 @@ export default function StudentDashboardPage() {
               const mBtId = (m.btId || "").toUpperCase().trim();
               const mEmail = (m.email || "").toLowerCase().trim();
               const mName = (m.name || m.displayName || "").toLowerCase().trim();
+              const mUid = (m.userId || m.uid || "").trim();
               return (
+                (cleanUid && mUid && mUid === cleanUid) ||
                 (cleanBtId && (mBtId === cleanBtId || mBtId.includes(cleanBtId) || cleanBtId.includes(mBtId))) ||
                 (cleanEmail && (mEmail === cleanEmail || mEmail.includes(cleanEmail))) ||
                 (cleanName && (mName === cleanName || mName.includes(cleanName) || cleanName.includes(mName)))
@@ -188,6 +216,18 @@ export default function StudentDashboardPage() {
       }));
     };
 
+    // Synchronous hydration from local cache to prevent flashing or disappearing passes on refresh
+    try {
+      const initialLocal = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+      if (Array.isArray(initialLocal) && initialLocal.length > 0) {
+        const instantFormatted = formatStudentRecords(initialLocal, getStoredEvents());
+        if (instantFormatted.length > 0) {
+          setRegistrations(instantFormatted);
+          setIsInitialLoading(false);
+        }
+      }
+    } catch {}
+
     const syncAndLoadRegistrations = async (cloudList?: StudentRegistrationRecord[]) => {
       try {
         const storedEvents = getStoredEvents();
@@ -199,8 +239,14 @@ export default function StudentDashboardPage() {
           remoteRecords = await getAllRegistrationsFromFirestore();
         }
 
+        if (!isCurrent) return;
+
         // Merge remote and local records by registration ID to guarantee no passes are lost
-        const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+        let local: any[] = [];
+        try {
+          local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+        } catch {}
+
         const map = new Map<string, any>();
         if (Array.isArray(local)) {
           local.forEach((r: any) => { if (r?.id) map.set(r.id, r); });
@@ -209,12 +255,20 @@ export default function StudentDashboardPage() {
           remoteRecords.forEach((r: any) => { if (r?.id) map.set(r.id, r); });
         }
         allRecords = Array.from(map.values());
-        localStorage.setItem("src_local_registrations", JSON.stringify(allRecords));
+        try {
+          localStorage.setItem("src_local_registrations", JSON.stringify(allRecords));
+        } catch {}
 
         const formatted = formatStudentRecords(allRecords, storedEvents);
-        setRegistrations(formatted);
+        if (isCurrent) {
+          setRegistrations(formatted);
+          setIsInitialLoading(false);
+        }
       } catch (e) {
         console.warn("Registrations sync error on student dashboard", e);
+        if (isCurrent) {
+          setIsInitialLoading(false);
+        }
       }
     };
 
@@ -222,10 +276,13 @@ export default function StudentDashboardPage() {
 
     // Subscribe to Firestore for real-time deletions and check-ins
     const unsubRegistrations = subscribeToRegistrationsFromFirestore((cloudRegs) => {
-      syncAndLoadRegistrations(cloudRegs);
+      if (isCurrent) {
+        syncAndLoadRegistrations(cloudRegs);
+      }
     });
 
     const handleEventsUpdate = (e: any) => {
+      if (!isCurrent) return;
       if (e?.detail && Array.isArray(e.detail)) {
         setEvents(e.detail);
       } else {
@@ -237,22 +294,23 @@ export default function StudentDashboardPage() {
     // Load dynamic listings for edit permissions & links
     setListings(getStoredListings());
     syncListingsFromFirestore().then((res) => {
-      if (res) setListings(res);
+      if (res && isCurrent) setListings(res);
     });
     const unsubListings = subscribeToListings((remoteListings) => {
-      if (remoteListings) setListings(remoteListings);
+      if (remoteListings && isCurrent) setListings(remoteListings);
     });
 
     const updateResponses = (overrideList?: ListingResponseRecord[]) => {
       const allResp = overrideList || getStoredListingResponses();
-      if (!user) {
-        setHubResponses([]);
+      const effUser = getEffectiveUser();
+      if (!effUser) {
+        if (isCurrent) setHubResponses([]);
         return;
       }
-      const uEmail = (user.email || "").toLowerCase().trim();
-      const uId = user.uid;
-      const uBtId = (user.btId || "").toUpperCase().trim();
-      const uName = (user.displayName || "").toLowerCase().trim();
+      const uEmail = (effUser.email || "").toLowerCase().trim();
+      const uId = effUser.uid;
+      const uBtId = (effUser.btId || "").toUpperCase().trim();
+      const uName = (effUser.displayName || "").toLowerCase().trim();
 
       const matched = allResp.filter((r) => {
         const rEmail = (r.userEmail || "").toLowerCase().trim();
@@ -267,24 +325,26 @@ export default function StudentDashboardPage() {
         return false;
       });
 
-      setHubResponses(matched);
+      if (isCurrent) {
+        setHubResponses(matched);
+      }
     };
 
     updateResponses();
     syncListingResponsesFromFirestore().then((res) => {
-      if (res) updateResponses(res);
+      if (res && isCurrent) updateResponses(res);
     });
 
     const unsubHub = subscribeToListingResponses((remoteResponses) => {
-      if (remoteResponses) updateResponses(remoteResponses);
+      if (remoteResponses && isCurrent) updateResponses(remoteResponses);
     });
 
     const handleRegsUpdate = (e: any) => {
-      syncAndLoadRegistrations(e?.detail);
+      if (isCurrent) syncAndLoadRegistrations(e?.detail);
     };
 
     const handleHubUpdate = (e: any) => {
-      updateResponses(e?.detail);
+      if (isCurrent) updateResponses(e?.detail);
     };
 
     window.addEventListener("src_events_updated", handleEventsUpdate);
@@ -293,6 +353,7 @@ export default function StudentDashboardPage() {
     window.addEventListener("storage", handleEventsUpdate);
 
     return () => {
+      isCurrent = false;
       unsub();
       unsubRegistrations();
       unsubListings();
@@ -563,7 +624,21 @@ export default function StudentDashboardPage() {
             {/* Content for Active Tab */}
             {activeDashboardTab === "passes" ? (
               <div className="space-y-4">
-                {registrations.length === 0 ? (
+                {isInitialLoading && registrations.length === 0 ? (
+                  <div className="p-10 rounded-3xl bg-white border border-slate-200 text-center space-y-4 shadow-xs">
+                    <div className="mx-auto h-12 w-12 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center text-[#17458F]">
+                      <RefreshCw className="w-6 h-6 animate-spin text-[#17458F]" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="font-heading font-bold text-base text-slate-900">
+                        Syncing Delegate Passes...
+                      </h3>
+                      <p className="text-xs text-slate-500 max-w-sm mx-auto font-sans font-medium">
+                        Verifying your official registrations with the campus registry.
+                      </p>
+                    </div>
+                  </div>
+                ) : registrations.length === 0 ? (
                   <div className="p-10 rounded-3xl bg-white border border-slate-200 text-center space-y-4 shadow-xs">
                     <div className="mx-auto h-14 w-14 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400">
                       <QrCode className="w-7 h-7" />

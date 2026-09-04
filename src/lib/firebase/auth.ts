@@ -43,7 +43,7 @@ export async function signInWithGoogle(): Promise<AuthUserProfile | null> {
       isCollegeStudent,
     };
 
-    localStorage.setItem("src_auth_user", JSON.stringify(profile));
+    // Full profile assembly and non-stripping local storage caching is handled centrally by AuthContext
     return profile;
   } catch (error: any) {
     console.error("Google Sign-In Error:", error);
@@ -107,10 +107,8 @@ export function subscribeToAuth(callback: (user: AuthUserProfile | null) => void
         photoURL: user.photoURL,
         isCollegeStudent: email.endsWith("@jdcoem.ac.in") || email.endsWith("@jdcoem.in"),
       };
-      localStorage.setItem("src_auth_user", JSON.stringify(profile));
       callback(profile);
     } else {
-      localStorage.removeItem("src_auth_user");
       callback(null);
     }
   });
