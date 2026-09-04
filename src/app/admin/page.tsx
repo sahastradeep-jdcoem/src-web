@@ -23,8 +23,11 @@ import {
   Upload,
   Activity,
   Check,
-  RefreshCw
+  RefreshCw,
+  HardDrive,
+  Trash2
 } from "lucide-react";
+import { StorageCleanerModal } from "@/components/admin/StorageCleanerModal";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { 
@@ -56,6 +59,7 @@ export default function AdminOverviewPage() {
   const [usersCount, setUsersCount] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [isStorageModalOpen, setIsStorageModalOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -400,24 +404,31 @@ export default function AdminOverviewPage() {
 
       </div>
 
-      {/* Disaster Recovery & Full Backup Panel */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-2xl bg-slate-100 text-slate-700">
-              <Database className="w-6 h-6 text-[#17458F]" />
+      {/* System Maintenance & Data Integrity Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {/* Disaster Recovery & Full Backup Panel */}
+        <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-6 flex flex-col justify-between">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-slate-100 text-slate-700">
+                <Database className="w-6 h-6 text-[#17458F]" />
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-lg text-slate-900">
+                  Disaster Recovery &amp; Backup
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  Export site snapshot or restore from an existing JSON backup.
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="font-heading font-bold text-lg text-slate-900">
-                Disaster Recovery &amp; Full Data Backup
-              </h3>
-              <p className="text-xs text-slate-500 font-medium">
-                Export full site snapshot (Tenures, Events, Clubs, Positions, Gallery, Registrations) or restore from an existing JSON backup.
-              </p>
-            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Downloads or restores all Tenures, Events, Clubs, Positions, Gallery, and Registrations with direct Firestore synchronization.
+            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 pt-2">
             <Button
               onClick={handleExportBackup}
               disabled={isExporting}
@@ -445,11 +456,57 @@ export default function AdminOverviewPage() {
               className="gap-2"
             >
               {isRestoring ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-              <span>Restore from Backup</span>
+              <span>Restore Backup</span>
             </Button>
           </div>
         </div>
+
+        {/* Storage Maintenance & Orphan Cleaner Panel */}
+        <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-6 flex flex-col justify-between">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-2xl bg-amber-50 text-amber-700 border border-amber-100">
+                  <HardDrive className="w-6 h-6 text-[#E78023]" />
+                </div>
+                <div>
+                  <h3 className="font-heading font-bold text-lg text-slate-900">
+                    Storage Maintenance
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Garbage collect unlinked media files in Firebase Cloud Storage.
+                  </p>
+                </div>
+              </div>
+              <Badge variant="orange" size="sm">
+                SPARK TIER
+              </Badge>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Audit the cloud storage bucket for superseded posters, deleted member photos, and replaced logos. Safely purge unreferenced files to preserve quota.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <Button
+              onClick={() => setIsStorageModalOpen(true)}
+              variant="primary"
+              size="sm"
+              className="gap-2 bg-[#E78023] hover:bg-[#D0701B] text-white shadow-sm cursor-pointer"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Scan &amp; Purge Unused Files</span>
+            </Button>
+          </div>
+        </div>
+
       </div>
+
+      {/* Storage Cleaner Modal */}
+      <StorageCleanerModal
+        isOpen={isStorageModalOpen}
+        onClose={() => setIsStorageModalOpen(false)}
+      />
 
     </div>
   );
