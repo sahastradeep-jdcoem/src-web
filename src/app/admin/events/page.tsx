@@ -32,9 +32,13 @@ import { EventItem, ClubItem, CustomQuestion, TargetAudience } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
-import { CustomQuestionsBuilder } from "@/components/admin/events/CustomQuestionsBuilder";
 import { CreateListingModal } from "@/components/admin/listings/CreateListingModal";
+import { 
+  EventFormModal, 
+  EventFormData, 
+  formatDateToReadable, 
+  parseToIsoDate 
+} from "@/components/admin/events/EventFormModal";
 import { cn } from "@/lib/utils";
 import { 
   getStoredEvents, 
@@ -45,42 +49,6 @@ import {
 } from "@/lib/eventsStore";
 import { getStoredClubs } from "@/lib/councilStore";
 import { deleteRegistrationsForEvent } from "@/lib/firebase/firestore";
-
-function formatDateToReadable(dateStr: string): string {
-  if (!dateStr) return "";
-  try {
-    const [year, month, day] = dateStr.split("-").map(Number);
-    if (!year || !month || !day) return dateStr;
-    const dateObj = new Date(year, month - 1, day);
-    return dateObj.toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
-  } catch {
-    return dateStr;
-  }
-}
-
-function parseToIsoDate(dateStr?: string): string {
-  if (!dateStr) return "";
-  const trimmed = dateStr.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    return trimmed;
-  }
-  try {
-    const parsed = new Date(trimmed);
-    if (!isNaN(parsed.getTime())) {
-      const year = parsed.getFullYear();
-      const month = String(parsed.getMonth() + 1).padStart(2, "0");
-      const day = String(parsed.getDate()).padStart(2, "0");
-      return `${year}-${month}-${day}`;
-    }
-  } catch {
-    // ignore
-  }
-  return "";
-}
 
 export default function AdminEventsPage() {
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
@@ -98,80 +66,6 @@ export default function AdminEventsPage() {
   const handleUploadStateChange = (uploading: boolean) => {
     setPendingUploads((prev) => Math.max(0, prev + (uploading ? 1 : -1)));
   };
-
-  // New Event Form State
-  const [newEvent, setNewEvent] = useState({
-    name: "",
-    category: "Technical",
-    rawDate: new Date().toISOString().split("T")[0],
-    date: formatDateToReadable(new Date().toISOString().split("T")[0]),
-    venue: "JDCOEM Campus",
-    organizer: "SRC JDCOEM",
-    organizerClubSlug: "src-council",
-    status: "Registration Open" as "Registration Open" | "Upcoming" | "Completed",
-    poster: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
-    cardImage: "",
-    posterImage: "",
-    headerImage: "",
-    description: "",
-    about: "",
-    whatToExpect: [""] as string[],
-    rules: [""] as string[],
-    teamType: "Both" as "Individual" | "Team" | "Both",
-    minTeamSize: 2,
-    maxTeamSize: 4,
-    registrationStartDate: new Date().toISOString().split("T")[0],
-    registrationDeadline: "",
-    isPaid: false,
-    feeAmount: 100,
-    feePricingModel: "per_person" as "per_person" | "per_team",
-    teamFeeAmount: 300,
-    customQuestions: [] as CustomQuestion[],
-    isParentFest: false,
-    parentEventId: "",
-    parentEventSlug: "",
-    parentEventName: "",
-    subEventBadge: "",
-    targetAudience: "inter_college" as TargetAudience,
-    isInterCollege: true,
-  });
-
-  // Edit Event Form State
-  const [editForm, setEditForm] = useState({
-    name: "",
-    category: "Technical",
-    rawDate: "",
-    date: "",
-    venue: "JDCOEM Campus",
-    organizer: "SRC JDCOEM",
-    organizerClubSlug: "src-council",
-    status: "Registration Open" as "Registration Open" | "Upcoming" | "Completed",
-    poster: "",
-    cardImage: "",
-    posterImage: "",
-    headerImage: "",
-    description: "",
-    about: "",
-    whatToExpect: [""] as string[],
-    rules: [""] as string[],
-    teamType: "Both" as "Individual" | "Team" | "Both",
-    minTeamSize: 2,
-    maxTeamSize: 4,
-    registrationStartDate: "",
-    registrationDeadline: "",
-    isPaid: false,
-    feeAmount: 100,
-    feePricingModel: "per_person" as "per_person" | "per_team",
-    teamFeeAmount: 300,
-    customQuestions: [] as CustomQuestion[],
-    isParentFest: false,
-    parentEventId: "",
-    parentEventSlug: "",
-    parentEventName: "",
-    subEventBadge: "",
-    targetAudience: "inter_college" as TargetAudience,
-    isInterCollege: true,
-  });
 
   const loadData = () => {
     const stored = getStoredEvents();
@@ -227,23 +121,6 @@ export default function AdminEventsPage() {
     };
   }, []);
 
-  const handleDateChange = (val: string, isEdit: boolean) => {
-    const formatted = formatDateToReadable(val);
-    if (isEdit) {
-      setEditForm((prev) => ({
-        ...prev,
-        rawDate: val,
-        date: formatted || val,
-      }));
-    } else {
-      setNewEvent((prev) => ({
-        ...prev,
-        rawDate: val,
-        date: formatted || val,
-      }));
-    }
-  };
-
   const filteredEvents = useMemo(() => {
     const q = searchQuery.toLowerCase();
     return eventsList.filter((e) =>
@@ -253,59 +130,58 @@ export default function AdminEventsPage() {
     );
   }, [eventsList, searchQuery]);
 
-  const handleCreateSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanWhatToExpect = Array.from(new Set(newEvent.whatToExpect.map((s) => s.trim()).filter(Boolean)));
-    const cleanRules = Array.from(new Set(newEvent.rules.map((s) => s.trim()).filter(Boolean)));
-    const regDeadlineFormatted = newEvent.registrationDeadline
-      ? formatDateToReadable(newEvent.registrationDeadline)
+  const handleCreateSubmit = (formData: EventFormData) => {
+    const cleanWhatToExpect = Array.from(new Set(formData.whatToExpect.map((s) => s.trim()).filter(Boolean)));
+    const cleanRules = Array.from(new Set(formData.rules.map((s) => s.trim()).filter(Boolean)));
+    const regDeadlineFormatted = formData.registrationDeadline
+      ? formatDateToReadable(formData.registrationDeadline)
       : "TBD";
 
-    const entryFeeText = newEvent.isPaid
-      ? (newEvent.feePricingModel === "per_team" && newEvent.teamFeeAmount 
-          ? `₹${newEvent.teamFeeAmount} / team`
-          : `₹${newEvent.feeAmount} / person`)
+    const entryFeeText = formData.isPaid
+      ? (formData.feePricingModel === "per_team" && formData.teamFeeAmount 
+          ? `₹${formData.teamFeeAmount} / team`
+          : `₹${formData.feeAmount} / person`)
       : "Free Entry";
 
     const created: EventItem = {
       id: `evt-${Date.now()}`,
-      slug: newEvent.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-      name: newEvent.name,
-      category: newEvent.category as any,
-      date: newEvent.date || "TBD 2026",
+      slug: formData.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      name: formData.name,
+      category: formData.category as any,
+      date: formData.date || "TBD 2026",
       time: "10:00 AM IST",
-      venue: newEvent.venue,
-      organizer: newEvent.organizer || "SRC JDCOEM",
-      organizerClubSlug: newEvent.organizerClubSlug || (newEvent.organizer === "SRC JDCOEM" ? "src-council" : undefined),
-      status: newEvent.status,
-      poster: newEvent.poster || newEvent.cardImage || newEvent.posterImage || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
-      cardImage: newEvent.cardImage || newEvent.poster,
-      posterImage: newEvent.posterImage || newEvent.poster,
-      headerImage: newEvent.headerImage || newEvent.cardImage || newEvent.poster,
-      description: newEvent.description,
-      about: newEvent.about || newEvent.description,
+      venue: formData.venue,
+      organizer: formData.organizer || "SRC JDCOEM",
+      organizerClubSlug: formData.organizerClubSlug || (formData.organizer === "SRC JDCOEM" ? "src-council" : undefined),
+      status: formData.status,
+      poster: formData.poster || formData.cardImage || formData.posterImage || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
+      cardImage: formData.cardImage || formData.poster,
+      posterImage: formData.posterImage || formData.poster,
+      headerImage: formData.headerImage || formData.cardImage || formData.poster,
+      description: formData.description,
+      about: formData.about || formData.description,
       whatToExpect: cleanWhatToExpect.length > 0 ? cleanWhatToExpect : ["High-impact collegiate showcase"],
       rules: cleanRules.length > 0 ? cleanRules : ["College ID mandatory"],
       schedule: [],
       prizes: [],
-      teamType: newEvent.teamType,
-      minTeamSize: newEvent.teamType !== "Individual" ? newEvent.minTeamSize : undefined,
-      maxTeamSize: newEvent.teamType !== "Individual" ? newEvent.maxTeamSize : undefined,
-      registrationStartDate: newEvent.registrationStartDate || new Date().toISOString().split("T")[0],
+      teamType: formData.teamType,
+      minTeamSize: formData.teamType !== "Individual" ? formData.minTeamSize : undefined,
+      maxTeamSize: formData.teamType !== "Individual" ? formData.maxTeamSize : undefined,
+      registrationStartDate: formData.registrationStartDate || new Date().toISOString().split("T")[0],
       registrationDeadline: regDeadlineFormatted,
       entryFee: entryFeeText,
-      isPaid: newEvent.isPaid,
-      feeAmount: newEvent.isPaid ? Number(newEvent.feeAmount) || 0 : 0,
-      teamFeeAmount: newEvent.isPaid && newEvent.feePricingModel === "per_team" ? Number(newEvent.teamFeeAmount) || 0 : undefined,
-      feePricingModel: newEvent.isPaid ? newEvent.feePricingModel : undefined,
-      customQuestions: newEvent.customQuestions && newEvent.customQuestions.length > 0 ? newEvent.customQuestions : undefined,
-      isParentFest: newEvent.isParentFest,
-      parentEventId: newEvent.parentEventId || undefined,
-      parentEventSlug: newEvent.parentEventSlug || undefined,
-      parentEventName: newEvent.parentEventName || undefined,
-      subEventBadge: newEvent.subEventBadge || undefined,
-      targetAudience: newEvent.targetAudience || "inter_college",
-      isInterCollege: newEvent.targetAudience === "inter_college",
+      isPaid: formData.isPaid,
+      feeAmount: formData.isPaid ? Number(formData.feeAmount) || 0 : 0,
+      teamFeeAmount: formData.isPaid && formData.feePricingModel === "per_team" ? Number(formData.teamFeeAmount) || 0 : undefined,
+      feePricingModel: formData.isPaid ? formData.feePricingModel : undefined,
+      customQuestions: formData.customQuestions && formData.customQuestions.length > 0 ? formData.customQuestions : undefined,
+      isParentFest: formData.isParentFest,
+      parentEventId: formData.parentEventId || undefined,
+      parentEventSlug: formData.parentEventSlug || undefined,
+      parentEventName: formData.parentEventName || undefined,
+      subEventBadge: formData.subEventBadge || undefined,
+      targetAudience: formData.targetAudience || "inter_college",
+      isInterCollege: formData.targetAudience === "inter_college",
     };
 
     const updated = [created, ...eventsList];
@@ -313,42 +189,6 @@ export default function AdminEventsPage() {
     saveStoredEvents(updated);
     setIsCreateOpen(false);
     showNotice(`Event "${created.name}" published by "${created.organizer}".`);
-
-    setNewEvent({
-      name: "",
-      category: "Technical",
-      rawDate: new Date().toISOString().split("T")[0],
-      date: formatDateToReadable(new Date().toISOString().split("T")[0]),
-      venue: "JDCOEM Campus",
-      organizer: "SRC JDCOEM",
-      organizerClubSlug: "src-council",
-      status: "Registration Open",
-      poster: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
-      cardImage: "",
-      posterImage: "",
-      headerImage: "",
-      description: "",
-      about: "",
-      whatToExpect: [""],
-      rules: [""],
-      teamType: "Both",
-      minTeamSize: 2,
-      maxTeamSize: 4,
-      registrationStartDate: new Date().toISOString().split("T")[0],
-      registrationDeadline: "",
-      isPaid: false,
-      feeAmount: 100,
-      feePricingModel: "per_person",
-      teamFeeAmount: 300,
-      customQuestions: [],
-      isParentFest: false,
-      parentEventId: "",
-      parentEventSlug: "",
-      parentEventName: "",
-      subEventBadge: "",
-      targetAudience: "inter_college",
-      isInterCollege: true,
-    });
   };
 
   const handleToggleAudience = (evt: EventItem) => {
@@ -371,109 +211,108 @@ export default function AdminEventsPage() {
     );
   };
 
-  const handleStartEdit = (evt: EventItem) => {
-    setEditingEvent(evt);
-    const parsedEventDate = parseToIsoDate(evt.date);
-    const parsedStartDate = parseToIsoDate(evt.registrationStartDate) || new Date().toISOString().split("T")[0];
-    const parsedDeadline = parseToIsoDate(evt.registrationDeadline) || parsedEventDate;
+  const editingInitialData: Partial<EventFormData> | undefined = useMemo(() => {
+    if (!editingEvent) return undefined;
+    const parsedEventDate = parseToIsoDate(editingEvent.date);
+    const parsedStartDate = parseToIsoDate(editingEvent.registrationStartDate) || new Date().toISOString().split("T")[0];
+    const parsedDeadline = parseToIsoDate(editingEvent.registrationDeadline) || parsedEventDate;
 
-    setEditForm({
-      name: evt.name,
-      category: evt.category,
+    return {
+      name: editingEvent.name,
+      category: editingEvent.category,
       rawDate: parsedEventDate,
-      date: evt.date,
-      venue: evt.venue,
-      organizer: evt.organizer || "SRC JDCOEM",
-      organizerClubSlug: evt.organizerClubSlug || (evt.organizer === "SRC JDCOEM" ? "src-council" : ""),
-      status: evt.status as any,
-      poster: evt.poster || "",
-      cardImage: evt.cardImage || "",
-      posterImage: evt.posterImage || "",
-      headerImage: evt.headerImage || "",
-      description: evt.description || "",
-      about: evt.about || evt.description || "",
-      whatToExpect: evt.whatToExpect && evt.whatToExpect.length > 0
-        ? Array.from(new Set(evt.whatToExpect.map((s) => (typeof s === "string" ? s.trim() : s)).filter(Boolean)))
-        : [""],
-      rules: evt.rules && evt.rules.length > 0
-        ? Array.from(new Set(evt.rules.map((s) => (typeof s === "string" ? s.trim() : s)).filter(Boolean)))
-        : [""],
-      teamType: evt.teamType || "Both",
-      minTeamSize: evt.minTeamSize || 2,
-      maxTeamSize: evt.maxTeamSize || 4,
+      date: editingEvent.date,
+      venue: editingEvent.venue,
+      organizer: editingEvent.organizer || "SRC JDCOEM",
+      organizerClubSlug: editingEvent.organizerClubSlug || (editingEvent.organizer === "SRC JDCOEM" ? "src-council" : ""),
+      status: editingEvent.status as any,
+      poster: editingEvent.poster || "",
+      cardImage: editingEvent.cardImage || "",
+      posterImage: editingEvent.posterImage || "",
+      headerImage: editingEvent.headerImage || "",
+      description: editingEvent.description || "",
+      about: editingEvent.about || editingEvent.description || "",
+      whatToExpect: editingEvent.whatToExpect && editingEvent.whatToExpect.length > 0 ? editingEvent.whatToExpect : [""],
+      rules: editingEvent.rules && editingEvent.rules.length > 0 ? editingEvent.rules : [""],
+      teamType: editingEvent.teamType || "Both",
+      minTeamSize: editingEvent.minTeamSize || 2,
+      maxTeamSize: editingEvent.maxTeamSize || 4,
       registrationStartDate: parsedStartDate,
       registrationDeadline: parsedDeadline,
-      isPaid: Boolean(evt.isPaid || (evt.feeAmount && evt.feeAmount > 0)),
-      feeAmount: evt.feeAmount || 100,
-      feePricingModel: evt.feePricingModel || "per_person",
-      teamFeeAmount: evt.teamFeeAmount || 300,
-      customQuestions: evt.customQuestions ? JSON.parse(JSON.stringify(evt.customQuestions)) : [],
-      isParentFest: Boolean(evt.isParentFest),
-      parentEventId: evt.parentEventId || "",
-      parentEventSlug: evt.parentEventSlug || "",
-      parentEventName: evt.parentEventName || "",
-      subEventBadge: evt.subEventBadge || "",
-      targetAudience: (evt.targetAudience || (evt.isInterCollege === false ? "jdcoem_only" : "inter_college")) as TargetAudience,
-      isInterCollege: evt.targetAudience ? evt.targetAudience === "inter_college" : evt.isInterCollege !== false,
-    });
+      isPaid: Boolean(editingEvent.isPaid || (editingEvent.feeAmount && editingEvent.feeAmount > 0)),
+      feeAmount: editingEvent.feeAmount || 100,
+      feePricingModel: editingEvent.feePricingModel || "per_person",
+      teamFeeAmount: editingEvent.teamFeeAmount || 300,
+      customQuestions: editingEvent.customQuestions ? JSON.parse(JSON.stringify(editingEvent.customQuestions)) : [],
+      isParentFest: Boolean(editingEvent.isParentFest),
+      parentEventId: editingEvent.parentEventId || "",
+      parentEventSlug: editingEvent.parentEventSlug || "",
+      parentEventName: editingEvent.parentEventName || "",
+      subEventBadge: editingEvent.subEventBadge || "",
+      targetAudience: (editingEvent.targetAudience || (editingEvent.isInterCollege === false ? "jdcoem_only" : "inter_college")) as TargetAudience,
+      isInterCollege: editingEvent.targetAudience ? editingEvent.targetAudience === "inter_college" : editingEvent.isInterCollege !== false,
+    };
+  }, [editingEvent]);
+
+  const handleStartEdit = (evt: EventItem) => {
+    setEditingEvent(evt);
   };
 
-  const handleEditSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleEditSubmit = (formData: EventFormData) => {
     if (!editingEvent) return;
 
-    const cleanWhatToExpect = Array.from(new Set(editForm.whatToExpect.map((s) => s.trim()).filter(Boolean)));
-    const cleanRules = Array.from(new Set(editForm.rules.map((s) => s.trim()).filter(Boolean)));
-    const regDeadlineFormatted = editForm.registrationDeadline
-      ? formatDateToReadable(editForm.registrationDeadline)
+    const cleanWhatToExpect = Array.from(new Set(formData.whatToExpect.map((s) => s.trim()).filter(Boolean)));
+    const cleanRules = Array.from(new Set(formData.rules.map((s) => s.trim()).filter(Boolean)));
+    const regDeadlineFormatted = formData.registrationDeadline
+      ? formatDateToReadable(formData.registrationDeadline)
       : undefined;
 
-    const entryFeeText = editForm.isPaid
-      ? (editForm.feePricingModel === "per_team" && editForm.teamFeeAmount 
-          ? `₹${editForm.teamFeeAmount} / team`
-          : `₹${editForm.feeAmount} / person`)
+    const entryFeeText = formData.isPaid
+      ? (formData.feePricingModel === "per_team" && formData.teamFeeAmount 
+          ? `₹${formData.teamFeeAmount} / team`
+          : `₹${formData.feeAmount} / person`)
       : "Free Entry";
 
     const defaultFallback = "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop";
-    const primaryPoster = editForm.posterImage || editForm.cardImage || editForm.headerImage || editForm.poster || editingEvent.poster || defaultFallback;
+    const primaryPoster = formData.posterImage || formData.cardImage || formData.headerImage || formData.poster || editingEvent.poster || defaultFallback;
 
     const updated = eventsList.map((item) =>
       item.id === editingEvent.id
         ? {
             ...item,
-            name: editForm.name,
-            category: editForm.category as any,
-            date: editForm.rawDate ? formatDateToReadable(editForm.rawDate) : editForm.date,
-            venue: editForm.venue,
-            organizer: editForm.organizer,
-            organizerClubSlug: editForm.organizerClubSlug || item.organizerClubSlug,
-            status: editForm.status,
+            name: formData.name,
+            category: formData.category as any,
+            date: formData.rawDate ? formatDateToReadable(formData.rawDate) : formData.date,
+            venue: formData.venue,
+            organizer: formData.organizer,
+            organizerClubSlug: formData.organizerClubSlug || item.organizerClubSlug,
+            status: formData.status,
             poster: primaryPoster,
-            cardImage: editForm.cardImage || primaryPoster,
-            posterImage: editForm.posterImage || primaryPoster,
-            headerImage: editForm.headerImage || editForm.cardImage || primaryPoster,
-            description: editForm.description,
-            about: editForm.about || editForm.description,
+            cardImage: formData.cardImage || primaryPoster,
+            posterImage: formData.posterImage || primaryPoster,
+            headerImage: formData.headerImage || formData.cardImage || primaryPoster,
+            description: formData.description,
+            about: formData.about || formData.description,
             whatToExpect: cleanWhatToExpect,
             rules: cleanRules,
-            teamType: editForm.teamType,
-            minTeamSize: editForm.teamType !== "Individual" ? editForm.minTeamSize : undefined,
-            maxTeamSize: editForm.teamType !== "Individual" ? editForm.maxTeamSize : undefined,
-            registrationStartDate: editForm.registrationStartDate,
-            registrationDeadline: regDeadlineFormatted || editForm.date,
+            teamType: formData.teamType,
+            minTeamSize: formData.teamType !== "Individual" ? formData.minTeamSize : undefined,
+            maxTeamSize: formData.teamType !== "Individual" ? formData.maxTeamSize : undefined,
+            registrationStartDate: formData.registrationStartDate,
+            registrationDeadline: regDeadlineFormatted || item.registrationDeadline,
             entryFee: entryFeeText,
-            isPaid: editForm.isPaid,
-            feeAmount: editForm.isPaid ? Number(editForm.feeAmount) || 0 : 0,
-            teamFeeAmount: editForm.isPaid && editForm.feePricingModel === "per_team" ? Number(editForm.teamFeeAmount) || 0 : undefined,
-            feePricingModel: editForm.isPaid ? editForm.feePricingModel : undefined,
-            customQuestions: editForm.customQuestions && editForm.customQuestions.length > 0 ? editForm.customQuestions : undefined,
-            isParentFest: editForm.isParentFest,
-            parentEventId: editForm.parentEventId || undefined,
-            parentEventSlug: editForm.parentEventSlug || undefined,
-            parentEventName: editForm.parentEventName || undefined,
-            subEventBadge: editForm.subEventBadge || undefined,
-            targetAudience: editForm.targetAudience || "inter_college",
-            isInterCollege: editForm.targetAudience === "inter_college",
+            isPaid: formData.isPaid,
+            feeAmount: formData.isPaid ? Number(formData.feeAmount) || 0 : 0,
+            teamFeeAmount: formData.isPaid && formData.feePricingModel === "per_team" ? Number(formData.teamFeeAmount) || 0 : undefined,
+            feePricingModel: formData.isPaid ? formData.feePricingModel : undefined,
+            customQuestions: formData.customQuestions && formData.customQuestions.length > 0 ? formData.customQuestions : undefined,
+            isParentFest: formData.isParentFest,
+            parentEventId: formData.parentEventId || undefined,
+            parentEventSlug: formData.parentEventSlug || undefined,
+            parentEventName: formData.parentEventName || undefined,
+            subEventBadge: formData.subEventBadge || undefined,
+            targetAudience: formData.targetAudience || "inter_college",
+            isInterCollege: formData.targetAudience === "inter_college",
           }
         : item
     );
@@ -481,7 +320,7 @@ export default function AdminEventsPage() {
     setEventsList(updated);
     saveStoredEvents(updated);
     setEditingEvent(null);
-    showNotice(`Changes saved for "${editForm.name}".`);
+    showNotice(`Changes saved for "${formData.name}".`);
   };
 
   const handleDuplicate = (evt: EventItem) => {
@@ -841,1355 +680,32 @@ export default function AdminEventsPage() {
 
       {/* Modal: Create Event */}
       {isCreateOpen && (
-        <Modal
+        <EventFormModal
           isOpen={isCreateOpen}
           onClose={() => setIsCreateOpen(false)}
-          title="Create New Event"
-          subtitle="Publish an official festival, competition, or workshop."
-          maxWidth="4xl"
-        >
-          <form onSubmit={handleCreateSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                Event Title *
-              </label>
-              <input
-                type="text"
-                required
-                value={newEvent.name}
-                onChange={(e) => setNewEvent({ ...newEvent, name: e.target.value })}
-                placeholder="e.g. CodeStorm 2026 Hackathon"
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
-              />
-            </div>
-
-            {/* Organized By Option: SRC Council vs Chartered Clubs */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5 text-[#17458F]" />
-                <span>Organized By *</span>
-              </label>
-              <select
-                value={newEvent.organizer}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  const matchedClub = clubsList.find((c) => c.name === val || `SRC ${c.name}` === val);
-                  setNewEvent({
-                    ...newEvent,
-                    organizer: val,
-                    organizerClubSlug: matchedClub ? matchedClub.slug : (val === "SRC JDCOEM" ? "src-council" : "")
-                  });
-                }}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
-              >
-                <optgroup label="Central Student Council">
-                  <option value="SRC JDCOEM">
-                    SRC JDCOEM
-                  </option>
-                </optgroup>
-
-                <optgroup label="Chartered Student Clubs">
-                  {clubsList.map((c) => (
-                    <option key={c.id || c.slug} value={c.name}>
-                      {c.name}
-                    </option>
-                  ))}
-                </optgroup>
-              </select>
-              <p className="text-[10px] text-slate-400">
-                Select whether this is an institutional council flagship event or organized by one of the 12 chartered student clubs.
-              </p>
-            </div>
-
-            {/* Dynamic Festival & Competition Hierarchy */}
-            <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
-                    <Layers className="w-4 h-4 text-[#E78023]" />
-                    <span>Festival &amp; Competition Hierarchy</span>
-                  </label>
-                  <p className="text-[11px] text-amber-800">
-                    Configure whether this is an umbrella mega-festival or a sub-competition/segment under another event.
-                  </p>
-                </div>
-                <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={newEvent.isParentFest}
-                    onChange={(e) => setNewEvent({ ...newEvent, isParentFest: e.target.checked })}
-                    className="w-4 h-4 rounded text-[#17458F] focus:ring-[#17458F] border-slate-300"
-                  />
-                  <span className="text-xs font-bold text-amber-950">Is Umbrella Festival</span>
-                </label>
-              </div>
-
-              {!newEvent.isParentFest && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-amber-200/60">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
-                      Part of Umbrella Festival (Optional)
-                    </label>
-                    <select
-                      value={newEvent.parentEventId}
-                      onChange={(e) => {
-                        const pid = e.target.value;
-                        const parentEvt = eventsList.find((ev) => ev.id === pid || ev.slug === pid);
-                        setNewEvent({
-                          ...newEvent,
-                          parentEventId: pid,
-                          parentEventSlug: parentEvt ? parentEvt.slug : "",
-                          parentEventName: parentEvt ? parentEvt.name : "",
-                        });
-                      }}
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-semibold focus:outline-none focus:border-[#17458F]"
-                    >
-                      <option value="">None (Standalone Event)</option>
-                      {eventsList
-                        .filter((ev) => ev.isParentFest || !ev.parentEventId)
-                        .map((ev) => (
-                          <option key={ev.id} value={ev.id}>
-                            {ev.name} ({ev.category})
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
-                      Sub-Event Badge / Tag (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={newEvent.subEventBadge}
-                      onChange={(e) => setNewEvent({ ...newEvent, subEventBadge: e.target.value.toUpperCase() })}
-                      placeholder="e.g. CONTESTANT, AUDITION, SOLO"
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-bold tracking-wider uppercase focus:outline-none focus:border-[#17458F]"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Target Audience & Eligibility Toggle Switch */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-[#17458F]" />
-                    <span>Target Audience &amp; Eligibility</span>
-                  </label>
-                  <p className="text-[11px] text-slate-500 font-medium">
-                    Visible to everyone publicly. Control whether registration is campus-only or open.
-                  </p>
-                </div>
-                <span className={cn(
-                  "text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full border transition-all",
-                  newEvent.targetAudience === "jdcoem_only"
-                    ? "bg-amber-50 text-amber-800 border-amber-200"
-                    : "bg-emerald-50 text-emerald-800 border-emerald-200"
-                )}>
-                  {newEvent.targetAudience === "jdcoem_only" ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
-                </span>
-              </div>
-
-              {/* Tactile 2-Segment Toggle */}
-              <div className="grid grid-cols-2 gap-2 p-1 bg-slate-200/70 rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => setNewEvent({ ...newEvent, targetAudience: "jdcoem_only", isInterCollege: false })}
-                  className={cn(
-                    "py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
-                    newEvent.targetAudience === "jdcoem_only"
-                      ? "bg-white text-[#17458F] shadow-xs"
-                      : "text-slate-600 hover:text-slate-900"
-                  )}
-                >
-                  <GraduationCap className="w-3.5 h-3.5" />
-                  <span>JDCOEM Students Only</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setNewEvent({ ...newEvent, targetAudience: "inter_college", isInterCollege: true })}
-                  className={cn(
-                    "py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
-                    newEvent.targetAudience === "inter_college"
-                      ? "bg-white text-[#E78023] shadow-xs"
-                      : "text-slate-600 hover:text-slate-900"
-                  )}
-                >
-                  <Globe className="w-3.5 h-3.5" />
-                  <span>Inter-College (Open to All)</span>
-                </button>
-              </div>
-              <p className="text-[10px] text-slate-500 font-medium italic">
-                {newEvent.targetAudience === "jdcoem_only"
-                  ? "ℹ️ External non-JDCOEM students can view details, but registration will be restricted to verified campus students."
-                  : "ℹ️ Open to students and delegates across all colleges and institutions."}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                  Category *
-                </label>
-                <select
-                  value={newEvent.category}
-                  onChange={(e) => setNewEvent({ ...newEvent, category: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
-                >
-                  <option value="Fest">Fest</option>
-                  <option value="Technical">Technical</option>
-                  <option value="Cultural">Cultural</option>
-                  <option value="Competitions">Competitions</option>
-                  <option value="Workshops">Workshops</option>
-                  <option value="Sports">Sports</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                  Event Status *
-                </label>
-                <select
-                  value={newEvent.status}
-                  onChange={(e) => setNewEvent({ ...newEvent, status: e.target.value as any })}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
-                >
-                  <option value="Registration Open">Registration Open</option>
-                  <option value="Upcoming">Upcoming</option>
-                  <option value="Completed">Completed</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Event Date (Interactive Calendar Picker) & Venue */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <CalendarIcon className="w-3.5 h-3.5 text-[#E78023]" />
-                    <span>Event Date (Calendar) *</span>
-                  </label>
-                  {newEvent.date && (
-                    <span className="text-[10px] text-[#17458F] font-bold truncate">
-                      {newEvent.date}
-                    </span>
-                  )}
-                </div>
-                
-                <div className="relative">
-                  <input
-                    type="date"
-                    required
-                    value={newEvent.rawDate}
-                    onChange={(e) => handleDateChange(e.target.value, false)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
-                  />
-                </div>
-                <p className="text-[10px] text-slate-400">
-                  Selected date: <strong className="text-slate-700">{newEvent.date || "Selected Date"}</strong>
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-[#E78023]" />
-                  <span>Venue</span>
-                </label>
-                <input
-                  type="text"
-                  value={newEvent.venue}
-                  onChange={(e) => setNewEvent({ ...newEvent, venue: e.target.value })}
-                  placeholder="e.g. Central Auditorium"
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                Brief Description
-              </label>
-              <textarea
-                rows={3}
-                value={newEvent.description}
-                onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
-                placeholder="Overview of rules, themes, and awards..."
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F] resize-none"
-              />
-            </div>
-
-            {/* About The Event */}
-            <div className="space-y-2 pt-2 border-t border-slate-100">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                About The Event
-              </label>
-              <textarea
-                rows={3}
-                value={newEvent.about}
-                onChange={(e) => setNewEvent({ ...newEvent, about: e.target.value })}
-                placeholder="Detailed description about what the event is, its significance, and goals..."
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F] resize-none"
-              />
-            </div>
-
-            {/* What To Expect (Dynamic List) */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                  What To Expect
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setNewEvent({ ...newEvent, whatToExpect: [...newEvent.whatToExpect, ""] })}
-                  className="text-[10px] font-bold text-[#17458F] hover:text-[#E78023] flex items-center gap-1 cursor-pointer"
-                >
-                  <Plus className="w-3 h-3" /> Add Item
-                </button>
-              </div>
-              {newEvent.whatToExpect.map((item, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-slate-400 w-5 shrink-0">0{idx + 1}</span>
-                  <input
-                    type="text"
-                    value={item}
-                    onChange={(e) => {
-                      const updated = [...newEvent.whatToExpect];
-                      updated[idx] = e.target.value;
-                      setNewEvent({ ...newEvent, whatToExpect: updated });
-                    }}
-                    placeholder="e.g. Industry-level competition experience"
-                    className="flex-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs focus:outline-none focus:border-[#17458F]"
-                  />
-                  {newEvent.whatToExpect.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const updated = newEvent.whatToExpect.filter((_, i) => i !== idx);
-                        setNewEvent({ ...newEvent, whatToExpect: updated });
-                      }}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Rules & Guidelines (Dynamic List) */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                  Rules &amp; Guidelines
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setNewEvent({ ...newEvent, rules: [...newEvent.rules, ""] })}
-                  className="text-[10px] font-bold text-[#17458F] hover:text-[#E78023] flex items-center gap-1 cursor-pointer"
-                >
-                  <Plus className="w-3 h-3" /> Add Rule
-                </button>
-              </div>
-              {newEvent.rules.map((item, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-slate-400 w-5 shrink-0">0{idx + 1}</span>
-                  <input
-                    type="text"
-                    value={item}
-                    onChange={(e) => {
-                      const updated = [...newEvent.rules];
-                      updated[idx] = e.target.value;
-                      setNewEvent({ ...newEvent, rules: updated });
-                    }}
-                    placeholder="e.g. College ID mandatory at entry"
-                    className="flex-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs focus:outline-none focus:border-[#17458F]"
-                  />
-                  {newEvent.rules.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const updated = newEvent.rules.filter((_, i) => i !== idx);
-                        setNewEvent({ ...newEvent, rules: updated });
-                      }}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Participation Format & Team Size */}
-            <div className="space-y-2 pt-2 border-t border-slate-100">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                Participation Format *
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {(["Individual", "Team", "Both"] as const).map((opt) => (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => setNewEvent({ ...newEvent, teamType: opt })}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer ${
-                      newEvent.teamType === opt
-                        ? "bg-[#17458F] text-white border-[#E78023] shadow-xs"
-                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                    }`}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-
-              {newEvent.teamType !== "Individual" && (
-                <div className="grid grid-cols-2 gap-4 pt-2">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      Min Team Size
-                    </label>
-                    <input
-                      type="number"
-                      min={2}
-                      max={20}
-                      value={newEvent.minTeamSize}
-                      onChange={(e) => setNewEvent({ ...newEvent, minTeamSize: parseInt(e.target.value) || 2 })}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      Max Team Size
-                    </label>
-                    <input
-                      type="number"
-                      min={2}
-                      max={20}
-                      value={newEvent.maxTeamSize}
-                      onChange={(e) => setNewEvent({ ...newEvent, maxTeamSize: parseInt(e.target.value) || 4 })}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Registration Deadline */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-[#E78023]" />
-                  <span>Registration Opens</span>
-                </label>
-                <input
-                  type="date"
-                  value={newEvent.registrationStartDate}
-                  onChange={(e) => setNewEvent({ ...newEvent, registrationStartDate: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-rose-500" />
-                  <span>Registration Closes</span>
-                </label>
-                <input
-                  type="date"
-                  value={newEvent.registrationDeadline}
-                  onChange={(e) => setNewEvent({ ...newEvent, registrationDeadline: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
-                />
-              </div>
-            </div>
-
-            {/* Registration Fee & Gateway Pricing */}
-            <div className="space-y-3 pt-2 border-t border-slate-100">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
-                  <span>Registration Fee (Razorpay Gateway)</span>
-                </label>
-                <span className="text-[10px] font-bold text-slate-500">
-                  {newEvent.isPaid ? "Paid Event" : "Free Entry"}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setNewEvent({ ...newEvent, isPaid: false })}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer ${
-                    !newEvent.isPaid
-                      ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
-                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                  }`}
-                >
-                  Free Event (₹0)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setNewEvent({ ...newEvent, isPaid: true })}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer ${
-                    newEvent.isPaid
-                      ? "bg-[#17458F] text-white border-[#E78023] shadow-xs"
-                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                  }`}
-                >
-                  Paid Event (₹ Fees)
-                </button>
-              </div>
-
-              {newEvent.isPaid && (
-                <div className="p-4 rounded-2xl bg-blue-50/60 border border-[#17458F]/20 space-y-3 animate-in fade-in duration-200">
-                  {newEvent.teamType !== "Individual" && (
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-                        Team Pricing Structure
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setNewEvent({ ...newEvent, feePricingModel: "per_person" })}
-                          className={`py-1.5 px-3 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                            newEvent.feePricingModel === "per_person"
-                              ? "bg-[#17458F] text-white border-[#17458F]"
-                              : "bg-white text-slate-700 border-slate-200"
-                          }`}
-                        >
-                          Per Member (₹ × Squad)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setNewEvent({ ...newEvent, feePricingModel: "per_team" })}
-                          className={`py-1.5 px-3 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                            newEvent.feePricingModel === "per_team"
-                              ? "bg-[#17458F] text-white border-[#17458F]"
-                              : "bg-white text-slate-700 border-slate-200"
-                          }`}
-                        >
-                          Flat Team Fee (₹ Fixed)
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                        {newEvent.feePricingModel === "per_team" && newEvent.teamType !== "Individual"
-                          ? "Solo Delegate Fee (₹)"
-                          : "Fee Per Participant (₹)"}
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        step={10}
-                        value={newEvent.feeAmount}
-                        onChange={(e) => setNewEvent({ ...newEvent, feeAmount: Math.max(0, parseInt(e.target.value) || 0) })}
-                        placeholder="e.g. 100"
-                        className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
-                      />
-                    </div>
-
-                    {newEvent.teamType !== "Individual" && newEvent.feePricingModel === "per_team" && (
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                          Flat Squad Fee (₹ / Team)
-                        </label>
-                        <input
-                          type="number"
-                          min={0}
-                          step={10}
-                          value={newEvent.teamFeeAmount}
-                          onChange={(e) => setNewEvent({ ...newEvent, teamFeeAmount: Math.max(0, parseInt(e.target.value) || 0) })}
-                          placeholder="e.g. 300"
-                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  <p className="text-[10px] text-slate-500 font-medium">
-                    Integrated with Razorpay Gateway. Registrations will securely charge this amount via UPI (GPay/PhonePe), Cards, or NetBanking before issuing delegate passes.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Multi-Size Visual Asset Suite */}
-            <div className="space-y-4 pt-4 border-t border-slate-200">
-              <div className="space-y-1">
-                <label className="text-xs font-extrabold uppercase tracking-wider text-[#17458F] flex items-center gap-1.5 font-heading">
-                  <ImageIcon className="w-4 h-4 text-[#E78023]" />
-                  <span>Event Visual Asset Suite (Multi-Size Imagery)</span>
-                </label>
-                <p className="text-[11px] text-slate-500 font-sans">
-                  Upload dedicated photos optimized for different screens and layouts across the portal.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* 1. Event Card Thumbnail (16:9) */}
-                <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-                  <ImageUploadDropzone
-                    label="1. Card Thumbnail"
-                    sublabel="For event catalog cards & dashboard"
-                    aspectRatio="16:9"
-                    recommendedSize="1200 x 675 px (16:9)"
-                    storagePath="events/cards"
-                    previewUrl={newEvent.cardImage}
-                    onUploadStateChange={handleUploadStateChange}
-                    onUrlChange={(url) => {
-                      setNewEvent((prev) => ({ ...prev, cardImage: url }));
-                    }}
-                  />
-                </div>
-
-                {/* 2. Official Vertical Poster (4:5) */}
-                <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-                  <ImageUploadDropzone
-                    label="2. Vertical Poster"
-                    sublabel="For official notices & passes"
-                    aspectRatio="4:5"
-                    recommendedSize="1080 x 1350 px (4:5)"
-                    storagePath="events/posters"
-                    previewUrl={newEvent.posterImage}
-                    onUploadStateChange={handleUploadStateChange}
-                    onUrlChange={(url) => {
-                      setNewEvent((prev) => ({ ...prev, posterImage: url, poster: url || prev.poster }));
-                    }}
-                  />
-                </div>
-
-                {/* 3. Hero Header Backdrop (21:9) */}
-                <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-                  <ImageUploadDropzone
-                    label="3. Header Banner"
-                    sublabel="Cinematic backdrop on detail page"
-                    aspectRatio="21:9"
-                    recommendedSize="1920 x 820 px (21:9)"
-                    storagePath="events/headers"
-                    previewUrl={newEvent.headerImage}
-                    onUploadStateChange={handleUploadStateChange}
-                    onUrlChange={(url) => {
-                      setNewEvent((prev) => ({ ...prev, headerImage: url }));
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Custom Registration Questions & Notes (Q&N) */}
-            <CustomQuestionsBuilder
-              questions={newEvent.customQuestions}
-              onChange={(qs) => setNewEvent({ ...newEvent, customQuestions: qs })}
-            />
-
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-              <Button
-                type="button"
-                onClick={() => setIsCreateOpen(false)}
-                variant="outline"
-                size="sm"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                size="sm"
-                disabled={pendingUploads > 0}
-                className="disabled:opacity-50 disabled:cursor-not-allowed gap-2"
-              >
-                {pendingUploads > 0 ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin text-white" />
-                    <span>Uploading ({pendingUploads})...</span>
-                  </>
-                ) : (
-                  <span>Save & Publish Event</span>
-                )}
-              </Button>
-            </div>
-          </form>
-        </Modal>
+          mode="create"
+          eventsList={eventsList}
+          clubsList={clubsList}
+          onSubmit={handleCreateSubmit}
+          pendingUploads={pendingUploads}
+          onUploadStateChange={handleUploadStateChange}
+        />
       )}
 
       {/* Modal: Edit Event */}
       {editingEvent && (
-        <Modal
+        <EventFormModal
           isOpen={!!editingEvent}
           onClose={() => setEditingEvent(null)}
-          title="Edit Event"
-          subtitle={`Editing: ${editingEvent.name}`}
-          maxWidth="4xl"
-        >
-          <form onSubmit={handleEditSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                Event Title *
-              </label>
-              <input
-                type="text"
-                required
-                value={editForm.name}
-                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
-              />
-            </div>
-
-            {/* Organized By Option */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5 text-[#17458F]" />
-                <span>Organized By *</span>
-              </label>
-              <select
-                value={editForm.organizer}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  const matchedClub = clubsList.find((c) => c.name === val || `SRC ${c.name}` === val);
-                  setEditForm({
-                    ...editForm,
-                    organizer: val,
-                    organizerClubSlug: matchedClub ? matchedClub.slug : (val === "SRC JDCOEM" ? "src-council" : "")
-                  });
-                }}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
-              >
-                <optgroup label="Central Student Council">
-                  <option value="SRC JDCOEM">
-                    SRC JDCOEM
-                  </option>
-                </optgroup>
-
-                <optgroup label="Chartered Student Clubs">
-                  {clubsList.map((c) => (
-                    <option key={c.id || c.slug} value={c.name}>
-                      {c.name}
-                    </option>
-                  ))}
-                </optgroup>
-              </select>
-            </div>
-
-            {/* Dynamic Festival & Competition Hierarchy */}
-            <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
-                    <Layers className="w-4 h-4 text-[#E78023]" />
-                    <span>Festival &amp; Competition Hierarchy</span>
-                  </label>
-                  <p className="text-[11px] text-amber-800">
-                    Configure whether this is an umbrella mega-festival or a sub-competition/segment under another event.
-                  </p>
-                </div>
-                <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={editForm.isParentFest}
-                    onChange={(e) => setEditForm({ ...editForm, isParentFest: e.target.checked })}
-                    className="w-4 h-4 rounded text-[#17458F] focus:ring-[#17458F] border-slate-300"
-                  />
-                  <span className="text-xs font-bold text-amber-950">Is Umbrella Festival</span>
-                </label>
-              </div>
-
-              {!editForm.isParentFest && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-amber-200/60">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
-                      Part of Umbrella Festival (Optional)
-                    </label>
-                    <select
-                      value={editForm.parentEventId}
-                      onChange={(e) => {
-                        const pid = e.target.value;
-                        const parentEvt = eventsList.find((ev) => ev.id === pid || ev.slug === pid);
-                        setEditForm({
-                          ...editForm,
-                          parentEventId: pid,
-                          parentEventSlug: parentEvt ? parentEvt.slug : "",
-                          parentEventName: parentEvt ? parentEvt.name : "",
-                        });
-                      }}
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-semibold focus:outline-none focus:border-[#17458F]"
-                    >
-                      <option value="">None (Standalone Event)</option>
-                      {eventsList
-                        .filter((ev) => ev.id !== editingEvent?.id && (ev.isParentFest || !ev.parentEventId))
-                        .map((ev) => (
-                          <option key={ev.id} value={ev.id}>
-                            {ev.name} ({ev.category})
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
-                      Sub-Event Badge / Tag (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={editForm.subEventBadge}
-                      onChange={(e) => setEditForm({ ...editForm, subEventBadge: e.target.value.toUpperCase() })}
-                      placeholder="e.g. CONTESTANT, AUDITION, SOLO"
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-bold tracking-wider uppercase focus:outline-none focus:border-[#17458F]"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Target Audience & Eligibility Toggle Switch */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-[#17458F]" />
-                    <span>Target Audience &amp; Eligibility</span>
-                  </label>
-                  <p className="text-[11px] text-slate-500 font-medium">
-                    Visible to everyone publicly. Control whether registration is campus-only or open.
-                  </p>
-                </div>
-                <span className={cn(
-                  "text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full border transition-all",
-                  editForm.targetAudience === "jdcoem_only"
-                    ? "bg-amber-50 text-amber-800 border-amber-200"
-                    : "bg-emerald-50 text-emerald-800 border-emerald-200"
-                )}>
-                  {editForm.targetAudience === "jdcoem_only" ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
-                </span>
-              </div>
-
-              {/* Tactile 2-Segment Toggle */}
-              <div className="grid grid-cols-2 gap-2 p-1 bg-slate-200/70 rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => setEditForm({ ...editForm, targetAudience: "jdcoem_only", isInterCollege: false })}
-                  className={cn(
-                    "py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
-                    editForm.targetAudience === "jdcoem_only"
-                      ? "bg-white text-[#17458F] shadow-xs"
-                      : "text-slate-600 hover:text-slate-900"
-                  )}
-                >
-                  <GraduationCap className="w-3.5 h-3.5" />
-                  <span>JDCOEM Students Only</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditForm({ ...editForm, targetAudience: "inter_college", isInterCollege: true })}
-                  className={cn(
-                    "py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
-                    editForm.targetAudience === "inter_college"
-                      ? "bg-white text-[#E78023] shadow-xs"
-                      : "text-slate-600 hover:text-slate-900"
-                  )}
-                >
-                  <Globe className="w-3.5 h-3.5" />
-                  <span>Inter-College (Open to All)</span>
-                </button>
-              </div>
-              <p className="text-[10px] text-slate-500 font-medium italic">
-                {editForm.targetAudience === "jdcoem_only"
-                  ? "ℹ️ External non-JDCOEM students can view details, but registration will be restricted to verified campus students."
-                  : "ℹ️ Open to students and delegates across all colleges and institutions."}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                  Category *
-                </label>
-                <select
-                  value={editForm.category}
-                  onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
-                >
-                  <option value="Fest">Fest</option>
-                  <option value="Technical">Technical</option>
-                  <option value="Cultural">Cultural</option>
-                  <option value="Competitions">Competitions</option>
-                  <option value="Workshops">Workshops</option>
-                  <option value="Sports">Sports</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                  Event Status *
-                </label>
-                <select
-                  value={editForm.status}
-                  onChange={(e) => setEditForm({ ...editForm, status: e.target.value as any })}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
-                >
-                  <option value="Registration Open">Registration Open</option>
-                  <option value="Upcoming">Upcoming</option>
-                  <option value="Completed">Completed</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Event Date (Interactive Calendar Picker) & Venue */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <CalendarIcon className="w-3.5 h-3.5 text-[#E78023]" />
-                    <span>Event Date (Calendar) *</span>
-                  </label>
-                  {editForm.date && (
-                    <span className="text-[10px] text-[#17458F] font-bold truncate">
-                      {editForm.date}
-                    </span>
-                  )}
-                </div>
-                
-                <input
-                  type="date"
-                  value={editForm.rawDate}
-                  onChange={(e) => handleDateChange(e.target.value, true)}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
-                />
-                <input
-                  type="text"
-                  value={editForm.date}
-                  onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
-                  placeholder="e.g. 15 February 2026"
-                  className="w-full px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-700"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-[#E78023]" />
-                  <span>Venue</span>
-                </label>
-                <input
-                  type="text"
-                  value={editForm.venue}
-                  onChange={(e) => setEditForm({ ...editForm, venue: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                Brief Description
-              </label>
-              <textarea
-                rows={3}
-                value={editForm.description}
-                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F] resize-none"
-              />
-            </div>
-
-            {/* About The Event */}
-            <div className="space-y-2 pt-2 border-t border-slate-100">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                About The Event
-              </label>
-              <textarea
-                rows={3}
-                value={editForm.about}
-                onChange={(e) => setEditForm({ ...editForm, about: e.target.value })}
-                placeholder="Detailed description about what the event is, its significance, and goals..."
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F] resize-none"
-              />
-            </div>
-
-            {/* What To Expect (Dynamic List) */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                  What To Expect
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setEditForm({ ...editForm, whatToExpect: [...editForm.whatToExpect, ""] })}
-                  className="text-[10px] font-bold text-[#17458F] hover:text-[#E78023] flex items-center gap-1 cursor-pointer"
-                >
-                  <Plus className="w-3 h-3" /> Add Item
-                </button>
-              </div>
-              {editForm.whatToExpect.map((item, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-slate-400 w-5 shrink-0">0{idx + 1}</span>
-                  <input
-                    type="text"
-                    value={item}
-                    onChange={(e) => {
-                      const updated = [...editForm.whatToExpect];
-                      updated[idx] = e.target.value;
-                      setEditForm({ ...editForm, whatToExpect: updated });
-                    }}
-                    placeholder="e.g. Industry-level competition experience"
-                    className="flex-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs focus:outline-none focus:border-[#17458F]"
-                  />
-                  {editForm.whatToExpect.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const updated = editForm.whatToExpect.filter((_, i) => i !== idx);
-                        setEditForm({ ...editForm, whatToExpect: updated });
-                      }}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Rules & Guidelines (Dynamic List) */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                  Rules &amp; Guidelines
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setEditForm({ ...editForm, rules: [...editForm.rules, ""] })}
-                  className="text-[10px] font-bold text-[#17458F] hover:text-[#E78023] flex items-center gap-1 cursor-pointer"
-                >
-                  <Plus className="w-3 h-3" /> Add Rule
-                </button>
-              </div>
-              {editForm.rules.map((item, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-slate-400 w-5 shrink-0">0{idx + 1}</span>
-                  <input
-                    type="text"
-                    value={item}
-                    onChange={(e) => {
-                      const updated = [...editForm.rules];
-                      updated[idx] = e.target.value;
-                      setEditForm({ ...editForm, rules: updated });
-                    }}
-                    placeholder="e.g. College ID mandatory at entry"
-                    className="flex-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs focus:outline-none focus:border-[#17458F]"
-                  />
-                  {editForm.rules.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const updated = editForm.rules.filter((_, i) => i !== idx);
-                        setEditForm({ ...editForm, rules: updated });
-                      }}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Participation Format & Team Size */}
-            <div className="space-y-2 pt-2 border-t border-slate-100">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                Participation Format *
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {(["Individual", "Team", "Both"] as const).map((opt) => (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => setEditForm({ ...editForm, teamType: opt })}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer ${
-                      editForm.teamType === opt
-                        ? "bg-[#17458F] text-white border-[#E78023] shadow-xs"
-                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                    }`}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-
-              {editForm.teamType !== "Individual" && (
-                <div className="grid grid-cols-2 gap-4 pt-2">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      Min Team Size
-                    </label>
-                    <input
-                      type="number"
-                      min={2}
-                      max={20}
-                      value={editForm.minTeamSize}
-                      onChange={(e) => setEditForm({ ...editForm, minTeamSize: parseInt(e.target.value) || 2 })}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      Max Team Size
-                    </label>
-                    <input
-                      type="number"
-                      min={2}
-                      max={20}
-                      value={editForm.maxTeamSize}
-                      onChange={(e) => setEditForm({ ...editForm, maxTeamSize: parseInt(e.target.value) || 4 })}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Registration Deadline */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-[#E78023]" />
-                  <span>Registration Opens</span>
-                </label>
-                <input
-                  type="date"
-                  value={editForm.registrationStartDate}
-                  onChange={(e) => setEditForm({ ...editForm, registrationStartDate: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-rose-500" />
-                  <span>Registration Closes</span>
-                </label>
-                <input
-                  type="date"
-                  value={editForm.registrationDeadline}
-                  onChange={(e) => setEditForm({ ...editForm, registrationDeadline: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
-                />
-              </div>
-            </div>
-
-            {/* Registration Fee & Gateway Pricing */}
-            <div className="space-y-3 pt-2 border-t border-slate-100">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
-                  <span>Registration Fee (Razorpay Gateway)</span>
-                </label>
-                <span className="text-[10px] font-bold text-slate-500">
-                  {editForm.isPaid ? "Paid Event" : "Free Entry"}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setEditForm({ ...editForm, isPaid: false })}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer ${
-                    !editForm.isPaid
-                      ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
-                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                  }`}
-                >
-                  Free Event (₹0)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditForm({ ...editForm, isPaid: true })}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer ${
-                    editForm.isPaid
-                      ? "bg-[#17458F] text-white border-[#E78023] shadow-xs"
-                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                  }`}
-                >
-                  Paid Event (₹ Fees)
-                </button>
-              </div>
-
-              {editForm.isPaid && (
-                <div className="p-4 rounded-2xl bg-blue-50/60 border border-[#17458F]/20 space-y-3 animate-in fade-in duration-200">
-                  {editForm.teamType !== "Individual" && (
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-                        Team Pricing Structure
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setEditForm({ ...editForm, feePricingModel: "per_person" })}
-                          className={`py-1.5 px-3 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                            editForm.feePricingModel === "per_person"
-                              ? "bg-[#17458F] text-white border-[#17458F]"
-                              : "bg-white text-slate-700 border-slate-200"
-                          }`}
-                        >
-                          Per Member (₹ × Squad)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditForm({ ...editForm, feePricingModel: "per_team" })}
-                          className={`py-1.5 px-3 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                            editForm.feePricingModel === "per_team"
-                              ? "bg-[#17458F] text-white border-[#17458F]"
-                              : "bg-white text-slate-700 border-slate-200"
-                          }`}
-                        >
-                          Flat Team Fee (₹ Fixed)
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                        {editForm.feePricingModel === "per_team" && editForm.teamType !== "Individual"
-                          ? "Solo Delegate Fee (₹)"
-                          : "Fee Per Participant (₹)"}
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        step={10}
-                        value={editForm.feeAmount}
-                        onChange={(e) => setEditForm({ ...editForm, feeAmount: Math.max(0, parseInt(e.target.value) || 0) })}
-                        placeholder="e.g. 100"
-                        className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
-                      />
-                    </div>
-
-                    {editForm.teamType !== "Individual" && editForm.feePricingModel === "per_team" && (
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                          Flat Squad Fee (₹ / Team)
-                        </label>
-                        <input
-                          type="number"
-                          min={0}
-                          step={10}
-                          value={editForm.teamFeeAmount}
-                          onChange={(e) => setEditForm({ ...editForm, teamFeeAmount: Math.max(0, parseInt(e.target.value) || 0) })}
-                          placeholder="e.g. 300"
-                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  <p className="text-[10px] text-slate-500 font-medium">
-                    Integrated with Razorpay Gateway. Registrations will securely charge this amount via UPI (GPay/PhonePe), Cards, or NetBanking before issuing delegate passes.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Multi-Size Visual Asset Suite */}
-            <div className="space-y-4 pt-4 border-t border-slate-200">
-              <div className="space-y-1">
-                <label className="text-xs font-extrabold uppercase tracking-wider text-[#17458F] flex items-center gap-1.5 font-heading">
-                  <ImageIcon className="w-4 h-4 text-[#E78023]" />
-                  <span>Event Visual Asset Suite (Multi-Size Imagery)</span>
-                </label>
-                <p className="text-[11px] text-slate-500 font-sans">
-                  Upload dedicated photos optimized for different screens and layouts across the portal.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* 1. Event Card Thumbnail (16:9) */}
-                <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-                  <ImageUploadDropzone
-                    label="1. Card Thumbnail"
-                    sublabel="For event catalog cards & dashboard"
-                    aspectRatio="16:9"
-                    recommendedSize="1200 x 675 px (16:9)"
-                    storagePath="events/cards"
-                    previewUrl={editForm.cardImage}
-                    onUploadStateChange={handleUploadStateChange}
-                    onUrlChange={(url) => {
-                      setEditForm((prev) => ({ ...prev, cardImage: url }));
-                    }}
-                  />
-                </div>
-
-                {/* 2. Official Vertical Poster (4:5) */}
-                <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-                  <ImageUploadDropzone
-                    label="2. Vertical Poster"
-                    sublabel="For official notices & passes"
-                    aspectRatio="4:5"
-                    recommendedSize="1080 x 1350 px (4:5)"
-                    storagePath="events/posters"
-                    previewUrl={editForm.posterImage}
-                    onUploadStateChange={handleUploadStateChange}
-                    onUrlChange={(url) => {
-                      setEditForm((prev) => ({ ...prev, posterImage: url, poster: url || prev.poster }));
-                    }}
-                  />
-                </div>
-
-                {/* 3. Hero Header Backdrop (21:9) */}
-                <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-                  <ImageUploadDropzone
-                    label="3. Header Banner"
-                    sublabel="Cinematic backdrop on detail page"
-                    aspectRatio="21:9"
-                    recommendedSize="1920 x 820 px (21:9)"
-                    storagePath="events/headers"
-                    previewUrl={editForm.headerImage}
-                    onUploadStateChange={handleUploadStateChange}
-                    onUrlChange={(url) => {
-                      setEditForm((prev) => ({ ...prev, headerImage: url }));
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Custom Registration Questions & Notes (Q&N) */}
-            <CustomQuestionsBuilder
-              questions={editForm.customQuestions}
-              onChange={(qs) => setEditForm({ ...editForm, customQuestions: qs })}
-            />
-
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-              <Button
-                type="button"
-                onClick={() => setEditingEvent(null)}
-                variant="outline"
-                size="sm"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                size="sm"
-                disabled={pendingUploads > 0}
-                className="disabled:opacity-50 disabled:cursor-not-allowed gap-2"
-              >
-                {pendingUploads > 0 ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin text-white" />
-                    <span>Uploading ({pendingUploads})...</span>
-                  </>
-                ) : (
-                  <span>Save Changes</span>
-                )}
-              </Button>
-            </div>
-          </form>
-        </Modal>
+          mode="edit"
+          initialData={editingInitialData}
+          eventsList={eventsList}
+          clubsList={clubsList}
+          editingEventId={editingEvent.id}
+          onSubmit={handleEditSubmit}
+          pendingUploads={pendingUploads}
+          onUploadStateChange={handleUploadStateChange}
+        />
       )}
 
     </div>
