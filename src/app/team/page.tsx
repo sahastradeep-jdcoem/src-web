@@ -126,7 +126,7 @@ export default function TeamPage() {
             department: leader.department || "JDCOEM Nagpur",
             year: leader.year || (isCoLead ? "3rd Year" : "4th Year"),
             avatar: leader.avatar || (isCoLead ? "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop" : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"),
-            bio: leader.bio || (isCoLead ? `Co-leading ${club.name} logistics, rehearsals, member coordination, and event execution.` : `Leading ${club.name} activities, workshops, productions, and student talent mentorship.`),
+            bio: leader.bio || "",
             email: leader.email || (isCoLead ? `src.${club.slug}.cohead${leaderIndex > 1 ? leaderIndex : ""}@jdcoem.ac.in` : `src.${club.slug}.head@jdcoem.ac.in`),
             linkedin: leader.linkedin || "https://www.linkedin.com/company/src-jdcoem/",
             order: clubIndex * 10 + leaderIndex + 1

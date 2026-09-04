@@ -159,7 +159,7 @@ export default function AdminTeamPage() {
           ...member,
           id: newId,
           name: `${member.role} (Appointee)`,
-          bio: `Council officer representing ${member.role} for the ${selectedTenure.label} tenure.`,
+          bio: "",
           email: `${cleanRoleSlug.replace(/-/g, "")}@jdcoem.ac.in`,
           order: idx + 1,
         };
@@ -379,7 +379,7 @@ export default function AdminTeamPage() {
           department: leader.department || "Computer Science & Engineering",
           year: leader.year || (leader.roleType === "coLead" ? "3rd Year" : "4th Year"),
           avatar: leader.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
-          bio: leader.bio || `Leading ${club.name} society operations, student chapters, and collegiate events.`,
+          bio: leader.bio || "",
           email: leader.email || "",
           linkedin: leader.linkedin || "",
           btId: leader.btId || "",
@@ -722,7 +722,7 @@ export default function AdminTeamPage() {
               department: "Computer Science and Engineering",
               year: "4th Year",
               avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
-              bio: `Guiding ${selectedTenure?.label} institutional oversight and council governance.`,
+              bio: "",
               email: "mentor@jdcoem.ac.in",
               order: 1
             },
@@ -733,7 +733,7 @@ export default function AdminTeamPage() {
               department: "Artificial Intelligence Engineering",
               year: "4th Year",
               avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
-              bio: `Presiding over the ${selectedTenure?.label} Student Representative Council.`,
+              bio: "",
               email: "president@jdcoem.ac.in",
               order: 2
             },
@@ -744,7 +744,7 @@ export default function AdminTeamPage() {
               department: "Information Technology",
               year: "4th Year",
               avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=600&auto=format&fit=crop",
-              bio: `Executive coordination and student council operations for ${selectedTenure?.label}.`,
+              bio: "",
               email: "vp@jdcoem.ac.in",
               order: 3
             }

@@ -55,14 +55,63 @@ export function getClubLeaders(club: ClubItem): ClubLeader[] {
   return list;
 }
 
+export const KNOWN_HARDCODED_BIO_SNIPPETS = [
+  "Pioneered the founding architecture",
+  "Led the inaugural foundation assembly",
+  "Directing campus digital infrastructure",
+  "Presiding over the entire Student Representative Council",
+  "Assisting executive governance",
+  "Heading administrative records",
+  "Assisting secretariat documentation",
+  "Leading large-scale festival logistics",
+  "Managing on-ground event workflows",
+  "Leading the official Sahastradeep magazine",
+  "Strategizing technical symposia",
+  "Structuring campus fests",
+  "Directing media relations",
+  "Managing council treasury",
+  "Assisting financial ledger records",
+  "Enforcing institutional conduct standards",
+  "Supervising gate accreditation",
+  "Curating stage scripts",
+  "Hosting major cultural nights",
+  "Anchoring hackathons",
+  "Co-anchoring stage ceremonies",
+  "Delivering central council addresses",
+  "Voicing student representations",
+  "Representing student needs across computing",
+  "Liaisoning for business conclaves",
+  "Facilitating smooth campus onboarding",
+  "institutional oversight and council governance",
+  "Student Representative Council.",
+  "Executive coordination and student council operations",
+  "Council officer representing",
+  "society operations, student chapters, and collegiate events",
+  "logistics, rehearsals, member coordination, and event execution",
+  "activities, workshops, productions, and student talent mentorship",
+];
+
+export function isHardcodedBio(bio?: string | null): boolean {
+  if (!bio || typeof bio !== "string") return false;
+  const trimmed = bio.trim();
+  if (!trimmed) return false;
+  return KNOWN_HARDCODED_BIO_SNIPPETS.some((snippet) => trimmed.includes(snippet));
+}
+
+export function sanitizeTeamMember(m: TeamMember): TeamMember {
+  if (!m) return m;
+  const copy = { ...m };
+  delete (copy as any).level;
+  delete (copy as any).category;
+  if (copy.bio && isHardcodedBio(copy.bio)) {
+    copy.bio = "";
+  }
+  return copy;
+}
+
 export function stripCategoryAndLevel(members: TeamMember[]): TeamMember[] {
   if (!Array.isArray(members)) return [];
-  return members.map((m) => {
-    const copy = { ...m };
-    delete (copy as any).level;
-    delete (copy as any).category;
-    return copy;
-  });
+  return members.map(sanitizeTeamMember);
 }
 
 // Council Team Store

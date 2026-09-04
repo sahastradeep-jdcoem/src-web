@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Mail, Linkedin, ArrowRight } from "lucide-react";
 import { TeamMember } from "@/types";
 import { getDepartmentShortName } from "@/lib/departmentsStore";
+import { isHardcodedBio } from "@/lib/councilStore";
 
 interface CouncilMemberCardProps {
   member: TeamMember;
@@ -11,6 +12,8 @@ interface CouncilMemberCardProps {
 }
 
 export function CouncilMemberCard({ member, categoryLabel = "ADMIN" }: CouncilMemberCardProps) {
+  const hasBio = Boolean(member.bio && member.bio.trim().length > 0 && !isHardcodedBio(member.bio));
+
   return (
     <div className="group rounded-2xl bg-white border border-slate-200 hover:border-[#17458F]/30 hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col justify-between shadow-xs font-sans">
       
@@ -52,7 +55,7 @@ export function CouncilMemberCard({ member, categoryLabel = "ADMIN" }: CouncilMe
           </p>
         </div>
 
-        {member.bio && (
+        {hasBio && (
           <p className="text-[11px] sm:text-xs text-slate-600 leading-relaxed border-t border-slate-100 pt-2 sm:pt-3 line-clamp-2 sm:line-clamp-3 font-sans font-normal">
             {member.bio}
           </p>

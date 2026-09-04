@@ -10,7 +10,8 @@ import {
   getStoredFoundingMembers,
   saveStoredFoundingMembers,
   getStoredClubs,
-  saveStoredClubs
+  saveStoredClubs,
+  stripCategoryAndLevel
 } from "./councilStore";
 import { getStoredEvents, saveStoredEvents } from "./eventsStore";
 import { 
@@ -147,7 +148,7 @@ export const initialDefaultTenures: CouncilTenure[] = [
         department: "Computer Science and Engineering",
         year: "4th Year",
         avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
-        bio: "Guiding 2026-27 institutional oversight and council governance.",
+        bio: "",
         email: "mentor@jdcoem.ac.in",
         order: 1
       },
@@ -158,7 +159,7 @@ export const initialDefaultTenures: CouncilTenure[] = [
         department: "Artificial Intelligence Engineering",
         year: "4th Year",
         avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
-        bio: "Presiding over the 2026-27 Student Representative Council.",
+        bio: "",
         email: "president@jdcoem.ac.in",
         order: 2
       },
@@ -169,7 +170,7 @@ export const initialDefaultTenures: CouncilTenure[] = [
         department: "Information Technology",
         year: "4th Year",
         avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=600&auto=format&fit=crop",
-        bio: "Executive coordination and student council operations for 2026-27.",
+        bio: "",
         email: "vp@jdcoem.ac.in",
         order: 3
       }
@@ -242,9 +243,9 @@ export function getStoredTenures(): CouncilTenure[] {
         status: "active" as const,
         startDate: t.startDate || "2025-09-24T00:00:00Z",
         tenureNumber: tenureNum,
-        adminCouncil: activeAdmins,
-        hostingCommittee: activeHosting,
-        foundingMembers: isFirstTenure ? activeFounders : [],
+        adminCouncil: stripCategoryAndLevel(activeAdmins),
+        hostingCommittee: stripCategoryAndLevel(activeHosting),
+        foundingMembers: stripCategoryAndLevel(isFirstTenure ? activeFounders : []),
         clubs: activeClubs,
         events: activeEvents,
       };
@@ -265,9 +266,9 @@ export function getStoredTenures(): CouncilTenure[] {
       isDraft,
       status: isDraft ? ("draft" as const) : ("archived" as const),
       tenureNumber: tenureNum,
-      adminCouncil: draftCouncil.length > 0 ? draftCouncil : (t.adminCouncil && t.adminCouncil.length > 0 ? t.adminCouncil : []),
-      hostingCommittee: draftHosting.length > 0 ? draftHosting : (t.hostingCommittee && t.hostingCommittee.length > 0 ? t.hostingCommittee : []),
-      foundingMembers: isFirstTenure ? (t.foundingMembers || activeFounders) : [],
+      adminCouncil: stripCategoryAndLevel(draftCouncil.length > 0 ? draftCouncil : (t.adminCouncil && t.adminCouncil.length > 0 ? t.adminCouncil : [])),
+      hostingCommittee: stripCategoryAndLevel(draftHosting.length > 0 ? draftHosting : (t.hostingCommittee && t.hostingCommittee.length > 0 ? t.hostingCommittee : [])),
+      foundingMembers: stripCategoryAndLevel(isFirstTenure ? (t.foundingMembers || activeFounders) : []),
       clubs: t.clubs && t.clubs.length > 0 ? t.clubs : activeClubs,
     };
   });
@@ -472,7 +473,7 @@ export function createNewDraftTenure(
           department: "Computer Science and Engineering",
           year: "4th Year",
           avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
-          bio: `Guiding ${label} institutional oversight and council governance.`,
+          bio: "",
           email: "mentor@jdcoem.ac.in",
           order: 1
         },
@@ -483,7 +484,7 @@ export function createNewDraftTenure(
           department: "Artificial Intelligence Engineering",
           year: "4th Year",
           avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
-          bio: `Presiding over the ${label} Student Representative Council.`,
+          bio: "",
           email: "president@jdcoem.ac.in",
           order: 2
         },
@@ -494,7 +495,7 @@ export function createNewDraftTenure(
           department: "Information Technology",
           year: "4th Year",
           avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=600&auto=format&fit=crop",
-          bio: `Executive coordination and student council operations for ${label}.`,
+          bio: "",
           email: "vp@jdcoem.ac.in",
           order: 3
         }
