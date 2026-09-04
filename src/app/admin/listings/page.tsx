@@ -29,7 +29,10 @@ import {
   getStoredListings, 
   saveStoredListings, 
   subscribeToListings, 
+  syncListingsFromFirestore,
   getStoredListingResponses,
+  syncListingResponsesFromFirestore,
+  subscribeToListingResponses,
   saveStoredListingResponse,
   deleteStoredListingResponse
 } from "@/lib/listingsStore";
@@ -72,8 +75,18 @@ export default function AdminListingsPage() {
     setEventsList(getStoredEvents());
     setClubsList(getStoredClubs());
 
+    // CRITICAL: Sync from Firestore on mount to get submissions from other devices
+    syncListingsFromFirestore().then((data) => { if (data && Array.isArray(data)) setListings(data); });
+    syncListingResponsesFromFirestore().then((data) => { if (data && Array.isArray(data)) setResponses(data); });
+
     const unsubListings = subscribeToListings((data) => {
       if (data && Array.isArray(data)) setListings(data);
+    });
+
+    // CRITICAL: Subscribe to real-time Firestore updates for listing responses
+    // so submissions from Sanskruti's laptop (or any device) appear immediately
+    const unsubResponses = subscribeToListingResponses((data) => {
+      if (data && Array.isArray(data)) setResponses(data);
     });
 
     const unsubEvents = subscribeToEvents((data) => {
@@ -94,6 +107,7 @@ export default function AdminListingsPage() {
     window.addEventListener("src_clubs_updated", handleEventsUpdate);
     return () => {
       unsubListings();
+      unsubResponses();
       unsubEvents();
       window.removeEventListener("src_listing_responses_updated", handleResponsesUpdate);
       window.removeEventListener("src_events_updated", handleEventsUpdate);

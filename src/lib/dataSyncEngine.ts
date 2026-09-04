@@ -549,34 +549,12 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
     return result as T;
   });
 
-  // Add any local-only items that were not matched in remote
-  localList.forEach((localItem) => {
-    if (!localItem || typeof localItem !== "object") return;
-    const idKey = localItem.id ? localItem.id.toLowerCase() : "";
-    const slugKey = localItem.slug ? localItem.slug.toLowerCase() : "";
-    const nameKey = (localItem as any).name ? (localItem as any).name.toLowerCase() : "";
-    const titleKey = (localItem as any).title ? (localItem as any).title.toLowerCase() : "";
-    const positionKey = (localItem as any).position ? (localItem as any).position.toLowerCase() : "";
-    const questionKey = (localItem as any).question ? (localItem as any).question.toLowerCase() : "";
-
-    // An item MUST have at least one identifier to be considered a distinct local item
-    const hasIdentifier = Boolean(idKey || slugKey || nameKey || titleKey || positionKey || questionKey);
-    if (!hasIdentifier) {
-      return;
-    }
-
-    const isMatched =
-      (idKey && matchedLocalKeys.has(idKey)) ||
-      (slugKey && matchedLocalKeys.has(slugKey)) ||
-      (nameKey && matchedLocalKeys.has(nameKey)) ||
-      (titleKey && matchedLocalKeys.has(titleKey)) ||
-      (positionKey && matchedLocalKeys.has(positionKey)) ||
-      (questionKey && matchedLocalKeys.has(questionKey));
-
-    if (!isMatched) {
-      merged.push(localItem);
-    }
-  });
+  // IMPORTANT: Do NOT append "local-only" items that aren't in the remote list.
+  // Previously this block resurrected deleted items from stale localStorage.
+  // Firestore is the single authoritative source of truth for the item set.
+  // Items deleted in Firestore must stay deleted on all devices.
+  // The per-field merge above already preserves local image uploads and
+  // non-empty local values for items that DO exist in both local and remote.
 
   return merged;
 }

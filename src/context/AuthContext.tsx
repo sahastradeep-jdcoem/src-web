@@ -74,7 +74,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const resolvedBtId = storedProfile?.btId || localProfile?.btId || registeredUser?.btId || "";
         const cleanBt = resolvedBtId ? resolvedBtId.trim().toUpperCase() : "";
-        const designationInfo = cleanBt ? resolveDesignationByBtId(cleanBt) : null;
+
+        // CRITICAL: Firestore profile is authoritative for designation badge.
+        // Only fall back to resolveDesignationByBtId if Firestore has no badge stored.
+        // This prevents stale localStorage council data from poisoning the role.
+        const firestoreBadge = storedProfile?.designationBadge;
+        const designationInfo = (!firestoreBadge && cleanBt) ? resolveDesignationByBtId(cleanBt) : null;
 
         const isCompleted = Boolean(
           storedProfile?.profileCompleted || 
@@ -87,9 +92,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ? "COUNCIL_ADMIN" 
           : (storedProfile?.role || localProfile?.role || registeredUser?.role || "STUDENT");
 
-        const assignedBadge = designationInfo 
-          ? designationInfo.designationBadge 
-          : (storedProfile?.designationBadge || localProfile?.designationBadge || registeredUser?.designationBadge);
+        // Priority: Firestore badge > resolved from council data > local cache
+        const assignedBadge = firestoreBadge 
+          || (designationInfo ? designationInfo.designationBadge : null)
+          || localProfile?.designationBadge 
+          || registeredUser?.designationBadge;
 
         const baseObj = { ...registeredUser, ...localProfile, ...storedProfile };
 
@@ -123,12 +130,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           employeeId: storedProfile?.employeeId || localProfile?.employeeId || registeredUser?.employeeId,
           profileCompleted: isCompleted,
           designationBadge: assignedBadge,
-          isCouncilOfficer: designationInfo ? true : Boolean(storedProfile?.isCouncilOfficer || localProfile?.isCouncilOfficer || registeredUser?.isCouncilOfficer),
+          isCouncilOfficer: (firestoreBadge || designationInfo) ? true : Boolean(storedProfile?.isCouncilOfficer || localProfile?.isCouncilOfficer || registeredUser?.isCouncilOfficer),
         };
 
         setUser(merged);
-        localStorage.setItem("src_auth_user", JSON.stringify(merged));
-        saveRegisteredUser(merged);
+        // CRITICAL: Only persist to local cache. Do NOT call saveRegisteredUser(merged) here,
+        // because it writes back to Firestore with potentially stale designation data from
+        // localStorage, creating a poisoning feedback loop across devices.
+        // Firestore writes happen only through explicit user actions (profile update, admin changes).
+        try {
+          localStorage.setItem("src_auth_user", JSON.stringify(merged));
+        } catch {}
+        window.dispatchEvent(new CustomEvent("src_users_updated"));
 
         const isExternalStudent = merged.userType === "EXTERNAL_STUDENT" || merged.isCollegeStudent === false;
         if (!isCompleted && !resolvedBtId && !isExternalStudent) {
@@ -174,7 +187,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const resolvedBtId = storedProfile?.btId || localProfile?.btId || registeredUser?.btId || "";
         const cleanBt = resolvedBtId ? resolvedBtId.trim().toUpperCase() : "";
-        const designationInfo = cleanBt ? resolveDesignationByBtId(cleanBt) : null;
+        
+        // CRITICAL: Firestore profile is authoritative for designation badge.
+        const firestoreBadge = storedProfile?.designationBadge;
+        const designationInfo = (!firestoreBadge && cleanBt) ? resolveDesignationByBtId(cleanBt) : null;
 
         const isCompleted = Boolean(
           storedProfile?.profileCompleted || 
@@ -187,9 +203,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ? "COUNCIL_ADMIN" 
           : (storedProfile?.role || localProfile?.role || registeredUser?.role || "STUDENT");
 
-        const assignedBadge = designationInfo 
-          ? designationInfo.designationBadge 
-          : (storedProfile?.designationBadge || localProfile?.designationBadge || registeredUser?.designationBadge);
+        // Priority: Firestore badge > resolved from council data > local cache
+        const assignedBadge = firestoreBadge
+          || (designationInfo ? designationInfo.designationBadge : null)
+          || localProfile?.designationBadge
+          || registeredUser?.designationBadge;
 
         const baseObj = { ...storedProfile, ...localProfile, ...registeredUser };
 
@@ -219,12 +237,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           employeeId: storedProfile?.employeeId || localProfile?.employeeId || registeredUser?.employeeId,
           profileCompleted: isCompleted,
           designationBadge: assignedBadge,
-          isCouncilOfficer: designationInfo ? true : Boolean(storedProfile?.isCouncilOfficer || localProfile?.isCouncilOfficer || registeredUser?.isCouncilOfficer),
+          isCouncilOfficer: (firestoreBadge || designationInfo) ? true : Boolean(storedProfile?.isCouncilOfficer || localProfile?.isCouncilOfficer || registeredUser?.isCouncilOfficer),
         };
 
         setUser(merged);
-        localStorage.setItem("src_auth_user", JSON.stringify(merged));
-        saveRegisteredUser(merged);
+        // Only persist to local cache on login, not back to Firestore
+        try {
+          localStorage.setItem("src_auth_user", JSON.stringify(merged));
+        } catch {}
+        window.dispatchEvent(new CustomEvent("src_users_updated"));
         setIsAuthModalOpen(false);
 
         const isExternalStudent = merged.userType === "EXTERNAL_STUDENT" || merged.isCollegeStudent === false;
