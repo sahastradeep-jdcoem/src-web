@@ -165,11 +165,6 @@ export default function StudentHubPage() {
       {/* Hero Header */}
       <section className="relative pt-24 pb-14 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-slate-900 via-[#17458F] to-slate-900 text-white overflow-hidden">
         <div className="max-w-7xl mx-auto space-y-6 relative z-10 text-center sm:text-left">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-slate-200 text-xs font-bold uppercase tracking-wider">
-            <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
-            <span>Collegiate Student Engagement Engine</span>
-          </div>
-
           <div className="max-w-3xl space-y-3">
             <h1 className="font-heading font-extrabold text-4xl sm:text-6xl text-white tracking-tight uppercase">
               STUDENT ENGAGEMENT HUB

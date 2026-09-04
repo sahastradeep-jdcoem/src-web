@@ -14,7 +14,6 @@ import {
   Award,
   Layers
 } from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
 import BrandStrip from "@/components/layout/BrandStrip";
 import { PillarsOfStrengthSection } from "@/components/team/PillarsOfStrengthSection";
 
@@ -63,9 +62,6 @@ export default function AboutPage() {
         
         {/* Page Header */}
         <div className="space-y-4 max-w-3xl">
-          <Badge variant="orange" size="md">
-            COUNCIL CHARTER & IDENTITY
-          </Badge>
           <h1 className="font-extrabold text-4xl sm:text-6xl text-[#0F172A] tracking-tight uppercase leading-none">
             BUILT BY STUDENTS.
             <br />
