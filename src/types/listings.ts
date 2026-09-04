@@ -107,6 +107,9 @@ export interface ListingItem {
   // Custom Q&N Form Fields
   customQuestions?: CustomQuestion[];
 
+  // Form & Response Settings
+  allowResponseEditing?: boolean; // Controlled from admin: allows students to revise/edit submitted responses
+
   // Polymorphic Subtype Configs
   pollConfig?: PollConfig;
   qaConfig?: QaConfig;

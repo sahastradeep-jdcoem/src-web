@@ -23,8 +23,11 @@ import {
   RefreshCw,
   Check,
   Printer,
-  Share2,
-  FileText
+  Share2, 
+  FileText,
+  Pencil,
+  Lock,
+  Sliders
 } from "lucide-react";
 import { mockRegistrations } from "@/data/registrations";
 import { Badge } from "@/components/ui/Badge";
@@ -32,8 +35,15 @@ import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { RegistrationRecord, EventItem } from "@/types";
-import { ListingResponseRecord } from "@/types/listings";
-import { getStoredListingResponses } from "@/lib/listingsStore";
+import { ListingItem, ListingResponseRecord } from "@/types/listings";
+import { 
+  getStoredListingResponses,
+  syncListingResponsesFromFirestore,
+  subscribeToListingResponses,
+  getStoredListings,
+  syncListingsFromFirestore,
+  subscribeToListings
+} from "@/lib/listingsStore";
 import { useAuth } from "@/context/AuthContext";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { downloadPassAsImage } from "@/lib/passExport";
@@ -43,13 +53,17 @@ import {
   subscribeToRegistrationsFromFirestore, 
   StudentRegistrationRecord 
 } from "@/lib/firebase/firestore";
+import { cn } from "@/lib/utils";
 
 export default function StudentDashboardPage() {
   const { user, openAuthModal, openProfileModal, logout } = useAuth();
   const [registrations, setRegistrations] = useState<RegistrationRecord[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [listings, setListings] = useState<ListingItem[]>([]);
   const [hubResponses, setHubResponses] = useState<ListingResponseRecord[]>([]);
+  const [activeDashboardTab, setActiveDashboardTab] = useState<"passes" | "hub">("passes");
   const [selectedTicket, setSelectedTicket] = useState<RegistrationRecord | null>(null);
+  const [selectedHubSubmission, setSelectedHubSubmission] = useState<ListingResponseRecord | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -220,27 +234,57 @@ export default function StudentDashboardPage() {
       syncAndLoadRegistrations();
     };
 
-    const updateResponses = () => {
-      const allResp = getStoredListingResponses();
+    // Load dynamic listings for edit permissions & links
+    setListings(getStoredListings());
+    syncListingsFromFirestore().then((res) => {
+      if (res) setListings(res);
+    });
+    const unsubListings = subscribeToListings((remoteListings) => {
+      if (remoteListings) setListings(remoteListings);
+    });
+
+    const updateResponses = (overrideList?: ListingResponseRecord[]) => {
+      const allResp = overrideList || getStoredListingResponses();
       if (!user) {
-        setHubResponses(allResp.slice(0, 3));
-      } else {
-        const uEmail = (user.email || "").toLowerCase().trim();
-        const uId = user.uid;
-        const matched = allResp.filter(
-          (r) => (r.userEmail && r.userEmail.toLowerCase().trim() === uEmail) || (r.userId && r.userId === uId)
-        );
-        setHubResponses(matched.length > 0 ? matched : allResp.slice(0, 3));
+        setHubResponses([]);
+        return;
       }
+      const uEmail = (user.email || "").toLowerCase().trim();
+      const uId = user.uid;
+      const uBtId = (user.btId || "").toUpperCase().trim();
+      const uName = (user.displayName || "").toLowerCase().trim();
+
+      const matched = allResp.filter((r) => {
+        const rEmail = (r.userEmail || "").toLowerCase().trim();
+        const rId = r.userId;
+        const rBtId = (r.btId || "").toUpperCase().trim();
+        const rName = (r.userName || "").toLowerCase().trim();
+
+        if (uEmail && rEmail === uEmail) return true;
+        if (uId && rId === uId) return true;
+        if (uBtId && rBtId === uBtId) return true;
+        if (uName && (rName === uName || (uName.length > 3 && rName.includes(uName)))) return true;
+        return false;
+      });
+
+      setHubResponses(matched);
     };
+
     updateResponses();
+    syncListingResponsesFromFirestore().then((res) => {
+      if (res) updateResponses(res);
+    });
+
+    const unsubHub = subscribeToListingResponses((remoteResponses) => {
+      if (remoteResponses) updateResponses(remoteResponses);
+    });
 
     const handleRegsUpdate = (e: any) => {
       syncAndLoadRegistrations(e?.detail);
     };
 
-    const handleHubUpdate = () => {
-      updateResponses();
+    const handleHubUpdate = (e: any) => {
+      updateResponses(e?.detail);
     };
 
     window.addEventListener("src_events_updated", handleEventsUpdate);
@@ -251,6 +295,8 @@ export default function StudentDashboardPage() {
     return () => {
       unsub();
       unsubRegistrations();
+      unsubListings();
+      unsubHub();
       window.removeEventListener("src_events_updated", handleEventsUpdate);
       window.removeEventListener("src_registrations_updated", handleRegsUpdate);
       window.removeEventListener("src_listing_responses_updated", handleHubUpdate);
@@ -400,8 +446,8 @@ export default function StudentDashboardPage() {
           </div>
         </div>
 
-        {/* 3 Metric Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        {/* 4 Metric Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           
           <div className="p-6 rounded-3xl bg-white border border-slate-200 space-y-2 shadow-xs flex flex-col justify-between">
             <div className="space-y-1.5">
@@ -455,96 +501,245 @@ export default function StudentDashboardPage() {
             <p className="text-[11px] text-slate-500 font-sans">Accredited participation history</p>
           </div>
 
+          <div className="p-6 rounded-3xl bg-white border border-slate-200 space-y-2 shadow-xs">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+              <FileText className="w-4 h-4 text-[#E78023]" />
+              <span>Engagement Hub</span>
+            </span>
+            <div className="flex items-baseline gap-2">
+              <span className="font-hero font-extrabold text-3xl text-[#E78023]">
+                {hubResponses.length}
+              </span>
+              <span className="text-xs text-slate-700 font-semibold font-sans">Forms &amp; Tickets</span>
+            </div>
+            <p className="text-[11px] text-slate-500 font-sans">Applications, contests &amp; inquiries</p>
+          </div>
+
         </div>
 
         {/* Main Content Grid: Registrations vs Digital Student ID Card */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           
-          {/* Left 2 Cols: My Registrations */}
+          {/* Left 2 Cols: My Registrations & Engagement Hub Submissions */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="font-heading font-extrabold text-2xl text-[#17458F] uppercase tracking-wide">
-                MY REGISTRATIONS
-              </h2>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              {/* Tab Selector */}
+              <div className="inline-flex p-1 rounded-2xl bg-slate-200/80 border border-slate-200/60">
+                <button
+                  type="button"
+                  onClick={() => setActiveDashboardTab("passes")}
+                  className={cn(
+                    "px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer",
+                    activeDashboardTab === "passes"
+                      ? "bg-white text-[#17458F] shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  )}
+                >
+                  <Ticket className="w-3.5 h-3.5" />
+                  <span>Event Passes ({registrations.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveDashboardTab("hub")}
+                  className={cn(
+                    "px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer",
+                    activeDashboardTab === "hub"
+                      ? "bg-white text-[#E78023] shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  )}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Hub Submissions ({hubResponses.length})</span>
+                </button>
+              </div>
+
               <span className="text-xs text-slate-500 font-medium">
-                {registrations.length} Total Records
+                {activeDashboardTab === "passes"
+                  ? `${registrations.length} Total Records`
+                  : `${hubResponses.length} Submissions Logged`}
               </span>
             </div>
 
-            <div className="space-y-4">
-              {registrations.length === 0 ? (
-                <div className="p-10 rounded-3xl bg-white border border-slate-200 text-center space-y-4 shadow-xs">
-                  <div className="mx-auto h-14 w-14 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400">
-                    <QrCode className="w-7 h-7" />
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="font-heading font-bold text-lg text-slate-900">
-                      No Event Passes Yet
-                    </h3>
-                    <p className="text-xs text-slate-500 max-w-sm mx-auto font-sans font-medium">
-                      {flagshipEvent
-                        ? `You haven't registered for any events yet. Explore ${flagshipEvent.name} and generate your instant digital delegate pass.`
-                        : `You haven't registered for any events yet. Explore upcoming council events and generate your instant digital delegate pass.`}
-                    </p>
-                  </div>
-                  <Link
-                    href={flagshipEvent ? `/events/${flagshipEvent.slug}` : "/events"}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-semibold uppercase tracking-wider transition-all shadow-md shadow-[#E78023]/20"
-                  >
-                    <span>{flagshipEvent ? `Explore ${flagshipEvent.name}` : "Explore Events"}</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </Link>
-                </div>
-              ) : (
-                registrations.map((reg) => {
-                  const isConfirmed = reg.status === "CONFIRMED" || reg.status === "CHECKED_IN";
-                  const isPending = reg.status === "PENDING";
-                  const statusVariant = reg.status === "CHECKED_IN" ? "success" : isConfirmed ? "orange" : isPending ? "warning" : "slate";
-
-                  return (
-                    <div
-                      key={reg.id}
-                      className="p-6 rounded-3xl bg-white border border-slate-200 hover:border-[#17458F]/30 hover:shadow-md transition-all space-y-4 shadow-xs"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-bold text-[#E78023]">
-                            {reg.registrationId}
-                          </span>
-                          <Badge variant={statusVariant} size="sm">
-                            {reg.status}
-                          </Badge>
-                        </div>
-                        <span className="text-[11px] text-slate-400 font-medium font-sans">
-                          Registered: {reg.registeredAt}
-                        </span>
-                      </div>
-
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div>
-                          <h3 className="font-heading font-bold text-lg text-slate-900">
-                            {reg.eventName}
-                          </h3>
-                          <p className="text-xs text-slate-600 font-medium font-sans mt-0.5">
-                            {reg.teamType === "Team" ? `Team: ${reg.teamName || "Squad"}` : "Individual Participation"}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setSelectedTicket(reg)}
-                            className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-[#17458F] text-slate-700 hover:text-white text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer font-sans"
-                          >
-                            <QrCode className="w-3.5 h-3.5" />
-                            <span>View QR Pass</span>
-                          </button>
-                        </div>
-                      </div>
+            {/* Content for Active Tab */}
+            {activeDashboardTab === "passes" ? (
+              <div className="space-y-4">
+                {registrations.length === 0 ? (
+                  <div className="p-10 rounded-3xl bg-white border border-slate-200 text-center space-y-4 shadow-xs">
+                    <div className="mx-auto h-14 w-14 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400">
+                      <QrCode className="w-7 h-7" />
                     </div>
-                  );
-                })
-              )}
-            </div>
+                    <div className="space-y-1">
+                      <h3 className="font-heading font-bold text-lg text-slate-900">
+                        No Event Passes Yet
+                      </h3>
+                      <p className="text-xs text-slate-500 max-w-sm mx-auto font-sans font-medium">
+                        {flagshipEvent
+                          ? `You haven't registered for any events yet. Explore ${flagshipEvent.name} and generate your instant digital delegate pass.`
+                          : `You haven't registered for any events yet. Explore upcoming council events and generate your instant digital delegate pass.`}
+                      </p>
+                    </div>
+                    <Link
+                      href={flagshipEvent ? `/events/${flagshipEvent.slug}` : "/events"}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-semibold uppercase tracking-wider transition-all shadow-md shadow-[#E78023]/20"
+                    >
+                      <span>{flagshipEvent ? `Explore ${flagshipEvent.name}` : "Explore Events"}</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
+                ) : (
+                  registrations.map((reg) => {
+                    const isConfirmed = reg.status === "CONFIRMED" || reg.status === "CHECKED_IN";
+                    const isPending = reg.status === "PENDING";
+                    const statusVariant = reg.status === "CHECKED_IN" ? "success" : isConfirmed ? "orange" : isPending ? "warning" : "slate";
+
+                    return (
+                      <div
+                        key={reg.id}
+                        className="p-6 rounded-3xl bg-white border border-slate-200 hover:border-[#17458F]/30 hover:shadow-md transition-all space-y-4 shadow-xs"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-bold text-[#E78023]">
+                              {reg.registrationId}
+                            </span>
+                            <Badge variant={statusVariant} size="sm">
+                              {reg.status}
+                            </Badge>
+                          </div>
+                          <span className="text-[11px] text-slate-400 font-medium font-sans">
+                            Registered: {reg.registeredAt}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div>
+                            <h3 className="font-heading font-bold text-lg text-slate-900">
+                              {reg.eventName}
+                            </h3>
+                            <p className="text-xs text-slate-600 font-medium font-sans mt-0.5">
+                              {reg.teamType === "Team" ? `Team: ${reg.teamName || "Squad"}` : "Individual Participation"}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setSelectedTicket(reg)}
+                              className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-[#17458F] text-slate-700 hover:text-white text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer font-sans"
+                            >
+                              <QrCode className="w-3.5 h-3.5" />
+                              <span>View QR Pass</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {hubResponses.length === 0 ? (
+                  <div className="p-10 rounded-3xl bg-white border border-slate-200 text-center space-y-4 shadow-xs">
+                    <div className="mx-auto h-14 w-14 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400">
+                      <FileText className="w-7 h-7" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="font-heading font-bold text-lg text-slate-900">
+                        No Hub Forms Submitted Yet
+                      </h3>
+                      <p className="text-xs text-slate-500 max-w-sm mx-auto font-sans font-medium">
+                        You haven&apos;t submitted any club recruitment applications, fellowships, or campus inquiry tickets yet. Check out the Student Hub for live forms!
+                      </p>
+                    </div>
+                    <Link
+                      href="/hub"
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#17458F] hover:bg-[#123670] text-white text-xs font-semibold uppercase tracking-wider transition-all shadow-md shadow-[#17458F]/20"
+                    >
+                      <span>Explore Student Hub</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
+                ) : (
+                  hubResponses.map((item) => {
+                    const targetListing = listings.find((l) => l.id === item.listingId || l.slug === item.listingSlug);
+                    const canEdit = targetListing ? targetListing.allowResponseEditing !== false : true;
+                    const isResolved = item.status === "approved" || item.status === "resolved";
+                    const isRejected = item.status === "rejected";
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-6 rounded-3xl bg-white border border-slate-200 hover:border-[#17458F]/30 hover:shadow-md transition-all space-y-4 shadow-xs"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-[#17458F] text-white">
+                              {item.listingType.toUpperCase()}
+                            </span>
+                            <span className="font-mono text-xs font-bold text-[#E78023]">
+                              {item.ticketCode}
+                            </span>
+                            <span className={cn(
+                              "text-[10px] font-bold uppercase px-2 py-0.5 rounded border",
+                              isResolved
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : isRejected
+                                ? "bg-rose-50 text-rose-700 border-rose-200"
+                                : "bg-amber-50 text-amber-800 border-amber-200"
+                            )}>
+                              {item.status?.toUpperCase() || "PENDING REVIEW"}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-slate-400 font-medium font-sans">
+                            Submitted: {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "Recently"}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="space-y-1">
+                            <h3 className="font-heading font-bold text-lg text-slate-900">
+                              {item.listingTitle}
+                            </h3>
+                            <p className="text-xs text-slate-500 font-medium font-sans">
+                              Applicant: {item.userName} • {item.userDepartment || "JDCOEM"}
+                              {item.updatedAt && (
+                                <span className="text-slate-400"> (Updated {new Date(item.updatedAt).toLocaleDateString()})</span>
+                              )}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedHubSubmission(item)}
+                              className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-[#17458F] text-slate-700 hover:text-white text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer font-sans"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                              <span>View Answers</span>
+                            </button>
+
+                            {canEdit ? (
+                              <Link
+                                href={`/hub/${item.listingSlug || item.listingId}?edit=true`}
+                                className="px-3.5 py-2 rounded-xl bg-[#E78023]/10 hover:bg-[#E78023] text-[#E78023] hover:text-white border border-[#E78023]/30 text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5 font-sans"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                                <span>Edit</span>
+                              </Link>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 font-medium italic flex items-center gap-1 px-2.5 py-1.5 bg-slate-50 rounded-xl border border-slate-200">
+                                <Lock className="w-3 h-3 text-slate-400" />
+                                <span>Locked</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </div>
 
           {/* Right 1 Col: Digital Student Accreditation Card */}
@@ -756,9 +951,32 @@ export default function StudentDashboardPage() {
                     )}
                   </div>
 
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400 font-medium">
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-medium">
                     <span>Submitted {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "Recently"}</span>
-                    <span className="text-slate-600 font-bold">Logged to Council</span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedHubSubmission(item)}
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-[#17458F] text-slate-700 hover:text-white text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"
+                      >
+                        <FileText className="w-3 h-3" />
+                        <span>Answers</span>
+                      </button>
+                      {(() => {
+                        const targetListing = listings.find((l) => l.id === item.listingId || l.slug === item.listingSlug);
+                        const canEdit = targetListing ? targetListing.allowResponseEditing !== false : true;
+                        if (!canEdit) return null;
+                        return (
+                          <Link
+                            href={`/hub/${item.listingSlug || item.listingId}?edit=true`}
+                            className="px-2.5 py-1 rounded-lg bg-[#E78023]/10 hover:bg-[#E78023] text-[#E78023] hover:text-white border border-[#E78023]/30 text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-1"
+                          >
+                            <Pencil className="w-3 h-3" />
+                            <span>Edit</span>
+                          </Link>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -1074,6 +1292,136 @@ export default function StudentDashboardPage() {
                 >
                   Done
                 </Button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {/* Modal: Inspect Submitted Hub Form / Application Responses */}
+        {selectedHubSubmission && (
+          <Modal
+            isOpen={!!selectedHubSubmission}
+            onClose={() => setSelectedHubSubmission(null)}
+            title={selectedHubSubmission.listingTitle}
+            subtitle={`Ticket Ref: ${selectedHubSubmission.ticketCode} • Submitted on ${new Date(selectedHubSubmission.createdAt).toLocaleDateString()}`}
+            maxWidth="3xl"
+          >
+            <div className="space-y-6">
+              {/* Applicant Header Badge Bar */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block">Applicant</span>
+                  <p className="font-bold text-slate-900 text-sm">{selectedHubSubmission.userName}</p>
+                  <p className="text-slate-600 font-medium">{selectedHubSubmission.userEmail}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block">Department &amp; Year</span>
+                  <p className="font-semibold text-slate-900">{selectedHubSubmission.userDepartment} • {selectedHubSubmission.userYear}</p>
+                  {selectedHubSubmission.btId && (
+                    <p className="font-mono text-slate-500 font-bold">BT ID: {selectedHubSubmission.btId}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Status & Timing */}
+              <div className="p-3.5 rounded-2xl bg-white border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Current Status:</span>
+                  <span className={cn(
+                    "text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full border",
+                    selectedHubSubmission.status === "approved" || selectedHubSubmission.status === "resolved"
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : selectedHubSubmission.status === "rejected"
+                      ? "bg-rose-50 text-rose-700 border-rose-200"
+                      : "bg-amber-50 text-amber-800 border-amber-200"
+                  )}>
+                    {selectedHubSubmission.status?.toUpperCase() || "PENDING REVIEW"}
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-400 font-medium">
+                  Reference: <span className="font-mono font-bold text-slate-700">{selectedHubSubmission.ticketCode}</span>
+                </div>
+              </div>
+
+              {/* External link if provided */}
+              {selectedHubSubmission.submissionLink && (
+                <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-1">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block">Portfolio / Submission Link</span>
+                  <a
+                    href={selectedHubSubmission.submissionLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-[#17458F] hover:underline"
+                  >
+                    <span>{selectedHubSubmission.submissionLink}</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              )}
+
+              {/* Submitted Q&A Answers */}
+              <div className="space-y-3">
+                <h4 className="font-heading font-bold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-[#17458F]" />
+                  <span>Recorded Form Responses</span>
+                </h4>
+
+                {selectedHubSubmission.answers && Object.keys(selectedHubSubmission.answers).length > 0 ? (
+                  <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
+                    {Object.entries(selectedHubSubmission.answers).map(([key, val]) => {
+                      const matchedListing = listings.find(
+                        (l) => l.id === selectedHubSubmission.listingId || l.slug === selectedHubSubmission.listingSlug
+                      );
+                      const matchedQuestion = matchedListing?.customQuestions?.find((q) => q.id === key);
+                      const questionTitle = matchedQuestion?.question || key.replace(/[-_]/g, " ");
+
+                      return (
+                        <div key={key} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1 text-xs">
+                          <span className="font-bold text-slate-600 block text-[11px]">
+                            {questionTitle}
+                          </span>
+                          <p className="font-semibold text-slate-900 bg-white p-2.5 rounded-xl border border-slate-200">
+                            {Array.isArray(val) ? val.join(", ") : String(val)}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic p-4 bg-slate-50 rounded-2xl text-center">
+                    No custom question responses recorded.
+                  </p>
+                )}
+              </div>
+
+              {/* Footer Actions */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-200">
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={() => setSelectedHubSubmission(null)}
+                  className="w-full sm:w-auto"
+                >
+                  Close
+                </Button>
+
+                {(() => {
+                  const targetListing = listings.find(
+                    (l) => l.id === selectedHubSubmission.listingId || l.slug === selectedHubSubmission.listingSlug
+                  );
+                  const canEdit = targetListing ? targetListing.allowResponseEditing !== false : true;
+                  if (!canEdit) return null;
+
+                  return (
+                    <Link
+                      href={`/hub/${selectedHubSubmission.listingSlug || selectedHubSubmission.listingId}?edit=true`}
+                      className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xs"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span>Edit Your Response</span>
+                    </Link>
+                  );
+                })()}
               </div>
             </div>
           </Modal>

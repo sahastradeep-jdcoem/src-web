@@ -21,14 +21,22 @@ import {
   Check,
   AlertCircle,
   GraduationCap,
-  Globe
+  Globe,
+  Pencil,
+  FileText,
+  Sliders,
+  ArrowRight,
+  ExternalLink
 } from "lucide-react";
 import { 
   getStoredListings, 
   subscribeToListings, 
   voteOnListingPoll, 
   saveStoredListingResponse,
-  getStoredVotedPolls
+  getStoredVotedPolls,
+  getStoredListingResponses,
+  syncListingResponsesFromFirestore,
+  subscribeToListingResponses
 } from "@/lib/listingsStore";
 import { ListingItem, ListingResponseRecord } from "@/types/listings";
 import { useAuth } from "@/context/AuthContext";
@@ -47,6 +55,8 @@ export default function ListingDetailPage() {
   const [listing, setListing] = useState<ListingItem | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [allResponses, setAllResponses] = useState<ListingResponseRecord[]>([]);
+  const [isEditingResponse, setIsEditingResponse] = useState(false);
 
   // Form State
   const [candidateName, setCandidateName] = useState("");
@@ -62,6 +72,23 @@ export default function ListingDetailPage() {
 
   useEffect(() => {
     setVotedPolls(getStoredVotedPolls());
+    setAllResponses(getStoredListingResponses());
+
+    syncListingResponsesFromFirestore().then((res) => {
+      if (res) setAllResponses(res);
+    });
+
+    const unsubResponses = subscribeToListingResponses((updated) => {
+      if (updated) setAllResponses(updated);
+    });
+
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("edit") === "true") {
+        setIsEditingResponse(true);
+      }
+    }
+
     const resolveListing = (list: ListingItem[]) => {
       if (!slug) return;
       const clean = slug.toLowerCase().trim();
@@ -74,24 +101,61 @@ export default function ListingDetailPage() {
     const initial = getStoredListings();
     resolveListing(initial);
 
-    const unsub = subscribeToListings((updated) => {
+    const unsubListings = subscribeToListings((updated) => {
       if (updated && Array.isArray(updated)) {
         resolveListing(updated);
         setVotedPolls(getStoredVotedPolls());
       }
     });
-    return () => unsub();
+
+    return () => {
+      unsubListings();
+      unsubResponses();
+    };
   }, [slug]);
 
   useEffect(() => {
     if (user) {
-      setCandidateName(user.displayName || "");
-      setCandidateEmail(user.email || "");
-      if (user.department) setCandidateDept(user.department);
-      if (user.year) setCandidateYear(user.year);
-      if (user.btId) setCandidateBtId(user.btId);
+      if (!candidateName) setCandidateName(user.displayName || "");
+      if (!candidateEmail) setCandidateEmail(user.email || "");
+      if (user.department && !candidateDept) setCandidateDept(user.department);
+      if (user.year && !candidateYear) setCandidateYear(user.year);
+      if (user.btId && !candidateBtId) setCandidateBtId(user.btId);
     }
   }, [user]);
+
+  // Check if current user has already submitted a response for this listing
+  const existingResponse = useMemo(() => {
+    if (!listing) return null;
+    const cleanListingId = listing.id;
+    const cleanSlug = listing.slug;
+    const uEmail = (user?.email || "").toLowerCase().trim();
+    const uId = user?.uid;
+    const cEmail = candidateEmail.toLowerCase().trim();
+
+    return allResponses.find((r) => {
+      const matchesListing = r.listingId === cleanListingId || r.listingSlug === cleanSlug;
+      if (!matchesListing) return false;
+
+      if (uId && r.userId && r.userId === uId) return true;
+      if (uEmail && r.userEmail && r.userEmail.toLowerCase().trim() === uEmail) return true;
+      if (cEmail && r.userEmail && r.userEmail.toLowerCase().trim() === cEmail) return true;
+      return false;
+    }) || null;
+  }, [listing, allResponses, user, candidateEmail]);
+
+  // Prepopulate form fields if an existing response exists
+  useEffect(() => {
+    if (existingResponse) {
+      if (existingResponse.userName) setCandidateName(existingResponse.userName);
+      if (existingResponse.userEmail) setCandidateEmail(existingResponse.userEmail);
+      if (existingResponse.userDepartment) setCandidateDept(existingResponse.userDepartment);
+      if (existingResponse.userYear) setCandidateYear(existingResponse.userYear);
+      if (existingResponse.btId) setCandidateBtId(existingResponse.btId);
+      if (existingResponse.submissionLink) setSubmissionLink(existingResponse.submissionLink);
+      if (existingResponse.answers) setCustomAnswers(existingResponse.answers);
+    }
+  }, [existingResponse]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -154,33 +218,40 @@ export default function ListingDetailPage() {
 
     setIsSubmitting(true);
 
-    const ticketCode = `SRC-${listing.type.toUpperCase().slice(0, 3)}-${Math.floor(10000 + Math.random() * 90000)}`;
+    const isUpdate = Boolean(existingResponse);
+    const ticketCode = existingResponse?.ticketCode || `SRC-${listing.type.toUpperCase().slice(0, 3)}-${Math.floor(10000 + Math.random() * 90000)}`;
 
     const responseRecord: ListingResponseRecord = {
-      id: `resp-${Date.now()}`,
+      id: existingResponse ? existingResponse.id : `resp-${Date.now()}`,
       listingId: listing.id,
       listingSlug: listing.slug,
       listingType: listing.type,
       listingTitle: listing.title,
-      userId: user?.uid,
+      userId: user?.uid || existingResponse?.userId,
       userEmail: candidateEmail,
       userName: candidateName,
       userDepartment: candidateDept,
       userYear: candidateYear,
-      btId: candidateBtId || undefined,
+      btId: candidateBtId || existingResponse?.btId || undefined,
       isAnonymous: Boolean(listing.issueConfig?.allowAnonymous),
       answers: Object.keys(customAnswers).length > 0 ? customAnswers : undefined,
       submissionLink: submissionLink || undefined,
       ticketCode,
-      status: "pending",
-      createdAt: new Date().toISOString(),
+      status: existingResponse?.status || "pending",
+      createdAt: existingResponse?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
     saveStoredListingResponse(responseRecord);
 
     setTimeout(() => {
       setIsSubmitting(false);
-      setReceiptCode(ticketCode);
+      if (isUpdate) {
+        setIsEditingResponse(false);
+        showToast("Your response has been updated successfully!");
+      } else {
+        setReceiptCode(ticketCode);
+      }
       try {
         confetti({ particleCount: 90, spread: 80, origin: { y: 0.5 } });
       } catch {}
@@ -490,8 +561,146 @@ export default function ListingDetailPage() {
                     Track in Student Dashboard
                   </Link>
                 </div>
+              ) : existingResponse && !isEditingResponse ? (
+                /* PREVENT DUPLICATES: ALREADY SUBMITTED VIEW */
+                <div className="p-6 sm:p-8 rounded-3xl bg-slate-50/80 border border-slate-200 space-y-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                        <CheckCircle2 className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-heading font-extrabold text-base text-slate-900 uppercase">
+                            You&apos;ve Already Submitted This Form
+                          </h4>
+                          <span className={cn(
+                            "text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full border",
+                            existingResponse.status === "approved" || existingResponse.status === "resolved"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : existingResponse.status === "rejected"
+                              ? "bg-rose-50 text-rose-700 border-rose-200"
+                              : "bg-amber-50 text-amber-800 border-amber-200"
+                          )}>
+                            {existingResponse.status?.toUpperCase() || "PENDING REVIEW"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 font-medium pt-0.5">
+                          Submitted on {new Date(existingResponse.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                          {existingResponse.updatedAt && (
+                            <span className="text-slate-400"> • Updated {new Date(existingResponse.updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-white border border-slate-200 flex sm:flex-col items-center sm:items-end justify-between gap-0.5 shrink-0 shadow-2xs">
+                      <span className="text-[10px] uppercase font-bold text-slate-400">Reference Ticket</span>
+                      <span className="font-mono font-extrabold text-xs text-[#17458F]">{existingResponse.ticketCode}</span>
+                    </div>
+                  </div>
+
+                  {/* Summary of Recorded Responses */}
+                  <div className="space-y-3">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-600 block">
+                      Your Recorded Responses
+                    </span>
+                    <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 space-y-3 text-xs shadow-2xs">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-3 border-b border-slate-100 text-slate-600">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Applicant Name</span>
+                          <span className="font-bold text-slate-900">{existingResponse.userName}</span> ({existingResponse.userEmail})
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Academic Details</span>
+                          <span className="font-medium text-slate-900">{existingResponse.userDepartment} • {existingResponse.userYear}</span>
+                          {existingResponse.btId && <span className="font-mono text-slate-500 block">BT ID: {existingResponse.btId}</span>}
+                        </div>
+                      </div>
+
+                      {existingResponse.submissionLink && (
+                        <div className="pb-3 border-b border-slate-100">
+                          <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Portfolio / Repo Link</span>
+                          <a
+                            href={existingResponse.submissionLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#17458F] hover:underline"
+                          >
+                            <span>{existingResponse.submissionLink}</span>
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                      )}
+
+                      {listing.customQuestions && listing.customQuestions.length > 0 && (
+                        <div className="space-y-2.5 pt-1">
+                          {listing.customQuestions.filter(q => q.type !== "note").map((q) => {
+                            const ans = existingResponse.answers?.[q.id];
+                            return (
+                              <div key={q.id} className="space-y-1">
+                                <span className="text-[11px] font-bold text-slate-500 block">{q.question}</span>
+                                <p className="text-xs font-semibold text-slate-800 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                  {Array.isArray(ans) ? ans.join(", ") : ans ? String(ans) : "No response provided"}
+                                </p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions Bar */}
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                    {listing.allowResponseEditing !== false ? (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingResponse(true)}
+                        className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        <span>Edit Your Response</span>
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-2 text-slate-500 text-xs font-medium py-1">
+                        <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>Response editing is disabled for this listing by council administrators.</span>
+                      </div>
+                    )}
+
+                    <Link
+                      href="/dashboard"
+                      className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
+                    >
+                      <span>View in Student Dashboard</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
+                </div>
               ) : (
                 <form onSubmit={handleFormSubmit} className="space-y-4">
+                  {existingResponse && isEditingResponse && (
+                    <div className="p-4 rounded-2xl bg-blue-50/90 border border-blue-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-blue-950 animate-in fade-in">
+                      <div className="flex items-center gap-2.5">
+                        <span className="p-1.5 bg-[#17458F] text-white rounded-lg shrink-0">
+                          <Pencil className="w-4 h-4" />
+                        </span>
+                        <div>
+                          <p className="text-xs font-bold">You are editing your previously submitted response</p>
+                          <p className="text-[11px] text-blue-800">Ticket Ref: <span className="font-mono font-bold">{existingResponse.ticketCode}</span> • Changes will update your active response.</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingResponse(false)}
+                        className="text-xs font-bold text-slate-600 hover:text-slate-900 px-3 py-1.5 rounded-lg bg-white border border-slate-200 self-start sm:self-center transition-colors cursor-pointer"
+                      >
+                        Cancel Editing
+                      </button>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
@@ -709,13 +918,26 @@ export default function ListingDetailPage() {
                     );
                   })}
 
-                  <div className="pt-4 flex justify-end">
+                  <div className="pt-4 flex items-center justify-end gap-3">
+                    {existingResponse && isEditingResponse && (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingResponse(false)}
+                        className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    )}
                     <button
                       type="submit"
                       disabled={isSubmitting}
                       className="px-8 py-3 rounded-2xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
                     >
-                      {isSubmitting ? "Submitting..." : "Send Application & Log Ticket"}
+                      {isSubmitting 
+                        ? "Saving..." 
+                        : existingResponse 
+                        ? "Update Response & Save Changes" 
+                        : "Send Application & Log Ticket"}
                     </button>
                   </div>
                 </form>

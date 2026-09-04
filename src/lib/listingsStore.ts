@@ -215,7 +215,36 @@ export function getStoredListingResponses(): ListingResponseRecord[] {
 
 export function saveStoredListingResponse(record: ListingResponseRecord): void {
   const current = getStoredListingResponses();
-  const updated = [record, ...current.filter((r) => r.id !== record.id)];
+  
+  // Check if updating an existing record by explicit ID or by user+listing matching
+  const exactIndex = current.findIndex((r) => r.id === record.id);
+  const matchUserIndex = exactIndex === -1 
+    ? current.findIndex(
+        (r) =>
+          r.listingId === record.listingId &&
+          ((r.userId && record.userId && r.userId === record.userId) ||
+           (r.userEmail && record.userEmail && r.userEmail.toLowerCase().trim() === record.userEmail.toLowerCase().trim()))
+      )
+    : -1;
+
+  const targetIndex = exactIndex !== -1 ? exactIndex : matchUserIndex;
+  let updated: ListingResponseRecord[];
+
+  if (targetIndex !== -1) {
+    const existing = current[targetIndex];
+    const mergedRecord: ListingResponseRecord = {
+      ...existing,
+      ...record,
+      id: existing.id,
+      ticketCode: existing.ticketCode || record.ticketCode,
+      createdAt: existing.createdAt || record.createdAt,
+      updatedAt: new Date().toISOString(),
+    };
+    updated = [...current];
+    updated[targetIndex] = mergedRecord;
+  } else {
+    updated = [record, ...current];
+  }
 
   if (typeof window !== "undefined") {
     try {
@@ -231,12 +260,77 @@ export function saveStoredListingResponse(record: ListingResponseRecord): void {
     } catch {}
   }
 
-  // Cloud Sync
-  saveSiteContentToFirestore(`responses_${record.listingId}`, updated).catch((err) => {
-    console.warn("Direct write for response failed, enqueuing:", err);
+  // Cloud Sync: Dual-write to global responses index & per-listing partition
+  const listingFiltered = updated.filter((r) => r.listingId === record.listingId);
+  saveSiteContentToFirestore("listing_responses", updated).catch((err) => {
+    console.warn("Direct write for global listing responses failed, enqueuing:", err);
+  });
+  saveSiteContentToFirestore(`responses_${record.listingId}`, listingFiltered).catch((err) => {
+    console.warn("Direct write for per-listing response failed:", err);
   });
 
-  enqueueCloudWrite(`responses_${record.listingId}`, updated, "Listing Response");
+  enqueueCloudWrite("listing_responses", updated, "Listing Response");
+}
+
+export async function syncListingResponsesFromFirestore(): Promise<ListingResponseRecord[] | null> {
+  try {
+    const remote = await getSiteContentFromFirestore<ListingResponseRecord[]>("listing_responses");
+    if (remote && Array.isArray(remote)) {
+      const local = getStoredListingResponses();
+      // Merge remote and local by id, preferring whichever is newer
+      const map = new Map<string, ListingResponseRecord>();
+      local.forEach((r) => map.set(r.id, r));
+      remote.forEach((r) => map.set(r.id, r));
+
+      const merged = Array.from(map.values()).sort(
+        (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+      );
+
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem(RESPONSES_STORAGE_KEY, JSON.stringify(merged));
+          window.dispatchEvent(
+            new CustomEvent("src_listing_responses_updated", { detail: merged })
+          );
+        } catch (e) {
+          console.warn("Failed to persist synced listing responses:", e);
+        }
+      }
+      return merged;
+    }
+  } catch (err) {
+    console.warn("Error syncing listing responses from Firestore:", err);
+  }
+  return null;
+}
+
+export function subscribeToListingResponses(
+  callback: (responses: ListingResponseRecord[]) => void
+): () => void {
+  // Listen to Firestore real-time snapshot
+  const unsubFirestore = subscribeToSiteContent<ListingResponseRecord[]>("listing_responses", (data) => {
+    if (data && Array.isArray(data)) {
+      callback(data);
+    }
+  });
+
+  // Listen to local window events across tabs
+  const handleLocalEvent = (e: any) => {
+    if (e?.detail && Array.isArray(e.detail)) {
+      callback(e.detail);
+    }
+  };
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("src_listing_responses_updated", handleLocalEvent);
+  }
+
+  return () => {
+    unsubFirestore();
+    if (typeof window !== "undefined") {
+      window.removeEventListener("src_listing_responses_updated", handleLocalEvent);
+    }
+  };
 }
 
 export function deleteStoredListingResponse(responseId: string, listingId: string): void {
@@ -258,10 +352,13 @@ export function deleteStoredListingResponse(responseId: string, listingId: strin
   }
 
   // Cloud Sync
-  saveSiteContentToFirestore(`responses_${listingId}`, updated).catch((err) => {
-    console.warn("Direct write for response deletion failed, enqueuing:", err);
+  saveSiteContentToFirestore("listing_responses", updated).catch((err) => {
+    console.warn("Direct write for global response deletion failed, enqueuing:", err);
+  });
+  saveSiteContentToFirestore(`responses_${listingId}`, updated.filter((r) => r.listingId === listingId)).catch((err) => {
+    console.warn("Direct write for per-listing response deletion failed:", err);
   });
 
-  enqueueCloudWrite(`responses_${listingId}`, updated, "Delete Listing Response");
+  enqueueCloudWrite("listing_responses", updated, "Delete Listing Response");
 }
 

@@ -380,6 +380,7 @@ export function CreateListingModal({
 
   // 4. Q&A Section State
   const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
+  const [allowResponseEditing, setAllowResponseEditing] = useState(true);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -399,6 +400,7 @@ export function CreateListingModal({
       setTargetAudience(initialData.targetAudience || (initialData.isInterCollege ? "inter_college" : "jdcoem_only"));
       setCoverImage(initialData.coverImage || PRESET_COVERS[0].url);
       setCustomQuestions(initialData.customQuestions || []);
+      setAllowResponseEditing(initialData.allowResponseEditing !== false);
 
       if (initialData.pollConfig) {
         setPollOptions(
@@ -444,6 +446,7 @@ export function CreateListingModal({
       setTargetAudience("inter_college");
       setCoverImage("https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1200&auto=format&fit=crop");
       setCustomQuestions([]);
+      setAllowResponseEditing(true);
       setPollOptions(["Option A", "Option B"]);
       setPollAnonymous(false);
       setPollMultipleChoices(false);
@@ -539,6 +542,7 @@ export function CreateListingModal({
         organizer: organizer.trim() || "SRC JDCOEM",
         coverImage: coverImage || PRESET_COVERS[0].url,
         deadline: deadline || undefined,
+        allowResponseEditing: selectedPillarOption.type === "poll" ? false : allowResponseEditing,
         customQuestions: customQuestions.length > 0 ? customQuestions : undefined,
       };
 
@@ -610,6 +614,7 @@ export function CreateListingModal({
       organizer: organizer.trim() || "SRC JDCOEM",
       coverImage: coverImage || PRESET_COVERS[0].url,
       deadline: deadline || undefined,
+      allowResponseEditing: selectedPillarOption.type === "poll" ? false : allowResponseEditing,
       customQuestions: customQuestions.length > 0 ? customQuestions : undefined,
     };
 
@@ -972,6 +977,47 @@ export function CreateListingModal({
                         : "ℹ️ Open to students and external delegates across all colleges and institutions."}
                     </p>
                   </div>
+
+                  {/* Allow Response Editing Switch */}
+                  {selectedPillarOption.type !== "poll" && (
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-4">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                            <Sliders className="w-3.5 h-3.5 text-[#17458F]" />
+                            <span>Allow Response Editing</span>
+                          </label>
+                          <span className={cn(
+                            "text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full border transition-all",
+                            allowResponseEditing
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : "bg-slate-100 text-slate-600 border-slate-200"
+                          )}>
+                            {allowResponseEditing ? "Editing Permitted" : "Submissions Locked"}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 font-medium leading-normal">
+                          Allow students to revise and update their submitted response from their student dashboard or the listing page.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setAllowResponseEditing(!allowResponseEditing)}
+                        className={cn(
+                          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                          allowResponseEditing ? "bg-[#17458F]" : "bg-slate-300"
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out",
+                            allowResponseEditing ? "translate-x-5" : "translate-x-0"
+                          )}
+                        />
+                      </button>
+                    </div>
+                  )}
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
