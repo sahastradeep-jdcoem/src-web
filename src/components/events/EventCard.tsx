@@ -1,7 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Calendar, MapPin, Users, ArrowRight } from "lucide-react";
+import { Calendar, MapPin, Users, ArrowRight, Layers } from "lucide-react";
 import { EventItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
@@ -38,9 +38,16 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
 
           {/* Badges on Image */}
           <div className="absolute top-4 left-4 flex flex-wrap gap-2">
-            <span className="text-[10px] font-sans font-semibold uppercase tracking-wider px-3 py-1 rounded-full bg-[#E78023] text-white shadow-md">
-              Featured Fest
-            </span>
+            {event.isParentFest ? (
+              <span className="text-[10px] font-sans font-extrabold uppercase tracking-wider px-3 py-1 rounded-full bg-indigo-600 text-white shadow-md flex items-center gap-1">
+                <Layers className="w-3 h-3" />
+                <span>Umbrella Festival</span>
+              </span>
+            ) : (
+              <span className="text-[10px] font-sans font-semibold uppercase tracking-wider px-3 py-1 rounded-full bg-[#E78023] text-white shadow-md">
+                Featured Fest
+              </span>
+            )}
             <Badge variant={statusVariant} size="sm">
               {event.status}
             </Badge>
@@ -90,7 +97,15 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
               Event Details
             </Link>
 
-            {isRegistrationOpen && (
+            {event.isParentFest ? (
+              <Link
+                href={`/events/${event.slug}#competitions`}
+                className="flex-1 py-3 px-4 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-sans font-semibold uppercase tracking-wider text-center transition-all shadow-md shadow-[#17458F]/20 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <span>Explore Lineup</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            ) : isRegistrationOpen ? (
               <Link
                 href={`/events/${event.slug}/register`}
                 className="flex-1 py-3 px-4 rounded-xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-sans font-semibold uppercase tracking-wider text-center transition-all shadow-md shadow-[#E78023]/20 flex items-center justify-center gap-1.5 cursor-pointer"
@@ -98,7 +113,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
                 <span>Register</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -118,31 +133,38 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
           unoptimized={true}
           className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-
-        {/* Status Pill */}
-        <div className="absolute top-3 left-3 flex gap-2">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+        
+        {/* Floating Badges */}
+        <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
+          {event.isParentFest ? (
+            <span className="text-[10px] font-sans font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-600 text-white shadow-xs flex items-center gap-1">
+              <Layers className="w-3 h-3" />
+              <span>Umbrella Fest</span>
+            </span>
+          ) : (
+            <span className="text-[10px] font-sans font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#E78023] text-white shadow-xs">
+              {event.category}
+            </span>
+          )}
           <Badge variant={statusVariant} size="sm">
             {event.status}
           </Badge>
-          <span className="text-[10px] font-sans font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white/90 text-slate-800 border border-slate-200 shadow-xs">
-            {event.category}
-          </span>
         </div>
       </div>
 
-      {/* Body Content */}
-      <div className="p-5 sm:p-6 flex-grow flex flex-col justify-between space-y-4">
-        <div className="space-y-1.5">
-          {event.tagline && (
-            <span className="text-[11px] font-sans font-semibold uppercase tracking-wider text-[#E78023] block">
-              {event.tagline}
-            </span>
-          )}
-          {/* Event Title — Sora Bold */}
-          <h4 className="font-heading font-bold text-lg sm:text-xl text-[#0F172A] group-hover:text-[#17458F] transition-colors leading-snug">
+      {/* Bottom Card Content */}
+      <div className="p-5 flex flex-col justify-between flex-1 space-y-4">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-[11px] text-[#E78023] font-sans font-semibold uppercase tracking-wider">
+            <span>{event.category}</span>
+            {event.tagline && <span className="text-slate-400 font-medium truncate max-w-[140px]">• {event.tagline}</span>}
+          </div>
+
+          <h3 className="font-heading font-bold text-lg text-[#0F172A] tracking-tight group-hover:text-[#17458F] transition-colors line-clamp-1">
             {event.name}
-          </h4>
+          </h3>
+
           <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed font-sans font-normal">
             {event.description}
           </p>
@@ -169,7 +191,15 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
             Details
           </Link>
 
-          {isRegistrationOpen ? (
+          {event.isParentFest ? (
+            <Link
+              href={`/events/${event.slug}#competitions`}
+              className="flex-1 py-2.5 px-3 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-sans font-semibold uppercase tracking-wider text-center transition-colors shadow-xs flex items-center justify-center gap-1 cursor-pointer"
+            >
+              <span>Explore Lineup</span>
+              <ArrowRight className="w-3 h-3" />
+            </Link>
+          ) : isRegistrationOpen ? (
             <Link
               href={`/events/${event.slug}/register`}
               className="flex-1 py-2.5 px-3 rounded-xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-sans font-semibold uppercase tracking-wider text-center transition-colors shadow-xs flex items-center justify-center gap-1 cursor-pointer"

@@ -17,7 +17,8 @@ import {
   Sparkles, 
   Trophy,
   AlertCircle,
-  Layers
+  Layers,
+  ArrowDown
 } from "lucide-react";
 import { mockEvents } from "@/data/events";
 import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
@@ -56,7 +57,8 @@ export default function EventDetailPage() {
         (e) =>
           e.id !== parent.id &&
           ((e.parentEventId && (e.parentEventId === parent.id || e.parentEventId === parent.slug)) ||
-           (e.parentEventSlug && (e.parentEventSlug === parent.slug || e.parentEventSlug === parent.id)))
+           (e.parentEventSlug && (e.parentEventSlug === parent.slug || e.parentEventSlug === parent.id)) ||
+           (e.parentEventName && e.parentEventName.toLowerCase().trim() === parent.name.toLowerCase().trim()))
       );
   };
 
@@ -251,7 +253,7 @@ export default function EventDetailPage() {
 
             {/* DYNAMIC FESTIVAL SUB-EVENTS & COMPETITIONS */}
             {subEvents.length > 0 && (
-              <section className="space-y-6 pt-6 border-t border-slate-200">
+              <section id="competitions" className="space-y-6 pt-6 border-t border-slate-200 scroll-mt-24">
                 <div className="space-y-1">
                   <span className="text-xs font-bold uppercase tracking-wider text-[#E78023] flex items-center gap-1.5">
                     <Layers className="w-4 h-4" />
@@ -319,17 +321,25 @@ export default function EventDetailPage() {
                           </div>
                         </div>
 
-                        <div className="pt-5 mt-4 border-t border-slate-100 flex items-center justify-between">
+                        <div className="pt-5 mt-4 border-t border-slate-100 flex items-center justify-between gap-2">
                           <span className="text-xs font-bold text-slate-700">
                             {sub.isPaid && sub.feeAmount ? `₹${sub.feeAmount}` : "Free Entry"}
                           </span>
-                          <Link
-                            href={`/events/${sub.slug}`}
-                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-xs"
-                          >
-                            <span>Explore &amp; Register</span>
-                            <ArrowRight className="w-3.5 h-3.5" />
-                          </Link>
+                          <div className="flex items-center gap-2">
+                            <Link
+                              href={`/events/${sub.slug}`}
+                              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider transition-colors"
+                            >
+                              Details
+                            </Link>
+                            <Link
+                              href={`/events/${sub.slug}/register`}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-xs"
+                            >
+                              <span>Register</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </Link>
+                          </div>
                         </div>
                       </div>
                     );
@@ -434,70 +444,132 @@ export default function EventDetailPage() {
               </div>
             )}
 
-            <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-6">
-              <div className="space-y-2">
-                <Badge variant={isRegistrationOpen ? "orange" : "slate"} size="md">
-                  {event.status}
-                </Badge>
-                <h3 className="font-heading font-extrabold text-2xl text-[#0F172A]">
-                  Registration Portal
-                </h3>
-                <p className="text-xs text-slate-500 font-medium">
-                  Secure your official entry pass for {event.name}.
-                </p>
-              </div>
-
-              {/* Specs Breakdown */}
-              <div className="space-y-3 pt-4 border-t border-slate-100 text-xs">
-                <div className="flex justify-between items-center py-1 border-b border-slate-100">
-                  <span className="text-slate-500">Participation Format:</span>
-                  <span className="font-bold text-slate-900">{event.teamType || "Individual"}</span>
-                </div>
-                {event.maxTeamSize && (
-                  <div className="flex justify-between items-center py-1 border-b border-slate-100">
-                    <span className="text-slate-500">Team Size:</span>
-                    <span className="font-bold text-slate-900">{event.minTeamSize || 1} – {event.maxTeamSize} Members</span>
-                  </div>
-                )}
-                <div className="flex justify-between items-center py-1 border-b border-slate-100">
-                  <span className="text-slate-500">Registration Closes:</span>
-                  <span className="font-bold text-[#E78023]">{event.registrationDeadline || "Open until slots filled"}</span>
-                </div>
-                <div className="flex justify-between items-center py-1">
-                  <span className="text-slate-500">Fee:</span>
-                  <span className="font-bold text-emerald-600">{event.entryFee || "Free Entry"}</span>
-                </div>
-              </div>
-
-              {/* Action Button */}
-              {isRegistrationOpen ? (
-                <Link
-                  href={`/events/${event.slug}/register`}
-                  className="w-full py-3.5 rounded-2xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs sm:text-sm font-bold uppercase tracking-wider text-center transition-all shadow-md shadow-[#E78023]/25 flex items-center justify-center gap-2 group cursor-pointer"
-                >
-                  <span>REGISTER NOW</span>
-                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-                </Link>
-              ) : (
-                <div className="w-full py-3.5 rounded-2xl bg-slate-100 text-slate-400 text-xs font-bold uppercase tracking-wider text-center">
-                  Registration Closed
-                </div>
-              )}
-
-              {/* Coordinator Contact */}
-              {event.coordinatorContact && (
-                <div className="pt-4 border-t border-slate-100 text-xs space-y-1">
-                  <span className="text-slate-500 uppercase font-bold text-[10px]">
-                    Event Helpdesk
+            {event.isParentFest || subEvents.length > 0 ? (
+              <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-6">
+                <div className="space-y-2">
+                  <span className="text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 inline-flex items-center gap-1">
+                    <Layers className="w-3 h-3" />
+                    <span>UMBRELLA FESTIVAL</span>
                   </span>
-                  <p className="font-semibold text-slate-800">{event.coordinatorContact.name} ({event.coordinatorContact.role})</p>
-                  <p className="text-[#E78023] font-bold flex items-center gap-1.5">
-                    <Phone className="w-3 h-3" />
-                    <span>{event.coordinatorContact.phone}</span>
+                  <h3 className="font-heading font-extrabold text-2xl text-[#0F172A]">
+                    Festival Competitions
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    {event.name} is an umbrella festival hosting {subEvents.length} specialized competition{subEvents.length === 1 ? "" : "s"}. Registrations are managed per competition.
                   </p>
                 </div>
-              )}
-            </div>
+
+                {/* Specs Breakdown */}
+                <div className="space-y-3 pt-4 border-t border-slate-100 text-xs">
+                  <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Active Competitions:</span>
+                    <span className="font-bold text-[#17458F] font-mono">{subEvents.length} Events</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Festival Date:</span>
+                    <span className="font-bold text-slate-900">{event.date}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-slate-500">Festival Venue:</span>
+                    <span className="font-bold text-slate-900">{event.venue}</span>
+                  </div>
+                </div>
+
+                {/* Action Button: Jump to competitions lineup */}
+                {subEvents.length > 0 ? (
+                  <a
+                    href="#competitions"
+                    className="w-full py-3.5 rounded-2xl bg-[#17458F] hover:bg-[#123670] text-white text-xs sm:text-sm font-bold uppercase tracking-wider text-center transition-all shadow-md shadow-[#17458F]/25 flex items-center justify-center gap-2 group cursor-pointer"
+                  >
+                    <span>Choose Competition to Register ({subEvents.length})</span>
+                    <ArrowDown className="w-4 h-4 transition-transform group-hover:translate-y-0.5" />
+                  </a>
+                ) : (
+                  <div className="w-full py-3.5 rounded-2xl bg-slate-100 text-slate-400 text-xs font-bold uppercase tracking-wider text-center">
+                    Competitions Announcing Soon
+                  </div>
+                )}
+
+                {/* Coordinator Contact */}
+                {event.coordinatorContact && (
+                  <div className="pt-4 border-t border-slate-100 text-xs space-y-1">
+                    <span className="text-slate-500 uppercase font-bold text-[10px]">
+                      Festival Secretariat
+                    </span>
+                    <p className="font-semibold text-slate-800">{event.coordinatorContact.name} ({event.coordinatorContact.role})</p>
+                    <p className="text-[#E78023] font-bold flex items-center gap-1.5">
+                      <Phone className="w-3 h-3" />
+                      <span>{event.coordinatorContact.phone}</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-6">
+                <div className="space-y-2">
+                  <Badge variant={isRegistrationOpen ? "orange" : "slate"} size="md">
+                    {event.status}
+                  </Badge>
+                  <h3 className="font-heading font-extrabold text-2xl text-[#0F172A]">
+                    Registration Portal
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Secure your official entry pass for {event.name}.
+                  </p>
+                </div>
+
+                {/* Specs Breakdown */}
+                <div className="space-y-3 pt-4 border-t border-slate-100 text-xs">
+                  <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Participation Format:</span>
+                    <span className="font-bold text-slate-900">{event.teamType || "Individual"}</span>
+                  </div>
+                  {event.maxTeamSize && (
+                    <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                      <span className="text-slate-500">Team Size:</span>
+                      <span className="font-bold text-slate-900">{event.minTeamSize || 1} – {event.maxTeamSize} Members</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Registration Closes:</span>
+                    <span className="font-bold text-[#E78023]">{event.registrationDeadline || "Open until slots filled"}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-slate-500">Fee:</span>
+                    <span className="font-bold text-emerald-600">{event.entryFee || "Free Entry"}</span>
+                  </div>
+                </div>
+
+                {/* Action Button */}
+                {isRegistrationOpen ? (
+                  <Link
+                    href={`/events/${event.slug}/register`}
+                    className="w-full py-3.5 rounded-2xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs sm:text-sm font-bold uppercase tracking-wider text-center transition-all shadow-md shadow-[#E78023]/25 flex items-center justify-center gap-2 group cursor-pointer"
+                  >
+                    <span>REGISTER NOW</span>
+                    <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                  </Link>
+                ) : (
+                  <div className="w-full py-3.5 rounded-2xl bg-slate-100 text-slate-400 text-xs font-bold uppercase tracking-wider text-center">
+                    Registration Closed
+                  </div>
+                )}
+
+                {/* Coordinator Contact */}
+                {event.coordinatorContact && (
+                  <div className="pt-4 border-t border-slate-100 text-xs space-y-1">
+                    <span className="text-slate-500 uppercase font-bold text-[10px]">
+                      Event Helpdesk
+                    </span>
+                    <p className="font-semibold text-slate-800">{event.coordinatorContact.name} ({event.coordinatorContact.role})</p>
+                    <p className="text-[#E78023] font-bold flex items-center gap-1.5">
+                      <Phone className="w-3 h-3" />
+                      <span>{event.coordinatorContact.phone}</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
         </div>

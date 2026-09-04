@@ -189,6 +189,9 @@ export interface RegistrationRecord {
   customBranch?: string;
   userType?: string;
   isCollegeStudent?: boolean;
+  parentEventName?: string;
+  parentEventId?: string;
+  subEventBadge?: string;
   customAnswers?: Record<string, string | number | boolean | string[] | { question?: string; answer?: any; type?: string; options?: string[] } | any>;
 }
 

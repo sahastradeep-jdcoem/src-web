@@ -63,6 +63,9 @@ export interface StudentRegistrationRecord {
   customBranch?: string;
   userType?: string;
   isCollegeStudent?: boolean;
+  parentEventName?: string;
+  parentEventId?: string;
+  subEventBadge?: string;
   customAnswers?: Record<string, any>;
 }
 
