@@ -5,27 +5,26 @@ export const adminCouncilMembers: TeamMember[] = [
   {
     id: "admin-1",
     name: "Harsh Shende",
-    role: "Mentor",
+    role: "Technical Affairs Secretary",
     department: "Computer Science and Engineering",
     year: "4th Year / Final Year",
     btId: "BT230036CS",
     avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
-    bio: "Guiding long-term institutional vision, advisory oversight, council governance standards, and mentorship across all wings.",
+    bio: "Directing campus digital infrastructure, web portals, technical symposia, hackathons, and technology club governance.",
     linkedin: "https://www.linkedin.com/company/src-jdcoem/",
     email: "shendeha@jdcoem.ac.in",
     order: 1
   },
   {
     id: "admin-2",
-    name: "Sanskruti Tidke",
+    name: "Council President",
     role: "President",
-    department: "Data Science Engineering",
-    year: "3rd Year",
-    btId: "BT240115DS",
+    department: "Student Representative Council",
+    year: "4th Year",
     avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
     bio: "Presiding over the entire Student Representative Council, executive policymaking, university administration liaison, and student body advocacy.",
     linkedin: "https://www.linkedin.com/company/src-jdcoem/",
-    email: "sanskrutitidke@jdcoem.ac.in",
+    email: "src.president@jdcoem.ac.in",
     order: 2
   },
   {

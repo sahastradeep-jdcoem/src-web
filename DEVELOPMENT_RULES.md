@@ -55,6 +55,17 @@
      linkedin: editingMember.linkedin ?? p.linkedin ?? "",
      ```
 
+5. **Cloud-Authoritative Dataset Invariant (Zero Deletion Resurrection)**:
+   - For all entity collections (`council`, `events`, `clubs`, `tenures`, `listings`, `users`), **remote Firestore state is strictly authoritative for the presence, order, and deletion of records**.
+   - Sync engines (`reconcileArrayDatasets`, `mergeRemoteUsers`) must merge per-field edits (such as active image crops) only for items that exist in the remote array.
+   - Sync engines must **NEVER** iterate through `localList` and append "local-only" items that are absent from remote. Deleting an item in Firestore must unconditionally delete it from client caches.
+   - Initial seed datasets (`mockEvents`, `adminCouncilMembers`, `DEFAULT_REGISTERED_USERS`) must be updated when official rosters change so offline cold-starts never render obsolete historical rosters.
+
+6. **Zero Passive Cloud Write-Backs (No Mount/Auth Overwrite Loops)**:
+   - Client-side page mounts, render hooks, and passive listeners (`subscribeToAuth`, `useEffect`) must **NEVER** write data back to Firestore (`saveSiteContentToFirestore`, `saveUserProfileToFirestore`, `saveRegisteredUser`).
+   - Cloud mutations are strictly permitted **ONLY** on explicit, deliberate user interactions (clicking a "Save" button, submitting a form, toggling a status).
+   - Dynamic client-side role resolution (`resolveDesignationByBtId`) is for visual badging fallbacks only and must never overwrite authoritative user profiles stored in Firestore.
+
 ---
 
 ## 3. Image Upload & Cropping Studio Standards

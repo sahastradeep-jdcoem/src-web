@@ -45,3 +45,20 @@ For detailed standards and implementation examples, refer to [DEVELOPMENT_RULES.
    - Never hardcode festival, event, or competition names in codebase logic.
    - Any event can be an umbrella festival (`isParentFest: true`), and any sub-competition dynamically references its parent via `parentEventId`.
    - All engagement primitives (Events, Applications, Polls, Opportunities, Submissions, Grievances) must follow the polymorphic `ListingItem` data architecture with instant Firestore dual-write, 5MB quota compaction, and real-time cross-tab reflection.
+
+9. **Cloud-Authoritative Dataset Invariant (Zero Deletion Resurrection)**:
+   - For all entity datasets (council members, clubs, events, tenures, listings, users), **remote Firestore state is strictly authoritative for the presence or deletion of items**.
+   - Client sync engines (`reconcileArrayDatasets`, `mergeRemoteUsers`, stores) must **NEVER** re-append or resurrect "local-only" items found in `localStorage` into the synced cloud array.
+   - Items deleted by administrators in Firestore must stay deleted across all client devices without requiring manual cache clearing.
+
+10. **Zero Passive Cloud Write-Backs (No Mount/Auth Overwrites)**:
+    - Page mounts, component render cycles, and auth state listeners (`subscribeToAuth`, `useEffect`) must **NEVER** initiate autonomous write-backs to Firestore.
+    - Cloud writes (`saveSiteContentToFirestore`, `saveUserProfileToFirestore`, `saveRegisteredUser`) are strictly permitted **ONLY** in response to explicit, intentional user interactions (submitting a form, saving a profile edit, admin roster saves).
+    - Resolving local badges or roles on client devices must never push computed client-side state back to the database. Firestore user profiles are authoritative.
+
+11. **Real-Time Dual-Subscription on All Admin & Hub Surfaces**:
+    - Every admin console (`/admin/listings`, `/admin/registrations`, `/admin/events`, `/admin/team`, etc.) and student tracking surface (`/dashboard`, `/hub`) must implement both:
+      1. Immediate asynchronous fetch (`sync*FromFirestore()`) on mount.
+      2. Active real-time document or collection listeners (`subscribeTo*()`).
+    - Submissions, votes, or modifications made on any device must reflect across all active admin and student screens with zero latency without requiring a page refresh.
+

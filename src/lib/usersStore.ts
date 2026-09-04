@@ -145,7 +145,7 @@ export const DEFAULT_REGISTERED_USERS: RegisteredUserRecord[] = [
     year: "3rd Year",
     phone: "9075828232",
     profileCompleted: true,
-    designationBadge: "President",
+    designationBadge: "Club Co-Head • Event Club",
     isCouncilOfficer: true,
     lastActive: "2026-08-31T01:00:00.000Z",
     createdAt: "2026-08-31T01:00:00.000Z",
@@ -164,7 +164,7 @@ export const DEFAULT_REGISTERED_USERS: RegisteredUserRecord[] = [
     year: "4th Year / Final Year",
     phone: "",
     profileCompleted: true,
-    designationBadge: "Mentor",
+    designationBadge: "Technical Affairs Secretary",
     isCouncilOfficer: true,
     lastActive: "2026-08-31T01:00:00.000Z",
     createdAt: "2026-08-30T18:00:00.000Z",
@@ -205,7 +205,7 @@ export function getStoredUsers(): RegisteredUserRecord[] {
     }
   }
 
-  // Always dynamically resolve designation badge & council status without altering security role
+  // Dynamically resolve designation badge & council status if not already authoritative
   return list.map((user) => {
     const cleanBtId = user.btId ? user.btId.trim().toUpperCase() : "";
     const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId) : null;
@@ -213,7 +213,7 @@ export function getStoredUsers(): RegisteredUserRecord[] {
       return {
         ...user,
         btId: cleanBtId,
-        designationBadge: designationInfo.designationBadge,
+        designationBadge: user.designationBadge || designationInfo.designationBadge,
         isCouncilOfficer: true,
       };
     }
@@ -222,64 +222,69 @@ export function getStoredUsers(): RegisteredUserRecord[] {
 }
 
 /**
- * Merge an array of remote users from Firestore into localStorage
+ * Merge an array of remote users from Firestore into localStorage.
+ * Remote Firestore is authoritative for the user list to avoid resurrecting deleted accounts.
  */
 export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): RegisteredUserRecord[] {
   if (typeof window === "undefined" || !Array.isArray(remoteUsers)) return getStoredUsers();
   try {
     const current = getStoredUsers();
-    const map = new Map<string, RegisteredUserRecord>();
-
-    // Seed with local users
+    const localMap = new Map<string, RegisteredUserRecord>();
     for (const u of current) {
-      if (u.uid) map.set(u.uid, u);
-      else if (u.email) map.set(u.email.toLowerCase(), u);
+      if (u.uid) localMap.set(u.uid, u);
+      else if (u.email) localMap.set(u.email.toLowerCase(), u);
     }
 
-    // Merge remote users
+    const map = new Map<string, RegisteredUserRecord>();
+
+    // Process remote users as authoritative
     for (const r of remoteUsers) {
       if (!r || (!r.uid && !r.email)) continue;
       const cleanBtId = r.btId ? r.btId.trim().toUpperCase() : "";
       const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId) : null;
       const assignedRole = r.role || "STUDENT";
-      const assignedBadge = designationInfo ? designationInfo.designationBadge : r.designationBadge;
+      // Firestore badge is authoritative; fallback to dynamic resolution if absent
+      const assignedBadge = r.designationBadge || (designationInfo ? designationInfo.designationBadge : undefined);
+
+      const localMatch = (r.uid ? localMap.get(r.uid) : null) || (r.email ? localMap.get(r.email.toLowerCase()) : null);
 
       const record: RegisteredUserRecord = {
+        ...(localMatch || {}),
         ...r,
-        uid: r.uid || `user-${Date.now()}`,
-        email: r.email || "",
-        displayName: r.displayName || `${r.firstName || ""} ${r.lastName || ""}`.trim() || "Student",
-        photoURL: r.photoURL || null,
+        uid: r.uid || localMatch?.uid || `user-${Date.now()}`,
+        email: r.email || localMatch?.email || "",
+        displayName: r.displayName || localMatch?.displayName || `${r.firstName || ""} ${r.lastName || ""}`.trim() || "Student",
+        photoURL: r.photoURL !== undefined ? r.photoURL : (localMatch?.photoURL || null),
         role: assignedRole,
-        userType: r.userType || (assignedRole === "FACULTY" ? "FACULTY" : cleanBtId ? "JDCOEM_STUDENT" : "EXTERNAL_STUDENT"),
+        userType: r.userType || localMatch?.userType || (assignedRole === "FACULTY" ? "FACULTY" : cleanBtId ? "JDCOEM_STUDENT" : "EXTERNAL_STUDENT"),
         isCollegeStudent: r.isCollegeStudent !== undefined ? r.isCollegeStudent : (assignedRole === "FACULTY" ? true : Boolean(cleanBtId)),
-        firstName: r.firstName || "",
-        lastName: r.lastName || "",
-        btId: cleanBtId,
-        department: r.department || "Computer Science and Engineering",
-        year: r.year || "3rd Year",
-        phone: r.phone || "",
-        collegeName: r.collegeName || "",
-        city: r.city || "",
-        degree: r.degree || r.customBranch || "",
-        customBranch: r.customBranch || r.degree || "",
-        title: r.title,
-        facultyDesignation: r.facultyDesignation,
-        facultyDepartment: r.facultyDepartment,
-        facultyApprovalStatus: r.facultyApprovalStatus,
-        facultyApprovedAt: r.facultyApprovedAt,
-        facultyApprovedBy: r.facultyApprovedBy,
-        employeeId: r.employeeId,
-        profileCompleted: r.profileCompleted ?? true,
-        designationBadge: assignedBadge,
-        isCouncilOfficer: designationInfo ? true : Boolean(r.isCouncilOfficer),
-        lastActive: r.lastActive || new Date().toISOString(),
-        createdAt: r.createdAt || new Date().toISOString(),
+        firstName: r.firstName || localMatch?.firstName || "",
+        lastName: r.lastName || localMatch?.lastName || "",
+        btId: cleanBtId || localMatch?.btId || "",
+        department: r.department || localMatch?.department || "Computer Science and Engineering",
+        year: r.year || localMatch?.year || "3rd Year",
+        phone: r.phone || localMatch?.phone || "",
+        collegeName: r.collegeName || localMatch?.collegeName || "",
+        city: r.city || localMatch?.city || "",
+        degree: r.degree || r.customBranch || localMatch?.degree || "",
+        customBranch: r.customBranch || r.degree || localMatch?.customBranch || "",
+        title: r.title || localMatch?.title,
+        facultyDesignation: r.facultyDesignation || localMatch?.facultyDesignation,
+        facultyDepartment: r.facultyDepartment || localMatch?.facultyDepartment,
+        facultyApprovalStatus: r.facultyApprovalStatus || localMatch?.facultyApprovalStatus,
+        facultyApprovedAt: r.facultyApprovedAt || localMatch?.facultyApprovedAt,
+        facultyApprovedBy: r.facultyApprovedBy || localMatch?.facultyApprovedBy,
+        employeeId: r.employeeId || localMatch?.employeeId,
+        profileCompleted: r.profileCompleted ?? localMatch?.profileCompleted ?? true,
+        designationBadge: assignedBadge || localMatch?.designationBadge,
+        isCouncilOfficer: (assignedBadge || designationInfo) ? true : Boolean(r.isCouncilOfficer || localMatch?.isCouncilOfficer),
+        lastActive: r.lastActive || localMatch?.lastActive || new Date().toISOString(),
+        createdAt: r.createdAt || localMatch?.createdAt || new Date().toISOString(),
       };
 
       const key = record.uid || (record.email ? record.email.toLowerCase() : "");
       if (key) {
-        map.set(key, { ...(map.get(key) || {}), ...record });
+        map.set(key, record);
       }
     }
 
