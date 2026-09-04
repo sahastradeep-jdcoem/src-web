@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import Image from "next/image";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -39,20 +39,29 @@ export function StorageCleanerModal({ isOpen, onClose }: StorageCleanerModalProp
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [purgeProgress, setPurgeProgress] = useState<{ completed: number; total: number }>({ completed: 0, total: 0 });
   const [purgeSummary, setPurgeSummary] = useState<{ deletedCount: number; reclaimedBytes: number } | null>(null);
+  const isCancelledRef = useRef(false);
 
   const handleStartScan = async () => {
+    isCancelledRef.current = false;
     setStage("scanning");
     try {
       const result = await scanOrphanStorageFiles();
+      if (isCancelledRef.current) return;
       setScanResult(result);
       // Pre-select all orphan files for easy 1-click purge
       setSelectedPaths(new Set(result.orphanFiles.map((f) => f.fullPath)));
       setStage("scanned");
     } catch (err: any) {
+      if (isCancelledRef.current) return;
       console.error("Storage scan error", err);
       toast.error(err?.message || "Failed to complete storage scan.", "Scan Error");
       setStage("idle");
     }
+  };
+
+  const handleCancelScan = () => {
+    isCancelledRef.current = true;
+    setStage("idle");
   };
 
   const handleToggleSelect = (path: string) => {
@@ -207,6 +216,11 @@ export function StorageCleanerModal({ isOpen, onClose }: StorageCleanerModalProp
                 Crawling storage buckets, checking directory prefixes, and cross-referencing with active Firestore entities...
               </p>
             </div>
+            <div className="pt-3">
+              <Button variant="secondary" size="sm" onClick={handleCancelScan}>
+                Cancel Scan
+              </Button>
+            </div>
           </div>
         )}
 
@@ -240,8 +254,43 @@ export function StorageCleanerModal({ isOpen, onClose }: StorageCleanerModalProp
               </div>
             </div>
 
-            {/* If NO orphans found */}
-            {scanResult.orphanCount === 0 ? (
+            {/* Bucket Inactive / Not Provisioned */}
+            {!scanResult.bucketAccessible ? (
+              <div className="p-6 sm:p-8 rounded-3xl bg-blue-50/70 border border-blue-200/80 text-center space-y-4">
+                <div className="h-12 w-12 rounded-2xl bg-[#17458F] text-white flex items-center justify-center mx-auto shadow-sm">
+                  <HardDrive className="w-6 h-6" />
+                </div>
+                <div className="space-y-1.5 max-w-lg mx-auto">
+                  <h4 className="font-heading font-bold text-base text-slate-900">
+                    Cloud Storage Bucket Inactive (Spark Tier)
+                  </h4>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    {scanResult.statusMessage}
+                  </p>
+                  <p className="text-[11px] text-slate-500 pt-1">
+                    All website images, posters, and council photos are currently loaded and preserved directly via high-density WebP payloads in Firestore and CDN links. There are 0 unlinked files consuming storage.
+                  </p>
+                </div>
+                <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+                  <a
+                    href="https://console.firebase.google.com/project/src-jdcoem/storage"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#17458F] hover:bg-[#0E2F66] text-white text-xs font-semibold uppercase tracking-wider transition-all shadow-sm"
+                  >
+                    <span>Enable in Firebase Console</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                  <Button variant="secondary" size="sm" onClick={handleStartScan} className="gap-1.5">
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Re-check</span>
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={onClose}>
+                    Close
+                  </Button>
+                </div>
+              </div>
+            ) : scanResult.orphanCount === 0 ? (
               <div className="p-8 rounded-3xl bg-emerald-50 border border-emerald-200/80 text-center space-y-3">
                 <div className="h-12 w-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center mx-auto shadow-sm">
                   <CheckCircle2 className="w-6 h-6" />
