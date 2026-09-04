@@ -229,3 +229,30 @@ export function saveStoredListingResponse(record: ListingResponseRecord): void {
 
   enqueueCloudWrite(`responses_${record.listingId}`, updated, "Listing Response");
 }
+
+export function deleteStoredListingResponse(responseId: string, listingId: string): void {
+  const current = getStoredListingResponses();
+  const updated = current.filter((r) => r.id !== responseId);
+
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(RESPONSES_STORAGE_KEY, JSON.stringify(updated));
+    } catch (e) {
+      console.warn("localStorage quota exceeded for listing responses:", e);
+    }
+
+    try {
+      window.dispatchEvent(
+        new CustomEvent("src_listing_responses_updated", { detail: updated })
+      );
+    } catch {}
+  }
+
+  // Cloud Sync
+  saveSiteContentToFirestore(`responses_${listingId}`, updated).catch((err) => {
+    console.warn("Direct write for response deletion failed, enqueuing:", err);
+  });
+
+  enqueueCloudWrite(`responses_${listingId}`, updated, "Delete Listing Response");
+}
+

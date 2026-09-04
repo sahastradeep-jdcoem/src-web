@@ -30,10 +30,12 @@ import {
   saveStoredListings, 
   subscribeToListings, 
   getStoredListingResponses,
-  saveStoredListingResponse
+  saveStoredListingResponse,
+  deleteStoredListingResponse
 } from "@/lib/listingsStore";
 import { ListingItem, ListingType, ListingPillar, ListingResponseRecord, TargetAudience } from "@/types/listings";
 import { CreateListingModal } from "@/components/admin/listings/CreateListingModal";
+import { ListingResponsesModal } from "@/components/admin/listings/ListingResponsesModal";
 import { EventFormModal, EventFormData, formatDateToReadable } from "@/components/admin/events/EventFormModal";
 import { getStoredEvents, saveStoredEvents, subscribeToEvents } from "@/lib/eventsStore";
 import { getStoredClubs } from "@/lib/councilStore";
@@ -251,6 +253,13 @@ export default function AdminListingsPage() {
     saveStoredListingResponse(updatedRecord);
     setResponses((prev) => prev.map((r) => (r.id === respId ? updatedRecord : r)));
     showToast(`Candidate status updated to ${newStatus.toUpperCase()}`);
+  };
+
+  const handleDeleteResponse = (respId: string) => {
+    if (!inspectingListing) return;
+    deleteStoredListingResponse(respId, inspectingListing.id);
+    setResponses((prev) => prev.filter((r) => r.id !== respId));
+    showToast("Response record deleted successfully.");
   };
 
   const handleExportExcel = async () => {
@@ -597,181 +606,16 @@ export default function AdminListingsPage() {
         </Modal>
       )}
 
-      {/* INSPECT RESPONSES MODAL (POLL BREAKDOWN OR CANDIDATE APPLICATION ROSTER) */}
+      {/* GOOGLE FORMS STYLE RESPONSES STUDIO MODAL */}
       {inspectingListing && (
-        <Modal
-          isOpen={!!inspectingListing}
+        <ListingResponsesModal
+          listing={inspectingListing}
+          responses={activeListingResponses}
           onClose={() => setInspectingListing(null)}
-          title={`${inspectingListing.title} — Analytics & Responses`}
-          subtitle={`Review candidate submissions, vote percentages, or grievance resolutions.`}
-          maxWidth="4xl"
-        >
-          <div className="space-y-6 pt-2">
-            
-            {/* Poll Breakdown View */}
-            {inspectingListing.type === "poll" && inspectingListing.pollConfig && (
-              <div className="space-y-4 p-5 rounded-3xl bg-slate-50 border border-slate-200">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-[#17458F]">
-                    Live Poll Distribution ({inspectingListing.pollConfig.totalVotes || 0} Total Votes)
-                  </span>
-                  <span className="text-xs font-bold text-slate-500">
-                    {inspectingListing.pollConfig.isAnonymous ? "Anonymous Voting" : "Verified Student Email"}
-                  </span>
-                </div>
-
-                <div className="space-y-3">
-                  {inspectingListing.pollConfig.options.map((opt) => {
-                    const total = inspectingListing.pollConfig?.totalVotes || 0;
-                    const pct = total > 0 ? Math.round((opt.votes / total) * 100) : 0;
-                    return (
-                      <div key={opt.id} className="space-y-1.5">
-                        <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                          <span>{opt.text}</span>
-                          <span className="font-mono text-[#17458F]">{pct}% ({opt.votes} votes)</span>
-                        </div>
-                        <div className="h-3 rounded-full bg-slate-200 overflow-hidden">
-                          <div
-                            className="h-full bg-[#17458F] transition-all duration-500 rounded-full"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Applications / Submissions / Grievance Roster View */}
-            {inspectingListing.type !== "poll" && (
-              <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                    Showing {activeListingResponses.length} Submissions
-                  </span>
-                  <button
-                    type="button"
-                    disabled={activeListingResponses.length === 0}
-                    onClick={handleExportExcel}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-xs cursor-pointer"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Export to Excel</span>
-                  </button>
-                </div>
-
-                {activeListingResponses.length === 0 ? (
-                  <div className="p-8 text-center text-xs text-slate-400 font-medium">
-                    No responses or applications have been submitted for this listing yet.
-                  </div>
-                ) : (
-                  <div className="max-h-[50vh] overflow-y-auto space-y-3 pr-1">
-                    {activeListingResponses.map((record) => (
-                      <div
-                        key={record.id}
-                        className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3"
-                      >
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div>
-                            <span className="font-bold text-slate-900 text-sm block">
-                              {record.userName || "Candidate"}
-                            </span>
-                            <span className="text-xs text-slate-500">
-                              {record.userEmail} • {record.userDepartment} ({record.userYear})
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            {record.ticketCode && (
-                              <span className="font-mono text-[11px] font-bold text-[#17458F] bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                                {record.ticketCode}
-                              </span>
-                            )}
-                            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-slate-200 text-slate-700">
-                              {record.status || "RECEIVED"}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Submission Link */}
-                        {record.submissionLink && (
-                          <div className="text-xs">
-                            <span className="text-slate-400 font-bold uppercase text-[10px] block">External Portfolio / Entry Link:</span>
-                            <a
-                              href={record.submissionLink}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-[#17458F] font-bold inline-flex items-center gap-1 hover:underline"
-                            >
-                              <span>{record.submissionLink}</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          </div>
-                        )}
-
-                        {/* Dynamic Answers Breakdown */}
-                        {record.answers && (
-                          <div className="p-3 rounded-xl bg-white border border-slate-200 text-xs space-y-1.5">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                              Candidate Responses
-                            </span>
-                            {Object.entries(record.answers).map(([key, val]) => {
-                              const matchedQ = inspectingListing.customQuestions?.find((q) => q.id === key);
-                              const qLabel = matchedQ ? matchedQ.question : key;
-                              const formattedVal = Array.isArray(val)
-                                ? val.join(", ")
-                                : typeof val === "object"
-                                ? JSON.stringify(val)
-                                : String(val);
-                              return (
-                                <div key={key} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2">
-                                  <span className="text-slate-500 font-medium sm:w-1/3">{qLabel}:</span>
-                                  <span className="font-semibold text-slate-800 sm:w-2/3">{formattedVal}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-
-                        {/* Status Action Buttons */}
-                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200/60">
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateResponseStatus(record.id, "approved")}
-                            className="px-3 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold transition-colors"
-                          >
-                            Mark Approved
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateResponseStatus(record.id, "resolved")}
-                            className="px-3 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#17458F] text-[11px] font-bold transition-colors"
-                          >
-                            Mark Resolved
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateResponseStatus(record.id, "rejected")}
-                            className="px-3 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-bold transition-colors"
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="flex items-center justify-end pt-4 border-t border-slate-200">
-              <Button variant="outline" size="sm" onClick={() => setInspectingListing(null)}>
-                Close Studio
-              </Button>
-            </div>
-          </div>
-        </Modal>
+          onUpdateStatus={handleUpdateResponseStatus}
+          onDeleteResponse={handleDeleteResponse}
+          onExportExcel={handleExportExcel}
+        />
       )}
 
     </div>
