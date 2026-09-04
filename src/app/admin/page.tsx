@@ -28,7 +28,6 @@ import {
   Trash2
 } from "lucide-react";
 import { StorageCleanerModal } from "@/components/admin/StorageCleanerModal";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { 
   getStoredClubs, 
@@ -246,9 +245,6 @@ export default function AdminOverviewPage() {
             <h1 className="font-extrabold text-2xl sm:text-3xl text-[#0F172A] uppercase tracking-tight font-heading">
               ADMIN DASHBOARD
             </h1>
-            <Badge variant="orange" size="sm">
-              PRODUCTION LIVE
-            </Badge>
           </div>
           <p className="text-xs text-slate-500 font-medium mt-1">
             Centralized operations, positions, active users, clubs, hero customization, and registrations console.
@@ -478,9 +474,6 @@ export default function AdminOverviewPage() {
                   </p>
                 </div>
               </div>
-              <Badge variant="orange" size="sm">
-                SPARK TIER
-              </Badge>
             </div>
             <p className="text-xs text-slate-600 leading-relaxed">
               Audit the cloud storage bucket for superseded posters, deleted member photos, and replaced logos. Safely purge unreferenced files to preserve quota.

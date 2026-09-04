@@ -27,7 +27,6 @@ import {
   subscribeToGallery
 } from "@/lib/galleryStore";
 import { GalleryPhoto } from "@/types";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
@@ -166,9 +165,6 @@ export default function AdminGalleryPage() {
             <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#0F172A] uppercase tracking-tight">
               GALLERY & VISUAL ARCHIVES STUDIO
             </h1>
-            <Badge variant="orange" size="sm">
-              LIVE CURATION
-            </Badge>
           </div>
           <p className="text-xs text-slate-500 font-medium mt-1">
             Upload, curate, tag, and publish campus photographs and visual archives displayed on the public gallery.

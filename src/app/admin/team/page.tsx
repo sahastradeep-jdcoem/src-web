@@ -766,9 +766,6 @@ export default function AdminTeamPage() {
             <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#0F172A] uppercase tracking-tight">
               COUNCIL LEADERSHIP STUDIO
             </h1>
-            <Badge variant="orange" size="sm">
-              DYNAMIC ROSTER
-            </Badge>
           </div>
           <p className="text-xs text-slate-500 font-medium mt-1">
             Create, edit, and organize all council positions, roles, officers, and committee members dynamically.
