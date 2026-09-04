@@ -134,9 +134,11 @@ export function CreateListingModal({
   if (!isOpen) return null;
 
   const handleSelectPillar = (option: PillarOption) => {
-    if (option.isEventStudio && onOpenEventModal) {
-      onClose();
-      onOpenEventModal();
+    if (option.isEventStudio) {
+      if (onOpenEventModal) {
+        onClose();
+        onOpenEventModal();
+      }
       return;
     }
     setSelectedPillarOption(option);
