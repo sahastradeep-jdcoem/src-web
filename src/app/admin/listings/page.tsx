@@ -35,7 +35,7 @@ import {
 } from "@/lib/listingsStore";
 import { ListingItem, ListingType, ListingPillar, ListingResponseRecord, TargetAudience } from "@/types/listings";
 import { CreateListingModal } from "@/components/admin/listings/CreateListingModal";
-import { ListingResponsesModal } from "@/components/admin/listings/ListingResponsesModal";
+import { ListingResponsesView } from "@/components/admin/listings/ListingResponsesView";
 import { EventFormModal, EventFormData, formatDateToReadable } from "@/components/admin/events/EventFormModal";
 import { getStoredEvents, saveStoredEvents, subscribeToEvents } from "@/lib/eventsStore";
 import { getStoredClubs } from "@/lib/councilStore";
@@ -315,8 +315,19 @@ export default function AdminListingsPage() {
         </div>
       )}
 
-      {/* Header Strip */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-6">
+      {inspectingListing ? (
+        <ListingResponsesView
+          listing={inspectingListing}
+          responses={activeListingResponses}
+          onBack={() => setInspectingListing(null)}
+          onUpdateStatus={handleUpdateResponseStatus}
+          onDeleteResponse={handleDeleteResponse}
+          onExportExcel={handleExportExcel}
+        />
+      ) : (
+        <>
+          {/* Header Strip */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-6">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
             <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase tracking-tight">
@@ -527,6 +538,8 @@ export default function AdminListingsPage() {
           )}
         </div>
       </div>
+      </>
+      )}
 
       {/* CREATE LISTING MODAL */}
       {isCreateModalOpen && (
@@ -606,17 +619,6 @@ export default function AdminListingsPage() {
         </Modal>
       )}
 
-      {/* GOOGLE FORMS STYLE RESPONSES STUDIO MODAL */}
-      {inspectingListing && (
-        <ListingResponsesModal
-          listing={inspectingListing}
-          responses={activeListingResponses}
-          onClose={() => setInspectingListing(null)}
-          onUpdateStatus={handleUpdateResponseStatus}
-          onDeleteResponse={handleDeleteResponse}
-          onExportExcel={handleExportExcel}
-        />
-      )}
 
     </div>
   );
