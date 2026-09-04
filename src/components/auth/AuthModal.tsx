@@ -102,28 +102,29 @@ export function AuthModal() {
       isOpen={isAuthModalOpen}
       onClose={closeAuthModal}
       maxWidth="md"
+      contentClassName="p-4 sm:p-5 sm:px-6"
     >
-      <div className="space-y-5 text-[#0F172A] py-1">
+      <div className="space-y-3 sm:space-y-3.5 text-[#0F172A]">
         
         {/* Header Branding */}
-        <div className="text-center space-y-1.5">
-          <div className="relative mx-auto h-14 w-14 rounded-2xl bg-white p-1.5 border border-slate-200 shadow-xs flex items-center justify-center">
+        <div className="text-center space-y-1">
+          <div className="relative mx-auto h-11 w-11 sm:h-12 sm:w-12 rounded-xl bg-white p-1 border border-slate-200 shadow-xs flex items-center justify-center">
             <Image
               src="/assets/SRC Logo.png"
               alt="SRC Emblem"
               fill
-              className="object-contain p-1"
+              className="object-contain p-0.5"
             />
           </div>
           <div className="space-y-0.5">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-[#E78023] flex items-center justify-center gap-1">
-              <Sparkles className="w-3 h-3" />
+            <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-[#E78023] flex items-center justify-center gap-1">
+              <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
               <span>SAHASTRADEEP PORTAL</span>
             </span>
-            <h3 className="font-heading font-extrabold text-xl sm:text-2xl text-[#0F172A]">
+            <h3 className="font-heading font-extrabold text-lg sm:text-xl text-[#0F172A] leading-tight">
               {step === "SELECT_ROLE" ? "Select Account Type" : "Sahastradeep Sign In"}
             </h3>
-            <p className="text-xs text-slate-500 font-medium max-w-xs mx-auto">
+            <p className="text-[11px] sm:text-xs text-slate-500 font-medium max-w-xs mx-auto leading-tight">
               {step === "SELECT_ROLE" 
                 ? "Please tell us who you are before continuing to sign in." 
                 : "Sign in with your Google account to access your student portal."}
@@ -132,7 +133,7 @@ export function AuthModal() {
         </div>
 
         {error && (
-          <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
+          <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
             <span>{error}</span>
           </div>
@@ -140,11 +141,11 @@ export function AuthModal() {
 
         {/* STEP 1: ROLE SELECTION */}
         {step === "SELECT_ROLE" && (
-          <div className="space-y-2.5 pt-1">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1">
+          <div className="space-y-2 pt-0.5">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-0.5">
               Choose your role to proceed:
             </p>
-            <div className="grid grid-cols-1 gap-2.5">
+            <div className="grid grid-cols-1 gap-2">
               {ROLE_OPTIONS.map((opt) => {
                 const IconComponent = opt.icon;
                 const isSelected = selectedRole === opt.id;
@@ -155,43 +156,43 @@ export function AuthModal() {
                     type="button"
                     onClick={() => handleSelectRole(opt.id)}
                     className={cn(
-                      "p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer flex items-start gap-3.5 group",
+                      "py-2.5 px-3 sm:py-2.5 sm:px-3.5 rounded-xl sm:rounded-2xl border-2 text-left transition-all cursor-pointer flex items-center gap-3 group",
                       isSelected 
                         ? "border-[#17458F] bg-blue-50/30 shadow-xs" 
                         : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
                     )}
                   >
                     <div className={cn(
-                      "h-10 w-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105",
+                      "h-9 w-9 sm:h-9.5 sm:w-9.5 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105",
                       opt.accentBg
                     )}>
-                      <IconComponent className="w-5 h-5" />
+                      <IconComponent className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-heading font-extrabold text-sm text-slate-900 group-hover:text-[#17458F] transition-colors">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <span className="font-heading font-extrabold text-xs sm:text-sm text-slate-900 group-hover:text-[#17458F] transition-colors">
                           {opt.title}
                         </span>
-                        <span className={cn("text-[9px] font-extrabold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0", opt.badgeColor)}>
+                        <span className={cn("text-[8.5px] sm:text-[9px] font-extrabold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0", opt.badgeColor)}>
                           {opt.badge}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-500 font-medium leading-relaxed mt-0.5">
+                      <p className="text-[11px] sm:text-xs text-slate-500 font-medium leading-snug mt-0.5">
                         {opt.description}
                       </p>
                     </div>
 
-                    <div className="text-slate-300 group-hover:text-[#17458F] self-center transition-colors">
-                      <ArrowRight className="w-4 h-4" />
+                    <div className="text-slate-300 group-hover:text-[#17458F] self-center transition-colors shrink-0">
+                      <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </div>
                   </button>
                 );
               })}
             </div>
 
-            <div className="pt-2 text-center">
-              <span className="text-[11px] text-slate-400 font-medium">
+            <div className="pt-1 text-center">
+              <span className="text-[10px] sm:text-[11px] text-slate-400 font-medium">
                 You will be prompted to complete required details after Google sign-in.
               </span>
             </div>
@@ -200,16 +201,16 @@ export function AuthModal() {
 
         {/* STEP 2: GOOGLE SIGN IN */}
         {step === "GOOGLE_SIGNIN" && currentRoleConfig && (
-          <div className="space-y-4 pt-1">
+          <div className="space-y-3 pt-0.5">
             
             {/* Selected Role Ribbon */}
-            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className={cn("h-8 w-8 rounded-xl flex items-center justify-center shrink-0", currentRoleConfig.accentBg)}>
-                  <currentRoleConfig.icon className="w-4 h-4" />
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className={cn("h-7 w-7 rounded-lg flex items-center justify-center shrink-0", currentRoleConfig.accentBg)}>
+                  <currentRoleConfig.icon className="w-3.5 h-3.5" />
                 </div>
                 <div className="min-w-0">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
                     Signing in as:
                   </span>
                   <span className="text-xs font-extrabold text-slate-900 truncate block">
@@ -229,15 +230,15 @@ export function AuthModal() {
             </div>
 
             {/* 1-Click Google Sign-In */}
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               <button
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={isSubmitting}
-                className="w-full py-3.5 px-4 rounded-2xl bg-white hover:bg-slate-50 border-2 border-slate-200 hover:border-[#17458F] text-slate-800 text-sm font-bold transition-all shadow-xs flex items-center justify-center gap-3 cursor-pointer group hover:scale-[1.01] active:scale-[0.99]"
+                className="w-full py-2.5 px-4 rounded-xl sm:rounded-2xl bg-white hover:bg-slate-50 border-2 border-slate-200 hover:border-[#17458F] text-slate-800 text-xs sm:text-sm font-bold transition-all shadow-xs flex items-center justify-center gap-3 cursor-pointer group hover:scale-[1.01] active:scale-[0.99]"
               >
                 {/* Google Color G SVG */}
-                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" viewBox="0 0 24 24">
                   <path
                     fill="#4285F4"
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -260,17 +261,17 @@ export function AuthModal() {
                 </span>
               </button>
 
-              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-1 text-center">
-                <div className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-[#17458F]">
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 space-y-0.5 text-center">
+                <div className="flex items-center justify-center gap-1.5 text-[10.5px] font-bold text-[#17458F]">
                   <ShieldCheck className="w-3.5 h-3.5 text-[#E78023]" />
                   <span>Mandatory Profile Completion Required</span>
                 </div>
-                <p className="text-[10px] text-slate-500 leading-relaxed">
-                  After Google authentication, you will be prompted to enter your mandatory academic credentials before accessing event passes and the platform.
+                <p className="text-[10px] text-slate-500 leading-snug">
+                  After Google authentication, you will be prompted to enter your academic credentials before accessing event passes.
                 </p>
               </div>
 
-              <div className="text-center pt-1">
+              <div className="text-center pt-0.5">
                 <button
                   type="button"
                   onClick={() => setStep("SELECT_ROLE")}
