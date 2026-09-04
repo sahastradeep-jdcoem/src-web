@@ -11,6 +11,39 @@ import { enqueueCloudWrite, reconcileArrayDatasets, hasPendingWritesFor, compact
 const EVENTS_STORAGE_KEY = "src_events";
 
 /**
+ * Sanitize an event item, deduplicating primitive arrays such as whatToExpect and rules
+ */
+export function sanitizeEventItem(event: EventItem): EventItem {
+  if (!event || typeof event !== "object") return event;
+  return {
+    ...event,
+    whatToExpect: Array.isArray(event.whatToExpect)
+      ? Array.from(
+          new Set(
+            event.whatToExpect
+              .map((s) => (typeof s === "string" ? s.trim() : s))
+              .filter((s) => s !== undefined && s !== null && s !== "")
+          )
+        )
+      : [],
+    rules: Array.isArray(event.rules)
+      ? Array.from(
+          new Set(
+            event.rules
+              .map((s) => (typeof s === "string" ? s.trim() : s))
+              .filter((s) => s !== undefined && s !== null && s !== "")
+          )
+        )
+      : [],
+  };
+}
+
+export function sanitizeEventsList(events: EventItem[]): EventItem[] {
+  if (!Array.isArray(events)) return [];
+  return events.map(sanitizeEventItem);
+}
+
+/**
  * Retrieve current events list from local storage or defaults
  */
 export function getStoredEvents(): EventItem[] {
@@ -19,7 +52,7 @@ export function getStoredEvents(): EventItem[] {
     const stored = localStorage.getItem(EVENTS_STORAGE_KEY);
     if (stored !== null) {
       const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) return sanitizeEventsList(parsed);
     }
   } catch (e) {
     console.warn("Could not read events from storage", e);
@@ -33,7 +66,7 @@ export function getStoredEvents(): EventItem[] {
 export function saveStoredEvents(events: EventItem[]): void {
   if (typeof window === "undefined") return;
   try {
-    const sanitized = cleanUndefined(events);
+    const sanitized = cleanUndefined(sanitizeEventsList(events));
     try { localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(sanitized)); } catch (lsErr) { console.warn("localStorage quota exceeded for events:", lsErr); }
     window.dispatchEvent(new CustomEvent("src_events_updated", { detail: sanitized }));
     compactEventDataset(sanitized).then((compacted) => {
@@ -61,7 +94,7 @@ export async function syncEventsFromFirestore(): Promise<EventItem[]> {
     const remote = await getSiteContentFromFirestore<EventItem[]>("events");
     if (remote !== null && Array.isArray(remote)) {
       const current = getStoredEvents();
-      const merged = reconcileArrayDatasets(current, remote);
+      const merged = sanitizeEventsList(reconcileArrayDatasets(current, remote));
       if (typeof window !== "undefined") {
         localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(merged));
         window.dispatchEvent(new CustomEvent("src_events_updated", { detail: merged }));
@@ -82,7 +115,7 @@ export function subscribeToEvents(callback: (events: EventItem[]) => void): () =
     if (remote !== null && Array.isArray(remote)) {
       if (hasPendingWritesFor("events")) return;
       const current = getStoredEvents();
-      const merged = reconcileArrayDatasets(current, remote);
+      const merged = sanitizeEventsList(reconcileArrayDatasets(current, remote));
       if (typeof window !== "undefined") {
         localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(merged));
         window.dispatchEvent(new CustomEvent("src_events_updated", { detail: merged }));

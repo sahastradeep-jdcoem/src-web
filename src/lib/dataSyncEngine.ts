@@ -362,14 +362,28 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
     return remoteList;
   }
 
+  // If the arrays themselves are primitive arrays (e.g. string[], number[]), deduplicate and return
+  const isPrimitiveArray =
+    (localList.length > 0 && typeof localList[0] !== "object") ||
+    (remoteList.length > 0 && typeof remoteList[0] !== "object");
+
+  if (isPrimitiveArray) {
+    const chosen = remoteList.length > 0 ? remoteList : localList;
+    return Array.from(new Set(chosen.filter((item) => item !== undefined && item !== null && String(item).trim() !== ""))) as T[];
+  }
+
   // Create multi-key lookup map for local items
   const localMap = new Map<string, T>();
   const matchedLocalKeys = new Set<string>();
 
   localList.forEach((item) => {
+    if (!item || typeof item !== "object") return;
     if (item.id) localMap.set(item.id.toLowerCase(), item);
     if (item.slug) localMap.set(item.slug.toLowerCase(), item);
     if ((item as any).name) localMap.set((item as any).name.toLowerCase(), item);
+    if ((item as any).title) localMap.set((item as any).title.toLowerCase(), item);
+    if ((item as any).position) localMap.set((item as any).position.toLowerCase(), item);
+    if ((item as any).question) localMap.set((item as any).question.toLowerCase(), item);
     // Also handle "club-" prefix variations
     if (item.id && item.id.startsWith("club-")) {
       localMap.set(item.id.replace("club-", "").toLowerCase(), item);
@@ -380,6 +394,7 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
   });
 
   const findMatchingLocal = (remoteItem: T): T | undefined => {
+    if (!remoteItem || typeof remoteItem !== "object") return undefined;
     if (remoteItem.id && localMap.has(remoteItem.id.toLowerCase())) {
       return localMap.get(remoteItem.id.toLowerCase());
     }
@@ -388,6 +403,15 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
     }
     if ((remoteItem as any).name && localMap.has((remoteItem as any).name.toLowerCase())) {
       return localMap.get((remoteItem as any).name.toLowerCase());
+    }
+    if ((remoteItem as any).title && localMap.has((remoteItem as any).title.toLowerCase())) {
+      return localMap.get((remoteItem as any).title.toLowerCase());
+    }
+    if ((remoteItem as any).position && localMap.has((remoteItem as any).position.toLowerCase())) {
+      return localMap.get((remoteItem as any).position.toLowerCase());
+    }
+    if ((remoteItem as any).question && localMap.has((remoteItem as any).question.toLowerCase())) {
+      return localMap.get((remoteItem as any).question.toLowerCase());
     }
     if (remoteItem.id && remoteItem.id.startsWith("club-")) {
       const stripped = remoteItem.id.replace("club-", "").toLowerCase();
@@ -405,10 +429,13 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
     const localItem = findMatchingLocal(remoteItem);
     if (!localItem) return remoteItem;
 
-    const localKey = (localItem.id || localItem.slug || (localItem as any).name || "").toLowerCase();
+    const localKey = (localItem.id || localItem.slug || (localItem as any).name || (localItem as any).title || "").toLowerCase();
     if (localKey) matchedLocalKeys.add(localKey);
     if (localItem.id) matchedLocalKeys.add(localItem.id.toLowerCase());
     if (localItem.slug) matchedLocalKeys.add(localItem.slug.toLowerCase());
+    if ((localItem as any).title) matchedLocalKeys.add((localItem as any).title.toLowerCase());
+    if ((localItem as any).position) matchedLocalKeys.add((localItem as any).position.toLowerCase());
+    if ((localItem as any).question) matchedLocalKeys.add((localItem as any).question.toLowerCase());
 
     // Remote is the authoritative cloud data source
     const result: any = { ...remoteItem };
@@ -459,11 +486,29 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
         continue;
       }
 
-      // For nested array fields (e.g. adminCouncil, hostingCommittee, clubs, events):
+      // For nested array fields (e.g. whatToExpect, rules, adminCouncil, schedule, prizes, events):
       if (Array.isArray(localVal) || Array.isArray(remoteVal)) {
         const localArr = Array.isArray(localVal) ? localVal : [];
         const remoteArr = Array.isArray(remoteVal) ? remoteVal : [];
 
+        // 1. Primitive arrays (like string[]: whatToExpect, rules, tags, perks, requirements, etc.)
+        const isPrimitiveSubArray =
+          (localArr.length > 0 && typeof localArr[0] !== "object") ||
+          (remoteArr.length > 0 && typeof remoteArr[0] !== "object");
+
+        if (isPrimitiveSubArray) {
+          // Never recurse with reconcileArrayDatasets on primitive string arrays, as it causes unbounded multiplication!
+          // Take the authoritative array (remote if present, otherwise local) and deduplicate values.
+          const chosen = remoteArr.length > 0 ? remoteArr : localArr;
+          result[k] = Array.from(
+            new Set(
+              chosen.filter((item: any) => item !== undefined && item !== null && String(item).trim() !== "")
+            )
+          );
+          continue;
+        }
+
+        // 2. Object arrays
         // For draft tenure sessions (!isCurrent): local draft roster is active staged work
         const isDraftTenure = (remoteItem as any)?.isCurrent === false || (localItem as any)?.isCurrent === false;
         if (isDraftTenure && localArr.length > 0) {
@@ -480,10 +525,6 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
         }
         if (remoteArr.length > 0 && localArr.length === 0) {
           result[k] = remoteArr;
-          continue;
-        }
-        if (localArr.length >= remoteArr.length && localArr.length > 0) {
-          result[k] = reconcileArrayDatasets(localArr, remoteArr);
           continue;
         }
         result[k] = reconcileArrayDatasets(localArr, remoteArr);
@@ -510,12 +551,29 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
 
   // Add any local-only items that were not matched in remote
   localList.forEach((localItem) => {
+    if (!localItem || typeof localItem !== "object") return;
     const idKey = localItem.id ? localItem.id.toLowerCase() : "";
     const slugKey = localItem.slug ? localItem.slug.toLowerCase() : "";
-    if (
-      (!idKey || !matchedLocalKeys.has(idKey)) &&
-      (!slugKey || !matchedLocalKeys.has(slugKey))
-    ) {
+    const nameKey = (localItem as any).name ? (localItem as any).name.toLowerCase() : "";
+    const titleKey = (localItem as any).title ? (localItem as any).title.toLowerCase() : "";
+    const positionKey = (localItem as any).position ? (localItem as any).position.toLowerCase() : "";
+    const questionKey = (localItem as any).question ? (localItem as any).question.toLowerCase() : "";
+
+    // An item MUST have at least one identifier to be considered a distinct local item
+    const hasIdentifier = Boolean(idKey || slugKey || nameKey || titleKey || positionKey || questionKey);
+    if (!hasIdentifier) {
+      return;
+    }
+
+    const isMatched =
+      (idKey && matchedLocalKeys.has(idKey)) ||
+      (slugKey && matchedLocalKeys.has(slugKey)) ||
+      (nameKey && matchedLocalKeys.has(nameKey)) ||
+      (titleKey && matchedLocalKeys.has(titleKey)) ||
+      (positionKey && matchedLocalKeys.has(positionKey)) ||
+      (questionKey && matchedLocalKeys.has(questionKey));
+
+    if (!isMatched) {
       merged.push(localItem);
     }
   });

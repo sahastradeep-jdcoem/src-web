@@ -248,8 +248,8 @@ export default function AdminEventsPage() {
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanWhatToExpect = newEvent.whatToExpect.filter((s) => s.trim());
-    const cleanRules = newEvent.rules.filter((s) => s.trim());
+    const cleanWhatToExpect = Array.from(new Set(newEvent.whatToExpect.map((s) => s.trim()).filter(Boolean)));
+    const cleanRules = Array.from(new Set(newEvent.rules.map((s) => s.trim()).filter(Boolean)));
     const regDeadlineFormatted = newEvent.registrationDeadline
       ? formatDateToReadable(newEvent.registrationDeadline)
       : "TBD";
@@ -361,8 +361,12 @@ export default function AdminEventsPage() {
       headerImage: evt.headerImage || "",
       description: evt.description || "",
       about: evt.about || evt.description || "",
-      whatToExpect: evt.whatToExpect && evt.whatToExpect.length > 0 ? [...evt.whatToExpect] : [""],
-      rules: evt.rules && evt.rules.length > 0 ? [...evt.rules] : [""],
+      whatToExpect: evt.whatToExpect && evt.whatToExpect.length > 0
+        ? Array.from(new Set(evt.whatToExpect.map((s) => (typeof s === "string" ? s.trim() : s)).filter(Boolean)))
+        : [""],
+      rules: evt.rules && evt.rules.length > 0
+        ? Array.from(new Set(evt.rules.map((s) => (typeof s === "string" ? s.trim() : s)).filter(Boolean)))
+        : [""],
       teamType: evt.teamType || "Both",
       minTeamSize: evt.minTeamSize || 2,
       maxTeamSize: evt.maxTeamSize || 4,
@@ -385,8 +389,8 @@ export default function AdminEventsPage() {
     e.preventDefault();
     if (!editingEvent) return;
 
-    const cleanWhatToExpect = editForm.whatToExpect.filter((s) => s.trim());
-    const cleanRules = editForm.rules.filter((s) => s.trim());
+    const cleanWhatToExpect = Array.from(new Set(editForm.whatToExpect.map((s) => s.trim()).filter(Boolean)));
+    const cleanRules = Array.from(new Set(editForm.rules.map((s) => s.trim()).filter(Boolean)));
     const regDeadlineFormatted = editForm.registrationDeadline
       ? formatDateToReadable(editForm.registrationDeadline)
       : undefined;
@@ -417,8 +421,8 @@ export default function AdminEventsPage() {
             headerImage: editForm.headerImage || editForm.cardImage || primaryPoster,
             description: editForm.description,
             about: editForm.about || editForm.description,
-            whatToExpect: cleanWhatToExpect.length > 0 ? cleanWhatToExpect : item.whatToExpect,
-            rules: cleanRules.length > 0 ? cleanRules : item.rules,
+            whatToExpect: cleanWhatToExpect,
+            rules: cleanRules,
             teamType: editForm.teamType,
             minTeamSize: editForm.teamType !== "Individual" ? editForm.minTeamSize : undefined,
             maxTeamSize: editForm.teamType !== "Individual" ? editForm.maxTeamSize : undefined,

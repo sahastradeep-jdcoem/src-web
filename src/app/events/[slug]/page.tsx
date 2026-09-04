@@ -21,7 +21,7 @@ import {
   ArrowDown
 } from "lucide-react";
 import { mockEvents } from "@/data/events";
-import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
+import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, sanitizeEventItem } from "@/lib/eventsStore";
 import { EventItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Accordion } from "@/components/ui/Accordion";
@@ -44,8 +44,9 @@ export default function EventDetailPage() {
         (e) =>
           e.slug === cleanSlug ||
           e.id === cleanSlug ||
-          e.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") === cleanSlug ||
-          e.name.toLowerCase() === decodeURIComponent(cleanSlug).toLowerCase()
+          e.id.toLowerCase() === cleanSlug ||
+          (e.slug && e.slug.toLowerCase() === cleanSlug) ||
+          e.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") === cleanSlug
       ) || null
     );
   };
@@ -71,8 +72,9 @@ export default function EventDetailPage() {
     const match = findEvent(combined, slug);
 
     if (match) {
-      setEvent(match);
-      setSubEvents(findSubEvents(combined, match));
+      const cleanMatch = sanitizeEventItem(match);
+      setEvent(cleanMatch);
+      setSubEvents(findSubEvents(combined, cleanMatch));
       setIsLoading(false);
     }
 
@@ -82,8 +84,9 @@ export default function EventDetailPage() {
         const remoteCombined = [...remote, ...mockEvents];
         const remoteMatch = findEvent(remoteCombined, slug);
         if (remoteMatch) {
-          setEvent(remoteMatch);
-          setSubEvents(findSubEvents(remoteCombined, remoteMatch));
+          const cleanRemoteMatch = sanitizeEventItem(remoteMatch);
+          setEvent(cleanRemoteMatch);
+          setSubEvents(findSubEvents(remoteCombined, cleanRemoteMatch));
         }
       }
       setIsLoading(false);
@@ -94,8 +97,9 @@ export default function EventDetailPage() {
         const streamCombined = [...remoteEvents, ...mockEvents];
         const streamMatch = findEvent(streamCombined, slug);
         if (streamMatch) {
-          setEvent(streamMatch);
-          setSubEvents(findSubEvents(streamCombined, streamMatch));
+          const cleanStreamMatch = sanitizeEventItem(streamMatch);
+          setEvent(cleanStreamMatch);
+          setSubEvents(findSubEvents(streamCombined, cleanStreamMatch));
         }
       }
     });
@@ -142,7 +146,11 @@ export default function EventDetailPage() {
 
   const isRegistrationOpen = event.status === "Registration Open";
 
-  const ruleAccordionItems = (event.rules || []).map((rule, idx) => ({
+  const displayRules = Array.from(
+    new Set((event.rules || []).map((s) => (typeof s === "string" ? s.trim() : s)).filter(Boolean))
+  );
+
+  const ruleAccordionItems = displayRules.map((rule, idx) => ({
     id: `rule-${idx}`,
     title: `Regulation 0${idx + 1}: ${rule.slice(0, 45)}...`,
     content: rule,
@@ -349,24 +357,30 @@ export default function EventDetailPage() {
             )}
 
             {/* WHAT TO EXPECT */}
-            {event.whatToExpect && event.whatToExpect.length > 0 && (
-              <section className="space-y-6">
-                <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase">
-                  WHAT TO EXPECT
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {event.whatToExpect.map((item, index) => (
-                    <div
-                      key={index}
-                      className="p-5 rounded-2xl bg-white border border-slate-200 flex items-start gap-3.5 shadow-xs"
-                    >
-                      <CheckCircle2 className="w-5 h-5 text-[#E78023] shrink-0 mt-0.5" />
-                      <p className="text-xs sm:text-sm text-slate-700 leading-snug font-medium">{item}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
+            {(() => {
+              const displayExpect = Array.from(
+                new Set((event.whatToExpect || []).map((s) => (typeof s === "string" ? s.trim() : s)).filter(Boolean))
+              );
+              if (displayExpect.length === 0) return null;
+              return (
+                <section className="space-y-6">
+                  <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase">
+                    WHAT TO EXPECT
+                  </h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {displayExpect.map((item, index) => (
+                      <div
+                        key={index}
+                        className="p-5 rounded-2xl bg-white border border-slate-200 flex items-start gap-3.5 shadow-xs"
+                      >
+                        <CheckCircle2 className="w-5 h-5 text-[#E78023] shrink-0 mt-0.5" />
+                        <p className="text-xs sm:text-sm text-slate-700 leading-snug font-medium">{item}</p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              );
+            })()}
 
             {/* SCHEDULE TIMELINE */}
             {event.schedule && event.schedule.length > 0 && (
