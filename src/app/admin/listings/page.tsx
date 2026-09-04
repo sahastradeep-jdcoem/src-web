@@ -38,6 +38,8 @@ import {
   RESPONSES_STORAGE_KEY
 } from "@/lib/listingsStore";
 import { saveSiteContentToFirestore } from "@/lib/firebase/firestore";
+import { db } from "@/lib/firebase/config";
+import { doc, deleteDoc } from "firebase/firestore";
 import { ListingItem, ListingType, ListingPillar, ListingResponseRecord, TargetAudience } from "@/types/listings";
 import { CreateListingModal } from "@/components/admin/listings/CreateListingModal";
 import { ListingResponsesView } from "@/components/admin/listings/ListingResponsesView";
@@ -319,6 +321,15 @@ export default function AdminListingsPage() {
     } catch {}
     saveSiteContentToFirestore("listing_responses", remainingResponses).catch(() => {});
 
+    // Delete any hub_poll_* documents in registrations collection for this poll
+    const firestoreDb = db;
+    if (firestoreDb) {
+      const pollBallotsToDelete = responses.filter((r) => (r.listingId === item.id || r.listingSlug === item.slug) && r.id?.startsWith("hub_poll_"));
+      pollBallotsToDelete.forEach((b) => {
+        deleteDoc(doc(firestoreDb, "registrations", b.id)).catch(() => {});
+      });
+    }
+
     if (inspectingListing && inspectingListing.id === item.id) {
       setInspectingListing(updatedItem);
     }
@@ -332,8 +343,29 @@ export default function AdminListingsPage() {
       const wb = XLSX.utils.book_new();
 
       if (inspectingListing.type === "poll" && inspectingListing.pollConfig) {
-        const totalVotes = inspectingListing.pollConfig.totalVotes || 0;
-        const sortedOptions = [...inspectingListing.pollConfig.options].sort((a, b) => b.votes - a.votes);
+        const pollResponses = responses.filter((r) => r.listingId === inspectingListing.id || r.listingSlug === inspectingListing.slug);
+        const optionCounts: Record<string, number> = {};
+        pollResponses.forEach((r) => {
+          const ids: string[] = r.selectedOptionIds && r.selectedOptionIds.length > 0 
+            ? r.selectedOptionIds 
+            : ((r as any).selectedOptionId ? [(r as any).selectedOptionId] : []);
+          if (ids.length === 0 && (r as any).customAnswers?.optionId) {
+            ids.push((r as any).customAnswers.optionId);
+          }
+          ids.forEach((optId) => {
+            optionCounts[optId] = (optionCounts[optId] || 0) + 1;
+          });
+        });
+        const computedOptions = (inspectingListing.pollConfig.options || []).map((opt) => ({
+          ...opt,
+          votes: Math.max(opt.votes || 0, optionCounts[opt.id] || 0),
+        }));
+        const totalVotes = Math.max(
+          inspectingListing.pollConfig.totalVotes || 0,
+          pollResponses.length,
+          computedOptions.reduce((s, o) => s + (o.votes || 0), 0)
+        );
+        const sortedOptions = [...computedOptions].sort((a, b) => b.votes - a.votes);
         const pollRows = sortedOptions.map((opt, idx) => {
           const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
           return {
@@ -547,8 +579,11 @@ export default function AdminListingsPage() {
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
                 {filteredListings.map((item) => {
-                  const respCount = responses.filter((r) => r.listingId === item.id || r.listingSlug === item.slug).length;
-                  const voteCount = item.pollConfig?.totalVotes || 0;
+                  const pollBallots = responses.filter((r) => r.listingId === item.id || r.listingSlug === item.slug);
+                  const respCount = pollBallots.length;
+                  const voteCount = item.type === "poll"
+                    ? Math.max(item.pollConfig?.totalVotes || 0, pollBallots.length)
+                    : respCount;
 
                   return (
                     <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">

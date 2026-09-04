@@ -3,9 +3,12 @@ import { initialListings } from "@/data/listings";
 import { 
   saveSiteContentToFirestore, 
   getSiteContentFromFirestore, 
-  subscribeToSiteContent 
+  subscribeToSiteContent,
+  saveUserProfileToFirestore
 } from "./firebase/firestore";
 import { enqueueCloudWrite } from "./dataSyncEngine";
+import { db } from "./firebase/config";
+import { doc, setDoc, getDocs, collection, serverTimestamp } from "firebase/firestore";
 
 export const LISTINGS_STORAGE_KEY = "src_listings_v1";
 export const RESPONSES_STORAGE_KEY = "src_listing_responses_v1";
@@ -192,8 +195,8 @@ export function voteOnListingPoll(
   const optionStillExists = target.pollConfig.options.some((o) => o.id === existingVoteOptionId);
   const totalVotesSoFar = target.pollConfig.totalVotes || 0;
 
-  // Only consider previously voted if the option still exists and totalVotes > 0
-  if (existingVoteOptionId && optionStillExists && totalVotesSoFar > 0) {
+  // Only consider previously voted if the option still exists
+  if (existingVoteOptionId && optionStillExists) {
     return { success: false, error: "You have already cast your vote on this poll." };
   }
 
@@ -233,8 +236,9 @@ export function voteOnListingPoll(
   // Record official ListingResponseRecord so votes appear in Admin Voter Log and can be audited/exported
   try {
     const isAnon = Boolean(target.pollConfig.isAnonymous || voterInfo?.isAnonymous);
+    const ballotId = `hub_poll_${target.id}_${voterId}`;
     const ballotRecord: ListingResponseRecord = {
-      id: `ballot-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: ballotId,
       listingId: target.id,
       listingSlug: target.slug,
       listingType: "poll",
@@ -254,6 +258,52 @@ export function voteOnListingPoll(
       status: "approved",
     };
     saveStoredListingResponse(ballotRecord);
+
+    // CRITICAL: Guaranteed persistence in users/{voterId} (owner write) AND registrations (create: true)
+    if (voterId) {
+      // 1. Write to student user profile in Firestore
+      saveUserProfileToFirestore(voterId, {
+        votedPolls: { ...votedMap, [listingId]: optionId },
+      }).catch((e) => console.warn("User profile votedPolls save notice:", e));
+
+      // 2. Write ballot to registrations collection in Firestore (create permitted for all students)
+      if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+        const regDocRef = doc(db, "registrations", `hub_poll_${listingId}_${voterId}`);
+        setDoc(regDocRef, {
+          id: `hub_poll_${listingId}_${voterId}`,
+          eventId: listingId,
+          eventTitle: `[POLL BALLOT] ${target.title}`,
+          leaderName: isAnon ? "Anonymous Voter" : (voterInfo?.userName || "Campus Student"),
+          email: isAnon ? "" : (voterInfo?.userEmail || ""),
+          phone: "",
+          college: "JDCOEM",
+          department: voterInfo?.userDepartment || "",
+          year: voterInfo?.userYear || "",
+          btId: isAnon ? "" : (voterInfo?.btId || ""),
+          teamSize: 1,
+          status: "CONFIRMED",
+          registeredAt: new Date().toISOString(),
+          createdAt: serverTimestamp(),
+          qrPayload: `SRC:POLL:${listingId}:${optionId}`,
+          customAnswers: {
+            isHubBallot: true,
+            listingId: target.id,
+            listingSlug: target.slug,
+            listingType: "poll",
+            listingTitle: target.title,
+            optionId: optionId,
+            optionText: chosenOption.text,
+            voterId: voterId,
+            voterName: isAnon ? "Anonymous Voter" : (voterInfo?.userName || "Campus Student"),
+            voterEmail: isAnon ? null : (voterInfo?.userEmail || null),
+            voterDepartment: voterInfo?.userDepartment || "",
+            voterYear: voterInfo?.userYear || "",
+            voterBtId: isAnon ? null : (voterInfo?.btId || null),
+            isAnonymous: isAnon,
+          },
+        }).catch((e) => console.warn("Firestore registration poll ballot write notice:", e));
+      }
+    }
   } catch (err) {
     console.warn("Failed to persist ballot response record:", err);
   }
@@ -370,31 +420,66 @@ export function saveStoredListingResponse(record: ListingResponseRecord): void {
 export async function syncListingResponsesFromFirestore(): Promise<ListingResponseRecord[] | null> {
   try {
     const remote = await getSiteContentFromFirestore<ListingResponseRecord[]>("listing_responses");
-    if (remote && Array.isArray(remote)) {
-      const local = getStoredListingResponses();
-      const map = new Map<string, ListingResponseRecord>();
-      
-      // Preserve any un-synced local records
-      local.forEach((r) => map.set(r.id, r));
-      // Overlay authoritative remote records
-      remote.forEach((r) => map.set(r.id, r));
+    const remoteList = Array.isArray(remote) ? remote : [];
+    const local = getStoredListingResponses();
+    const map = new Map<string, ListingResponseRecord>();
+    
+    // Preserve any local records
+    local.forEach((r) => map.set(r.id, r));
+    // Overlay authoritative remote records
+    remoteList.forEach((r) => map.set(r.id, r));
 
-      const merged = Array.from(map.values()).sort(
-        (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-      );
-
-      if (typeof window !== "undefined") {
-        try {
-          localStorage.setItem(RESPONSES_STORAGE_KEY, JSON.stringify(merged));
-          window.dispatchEvent(
-            new CustomEvent("src_listing_responses_updated", { detail: merged })
-          );
-        } catch (e) {
-          console.warn("Failed to persist synced listing responses:", e);
-        }
+    // CRITICAL: Also query registrations collection for any hub_poll_* ballots
+    // so student votes cast by non-admins are immediately picked up across all devices
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      try {
+        const regSnap = await getDocs(collection(db, "registrations"));
+        regSnap.docs.forEach((d) => {
+          const data = d.data();
+          if (d.id.startsWith("hub_poll_") || data.customAnswers?.isHubBallot) {
+            const ca = data.customAnswers || {};
+            const optId = ca.optionId;
+            const ballotRecord: ListingResponseRecord = {
+              id: d.id,
+              listingId: ca.listingId || data.eventId,
+              listingSlug: ca.listingSlug || "",
+              listingType: "poll",
+              listingTitle: ca.listingTitle || data.eventTitle,
+              userId: ca.voterId,
+              userName: ca.voterName || data.leaderName || "Campus Student",
+              userEmail: ca.voterEmail || data.email,
+              userDepartment: ca.voterDepartment || data.department,
+              userYear: ca.voterYear || data.year,
+              btId: ca.voterBtId || data.btId,
+              isAnonymous: Boolean(ca.isAnonymous),
+              selectedOptionIds: optId ? [optId] : [],
+              answers: optId ? { [optId]: ca.optionText || optId } : {},
+              createdAt: data.registeredAt || (typeof data.createdAt?.toDate === "function" ? data.createdAt.toDate().toISOString() : new Date().toISOString()),
+              status: "approved",
+            };
+            map.set(d.id, ballotRecord);
+          }
+        });
+      } catch (e) {
+        console.warn("Notice checking registrations for poll ballots:", e);
       }
-      return merged;
     }
+
+    const merged = Array.from(map.values()).sort(
+      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    );
+
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(RESPONSES_STORAGE_KEY, JSON.stringify(merged));
+        window.dispatchEvent(
+          new CustomEvent("src_listing_responses_updated", { detail: merged })
+        );
+      } catch (e) {
+        console.warn("Failed to persist synced listing responses:", e);
+      }
+    }
+    return merged;
   } catch (err) {
     console.warn("Error syncing listing responses from Firestore:", err);
   }

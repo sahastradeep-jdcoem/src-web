@@ -147,7 +147,9 @@ export default function AdminRegistrationsPage() {
   }, []);
 
   const formatRecords = (records: any[]): RegistrationRecord[] => {
-    return records.map((r: any) => {
+    return records
+      .filter((r: any) => !r.id?.startsWith("hub_poll_") && !r.customAnswers?.isHubBallot)
+      .map((r: any) => {
       // Determine the best ISO time string from r.paidAt, r.registeredAt, or r.createdAt
       let fullIsoTime = "";
       if (typeof r.paidAt === "string" && r.paidAt.includes("T")) {

@@ -54,16 +54,23 @@ export default function StudentHubPage() {
       } catch {}
     }
 
+    // 2. Load user-specific voting ledger
     if (user?.uid) {
-      setVotedPolls(getStoredVotedPolls(user.uid));
-      // Reconcile user's votes from remote Firestore ballot records for cross-device consistency
+      const initialMap = {
+        ...getStoredVotedPolls(user.uid),
+        ...((user as any)?.votedPolls || {}),
+      };
+      setVotedPolls(initialMap);
+
       syncListingResponsesFromFirestore().then((res) => {
         if (res && Array.isArray(res)) {
           const userVotes = res.filter(
             (r) => r.listingType === "poll" && (r.userId === user.uid || (r.userEmail && r.userEmail === user.email))
           );
           if (userVotes.length > 0) {
-            const map: Record<string, string> = { ...getStoredVotedPolls(user.uid) };
+            const map: Record<string, string> = {
+              ...initialMap,
+            };
             userVotes.forEach((r) => {
               if (r.listingId && r.selectedOptionIds?.[0]) {
                 map[r.listingId] = r.selectedOptionIds[0];
@@ -313,11 +320,13 @@ export default function StudentHubPage() {
                     <div className="space-y-3 pt-2 border-t border-slate-100">
                       <div className="space-y-2">
                         {item.pollConfig.options.map((opt) => {
-                          const userVotedOptionId = user ? votedPolls[item.id] : null;
+                          const userVotedOptionId = user ? (votedPolls[item.id] || (user as any).votedPolls?.[item.id]) : null;
                           const isOptionValid = Boolean(item.pollConfig?.options.some((o) => o.id === userVotedOptionId));
-                          const hasVoted = Boolean(user) && Boolean(userVotedOptionId) && isOptionValid && totalPollVotes > 0;
+                          const hasVoted = Boolean(user) && Boolean(userVotedOptionId) && isOptionValid;
                           const isSelectedByUser = hasVoted && userVotedOptionId === opt.id;
-                          const pct = totalPollVotes > 0 ? Math.round((opt.votes / totalPollVotes) * 100) : 0;
+                          const effectiveTotal = Math.max(totalPollVotes, hasVoted ? 1 : 0);
+                          const effectiveOptionVotes = opt.votes + (isSelectedByUser && opt.votes === 0 ? 1 : 0);
+                          const pct = effectiveTotal > 0 ? Math.round((effectiveOptionVotes / effectiveTotal) * 100) : 0;
 
                           return (
                             <button
@@ -394,7 +403,7 @@ export default function StudentHubPage() {
                         <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
                           {!user
                             ? "🔒 Sign in to vote"
-                            : votedPolls[item.id] && item.pollConfig?.options.some((o) => o.id === votedPolls[item.id]) && totalPollVotes > 0 
+                            : (votedPolls[item.id] || (user as any).votedPolls?.[item.id]) && item.pollConfig?.options.some((o) => o.id === (votedPolls[item.id] || (user as any).votedPolls?.[item.id]))
                             ? "✓ Your vote recorded" 
                             : "Select an option to vote"}
                         </span>

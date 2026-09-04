@@ -228,8 +228,32 @@ export function ListingResponsesView({
   // DEDICATED POLL ANALYTICS & BALLOT DISTRIBUTION STUDIO (NO GOOGLE FORM TABS)
   // --------------------------------------------------------------------------
   if (listing.type === "poll") {
-    const totalVotes = listing.pollConfig?.totalVotes || 0;
-    const sortedOptions = [...(listing.pollConfig?.options || [])].sort((a, b) => b.votes - a.votes);
+    const pollResponses = responses.filter((r) => r.listingId === listing.id || r.listingSlug === listing.slug);
+    const optionCounts: Record<string, number> = {};
+    pollResponses.forEach((r) => {
+      const ids: string[] = r.selectedOptionIds && r.selectedOptionIds.length > 0 
+        ? r.selectedOptionIds 
+        : ((r as any).selectedOptionId ? [(r as any).selectedOptionId] : []);
+      if (ids.length === 0 && (r as any).customAnswers?.optionId) {
+        ids.push((r as any).customAnswers.optionId);
+      }
+      ids.forEach((optId) => {
+        optionCounts[optId] = (optionCounts[optId] || 0) + 1;
+      });
+    });
+
+    const computedOptions = (listing.pollConfig?.options || []).map((opt) => ({
+      ...opt,
+      votes: Math.max(opt.votes || 0, optionCounts[opt.id] || 0),
+    }));
+
+    const totalVotes = Math.max(
+      listing.pollConfig?.totalVotes || 0,
+      pollResponses.length,
+      computedOptions.reduce((s, o) => s + (o.votes || 0), 0)
+    );
+
+    const sortedOptions = [...computedOptions].sort((a, b) => b.votes - a.votes);
     const leadingOption = sortedOptions[0] || null;
     const leadingPct = totalVotes > 0 && leadingOption ? Math.round((leadingOption.votes / totalVotes) * 100) : 0;
 
@@ -590,7 +614,9 @@ export function ListingResponsesView({
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
                       {pollVoters.map((r, idx) => {
-                        const votedAnswer = Object.values(r.answers || {})[0] || (r.selectedOptionIds && r.selectedOptionIds[0]) || "Recorded Vote";
+                        const optId = (r.selectedOptionIds && r.selectedOptionIds[0]) || (r as any).selectedOptionId || (r as any).customAnswers?.optionId;
+                        const matchingOpt = computedOptions.find((o) => o.id === optId);
+                        const votedAnswer = matchingOpt ? matchingOpt.text : (Object.values(r.answers || {})[0] || optId || "Recorded Vote");
                         return (
                           <tr key={r.id} className="hover:bg-slate-50/80 transition-colors">
                             <td className="py-3.5 px-4 font-mono font-bold text-slate-400 text-[11px]">

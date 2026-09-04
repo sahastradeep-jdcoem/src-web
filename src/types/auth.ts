@@ -35,6 +35,9 @@ export interface UserProfile {
   degree?: string; // e.g. "B.Tech - Bachelor of Technology", "MBA", "BCA", etc.
   customBranch?: string; // e.g. "Computer Science & Design", "B.Sc Physics"
 
+  // Student Voting & Engagement Ledger
+  votedPolls?: Record<string, string>;
+
   // Account Lifecycle & Deletion
   isDeleted?: boolean;
   deletedAt?: string;
