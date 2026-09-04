@@ -135,13 +135,11 @@ export function deleteStoredEvent(idOrSlug: string): EventItem[] {
   return updated;
 }
 
-import { defaultPrarambhEvent } from "@/data/events";
-
 /**
- * Reset to default PRARAMBH fest
+ * Reset events storage to empty
  */
 export function resetStoredEvents(): EventItem[] {
-  const defaults = [defaultPrarambhEvent];
+  const defaults: EventItem[] = [];
   saveStoredEvents(defaults);
   return defaults;
 }

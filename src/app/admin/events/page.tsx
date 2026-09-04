@@ -17,7 +17,6 @@ import {
   Clock,
   CheckCircle2,
   AlertTriangle,
-  RotateCcw,
   Inbox,
   Building2,
   Users,
@@ -43,7 +42,6 @@ import { cn } from "@/lib/utils";
 import { 
   getStoredEvents, 
   saveStoredEvents, 
-  resetStoredEvents,
   syncEventsFromFirestore,
   subscribeToEvents
 } from "@/lib/eventsStore";
@@ -363,12 +361,6 @@ export default function AdminEventsPage() {
     }
   };
 
-  const handleResetDefaults = () => {
-    const restored = resetStoredEvents();
-    setEventsList(restored);
-    showNotice("Events reset to default PRARAMBH fest.");
-  };
-
   const showNotice = (msg: string) => {
     setNotice(msg);
     setTimeout(() => setNotice(null), 3500);
@@ -406,15 +398,6 @@ export default function AdminEventsPage() {
           >
             <RefreshCw className={`w-3.5 h-3.5 text-[#17458F] transition-transform duration-500 ${isSyncing ? "animate-spin" : ""}`} />
             <span>{isSyncing ? "Syncing..." : "Sync Live Cloud"}</span>
-          </button>
-
-          <button
-            onClick={handleResetDefaults}
-            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
-            title="Reset to default PRARAMBH event"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Restore PRARAMBH</span>
           </button>
 
           <Button
@@ -489,14 +472,6 @@ export default function AdminEventsPage() {
                   <Plus className="w-4 h-4" />
                   <span>Create New Event</span>
                 </Button>
-                {eventsList.length === 0 && (
-                  <button
-                    onClick={handleResetDefaults}
-                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all"
-                  >
-                    Restore PRARAMBH
-                  </button>
-                )}
               </div>
             </div>
           ) : (
@@ -635,7 +610,7 @@ export default function AdminEventsPage() {
                 <p className="font-bold">This action will immediately delete:</p>
                 <p className="font-semibold text-rose-800 text-sm">{eventToDelete.name}</p>
                 <p className="text-slate-600 text-[11px]">
-                  The event page and listings across the portal will be removed. You can recreate or restore PRARAMBH anytime.
+                  The event page and listings across the portal will be removed. All associated registrations will be cleaned up.
                 </p>
               </div>
             </div>
