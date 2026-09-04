@@ -2,7 +2,7 @@ import React from "react";
 import { cn } from "@/lib/utils";
 
 interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
-  variant?: "orange" | "navy" | "slate" | "outline" | "success" | "warning";
+  variant?: "orange" | "navy" | "slate" | "outline" | "success" | "warning" | "rose";
   size?: "sm" | "md";
 }
 
@@ -20,6 +20,7 @@ export function Badge({
     outline: "bg-transparent text-slate-700 border-slate-300 font-medium",
     success: "bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold",
     warning: "bg-amber-50 text-amber-800 border-amber-300 font-semibold",
+    rose: "bg-rose-50 text-rose-700 border-rose-300 font-bold",
   };
 
   const sizeStyles = {

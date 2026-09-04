@@ -34,6 +34,11 @@ export interface UserProfile {
   city?: string; // e.g. "Nagpur", "Pune", "Mumbai"
   degree?: string; // e.g. "B.Tech - Bachelor of Technology", "MBA", "BCA", etc.
   customBranch?: string; // e.g. "Computer Science & Design", "B.Sc Physics"
+
+  // Account Lifecycle & Deletion
+  isDeleted?: boolean;
+  deletedAt?: string;
+  status?: "active" | "deleted" | "pending";
 }
 
 export type AuthUser = UserProfile;
@@ -48,9 +53,12 @@ export interface AuthContextType {
   isProfileModalOpen: boolean;
   openProfileModal: () => void;
   closeProfileModal: () => void;
-  loginWithGoogle: () => Promise<void>;
+  pendingUserType: "JDCOEM_STUDENT" | "FACULTY" | "EXTERNAL_STUDENT" | null;
+  setPendingUserType: (type: "JDCOEM_STUDENT" | "FACULTY" | "EXTERNAL_STUDENT" | null) => void;
+  loginWithGoogle: (selectedUserType?: "JDCOEM_STUDENT" | "FACULTY" | "EXTERNAL_STUDENT") => Promise<void>;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
   registerWithEmail: (email: string, pass: string, name: string) => Promise<void>;
   updateUserProfile: (data: Partial<UserProfile>) => Promise<void>;
+  deleteAccount: () => Promise<void>;
   logout: () => Promise<void>;
 }

@@ -19,7 +19,40 @@ import {
   saveUserProfileToFirestore 
 } from "@/lib/firebase/firestore";
 import { UserProfile, AuthUser, AuthContextType } from "@/types/auth";
-import { saveRegisteredUser, getStoredUsers, resolveDesignationByBtId } from "@/lib/usersStore";
+import { 
+  saveRegisteredUser, 
+  getStoredUsers, 
+  resolveDesignationByBtId, 
+  markUserAsDeleted 
+} from "@/lib/usersStore";
+
+/**
+ * Validates that all required fields for a given role are completed
+ */
+export function determineProfileCompletion(
+  profile: Partial<UserProfile> | null, 
+  userType?: string, 
+  btId?: string
+): boolean {
+  if (!profile) return false;
+  if (!profile.profileCompleted) return false;
+  if (!profile.firstName?.trim() || !profile.lastName?.trim() || !profile.phone?.trim()) return false;
+
+  const resolvedType = userType || profile.userType;
+  if (resolvedType === "FACULTY") {
+    return Boolean(profile.facultyDesignation && profile.facultyDepartment);
+  }
+  if (resolvedType === "EXTERNAL_STUDENT") {
+    return Boolean(
+      profile.collegeName?.trim() && 
+      profile.city?.trim() && 
+      (profile.degree?.trim() || profile.customBranch?.trim())
+    );
+  }
+  // Default JDCOEM_STUDENT
+  const cleanBt = (btId || profile.btId || "").trim();
+  return Boolean(cleanBt.length >= 3 && profile.department && profile.year);
+}
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -28,23 +61,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [pendingUserType, setPendingUserType] = useState<"JDCOEM_STUDENT" | "FACULTY" | "EXTERNAL_STUDENT" | null>(null);
 
   useEffect(() => {
-    // Check initial cached user in localStorage
+    // Check initial cached user in localStorage & pending user type in sessionStorage
     try {
+      const pending = sessionStorage.getItem("src_pending_user_type") as any;
+      if (pending) setPendingUserType(pending);
+
       const cached = localStorage.getItem("src_auth_user");
       if (cached) {
         const parsed = JSON.parse(cached);
-        const cleanBt = parsed.btId ? parsed.btId.trim().toUpperCase() : "";
-        const desig = cleanBt ? resolveDesignationByBtId(cleanBt) : null;
-        if (desig) {
-          parsed.designationBadge = desig.designationBadge;
-          parsed.isCouncilOfficer = true;
-        } else if (cleanBt) {
-          parsed.designationBadge = undefined;
-          parsed.isCouncilOfficer = false;
+        if (parsed.isDeleted) {
+          localStorage.removeItem("src_auth_user");
+          setUser(null);
+        } else {
+          const cleanBt = parsed.btId ? parsed.btId.trim().toUpperCase() : "";
+          const desig = cleanBt ? resolveDesignationByBtId(cleanBt) : null;
+          if (desig) {
+            parsed.designationBadge = desig.designationBadge;
+            parsed.isCouncilOfficer = true;
+          } else if (cleanBt) {
+            parsed.designationBadge = undefined;
+            parsed.isCouncilOfficer = false;
+          }
+          const isComplete = determineProfileCompletion(parsed, parsed.userType, cleanBt);
+          parsed.profileCompleted = isComplete;
+          setUser(parsed);
+          if (!isComplete) {
+            setIsProfileModalOpen(true);
+          }
         }
-        setUser(parsed);
       }
     } catch (e) {
       console.warn("Auth cache read error", e);
@@ -53,8 +100,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Subscribe to Auth listener
     const unsubscribe = subscribeToAuth(async (fbUser) => {
       if (fbUser && fbUser.email) {
-        const isAdminUser = await checkIsAdminInFirestore(fbUser.email);
         const storedProfile = await getUserProfileFromFirestore(fbUser.uid);
+
+        if (storedProfile?.isDeleted === true) {
+          // Account was permanently deleted, revoke active session
+          try {
+            await firebaseSignOut();
+          } catch {}
+          setUser(null);
+          try {
+            localStorage.removeItem("src_auth_user");
+            sessionStorage.removeItem("src_pending_user_type");
+          } catch {}
+          setIsLoading(false);
+          return;
+        }
+
+        const isAdminUser = await checkIsAdminInFirestore(fbUser.email);
 
         let localProfile: Partial<UserProfile> = {};
         try {
@@ -79,17 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const cleanBt = resolvedBtId ? resolvedBtId.trim().toUpperCase() : "";
 
         // Dynamic council/club roster resolution is authoritative for users with a BT ID.
-        // If a student's BT ID matches an active council or club leadership role, that role takes
-        // precedence over any stale designationBadge saved in Firestore.
-        // If a student's BT ID does NOT match any roster, any stale council badge is cleared.
         const designationInfo = cleanBt ? resolveDesignationByBtId(cleanBt) : null;
-
-        const isCompleted = Boolean(
-          storedProfile?.profileCompleted || 
-          localProfile?.profileCompleted || 
-          registeredUser?.profileCompleted || 
-          (cleanBt && cleanBt.length > 0)
-        );
 
         const assignedRole = isAdminUser 
           ? "COUNCIL_ADMIN" 
@@ -106,9 +158,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const baseObj = { ...registeredUser, ...localProfile, ...storedProfile };
 
-        const resolvedUserType = storedProfile?.userType || localProfile?.userType || registeredUser?.userType || 
+        const activePending = pendingUserType || (typeof window !== "undefined" ? (sessionStorage.getItem("src_pending_user_type") as any) : null);
+        const resolvedUserType = activePending || storedProfile?.userType || localProfile?.userType || registeredUser?.userType || 
           (storedProfile?.role === "FACULTY" || localProfile?.role === "FACULTY" ? "FACULTY" : 
           (storedProfile?.collegeName || localProfile?.collegeName || !fbUser.isCollegeStudent) ? "EXTERNAL_STUDENT" : "JDCOEM_STUDENT");
+
+        const isCompleted = determineProfileCompletion(
+          baseObj,
+          resolvedUserType,
+          cleanBt
+        );
 
         const merged: AuthUser = {
           ...baseObj,
@@ -140,19 +199,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
 
         setUser(merged);
-        // CRITICAL: Only persist to local cache. Do NOT call saveRegisteredUser(merged) here,
-        // because it writes back to Firestore with potentially stale designation data from
-        // localStorage, creating a poisoning feedback loop across devices.
-        // Firestore writes happen only through explicit user actions (profile update, admin changes).
         try {
           localStorage.setItem("src_auth_user", JSON.stringify(merged));
         } catch {}
         window.dispatchEvent(new CustomEvent("src_users_updated"));
 
-        const isExternalStudent = merged.userType === "EXTERNAL_STUDENT" || merged.isCollegeStudent === false;
-        if (!isCompleted && !resolvedBtId && !isExternalStudent) {
-          setIsProfileModalOpen(true);
-        } else if (!isCompleted) {
+        // Persistent mandatory profile gate: if profile is not completed, immediately prompt
+        if (!isCompleted) {
           setIsProfileModalOpen(true);
         } else {
           setIsProfileModalOpen(false);
@@ -164,13 +217,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  const loginWithGoogle = async () => {
+  const loginWithGoogle = async (selectedUserType?: "JDCOEM_STUDENT" | "FACULTY" | "EXTERNAL_STUDENT") => {
     setIsLoading(true);
     try {
+      if (selectedUserType) {
+        setPendingUserType(selectedUserType);
+        try {
+          sessionStorage.setItem("src_pending_user_type", selectedUserType);
+        } catch {}
+      }
       const fbUser = await firebaseGoogleSignIn();
       if (fbUser) {
-        const isAdminUser = await checkIsAdminInFirestore(fbUser.email || "");
         const storedProfile = await getUserProfileFromFirestore(fbUser.uid);
+        if (storedProfile?.isDeleted || storedProfile?.status === "deleted") {
+          await firebaseSignOut();
+          setUser(null);
+          try {
+            localStorage.removeItem("src_auth_user");
+            sessionStorage.removeItem("src_pending_user_type");
+          } catch {}
+          throw new Error("This account has been permanently deleted. Please contact administration or register with a new account.");
+        }
+
+        const isAdminUser = await checkIsAdminInFirestore(fbUser.email || "");
 
         let localProfile: Partial<UserProfile> = {};
         try {
@@ -197,13 +266,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Dynamic council/club roster resolution is authoritative for users with a BT ID.
         const designationInfo = cleanBt ? resolveDesignationByBtId(cleanBt) : null;
 
-        const isCompleted = Boolean(
-          storedProfile?.profileCompleted || 
-          localProfile?.profileCompleted || 
-          registeredUser?.profileCompleted || 
-          (cleanBt && cleanBt.length > 0)
-        );
-
         const assignedRole = isAdminUser 
           ? "COUNCIL_ADMIN" 
           : (storedProfile?.role || localProfile?.role || registeredUser?.role || "STUDENT");
@@ -217,7 +279,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ? true 
           : (cleanBt ? false : Boolean(storedProfile?.isCouncilOfficer || localProfile?.isCouncilOfficer || registeredUser?.isCouncilOfficer));
 
-        const baseObj = { ...storedProfile, ...localProfile, ...registeredUser };
+        const baseObj = { ...registeredUser, ...localProfile, ...storedProfile };
+
+        const activePending = selectedUserType || pendingUserType || (typeof window !== "undefined" ? (sessionStorage.getItem("src_pending_user_type") as any) : null);
+        const resolvedUserType = activePending || storedProfile?.userType || localProfile?.userType || registeredUser?.userType || 
+          (storedProfile?.role === "FACULTY" || localProfile?.role === "FACULTY" ? "FACULTY" : 
+          (storedProfile?.collegeName || localProfile?.collegeName || !fbUser.isCollegeStudent) ? "EXTERNAL_STUDENT" : "JDCOEM_STUDENT");
+
+        const isCompleted = determineProfileCompletion(baseObj, resolvedUserType, cleanBt);
 
         const merged: AuthUser = {
           ...baseObj,
@@ -226,13 +295,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           displayName: storedProfile?.displayName || localProfile?.displayName || registeredUser?.displayName || fbUser.displayName || "Google Student",
           photoURL: fbUser.photoURL || storedProfile?.photoURL || localProfile?.photoURL || null,
           role: assignedRole,
-          userType: (storedProfile?.userType || localProfile?.userType || registeredUser?.userType || (fbUser.isCollegeStudent ? "JDCOEM_STUDENT" : "EXTERNAL_STUDENT")) as any,
-          isCollegeStudent: fbUser.isCollegeStudent,
+          userType: resolvedUserType as any,
+          isCollegeStudent: resolvedUserType === "EXTERNAL_STUDENT" ? false : fbUser.isCollegeStudent,
           firstName: storedProfile?.firstName || localProfile?.firstName || registeredUser?.firstName || (fbUser.displayName ? fbUser.displayName.split(" ")[0] : ""),
           lastName: storedProfile?.lastName || localProfile?.lastName || registeredUser?.lastName || (fbUser.displayName ? fbUser.displayName.split(" ").slice(1).join(" ") : ""),
           btId: cleanBt,
-          department: storedProfile?.department || localProfile?.department || registeredUser?.department || "Computer Science and Engineering",
-          year: storedProfile?.year || localProfile?.year || registeredUser?.year || "3rd Year",
+          department: storedProfile?.department || localProfile?.department || registeredUser?.department || (resolvedUserType === "JDCOEM_STUDENT" ? "Computer Science and Engineering" : ""),
+          year: storedProfile?.year || localProfile?.year || registeredUser?.year || (resolvedUserType === "JDCOEM_STUDENT" ? "3rd Year" : ""),
           phone: storedProfile?.phone || localProfile?.phone || registeredUser?.phone || "",
           collegeName: storedProfile?.collegeName || localProfile?.collegeName || registeredUser?.collegeName || "",
           city: storedProfile?.city || localProfile?.city || registeredUser?.city || "",
@@ -256,10 +325,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         window.dispatchEvent(new CustomEvent("src_users_updated"));
         setIsAuthModalOpen(false);
 
-        const isExternalStudent = merged.userType === "EXTERNAL_STUDENT" || merged.isCollegeStudent === false;
-        if (!isCompleted && !cleanBt && !isExternalStudent) {
-          setIsProfileModalOpen(true);
-        } else if (!isCompleted) {
+        // Persistent mandatory profile gate: if profile is not completed, immediately prompt
+        if (!isCompleted) {
           setIsProfileModalOpen(true);
         } else {
           setIsProfileModalOpen(false);
@@ -341,7 +408,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     setUser(updatedUser);
-    localStorage.setItem("src_auth_user", JSON.stringify(updatedUser));
+    setPendingUserType(null);
+    try {
+      localStorage.setItem("src_auth_user", JSON.stringify(updatedUser));
+      sessionStorage.removeItem("src_pending_user_type");
+    } catch {}
     saveRegisteredUser(updatedUser);
     setIsProfileModalOpen(false);
 
@@ -353,16 +424,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const deleteAccount = async () => {
+    if (!user) return;
+    setIsLoading(true);
+    try {
+      const uid = user.uid;
+      markUserAsDeleted(uid);
+      try {
+        localStorage.removeItem("src_auth_user");
+        sessionStorage.removeItem("src_pending_user_type");
+      } catch {}
+      await firebaseSignOut();
+      setUser(null);
+      setIsProfileModalOpen(false);
+      setIsAuthModalOpen(false);
+      window.dispatchEvent(new CustomEvent("src_users_updated"));
+    } catch (err) {
+      console.error("Failed to delete account:", err);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const logout = async () => {
     setIsLoading(true);
     try {
       await firebaseSignOut();
       setUser(null);
-      localStorage.removeItem("src_auth_user");
+      setPendingUserType(null);
+      try {
+        localStorage.removeItem("src_auth_user");
+        sessionStorage.removeItem("src_pending_user_type");
+      } catch {}
     } catch (error) {
       console.error("Sign out notice", error);
       setUser(null);
-      localStorage.removeItem("src_auth_user");
+      setPendingUserType(null);
+      try {
+        localStorage.removeItem("src_auth_user");
+        sessionStorage.removeItem("src_pending_user_type");
+      } catch {}
     } finally {
       setIsLoading(false);
     }
@@ -380,10 +482,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isProfileModalOpen,
         openProfileModal: () => setIsProfileModalOpen(true),
         closeProfileModal: () => setIsProfileModalOpen(false),
+        pendingUserType,
+        setPendingUserType,
         loginWithGoogle,
         loginWithEmail,
         registerWithEmail,
         updateUserProfile,
+        deleteAccount,
         logout,
       }}
     >

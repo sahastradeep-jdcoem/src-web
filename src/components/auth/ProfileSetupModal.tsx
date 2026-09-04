@@ -21,9 +21,10 @@ import {
   School,
   MapPin,
   Briefcase,
-  Clock,
-  Globe,
-  HelpCircle
+  Clock, 
+  Globe, 
+  HelpCircle,
+  Trash2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -69,7 +70,15 @@ export const FACULTY_DESIGNATIONS = [
 ];
 
 export function ProfileSetupModal() {
-  const { user, isProfileModalOpen, closeProfileModal, updateUserProfile } = useAuth();
+  const { 
+    user, 
+    isProfileModalOpen, 
+    closeProfileModal, 
+    updateUserProfile, 
+    deleteAccount, 
+    logout, 
+    pendingUserType 
+  } = useAuth();
   
   // Category Switcher: JDCOEM_STUDENT | FACULTY | EXTERNAL_STUDENT
   const [accountType, setAccountType] = useState<"JDCOEM_STUDENT" | "FACULTY" | "EXTERNAL_STUDENT">("JDCOEM_STUDENT");
@@ -101,6 +110,8 @@ export function ProfileSetupModal() {
   const [detectedDesignation, setDetectedDesignation] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showFacultyPendingNotice, setShowFacultyPendingNotice] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     setDepartmentsList(getStoredDepartments());
@@ -128,8 +139,10 @@ export function ProfileSetupModal() {
         setLastName(parts.slice(1).join(" ") || "");
       }
 
-      // Infer account type
-      if (user.role === "FACULTY" || user.userType === "FACULTY") {
+      // Infer account type from pending selection or existing user attributes
+      if (pendingUserType) {
+        setAccountType(pendingUserType);
+      } else if (user.role === "FACULTY" || user.userType === "FACULTY") {
         setAccountType("FACULTY");
       } else if (user.userType === "EXTERNAL_STUDENT" || user.isCollegeStudent === false) {
         setAccountType("EXTERNAL_STUDENT");
@@ -336,12 +349,27 @@ export function ProfileSetupModal() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    try {
+      await deleteAccount();
+      setShowDeleteConfirm(false);
+    } catch (err: any) {
+      setError(err?.message || "Failed to delete account. Please try again.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <Modal
       isOpen={isProfileModalOpen}
-      onClose={closeProfileModal}
+      onClose={user?.profileCompleted ? closeProfileModal : () => {}}
       maxWidth="md"
       title=""
+      closeOnBackdropClick={Boolean(user?.profileCompleted)}
+      closeOnEscape={Boolean(user?.profileCompleted)}
+      showCloseButton={Boolean(user?.profileCompleted)}
     >
       <div className="space-y-5 text-[#0F172A] py-1">
         
@@ -415,8 +443,52 @@ export function ProfileSetupModal() {
           </button>
         </div>
 
-        {/* Post-Faculty Submission Notice Modal Dialog */}
-        {showFacultyPendingNotice ? (
+        {/* Account Deletion Confirmation Dialog */}
+        {showDeleteConfirm ? (
+          <div className="p-5 rounded-3xl bg-rose-50/90 border-2 border-rose-200 space-y-4 animate-in fade-in">
+            <div className="h-12 w-12 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center mx-auto">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <div className="space-y-1 text-center">
+              <h4 className="font-heading font-extrabold text-lg text-rose-950">
+                Permanently Delete Account?
+              </h4>
+              <p className="text-xs text-rose-700 font-medium leading-relaxed max-w-sm mx-auto">
+                Are you sure you want to permanently delete your account (<strong>{user?.email}</strong>)? This action cannot be reversed.
+              </p>
+            </div>
+            <div className="p-3.5 rounded-xl bg-white border border-rose-200 text-[11px] text-rose-900 space-y-1.5 font-medium text-left">
+              <div className="font-bold flex items-center gap-1.5 text-rose-800">
+                <ShieldCheck className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>What happens when you delete your account:</span>
+              </div>
+              <ul className="list-disc pl-4 text-slate-600 space-y-0.5 pt-0.5">
+                <li>All your verified festival passes and ticket QR codes will be deactivated.</li>
+                <li>In the SRC admin console, your account will be displayed with a prominent <strong>DELETED ACCOUNT</strong> status.</li>
+                <li>You will be signed out immediately across all devices.</li>
+              </ul>
+            </div>
+            <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setShowDeleteConfirm(false)}
+                className="w-full sm:w-1/2 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer text-center"
+              >
+                Cancel &amp; Keep Account
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleDeleteAccount}
+                className="w-full sm:w-1/2 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isDeleting ? "Deleting..." : "Permanently Delete"}</span>
+              </button>
+            </div>
+          </div>
+        ) : showFacultyPendingNotice ? (
           <div className="p-6 rounded-3xl bg-amber-50/80 border border-amber-200 text-center space-y-4 animate-in fade-in">
             <div className="h-12 w-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto">
               <Clock className="w-6 h-6 animate-pulse" />
@@ -786,15 +858,41 @@ export function ProfileSetupModal() {
                 </Button>
               </div>
 
-              {user?.profileCompleted && (
-                <div className="text-center pt-1">
+              {!user?.profileCompleted ? (
+                <div className="pt-3 text-center border-t border-slate-100 space-y-1.5">
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    Profile details must be completed to access the portal and event passes.
+                  </p>
                   <button
                     type="button"
-                    onClick={closeProfileModal}
-                    className="text-xs text-slate-500 hover:text-slate-700 font-medium cursor-pointer"
+                    onClick={async () => {
+                      await logout();
+                      closeProfileModal();
+                    }}
+                    className="text-xs text-rose-600 hover:text-rose-700 font-bold hover:underline cursor-pointer inline-flex items-center gap-1"
                   >
-                    Close without changes
+                    <span>Sign Out &amp; Exit</span>
                   </button>
+                </div>
+              ) : (
+                <div className="space-y-3 pt-3 border-t border-slate-100">
+                  <div className="flex items-center justify-between text-xs">
+                    <button
+                      type="button"
+                      onClick={closeProfileModal}
+                      className="text-slate-500 hover:text-slate-700 font-medium cursor-pointer"
+                    >
+                      Close without changes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="text-rose-600 hover:text-rose-700 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete Account Permanently</span>
+                    </button>
+                  </div>
                 </div>
               )}
 

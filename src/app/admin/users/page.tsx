@@ -31,13 +31,14 @@ import {
   getStoredUsers, 
   saveRegisteredUser, 
   deleteRegisteredUser, 
+  purgeRegisteredUser,
   changeUserRole, 
   approveFacultyUser,
   rejectFacultyUser,
   mergeRemoteUsers,
   syncUsersFromFirestore,
   reconcileAllUserDesignations,
-  resolveDesignationByBtId,
+  resolveDesignationByBtId, 
   RegisteredUserRecord 
 } from "@/lib/usersStore";
 import { subscribeToUsersFromFirestore } from "@/lib/firebase/firestore";
@@ -56,7 +57,7 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<RegisteredUserRecord[]>([]);
   const [departments, setDepartments] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<"All" | "PENDING_FACULTY" | "VERIFIED_FACULTY" | "JDCOEM_STUDENTS" | "EXTERNAL_STUDENTS" | "COUNCIL_ADMIN">("All");
+  const [categoryFilter, setCategoryFilter] = useState<"All" | "PENDING_FACULTY" | "VERIFIED_FACULTY" | "JDCOEM_STUDENTS" | "EXTERNAL_STUDENTS" | "COUNCIL_ADMIN" | "DELETED_ACCOUNTS">("All");
   const [deptFilter, setDeptFilter] = useState("All");
   const [selectedUser, setSelectedUser] = useState<RegisteredUserRecord | null>(null);
   const [userToEdit, setUserToEdit] = useState<RegisteredUserRecord | null>(null);
@@ -271,9 +272,14 @@ export default function AdminUsersPage() {
   const confirmDelete = () => {
     if (!userToDelete) return;
     const name = userToDelete.displayName;
-    deleteRegisteredUser(userToDelete.uid);
+    if (userToDelete.isDeleted || userToDelete.status === "deleted") {
+      purgeRegisteredUser(userToDelete.uid);
+      showNotice(`Permanently purged record for ${name}.`);
+    } else {
+      deleteRegisteredUser(userToDelete.uid);
+      showNotice(`Marked account as deleted for ${name}.`);
+    }
     setUserToDelete(null);
-    showNotice(`Removed user record for ${name}.`);
   };
 
   const showNotice = (msg: string) => {
@@ -283,30 +289,34 @@ export default function AdminUsersPage() {
 
   const pendingFaculty = useMemo(() => {
     return users.filter(
-      (u) => (u.role === "FACULTY" || u.userType === "FACULTY") && u.facultyApprovalStatus === "pending"
+      (u) => !u.isDeleted && u.status !== "deleted" && (u.role === "FACULTY" || u.userType === "FACULTY") && u.facultyApprovalStatus === "pending"
     );
   }, [users]);
 
   const verifiedFaculty = useMemo(() => {
     return users.filter(
-      (u) => (u.role === "FACULTY" || u.userType === "FACULTY") && u.facultyApprovalStatus === "approved"
+      (u) => !u.isDeleted && u.status !== "deleted" && (u.role === "FACULTY" || u.userType === "FACULTY") && u.facultyApprovalStatus === "approved"
     );
   }, [users]);
 
   const jdcoemStudents = useMemo(() => {
     return users.filter(
-      (u) => (u.userType === "JDCOEM_STUDENT" || (u.role === "STUDENT" && !u.collegeName && u.btId)) && u.role !== "FACULTY" && u.role !== "COUNCIL_ADMIN"
+      (u) => !u.isDeleted && u.status !== "deleted" && (u.userType === "JDCOEM_STUDENT" || (u.role === "STUDENT" && !u.collegeName && u.btId)) && u.role !== "FACULTY" && u.role !== "COUNCIL_ADMIN"
     );
   }, [users]);
 
   const externalStudents = useMemo(() => {
     return users.filter(
-      (u) => u.userType === "EXTERNAL_STUDENT" || u.isCollegeStudent === false || Boolean(u.collegeName)
+      (u) => !u.isDeleted && u.status !== "deleted" && (u.userType === "EXTERNAL_STUDENT" || u.isCollegeStudent === false || Boolean(u.collegeName))
     );
   }, [users]);
 
   const adminUsers = useMemo(() => {
-    return users.filter((u) => u.role === "COUNCIL_ADMIN");
+    return users.filter((u) => !u.isDeleted && u.status !== "deleted" && u.role === "COUNCIL_ADMIN");
+  }, [users]);
+
+  const deletedUsers = useMemo(() => {
+    return users.filter((u) => u.isDeleted || u.status === "deleted");
   }, [users]);
 
   const filteredUsers = useMemo(() => {
@@ -328,16 +338,18 @@ export default function AdminUsersPage() {
         city.includes(query);
 
       let matchesCategory = true;
-      if (categoryFilter === "PENDING_FACULTY") {
-        matchesCategory = (u.role === "FACULTY" || u.userType === "FACULTY") && u.facultyApprovalStatus === "pending";
+      if (categoryFilter === "DELETED_ACCOUNTS") {
+        matchesCategory = Boolean(u.isDeleted || u.status === "deleted");
+      } else if (categoryFilter === "PENDING_FACULTY") {
+        matchesCategory = !u.isDeleted && u.status !== "deleted" && (u.role === "FACULTY" || u.userType === "FACULTY") && u.facultyApprovalStatus === "pending";
       } else if (categoryFilter === "VERIFIED_FACULTY") {
-        matchesCategory = (u.role === "FACULTY" || u.userType === "FACULTY") && u.facultyApprovalStatus === "approved";
+        matchesCategory = !u.isDeleted && u.status !== "deleted" && (u.role === "FACULTY" || u.userType === "FACULTY") && u.facultyApprovalStatus === "approved";
       } else if (categoryFilter === "JDCOEM_STUDENTS") {
-        matchesCategory = (u.userType === "JDCOEM_STUDENT" || (u.role === "STUDENT" && !u.collegeName)) && u.role !== "FACULTY";
+        matchesCategory = !u.isDeleted && u.status !== "deleted" && (u.userType === "JDCOEM_STUDENT" || (u.role === "STUDENT" && !u.collegeName)) && u.role !== "FACULTY";
       } else if (categoryFilter === "EXTERNAL_STUDENTS") {
-        matchesCategory = u.userType === "EXTERNAL_STUDENT" || u.isCollegeStudent === false || Boolean(u.collegeName);
+        matchesCategory = !u.isDeleted && u.status !== "deleted" && (u.userType === "EXTERNAL_STUDENT" || u.isCollegeStudent === false || Boolean(u.collegeName));
       } else if (categoryFilter === "COUNCIL_ADMIN") {
-        matchesCategory = u.role === "COUNCIL_ADMIN";
+        matchesCategory = !u.isDeleted && u.status !== "deleted" && u.role === "COUNCIL_ADMIN";
       }
 
       const matchesDept =
@@ -472,8 +484,8 @@ export default function AdminUsersPage() {
         </div>
       )}
 
-      {/* Summary KPI Badges (5 Cards) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+      {/* Summary KPI Badges (6 Cards) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
         <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Users</span>
           <p className="font-hero font-extrabold text-2xl text-[#0F172A]">{users.length}</p>
@@ -509,6 +521,12 @@ export default function AdminUsersPage() {
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Council Admins</span>
           <p className="font-hero font-extrabold text-2xl text-slate-900">{adminUsers.length}</p>
           <span className="text-[10px] text-slate-500 font-medium">Full Studio Access</span>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Deleted Accounts</span>
+          <p className="font-hero font-extrabold text-2xl text-rose-600">{deletedUsers.length}</p>
+          <span className="text-[10px] text-slate-500 font-medium">Deactivated</span>
         </div>
       </div>
 
@@ -586,6 +604,18 @@ export default function AdminUsersPage() {
             <span>Other Colleges ({externalStudents.length})</span>
           </button>
 
+          <button
+            onClick={() => setCategoryFilter("DELETED_ACCOUNTS")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              categoryFilter === "DELETED_ACCOUNTS"
+                ? "bg-rose-600 text-white shadow-xs"
+                : "bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100"
+            }`}
+          >
+            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+            <span>Deleted Accounts ({deletedUsers.length})</span>
+          </button>
+
           {/* Department Filter */}
           <select
             value={deptFilter}
@@ -635,15 +665,16 @@ export default function AdminUsersPage() {
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-800 font-medium">
                 {filteredUsers.map((u) => {
+                  const isDeleted = Boolean(u.isDeleted || u.status === "deleted");
                   const isFaculty = u.role === "FACULTY" || u.userType === "FACULTY";
                   const isExternal = u.userType === "EXTERNAL_STUDENT" || u.isCollegeStudent === false || Boolean(u.collegeName);
-                  const isPendingFaculty = isFaculty && u.facultyApprovalStatus === "pending";
+                  const isPendingFaculty = !isDeleted && isFaculty && u.facultyApprovalStatus === "pending";
 
                   return (
                     <tr 
                       key={u.uid} 
                       className={`hover:bg-slate-50 transition-colors ${
-                        isPendingFaculty ? "bg-amber-50/40" : ""
+                        isDeleted ? "bg-rose-50/30" : isPendingFaculty ? "bg-amber-50/40" : ""
                       }`}
                     >
                       
@@ -676,7 +707,11 @@ export default function AdminUsersPage() {
 
                       {/* Affiliation / BT ID */}
                       <td className="py-4 px-6">
-                        {isFaculty ? (
+                        {isDeleted ? (
+                          <span className="text-rose-600 text-xs font-bold font-mono px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200">
+                            DELETED
+                          </span>
+                        ) : isFaculty ? (
                           <div className="space-y-0.5">
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 font-bold text-xs">
                               <School className="w-3.5 h-3.5 text-[#E78023]" />
@@ -733,27 +768,33 @@ export default function AdminUsersPage() {
                       {/* Account Category */}
                       <td className="py-4 px-6">
                         <div className="space-y-1">
-                          <Badge
-                            variant={
-                              u.role === "COUNCIL_ADMIN"
-                                ? "orange"
+                          {isDeleted ? (
+                            <Badge variant="rose" size="sm">
+                              DELETED ACCOUNT
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant={
+                                u.role === "COUNCIL_ADMIN"
+                                  ? "orange"
+                                  : isFaculty
+                                  ? "navy"
+                                  : isExternal
+                                  ? "success"
+                                  : "slate"
+                              }
+                              size="sm"
+                            >
+                              {u.role === "COUNCIL_ADMIN"
+                                ? "Admin"
                                 : isFaculty
-                                ? "navy"
+                                ? "Faculty"
                                 : isExternal
-                                ? "success"
-                                : "slate"
-                            }
-                            size="sm"
-                          >
-                            {u.role === "COUNCIL_ADMIN"
-                              ? "Admin"
-                              : isFaculty
-                              ? "Faculty"
-                              : isExternal
-                              ? "Other College"
-                              : "JDCOEM Student"}
-                          </Badge>
-                          {(() => {
+                                ? "Other College"
+                                : "JDCOEM Student"}
+                            </Badge>
+                          )}
+                          {!isDeleted && (() => {
                             const effectiveBadge = (u.btId ? resolveDesignationByBtId(u.btId)?.designationBadge : null) || u.designationBadge;
                             if (!effectiveBadge) return null;
                             return (
@@ -769,7 +810,12 @@ export default function AdminUsersPage() {
 
                       {/* Verification Status */}
                       <td className="py-4 px-6">
-                        {isFaculty ? (
+                        {isDeleted ? (
+                          <div className="flex items-center gap-1.5 text-rose-700 text-xs font-semibold">
+                            <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                            <span>Deactivated {u.deletedAt ? new Date(u.deletedAt).toLocaleDateString() : ""}</span>
+                          </div>
+                        ) : isFaculty ? (
                           u.facultyApprovalStatus === "pending" ? (
                             <div className="flex items-center gap-1.5 text-amber-700 text-xs font-bold bg-amber-100/80 px-2.5 py-1 rounded-xl border border-amber-300 w-fit animate-pulse">
                               <Clock className="w-3.5 h-3.5 text-amber-600" />
@@ -807,71 +853,91 @@ export default function AdminUsersPage() {
                       {/* Actions */}
                       <td className="py-4 px-6 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          
-                          {/* 1-Click Approve / Reject for Faculty */}
-                          {isFaculty && (
+                          {isDeleted ? (
                             <>
-                              {u.facultyApprovalStatus !== "approved" ? (
-                                <button
-                                  onClick={() => handleApproveFaculty(u)}
-                                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-xs"
-                                  title="Approve Faculty Verification"
-                                >
-                                  <Check className="w-3.5 h-3.5" />
-                                  <span>Approve</span>
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => handleRejectFaculty(u)}
-                                  className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer"
-                                  title="Revoke Faculty Verification"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                  <span>Revoke</span>
-                                </button>
+                              <button
+                                onClick={() => setSelectedUser(u)}
+                                className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-[#17458F] transition-colors cursor-pointer"
+                                title="Inspect Deleted User Record"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setUserToDelete(u)}
+                                className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors cursor-pointer"
+                                title="Permanently Purge Record"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              {/* 1-Click Approve / Reject for Faculty */}
+                              {isFaculty && (
+                                <>
+                                  {u.facultyApprovalStatus !== "approved" ? (
+                                    <button
+                                      onClick={() => handleApproveFaculty(u)}
+                                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-xs"
+                                      title="Approve Faculty Verification"
+                                    >
+                                      <Check className="w-3.5 h-3.5" />
+                                      <span>Approve</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleRejectFaculty(u)}
+                                      className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                                      title="Revoke Faculty Verification"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                      <span>Revoke</span>
+                                    </button>
+                                  )}
+                                </>
                               )}
+
+                              <button
+                                onClick={() => setSelectedUser(u)}
+                                className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-[#17458F] transition-colors cursor-pointer"
+                                title="Inspect User Profile"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                onClick={() => openEditModal(u)}
+                                className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#17458F] transition-colors cursor-pointer"
+                                title="Edit User Profile"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                onClick={() => handleRoleToggle(u)}
+                                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                                  u.role === "COUNCIL_ADMIN"
+                                    ? "bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200"
+                                    : "bg-slate-100 hover:bg-slate-200 text-slate-600"
+                                }`}
+                                title={u.role === "COUNCIL_ADMIN" ? "Demote to Student" : "Promote to Admin"}
+                              >
+                                {u.role === "COUNCIL_ADMIN" ? (
+                                  <ShieldCheck className="w-3.5 h-3.5 text-[#E78023]" />
+                                ) : (
+                                  <ShieldAlert className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+
+                              <button
+                                onClick={() => setUserToDelete(u)}
+                                className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors cursor-pointer"
+                                title="Delete User Record"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </>
                           )}
-
-                          <button
-                            onClick={() => setSelectedUser(u)}
-                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-[#17458F] transition-colors cursor-pointer"
-                            title="Inspect User Profile"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-
-                          <button
-                            onClick={() => openEditModal(u)}
-                            className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#17458F] transition-colors cursor-pointer"
-                            title="Edit User Profile"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-
-                          <button
-                            onClick={() => handleRoleToggle(u)}
-                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                              u.role === "COUNCIL_ADMIN"
-                                ? "bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200"
-                                : "bg-slate-100 hover:bg-slate-200 text-slate-600"
-                            }`}
-                            title={u.role === "COUNCIL_ADMIN" ? "Demote to Student" : "Promote to Admin"}
-                          >
-                            {u.role === "COUNCIL_ADMIN" ? (
-                              <ShieldCheck className="w-3.5 h-3.5 text-[#E78023]" />
-                            ) : (
-                              <ShieldAlert className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-
-                          <button
-                            onClick={() => setUserToDelete(u)}
-                            className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors cursor-pointer"
-                            title="Delete User Record"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
                         </div>
                       </td>
 
@@ -894,6 +960,22 @@ export default function AdminUsersPage() {
           maxWidth="lg"
         >
           <div className="space-y-5 pt-2 text-[#0F172A]">
+            {(selectedUser.isDeleted || selectedUser.status === "deleted") && (
+              <div className="p-4 rounded-2xl bg-rose-50 border-2 border-rose-200 flex items-start gap-3">
+                <div className="p-2 rounded-xl bg-rose-100 text-rose-700 shrink-0">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <div className="space-y-0.5">
+                  <h4 className="font-heading font-extrabold text-sm text-rose-950">
+                    Account Permanently Deactivated
+                  </h4>
+                  <p className="text-xs text-rose-700 font-medium">
+                    This account was permanently deleted by the user on {selectedUser.deletedAt ? new Date(selectedUser.deletedAt).toLocaleString() : "record"}. Verified passes and portal rights have been revoked.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-200">
               <div className="relative h-16 w-16 rounded-2xl bg-white border border-slate-200 overflow-hidden flex items-center justify-center font-bold text-xl text-[#17458F] shrink-0">
                 {selectedUser.photoURL ? (
@@ -912,27 +994,33 @@ export default function AdminUsersPage() {
                   <h3 className="font-heading font-extrabold text-lg text-slate-900">
                     {selectedUser.displayName}
                   </h3>
-                  <Badge 
-                    variant={
-                      selectedUser.role === "COUNCIL_ADMIN" 
-                        ? "orange" 
+                  {selectedUser.isDeleted || selectedUser.status === "deleted" ? (
+                    <Badge variant="rose" size="sm">
+                      DELETED ACCOUNT
+                    </Badge>
+                  ) : (
+                    <Badge 
+                      variant={
+                        selectedUser.role === "COUNCIL_ADMIN" 
+                          ? "orange" 
+                          : selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY" 
+                          ? "navy" 
+                          : selectedUser.userType === "EXTERNAL_STUDENT" 
+                          ? "success" 
+                          : "slate"
+                      } 
+                      size="sm"
+                    >
+                      {selectedUser.role === "COUNCIL_ADMIN" 
+                        ? "Council Admin" 
                         : selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY" 
-                        ? "navy" 
+                        ? "Faculty Member" 
                         : selectedUser.userType === "EXTERNAL_STUDENT" 
-                        ? "success" 
-                        : "slate"
-                    } 
-                    size="sm"
-                  >
-                    {selectedUser.role === "COUNCIL_ADMIN" 
-                      ? "Council Admin" 
-                      : selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY" 
-                      ? "Faculty Member" 
-                      : selectedUser.userType === "EXTERNAL_STUDENT" 
-                      ? "Visiting Delegate" 
-                      : "JDCOEM Student"}
-                  </Badge>
-                  {(() => {
+                        ? "Visiting Delegate" 
+                        : "JDCOEM Student"}
+                    </Badge>
+                  )}
+                  {!selectedUser.isDeleted && (() => {
                     const effectiveBadge = (selectedUser.btId ? resolveDesignationByBtId(selectedUser.btId)?.designationBadge : null) || selectedUser.designationBadge;
                     if (!effectiveBadge) return null;
                     return (
@@ -947,7 +1035,7 @@ export default function AdminUsersPage() {
             </div>
 
             {/* FACULTY APPROVAL ACTION CARD IF PENDING */}
-            {(selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY") && (
+            {!selectedUser.isDeleted && (selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY") && (
               <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">

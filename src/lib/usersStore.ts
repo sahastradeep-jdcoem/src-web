@@ -280,6 +280,9 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
         profileCompleted: r.profileCompleted ?? localMatch?.profileCompleted ?? true,
         designationBadge: assignedBadge,
         isCouncilOfficer: isOfficer,
+        isDeleted: r.isDeleted !== undefined ? r.isDeleted : (localMatch?.isDeleted || false),
+        deletedAt: r.deletedAt || localMatch?.deletedAt,
+        status: r.status || localMatch?.status || (r.isDeleted ? "deleted" : "active"),
         lastActive: r.lastActive || localMatch?.lastActive || new Date().toISOString(),
         createdAt: r.createdAt || localMatch?.createdAt || new Date().toISOString(),
       };
@@ -374,6 +377,10 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
       degree: user.degree || user.customBranch || existing?.degree || existing?.customBranch || "",
       customBranch: user.customBranch || user.degree || existing?.customBranch || existing?.degree || "",
 
+      isDeleted: user.isDeleted !== undefined ? user.isDeleted : (existing?.isDeleted || false),
+      deletedAt: user.deletedAt || existing?.deletedAt,
+      status: user.status || existing?.status || (user.isDeleted ? "deleted" : "active"),
+
       lastActive: now,
       createdAt: existing?.createdAt || now,
     };
@@ -465,13 +472,54 @@ export function getPendingFacultyApprovals(): RegisteredUserRecord[] {
 }
 
 /**
- * Delete a user from active roster
+ * Mark a registered user account as permanently deleted (syncs to Firestore & localStorage)
+ */
+export function markUserAsDeleted(uid: string): RegisteredUserRecord[] {
+  const current = getStoredUsers();
+  const now = new Date().toISOString();
+  const updated = current.map((u) => {
+    if (u.uid === uid) {
+      return {
+        ...u,
+        isDeleted: true,
+        status: "deleted" as const,
+        deletedAt: now,
+      };
+    }
+    return u;
+  });
+
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
+    } catch {}
+    window.dispatchEvent(new CustomEvent("src_users_updated", { detail: updated }));
+    saveUserProfileToFirestore(uid, {
+      isDeleted: true,
+      status: "deleted",
+      deletedAt: now,
+    });
+  }
+  return updated;
+}
+
+/**
+ * Delete a user by marking their account status as deleted
  */
 export function deleteRegisteredUser(uid: string): RegisteredUserRecord[] {
+  return markUserAsDeleted(uid);
+}
+
+/**
+ * Completely purge a user record from localStorage (admin hard-delete)
+ */
+export function purgeRegisteredUser(uid: string): RegisteredUserRecord[] {
   const current = getStoredUsers();
   const updated = current.filter((u) => u.uid !== uid);
   if (typeof window !== "undefined") {
-    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
+    try {
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
+    } catch {}
     window.dispatchEvent(new CustomEvent("src_users_updated", { detail: updated }));
   }
   return updated;

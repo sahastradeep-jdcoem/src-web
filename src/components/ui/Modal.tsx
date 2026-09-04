@@ -11,6 +11,9 @@ interface ModalProps {
   subtitle?: string;
   children: React.ReactNode;
   maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "5xl";
+  closeOnBackdropClick?: boolean;
+  closeOnEscape?: boolean;
+  showCloseButton?: boolean;
 }
 
 export function Modal({
@@ -20,13 +23,18 @@ export function Modal({
   subtitle,
   children,
   maxWidth = "lg",
+  closeOnBackdropClick = true,
+  closeOnEscape = true,
+  showCloseButton = true,
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        onClose();
+        if (closeOnEscape) {
+          onClose();
+        }
         return;
       }
 
@@ -90,7 +98,7 @@ export function Modal({
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
+        onClick={closeOnBackdropClick ? onClose : undefined}
         aria-hidden="true"
       />
 
@@ -119,13 +127,15 @@ export function Modal({
               </p>
             )}
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close dialog"
-            className="p-2.5 min-w-[40px] min-h-[40px] rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer shrink-0 flex items-center justify-center"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          {showCloseButton && (
+            <button
+              onClick={onClose}
+              aria-label="Close dialog"
+              className="p-2.5 min-w-[40px] min-h-[40px] rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer shrink-0 flex items-center justify-center"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         {/* Content */}
