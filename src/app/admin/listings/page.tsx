@@ -78,11 +78,19 @@ export default function AdminListingsPage() {
     setClubsList(getStoredClubs());
 
     // CRITICAL: Sync from Firestore on mount to get submissions from other devices
-    syncListingsFromFirestore().then((data) => { if (data && Array.isArray(data)) setListings(data); });
+    syncListingsFromFirestore().then((data) => { 
+      if (data && Array.isArray(data)) {
+        setListings(data);
+        setInspectingListing((prev) => prev ? data.find((l) => l.id === prev.id || l.slug === prev.slug) || prev : null);
+      }
+    });
     syncListingResponsesFromFirestore().then((data) => { if (data && Array.isArray(data)) setResponses(data); });
 
     const unsubListings = subscribeToListings((data) => {
-      if (data && Array.isArray(data)) setListings(data);
+      if (data && Array.isArray(data)) {
+        setListings(data);
+        setInspectingListing((prev) => prev ? data.find((l) => l.id === prev.id || l.slug === prev.slug) || prev : null);
+      }
     });
 
     // CRITICAL: Subscribe to real-time Firestore updates for listing responses
@@ -342,7 +350,23 @@ export default function AdminListingsPage() {
       }
 
       if (activeListingResponses.length > 0 || inspectingListing.type !== "poll") {
+        const isPoll = inspectingListing.type === "poll";
         const exportRows = activeListingResponses.map((r) => {
+          if (isPoll) {
+            const votedChoice = Object.values(r.answers || {})[0] || (r.selectedOptionIds && r.selectedOptionIds[0]) || "Recorded Vote";
+            return {
+              "Ballot ID": r.id,
+              "Student / Voter Name": r.userName || "Anonymous Voter",
+              "Email Address": r.userEmail || "N/A",
+              "College / BT ID": r.btId || "N/A",
+              "Department": r.userDepartment || "N/A",
+              "Academic Year": r.userYear || "N/A",
+              "Selected Option Choice": votedChoice,
+              "Ballot Status": (r.status || "APPROVED").toUpperCase(),
+              "Time Cast": r.createdAt ? new Date(r.createdAt).toLocaleString() : "N/A",
+            };
+          }
+
           const flatRow: Record<string, any> = {
             "Ticket / Ref ID": r.ticketCode || r.id,
             "Candidate Name": r.userName || "Anonymous",
@@ -385,6 +409,11 @@ export default function AdminListingsPage() {
     }
   };
 
+  const liveInspectingListing = useMemo(() => {
+    if (!inspectingListing) return null;
+    return listings.find((l) => l.id === inspectingListing.id || l.slug === inspectingListing.slug) || inspectingListing;
+  }, [inspectingListing, listings]);
+
   return (
     <div className="space-y-8 font-sans text-left">
       
@@ -396,15 +425,15 @@ export default function AdminListingsPage() {
         </div>
       )}
 
-      {inspectingListing ? (
+      {liveInspectingListing ? (
         <ListingResponsesView
-          listing={inspectingListing}
+          listing={liveInspectingListing}
           responses={activeListingResponses}
           onBack={() => setInspectingListing(null)}
           onUpdateStatus={handleUpdateResponseStatus}
           onDeleteResponse={handleDeleteResponse}
           onExportExcel={handleExportExcel}
-          onResetPollVotes={() => handleResetPollVotes(inspectingListing)}
+          onResetPollVotes={() => handleResetPollVotes(liveInspectingListing)}
         />
       ) : (
         <>

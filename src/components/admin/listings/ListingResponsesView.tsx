@@ -6,6 +6,7 @@ import {
   BarChart3, 
   HelpCircle, 
   User, 
+  Users,
   Table as TableIcon, 
   Download, 
   Search, 
@@ -506,6 +507,139 @@ export function ListingResponsesView({
             </table>
           </div>
         </div>
+
+        {/* Verified Student Voter Audit Log */}
+        {(() => {
+          const pollVoters = responses.filter((r) => {
+            const isMatch = r.listingId === listing.id || r.listingSlug === listing.slug;
+            if (!isMatch) return false;
+            if (searchQuery.trim()) {
+              const q = searchQuery.toLowerCase();
+              return (
+                (r.userName && r.userName.toLowerCase().includes(q)) ||
+                (r.userEmail && r.userEmail.toLowerCase().includes(q)) ||
+                (r.userDepartment && r.userDepartment.toLowerCase().includes(q)) ||
+                (r.btId && r.btId.toLowerCase().includes(q)) ||
+                Object.values(r.answers || {}).some((ans) => String(ans).toLowerCase().includes(q))
+              );
+            }
+            return true;
+          });
+
+          return (
+            <div className="rounded-3xl border border-slate-200 overflow-hidden bg-white shadow-xs space-y-0">
+              <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-2.5">
+                  <Users className="w-5 h-5 text-[#17458F]" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-heading font-extrabold text-sm text-slate-900 uppercase">
+                        Verified Student Voter Log
+                      </h4>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-blue-50 text-[#17458F] border border-blue-200 font-mono">
+                        {pollVoters.length} Logged
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 font-medium">
+                      Audit record of students and delegates who cast verified ballots for this poll.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Voter Search */}
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search voter name, college, option..."
+                    className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
+                  />
+                </div>
+              </div>
+
+              {listing.pollConfig?.isAnonymous ? (
+                <div className="p-8 text-center space-y-1.5 bg-slate-50/50">
+                  <ShieldCheck className="w-6 h-6 text-slate-400 mx-auto" />
+                  <h5 className="text-xs font-bold text-slate-700">Anonymous Poll Configuration</h5>
+                  <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                    Individual voter identities are kept confidential and protected from public/admin disclosure per poll settings.
+                  </p>
+                </div>
+              ) : pollVoters.length === 0 ? (
+                <div className="p-10 text-center space-y-2 bg-slate-50/50">
+                  <Inbox className="w-7 h-7 text-slate-300 mx-auto" />
+                  <h5 className="text-xs font-bold text-slate-700">No Individual Ballots Logged</h5>
+                  <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                    {searchQuery ? "No voters matched your search filter." : "Ballot records will appear here as verified students and delegates submit votes."}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                      <tr>
+                        <th className="py-3 px-4">#</th>
+                        <th className="py-3 px-4">Voter / Student</th>
+                        <th className="py-3 px-4">College / Department</th>
+                        <th className="py-3 px-4">Voted Option</th>
+                        <th className="py-3 px-4">Time Cast</th>
+                        <th className="py-3 px-4 text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
+                      {pollVoters.map((r, idx) => {
+                        const votedAnswer = Object.values(r.answers || {})[0] || (r.selectedOptionIds && r.selectedOptionIds[0]) || "Recorded Vote";
+                        return (
+                          <tr key={r.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="py-3.5 px-4 font-mono font-bold text-slate-400 text-[11px]">
+                              #{idx + 1}
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className="font-bold text-slate-900 block text-xs">
+                                {r.userName || "Student Voter"}
+                              </span>
+                              {r.userEmail && (
+                                <span className="text-[11px] text-slate-400 block font-sans">
+                                  {r.userEmail}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-4 text-slate-600">
+                              <span className="block font-semibold">
+                                {r.btId ? r.btId : (r.userDepartment || "General Student")}
+                              </span>
+                              {r.userYear && (
+                                <span className="text-[10px] text-slate-400 font-medium">
+                                  {r.userYear}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className="px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-[#17458F] font-bold text-xs inline-block">
+                                {votedAnswer}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-slate-500 text-[11px] whitespace-nowrap">
+                              {r.createdAt ? new Date(r.createdAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "Recently"}
+                            </td>
+                            <td className="py-3.5 px-4 text-right">
+                              <span className="text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                <span>Verified</span>
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
       </div>
     );

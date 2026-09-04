@@ -310,6 +310,7 @@ export function saveStoredListingResponse(record: ListingResponseRecord): void {
     updated = [record, ...current];
   }
 
+  // 1. Immediate optimistic local write
   if (typeof window !== "undefined") {
     try {
       localStorage.setItem(RESPONSES_STORAGE_KEY, JSON.stringify(updated));
@@ -324,24 +325,61 @@ export function saveStoredListingResponse(record: ListingResponseRecord): void {
     } catch {}
   }
 
-  // Cloud Sync: Dual-write to global responses index & per-listing partition
-  const listingFiltered = updated.filter((r) => r.listingId === record.listingId);
-  saveSiteContentToFirestore("listing_responses", updated).catch((err) => {
-    console.warn("Direct write for global listing responses failed, enqueuing:", err);
-  });
-  saveSiteContentToFirestore(`responses_${record.listingId}`, listingFiltered).catch((err) => {
-    console.warn("Direct write for per-listing response failed:", err);
-  });
+  // 2. Cloud Sync: Fetch fresh remote state first to avoid overwriting responses from other devices
+  (async () => {
+    try {
+      const remote = await getSiteContentFromFirestore<ListingResponseRecord[]>("listing_responses");
+      const remoteList = Array.isArray(remote) ? remote : [];
+      
+      const map = new Map<string, ListingResponseRecord>();
+      // Put existing remote records first
+      remoteList.forEach((r) => map.set(r.id, r));
+      // Put current local records
+      updated.forEach((r) => map.set(r.id, r));
+      // Ensure the newly saved record is present
+      map.set(record.id, record);
 
-  enqueueCloudWrite("listing_responses", updated, "Listing Response");
+      const combined = Array.from(map.values()).sort(
+        (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+      );
+
+      // Save combined to Firestore
+      await saveSiteContentToFirestore("listing_responses", combined);
+
+      // Also partition by listing
+      const listingFiltered = combined.filter((r) => r.listingId === record.listingId);
+      await saveSiteContentToFirestore(`responses_${record.listingId}`, listingFiltered);
+
+      // Update local storage with full combined set
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem(RESPONSES_STORAGE_KEY, JSON.stringify(combined));
+          window.dispatchEvent(
+            new CustomEvent("src_listing_responses_updated", { detail: combined })
+          );
+        } catch {}
+      }
+    } catch (cloudErr) {
+      console.warn("Direct Firestore merge for listing responses failed, enqueuing:", cloudErr);
+      saveSiteContentToFirestore("listing_responses", updated).catch(() => {});
+      enqueueCloudWrite("listing_responses", updated, "Listing Response");
+    }
+  })();
 }
 
 export async function syncListingResponsesFromFirestore(): Promise<ListingResponseRecord[] | null> {
   try {
     const remote = await getSiteContentFromFirestore<ListingResponseRecord[]>("listing_responses");
     if (remote && Array.isArray(remote)) {
-      // Remote Firestore state is authoritative (Invariant 9: Cloud-Authoritative Dataset Invariant)
-      const merged = [...remote].sort(
+      const local = getStoredListingResponses();
+      const map = new Map<string, ListingResponseRecord>();
+      
+      // Preserve any un-synced local records
+      local.forEach((r) => map.set(r.id, r));
+      // Overlay authoritative remote records
+      remote.forEach((r) => map.set(r.id, r));
+
+      const merged = Array.from(map.values()).sort(
         (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
       );
 
