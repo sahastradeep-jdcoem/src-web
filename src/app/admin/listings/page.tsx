@@ -34,8 +34,10 @@ import {
   syncListingResponsesFromFirestore,
   subscribeToListingResponses,
   saveStoredListingResponse,
-  deleteStoredListingResponse
+  deleteStoredListingResponse,
+  RESPONSES_STORAGE_KEY
 } from "@/lib/listingsStore";
+import { saveSiteContentToFirestore } from "@/lib/firebase/firestore";
 import { ListingItem, ListingType, ListingPillar, ListingResponseRecord, TargetAudience } from "@/types/listings";
 import { CreateListingModal } from "@/components/admin/listings/CreateListingModal";
 import { ListingResponsesView } from "@/components/admin/listings/ListingResponsesView";
@@ -276,6 +278,45 @@ export default function AdminListingsPage() {
     showToast("Response record deleted successfully.");
   };
 
+  const handleResetPollVotes = (item: ListingItem) => {
+    if (item.type !== "poll" || !item.pollConfig) return;
+    const confirmed = window.confirm(
+      `Are you sure you want to reset all votes for "${item.title}" to 0? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    const resetPollConfig = {
+      ...item.pollConfig,
+      totalVotes: 0,
+      options: item.pollConfig.options.map((opt) => ({
+        ...opt,
+        votes: 0,
+      })),
+    };
+
+    const updatedItem: ListingItem = {
+      ...item,
+      pollConfig: resetPollConfig,
+    };
+
+    const updated = listings.map((l) => (l.id === item.id ? updatedItem : l));
+    setListings(updated);
+    saveStoredListings(updated);
+
+    // Clear existing ballot records for this poll from state, localStorage, and Firestore
+    const remainingResponses = responses.filter((r) => r.listingId !== item.id && r.listingSlug !== item.slug);
+    setResponses(remainingResponses);
+    try {
+      localStorage.setItem(RESPONSES_STORAGE_KEY, JSON.stringify(remainingResponses));
+    } catch {}
+    saveSiteContentToFirestore("listing_responses", remainingResponses).catch(() => {});
+
+    if (inspectingListing && inspectingListing.id === item.id) {
+      setInspectingListing(updatedItem);
+    }
+    showToast(`All votes for "${item.title}" have been reset to 0.`);
+  };
+
   const handleExportExcel = async () => {
     if (!inspectingListing) return;
     try {
@@ -332,7 +373,11 @@ export default function AdminListingsPage() {
         XLSX.utils.book_append_sheet(wb, ws, inspectingListing.type === "poll" ? "Voter Log" : "Responses");
       }
 
-      XLSX.writeFile(wb, `${inspectingListing.slug}-report.xlsx`);
+      const cleanFileSlug = inspectingListing.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "") || inspectingListing.slug || "listing-report";
+      XLSX.writeFile(wb, `${cleanFileSlug}-report.xlsx`);
       showToast("Excel spreadsheet downloaded successfully.");
     } catch (err) {
       console.error(err);
@@ -359,6 +404,7 @@ export default function AdminListingsPage() {
           onUpdateStatus={handleUpdateResponseStatus}
           onDeleteResponse={handleDeleteResponse}
           onExportExcel={handleExportExcel}
+          onResetPollVotes={() => handleResetPollVotes(inspectingListing)}
         />
       ) : (
         <>

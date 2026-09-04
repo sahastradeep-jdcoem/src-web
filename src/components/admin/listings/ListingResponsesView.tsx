@@ -27,7 +27,8 @@ import {
   Vote,
   Trophy,
   Award,
-  ShieldCheck
+  ShieldCheck,
+  RotateCcw
 } from "lucide-react";
 import { ListingItem, ListingResponseRecord } from "@/types/listings";
 import { CustomQuestion } from "@/types";
@@ -44,6 +45,7 @@ export interface ListingResponsesViewProps {
   onUpdateStatus: (respId: string, status: "approved" | "rejected" | "resolved" | "reviewed") => void;
   onDeleteResponse?: (respId: string) => void;
   onExportExcel: () => void;
+  onResetPollVotes?: () => void;
 }
 
 export function ListingResponsesView({
@@ -53,6 +55,7 @@ export function ListingResponsesView({
   onUpdateStatus,
   onDeleteResponse,
   onExportExcel,
+  onResetPollVotes,
 }: ListingResponsesViewProps) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("summary");
   const [selectedQuestionIndex, setSelectedQuestionIndex] = useState<number>(0);
@@ -272,6 +275,18 @@ export function ListingResponsesView({
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
+            {onResetPollVotes && (
+              <button
+                type="button"
+                onClick={onResetPollVotes}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition-all shadow-xs cursor-pointer"
+                title="Zero out all vote counts and reset ballots for this poll"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
+                <span>Reset Votes</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={onExportExcel}

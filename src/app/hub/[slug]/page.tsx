@@ -50,7 +50,7 @@ export default function ListingDetailPage() {
   const slug = params?.slug as string;
   const { user } = useAuth();
   const isExternalUser = Boolean(
-    user && (user.userType === "EXTERNAL_STUDENT" || user.isCollegeStudent === false || (user.collegeName && !user.email?.endsWith("@jdcoem.ac.in")))
+    user && (user.userType === "EXTERNAL_STUDENT" || user.isCollegeStudent === false)
   );
 
   const [listing, setListing] = useState<ListingItem | null>(null);
@@ -209,8 +209,20 @@ export default function ListingDetailPage() {
       return;
     }
     const voterKey = user?.email || `anon-${Date.now()}`;
-    const res = voteOnListingPoll(listing.id, optionId, voterKey);
+    const voterInfo = {
+      userId: user?.uid,
+      userName: user?.displayName || (user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : undefined),
+      userEmail: user?.email,
+      userDepartment: user?.department,
+      userYear: user?.year,
+      btId: user?.btId,
+      isAnonymous: Boolean(listing.pollConfig?.isAnonymous),
+    };
+    const res = voteOnListingPoll(listing.id, optionId, voterKey, voterInfo);
     if (res.success) {
+      if (res.updatedListing) {
+        setListing(res.updatedListing);
+      }
       setVotedPolls(getStoredVotedPolls());
       showToast("Vote recorded successfully!");
       try {
@@ -459,7 +471,8 @@ export default function ListingDetailPage() {
           {/* LIVE POLL PARTICIPATION */}
           {isPoll && listing.pollConfig && (() => {
             const userVotedOptionId = listing ? votedPolls[listing.id] : null;
-            const hasVoted = Boolean(userVotedOptionId);
+            const isOptionValid = Boolean(listing && userVotedOptionId && listing.pollConfig.options.some((o) => o.id === userVotedOptionId));
+            const hasVoted = Boolean(userVotedOptionId) && isOptionValid && totalPollVotes > 0;
 
             return (
               <div className="p-6 sm:p-8 border-t border-slate-200 space-y-5">

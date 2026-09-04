@@ -532,9 +532,17 @@ export function CreateListingModal({
 
     // EDIT MODE: Update existing item in place
     if (mode === "edit" && initialData) {
+      const baseSlug = title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "");
+      const oldSuffix = initialData.slug.split("-").pop() || Date.now().toString().slice(-4);
+      const newSlug = initialData.title !== title.trim() ? `${baseSlug}-${oldSuffix}` : initialData.slug;
+
       const updatedListing: ListingItem = {
         ...initialData,
         title: title.trim(),
+        slug: newSlug,
         targetAudience,
         isInterCollege: targetAudience === "inter_college",
         summary: summary.trim() || title.trim(),
@@ -548,19 +556,36 @@ export function CreateListingModal({
 
       if (selectedPillarOption.type === "poll") {
         const existingOpts = initialData.pollConfig?.options || [];
+        const isQuestionChanged = initialData.title !== title.trim();
+
+        const newOptionTexts = pollOptions.filter((o) => o.trim());
+        let optionsChanged = false;
+        if (newOptionTexts.length !== existingOpts.length) {
+          optionsChanged = true;
+        } else {
+          for (let i = 0; i < newOptionTexts.length; i++) {
+            if (newOptionTexts[i].trim().toLowerCase() !== (existingOpts[i]?.text || "").trim().toLowerCase()) {
+              optionsChanged = true;
+              break;
+            }
+          }
+        }
+
+        const shouldResetVotes = isQuestionChanged || optionsChanged;
+
         updatedListing.pollConfig = {
           ...initialData.pollConfig,
-          options: pollOptions.filter((o) => o.trim()).map((text, idx) => {
+          options: newOptionTexts.map((text, idx) => {
             const prev = existingOpts[idx];
             return {
-              id: prev?.id || `opt-${idx + 1}`,
+              id: shouldResetVotes ? `opt-${Date.now().toString().slice(-4)}-${idx + 1}` : (prev?.id || `opt-${idx + 1}`),
               text: text.trim(),
-              votes: prev?.votes || 0,
+              votes: shouldResetVotes ? 0 : (prev?.votes || 0),
             };
           }),
           isAnonymous: pollAnonymous,
           allowMultipleChoices: pollMultipleChoices,
-          totalVotes: initialData.pollConfig?.totalVotes || 0,
+          totalVotes: shouldResetVotes ? 0 : (initialData.pollConfig?.totalVotes || 0),
         };
       } else if (selectedPillarOption.type === "opportunity") {
         updatedListing.opportunityConfig = {

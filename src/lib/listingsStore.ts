@@ -102,6 +102,13 @@ export function subscribeToListings(callback: (listings: ListingItem[]) => void)
   // Listen to Firestore real-time snapshot
   const unsubFirestore = subscribeToSiteContent<ListingItem[]>("listings", (data) => {
     if (data && Array.isArray(data)) {
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem(LISTINGS_STORAGE_KEY, JSON.stringify(data));
+        } catch (e) {
+          console.warn("Failed to cache listings snapshot to localStorage:", e);
+        }
+      }
       callback(data);
     }
   });
@@ -141,13 +148,22 @@ export function getStoredVotedPolls(): Record<string, string> {
 export function voteOnListingPoll(
   listingId: string, 
   optionId: string, 
-  userVoterKey: string
+  userVoterKey: string,
+  voterInfo?: {
+    userId?: string;
+    userName?: string;
+    userEmail?: string | null;
+    userDepartment?: string;
+    userYear?: string;
+    btId?: string;
+    isAnonymous?: boolean;
+  }
 ): { success: boolean; updatedListing?: ListingItem; error?: string } {
   const currentListings = getStoredListings();
   const index = currentListings.findIndex((l) => l.id === listingId);
 
   if (index === -1) {
-    return { success: false, error: "Listing not found" };
+    return { success: false, error: "Listing not found. Please refresh the page." };
   }
 
   const target = currentListings[index];
@@ -164,8 +180,19 @@ export function voteOnListingPoll(
     } catch {}
   }
 
-  if (votedMap[listingId]) {
+  const existingVoteOptionId = votedMap[listingId];
+  const optionStillExists = target.pollConfig.options.some((o) => o.id === existingVoteOptionId);
+  const totalVotesSoFar = target.pollConfig.totalVotes || 0;
+
+  // Only consider previously voted if the option still exists and totalVotes > 0
+  if (existingVoteOptionId && optionStillExists && totalVotesSoFar > 0) {
     return { success: false, error: "You have already cast your vote on this poll." };
+  }
+
+  // Find target option
+  const chosenOption = target.pollConfig.options.find((opt) => opt.id === optionId);
+  if (!chosenOption) {
+    return { success: false, error: "Selected option is no longer valid." };
   }
 
   // Increment option votes
@@ -178,7 +205,7 @@ export function voteOnListingPoll(
     pollConfig: {
       ...target.pollConfig,
       options: updatedOptions,
-      totalVotes: (target.pollConfig.totalVotes || 0) + 1,
+      totalVotes: totalVotesSoFar + 1,
     },
   };
 
@@ -192,6 +219,34 @@ export function voteOnListingPoll(
       votedMap[listingId] = optionId;
       localStorage.setItem(votedPollsKey, JSON.stringify(votedMap));
     } catch {}
+  }
+
+  // Record official ListingResponseRecord so votes appear in Admin Voter Log and can be audited/exported
+  try {
+    const isAnon = Boolean(target.pollConfig.isAnonymous || voterInfo?.isAnonymous);
+    const ballotRecord: ListingResponseRecord = {
+      id: `ballot-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      listingId: target.id,
+      listingSlug: target.slug,
+      listingType: "poll",
+      listingTitle: target.title,
+      userId: isAnon ? undefined : voterInfo?.userId,
+      userName: isAnon ? "Anonymous Voter" : (voterInfo?.userName || "Campus Student"),
+      userEmail: isAnon ? undefined : (voterInfo?.userEmail || undefined),
+      userDepartment: voterInfo?.userDepartment,
+      userYear: voterInfo?.userYear,
+      btId: isAnon ? undefined : voterInfo?.btId,
+      isAnonymous: isAnon,
+      selectedOptionIds: [optionId],
+      answers: {
+        [optionId]: chosenOption.text,
+      },
+      createdAt: new Date().toISOString(),
+      status: "approved",
+    };
+    saveStoredListingResponse(ballotRecord);
+  } catch (err) {
+    console.warn("Failed to persist ballot response record:", err);
   }
 
   return { success: true, updatedListing };
@@ -276,13 +331,8 @@ export async function syncListingResponsesFromFirestore(): Promise<ListingRespon
   try {
     const remote = await getSiteContentFromFirestore<ListingResponseRecord[]>("listing_responses");
     if (remote && Array.isArray(remote)) {
-      const local = getStoredListingResponses();
-      // Merge remote and local by id, preferring whichever is newer
-      const map = new Map<string, ListingResponseRecord>();
-      local.forEach((r) => map.set(r.id, r));
-      remote.forEach((r) => map.set(r.id, r));
-
-      const merged = Array.from(map.values()).sort(
+      // Remote Firestore state is authoritative (Invariant 9: Cloud-Authoritative Dataset Invariant)
+      const merged = [...remote].sort(
         (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
       );
 

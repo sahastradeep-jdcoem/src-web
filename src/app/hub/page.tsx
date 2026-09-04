@@ -37,7 +37,7 @@ import confetti from "canvas-confetti";
 export default function StudentHubPage() {
   const { user } = useAuth();
   const isExternalUser = Boolean(
-    user && (user.userType === "EXTERNAL_STUDENT" || user.isCollegeStudent === false || (user.collegeName && !user.email?.endsWith("@jdcoem.ac.in")))
+    user && (user.userType === "EXTERNAL_STUDENT" || user.isCollegeStudent === false)
   );
   const [listings, setListings] = useState<ListingItem[]>([]);
   const [selectedPillar, setSelectedPillar] = useState<ListingPillar | "all">("all");
@@ -94,8 +94,20 @@ export default function StudentHubPage() {
       return;
     }
     const voterKey = user?.email || `anon-${Date.now()}`;
-    const res = voteOnListingPoll(listingId, optionId, voterKey);
+    const voterInfo = {
+      userId: user?.uid,
+      userName: user?.displayName || (user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : undefined),
+      userEmail: user?.email,
+      userDepartment: user?.department,
+      userYear: user?.year,
+      btId: user?.btId,
+      isAnonymous: Boolean(matched?.pollConfig?.isAnonymous),
+    };
+    const res = voteOnListingPoll(listingId, optionId, voterKey, voterInfo);
     if (res.success) {
+      if (res.updatedListing) {
+        setListings((prev) => prev.map((l) => (l.id === listingId ? res.updatedListing! : l)));
+      }
       setVotedPolls(getStoredVotedPolls());
       showToast("Your vote has been cast successfully!");
       try {
@@ -241,8 +253,9 @@ export default function StudentHubPage() {
                       <div className="space-y-2">
                         {item.pollConfig.options.map((opt) => {
                           const userVotedOptionId = votedPolls[item.id];
-                          const hasVoted = Boolean(userVotedOptionId);
-                          const isSelectedByUser = userVotedOptionId === opt.id;
+                          const isOptionValid = Boolean(item.pollConfig?.options.some((o) => o.id === userVotedOptionId));
+                          const hasVoted = Boolean(userVotedOptionId) && isOptionValid && totalPollVotes > 0;
+                          const isSelectedByUser = hasVoted && userVotedOptionId === opt.id;
                           const pct = totalPollVotes > 0 ? Math.round((opt.votes / totalPollVotes) * 100) : 0;
 
                           return (
@@ -309,7 +322,9 @@ export default function StudentHubPage() {
                       </div>
                       <div className="flex items-center justify-between text-[11px] pt-1">
                         <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                          {votedPolls[item.id] ? "✓ Your vote recorded" : "Select an option to vote"}
+                          {votedPolls[item.id] && item.pollConfig?.options.some((o) => o.id === votedPolls[item.id]) && totalPollVotes > 0 
+                            ? "✓ Your vote recorded" 
+                            : "Select an option to vote"}
                         </span>
                         <Link href={`/hub/${item.slug}`} className="text-[#17458F] hover:underline font-bold">
                           Dedicated Page &rarr;
