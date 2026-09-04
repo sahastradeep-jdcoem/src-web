@@ -73,7 +73,7 @@ export function ListingResponsesView({
   // Questions for Question-by-Question tab
   const availableQuestions = useMemo(() => {
     const list: { id: string; title: string; type: string; options?: string[]; isStandard?: boolean }[] = [
-      { id: "userDepartment", title: "Engineering Department", type: "dropdown", isStandard: true },
+      { id: "userDepartment", title: "Department / Branch", type: "dropdown", isStandard: true },
       { id: "userYear", title: "Academic Year", type: "dropdown", isStandard: true },
     ];
 
@@ -946,7 +946,7 @@ export function ListingResponsesView({
                   <div className="flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-[#17458F]" />
                     <h3 className="font-heading font-bold text-sm text-slate-900 uppercase">
-                      Department Distribution
+                      Department / Branch Distribution
                     </h3>
                   </div>
                   <span className="text-[11px] font-mono font-bold text-slate-400">
@@ -1617,7 +1617,7 @@ export function ListingResponsesView({
                       <th className="py-3 px-4 font-bold text-slate-600 uppercase tracking-wider text-[10px]">#</th>
                       <th className="py-3 px-4 font-bold text-slate-600 uppercase tracking-wider text-[10px]">Ticket</th>
                       <th className="py-3 px-4 font-bold text-slate-600 uppercase tracking-wider text-[10px]">Candidate</th>
-                      <th className="py-3 px-4 font-bold text-slate-600 uppercase tracking-wider text-[10px]">Department</th>
+                      <th className="py-3 px-4 font-bold text-slate-600 uppercase tracking-wider text-[10px]">Department / Branch</th>
                       <th className="py-3 px-4 font-bold text-slate-600 uppercase tracking-wider text-[10px]">Status</th>
                       <th className="py-3 px-4 font-bold text-slate-600 uppercase tracking-wider text-[10px]">Date</th>
                       <th className="py-3 px-4 font-bold text-slate-600 uppercase tracking-wider text-[10px] text-right">Actions</th>
