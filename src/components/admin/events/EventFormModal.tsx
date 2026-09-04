@@ -973,16 +973,6 @@ export function EventFormModal({
         {/* ========================================================= */}
         {activeSection === "visuals" && (
           <div className="space-y-5 animate-in fade-in duration-200">
-            <div className="p-4 rounded-2xl bg-blue-50/60 border border-[#17458F]/20 flex items-start gap-3">
-              <ImageIcon className="w-5 h-5 text-[#17458F] shrink-0 mt-0.5" />
-              <div className="space-y-1 text-xs">
-                <p className="font-bold text-[#17458F]">Multi-Size Responsive Visual Suite</p>
-                <p className="text-slate-600 text-[11px]">
-                  Upload high-density images for distinct viewports. Images are instantly optimized into WebP format with zero-latency preview and background cloud synchronization.
-                </p>
-              </div>
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* 1. Event Card Thumbnail (16:9) */}
               <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
@@ -1040,16 +1030,6 @@ export function EventFormModal({
         {/* ========================================================= */}
         {activeSection === "qa" && (
           <div className="space-y-4 animate-in fade-in duration-200">
-            <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 flex items-start gap-3">
-              <HelpCircle className="w-5 h-5 text-[#E78023] shrink-0 mt-0.5" />
-              <div className="space-y-1 text-xs">
-                <p className="font-bold text-amber-950">Dynamic Questionnaire Builder</p>
-                <p className="text-amber-900/80 text-[11px]">
-                  Add custom form questions for participants registering for this event. Collected answers are securely stored and filterable in the Admin Registrations console.
-                </p>
-              </div>
-            </div>
-
             <CustomQuestionsBuilder
               questions={form.customQuestions}
               onChange={(qs) => setForm({ ...form, customQuestions: qs })}
