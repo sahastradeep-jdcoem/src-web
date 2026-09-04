@@ -1119,15 +1119,13 @@ export default function AdminRegistrationsPage() {
 
         {/* Right Corner: Export Excel Button (Enabled only after selecting filter) */}
         <div className="pt-1 md:pt-0 flex items-end">
-          <Button
+          <button
             onClick={handleExportExcel}
             disabled={isExportDisabled}
-            variant="primary"
-            size="md"
-            className={`gap-2 transition-all font-bold ${
+            className={`h-9 px-3.5 sm:px-4 rounded-xl text-xs font-semibold tracking-normal transition-all duration-200 inline-flex items-center justify-center gap-2 ${
               isExportDisabled
-                ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-50 shadow-none hover:bg-slate-100"
-                : "bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm cursor-pointer"
+                ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60 shadow-none"
+                : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs hover:shadow-md hover:shadow-emerald-600/20 active:scale-[0.98] cursor-pointer"
             }`}
             title={
               isExportDisabled
@@ -1135,9 +1133,9 @@ export default function AdminRegistrationsPage() {
                 : `Download Excel (.xlsx) responses for ${currentSelectedEventObj?.name || selectedEventSlug}`
             }
           >
-            <FileSpreadsheet className={`w-4 h-4 ${isExportDisabled ? "text-slate-400" : "text-emerald-100"}`} />
+            <FileSpreadsheet className={`w-3.5 h-3.5 ${isExportDisabled ? "text-slate-400" : "text-emerald-100"}`} />
             <span>Export Excel (.xlsx)</span>
-          </Button>
+          </button>
         </div>
 
       </div>

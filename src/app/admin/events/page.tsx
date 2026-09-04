@@ -378,32 +378,35 @@ export default function AdminEventsPage() {
     <div className="space-y-8 max-w-7xl mx-auto text-[#0F172A]">
       
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200">
-        <div>
-          <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200/80">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
             <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#0F172A] uppercase tracking-tight">
               EVENT DIRECTORY STUDIO
             </h1>
-            <Badge variant="orange" size="sm">
-              {eventsList.length} PUBLISHED
-            </Badge>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-50 border border-slate-200 shadow-2xs">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="font-bold text-[#17458F] tabular-nums text-xs">{eventsList.length}</span>
+              <span className="text-slate-500 font-medium text-xs">Published</span>
+            </div>
           </div>
-          <p className="text-xs text-slate-500 font-medium mt-1">
+          <p className="text-xs text-slate-500 font-medium">
             Create, edit, and organize flagship fests, hackathons, and chartered club events.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Button
+        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+          <button
             onClick={handleManualSync}
-            variant="outline"
-            size="sm"
-            className="gap-1.5 cursor-pointer bg-white"
             disabled={isSyncing}
+            className="h-9 px-3 sm:px-3.5 rounded-xl border border-slate-200/90 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 hover:text-[#17458F] text-xs font-medium tracking-normal transition-all duration-200 shadow-2xs active:scale-[0.98] cursor-pointer inline-flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-[#17458F] ${isSyncing ? "animate-spin" : ""}`} />
+            <RefreshCw className={`w-3.5 h-3.5 text-[#17458F] transition-transform duration-500 ${isSyncing ? "animate-spin" : ""}`} />
             <span>{isSyncing ? "Syncing..." : "Sync Live Cloud"}</span>
-          </Button>
+          </button>
 
           <button
             onClick={handleResetDefaults}
