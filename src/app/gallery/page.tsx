@@ -79,9 +79,6 @@ export default function GalleryPage() {
         
         {/* Page Header */}
         <div className="space-y-4 max-w-3xl">
-          <Badge variant="orange" size="md">
-            VISUAL CHRONICLES
-          </Badge>
           <h1 className="font-extrabold text-4xl sm:text-6xl text-[#0F172A] tracking-tight uppercase leading-none">
             MOMENTS THAT
             <br />
