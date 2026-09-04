@@ -53,14 +53,8 @@ export function PillarsOfStrengthSection({ className = "", boxed = true }: Pilla
           {/* Understated Section Header */}
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 border-b border-slate-200/80 pb-4">
             <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full bg-[#17458F]/10 text-[#17458F] border border-[#17458F]/20 text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1.5">
-                  <GraduationCap className="w-3.5 h-3.5 text-[#E78023]" />
-                  <span>Institutional Patrons &amp; Mentors</span>
-                </span>
-              </div>
               <h2 className="font-heading font-extrabold text-xl sm:text-2xl text-[#17458F] uppercase tracking-tight">
-                4 PILLARS OF STRENGTH OF SRC
+                4 PILLARS OF STRENGTH
               </h2>
               <p className="text-xs text-slate-500 font-medium max-w-2xl">
                 Visionary institutional patronship and dedicated faculty mentorship guiding the Student Representative Council at JDCOEM Nagpur.
@@ -145,7 +139,7 @@ export function PillarsOfStrengthSection({ className = "", boxed = true }: Pilla
             </span>
           </div>
           <h2 className="font-heading font-extrabold text-xl sm:text-2xl text-[#17458F] uppercase tracking-tight">
-            4 PILLARS OF STRENGTH OF SRC
+            4 PILLARS OF STRENGTH
           </h2>
           <p className="text-xs text-slate-500 font-medium max-w-2xl">
             Visionary institutional patronship and dedicated faculty mentorship guiding the Student Representative Council at JDCOEM Nagpur.
