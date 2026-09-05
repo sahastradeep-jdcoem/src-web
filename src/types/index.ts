@@ -201,7 +201,7 @@ export interface RegistrationRecord {
 export interface GalleryPhoto {
   id: string;
   title: string;
-  category: "Events" | "Clubs" | "SRC" | "Prarambh" | "Vibrance" | "Behind the Scenes";
+  category: string;
   imageUrl: string;
   date: string;
   caption: string;

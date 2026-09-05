@@ -13,19 +13,30 @@ import { GalleryPhoto } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 
-const CATEGORIES = [
-  "All",
-  "Events",
-  "Clubs",
-  "SRC",
-  "Prarambh",
-  "Behind the Scenes",
-];
-
 export default function GalleryPage() {
   const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [activePhotoIndex, setActivePhotoIndex] = useState<number | null>(null);
+
+  const categories = useMemo(() => {
+    const existing = Array.from(new Set(photos.map((p) => p.category).filter(Boolean)));
+    const priority = ["Events", "Clubs", "SRC", "Behind the Scenes"];
+    existing.sort((a, b) => {
+      const idxA = priority.indexOf(a);
+      const idxB = priority.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+    return ["All", ...existing];
+  }, [photos]);
+
+  useEffect(() => {
+    if (selectedCategory !== "All" && !categories.includes(selectedCategory)) {
+      setSelectedCategory("All");
+    }
+  }, [categories, selectedCategory]);
 
   useEffect(() => {
     setPhotos(getStoredGalleryPhotos());
@@ -96,7 +107,7 @@ export default function GalleryPage() {
               <Filter className="w-3.5 h-3.5 text-[#E78023]" />
               <span>Category:</span>
             </span>
-            {CATEGORIES.map((cat) => (
+            {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}

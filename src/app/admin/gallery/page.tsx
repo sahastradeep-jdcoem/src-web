@@ -31,20 +31,30 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
 
-const CATEGORIES = [
-  "All",
-  "Events",
-  "Clubs",
-  "SRC",
-  "Prarambh",
-  "Behind the Scenes",
-  "Vibrance",
-];
-
 export default function AdminGalleryPage() {
   const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
+
+  const categories = useMemo(() => {
+    const existing = Array.from(new Set(photos.map((p) => p.category).filter(Boolean)));
+    const priority = ["Events", "Clubs", "SRC", "Behind the Scenes"];
+    existing.sort((a, b) => {
+      const idxA = priority.indexOf(a);
+      const idxB = priority.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+    return ["All", ...existing];
+  }, [photos]);
+
+  useEffect(() => {
+    if (selectedCategory !== "All" && !categories.includes(selectedCategory)) {
+      setSelectedCategory("All");
+    }
+  }, [categories, selectedCategory]);
 
   const [editingPhoto, setEditingPhoto] = useState<GalleryPhoto | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
@@ -220,21 +230,21 @@ export default function AdminGalleryPage() {
           <p className="font-heading font-extrabold text-2xl text-[#17458F]">{photos.length}</p>
         </div>
         <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Prarambh Memories</span>
-          <p className="font-heading font-extrabold text-2xl text-[#E78023]">
-            {photos.filter(p => p.category === "Prarambh").length}
-          </p>
-        </div>
-        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Events & Festivals</span>
           <p className="font-heading font-extrabold text-2xl text-emerald-600">
             {photos.filter(p => p.category === "Events" || p.category === "Vibrance").length}
           </p>
         </div>
         <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Clubs & Behind Scenes</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Clubs & Activities</span>
           <p className="font-heading font-extrabold text-2xl text-indigo-600">
-            {photos.filter(p => p.category === "Clubs" || p.category === "Behind the Scenes").length}
+            {photos.filter(p => p.category === "Clubs").length}
+          </p>
+        </div>
+        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Council & Campus Life</span>
+          <p className="font-heading font-extrabold text-2xl text-[#E78023]">
+            {photos.filter(p => p.category !== "Events" && p.category !== "Vibrance" && p.category !== "Clubs").length}
           </p>
         </div>
       </div>
@@ -264,7 +274,7 @@ export default function AdminGalleryPage() {
             <Filter className="w-3 h-3 text-[#E78023]" />
             <span>Category:</span>
           </span>
-          {CATEGORIES.map((cat) => (
+          {categories.map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
@@ -390,15 +400,16 @@ export default function AdminGalleryPage() {
                 <label className="font-bold text-slate-700">Category *</label>
                 <select
                   value={editingPhoto.category}
-                  onChange={(e) => setEditingPhoto({ ...editingPhoto, category: e.target.value as any })}
+                  onChange={(e) => setEditingPhoto({ ...editingPhoto, category: e.target.value })}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
                 >
                   <option value="Events">Events</option>
                   <option value="Clubs">Clubs</option>
                   <option value="SRC">SRC</option>
-                  <option value="Prarambh">Prarambh</option>
-                  <option value="Vibrance">Vibrance</option>
                   <option value="Behind the Scenes">Behind the Scenes</option>
+                  {editingPhoto.category && !["Events", "Clubs", "SRC", "Behind the Scenes"].includes(editingPhoto.category) && (
+                    <option value={editingPhoto.category}>{editingPhoto.category}</option>
+                  )}
                 </select>
               </div>
 
