@@ -17,7 +17,7 @@ import {
   CheckCircle2,
   GraduationCap
 } from "lucide-react";
-import { getStoredCouncilMembers, subscribeToCouncilMembers } from "@/lib/councilStore";
+import { getStoredCouncilMembers, subscribeToCouncilMembers, syncCouncilMembersFromFirestore } from "@/lib/councilStore";
 import { getCurrentTenure, getStoredTenures } from "@/lib/tenureStore";
 import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { TeamMember } from "@/types";
@@ -39,6 +39,10 @@ export default function LeadershipSpotlightSection() {
   useEffect(() => {
     refresh();
 
+    syncCouncilMembersFromFirestore().then((res) => {
+      if (res && res.length > 0) setCouncilMembers(res);
+    }).catch(() => {});
+
     const unsubscribe = subscribeToCouncilMembers((remote) => {
       if (remote && remote.length > 0) setCouncilMembers(remote);
     });
@@ -58,24 +62,32 @@ export default function LeadershipSpotlightSection() {
     };
   }, []);
 
+  // Filter out any mock placeholders so public users never see template cards
+  const realCouncilMembers = councilMembers.filter((m) => {
+    if (!m || !m.name) return false;
+    const n = m.name.trim().toLowerCase();
+    return !n.includes("placeholder") && n !== "council president";
+  });
+
   // Find President (exclude Vice President)
   const president = 
-    councilMembers.find((m) => {
+    realCouncilMembers.find((m) => {
       const r = (m.role || "").toLowerCase();
       return r.includes("president") && !r.includes("vice");
     }) ||
-    councilMembers.find((m) => m.role.toLowerCase() === "president") ||
-    councilMembers[1] || // fallback to index 1 (usually president after mentor)
-    councilMembers[0];
+    realCouncilMembers.find((m) => m.role.toLowerCase() === "president");
 
   // Find Vice President
   const vicePresident = 
-    councilMembers.find((m) => {
+    realCouncilMembers.find((m) => {
       const r = (m.role || "").toLowerCase();
       return r.includes("vice president") || r.includes("vice-president") || r === "vp";
     }) ||
-    councilMembers.find((m) => m.id !== president?.id && (m.role.toLowerCase().includes("lead") || m.role.toLowerCase().includes("secretary"))) ||
-    councilMembers[2];
+    realCouncilMembers.find((m) => m.id !== president?.id && (m.role.toLowerCase().includes("lead") || m.role.toLowerCase().includes("secretary")));
+
+  if (!president && !vicePresident) {
+    return null;
+  }
 
   return (
     <section className="py-20 px-4 sm:px-6 lg:px-8 border-b border-slate-200 bg-gradient-to-b from-[#F8FAFC] via-white to-[#F8FAFC] text-[#0F172A] relative overflow-hidden">
