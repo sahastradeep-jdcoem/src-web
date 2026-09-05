@@ -3,7 +3,7 @@ import { mockClubs } from "@/data/clubs";
 import { mockEvents } from "@/data/events";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://src-jdcoem.vercel.app";
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://srcjdcoem.in";
   const now = new Date();
 
   // Static core routes

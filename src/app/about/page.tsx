@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "About Us | SAHASTRADEEP • SRC JDCOEM",
     description: "Discover the governance, institutional pillars, and founding history of the Student Representative Council of JDCOEM Nagpur.",
-    url: "https://src-jdcoem.vercel.app/about",
+    url: "https://srcjdcoem.in/about",
     siteName: "SRC JDCOEM",
   },
 };

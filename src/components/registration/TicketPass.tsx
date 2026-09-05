@@ -224,7 +224,7 @@ export function TicketPass({
                   value={
                     typeof window !== "undefined"
                       ? `${window.location.origin}/verify/${encodeURIComponent(registrationId)}`
-                      : `https://src-jdcoem.vercel.app/verify/${encodeURIComponent(registrationId)}`
+                      : `https://srcjdcoem.in/verify/${encodeURIComponent(registrationId)}`
                   }
                   size={116}
                   level="H"

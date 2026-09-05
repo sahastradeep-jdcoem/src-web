@@ -15,7 +15,7 @@ interface JsonLdProps {
 }
 
 export function JsonLd({ type = "Organization", eventData }: JsonLdProps) {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://src-jdcoem.vercel.app";
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://srcjdcoem.in";
 
   if (type === "Event" && eventData) {
     const eventSchema = {

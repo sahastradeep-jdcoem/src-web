@@ -1226,7 +1226,7 @@ export default function StudentDashboardPage() {
                             value={
                               typeof window !== "undefined"
                                 ? `${window.location.origin}/verify/${encodeURIComponent(selectedTicket.registrationId)}`
-                                : `https://src-jdcoem.vercel.app/verify/${encodeURIComponent(selectedTicket.registrationId)}`
+                                : `https://srcjdcoem.in/verify/${encodeURIComponent(selectedTicket.registrationId)}`
                             }
                             size={116}
                             level="H"

@@ -16,7 +16,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://src-jdcoem.vercel.app"),
+  metadataBase: new URL("https://srcjdcoem.in"),
   title: "SAHASTRADEEP | Student Representative Council • JDCOEM Nagpur",
   description: "Official digital platform of the Student Representative Council (SRC) of JD College of Engineering & Management, Nagpur. Uniting 12 clubs, flagship fests, and student leadership.",
   manifest: "/manifest.json",
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "SAHASTRADEEP — SRC JDCOEM",
     description: "Official Student Representative Council portal of JDCOEM Nagpur. Flagship fests, 12 club charters, and student accreditation.",
-    url: "https://src-jdcoem.vercel.app",
+    url: "https://srcjdcoem.in",
     siteName: "SRC JDCOEM",
     images: [
       {

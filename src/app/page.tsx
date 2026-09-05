@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "SAHASTRADEEP | Student Representative Council • JDCOEM",
     description: "Official portal of SRC JDCOEM Nagpur. Flagship fests, 12 chartered clubs, and digital delegate passes.",
-    url: "https://src-jdcoem.vercel.app",
+    url: "https://srcjdcoem.in",
     siteName: "SRC JDCOEM",
   },
 };

@@ -1725,7 +1725,7 @@ export default function AdminRegistrationsPage() {
                           value={
                             typeof window !== "undefined"
                               ? `${window.location.origin}/verify/${encodeURIComponent(currentIndividual.registrationId)}`
-                              : `https://src-jdcoem.vercel.app/verify/${encodeURIComponent(currentIndividual.registrationId)}`
+                              : `https://srcjdcoem.in/verify/${encodeURIComponent(currentIndividual.registrationId)}`
                           }
                           size={120}
                           level="H"
@@ -2019,7 +2019,7 @@ export default function AdminRegistrationsPage() {
                   value={
                     typeof window !== "undefined"
                       ? `${window.location.origin}/verify/${encodeURIComponent(selectedRecord.registrationId)}`
-                      : `https://src-jdcoem.vercel.app/verify/${encodeURIComponent(selectedRecord.registrationId)}`
+                      : `https://srcjdcoem.in/verify/${encodeURIComponent(selectedRecord.registrationId)}`
                   }
                   size={120}
                   level="H"

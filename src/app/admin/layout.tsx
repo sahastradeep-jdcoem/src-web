@@ -262,7 +262,7 @@ export default function AdminLayout({
           <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 text-left space-y-2.5 text-xs text-slate-300">
             <div className="flex items-start gap-2.5">
               <span className="text-amber-400 font-bold">💻</span>
-              <span>Open <strong>src-jdcoem.vercel.app/admin</strong> on a PC, Mac, or Laptop.</span>
+              <span>Open <strong>srcjdcoem.in/admin</strong> on a PC, Mac, or Laptop.</span>
             </div>
             <div className="flex items-start gap-2.5">
               <span className="text-emerald-400 font-bold">📱</span>
