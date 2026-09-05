@@ -4,12 +4,14 @@ import { getAuth, Auth } from "firebase/auth";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 
 const getAuthDomain = (): string => {
-  if (process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN) {
-    return process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN;
+  const envDomain = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN;
+  // If env var is set to a custom domain (not the default firebaseapp.com), use it
+  if (envDomain && !envDomain.includes("firebaseapp.com")) {
+    return envDomain;
   }
   if (typeof window !== "undefined") {
     const hostname = window.location.hostname;
-    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith(".vercel.app")) {
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
       return "src-jdcoem.firebaseapp.com";
     }
     if (hostname.includes("srcjdcoem.in")) {
