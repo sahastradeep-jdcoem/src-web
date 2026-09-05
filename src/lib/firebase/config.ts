@@ -3,9 +3,25 @@ import { getFirestore, Firestore } from "firebase/firestore";
 import { getAuth, Auth } from "firebase/auth";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 
+const getAuthDomain = (): string => {
+  if (process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN) {
+    return process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN;
+  }
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith(".vercel.app")) {
+      return "src-jdcoem.firebaseapp.com";
+    }
+    if (hostname.includes("srcjdcoem.in")) {
+      return hostname;
+    }
+  }
+  return "www.srcjdcoem.in";
+};
+
 export const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyMockKeyForDevOnly1234567890",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "src-jdcoem.firebaseapp.com",
+  authDomain: getAuthDomain(),
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "src-jdcoem",
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "src-jdcoem.appspot.com",
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "1234567890",
