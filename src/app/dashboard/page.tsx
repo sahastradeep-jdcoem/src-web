@@ -45,6 +45,7 @@ import {
   subscribeToListings
 } from "@/lib/listingsStore";
 import { formatDesignationBadge, isExternalUser } from "@/lib/usersStore";
+import { resolveCanonicalDepartmentName } from "@/lib/departmentsStore";
 import { useAuth } from "@/context/AuthContext";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { downloadPassAsImage } from "@/lib/passExport";
@@ -202,15 +203,29 @@ export default function StudentDashboardPage() {
         (a: any, b: any) => new Date(b.paidAt || b.registeredAt || 0).getTime() - new Date(a.paidAt || a.registeredAt || 0).getTime()
       );
 
-      return sortedPasses.map((r: any) => ({
-        id: r.id,
-        registrationId: r.id,
-        eventSlug: r.eventId || r.eventSlug || "",
-        eventName: r.eventTitle || r.eventName || "Event Delegate Pass",
-        participantName: r.leaderName || r.participantName || "Delegate",
-        email: r.email,
-        phone: r.phone,
-        department: r.department,
+      return sortedPasses.map((r: any) => {
+        const cleanBt = (r.btId || "").trim().toUpperCase();
+        let rawDept = (r.department || "").trim();
+        if (!rawDept || rawDept.toLowerCase().includes("b.tech") || rawDept.toLowerCase().includes("bachelor") || rawDept.toLowerCase().includes("data science") || rawDept.toLowerCase() === "ds") {
+          if (cleanBt.endsWith("DS") || cleanBt.includes("DS") || rawDept.toLowerCase().includes("data science") || rawDept.toLowerCase() === "ds") {
+            rawDept = "CSE(Data Science)";
+          } else if (cleanBt.endsWith("CY") || cleanBt.includes("CY") || rawDept.toLowerCase().includes("cyber")) {
+            rawDept = "CSE(Cyber Security)";
+          } else if (cleanBt.endsWith("AI") || cleanBt.includes("AI") || rawDept.toLowerCase().includes("artificial intelligence")) {
+            rawDept = "CSE(AI)";
+          }
+        }
+        const canonicalDept = resolveCanonicalDepartmentName(rawDept);
+
+        return {
+          id: r.id,
+          registrationId: r.id,
+          eventSlug: r.eventId || r.eventSlug || "",
+          eventName: r.eventTitle || r.eventName || "Event Delegate Pass",
+          participantName: r.leaderName || r.participantName || "Delegate",
+          email: r.email,
+          phone: r.phone,
+          department: canonicalDept,
         year: r.year,
         teamType: (r.teamSize && r.teamSize > 1) || r.teamType === "Team" ? "Team" : "Individual",
         teamName: r.teamName,
@@ -224,8 +239,9 @@ export default function StudentDashboardPage() {
         qrPayload: r.qrPayload || `SRC:PASS:${r.id}`,
         amountPaid: r.amountPaid || 0,
         customAnswers: r.customAnswers,
-      }));
-    };
+      };
+    });
+  };
 
     // Synchronous hydration from local cache to prevent flashing or disappearing passes on refresh
     try {

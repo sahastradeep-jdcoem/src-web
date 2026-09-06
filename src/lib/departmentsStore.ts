@@ -8,7 +8,7 @@ import {
 } from "./firebase/firestore";
 import { enqueueCloudWrite } from "./dataSyncEngine";
 import { db } from "./firebase/config";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, updateDoc, collection, getDocs } from "firebase/firestore";
 import { getStoredUsers, USERS_STORAGE_KEY } from "./usersStore";
 import { getStoredListingResponses, RESPONSES_STORAGE_KEY } from "./listingsStore";
 import { getStoredCouncilMembers, saveStoredCouncilMembers } from "./councilStore";
@@ -221,16 +221,18 @@ export async function cascadeDepartmentRename(oldDeptName: string, newDeptName: 
   usersCount: number;
   responsesCount: number;
   councilCount: number;
+  regsCount: number;
 }> {
   const cleanOld = oldDeptName?.trim();
   const cleanNew = newDeptName?.trim();
   if (!cleanOld || !cleanNew || cleanOld.toLowerCase() === cleanNew.toLowerCase()) {
-    return { usersCount: 0, responsesCount: 0, councilCount: 0 };
+    return { usersCount: 0, responsesCount: 0, councilCount: 0, regsCount: 0 };
   }
 
   let usersCount = 0;
   let responsesCount = 0;
   let councilCount = 0;
+  let regsCount = 0;
 
   // 1. Cascade to Registered Users
   try {
@@ -437,7 +439,33 @@ export async function cascadeDepartmentRename(oldDeptName: string, newDeptName: 
     console.warn("Error cascading department rename across tenures:", e);
   }
 
-  // 5. Cascade to Event Registrations
+  // 5. Cascade to Event Registrations in Firestore and Local Cache
+  try {
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      const colRef = collection(db, "registrations");
+      const snapshot = await getDocs(colRef);
+      for (const d of snapshot.docs) {
+        const data = d.data();
+        const currentDept = (data.department || "").trim();
+        const isMatch =
+          currentDept.toLowerCase() === cleanOld.toLowerCase() ||
+          (cleanOld.toLowerCase().includes("data science") && currentDept.toLowerCase().includes("data science")) ||
+          (cleanOld.toLowerCase().includes("cyber") && currentDept.toLowerCase().includes("cyber")) ||
+          (cleanOld.toLowerCase().includes("artificial intelligence") && currentDept.toLowerCase().includes("artificial intelligence"));
+
+        if (isMatch) {
+          regsCount++;
+          await updateDoc(doc(db, "registrations", d.id), {
+            department: cleanNew,
+            updatedAt: new Date().toISOString(),
+          }).catch((err) => console.warn("Notice: failed to update registration doc:", d.id, err));
+        }
+      }
+    }
+  } catch (cloudRegErr) {
+    console.warn("Notice: could not cascade rename to Firestore registrations:", cloudRegErr);
+  }
+
   try {
     if (typeof window !== "undefined") {
       const rawRegs = localStorage.getItem("src_local_registrations");
@@ -445,7 +473,14 @@ export async function cascadeDepartmentRename(oldDeptName: string, newDeptName: 
         const localRegs = JSON.parse(rawRegs);
         let regsModified = false;
         const updatedRegs = localRegs.map((r: any) => {
-          if (r.department && (r.department.trim().toLowerCase() === cleanOld.toLowerCase() || (cleanOld.toLowerCase().includes("data science") && r.department.toLowerCase().includes("data science")))) {
+          const currentDept = (r.department || "").trim();
+          const isMatch =
+            currentDept.toLowerCase() === cleanOld.toLowerCase() ||
+            (cleanOld.toLowerCase().includes("data science") && currentDept.toLowerCase().includes("data science")) ||
+            (cleanOld.toLowerCase().includes("cyber") && currentDept.toLowerCase().includes("cyber")) ||
+            (cleanOld.toLowerCase().includes("artificial intelligence") && currentDept.toLowerCase().includes("artificial intelligence"));
+
+          if (isMatch) {
             regsModified = true;
             return { ...r, department: cleanNew };
           }
@@ -461,6 +496,6 @@ export async function cascadeDepartmentRename(oldDeptName: string, newDeptName: 
     console.warn("Error cascading department rename across local registrations:", regErr);
   }
 
-  return { usersCount, responsesCount, councilCount };
+  return { usersCount, responsesCount, councilCount, regsCount };
 }
 

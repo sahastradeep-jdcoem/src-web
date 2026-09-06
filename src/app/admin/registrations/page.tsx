@@ -45,9 +45,17 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { getStoredEvents, syncEventsFromFirestore } from "@/lib/eventsStore";
-import { getDepartmentShortName } from "@/lib/departmentsStore";
+import { 
+  getDepartmentShortName, 
+  resolveCanonicalDepartmentName, 
+  getStoredDepartments, 
+  subscribeToDepartments, 
+  syncDepartmentsFromFirestore 
+} from "@/lib/departmentsStore";
 import { getStoredTenures, syncTenuresFromFirestore, subscribeToTenures, CouncilTenure } from "@/lib/tenureStore";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
+import { db } from "@/lib/firebase/config";
+import { doc, updateDoc } from "firebase/firestore";
 import { 
   checkInStudentPass, 
   getAllRegistrationsFromFirestore, 
@@ -64,6 +72,7 @@ export default function AdminRegistrationsPage() {
   const [registrations, setRegistrations] = useState<RegistrationRecord[]>([]);
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
   const [tenuresList, setTenuresList] = useState<CouncilTenure[]>([]);
+  const [departmentsList, setDepartmentsList] = useState<string[]>([]);
   const [selectedTenureId, setSelectedTenureId] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<ActiveTab>("summary");
   const [selectedEventSlug, setSelectedEventSlug] = useState<string>("all");
@@ -89,7 +98,7 @@ export default function AdminRegistrationsPage() {
   const [selectedRecord, setSelectedRecord] = useState<RegistrationRecord | null>(null);
   const [checkInNotice, setCheckInNotice] = useState<string | null>(null);
 
-  // Load and sync events & tenures from local store & Firestore
+  // Load and sync events, tenures & departments from local store & Firestore
   useEffect(() => {
     setEventsList(getStoredEvents());
     syncEventsFromFirestore().then((evts) => {
@@ -101,6 +110,11 @@ export default function AdminRegistrationsPage() {
       if (res && res.length > 0) setTenuresList(res);
     });
 
+    setDepartmentsList(getStoredDepartments());
+    syncDepartmentsFromFirestore().then((depts) => {
+      if (depts && depts.length > 0) setDepartmentsList(depts);
+    });
+
     const unsubscribeEvents = subscribeToSiteContent<EventItem[]>("events", (cloudEvts) => {
       if (cloudEvts && Array.isArray(cloudEvts) && cloudEvts.length > 0) {
         setEventsList(cloudEvts);
@@ -110,6 +124,12 @@ export default function AdminRegistrationsPage() {
     const unsubscribeTenures = subscribeToTenures((cloudTenures) => {
       if (cloudTenures && Array.isArray(cloudTenures) && cloudTenures.length > 0) {
         setTenuresList(cloudTenures);
+      }
+    });
+
+    const unsubscribeDepts = subscribeToDepartments((cloudDepts) => {
+      if (cloudDepts && Array.isArray(cloudDepts) && cloudDepts.length > 0) {
+        setDepartmentsList(cloudDepts);
       }
     });
 
@@ -132,6 +152,7 @@ export default function AdminRegistrationsPage() {
     return () => {
       unsubscribeEvents();
       unsubscribeTenures();
+      unsubscribeDepts();
       window.removeEventListener("src_events_updated", handleEventsUpdate);
       document.removeEventListener("mousedown", handleClickOutside);
     };
@@ -148,7 +169,8 @@ export default function AdminRegistrationsPage() {
     }
   }, []);
 
-  const formatRecords = (records: any[]): RegistrationRecord[] => {
+  const formatRecords = (records: any[], activeDepts?: string[]): RegistrationRecord[] => {
+    const depts = activeDepts && activeDepts.length > 0 ? activeDepts : (departmentsList.length > 0 ? departmentsList : getStoredDepartments());
     return records
       .filter((r: any) => !r.id?.startsWith("hub_") && !r.customAnswers?.isHubBallot && !r.customAnswers?.isHubSubmission && !r.eventTitle?.startsWith("[HUB]"))
       .map((r: any) => {
@@ -172,6 +194,42 @@ export default function AdminRegistrationsPage() {
 
       const cleanRegisteredAt = fullIsoTime || r.registeredAt || (typeof r.createdAt === "string" ? r.createdAt : new Date().toISOString());
 
+      const cleanBt = (r.btId || "").trim().toUpperCase();
+      let rawDept = (r.department || "").trim();
+
+      // Check if rawDept is legacy, typo, or missing or degree
+      if (!rawDept || rawDept.toLowerCase().includes("b.tech") || rawDept.toLowerCase().includes("bachelor") || rawDept.toLowerCase().includes("data science") || rawDept.toLowerCase() === "ds") {
+        if (cleanBt.endsWith("DS") || cleanBt.includes("DS") || rawDept.toLowerCase().includes("data science") || rawDept.toLowerCase() === "ds") {
+          rawDept = "CSE(Data Science)";
+        } else if (cleanBt.endsWith("CY") || cleanBt.includes("CY") || rawDept.toLowerCase().includes("cyber")) {
+          rawDept = "CSE(Cyber Security)";
+        } else if (cleanBt.endsWith("AI") || cleanBt.includes("AI") || rawDept.toLowerCase().includes("artificial intelligence")) {
+          rawDept = "CSE(AI)";
+        } else if (cleanBt.endsWith("CS") || cleanBt.endsWith("CSE") || cleanBt.includes("CS")) {
+          rawDept = "Computer Science and Engineering";
+        } else if (cleanBt.endsWith("IT") || cleanBt.includes("IT")) {
+          rawDept = "Information Technology";
+        } else if (cleanBt.endsWith("CE") || cleanBt.includes("CE")) {
+          rawDept = "Civil Engineering";
+        } else if (cleanBt.endsWith("EE") || cleanBt.includes("EE")) {
+          rawDept = "Electrical Engineering";
+        } else if (cleanBt.endsWith("ME") || cleanBt.includes("ME")) {
+          rawDept = "Mechanical Engineering";
+        } else if (cleanBt.endsWith("ETC") || cleanBt.includes("ETC") || cleanBt.includes("EXTC")) {
+          rawDept = "Electronics and Telecommunication Engineering";
+        }
+      }
+
+      const canonicalDept = resolveCanonicalDepartmentName(rawDept, depts);
+
+      // Self-heal Firestore document in background if it had a legacy department string
+      if (typeof window !== "undefined" && db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY && r.id && !r.id.startsWith("hub_") && r.department !== canonicalDept) {
+        updateDoc(doc(db, "registrations", r.id), {
+          department: canonicalDept,
+          updatedAt: new Date().toISOString(),
+        }).catch(() => {});
+      }
+
       return {
         ...r,
         id: r.id,
@@ -181,7 +239,7 @@ export default function AdminRegistrationsPage() {
         participantName: r.leaderName || r.participantName || "Delegate",
         email: r.email,
         phone: r.phone,
-        department: r.department,
+        department: canonicalDept,
         year: r.year,
         teamType: (r.teamSize && r.teamSize > 1) || r.teamType === "Team" ? "Team" : "Individual",
         teamName: r.teamName,
@@ -215,9 +273,10 @@ export default function AdminRegistrationsPage() {
       const cloud = await getAllRegistrationsFromFirestore();
       if (cloud) {
         const cleaned = cloud.filter((r: any) => !isTestPassRecord(r) && !isHubRecord(r));
-        setRegistrations(formatRecords(cleaned));
+        const formatted = formatRecords(cleaned);
+        setRegistrations(formatted);
         try {
-          localStorage.setItem("src_local_registrations", JSON.stringify(cleaned));
+          localStorage.setItem("src_local_registrations", JSON.stringify(formatted));
         } catch {}
       }
     } catch {}
@@ -229,7 +288,11 @@ export default function AdminRegistrationsPage() {
     const unsubscribe = subscribeToRegistrationsFromFirestore((cloudRegs) => {
       if (cloudRegs) {
         const cleaned = cloudRegs.filter((r: any) => !isTestPassRecord(r) && !isHubRecord(r));
-        setRegistrations(formatRecords(cleaned));
+        const formatted = formatRecords(cleaned);
+        setRegistrations(formatted);
+        try {
+          localStorage.setItem("src_local_registrations", JSON.stringify(formatted));
+        } catch {}
       }
     });
 
@@ -240,6 +303,13 @@ export default function AdminRegistrationsPage() {
       window.removeEventListener("storage", handleStorage);
     };
   }, []);
+
+  // Re-normalize registrations whenever department list updates
+  useEffect(() => {
+    if (departmentsList.length > 0 && registrations.length > 0) {
+      setRegistrations((prev) => formatRecords(prev, departmentsList));
+    }
+  }, [departmentsList]);
 
   // Events available in selected tenure
   const tenureFilteredEvents = useMemo(() => {
@@ -438,7 +508,7 @@ export default function AdminRegistrationsPage() {
     // Department breakdown
     const depts: Record<string, number> = {};
     eventRegistrations.forEach((r) => {
-      const d = r.department || "Unspecified";
+      const d = resolveCanonicalDepartmentName(r.department, departmentsList) || "Unspecified";
       depts[d] = (depts[d] || 0) + 1;
     });
 
@@ -461,7 +531,7 @@ export default function AdminRegistrationsPage() {
       departments: Object.entries(depts).sort((a, b) => b[1] - a[1]),
       years: Object.entries(years).sort((a, b) => b[1] - a[1]),
     };
-  }, [eventRegistrations]);
+  }, [eventRegistrations, departmentsList]);
 
   // Helper to format question types into friendly display labels
   const getQuestionTypeLabel = (type?: string) => {
@@ -686,7 +756,10 @@ export default function AdminRegistrationsPage() {
         rawVal = r.customAnswers[q.id];
       }
 
-      const val = getAnswerValue(rawVal);
+      let val = getAnswerValue(rawVal);
+      if (q.id === "department" && val) {
+        val = resolveCanonicalDepartmentName(String(val), departmentsList);
+      }
 
       if (val !== undefined && val !== null && val !== "") {
         responses.push({ respondent: r, answer: val });
@@ -694,14 +767,15 @@ export default function AdminRegistrationsPage() {
         if (isChoice) {
           if (Array.isArray(val)) {
             val.forEach((item) => {
-              if (!optionCounts[item]) {
-                optionCounts[item] = { count: 0, respondents: [] };
+              const itemVal = q.id === "department" && typeof item === "string" ? resolveCanonicalDepartmentName(item, departmentsList) : item;
+              if (!optionCounts[itemVal]) {
+                optionCounts[itemVal] = { count: 0, respondents: [] };
               }
-              optionCounts[item].count += 1;
-              optionCounts[item].respondents.push(r);
+              optionCounts[itemVal].count += 1;
+              optionCounts[itemVal].respondents.push(r);
             });
           } else {
-            const strVal = String(val);
+            const strVal = q.id === "department" ? resolveCanonicalDepartmentName(String(val), departmentsList) : String(val);
             if (!optionCounts[strVal]) {
               optionCounts[strVal] = { count: 0, respondents: [] };
             }
@@ -892,7 +966,7 @@ export default function AdminRegistrationsPage() {
         "Full Name": sanitizeExcelCell(r.participantName || ""),
         "College BT ID": sanitizeExcelCell(r.btId || ""),
         "WhatsApp Contact": sanitizeExcelCell(r.phone || ""),
-        "Department / Branch": sanitizeExcelCell(r.department || ""),
+        "Department / Branch": sanitizeExcelCell(resolveCanonicalDepartmentName(r.department, departmentsList) || ""),
         "Academic Year": sanitizeExcelCell(r.year || ""),
         "Event": sanitizeExcelCell(r.eventName || ""),
         "Participation Format": sanitizeExcelCell(r.teamType || "Individual"),

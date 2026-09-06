@@ -101,9 +101,9 @@ export default function AdminDepartmentsPage() {
 
     if (oldName && oldName.toLowerCase() !== clean.toLowerCase()) {
       cascadeDepartmentRename(oldName, clean).then((stats) => {
-        if (stats.usersCount > 0 || stats.responsesCount > 0 || stats.councilCount > 0) {
+        if (stats.usersCount > 0 || stats.responsesCount > 0 || stats.councilCount > 0 || stats.regsCount > 0) {
           setNoticeMessage(
-            `Switched ${stats.usersCount} student profile(s), ${stats.responsesCount} response(s), and ${stats.councilCount} council record(s) from "${oldName}" to "${clean}".`
+            `Switched ${stats.usersCount} student profile(s), ${stats.regsCount || 0} registration(s), ${stats.responsesCount} response(s), and ${stats.councilCount} council record(s) from "${oldName}" to "${clean}".`
           );
           setTimeout(() => setNoticeMessage(null), 6000);
         }
