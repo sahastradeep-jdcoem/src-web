@@ -1043,18 +1043,6 @@ export default function AdminTeamPage() {
       {/* 4 PILLARS OF STRENGTH MANAGEMENT VIEW */}
       {activeTab === "pillars" && (
         <div className="space-y-6">
-          <div className="p-5 rounded-3xl bg-linear-to-r from-blue-50 to-indigo-50/50 border border-blue-200 text-blue-950 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-            <div className="space-y-1">
-              <div className="font-bold flex items-center gap-1.5 text-sm text-[#17458F]">
-                <GraduationCap className="w-4 h-4 text-[#E78023]" />
-                <span>The 4 Pillars of Strength of SRC</span>
-              </div>
-              <p className="text-slate-600 leading-relaxed max-w-3xl">
-                These 4 institutional patrons and faculty mentors (Principal, Dean IQAC, and 2 Faculty Coordinators) represent the foundational pillars of the Student Representative Council (Sahastradeep). They are showcased in the postcard gallery at the top of the public <code>/about</code> page. You can edit their names, designations, guidance quotes, and upload high-res photos below.
-              </p>
-            </div>
-          </div>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {pillarsList.map((pillar) => (
               <div
