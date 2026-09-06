@@ -43,7 +43,7 @@ import {
   RegisteredUserRecord 
 } from "@/lib/usersStore";
 import { subscribeToUsersFromFirestore } from "@/lib/firebase/firestore";
-import { getStoredDepartments, getDepartmentShortName } from "@/lib/departmentsStore";
+import { getStoredDepartments, getDepartmentShortName, resolveCanonicalDepartmentName, syncDepartmentsFromFirestore } from "@/lib/departmentsStore";
 import { 
   School, 
   MapPin, 
@@ -69,6 +69,11 @@ export default function AdminUsersPage() {
   const loadData = async () => {
     setUsers(getStoredUsers());
     setDepartments(getStoredDepartments());
+    syncDepartmentsFromFirestore().then((remoteDepts) => {
+      if (remoteDepts && remoteDepts.length > 0) {
+        setDepartments(remoteDepts);
+      }
+    }).catch(() => {});
     try {
       const synced = await syncUsersFromFirestore();
       if (synced && synced.length > 0) {
@@ -117,7 +122,7 @@ export default function AdminUsersPage() {
     displayName: "",
     email: "",
     btId: "",
-    department: "Data Science Engineering",
+    department: "CSE(Data Science)",
     year: "3rd Year",
     role: "STUDENT" as "STUDENT" | "COUNCIL_ADMIN",
   });
@@ -126,7 +131,7 @@ export default function AdminUsersPage() {
     displayName: "",
     email: "",
     btId: "",
-    department: "Data Science Engineering",
+    department: "CSE(Data Science)",
     year: "3rd Year",
     phone: "",
     role: "STUDENT" as "STUDENT" | "COUNCIL_ADMIN",
@@ -138,7 +143,7 @@ export default function AdminUsersPage() {
       displayName: u.displayName || "",
       email: u.email || "",
       btId: u.btId || "",
-      department: u.department || "Data Science Engineering",
+      department: resolveCanonicalDepartmentName(u.department || "CSE(Data Science)", departments),
       year: u.year || "3rd Year",
       phone: u.phone || "",
       role: u.role === "COUNCIL_ADMIN" ? "COUNCIL_ADMIN" : "STUDENT",
@@ -208,7 +213,7 @@ export default function AdminUsersPage() {
       displayName: "",
       email: "",
       btId: "",
-      department: "Data Science Engineering",
+      department: "CSE(Data Science)",
       year: "3rd Year",
       role: "STUDENT",
     });

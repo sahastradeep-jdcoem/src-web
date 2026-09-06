@@ -193,7 +193,7 @@ export const DEFAULT_REGISTERED_USERS: RegisteredUserRecord[] = [
     firstName: "Sanskruti",
     lastName: "Tidke",
     btId: "BT240115DS",
-    department: "Data Science Engineering",
+    department: "CSE(Data Science)",
     year: "3rd Year",
     phone: "9075828232",
     profileCompleted: true,

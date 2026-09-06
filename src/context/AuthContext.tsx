@@ -26,6 +26,7 @@ import {
   markUserAsDeleted,
   formatDesignationBadge 
 } from "@/lib/usersStore";
+import { resolveCanonicalDepartmentName } from "@/lib/departmentsStore";
 
 /**
  * Validates that all required fields for a given role are completed
@@ -87,6 +88,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             parsed.isCouncilOfficer = false;
           } else if (parsed.designationBadge) {
             parsed.designationBadge = formatDesignationBadge(parsed.designationBadge);
+          }
+          if (parsed.department && parsed.userType !== "EXTERNAL_STUDENT") {
+            parsed.department = resolveCanonicalDepartmentName(parsed.department);
           }
           const isComplete = determineProfileCompletion(parsed, parsed.userType, cleanBt);
           parsed.profileCompleted = isComplete;
@@ -185,7 +189,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           firstName: storedProfile?.firstName || localProfile?.firstName || registeredUser?.firstName || (fbUser.displayName ? fbUser.displayName.split(" ")[0] : ""),
           lastName: storedProfile?.lastName || localProfile?.lastName || registeredUser?.lastName || (fbUser.displayName ? fbUser.displayName.split(" ").slice(1).join(" ") : ""),
           btId: cleanBt,
-          department: storedProfile?.department || localProfile?.department || registeredUser?.department || (resolvedUserType === "EXTERNAL_STUDENT" ? (storedProfile?.degree || localProfile?.degree || "Undergraduate") : "Computer Science and Engineering"),
+          department: resolvedUserType === "EXTERNAL_STUDENT"
+            ? (storedProfile?.degree || localProfile?.degree || "Undergraduate")
+            : resolveCanonicalDepartmentName(storedProfile?.department || localProfile?.department || registeredUser?.department || "Computer Science and Engineering"),
           year: storedProfile?.year || localProfile?.year || registeredUser?.year || "3rd Year",
           phone: storedProfile?.phone || localProfile?.phone || registeredUser?.phone || "",
           collegeName: storedProfile?.collegeName || localProfile?.collegeName || registeredUser?.collegeName || "",

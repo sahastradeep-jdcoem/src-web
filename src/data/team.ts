@@ -330,7 +330,7 @@ export const foundingMembers: TeamMember[] = [
     id: "founder-2",
     name: "Sanskruti Tidke",
     role: "Founding President",
-    department: "Data Science Engineering",
+    department: "CSE(Data Science)",
     year: "3rd Year",
     btId: "BT240115DS",
     avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",

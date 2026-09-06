@@ -2,7 +2,9 @@ import {
   getSiteContentFromFirestore,
   cleanUndefined,
   saveSiteContentToFirestore,
-  saveUserProfileToFirestore
+  saveUserProfileToFirestore,
+  subscribeToSiteContent,
+  getAllUsersFromFirestore
 } from "./firebase/firestore";
 import { enqueueCloudWrite } from "./dataSyncEngine";
 import { db } from "./firebase/config";
@@ -26,8 +28,8 @@ export function getDepartmentShortName(deptName?: string | null): string {
   }
   
   const lower = trimmed.toLowerCase();
-  if (lower.includes("data science")) return "DS";
-  if (lower.includes("cyber security") || lower.includes("cyber")) return "CY";
+  if (lower.includes("data science") || lower === "ds") return "DS";
+  if (lower.includes("cyber security") || lower.includes("cyber") || lower === "cy") return "CY";
   if (lower.includes("artificial intelligence") || lower === "ai") return "AI";
   if (lower.includes("computer science") || lower === "cse") return "CSE";
   if (lower.includes("information tech") || lower === "it") return "IT";
@@ -41,6 +43,80 @@ export function getDepartmentShortName(deptName?: string | null): string {
   if (lower.includes("master of computer") || lower === "mca") return "MCA";
   if (lower.includes("diploma") || lower === "dip") return "DIP";
   if (lower.includes("basic science") || lower.includes("humanities") || lower === "bsh") return "BSH";
+
+  return trimmed;
+}
+
+/**
+ * Intelligently resolves legacy or variant department names into the accredited live department name.
+ * e.g. "Data Science Engineering" -> "CSE(Data Science)"
+ */
+export function resolveCanonicalDepartmentName(
+  deptName?: string | null,
+  activeDepts?: string[]
+): string {
+  const list = activeDepts && activeDepts.length > 0 ? activeDepts : getStoredDepartments();
+  if (!deptName) {
+    return list[0] || DEFAULT_DEPARTMENTS[0] || "Computer Science and Engineering";
+  }
+
+  const trimmed = deptName.trim();
+  if (!trimmed) {
+    return list[0] || DEFAULT_DEPARTMENTS[0] || "Computer Science and Engineering";
+  }
+
+  // 1. Exact or case-insensitive match in the active list
+  const exactMatch = list.find((d) => d.toLowerCase() === trimmed.toLowerCase());
+  if (exactMatch) return exactMatch;
+
+  // 2. Specific alias normalization
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("data science") || lower === "ds" || lower.includes("cse(ds)") || lower.includes("cse (ds)")) {
+    const dsMatch = list.find((d) => {
+      const dl = d.toLowerCase();
+      return dl.includes("data science") || dl === "ds" || dl.includes("(ds)");
+    });
+    if (dsMatch) return dsMatch;
+  }
+
+  if (lower.includes("cyber security") || lower === "cy" || lower.includes("cyber")) {
+    const cyMatch = list.find((d) => {
+      const dl = d.toLowerCase();
+      return dl.includes("cyber security") || dl.includes("cyber") || dl === "cy";
+    });
+    if (cyMatch) return cyMatch;
+  }
+
+  if (lower.includes("artificial intelligence") || lower === "ai" || lower.includes("(ai)")) {
+    const aiMatch = list.find((d) => {
+      const dl = d.toLowerCase();
+      return dl.includes("artificial intelligence") || dl === "ai" || dl.includes("(ai)");
+    });
+    if (aiMatch) return aiMatch;
+  }
+
+  if (lower.includes("information tech") || lower === "it") {
+    const itMatch = list.find((d) => {
+      const dl = d.toLowerCase();
+      return dl.includes("information tech") || dl === "it";
+    });
+    if (itMatch) return itMatch;
+  }
+
+  if (lower.includes("computer science") || lower === "cse") {
+    const cseMatch = list.find((d) => {
+      const dl = d.toLowerCase();
+      return (dl.includes("computer science") || dl === "cse") && !dl.includes("data science") && !dl.includes("artificial");
+    });
+    if (cseMatch) return cseMatch;
+  }
+
+  // 3. Acronym code match
+  const code = getDepartmentShortName(trimmed);
+  if (code) {
+    const codeMatch = list.find((d) => getDepartmentShortName(d) === code);
+    if (codeMatch) return codeMatch;
+  }
 
   return trimmed;
 }
@@ -77,13 +153,50 @@ export async function syncDepartmentsFromFirestore(): Promise<string[]> {
     const remote = await getSiteContentFromFirestore<string[]>("departments");
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
       if (typeof window !== "undefined") {
-        localStorage.setItem("src_departments", JSON.stringify(remote));
+        try { localStorage.setItem("src_departments", JSON.stringify(remote)); } catch {}
         window.dispatchEvent(new CustomEvent("src_departments_updated", { detail: remote }));
       }
       return remote;
     }
   } catch {}
   return getStoredDepartments();
+}
+
+/**
+ * Real-time dual-subscription to departments across Firestore cloud and local cross-tab events
+ */
+export function subscribeToDepartments(callback: (departments: string[]) => void): () => void {
+  // 1. Subscribe to Firestore site_content/departments doc
+  const unsubscribeFirestore = subscribeToSiteContent<string[]>("departments", (remote) => {
+    if (remote && Array.isArray(remote) && remote.length > 0) {
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("src_departments", JSON.stringify(remote));
+        } catch {}
+      }
+      callback(remote);
+    }
+  });
+
+  // 2. Also listen to local window event for instant cross-tab / local updates
+  const handleLocal = (e: any) => {
+    if (e?.detail && Array.isArray(e.detail) && e.detail.length > 0) {
+      callback(e.detail);
+    } else {
+      callback(getStoredDepartments());
+    }
+  };
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("src_departments_updated", handleLocal);
+  }
+
+  return () => {
+    unsubscribeFirestore();
+    if (typeof window !== "undefined") {
+      window.removeEventListener("src_departments_updated", handleLocal);
+    }
+  };
 }
 
 export function resetStoredDepartments(): string[] {
@@ -162,6 +275,37 @@ export async function cascadeDepartmentRename(oldDeptName: string, newDeptName: 
       } catch {}
     }
 
+    // 1b. Query and update all remote Firestore users to ensure accounts not present in local cache are updated
+    try {
+      const remoteUsers = await getAllUsersFromFirestore();
+      for (const ru of remoteUsers) {
+        let changed = false;
+        let newDept = ru.department;
+        let newFacDept = ru.facultyDepartment;
+
+        if (ru.department && (ru.department.trim().toLowerCase() === cleanOld.toLowerCase() || (cleanOld.toLowerCase().includes("data science") && ru.department.toLowerCase().includes("data science")))) {
+          newDept = cleanNew;
+          changed = true;
+        }
+        if (ru.facultyDepartment && (ru.facultyDepartment.trim().toLowerCase() === cleanOld.toLowerCase() || (cleanOld.toLowerCase().includes("data science") && ru.facultyDepartment.toLowerCase().includes("data science")))) {
+          newFacDept = cleanNew;
+          changed = true;
+        }
+
+        if (changed && ru.uid) {
+          if (!currentUsers.some((cu) => cu.uid === ru.uid)) {
+            usersCount++;
+          }
+          await saveUserProfileToFirestore(ru.uid, {
+            department: newDept,
+            facultyDepartment: newFacDept,
+          }).catch(() => {});
+        }
+      }
+    } catch (remoteUsersErr) {
+      console.warn("Notice: could not cascade rename to remote users:", remoteUsersErr);
+    }
+
     // Update active user session in localStorage/sessionStorage
     if (typeof window !== "undefined") {
       try {
@@ -169,17 +313,18 @@ export async function cascadeDepartmentRename(oldDeptName: string, newDeptName: 
         if (rawAuth) {
           const authUser = JSON.parse(rawAuth);
           let authChanged = false;
-          if (authUser.department && authUser.department.trim().toLowerCase() === cleanOld.toLowerCase()) {
+          if (authUser.department && (authUser.department.trim().toLowerCase() === cleanOld.toLowerCase() || (cleanOld.toLowerCase().includes("data science") && authUser.department.toLowerCase().includes("data science")))) {
             authUser.department = cleanNew;
             authChanged = true;
           }
-          if (authUser.facultyDepartment && authUser.facultyDepartment.trim().toLowerCase() === cleanOld.toLowerCase()) {
+          if (authUser.facultyDepartment && (authUser.facultyDepartment.trim().toLowerCase() === cleanOld.toLowerCase() || (cleanOld.toLowerCase().includes("data science") && authUser.facultyDepartment.toLowerCase().includes("data science")))) {
             authUser.facultyDepartment = cleanNew;
             authChanged = true;
           }
           if (authChanged) {
             localStorage.setItem("src_auth_user", JSON.stringify(authUser));
             sessionStorage.setItem("src_auth_user", JSON.stringify(authUser));
+            window.dispatchEvent(new CustomEvent("src_auth_state_changed", { detail: authUser }));
           }
         }
       } catch {}
@@ -290,6 +435,30 @@ export async function cascadeDepartmentRename(oldDeptName: string, newDeptName: 
     }
   } catch (e) {
     console.warn("Error cascading department rename across tenures:", e);
+  }
+
+  // 5. Cascade to Event Registrations
+  try {
+    if (typeof window !== "undefined") {
+      const rawRegs = localStorage.getItem("src_local_registrations");
+      if (rawRegs) {
+        const localRegs = JSON.parse(rawRegs);
+        let regsModified = false;
+        const updatedRegs = localRegs.map((r: any) => {
+          if (r.department && (r.department.trim().toLowerCase() === cleanOld.toLowerCase() || (cleanOld.toLowerCase().includes("data science") && r.department.toLowerCase().includes("data science")))) {
+            regsModified = true;
+            return { ...r, department: cleanNew };
+          }
+          return r;
+        });
+        if (regsModified) {
+          localStorage.setItem("src_local_registrations", JSON.stringify(updatedRegs));
+          window.dispatchEvent(new CustomEvent("src_registrations_updated", { detail: updatedRegs }));
+        }
+      }
+    }
+  } catch (regErr) {
+    console.warn("Error cascading department rename across local registrations:", regErr);
   }
 
   return { usersCount, responsesCount, councilCount };

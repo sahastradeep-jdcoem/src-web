@@ -30,7 +30,10 @@ import { cn } from "@/lib/utils";
 
 import { 
   getStoredDepartments, 
-  DEFAULT_DEPARTMENTS 
+  DEFAULT_DEPARTMENTS,
+  syncDepartmentsFromFirestore,
+  subscribeToDepartments,
+  resolveCanonicalDepartmentName
 } from "@/lib/departmentsStore";
 import { 
   checkBtIdAvailability, 
@@ -116,16 +119,21 @@ export function ProfileSetupModal() {
   useEffect(() => {
     setDepartmentsList(getStoredDepartments());
 
-    const handleDeptsUpdate = (e: any) => {
-      if (e?.detail && Array.isArray(e.detail)) {
-        setDepartmentsList(e.detail);
-      } else {
-        setDepartmentsList(getStoredDepartments());
+    syncDepartmentsFromFirestore().then((remote) => {
+      if (remote && Array.isArray(remote) && remote.length > 0) {
+        setDepartmentsList(remote);
       }
-    };
+    });
 
-    window.addEventListener("src_departments_updated", handleDeptsUpdate);
-    return () => window.removeEventListener("src_departments_updated", handleDeptsUpdate);
+    const unsubscribe = subscribeToDepartments((fresh) => {
+      if (fresh && Array.isArray(fresh) && fresh.length > 0) {
+        setDepartmentsList(fresh);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -156,8 +164,9 @@ export function ProfileSetupModal() {
         if (match) setDetectedDesignation(match.designationBadge);
       }
       if (user.department) {
-        setDepartment(user.department);
-        setFacultyDepartment(user.department);
+        const canonical = resolveCanonicalDepartmentName(user.department, departmentsList);
+        setDepartment(canonical);
+        setFacultyDepartment(canonical);
       }
       if (user.year) {
         setYear(user.year);
@@ -640,7 +649,7 @@ export function ProfileSetupModal() {
                       <span>JDCOEM Department <span className="text-rose-500">*</span></span>
                     </label>
                     <select
-                      value={department}
+                      value={resolveCanonicalDepartmentName(department, departmentsList)}
                       onChange={(e) => setDepartment(e.target.value)}
                       className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
                     >

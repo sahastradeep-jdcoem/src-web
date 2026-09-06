@@ -34,7 +34,10 @@ import {
 import confetti from "canvas-confetti";
 import { 
   getStoredDepartments, 
-  DEFAULT_DEPARTMENTS 
+  DEFAULT_DEPARTMENTS,
+  syncDepartmentsFromFirestore,
+  subscribeToDepartments,
+  resolveCanonicalDepartmentName
 } from "@/lib/departmentsStore";
 import { 
   findRegisteredUserByBtId, 
@@ -149,18 +152,25 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     return () => { isMounted = false; };
   }, [user, event.id, event.slug, formData.btId, formData.email, isExternal]);
 
-  // Sync profile data directly from authenticated user
+  // Sync profile data directly from authenticated user and live Firestore departments
   useEffect(() => {
     setDepartmentsList(getStoredDepartments());
-    const handleDeptUpdate = (e: any) => {
-      if (e?.detail && Array.isArray(e.detail)) {
-        setDepartmentsList(e.detail);
-      } else {
-        setDepartmentsList(getStoredDepartments());
+
+    syncDepartmentsFromFirestore().then((remote) => {
+      if (remote && Array.isArray(remote) && remote.length > 0) {
+        setDepartmentsList(remote);
       }
+    });
+
+    const unsubscribe = subscribeToDepartments((fresh) => {
+      if (fresh && Array.isArray(fresh) && fresh.length > 0) {
+        setDepartmentsList(fresh);
+      }
+    });
+
+    return () => {
+      unsubscribe();
     };
-    window.addEventListener("src_departments_updated", handleDeptUpdate);
-    return () => window.removeEventListener("src_departments_updated", handleDeptUpdate);
   }, []);
 
   useEffect(() => {
@@ -172,11 +182,16 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       const leaderBtId = userIsExternal ? "" : (user.btId || (userIsFaculty ? (user.employeeId || "FACULTY") : ""));
       const leaderCollege = userIsExternal ? (user.collegeName || "") : "JDCOEM Nagpur";
       const leaderCity = userIsExternal ? (user.city || "Nagpur") : "Nagpur";
-      const leaderDept = userIsFaculty 
+      const rawDept = userIsFaculty 
         ? (user.facultyDepartment || user.department || "Academic Faculty") 
         : userIsExternal 
         ? (user.customBranch || user.department || "General Stream") 
-        : (user.department || DEFAULT_DEPARTMENTS[0] || "Computer Science and Engineering");
+        : (user.department || departmentsList[0] || DEFAULT_DEPARTMENTS[0] || "Computer Science and Engineering");
+
+      const leaderDept = (userIsFaculty || userIsExternal)
+        ? rawDept
+        : resolveCanonicalDepartmentName(rawDept, departmentsList);
+
       const leaderYear = userIsFaculty ? (user.facultyDesignation || "Faculty Member") : (user.year || "3rd Year");
       const leaderPhone = user.phone || "";
       const leaderEmail = user.email || "";
@@ -209,7 +224,20 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         setTeamAddMode("external");
       }
     }
-  }, [user]);
+  }, [user, departmentsList]);
+
+  // Automatically keep formData.department aligned when departmentsList is refreshed from Firestore
+  useEffect(() => {
+    if (!isExternal && !isFaculty && formData.department && departmentsList.length > 0) {
+      const canonical = resolveCanonicalDepartmentName(formData.department, departmentsList);
+      if (canonical && canonical !== formData.department) {
+        setFormData((prev) => ({ ...prev, department: canonical }));
+        setTeamMembers((prev) =>
+          prev.map((m) => (m.isLeader ? { ...m, department: canonical } : m))
+        );
+      }
+    }
+  }, [departmentsList, isExternal, isFaculty, formData.department]);
 
   const minTeamSize = event.minTeamSize || (event.teamType === "Individual" ? 1 : 2);
   const maxTeamSize = event.maxTeamSize || 4;
@@ -1007,7 +1035,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                             <span>Academic Department *</span>
                           </label>
                           <select
-                            value={formData.department}
+                            value={resolveCanonicalDepartmentName(formData.department, departmentsList)}
                             onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                             className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
                           >
@@ -1043,7 +1071,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                             <span>Department / Branch *</span>
                           </label>
                           <select
-                            value={formData.department}
+                            value={resolveCanonicalDepartmentName(formData.department, departmentsList)}
                             onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                             className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
                           >
