@@ -314,7 +314,7 @@ export default function AdminUsersPage() {
 
   const jdcoemStudents = useMemo(() => {
     return users.filter(
-      (u) => !u.isDeleted && u.status !== "deleted" && !isExternalUser(u) && u.role !== "FACULTY" && u.role !== "COUNCIL_ADMIN"
+      (u) => !u.isDeleted && u.status !== "deleted" && !isExternalUser(u) && u.role !== "FACULTY"
     );
   }, [users]);
 
@@ -358,7 +358,7 @@ export default function AdminUsersPage() {
       } else if (categoryFilter === "VERIFIED_FACULTY") {
         matchesCategory = !u.isDeleted && u.status !== "deleted" && (u.role === "FACULTY" || u.userType === "FACULTY") && u.facultyApprovalStatus === "approved";
       } else if (categoryFilter === "JDCOEM_STUDENTS") {
-        matchesCategory = !u.isDeleted && u.status !== "deleted" && !isExternalUser(u) && u.role !== "FACULTY" && u.role !== "COUNCIL_ADMIN";
+        matchesCategory = !u.isDeleted && u.status !== "deleted" && !isExternalUser(u) && u.role !== "FACULTY";
       } else if (categoryFilter === "EXTERNAL_STUDENTS") {
         matchesCategory = !u.isDeleted && u.status !== "deleted" && isExternalUser(u);
       } else if (categoryFilter === "COUNCIL_ADMIN") {
@@ -499,21 +499,39 @@ export default function AdminUsersPage() {
 
       {/* Summary KPI Badges (6 Cards) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Users</span>
+        <button
+          type="button"
+          onClick={() => setCategoryFilter("All")}
+          className={`p-4 rounded-2xl bg-white border shadow-xs space-y-1 text-left transition-all hover:border-[#17458F]/40 cursor-pointer ${
+            categoryFilter === "All" ? "ring-2 ring-[#17458F] border-[#17458F]" : "border-slate-200"
+          }`}
+        >
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Users</span>
           <p className="font-hero font-extrabold text-2xl text-[#0F172A]">{users.length}</p>
-          <span className="text-[10px] text-slate-500 font-medium">All Accounts</span>
-        </div>
+          <span className="text-[10px] text-slate-500 font-medium block">All Accounts</span>
+        </button>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">JDCOEM Students</span>
+        <button
+          type="button"
+          onClick={() => setCategoryFilter("JDCOEM_STUDENTS")}
+          className={`p-4 rounded-2xl bg-white border shadow-xs space-y-1 text-left transition-all hover:border-[#17458F]/40 cursor-pointer ${
+            categoryFilter === "JDCOEM_STUDENTS" ? "ring-2 ring-[#17458F] border-[#17458F]" : "border-slate-200"
+          }`}
+        >
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">JDCOEM Students</span>
           <p className="font-hero font-extrabold text-2xl text-[#17458F]">{jdcoemStudents.length}</p>
-          <span className="text-[10px] text-slate-500 font-medium">Verified BT IDs</span>
-        </div>
+          <span className="text-[10px] text-slate-500 font-medium block">Verified BT IDs</span>
+        </button>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
+        <button
+          type="button"
+          onClick={() => setCategoryFilter(pendingFaculty.length > 0 ? "PENDING_FACULTY" : "VERIFIED_FACULTY")}
+          className={`p-4 rounded-2xl bg-white border shadow-xs space-y-1 text-left transition-all hover:border-[#E78023]/40 cursor-pointer ${
+            categoryFilter === "VERIFIED_FACULTY" || categoryFilter === "PENDING_FACULTY" ? "ring-2 ring-[#E78023] border-[#E78023]" : "border-slate-200"
+          }`}
+        >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Faculty &amp; Staff</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Faculty &amp; Staff</span>
             {pendingFaculty.length > 0 && (
               <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold text-[9px]">
                 {pendingFaculty.length} Pending
@@ -521,26 +539,44 @@ export default function AdminUsersPage() {
             )}
           </div>
           <p className="font-hero font-extrabold text-2xl text-[#E78023]">{verifiedFaculty.length + pendingFaculty.length}</p>
-          <span className="text-[10px] text-slate-500 font-medium">{verifiedFaculty.length} Approved</span>
-        </div>
+          <span className="text-[10px] text-slate-500 font-medium block">{verifiedFaculty.length} Approved</span>
+        </button>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Other Colleges</span>
+        <button
+          type="button"
+          onClick={() => setCategoryFilter("EXTERNAL_STUDENTS")}
+          className={`p-4 rounded-2xl bg-white border shadow-xs space-y-1 text-left transition-all hover:border-emerald-500/40 cursor-pointer ${
+            categoryFilter === "EXTERNAL_STUDENTS" ? "ring-2 ring-emerald-600 border-emerald-600" : "border-slate-200"
+          }`}
+        >
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Other Colleges</span>
           <p className="font-hero font-extrabold text-2xl text-emerald-600">{externalStudents.length}</p>
-          <span className="text-[10px] text-slate-500 font-medium">Visiting Delegates</span>
-        </div>
+          <span className="text-[10px] text-slate-500 font-medium block">Visiting Delegates</span>
+        </button>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Council Admins</span>
+        <button
+          type="button"
+          onClick={() => setCategoryFilter("COUNCIL_ADMIN")}
+          className={`p-4 rounded-2xl bg-white border shadow-xs space-y-1 text-left transition-all hover:border-slate-900/40 cursor-pointer ${
+            categoryFilter === "COUNCIL_ADMIN" ? "ring-2 ring-slate-900 border-slate-900" : "border-slate-200"
+          }`}
+        >
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Council Admins</span>
           <p className="font-hero font-extrabold text-2xl text-slate-900">{adminUsers.length}</p>
-          <span className="text-[10px] text-slate-500 font-medium">Full Studio Access</span>
-        </div>
+          <span className="text-[10px] text-slate-500 font-medium block">Full Studio Access</span>
+        </button>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Deleted Accounts</span>
+        <button
+          type="button"
+          onClick={() => setCategoryFilter("DELETED_ACCOUNTS")}
+          className={`p-4 rounded-2xl bg-white border shadow-xs space-y-1 text-left transition-all hover:border-rose-500/40 cursor-pointer ${
+            categoryFilter === "DELETED_ACCOUNTS" ? "ring-2 ring-rose-600 border-rose-600" : "border-slate-200"
+          }`}
+        >
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Deleted Accounts</span>
           <p className="font-hero font-extrabold text-2xl text-rose-600">{deletedUsers.length}</p>
-          <span className="text-[10px] text-slate-500 font-medium">Deactivated</span>
-        </div>
+          <span className="text-[10px] text-slate-500 font-medium block">Deactivated</span>
+        </button>
       </div>
 
       {/* Filter & Search Bar */}
@@ -615,6 +651,18 @@ export default function AdminUsersPage() {
           >
             <Globe className="w-3.5 h-3.5" />
             <span>Other Colleges ({externalStudents.length})</span>
+          </button>
+
+          <button
+            onClick={() => setCategoryFilter("COUNCIL_ADMIN")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              categoryFilter === "COUNCIL_ADMIN"
+                ? "bg-slate-900 text-white shadow-xs"
+                : "bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100"
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Council Admins ({adminUsers.length})</span>
           </button>
 
           <button
@@ -850,7 +898,7 @@ export default function AdminUsersPage() {
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                             <span>Verified Delegate</span>
                           </div>
-                        ) : u.profileCompleted ? (
+                        ) : u.role === "COUNCIL_ADMIN" || u.profileCompleted ? (
                           <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-semibold">
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                             <span>Verified BT ID</span>
