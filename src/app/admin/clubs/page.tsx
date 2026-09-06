@@ -444,10 +444,18 @@ export default function AdminClubsPage() {
                 <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500 font-medium">Club Head{heads.length > 1 ? "s" : ""}:</span>
-                    <span className="font-bold text-slate-900 truncate max-w-[150px]">
+                    <span className="font-bold text-slate-900 truncate max-w-[170px]" title={heads.map(h => h.role ? `${h.name} (${h.role})` : h.name).join(", ")}>
                       {heads.map(h => h.name).filter(Boolean).join(", ") || club.lead.name || "TBA"}
                     </span>
                   </div>
+                  {heads.some(h => (h.clubNames && h.clubNames.length > 1) || (h.clubIds && h.clubIds.length > 1)) && (
+                    <div className="flex items-center justify-between text-[10px] text-[#17458F] bg-blue-50/70 px-2 py-0.5 rounded-md border border-blue-200/60">
+                      <span className="font-semibold">Joint Head:</span>
+                      <span className="truncate max-w-[140px] font-bold">
+                        {heads.find(h => (h.clubNames && h.clubNames.length > 1) || (h.clubIds && h.clubIds.length > 1))?.role || "Multi-Club Head"}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500 font-medium">Department:</span>
                     <span className="text-[#E78023] font-semibold truncate max-w-[140px]" title={club.lead.department}>

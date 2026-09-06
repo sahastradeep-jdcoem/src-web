@@ -366,32 +366,95 @@ export default function AdminTeamPage() {
     }
   };
 
-  // Convert clubs to editable team member items
+  // Convert clubs to editable team member items, aggregating multi-club leaders
   const clubLeadMembers = React.useMemo(() => {
-    const list: (TeamMember & { clubId: string; roleType: "lead" | "coLead"; clubName: string })[] = [];
+    const leaderMap = new Map<string, (TeamMember & {
+      clubId: string;
+      roleType: "lead" | "coLead";
+      clubName: string;
+      clubIds: string[];
+      clubSlugs: string[];
+      clubNames: string[];
+      clubs: { id: string; name: string; slug: string }[];
+    })>();
+
     clubsList.forEach((club, clubIndex) => {
       const leaders = getClubLeaders(club);
       leaders.forEach((leader, leaderIndex) => {
-        list.push({
-          id: leader.id || `lead-${club.id}-${leaderIndex}-${Date.now()}`,
-          name: leader.name || "",
-          role: leader.role || (leader.roleType === "coLead" ? `${club.name} Co-Lead` : `${club.name} Head`),
-          department: leader.department || "Computer Science & Engineering",
-          year: leader.year || (leader.roleType === "coLead" ? "3rd Year" : "4th Year"),
-          avatar: leader.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
-          bio: leader.bio || "",
-          email: leader.email || "",
-          linkedin: leader.linkedin || "",
-          btId: leader.btId || "",
-          order: clubIndex * 2 + (leader.roleType === "coLead" ? 2 : 1),
-          clubId: club.id,
-          clubSlug: club.slug,
-          clubName: club.name,
-          roleType: leader.roleType || (leaderIndex === 0 ? "lead" : "coLead")
-        });
+        if (!leader || (!leader.name && !leader.role)) return;
+
+        const cleanName = (leader.name || "").trim().toLowerCase();
+        const cleanBt = (leader.btId || "").trim().toUpperCase();
+        const groupKey = cleanBt 
+          ? `bt-${cleanBt}` 
+          : (leader.id && !leader.id.includes("-leader-") && !leader.id.startsWith("lead-") 
+              ? `id-${leader.id}` 
+              : (cleanName ? `name-${cleanName}` : `club-${club.id}-${leaderIndex}`));
+
+        const existing = leaderMap.get(groupKey);
+        const clubInfo = { id: club.id, name: club.name, slug: club.slug };
+
+        if (existing) {
+          if (!existing.clubIds.includes(club.id)) {
+            existing.clubIds.push(club.id);
+            existing.clubSlugs.push(club.slug);
+            existing.clubNames.push(club.name);
+            existing.clubs.push(clubInfo);
+          }
+          if (leader.role && !["Club Head", "Club Co-Head"].includes(leader.role.trim())) {
+            existing.role = leader.role;
+          }
+        } else {
+          const clubIds = leader.clubIds && Array.isArray(leader.clubIds) && leader.clubIds.length > 0
+            ? Array.from(new Set([club.id, ...leader.clubIds]))
+            : [club.id];
+          const clubSlugs = leader.clubSlugs && Array.isArray(leader.clubSlugs) && leader.clubSlugs.length > 0
+            ? Array.from(new Set([club.slug, ...leader.clubSlugs]))
+            : [club.slug];
+          const clubNames = leader.clubNames && Array.isArray(leader.clubNames) && leader.clubNames.length > 0
+            ? Array.from(new Set([club.name, ...leader.clubNames]))
+            : [club.name];
+
+          leaderMap.set(groupKey, {
+            id: leader.id || `lead-${club.id}-${leaderIndex}-${Date.now()}`,
+            name: leader.name || "",
+            role: leader.role || (leader.roleType === "coLead" ? `${club.name} Co-Lead` : `${club.name} Head`),
+            department: leader.department || "Computer Science & Engineering",
+            year: leader.year || (leader.roleType === "coLead" ? "3rd Year" : "4th Year"),
+            avatar: leader.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
+            bio: leader.bio || "",
+            email: leader.email || "",
+            linkedin: leader.linkedin || "",
+            btId: leader.btId || "",
+            order: clubIndex * 2 + (leader.roleType === "coLead" ? 2 : 1),
+            clubId: club.id,
+            clubSlug: club.slug,
+            clubName: club.name,
+            clubIds,
+            clubSlugs,
+            clubNames,
+            clubs: [clubInfo],
+            roleType: leader.roleType || (leaderIndex === 0 ? "lead" : "coLead")
+          });
+        }
       });
     });
-    return list;
+
+    // Backfill any clubs mentioned in clubIds/clubSlugs
+    leaderMap.forEach((entry) => {
+      if (entry.clubIds && entry.clubIds.length > 1) {
+        entry.clubIds.forEach((cid) => {
+          const matchedClub = clubsList.find((c) => c.id === cid || c.slug === cid);
+          if (matchedClub && !entry.clubs.some((c) => c.id === matchedClub.id || c.slug === matchedClub.slug)) {
+            entry.clubs.push({ id: matchedClub.id, name: matchedClub.name, slug: matchedClub.slug });
+            if (!entry.clubNames.includes(matchedClub.name)) entry.clubNames.push(matchedClub.name);
+            if (!entry.clubSlugs.includes(matchedClub.slug)) entry.clubSlugs.push(matchedClub.slug);
+          }
+        });
+      }
+    });
+
+    return Array.from(leaderMap.values());
   }, [clubsList]);
 
   // Current active list depending on tab
@@ -496,15 +559,19 @@ export default function AdminTeamPage() {
       setEditingMember({
         id: `leader-${Date.now()}`,
         name: "",
-        role: firstClub ? `${firstClub.name} Co-Head` : "Club Co-Head",
+        role: firstClub ? `${firstClub.name} Head` : "Club Head",
         clubId: firstClub?.id || "",
         clubSlug: firstClub?.slug || "",
         clubName: firstClub?.name || "",
-        roleType: "coLead",
+        clubIds: firstClub ? [firstClub.id] : [],
+        clubSlugs: firstClub ? [firstClub.slug] : [],
+        clubNames: firstClub ? [firstClub.name] : [],
+        clubs: firstClub ? [{ id: firstClub.id, name: firstClub.name, slug: firstClub.slug }] : [],
+        roleType: "lead",
         department: "Computer Science & Engineering",
-        year: "3rd Year",
+        year: "4th Year",
         bio: "",
-        avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
+        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
         order: currentMembers.length + 1,
         email: "",
         linkedin: "",
@@ -568,42 +635,70 @@ export default function AdminTeamPage() {
 
     if (activeTab === "clubs") {
       const match = clubLeadMembers.find((m) => m.id === editingMember.id);
-      const targetClubId = (editingMember as any).clubId || match?.clubId;
-      const targetRoleType: "lead" | "coLead" = (editingMember as any).roleType || match?.roleType || "lead";
+      let targetClubIds: string[] = (editingMember as any).clubIds || [];
+      if (targetClubIds.length === 0 && (editingMember as any).clubId) {
+        targetClubIds = [(editingMember as any).clubId];
+      }
+      if (targetClubIds.length === 0 && match) {
+        targetClubIds = match.clubIds || [match.clubId].filter(Boolean);
+      }
 
-      if (!targetClubId) {
-        alert("Please select a chartered club.");
+      if (targetClubIds.length === 0) {
+        alert("Please select at least one chartered club.");
         return;
       }
 
-      const updatedClubs = clubsList.map((club) => {
-        if (club.id === targetClubId || club.slug === targetClubId) {
-          const currentLeaders = getClubLeaders(club);
-          const leaderPayload: ClubLeader = {
-            id: editingMember.id,
-            name: editingMember.name,
-            role: targetRoleType === "coLead" ? `${club.name} Co-Head` : `${club.name} Head`,
-            roleType: targetRoleType,
-            department: editingMember.department,
-            year: editingMember.year || (targetRoleType === "lead" ? "4th Year" : "3rd Year"),
-            avatar: editingMember.avatar,
-            bio: editingMember.bio || "",
-            email: editingMember.email || "",
-            linkedin: editingMember.linkedin || "",
-            btId: editingMember.btId || ""
-          };
+      const targetRoleType: "lead" | "coLead" = (editingMember as any).roleType || match?.roleType || "lead";
 
+      const selectedClubs = clubsList.filter((c) => targetClubIds.includes(c.id) || targetClubIds.includes(c.slug));
+      const clubNames = selectedClubs.map((c) => c.name);
+      const clubSlugs = selectedClubs.map((c) => c.slug);
+
+      // Final custom designation
+      let finalRole = (editingMember.role || "").trim();
+      if (!finalRole) {
+        const suffix = targetRoleType === "coLead" ? "Co-Head" : "Head";
+        if (clubNames.length === 1) {
+          finalRole = `${clubNames[0]} ${suffix}`;
+        } else if (clubNames.length === 2) {
+          finalRole = `${suffix} • ${clubNames[0]} & ${clubNames[1]}`;
+        } else {
+          finalRole = `Joint ${suffix} • ${clubNames.join(", ")}`;
+        }
+      }
+
+      const leaderPayload: ClubLeader = {
+        id: editingMember.id,
+        name: editingMember.name,
+        role: finalRole,
+        roleType: targetRoleType,
+        department: editingMember.department,
+        year: editingMember.year || (targetRoleType === "lead" ? "4th Year" : "3rd Year"),
+        avatar: editingMember.avatar,
+        bio: editingMember.bio || "",
+        email: editingMember.email || "",
+        linkedin: editingMember.linkedin || "",
+        btId: editingMember.btId || "",
+        clubIds: targetClubIds,
+        clubSlugs,
+        clubNames,
+      };
+
+      const updatedClubs = clubsList.map((club) => {
+        const isSelectedForClub = targetClubIds.includes(club.id) || targetClubIds.includes(club.slug);
+        const currentLeaders = getClubLeaders(club);
+
+        if (isSelectedForClub) {
           let newLeaders: ClubLeader[];
-          if (isCreatingNew) {
-            newLeaders = [...currentLeaders, leaderPayload];
+          const existingIdx = currentLeaders.findIndex(
+            (l) => l.id === editingMember.id || (editingMember.btId && l.btId && l.btId.trim().toUpperCase() === editingMember.btId.trim().toUpperCase())
+          );
+
+          if (existingIdx !== -1) {
+            newLeaders = [...currentLeaders];
+            newLeaders[existingIdx] = leaderPayload;
           } else {
-            const existingIdx = currentLeaders.findIndex((l) => l.id === editingMember.id);
-            if (existingIdx !== -1) {
-              newLeaders = [...currentLeaders];
-              newLeaders[existingIdx] = leaderPayload;
-            } else {
-              newLeaders = [...currentLeaders, leaderPayload];
-            }
+            newLeaders = [...currentLeaders, leaderPayload];
           }
 
           const primaryLead = newLeaders.find((l) => l.roleType === "lead") || newLeaders[0] || leaderPayload;
@@ -616,21 +711,34 @@ export default function AdminTeamPage() {
             coLead: coLeadsList[0] || undefined,
             coLeads: coLeadsList
           };
-        } else if (match && (club.id === match.clubId || club.slug === match.clubSlug) && club.id !== targetClubId) {
-          // If member was switched to a different club
-          const currentLeaders = getClubLeaders(club).filter((l) => l.id !== editingMember.id);
-          const primaryLead = currentLeaders.find((l) => l.roleType === "lead") || currentLeaders[0] || club.lead;
-          const coLeadsList = currentLeaders.filter((l) => l.roleType === "coLead");
+        } else {
+          // If club was previously selected for this leader but is now unselected, remove them
+          const existingIdx = currentLeaders.findIndex(
+            (l) => l.id === editingMember.id || (editingMember.btId && l.btId && l.btId.trim().toUpperCase() === editingMember.btId.trim().toUpperCase())
+          );
 
-          return {
-            ...club,
-            leaders: currentLeaders,
-            lead: primaryLead,
-            coLead: coLeadsList[0] || undefined,
-            coLeads: coLeadsList
-          };
+          if (existingIdx !== -1) {
+            const newLeaders = currentLeaders.filter((_, idx) => idx !== existingIdx);
+            const primaryLead = newLeaders.find((l) => l.roleType === "lead") || newLeaders[0] || {
+              name: "",
+              role: `${club.name} Head`,
+              department: "Computer Science & Engineering",
+              year: "4th Year",
+              avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"
+            };
+            const coLeadsList = newLeaders.filter((l) => l.roleType === "coLead");
+
+            return {
+              ...club,
+              leaders: newLeaders,
+              lead: primaryLead,
+              coLead: coLeadsList[0] || undefined,
+              coLeads: coLeadsList
+            };
+          }
+
+          return club;
         }
-        return club;
       });
 
       setClubsList(updatedClubs);
@@ -667,9 +775,12 @@ export default function AdminTeamPage() {
     if (activeTab === "clubs") {
       const match = clubLeadMembers.find((m) => m.id === id);
       if (match) {
+        const targetIds = (match.clubIds && match.clubIds.length > 0) ? match.clubIds : [match.clubId];
         const updatedClubs = clubsList.map((club) => {
-          if (club.id === match.clubId || club.slug === match.clubSlug) {
-            const currentLeaders = getClubLeaders(club).filter((l) => l.id !== id);
+          if (targetIds.includes(club.id) || targetIds.includes(club.slug)) {
+            const currentLeaders = getClubLeaders(club).filter(
+              (l) => l.id !== id && (!match.btId || l.btId !== match.btId)
+            );
             const primaryLead = currentLeaders.find((l) => l.roleType === "lead") || currentLeaders[0] || {
               name: "",
               role: `${club.name} Head`,
@@ -1121,19 +1232,33 @@ export default function AdminTeamPage() {
             >
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     {activeTab === "clubs" ? (
-                      <span className={cn(
-                        "text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full flex items-center gap-1",
-                        (member as any).roleType === "coLead" || member.role.toLowerCase().includes("co-head")
-                          ? "bg-[#17458F]/10 text-[#17458F]"
-                          : "bg-[#E78023]/10 text-[#E78023]"
-                      )}>
-                        <Sparkles className="w-3 h-3" />
-                        {(member as any).clubName 
-                          ? `${(member as any).clubName} • ${(member as any).roleType === "coLead" || member.role.toLowerCase().includes("co-head") ? "CO-HEAD" : "HEAD"}`
-                          : (member.role.toLowerCase().includes("co-head") ? "CLUB CO-HEAD" : "CLUB HEAD")}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-1">
+                        {(member as any).clubs && (member as any).clubs.length > 1 ? (
+                          (member as any).clubs.map((c: any) => (
+                            <span
+                              key={c.id || c.slug}
+                              className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#17458F]/10 text-[#17458F] border border-[#17458F]/20 flex items-center gap-1"
+                            >
+                              <Sparkles className="w-2.5 h-2.5 text-[#E78023]" />
+                              <span>{c.name.replace(" Club", "").replace(" Society", "")}</span>
+                            </span>
+                          ))
+                        ) : (
+                          <span className={cn(
+                            "text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full flex items-center gap-1",
+                            (member as any).roleType === "coLead" || member.role.toLowerCase().includes("co-head")
+                              ? "bg-[#17458F]/10 text-[#17458F]"
+                              : "bg-[#E78023]/10 text-[#E78023]"
+                          )}>
+                            <Sparkles className="w-3 h-3" />
+                            {(member as any).clubName 
+                              ? `${(member as any).clubName} • ${(member as any).roleType === "coLead" || member.role.toLowerCase().includes("co-head") ? "CO-HEAD" : "HEAD"}`
+                              : (member.role.toLowerCase().includes("co-head") ? "CLUB CO-HEAD" : "CLUB HEAD")}
+                          </span>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-md bg-[#17458F]/10 text-[#17458F]">
                         Rank #{actualIndex + 1}
@@ -1181,7 +1306,7 @@ export default function AdminTeamPage() {
                     <h3 className="font-bold text-sm text-[#0F172A] truncate">
                       {member.name || "Untitled Member"}
                     </h3>
-                    <p className="text-xs text-[#E78023] font-bold truncate">
+                    <p className="text-xs text-[#E78023] font-bold truncate" title={member.role}>
                       {member.role || "Untitled Position"}
                     </p>
                     <p className="text-[11px] text-slate-500 font-medium truncate" title={member.department}>
@@ -1201,7 +1326,7 @@ export default function AdminTeamPage() {
 
               {/* Action Buttons */}
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <button
                     onClick={() => handleDeleteMember(member.id, member.name)}
                     className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 hover:text-rose-600 border border-transparent hover:border-rose-200 transition-all cursor-pointer"
@@ -1211,26 +1336,48 @@ export default function AdminTeamPage() {
                     <Trash2 className="w-4 h-4" />
                   </button>
 
-                  {activeTab === "clubs" && (member as any).clubSlug && (
-                    <Link
-                      href={`/clubs/${(member as any).clubSlug}`}
-                      target="_blank"
-                      className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold uppercase transition-colors"
-                    >
-                      View Club
-                    </Link>
+                  {activeTab === "clubs" && (
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {(member as any).clubs && (member as any).clubs.length > 1 ? (
+                        (member as any).clubs.map((c: any) => (
+                          <Link
+                            key={c.slug}
+                            href={`/clubs/${c.slug}`}
+                            target="_blank"
+                            className="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[9px] font-bold uppercase transition-colors"
+                            title={`View ${c.name}`}
+                          >
+                            {c.name.replace(" Club", "").replace(" Society", "")}
+                          </Link>
+                        ))
+                      ) : (member as any).clubSlug ? (
+                        <Link
+                          href={`/clubs/${(member as any).clubSlug}`}
+                          target="_blank"
+                          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold uppercase transition-colors"
+                        >
+                          View Club
+                        </Link>
+                      ) : null}
+                    </div>
                   )}
                 </div>
 
                 <button
                   onClick={() => {
                     setIsCreatingNew(false);
+                    const clubIds = (member as any).clubIds || [(member as any).clubId].filter(Boolean);
+                    const clubNames = (member as any).clubNames || [(member as any).clubName].filter(Boolean);
+                    const clubSlugs = (member as any).clubSlugs || [(member as any).clubSlug].filter(Boolean);
                     setEditingMember({
                       ...member,
-                      order: actualIndex + 1
-                    });
+                      order: actualIndex + 1,
+                      clubIds,
+                      clubNames,
+                      clubSlugs,
+                    } as any);
                   }}
-                  className="px-3.5 py-1.5 rounded-xl bg-[#17458F] hover:bg-[#0E2F66] text-white text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                  className="px-3.5 py-1.5 rounded-xl bg-[#17458F] hover:bg-[#0E2F66] text-white text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer shrink-0"
                 >
                   <Edit3 className="w-3.5 h-3.5" />
                   <span>Edit Details</span>
@@ -1346,59 +1493,132 @@ export default function AdminTeamPage() {
               </div>
             )}
 
-            {/* Club Name Dropdown Menu (When in Club Leadership tab) */}
+            {/* Club Multi-Selection & Custom Designation (When in Club Leadership tab) */}
             {activeTab === "clubs" && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3.5 rounded-2xl bg-[#17458F]/5 border border-[#17458F]/15">
-                <div className="space-y-1.5">
-                  <label className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
-                    <span>Select Chartered Club <span className="text-rose-500">*</span></span>
-                  </label>
-                  <select
-                    value={(editingMember as any).clubId || (editingMember as any).clubSlug || ""}
-                    onChange={(e) => {
-                      const selectedClub = clubsList.find((c) => c.id === e.target.value || c.slug === e.target.value);
-                      if (selectedClub) {
-                        const currentRoleType = (editingMember as any).roleType || "lead";
-                        setEditingMember({
-                          ...editingMember,
-                          clubId: selectedClub.id,
-                          clubSlug: selectedClub.slug,
-                          clubName: selectedClub.name,
-                          role: currentRoleType === "lead" ? `${selectedClub.name} Head` : `${selectedClub.name} Co-Head`
-                        } as any);
-                      }
-                    }}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
-                  >
-                    {clubsList.map((c) => (
-                      <option key={c.id || c.slug} value={c.id || c.slug}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+              <div className="space-y-4 p-4 rounded-2xl bg-[#17458F]/5 border border-[#17458F]/15">
+                {/* 1. Multi-Club Selector */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
+                      <span>Assign Chartered Societies / Clubs (Select 1, 2, or 3+) <span className="text-rose-500">*</span></span>
+                    </label>
+                    <span className="text-[11px] font-bold text-[#17458F]">
+                      {((editingMember as any).clubIds || [(editingMember as any).clubId].filter(Boolean)).length} Selected
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Select one or multiple clubs if this leader is assigned joint leadership across societies (e.g. Dance + Music).
+                  </p>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 max-h-56 overflow-y-auto pr-1">
+                    {clubsList.map((club) => {
+                      const currentSelectedIds: string[] = (editingMember as any).clubIds || [(editingMember as any).clubId].filter(Boolean);
+                      const isSelected = currentSelectedIds.includes(club.id) || currentSelectedIds.includes(club.slug);
+
+                      return (
+                        <button
+                          key={club.id || club.slug}
+                          type="button"
+                          onClick={() => {
+                            let nextIds: string[];
+                            if (isSelected) {
+                              nextIds = currentSelectedIds.filter((id) => id !== club.id && id !== club.slug);
+                            } else {
+                              nextIds = [...currentSelectedIds, club.id];
+                            }
+                            const nextClubs = clubsList.filter((c) => nextIds.includes(c.id) || nextIds.includes(c.slug));
+                            const nextNames = nextClubs.map((c) => c.name);
+                            const nextSlugs = nextClubs.map((c) => c.slug);
+
+                            setEditingMember({
+                              ...editingMember,
+                              clubId: nextIds[0] || "",
+                              clubSlug: nextSlugs[0] || "",
+                              clubName: nextNames[0] || "",
+                              clubIds: nextIds,
+                              clubSlugs: nextSlugs,
+                              clubNames: nextNames,
+                            } as any);
+                          }}
+                          className={`px-3 py-2 rounded-xl text-left text-xs font-semibold flex items-center justify-between transition-all border cursor-pointer ${
+                            isSelected
+                              ? "bg-[#17458F] text-white border-[#17458F] shadow-xs"
+                              : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                          }`}
+                        >
+                          <span className="truncate pr-1">{club.name}</span>
+                          {isSelected && <Check className="w-3.5 h-3.5 shrink-0 text-amber-300" />}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="font-bold text-slate-800 text-xs">
-                    Leadership Tier <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={(editingMember as any).roleType || "lead"}
-                    onChange={(e) => {
-                      const newRoleType = e.target.value as "lead" | "coLead";
-                      const currentClubName = (editingMember as any).clubName || "Club";
-                      setEditingMember({
-                        ...editingMember,
-                        roleType: newRoleType,
-                        role: newRoleType === "lead" ? `${currentClubName} Head` : `${currentClubName} Co-Head`
-                      } as any);
-                    }}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
-                  >
-                    <option value="lead">Club Head</option>
-                    <option value="coLead">Club Co-Head</option>
-                  </select>
+                {/* 2. Tier & Custom Designation */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-[#17458F]/10">
+                  <div className="space-y-1.5 sm:col-span-1">
+                    <label className="font-bold text-slate-800 text-xs">
+                      Leadership Tier <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={(editingMember as any).roleType || "lead"}
+                      onChange={(e) => {
+                        const newRoleType = e.target.value as "lead" | "coLead";
+                        setEditingMember({
+                          ...editingMember,
+                          roleType: newRoleType,
+                        } as any);
+                      }}
+                      className="w-full px-3 py-2.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                    >
+                      <option value="lead">Head / Primary Lead</option>
+                      <option value="coLead">Co-Head / Deputy Lead</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-slate-800 text-xs">
+                        Appropriate Designation Title <span className="text-rose-500">*</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const currentIds: string[] = (editingMember as any).clubIds || [(editingMember as any).clubId].filter(Boolean);
+                          const matched = clubsList.filter((c) => currentIds.includes(c.id) || currentIds.includes(c.slug));
+                          const roleType = (editingMember as any).roleType || "lead";
+                          const suffix = roleType === "coLead" ? "Co-Head" : "Head";
+                          let suggested = "";
+                          if (matched.length === 0) {
+                            suggested = `Club ${suffix}`;
+                          } else if (matched.length === 1) {
+                            suggested = `${matched[0].name} ${suffix}`;
+                          } else if (matched.length === 2) {
+                            suggested = `${suffix} • ${matched[0].name} & ${matched[1].name}`;
+                          } else {
+                            suggested = `Joint ${suffix} • ${matched.map((c) => c.name).join(", ")}`;
+                          }
+                          setEditingMember({
+                            ...editingMember,
+                            role: suggested,
+                          });
+                        }}
+                        className="text-[10px] font-bold text-[#17458F] hover:text-[#E78023] underline cursor-pointer"
+                      >
+                        Auto-Suggest
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Head • Dance Club & Music Society or Cultural Societies Head..."
+                      value={editingMember.role || ""}
+                      onChange={(e) => setEditingMember({ ...editingMember, role: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                    />
+                  </div>
                 </div>
               </div>
             )}

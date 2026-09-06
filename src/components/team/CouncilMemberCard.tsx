@@ -29,11 +29,22 @@ export function CouncilMemberCard({ member, categoryLabel = "ADMIN" }: CouncilMe
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
 
         {/* Club Tag (Only for Club Heads) */}
-        {member.clubSlug && (
-          <div className="absolute top-2 left-2 sm:top-3.5 sm:left-3.5">
-            <span className="text-[8px] sm:text-[10px] font-sans font-semibold uppercase tracking-wider px-2 py-0.5 sm:px-3 sm:py-1 rounded-full bg-white/95 text-[#E78023] border border-slate-200 shadow-xs">
-              {member.level || "Club Society"}
-            </span>
+        {Boolean(member.clubSlug || (member.clubSlugs && member.clubSlugs.length > 0)) && (
+          <div className="absolute top-2 left-2 sm:top-3.5 sm:left-3.5 flex flex-wrap gap-1 max-w-[90%]">
+            {member.clubs && member.clubs.length > 1 ? (
+              member.clubs.map((c) => (
+                <span
+                  key={c.slug}
+                  className="text-[8px] sm:text-[10px] font-sans font-semibold uppercase tracking-wider px-2 py-0.5 sm:px-2.5 sm:py-0.5 rounded-full bg-white/95 text-[#E78023] border border-slate-200 shadow-xs backdrop-blur-xs"
+                >
+                  {c.name.replace(" Club", "").replace(" Society", "")}
+                </span>
+              ))
+            ) : (
+              <span className="text-[8px] sm:text-[10px] font-sans font-semibold uppercase tracking-wider px-2 py-0.5 sm:px-3 sm:py-1 rounded-full bg-white/95 text-[#E78023] border border-slate-200 shadow-xs">
+                {member.level || "Club Society"}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -41,7 +52,7 @@ export function CouncilMemberCard({ member, categoryLabel = "ADMIN" }: CouncilMe
       {/* Profile Details */}
       <div className="p-3.5 sm:p-6 flex-grow flex flex-col justify-between space-y-3 sm:space-y-4 bg-white">
         <div className="space-y-0.5 sm:space-y-1">
-          <span className="text-[9px] sm:text-[11px] font-sans font-semibold uppercase tracking-wider text-[#E78023] block line-clamp-1">
+          <span className="text-[9px] sm:text-[11px] font-sans font-semibold uppercase tracking-wider text-[#E78023] block line-clamp-1" title={member.role}>
             {member.role}
           </span>
           {/* Member Name — Sora Bold */}
@@ -62,8 +73,23 @@ export function CouncilMemberCard({ member, categoryLabel = "ADMIN" }: CouncilMe
         )}
 
         {/* Contact Links & Club Link */}
-        <div className="pt-2 sm:pt-3 border-t border-slate-100 flex items-center justify-between font-sans gap-1">
-          {member.clubSlug ? (
+        <div className="pt-2 sm:pt-3 border-t border-slate-100 flex items-center justify-between font-sans gap-1 flex-wrap">
+          {member.clubs && member.clubs.length > 1 ? (
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold uppercase">Clubs:</span>
+              {member.clubs.map((c) => (
+                <Link
+                  key={c.slug}
+                  href={`/clubs/${c.slug}`}
+                  className="inline-flex items-center gap-0.5 text-[9px] sm:text-[10px] text-[#17458F] hover:text-[#E78023] font-bold uppercase transition-colors px-1.5 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-200"
+                  title={`View ${c.name}`}
+                >
+                  <span>{c.name.replace(" Club", "").replace(" Society", "")}</span>
+                  <ArrowRight className="w-2 h-2" />
+                </Link>
+              ))}
+            </div>
+          ) : member.clubSlug ? (
             <Link
               href={`/clubs/${member.clubSlug}`}
               className="inline-flex items-center gap-1 text-[9px] sm:text-[11px] text-[#17458F] hover:text-[#E78023] font-bold uppercase tracking-wider transition-colors group/link"

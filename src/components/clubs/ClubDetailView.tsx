@@ -184,18 +184,33 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
                       className="object-cover"
                     />
                   </div>
-                  <div className="space-y-0.5">
-                    <span className={`text-[10px] font-bold uppercase tracking-wider ${isCoLead ? "text-[#17458F]" : "text-[#E78023]"}`}>
+                  <div className="space-y-0.5 min-w-0">
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${isCoLead ? "text-[#17458F]" : "text-[#E78023]"}`} title={leader.role}>
                       {leader.role || (isCoLead ? `${club.name} Co-Head` : `${club.name} Head`)}
                     </span>
-                    <h4 className="font-bold text-base text-[#0F172A]">
+                    <h4 className="font-bold text-base text-[#0F172A] truncate">
                       {leader.name}
                     </h4>
-                    <p className="text-xs text-slate-500 font-medium">
+                    <p className="text-xs text-slate-500 font-medium truncate">
                       <span className="sm:hidden">{getDepartmentShortName(leader.department)}</span>
                       <span className="hidden sm:inline">{leader.department}</span>
                       {" "}• {leader.year}
                     </p>
+                    {leader.clubNames && leader.clubNames.length > 1 && (
+                      <div className="pt-1 flex flex-wrap items-center gap-1">
+                        <span className="text-[10px] text-slate-400 font-semibold">Also leads:</span>
+                        {leader.clubNames
+                          .filter((cn) => cn.trim().toLowerCase() !== club.name.trim().toLowerCase())
+                          .map((otherName) => (
+                            <span
+                              key={otherName}
+                              className="text-[9px] font-bold text-[#17458F] px-1.5 py-0.5 rounded-md bg-blue-50 border border-blue-200"
+                            >
+                              {otherName}
+                            </span>
+                          ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               );

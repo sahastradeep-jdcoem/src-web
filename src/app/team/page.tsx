@@ -108,21 +108,62 @@ export default function TeamPage() {
     return [...councilMembers].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
   }, [councilMembers]);
 
-  // Club Heads & Co-Heads converted to standard TeamMember cards
+  // Club Heads & Co-Heads converted to standard TeamMember cards (supporting multi-club heads)
   const clubLeadMembers = React.useMemo(() => {
-    const list: TeamMember[] = [];
+    const leaderMap = new Map<string, TeamMember>();
+
     clubs.forEach((club, clubIndex) => {
       const leaders = getClubLeaders(club);
       leaders.forEach((leader, leaderIndex) => {
-        if (leader && (leader.name || leader.role)) {
-          const isCoLead = leader.roleType === "coLead" || (leader.role && leader.role.toLowerCase().includes("co-head"));
-          list.push({
+        if (!leader || (!leader.name && !leader.role)) return;
+
+        const isCoLead = leader.roleType === "coLead" || (leader.role && leader.role.toLowerCase().includes("co-head"));
+        const cleanName = (leader.name || "").trim().toLowerCase();
+        const cleanBt = (leader.btId || "").trim().toUpperCase();
+        const groupKey = cleanBt 
+          ? `bt-${cleanBt}` 
+          : (leader.id && !leader.id.includes("-leader-") && !leader.id.startsWith("lead-") 
+              ? `id-${leader.id}` 
+              : (cleanName ? `name-${cleanName}` : `club-${club.id}-${leaderIndex}`));
+
+        const existing = leaderMap.get(groupKey);
+        const clubInfo = { id: club.id, name: club.name, slug: club.slug };
+
+        if (existing) {
+          // Merge clubs
+          if (existing.clubSlugs && !existing.clubSlugs.includes(club.slug)) {
+            existing.clubSlugs.push(club.slug);
+            existing.clubNames?.push(club.name);
+            existing.clubs?.push(clubInfo);
+            existing.level = existing.clubNames?.join(" • ") || existing.level;
+          }
+          // If leader has custom role, preserve it
+          if (leader.role && !["Club Head", "Club Co-Head"].includes(leader.role.trim())) {
+            existing.role = leader.role;
+          }
+        } else {
+          const clubIds = leader.clubIds && Array.isArray(leader.clubIds) && leader.clubIds.length > 0
+            ? Array.from(new Set([club.id, ...leader.clubIds]))
+            : [club.id];
+          const clubSlugs = leader.clubSlugs && Array.isArray(leader.clubSlugs) && leader.clubSlugs.length > 0
+            ? Array.from(new Set([club.slug, ...leader.clubSlugs]))
+            : [club.slug];
+          const clubNames = leader.clubNames && Array.isArray(leader.clubNames) && leader.clubNames.length > 0
+            ? Array.from(new Set([club.name, ...leader.clubNames]))
+            : [club.name];
+
+          leaderMap.set(groupKey, {
             id: leader.id || `${club.id || club.slug}-leader-${leaderIndex}`,
             name: leader.name || (isCoLead ? `${club.name} Co-Head` : `${club.name} Head`),
             role: leader.role || (isCoLead ? `${club.name} Co-Head` : `${club.name} Head`),
-            level: club.name,
+            level: clubNames.length > 1 ? clubNames.join(" • ") : club.name,
             category: "Clubs Leadership",
             clubSlug: club.slug,
+            clubSlugs,
+            clubNames,
+            clubId: club.id,
+            clubIds,
+            clubs: [clubInfo],
             department: leader.department || "JDCOEM Nagpur",
             year: leader.year || (isCoLead ? "3rd Year" : "4th Year"),
             avatar: leader.avatar || (isCoLead ? "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop" : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"),
@@ -134,7 +175,24 @@ export default function TeamPage() {
         }
       });
     });
-    return list;
+
+    // Backfill missing club details for leaders that span multiple clubs
+    leaderMap.forEach((entry) => {
+      if (entry.clubSlugs && entry.clubSlugs.length > 1 && entry.clubs) {
+        entry.clubSlugs.forEach((slug) => {
+          const match = clubs.find((c) => c.slug === slug || c.id === slug);
+          if (match && !entry.clubs?.some((c) => c.slug === match.slug)) {
+            entry.clubs?.push({ id: match.id, name: match.name, slug: match.slug });
+            if (!entry.clubNames?.includes(match.name)) entry.clubNames?.push(match.name);
+          }
+        });
+        if (entry.clubNames && entry.clubNames.length > 1) {
+          entry.level = entry.clubNames.join(" • ");
+        }
+      }
+    });
+
+    return Array.from(leaderMap.values());
   }, [clubs]);
 
   return (

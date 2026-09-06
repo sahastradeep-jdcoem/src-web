@@ -103,6 +103,9 @@ export interface ClubLeader {
   bio?: string;
   email?: string;
   linkedin?: string;
+  clubIds?: string[];
+  clubSlugs?: string[];
+  clubNames?: string[];
 }
 
 export interface ClubItem {
@@ -148,6 +151,11 @@ export interface TeamMember {
   badgeNumber?: string;
   btId?: string; // College BT ID for designation badge linkage
   clubSlug?: string; // Optional slug to navigate to club profile
+  clubSlugs?: string[]; // Multiple clubs if 1 person leads 2/3 clubs
+  clubNames?: string[]; // Names of multiple clubs
+  clubId?: string;
+  clubIds?: string[];
+  clubs?: { id: string; name: string; slug: string }[];
   isLive?: boolean;
 }
 

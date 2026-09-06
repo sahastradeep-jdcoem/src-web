@@ -1,4 +1,5 @@
 import { AuthUser, UserProfile } from "@/types/auth";
+import { ClubLeader } from "@/types";
 import { getAllUsersFromFirestore, saveUserProfileToFirestore } from "./firebase/firestore";
 import { 
   getStoredCouncilMembers, 
@@ -124,19 +125,47 @@ export function resolveDesignationByBtId(btId: string): {
 
   // 4. Check Chartered Clubs (Head / Co-Head)
   const clubs = getStoredClubs();
+  const matchedClubRoles: { clubName: string; leader: ClubLeader }[] = [];
   for (const club of clubs) {
     const leaders = getClubLeaders(club);
     for (const leader of leaders) {
       if (leader.btId && leader.btId.trim().toUpperCase() === cleanBtId) {
-        const isCoLead = leader.roleType === "coLead" || (leader.role && leader.role.toLowerCase().includes("co-head"));
-        const roleSuffix = isCoLead ? "Co-Head" : "Head";
-        return {
-          designationBadge: `${club.name} ${roleSuffix}`,
-          isCouncilOfficer: true,
-          category: "Club Leadership",
-        };
+        matchedClubRoles.push({ clubName: club.name, leader });
       }
     }
+  }
+
+  if (matchedClubRoles.length > 0) {
+    const primary = matchedClubRoles[0].leader;
+    // If the leader has a custom role/designation that is specific
+    if (primary.role && primary.role.trim() && !["Club Head", "Club Co-Head", "Head", "Co-Head"].includes(primary.role.trim())) {
+      return {
+        designationBadge: formatDesignationBadge(primary.role),
+        isCouncilOfficer: true,
+        category: "Club Leadership",
+      };
+    }
+
+    // If multiple clubs are matched (e.g. 2 or 3 clubs)
+    if (matchedClubRoles.length > 1) {
+      const clubNames = Array.from(new Set(matchedClubRoles.map((m) => m.clubName)));
+      const isCoLead = matchedClubRoles.some(
+        (m) => m.leader.roleType === "coLead" || (m.leader.role && m.leader.role.toLowerCase().includes("co-head"))
+      );
+      return {
+        designationBadge: `${clubNames.join(" & ")} ${isCoLead ? "Co-Head" : "Head"}`,
+        isCouncilOfficer: true,
+        category: "Club Leadership",
+      };
+    }
+
+    const isCoLead = primary.roleType === "coLead" || (primary.role && primary.role.toLowerCase().includes("co-head"));
+    const roleSuffix = isCoLead ? "Co-Head" : "Head";
+    return {
+      designationBadge: `${matchedClubRoles[0].clubName} ${roleSuffix}`,
+      isCouncilOfficer: true,
+      category: "Club Leadership",
+    };
   }
 
   // 5. Check Founding Members
