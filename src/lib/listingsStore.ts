@@ -10,6 +10,7 @@ import {
 import { enqueueCloudWrite } from "./dataSyncEngine";
 import { db } from "./firebase/config";
 import { doc, setDoc, getDocs, collection, serverTimestamp, deleteDoc, onSnapshot } from "firebase/firestore";
+import { getStoredUsers, RegisteredUserRecord } from "./usersStore";
 
 export const LISTINGS_STORAGE_KEY = "src_listings_v1";
 export const RESPONSES_STORAGE_KEY = "src_listing_responses_v1";
@@ -351,6 +352,66 @@ export function voteOnListingPoll(
 // 3. RESPONSES STORE OPERATIONS (Applications, Submissions, Grievances)
 // --------------------------------------------------------------------------
 
+/**
+ * Cross-references applicant details against their verified registered user profile
+ * to strictly use their profile department and year, healing any legacy form submissions
+ * that were saved with the hardcoded "Computer Science & Engineering" fallback.
+ */
+export function findApplicantUserProfile(record: { userId?: string; userEmail?: string; btId?: string }): RegisteredUserRecord | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const users = getStoredUsers();
+    if (!Array.isArray(users) || users.length === 0) return undefined;
+
+    const uId = record.userId?.trim();
+    const uEmail = record.userEmail?.toLowerCase().trim();
+    const cleanBt = record.btId?.toUpperCase().trim();
+
+    return users.find((u) => {
+      if (uId && u.uid === uId) return true;
+      if (uEmail && u.email && u.email.toLowerCase().trim() === uEmail) return true;
+      if (cleanBt && u.btId && u.btId.toUpperCase().trim() === cleanBt) return true;
+      return false;
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+export function resolveResponseWithUserProfile(record: ListingResponseRecord): ListingResponseRecord {
+  if (!record) return record;
+  const matchedUser = findApplicantUserProfile(record);
+  if (!matchedUser) return record;
+
+  let updatedDept = record.userDepartment;
+  if (matchedUser.department && matchedUser.department.trim()) {
+    // If empty or was saved with the legacy hardcoded fallback, heal with verified profile department
+    if (
+      !updatedDept ||
+      updatedDept.trim() === "Computer Science & Engineering" ||
+      updatedDept.trim() === "Computer Science and Engineering" ||
+      updatedDept.trim() === "Unspecified"
+    ) {
+      updatedDept = matchedUser.department.trim();
+    }
+  }
+
+  let updatedYear = record.userYear;
+  if (matchedUser.year && matchedUser.year.trim()) {
+    if (!updatedYear || updatedYear.trim() === "3rd Year" || updatedYear.trim() === "Unspecified") {
+      updatedYear = matchedUser.year.trim();
+    }
+  }
+
+  return {
+    ...record,
+    userDepartment: updatedDept,
+    userYear: updatedYear,
+    userName: record.userName && record.userName !== "Applicant" ? record.userName : (matchedUser.displayName || record.userName),
+    btId: record.btId || matchedUser.btId || undefined,
+  };
+}
+
 export function parseRegistrationToResponseRecord(docId: string, data: any): ListingResponseRecord | null {
   if (!data) return null;
 
@@ -358,7 +419,7 @@ export function parseRegistrationToResponseRecord(docId: string, data: any): Lis
   if (docId.startsWith("hub_poll_") || data.customAnswers?.isHubBallot) {
     const ca = data.customAnswers || {};
     const optId = ca.optionId;
-    return {
+    return resolveResponseWithUserProfile({
       id: docId,
       listingId: ca.listingId || data.eventId || "",
       listingSlug: ca.listingSlug || "",
@@ -375,7 +436,7 @@ export function parseRegistrationToResponseRecord(docId: string, data: any): Lis
       answers: optId ? { [optId]: ca.optionText || optId } : {},
       createdAt: data.registeredAt || (typeof data.createdAt?.toDate === "function" ? data.createdAt.toDate().toISOString() : new Date().toISOString()),
       status: "approved",
-    };
+    });
   }
 
   // 2. Hub Form Submissions (Applications, Recruitments, Contests, Grievances)
@@ -390,7 +451,7 @@ export function parseRegistrationToResponseRecord(docId: string, data: any): Lis
     else if (rawStatus === "reviewed") normStatus = "reviewed";
     else normStatus = "pending";
 
-    return {
+    return resolveResponseWithUserProfile({
       id: subId,
       listingId: ca.listingId || data.eventId || "",
       listingSlug: ca.listingSlug || "",
@@ -412,7 +473,7 @@ export function parseRegistrationToResponseRecord(docId: string, data: any): Lis
       adminFeedback: ca.reviewNotes || ca.adminFeedback || undefined,
       createdAt: ca.createdAt || data.registeredAt || (typeof data.createdAt?.toDate === "function" ? data.createdAt.toDate().toISOString() : new Date().toISOString()),
       updatedAt: ca.updatedAt || undefined,
-    };
+    });
   }
 
   return null;
@@ -460,9 +521,11 @@ export function mergeResponseLists(...lists: ListingResponseRecord[][]): Listing
     }
   }
 
-  return Array.from(map.values()).sort(
-    (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-  );
+  return Array.from(map.values())
+    .map(resolveResponseWithUserProfile)
+    .sort(
+      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    );
 }
 
 export function getStoredListingResponses(): ListingResponseRecord[] {
@@ -470,7 +533,8 @@ export function getStoredListingResponses(): ListingResponseRecord[] {
 
   try {
     const raw = localStorage.getItem(RESPONSES_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const parsed: ListingResponseRecord[] = raw ? JSON.parse(raw) : [];
+    return parsed.map(resolveResponseWithUserProfile);
   } catch (err) {
     console.warn("Failed to load listing responses from localStorage:", err);
     return [];
@@ -478,19 +542,20 @@ export function getStoredListingResponses(): ListingResponseRecord[] {
 }
 
 export function saveStoredListingResponse(record: ListingResponseRecord): void {
+  const resolved = resolveResponseWithUserProfile(record);
   const current = getStoredListingResponses();
   
   // Check if updating an existing record by explicit ID, ticketCode, or user+listing matching
-  const exactIndex = current.findIndex((r) => r.id === record.id);
-  const matchTicketIndex = exactIndex === -1 && record.ticketCode
-    ? current.findIndex((r) => r.ticketCode === record.ticketCode)
+  const exactIndex = current.findIndex((r) => r.id === resolved.id);
+  const matchTicketIndex = exactIndex === -1 && resolved.ticketCode
+    ? current.findIndex((r) => r.ticketCode === resolved.ticketCode)
     : -1;
   const matchUserIndex = exactIndex === -1 && matchTicketIndex === -1
     ? current.findIndex(
         (r) =>
-          r.listingId === record.listingId &&
-          ((r.userId && record.userId && r.userId === record.userId) ||
-           (r.userEmail && record.userEmail && r.userEmail.toLowerCase().trim() === record.userEmail.toLowerCase().trim()))
+          r.listingId === resolved.listingId &&
+          ((r.userId && resolved.userId && r.userId === resolved.userId) ||
+           (r.userEmail && resolved.userEmail && r.userEmail.toLowerCase().trim() === resolved.userEmail.toLowerCase().trim()))
       )
     : -1;
 
@@ -501,16 +566,16 @@ export function saveStoredListingResponse(record: ListingResponseRecord): void {
     const existing = current[targetIndex];
     const mergedRecord: ListingResponseRecord = {
       ...existing,
-      ...record,
+      ...resolved,
       id: existing.id,
-      ticketCode: existing.ticketCode || record.ticketCode,
-      createdAt: existing.createdAt || record.createdAt,
+      ticketCode: existing.ticketCode || resolved.ticketCode,
+      createdAt: existing.createdAt || resolved.createdAt,
       updatedAt: new Date().toISOString(),
     };
     updated = [...current];
     updated[targetIndex] = mergedRecord;
   } else {
-    updated = [record, ...current];
+    updated = [resolved, ...current];
   }
 
   // 1. Immediate optimistic local write
@@ -531,49 +596,49 @@ export function saveStoredListingResponse(record: ListingResponseRecord): void {
   // 2. CRITICAL DUAL-WRITE: Guaranteed persistence to registrations collection
   // Non-admin students have 'allow create: if true' on registrations, so submissions never fail
   const firestoreDb = db;
-  if (firestoreDb && process.env.NEXT_PUBLIC_FIREBASE_API_KEY && record.listingType !== "poll" && !record.id.startsWith("hub_poll_")) {
-    const regDocId = `hub_sub_${record.ticketCode || record.id}`;
+  if (firestoreDb && process.env.NEXT_PUBLIC_FIREBASE_API_KEY && resolved.listingType !== "poll" && !resolved.id.startsWith("hub_poll_")) {
+    const regDocId = `hub_sub_${resolved.ticketCode || resolved.id}`;
     const regDocRef = doc(firestoreDb, "registrations", regDocId);
     const regPayload = cleanUndefined({
       id: regDocId,
-      eventId: record.listingId,
-      eventTitle: `[HUB] ${record.listingTitle || "Form Submission"}`,
-      leaderName: record.userName || "Applicant",
-      email: record.userEmail || "",
+      eventId: resolved.listingId,
+      eventTitle: `[HUB] ${resolved.listingTitle || "Form Submission"}`,
+      leaderName: resolved.userName || "Applicant",
+      email: resolved.userEmail || "",
       phone: "",
       college: "JDCOEM",
-      department: record.userDepartment || "",
-      year: record.userYear || "",
-      btId: record.btId || "",
+      department: resolved.userDepartment || "",
+      year: resolved.userYear || "",
+      btId: resolved.btId || "",
       teamSize: 1,
-      status: record.status ? (record.status === "approved" ? "CONFIRMED" : record.status.toUpperCase()) : "PENDING",
-      registeredAt: record.createdAt || new Date().toISOString(),
+      status: resolved.status ? (resolved.status === "approved" ? "CONFIRMED" : resolved.status.toUpperCase()) : "PENDING",
+      registeredAt: resolved.createdAt || new Date().toISOString(),
       createdAt: serverTimestamp(),
-      ticketCode: record.ticketCode || "",
+      ticketCode: resolved.ticketCode || "",
       isPass: false,
       customAnswers: {
         isHubSubmission: true,
         isPass: false,
-        responseId: record.id,
-        listingId: record.listingId,
-        listingSlug: record.listingSlug || "",
-        listingType: record.listingType || "application",
-        listingTitle: record.listingTitle || "",
-        userId: record.userId || null,
-        userName: record.userName || "Applicant",
-        userEmail: record.userEmail || null,
-        userDepartment: record.userDepartment || "",
-        userYear: record.userYear || "",
-        btId: record.btId || null,
-        answers: record.answers || {},
-        selectedOptionIds: record.selectedOptionIds || [],
-        submissionLink: record.submissionLink || null,
-        fileUrl: record.fileUrl || null,
-        ticketCode: record.ticketCode || "",
-        status: record.status || "pending",
-        adminFeedback: record.adminFeedback || "",
-        createdAt: record.createdAt || new Date().toISOString(),
-        updatedAt: record.updatedAt || new Date().toISOString(),
+        responseId: resolved.id,
+        listingId: resolved.listingId,
+        listingSlug: resolved.listingSlug || "",
+        listingType: resolved.listingType || "application",
+        listingTitle: resolved.listingTitle || "",
+        userId: resolved.userId || null,
+        userName: resolved.userName || "Applicant",
+        userEmail: resolved.userEmail || null,
+        userDepartment: resolved.userDepartment || "",
+        userYear: resolved.userYear || "",
+        btId: resolved.btId || null,
+        answers: resolved.answers || {},
+        selectedOptionIds: resolved.selectedOptionIds || [],
+        submissionLink: resolved.submissionLink || null,
+        fileUrl: resolved.fileUrl || null,
+        ticketCode: resolved.ticketCode || "",
+        status: resolved.status || "pending",
+        adminFeedback: resolved.adminFeedback || "",
+        createdAt: resolved.createdAt || new Date().toISOString(),
+        updatedAt: resolved.updatedAt || new Date().toISOString(),
       },
     });
 
@@ -691,6 +756,28 @@ export async function syncListingResponsesFromFirestore(): Promise<ListingRespon
     }
 
     const merged = mergeResponseLists(local, remoteList, fromRegistrations);
+
+    // Auto-heal cloud records: If any response was stored with the old fallback but user profile has their verified department, heal it in Firestore
+    if (firestoreDb && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      merged.forEach((rec) => {
+        if (rec.listingType !== "poll" && !rec.id.startsWith("hub_poll_") && rec.userDepartment && rec.userDepartment !== "Computer Science & Engineering") {
+          const expectedDocId = `hub_sub_${rec.ticketCode || rec.id}`;
+          const regDocRef = doc(firestoreDb, "registrations", expectedDocId);
+          setDoc(
+            regDocRef,
+            cleanUndefined({
+              department: rec.userDepartment,
+              year: rec.userYear || "",
+              "customAnswers.userDepartment": rec.userDepartment,
+              "customAnswers.userYear": rec.userYear || "",
+              updatedAt: new Date().toISOString(),
+            }),
+            { merge: true }
+          ).catch(() => {});
+        }
+      });
+      saveSiteContentToFirestore("listing_responses", merged).catch(() => {});
+    }
 
     if (typeof window !== "undefined") {
       try {

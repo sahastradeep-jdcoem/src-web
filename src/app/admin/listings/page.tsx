@@ -46,6 +46,7 @@ import { ListingResponsesView } from "@/components/admin/listings/ListingRespons
 import { EventFormModal, EventFormData, formatDateToReadable } from "@/components/admin/events/EventFormModal";
 import { getStoredEvents, saveStoredEvents, subscribeToEvents } from "@/lib/eventsStore";
 import { getStoredClubs } from "@/lib/councilStore";
+import { syncUsersFromFirestore } from "@/lib/usersStore";
 import { EventItem } from "@/types";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
@@ -87,6 +88,9 @@ export default function AdminListingsPage() {
       }
     });
     syncListingResponsesFromFirestore().then((data) => { if (data && Array.isArray(data)) setResponses(data); });
+    syncUsersFromFirestore().then(() => {
+      setResponses(getStoredListingResponses());
+    });
 
     const unsubListings = subscribeToListings((data) => {
       if (data && Array.isArray(data)) {
@@ -109,12 +113,17 @@ export default function AdminListingsPage() {
       setResponses(e?.detail || getStoredListingResponses());
     };
 
+    const handleUsersUpdate = () => {
+      setResponses(getStoredListingResponses());
+    };
+
     const handleEventsUpdate = () => {
       setEventsList(getStoredEvents());
       setClubsList(getStoredClubs());
     };
 
     window.addEventListener("src_listing_responses_updated", handleResponsesUpdate);
+    window.addEventListener("src_users_updated", handleUsersUpdate);
     window.addEventListener("src_events_updated", handleEventsUpdate);
     window.addEventListener("src_clubs_updated", handleEventsUpdate);
     return () => {
@@ -122,6 +131,7 @@ export default function AdminListingsPage() {
       unsubResponses();
       unsubEvents();
       window.removeEventListener("src_listing_responses_updated", handleResponsesUpdate);
+      window.removeEventListener("src_users_updated", handleUsersUpdate);
       window.removeEventListener("src_events_updated", handleEventsUpdate);
       window.removeEventListener("src_clubs_updated", handleEventsUpdate);
     };

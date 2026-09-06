@@ -30,6 +30,7 @@ import {
   LogIn
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { DEFAULT_DEPARTMENTS } from "@/data/departments";
 import { 
   getStoredListings, 
   subscribeToListings, 
@@ -63,11 +64,11 @@ export default function ListingDetailPage() {
   const [isEditingResponse, setIsEditingResponse] = useState(false);
 
   // Form State
-  const [candidateName, setCandidateName] = useState("");
-  const [candidateEmail, setCandidateEmail] = useState("");
-  const [candidateDept, setCandidateDept] = useState("Computer Science & Engineering");
-  const [candidateYear, setCandidateYear] = useState("3rd Year");
-  const [candidateBtId, setCandidateBtId] = useState("");
+  const [candidateName, setCandidateName] = useState(user?.displayName || "");
+  const [candidateEmail, setCandidateEmail] = useState(user?.email || "");
+  const [candidateDept, setCandidateDept] = useState(user?.department || "");
+  const [candidateYear, setCandidateYear] = useState(user?.year || "");
+  const [candidateBtId, setCandidateBtId] = useState(user?.btId || "");
   const [submissionLink, setSubmissionLink] = useState("");
   const [customAnswers, setCustomAnswers] = useState<Record<string, any>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -167,10 +168,14 @@ export default function ListingDetailPage() {
 
   useEffect(() => {
     if (user) {
-      if (!candidateName) setCandidateName(user.displayName || "");
-      if (!candidateEmail) setCandidateEmail(user.email || "");
-      if (user.department && !candidateDept) setCandidateDept(user.department);
-      if (user.year && !candidateYear) setCandidateYear(user.year);
+      if (!candidateName && user.displayName) setCandidateName(user.displayName);
+      if (!candidateEmail && user.email) setCandidateEmail(user.email);
+      if (user.department && (!candidateDept || candidateDept === "Computer Science & Engineering")) {
+        setCandidateDept(user.department);
+      }
+      if (user.year && (!candidateYear || candidateYear === "3rd Year")) {
+        setCandidateYear(user.year);
+      }
       if (user.btId && !candidateBtId) setCandidateBtId(user.btId);
     }
   }, [user]);
@@ -200,13 +205,22 @@ export default function ListingDetailPage() {
     if (existingResponse) {
       if (existingResponse.userName) setCandidateName(existingResponse.userName);
       if (existingResponse.userEmail) setCandidateEmail(existingResponse.userEmail);
-      if (existingResponse.userDepartment) setCandidateDept(existingResponse.userDepartment);
-      if (existingResponse.userYear) setCandidateYear(existingResponse.userYear);
+      // Prioritize user's actual profile department if existing response had the old hardcoded fallback
+      if (user?.department && (existingResponse.userDepartment === "Computer Science & Engineering" || !existingResponse.userDepartment)) {
+        setCandidateDept(user.department);
+      } else if (existingResponse.userDepartment) {
+        setCandidateDept(existingResponse.userDepartment);
+      }
+      if (user?.year && (existingResponse.userYear === "3rd Year" || !existingResponse.userYear)) {
+        setCandidateYear(user.year);
+      } else if (existingResponse.userYear) {
+        setCandidateYear(existingResponse.userYear);
+      }
       if (existingResponse.btId) setCandidateBtId(existingResponse.btId);
       if (existingResponse.submissionLink) setSubmissionLink(existingResponse.submissionLink);
       if (existingResponse.answers) setCustomAnswers(existingResponse.answers);
     }
-  }, [existingResponse]);
+  }, [existingResponse, user]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -878,10 +892,17 @@ export default function ListingDetailPage() {
                       </label>
                       <input
                         type="text"
+                        list="hub-dept-list"
                         value={candidateDept}
                         onChange={(e) => setCandidateDept(e.target.value)}
+                        placeholder="Select or enter department"
                         className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium"
                       />
+                      <datalist id="hub-dept-list">
+                        {DEFAULT_DEPARTMENTS.map((d) => (
+                          <option key={d} value={d} />
+                        ))}
+                      </datalist>
                     </div>
                     <div>
                       <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">

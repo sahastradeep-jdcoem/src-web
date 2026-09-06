@@ -32,6 +32,7 @@ import {
   RotateCcw
 } from "lucide-react";
 import { ListingItem, ListingResponseRecord } from "@/types/listings";
+import { resolveResponseWithUserProfile } from "@/lib/listingsStore";
 import { CustomQuestion } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -53,7 +54,7 @@ export interface ListingResponsesViewProps {
 
 export function ListingResponsesView({
   listing,
-  responses,
+  responses: rawResponses,
   onBack,
   onUpdateStatus,
   onDeleteResponse,
@@ -62,6 +63,10 @@ export function ListingResponsesView({
   onToggleApprovalWorkflow,
   onEditListing,
 }: ListingResponsesViewProps) {
+  const responses = useMemo(() => {
+    return (rawResponses || []).map(resolveResponseWithUserProfile);
+  }, [rawResponses]);
+
   const [activeTab, setActiveTab] = useState<ActiveTab>("summary");
   const [selectedQuestionIndex, setSelectedQuestionIndex] = useState<number>(0);
   const [individualIndex, setIndividualIndex] = useState<number>(0);
