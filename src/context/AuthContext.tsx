@@ -23,7 +23,8 @@ import {
   saveRegisteredUser, 
   getStoredUsers, 
   resolveDesignationByBtId, 
-  markUserAsDeleted 
+  markUserAsDeleted,
+  formatDesignationBadge 
 } from "@/lib/usersStore";
 
 /**
@@ -79,11 +80,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const cleanBt = parsed.btId ? parsed.btId.trim().toUpperCase() : "";
           const desig = cleanBt ? resolveDesignationByBtId(cleanBt) : null;
           if (desig) {
-            parsed.designationBadge = desig.designationBadge;
+            parsed.designationBadge = formatDesignationBadge(desig.designationBadge);
             parsed.isCouncilOfficer = true;
           } else if (cleanBt) {
             parsed.designationBadge = undefined;
             parsed.isCouncilOfficer = false;
+          } else if (parsed.designationBadge) {
+            parsed.designationBadge = formatDesignationBadge(parsed.designationBadge);
           }
           const isComplete = determineProfileCompletion(parsed, parsed.userType, cleanBt);
           parsed.profileCompleted = isComplete;
@@ -148,9 +151,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           : (storedProfile?.role || localProfile?.role || registeredUser?.role || "STUDENT");
 
         // Priority: Live roster resolution > non-student stored badge > fallback
+        const rawBadge = storedProfile?.designationBadge || localProfile?.designationBadge || registeredUser?.designationBadge;
         const assignedBadge = designationInfo 
           ? designationInfo.designationBadge 
-          : (cleanBt ? undefined : (storedProfile?.designationBadge || localProfile?.designationBadge || registeredUser?.designationBadge));
+          : (cleanBt ? undefined : (formatDesignationBadge(rawBadge) || undefined));
 
         const isOfficer = designationInfo 
           ? true 
@@ -271,9 +275,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           : (storedProfile?.role || localProfile?.role || registeredUser?.role || "STUDENT");
 
         // Priority: Live roster resolution > non-student stored badge > fallback
+        const rawBadge = storedProfile?.designationBadge || localProfile?.designationBadge || registeredUser?.designationBadge;
         const assignedBadge = designationInfo 
           ? designationInfo.designationBadge 
-          : (cleanBt ? undefined : (storedProfile?.designationBadge || localProfile?.designationBadge || registeredUser?.designationBadge));
+          : (cleanBt ? undefined : (formatDesignationBadge(rawBadge) || undefined));
 
         const isOfficer = designationInfo 
           ? true 
@@ -402,7 +407,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       btId: mergedBtId,
       displayName: data.displayName || `${data.firstName || user.firstName || ""} ${data.lastName || user.lastName || ""}`.trim() || user.displayName,
       role: data.role || user.role || "STUDENT",
-      designationBadge: designationInfo ? designationInfo.designationBadge : (data.designationBadge || user.designationBadge),
+      designationBadge: designationInfo ? designationInfo.designationBadge : (formatDesignationBadge(data.designationBadge || user.designationBadge) || undefined),
       isCouncilOfficer: designationInfo ? true : Boolean(data.isCouncilOfficer || user.isCouncilOfficer),
       profileCompleted: true,
     };

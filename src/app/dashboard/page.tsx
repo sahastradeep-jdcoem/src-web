@@ -44,6 +44,7 @@ import {
   syncListingsFromFirestore,
   subscribeToListings
 } from "@/lib/listingsStore";
+import { formatDesignationBadge } from "@/lib/usersStore";
 import { useAuth } from "@/context/AuthContext";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { downloadPassAsImage } from "@/lib/passExport";
@@ -446,7 +447,7 @@ export default function StudentDashboardPage() {
               {user?.designationBadge ? (
                 <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-sm shadow-amber-500/25">
                   <Award className="w-3.5 h-3.5" />
-                  <span>{user.designationBadge}</span>
+                  <span>{formatDesignationBadge(user.designationBadge)}</span>
                 </span>
               ) : isFaculty ? (
                 <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${
@@ -900,7 +901,7 @@ export default function StudentDashboardPage() {
               {user?.designationBadge && (
                 <div className="px-3 py-2 rounded-2xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-400/40 flex items-center gap-2 text-xs font-bold text-amber-300">
                   <Award className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span className="truncate">{user.designationBadge}</span>
+                  <span className="truncate">{formatDesignationBadge(user.designationBadge)}</span>
                 </div>
               )}
 

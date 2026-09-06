@@ -56,6 +56,29 @@ export function checkBtIdAvailability(
 }
 
 /**
+ * Normalizes designation badges into standard institutional format:
+ * e.g. "Club Co-Head • Event Club" -> "Event Club Co-Head"
+ * e.g. "Club Head • Event Club" -> "Event Club Head"
+ */
+export function formatDesignationBadge(badge?: string | null): string {
+  if (!badge || typeof badge !== "string") return "";
+  const trimmed = badge.trim();
+  const match1 = trimmed.match(/^Club (Co-Head|Head|Co-Lead|Lead) • (.+)$/i);
+  if (match1) {
+    const role = match1[1].toLowerCase().includes("co") ? "Co-Head" : "Head";
+    const clubName = match1[2].trim();
+    return `${clubName} ${role}`;
+  }
+  const match2 = trimmed.match(/^(.+) • Club (Co-Head|Head|Co-Lead|Lead)$/i);
+  if (match2) {
+    const clubName = match2[1].trim();
+    const role = match2[2].toLowerCase().includes("co") ? "Co-Head" : "Head";
+    return `${clubName} ${role}`;
+  }
+  return trimmed;
+}
+
+/**
  * Resolve special council badging and designations attached to a BT ID
  */
 export function resolveDesignationByBtId(btId: string): { 
@@ -71,7 +94,7 @@ export function resolveDesignationByBtId(btId: string): {
   const matchedCouncil = council.find((m) => m.btId && m.btId.trim().toUpperCase() === cleanBtId);
   if (matchedCouncil) {
     return {
-      designationBadge: matchedCouncil.role,
+      designationBadge: formatDesignationBadge(matchedCouncil.role),
       isCouncilOfficer: true,
       category: "Admin Council",
     };
@@ -82,7 +105,7 @@ export function resolveDesignationByBtId(btId: string): {
   const matchedHosting = hosting.find((m) => m.btId && m.btId.trim().toUpperCase() === cleanBtId);
   if (matchedHosting) {
     return {
-      designationBadge: matchedHosting.role,
+      designationBadge: formatDesignationBadge(matchedHosting.role),
       isCouncilOfficer: true,
       category: "Hosting Committee",
     };
@@ -93,7 +116,7 @@ export function resolveDesignationByBtId(btId: string): {
   const matchedSpokes = spokes.find((m) => m.btId && m.btId.trim().toUpperCase() === cleanBtId);
   if (matchedSpokes) {
     return {
-      designationBadge: matchedSpokes.role,
+      designationBadge: formatDesignationBadge(matchedSpokes.role),
       isCouncilOfficer: true,
       category: "Spokesperson",
     };
@@ -106,9 +129,9 @@ export function resolveDesignationByBtId(btId: string): {
     for (const leader of leaders) {
       if (leader.btId && leader.btId.trim().toUpperCase() === cleanBtId) {
         const isCoLead = leader.roleType === "coLead" || (leader.role && leader.role.toLowerCase().includes("co-head"));
-        const rolePrefix = isCoLead ? "Club Co-Head" : "Club Head";
+        const roleSuffix = isCoLead ? "Co-Head" : "Head";
         return {
-          designationBadge: `${rolePrefix} • ${club.name}`,
+          designationBadge: `${club.name} ${roleSuffix}`,
           isCouncilOfficer: true,
           category: "Club Leadership",
         };
@@ -121,7 +144,7 @@ export function resolveDesignationByBtId(btId: string): {
   const matchedFounder = founders.find((m) => m.btId && m.btId.trim().toUpperCase() === cleanBtId);
   if (matchedFounder) {
     return {
-      designationBadge: matchedFounder.role,
+      designationBadge: formatDesignationBadge(matchedFounder.role),
       isCouncilOfficer: true,
       category: "Founding Council",
     };
@@ -145,7 +168,7 @@ export const DEFAULT_REGISTERED_USERS: RegisteredUserRecord[] = [
     year: "3rd Year",
     phone: "9075828232",
     profileCompleted: true,
-    designationBadge: "Club Co-Head • Event Club",
+    designationBadge: "Event Club Co-Head",
     isCouncilOfficer: true,
     lastActive: "2026-08-31T01:00:00.000Z",
     createdAt: "2026-08-31T01:00:00.000Z",
@@ -214,7 +237,7 @@ export function getStoredUsers(): RegisteredUserRecord[] {
       btId: cleanBtId,
       designationBadge: designationInfo 
         ? designationInfo.designationBadge 
-        : (cleanBtId ? undefined : user.designationBadge),
+        : (cleanBtId ? undefined : (formatDesignationBadge(user.designationBadge) || undefined)),
       isCouncilOfficer: designationInfo ? true : (cleanBtId ? false : Boolean(user.isCouncilOfficer)),
     };
   });
@@ -245,7 +268,7 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
       // Dynamic roster resolution takes precedence for linked BT IDs to prevent stale cloud badges
       const assignedBadge = designationInfo 
         ? designationInfo.designationBadge 
-        : (cleanBtId ? undefined : (r.designationBadge || undefined));
+        : (cleanBtId ? undefined : (formatDesignationBadge(r.designationBadge) || undefined));
       const isOfficer = designationInfo ? true : (cleanBtId ? false : Boolean(r.isCouncilOfficer));
 
       const localMatch = (r.uid ? localMap.get(r.uid) : null) || (r.email ? localMap.get(r.email.toLowerCase()) : null);
@@ -338,7 +361,7 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
     const assignedRole = user.role || existing?.role || "STUDENT";
     const assignedBadge = designationInfo 
       ? designationInfo.designationBadge 
-      : (cleanBtId ? undefined : (user.designationBadge || existing?.designationBadge));
+      : (cleanBtId ? undefined : (formatDesignationBadge(user.designationBadge || existing?.designationBadge) || undefined));
     const isOfficer = designationInfo ? true : (cleanBtId ? false : Boolean(user.isCouncilOfficer || existing?.isCouncilOfficer));
 
     const now = new Date().toISOString();
@@ -585,7 +608,7 @@ export async function reconcileAllUserDesignations(): Promise<RegisteredUserReco
   const updated = current.map((u) => {
     const cleanBtId = u.btId ? u.btId.trim().toUpperCase() : "";
     const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId) : null;
-    const newBadge = designationInfo ? designationInfo.designationBadge : (cleanBtId ? undefined : u.designationBadge);
+    const newBadge = designationInfo ? designationInfo.designationBadge : (cleanBtId ? undefined : (formatDesignationBadge(u.designationBadge) || undefined));
     const newOfficer = designationInfo ? true : (cleanBtId ? false : Boolean(u.isCouncilOfficer));
 
     if (u.designationBadge !== newBadge || u.isCouncilOfficer !== newOfficer) {

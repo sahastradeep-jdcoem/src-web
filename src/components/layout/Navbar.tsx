@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { formatDesignationBadge } from "@/lib/usersStore";
 
 const NAV_LINKS = [
   { name: "Home", href: "/" },
@@ -177,7 +178,7 @@ export default function Navbar() {
                       <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                         {user.designationBadge ? (
                           <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300 truncate max-w-full">
-                            🏅 {user.designationBadge}
+                            🏅 {formatDesignationBadge(user.designationBadge)}
                           </span>
                         ) : (
                           <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
