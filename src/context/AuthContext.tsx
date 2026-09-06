@@ -24,7 +24,8 @@ import {
   getStoredUsers, 
   resolveDesignationByBtId, 
   markUserAsDeleted,
-  formatDesignationBadge 
+  formatDesignationBadge,
+  isExternalUser 
 } from "@/lib/usersStore";
 import { resolveCanonicalDepartmentName } from "@/lib/departmentsStore";
 
@@ -166,16 +167,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const baseObj = { ...registeredUser, ...localProfile, ...storedProfile };
 
+        const isJdcoem = Boolean(cleanBt && cleanBt.length >= 3) || 
+          Boolean(fbUser.email && (fbUser.email.endsWith("@jdcoem.ac.in") || fbUser.email.endsWith("@jdcoem.in"))) ||
+          storedProfile?.userType === "JDCOEM_STUDENT" || 
+          localProfile?.userType === "JDCOEM_STUDENT" || 
+          registeredUser?.userType === "JDCOEM_STUDENT";
+
         const activePending = pendingUserType || (typeof window !== "undefined" ? (sessionStorage.getItem("src_pending_user_type") as any) : null);
-        const resolvedUserType = activePending || storedProfile?.userType || localProfile?.userType || registeredUser?.userType || 
-          (storedProfile?.role === "FACULTY" || localProfile?.role === "FACULTY" ? "FACULTY" : 
-          (storedProfile?.collegeName || localProfile?.collegeName || !fbUser.isCollegeStudent) ? "EXTERNAL_STUDENT" : "JDCOEM_STUDENT");
+        const resolvedUserType = activePending || 
+          (assignedRole === "FACULTY" || storedProfile?.role === "FACULTY" || localProfile?.role === "FACULTY" ? "FACULTY" : 
+          assignedRole === "COUNCIL_ADMIN" ? "COUNCIL_ADMIN" :
+          isJdcoem ? "JDCOEM_STUDENT" :
+          storedProfile?.userType || localProfile?.userType || registeredUser?.userType || 
+          (!cleanBt && (storedProfile?.collegeName || localProfile?.collegeName) ? "EXTERNAL_STUDENT" : "JDCOEM_STUDENT"));
 
         const isCompleted = determineProfileCompletion(
           baseObj,
           resolvedUserType,
           cleanBt
         );
+
+        const resolvedIsCollegeStudent = isJdcoem ? true : (resolvedUserType === "EXTERNAL_STUDENT" ? false : fbUser.isCollegeStudent);
+        const resolvedCollegeName = isJdcoem
+          ? ((storedProfile?.collegeName && (storedProfile.collegeName.toLowerCase().includes("jdcoem") || storedProfile.collegeName.toLowerCase().includes("jd college"))) ? storedProfile.collegeName : "")
+          : (storedProfile?.collegeName || localProfile?.collegeName || registeredUser?.collegeName || "");
 
         const merged: AuthUser = {
           ...baseObj,
@@ -185,19 +200,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           photoURL: fbUser.photoURL || storedProfile?.photoURL || localProfile?.photoURL || registeredUser?.photoURL || null,
           role: assignedRole,
           userType: resolvedUserType as any,
-          isCollegeStudent: resolvedUserType === "EXTERNAL_STUDENT" ? false : fbUser.isCollegeStudent,
+          isCollegeStudent: resolvedIsCollegeStudent,
           firstName: storedProfile?.firstName || localProfile?.firstName || registeredUser?.firstName || (fbUser.displayName ? fbUser.displayName.split(" ")[0] : ""),
           lastName: storedProfile?.lastName || localProfile?.lastName || registeredUser?.lastName || (fbUser.displayName ? fbUser.displayName.split(" ").slice(1).join(" ") : ""),
           btId: cleanBt,
-          department: resolvedUserType === "EXTERNAL_STUDENT"
-            ? (storedProfile?.degree || localProfile?.degree || "Undergraduate")
-            : resolveCanonicalDepartmentName(storedProfile?.department || localProfile?.department || registeredUser?.department || "Computer Science and Engineering"),
+          department: isJdcoem || resolvedUserType === "JDCOEM_STUDENT" || resolvedUserType === "COUNCIL_ADMIN"
+            ? resolveCanonicalDepartmentName(storedProfile?.department || localProfile?.department || registeredUser?.department || "Computer Science and Engineering")
+            : (storedProfile?.degree || localProfile?.degree || storedProfile?.department || "Undergraduate"),
           year: storedProfile?.year || localProfile?.year || registeredUser?.year || "3rd Year",
           phone: storedProfile?.phone || localProfile?.phone || registeredUser?.phone || "",
-          collegeName: storedProfile?.collegeName || localProfile?.collegeName || registeredUser?.collegeName || "",
-          city: storedProfile?.city || localProfile?.city || registeredUser?.city || "",
-          degree: storedProfile?.degree || localProfile?.degree || registeredUser?.degree || storedProfile?.customBranch || localProfile?.customBranch || registeredUser?.customBranch || "",
-          customBranch: storedProfile?.customBranch || localProfile?.customBranch || registeredUser?.customBranch || storedProfile?.degree || localProfile?.degree || registeredUser?.degree || "",
+          collegeName: resolvedCollegeName,
+          city: isJdcoem ? (storedProfile?.city || localProfile?.city || "Nagpur") : (storedProfile?.city || localProfile?.city || registeredUser?.city || ""),
+          degree: isJdcoem ? "" : (storedProfile?.degree || localProfile?.degree || registeredUser?.degree || ""),
+          customBranch: isJdcoem ? "" : (storedProfile?.customBranch || localProfile?.customBranch || registeredUser?.customBranch || ""),
           title: storedProfile?.title || localProfile?.title || registeredUser?.title,
           facultyDesignation: storedProfile?.facultyDesignation || localProfile?.facultyDesignation || registeredUser?.facultyDesignation,
           facultyDepartment: storedProfile?.facultyDepartment || localProfile?.facultyDepartment || registeredUser?.facultyDepartment,
@@ -323,12 +338,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const baseObj = { ...registeredUser, ...localProfile, ...storedProfile };
 
+        const isJdcoem = Boolean(cleanBt && cleanBt.length >= 3) || 
+          Boolean(fbUser.email && (fbUser.email.endsWith("@jdcoem.ac.in") || fbUser.email.endsWith("@jdcoem.in"))) ||
+          storedProfile?.userType === "JDCOEM_STUDENT" || 
+          localProfile?.userType === "JDCOEM_STUDENT" || 
+          registeredUser?.userType === "JDCOEM_STUDENT";
+
         const activePending = selectedUserType || pendingUserType || (typeof window !== "undefined" ? (sessionStorage.getItem("src_pending_user_type") as any) : null);
-        const resolvedUserType = activePending || storedProfile?.userType || localProfile?.userType || registeredUser?.userType || 
-          (storedProfile?.role === "FACULTY" || localProfile?.role === "FACULTY" ? "FACULTY" : 
-          (storedProfile?.collegeName || localProfile?.collegeName || !fbUser.isCollegeStudent) ? "EXTERNAL_STUDENT" : "JDCOEM_STUDENT");
+        const resolvedUserType = activePending || 
+          (assignedRole === "FACULTY" || storedProfile?.role === "FACULTY" || localProfile?.role === "FACULTY" ? "FACULTY" : 
+          assignedRole === "COUNCIL_ADMIN" ? "COUNCIL_ADMIN" :
+          isJdcoem ? "JDCOEM_STUDENT" :
+          storedProfile?.userType || localProfile?.userType || registeredUser?.userType || 
+          (!cleanBt && (storedProfile?.collegeName || localProfile?.collegeName) ? "EXTERNAL_STUDENT" : "JDCOEM_STUDENT"));
 
         const isCompleted = determineProfileCompletion(baseObj, resolvedUserType, cleanBt);
+
+        const resolvedIsCollegeStudent = isJdcoem ? true : (resolvedUserType === "EXTERNAL_STUDENT" ? false : fbUser.isCollegeStudent);
+        const resolvedCollegeName = isJdcoem
+          ? ((storedProfile?.collegeName && (storedProfile.collegeName.toLowerCase().includes("jdcoem") || storedProfile.collegeName.toLowerCase().includes("jd college"))) ? storedProfile.collegeName : "")
+          : (storedProfile?.collegeName || localProfile?.collegeName || registeredUser?.collegeName || "");
 
         const merged: AuthUser = {
           ...baseObj,
@@ -338,17 +367,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           photoURL: fbUser.photoURL || storedProfile?.photoURL || localProfile?.photoURL || null,
           role: assignedRole,
           userType: resolvedUserType as any,
-          isCollegeStudent: resolvedUserType === "EXTERNAL_STUDENT" ? false : fbUser.isCollegeStudent,
+          isCollegeStudent: resolvedIsCollegeStudent,
           firstName: storedProfile?.firstName || localProfile?.firstName || registeredUser?.firstName || (fbUser.displayName ? fbUser.displayName.split(" ")[0] : ""),
           lastName: storedProfile?.lastName || localProfile?.lastName || registeredUser?.lastName || (fbUser.displayName ? fbUser.displayName.split(" ").slice(1).join(" ") : ""),
           btId: cleanBt,
-          department: storedProfile?.department || localProfile?.department || registeredUser?.department || (resolvedUserType === "JDCOEM_STUDENT" ? "Computer Science and Engineering" : ""),
+          department: isJdcoem || resolvedUserType === "JDCOEM_STUDENT" || resolvedUserType === "COUNCIL_ADMIN"
+            ? resolveCanonicalDepartmentName(storedProfile?.department || localProfile?.department || registeredUser?.department || "Computer Science and Engineering")
+            : (storedProfile?.degree || localProfile?.degree || storedProfile?.department || "Undergraduate"),
           year: storedProfile?.year || localProfile?.year || registeredUser?.year || (resolvedUserType === "JDCOEM_STUDENT" ? "3rd Year" : ""),
           phone: storedProfile?.phone || localProfile?.phone || registeredUser?.phone || "",
-          collegeName: storedProfile?.collegeName || localProfile?.collegeName || registeredUser?.collegeName || "",
-          city: storedProfile?.city || localProfile?.city || registeredUser?.city || "",
-          degree: storedProfile?.degree || localProfile?.degree || registeredUser?.degree || storedProfile?.customBranch || localProfile?.customBranch || registeredUser?.customBranch || "",
-          customBranch: storedProfile?.customBranch || localProfile?.customBranch || registeredUser?.customBranch || storedProfile?.degree || localProfile?.degree || registeredUser?.degree || "",
+          collegeName: resolvedCollegeName,
+          city: isJdcoem ? (storedProfile?.city || localProfile?.city || "Nagpur") : (storedProfile?.city || localProfile?.city || registeredUser?.city || ""),
+          degree: isJdcoem ? "" : (storedProfile?.degree || localProfile?.degree || registeredUser?.degree || ""),
+          customBranch: isJdcoem ? "" : (storedProfile?.customBranch || localProfile?.customBranch || registeredUser?.customBranch || ""),
           title: storedProfile?.title || localProfile?.title || registeredUser?.title,
           facultyDesignation: storedProfile?.facultyDesignation || localProfile?.facultyDesignation || registeredUser?.facultyDesignation,
           facultyDepartment: storedProfile?.facultyDepartment || localProfile?.facultyDepartment || registeredUser?.facultyDepartment,

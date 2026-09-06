@@ -45,6 +45,7 @@ import {
 import { ListingItem, ListingResponseRecord } from "@/types/listings";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
+import { isExternalUser as checkIsExternalUser } from "@/lib/usersStore";
 import confetti from "canvas-confetti";
 
 export default function ListingDetailPage() {
@@ -52,9 +53,7 @@ export default function ListingDetailPage() {
   const router = useRouter();
   const slug = params?.slug as string;
   const { user, openAuthModal } = useAuth();
-  const isExternalUser = Boolean(
-    user && (user.userType === "EXTERNAL_STUDENT" || user.isCollegeStudent === false)
-  );
+  const isExternalUser = checkIsExternalUser(user);
 
   const [listing, setListing] = useState<ListingItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);

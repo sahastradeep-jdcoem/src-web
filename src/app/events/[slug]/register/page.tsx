@@ -24,14 +24,13 @@ import { RegistrationWizard } from "@/components/registration/RegistrationWizard
 import { Badge } from "@/components/ui/Badge";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
+import { isExternalUser } from "@/lib/usersStore";
 
 export default function EventRegisterPage() {
   const params = useParams();
   const slug = params?.slug as string;
   const { user, openAuthModal } = useAuth();
-  const isExternal = Boolean(
-    user && (user.userType === "EXTERNAL_STUDENT" || user.isCollegeStudent === false || (user.collegeName && !user.email?.endsWith("@jdcoem.ac.in")))
-  );
+  const isExternal = isExternalUser(user);
 
   const [event, setEvent] = useState<EventItem | null>(null);
   const [subEvents, setSubEvents] = useState<EventItem[]>([]);

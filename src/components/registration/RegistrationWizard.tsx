@@ -43,7 +43,8 @@ import {
   findRegisteredUserByBtId, 
   lookupUserByBtId, 
   RegisteredUserRecord,
-  saveRegisteredUser
+  saveRegisteredUser,
+  isExternalUser
 } from "@/lib/usersStore";
 
 function loadRazorpayScript(): Promise<boolean> {
@@ -83,7 +84,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   const initialFormat = event.teamType === "Team" ? "Team" : "Individual";
 
   const isFaculty = user?.role === "FACULTY" || user?.userType === "FACULTY";
-  const isExternal = user?.userType === "EXTERNAL_STUDENT" || user?.isCollegeStudent === false || Boolean(user?.collegeName);
+  const isExternal = isExternalUser(user);
   const isJdcoemOnly = event.targetAudience === "jdcoem_only" || event.isInterCollege === false;
 
   // Form State
@@ -176,7 +177,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   useEffect(() => {
     if (user) {
       const userIsFaculty = user.role === "FACULTY" || user.userType === "FACULTY";
-      const userIsExternal = user.userType === "EXTERNAL_STUDENT" || user.isCollegeStudent === false || Boolean(user.collegeName);
+      const userIsExternal = isExternalUser(user);
 
       const leaderName = user.displayName || `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email?.split("@")[0] || "Delegate";
       const leaderBtId = userIsExternal ? "" : (user.btId || (userIsFaculty ? (user.employeeId || "FACULTY") : ""));
@@ -369,7 +370,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       return;
     }
 
-    const isNonBtIdUser = user?.role === "FACULTY" || user?.userType === "FACULTY" || user?.userType === "EXTERNAL_STUDENT" || user?.isCollegeStudent === false || Boolean(user?.collegeName);
+    const isNonBtIdUser = user?.role === "FACULTY" || user?.userType === "FACULTY" || isExternalUser(user);
 
     if (!isNonBtIdUser && !formData.btId.trim()) {
       alert("Please ensure your College BT ID is saved in your profile.");
@@ -525,7 +526,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         collegeName: isExternal ? (formData.collegeName || user?.collegeName || "Other College") : undefined,
         city: isExternal ? (formData.city || user?.city || "Nagpur") : undefined,
         customBranch: isExternal ? (formData.department || user?.customBranch) : undefined,
-        userType: user?.userType || (isExternal ? "EXTERNAL_STUDENT" : isFaculty ? "FACULTY" : "JDCOEM_STUDENT"),
+        userType: isExternal ? "EXTERNAL_STUDENT" : isFaculty ? "FACULTY" : "JDCOEM_STUDENT",
         isCollegeStudent: !isExternal,
         department: formData.department,
         year: formData.year,

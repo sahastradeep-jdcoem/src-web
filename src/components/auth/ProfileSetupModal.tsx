@@ -38,7 +38,8 @@ import {
 import { 
   checkBtIdAvailability, 
   resolveDesignationByBtId, 
-  maskEmail 
+  maskEmail,
+  isExternalUser 
 } from "@/lib/usersStore";
 import { SearchableDegreeSelect } from "@/components/ui/SearchableDegreeSelect";
 
@@ -152,7 +153,7 @@ export function ProfileSetupModal() {
         setAccountType(pendingUserType);
       } else if (user.role === "FACULTY" || user.userType === "FACULTY") {
         setAccountType("FACULTY");
-      } else if (user.userType === "EXTERNAL_STUDENT" || user.isCollegeStudent === false) {
+      } else if (isExternalUser(user)) {
         setAccountType("EXTERNAL_STUDENT");
       } else {
         setAccountType("JDCOEM_STUDENT");
@@ -257,6 +258,10 @@ export function ProfileSetupModal() {
           department,
           year,
           phone: cleanPhone,
+          collegeName: "",
+          city: "",
+          degree: "",
+          customBranch: "",
           profileCompleted: true,
           designationBadge: designationInfo ? designationInfo.designationBadge : undefined,
           isCouncilOfficer: designationInfo ? true : false,

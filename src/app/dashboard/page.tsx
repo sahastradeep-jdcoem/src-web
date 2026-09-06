@@ -44,7 +44,7 @@ import {
   syncListingsFromFirestore,
   subscribeToListings
 } from "@/lib/listingsStore";
-import { formatDesignationBadge } from "@/lib/usersStore";
+import { formatDesignationBadge, isExternalUser } from "@/lib/usersStore";
 import { useAuth } from "@/context/AuthContext";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { downloadPassAsImage } from "@/lib/passExport";
@@ -395,7 +395,7 @@ export default function StudentDashboardPage() {
   const completedRegistrations = registrations.filter((r) => r.status === "COMPLETED");
 
   const isFaculty = user?.role === "FACULTY" || user?.userType === "FACULTY";
-  const isExternal = user?.userType === "EXTERNAL_STUDENT" || user?.isCollegeStudent === false || Boolean(user?.collegeName);
+  const isExternal = isExternalUser(user);
   const isPendingFaculty = isFaculty && user?.facultyApprovalStatus === "pending";
 
   const displayName = user?.displayName || (isFaculty ? "Faculty Member" : isExternal ? "Visiting Delegate" : "Aryan Sharma");

@@ -32,6 +32,7 @@ import { ScheduleTimeline } from "@/components/events/ScheduleTimeline";
 import { PrizeCard } from "@/components/events/PrizeCard";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
+import { isExternalUser } from "@/lib/usersStore";
 
 export default function EventDetailPage() {
   const params = useParams();
@@ -42,9 +43,7 @@ export default function EventDetailPage() {
   const [subEvents, setSubEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const isExternalStudent = Boolean(
-    user && (user.userType === "EXTERNAL_STUDENT" || user.isCollegeStudent === false || (user.collegeName && !user.email?.endsWith("@jdcoem.ac.in")))
-  );
+  const isExternalStudent = isExternalUser(user);
 
   const findEvent = (allEvents: EventItem[], targetSlug: string): EventItem | null => {
     if (!targetSlug) return null;

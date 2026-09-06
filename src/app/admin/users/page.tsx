@@ -40,6 +40,7 @@ import {
   reconcileAllUserDesignations,
   resolveDesignationByBtId, 
   formatDesignationBadge,
+  isExternalUser,
   RegisteredUserRecord 
 } from "@/lib/usersStore";
 import { subscribeToUsersFromFirestore } from "@/lib/firebase/firestore";
@@ -156,6 +157,7 @@ export default function AdminUsersPage() {
 
     const cleanBt = editUserForm.btId.trim().toUpperCase();
     const parts = editUserForm.displayName.trim().split(" ");
+    const isJdcoem = Boolean(cleanBt && cleanBt.length >= 3);
 
     const updatedRecord: RegisteredUserRecord = {
       ...userToEdit,
@@ -166,6 +168,11 @@ export default function AdminUsersPage() {
       year: editUserForm.year,
       phone: editUserForm.phone.trim(),
       role: editUserForm.role,
+      userType: isJdcoem ? "JDCOEM_STUDENT" : userToEdit.userType,
+      isCollegeStudent: isJdcoem ? true : userToEdit.isCollegeStudent,
+      collegeName: isJdcoem ? "" : userToEdit.collegeName,
+      degree: isJdcoem ? "" : userToEdit.degree,
+      customBranch: isJdcoem ? "" : userToEdit.customBranch,
       firstName: parts[0] || userToEdit.firstName || "",
       lastName: parts.slice(1).join(" ") || userToEdit.lastName || "",
       profileCompleted: Boolean(cleanBt),
@@ -307,13 +314,13 @@ export default function AdminUsersPage() {
 
   const jdcoemStudents = useMemo(() => {
     return users.filter(
-      (u) => !u.isDeleted && u.status !== "deleted" && (u.userType === "JDCOEM_STUDENT" || (u.role === "STUDENT" && !u.collegeName && u.btId)) && u.role !== "FACULTY" && u.role !== "COUNCIL_ADMIN"
+      (u) => !u.isDeleted && u.status !== "deleted" && !isExternalUser(u) && u.role !== "FACULTY" && u.role !== "COUNCIL_ADMIN"
     );
   }, [users]);
 
   const externalStudents = useMemo(() => {
     return users.filter(
-      (u) => !u.isDeleted && u.status !== "deleted" && (u.userType === "EXTERNAL_STUDENT" || u.isCollegeStudent === false || Boolean(u.collegeName))
+      (u) => !u.isDeleted && u.status !== "deleted" && isExternalUser(u)
     );
   }, [users]);
 
@@ -351,9 +358,9 @@ export default function AdminUsersPage() {
       } else if (categoryFilter === "VERIFIED_FACULTY") {
         matchesCategory = !u.isDeleted && u.status !== "deleted" && (u.role === "FACULTY" || u.userType === "FACULTY") && u.facultyApprovalStatus === "approved";
       } else if (categoryFilter === "JDCOEM_STUDENTS") {
-        matchesCategory = !u.isDeleted && u.status !== "deleted" && (u.userType === "JDCOEM_STUDENT" || (u.role === "STUDENT" && !u.collegeName)) && u.role !== "FACULTY";
+        matchesCategory = !u.isDeleted && u.status !== "deleted" && !isExternalUser(u) && u.role !== "FACULTY" && u.role !== "COUNCIL_ADMIN";
       } else if (categoryFilter === "EXTERNAL_STUDENTS") {
-        matchesCategory = !u.isDeleted && u.status !== "deleted" && (u.userType === "EXTERNAL_STUDENT" || u.isCollegeStudent === false || Boolean(u.collegeName));
+        matchesCategory = !u.isDeleted && u.status !== "deleted" && isExternalUser(u);
       } else if (categoryFilter === "COUNCIL_ADMIN") {
         matchesCategory = !u.isDeleted && u.status !== "deleted" && u.role === "COUNCIL_ADMIN";
       }
@@ -673,7 +680,7 @@ export default function AdminUsersPage() {
                 {filteredUsers.map((u) => {
                   const isDeleted = Boolean(u.isDeleted || u.status === "deleted");
                   const isFaculty = u.role === "FACULTY" || u.userType === "FACULTY";
-                  const isExternal = u.userType === "EXTERNAL_STUDENT" || u.isCollegeStudent === false || Boolean(u.collegeName);
+                  const isExternal = isExternalUser(u);
                   const isPendingFaculty = !isDeleted && isFaculty && u.facultyApprovalStatus === "pending";
 
                   return (
@@ -1092,7 +1099,7 @@ export default function AdminUsersPage() {
               <div className="p-3.5 rounded-xl bg-slate-50 space-y-1 border border-slate-100">
                 <span className="text-slate-400 uppercase text-[10px] font-bold">Institution / College</span>
                 <p className="font-bold text-slate-900">
-                  {selectedUser.collegeName || "JDCOEM Nagpur"}
+                  {isExternalUser(selectedUser) ? (selectedUser.collegeName || "Other College") : "JDCOEM Nagpur"}
                 </p>
                 {selectedUser.city && (
                   <p className="text-[11px] text-slate-500 font-medium">📍 {selectedUser.city}</p>

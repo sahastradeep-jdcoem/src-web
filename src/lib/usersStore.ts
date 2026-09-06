@@ -80,6 +80,47 @@ export function formatDesignationBadge(badge?: string | null): string {
 }
 
 /**
+ * Canonical helper: Determine whether a user is truly an external visiting delegate.
+ * Guaranteed invariant: Any user with a valid JDCOEM BT ID, @jdcoem email,
+ * council designation, or JDCOEM_STUDENT status is NEVER an external student.
+ */
+export function isExternalUser(user: {
+  userType?: string;
+  isCollegeStudent?: boolean;
+  collegeName?: string;
+  btId?: string;
+  email?: string | null;
+  role?: string;
+} | null | undefined): boolean {
+  if (!user) return false;
+  if (user.role === "COUNCIL_ADMIN" || user.role === "FACULTY" || user.userType === "FACULTY") return false;
+  
+  const cleanBt = (user.btId || "").trim().toUpperCase();
+  if (cleanBt.length >= 3) return false; // Any user with a BT ID is a JDCOEM student
+  
+  if (user.userType === "JDCOEM_STUDENT") return false;
+  if (user.isCollegeStudent === true && (!user.collegeName || user.collegeName.toLowerCase().includes("jdcoem") || user.collegeName.toLowerCase().includes("jd college"))) return false;
+  if (user.email && (user.email.endsWith("@jdcoem.ac.in") || user.email.endsWith("@jdcoem.in"))) return false;
+
+  // Explicit external status
+  if (user.userType === "EXTERNAL_STUDENT") return true;
+
+  // Has an external college name
+  if (user.collegeName && user.collegeName.trim()) {
+    const col = user.collegeName.trim().toLowerCase();
+    if (col === "other college" || col === "visiting college") return true;
+    if (!col.includes("jdcoem") && !col.includes("jd college") && !col.includes("jaidev")) {
+      return true;
+    }
+  }
+
+  // Not a college student and no BT ID
+  if (user.isCollegeStudent === false && !cleanBt) return true;
+
+  return false;
+}
+
+/**
  * Resolve special council badging and designations attached to a BT ID
  */
 export function resolveDesignationByBtId(btId: string): { 
@@ -291,16 +332,36 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
     // Process remote users as authoritative
     for (const r of remoteUsers) {
       if (!r || (!r.uid && !r.email)) continue;
-      const cleanBtId = r.btId ? r.btId.trim().toUpperCase() : "";
+      const localMatch = (r.uid ? localMap.get(r.uid) : null) || (r.email ? localMap.get(r.email.toLowerCase()) : null);
+      const cleanBtId = (r.btId || localMatch?.btId || "").trim().toUpperCase();
       const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId) : null;
-      const assignedRole = r.role || "STUDENT";
+      const assignedRole = r.role || localMatch?.role || "STUDENT";
       // Dynamic roster resolution takes precedence for linked BT IDs to prevent stale cloud badges
       const assignedBadge = designationInfo 
         ? designationInfo.designationBadge 
-        : (cleanBtId ? undefined : (formatDesignationBadge(r.designationBadge) || undefined));
-      const isOfficer = designationInfo ? true : (cleanBtId ? false : Boolean(r.isCouncilOfficer));
+        : (cleanBtId ? undefined : (formatDesignationBadge(r.designationBadge || localMatch?.designationBadge) || undefined));
+      const isOfficer = designationInfo ? true : (cleanBtId ? false : Boolean(r.isCouncilOfficer || localMatch?.isCouncilOfficer));
 
-      const localMatch = (r.uid ? localMap.get(r.uid) : null) || (r.email ? localMap.get(r.email.toLowerCase()) : null);
+      const isJdcoemStudent = Boolean(cleanBtId && cleanBtId.length >= 3) || 
+        Boolean(r.email && (r.email.endsWith("@jdcoem.ac.in") || r.email.endsWith("@jdcoem.in"))) ||
+        r.userType === "JDCOEM_STUDENT" || 
+        localMatch?.userType === "JDCOEM_STUDENT";
+
+      const resolvedUserType: "JDCOEM_STUDENT" | "FACULTY" | "EXTERNAL_STUDENT" = assignedRole === "FACULTY" 
+        ? "FACULTY" 
+        : isJdcoemStudent || assignedRole === "COUNCIL_ADMIN" 
+        ? "JDCOEM_STUDENT" 
+        : (r.userType === "FACULTY" || r.userType === "EXTERNAL_STUDENT" || r.userType === "JDCOEM_STUDENT" ? r.userType : (localMatch?.userType || "EXTERNAL_STUDENT"));
+
+      const resolvedIsCollegeStudent = assignedRole === "FACULTY" 
+        ? true 
+        : isJdcoemStudent 
+        ? true 
+        : Boolean(r.isCollegeStudent !== undefined ? r.isCollegeStudent : (localMatch?.isCollegeStudent ?? false));
+
+      const resolvedCollegeName = isJdcoemStudent 
+        ? ((r.collegeName && (r.collegeName.toLowerCase().includes("jdcoem") || r.collegeName.toLowerCase().includes("jd college"))) ? r.collegeName : "")
+        : (r.collegeName !== undefined ? r.collegeName : (localMatch?.collegeName || ""));
 
       const record: RegisteredUserRecord = {
         ...(localMatch || {}),
@@ -310,18 +371,18 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
         displayName: r.displayName || localMatch?.displayName || `${r.firstName || ""} ${r.lastName || ""}`.trim() || "Student",
         photoURL: r.photoURL !== undefined ? r.photoURL : (localMatch?.photoURL || null),
         role: assignedRole,
-        userType: r.userType || localMatch?.userType || (assignedRole === "FACULTY" ? "FACULTY" : cleanBtId ? "JDCOEM_STUDENT" : "EXTERNAL_STUDENT"),
-        isCollegeStudent: r.isCollegeStudent !== undefined ? r.isCollegeStudent : (assignedRole === "FACULTY" ? true : Boolean(cleanBtId)),
+        userType: resolvedUserType,
+        isCollegeStudent: resolvedIsCollegeStudent,
         firstName: r.firstName || localMatch?.firstName || "",
         lastName: r.lastName || localMatch?.lastName || "",
-        btId: cleanBtId || localMatch?.btId || "",
+        btId: cleanBtId,
         department: r.department || localMatch?.department || "Computer Science and Engineering",
         year: r.year || localMatch?.year || "3rd Year",
         phone: r.phone || localMatch?.phone || "",
-        collegeName: r.collegeName || localMatch?.collegeName || "",
-        city: r.city || localMatch?.city || "",
-        degree: r.degree || r.customBranch || localMatch?.degree || "",
-        customBranch: r.customBranch || r.degree || localMatch?.customBranch || "",
+        collegeName: resolvedCollegeName,
+        city: isJdcoemStudent ? (r.city || localMatch?.city || "Nagpur") : (r.city || localMatch?.city || ""),
+        degree: isJdcoemStudent ? "" : (r.degree || r.customBranch || localMatch?.degree || ""),
+        customBranch: isJdcoemStudent ? "" : (r.customBranch || r.degree || localMatch?.customBranch || ""),
         title: r.title || localMatch?.title,
         facultyDesignation: r.facultyDesignation || localMatch?.facultyDesignation,
         facultyDepartment: r.facultyDepartment || localMatch?.facultyDepartment,
@@ -338,6 +399,39 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
         lastActive: r.lastActive || localMatch?.lastActive || new Date().toISOString(),
         createdAt: r.createdAt || localMatch?.createdAt || new Date().toISOString(),
       };
+
+      // Auto-repair in Firestore if remote user has a valid BT ID but was miscategorized as EXTERNAL_STUDENT or Other College
+      if (r.uid && isJdcoemStudent && (r.userType === "EXTERNAL_STUDENT" || r.collegeName === "Other College" || r.isCollegeStudent === false)) {
+        saveUserProfileToFirestore(r.uid, {
+          userType: "JDCOEM_STUDENT",
+          isCollegeStudent: true,
+          collegeName: "",
+          btId: cleanBtId,
+        }).catch(() => {});
+      }
+
+      // If active session belongs to this user, synchronize session state
+      if (typeof window !== "undefined" && isJdcoemStudent) {
+        try {
+          const rawAuth = localStorage.getItem("src_auth_user");
+          if (rawAuth) {
+            const authUser = JSON.parse(rawAuth);
+            if (authUser.uid === record.uid || (authUser.email && record.email && authUser.email.toLowerCase() === record.email.toLowerCase())) {
+              if (authUser.userType !== "JDCOEM_STUDENT" || authUser.collegeName === "Other College" || authUser.isCollegeStudent === false || !authUser.btId) {
+                authUser.userType = "JDCOEM_STUDENT";
+                authUser.isCollegeStudent = true;
+                authUser.collegeName = "";
+                authUser.btId = cleanBtId || authUser.btId;
+                authUser.designationBadge = assignedBadge || authUser.designationBadge;
+                authUser.isCouncilOfficer = isOfficer;
+                localStorage.setItem("src_auth_user", JSON.stringify(authUser));
+                sessionStorage.setItem("src_auth_user", JSON.stringify(authUser));
+                window.dispatchEvent(new CustomEvent("src_auth_state_changed", { detail: authUser }));
+              }
+            }
+          }
+        } catch {}
+      }
 
       const key = record.uid || (record.email ? record.email.toLowerCase() : "");
       if (key) {
@@ -394,6 +488,27 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
     const isOfficer = designationInfo ? true : (cleanBtId ? false : Boolean(user.isCouncilOfficer || existing?.isCouncilOfficer));
 
     const now = new Date().toISOString();
+    const isJdcoemStudent = Boolean(cleanBtId && cleanBtId.length >= 3) || 
+      Boolean(user.email && (user.email.endsWith("@jdcoem.ac.in") || user.email.endsWith("@jdcoem.in"))) ||
+      user.userType === "JDCOEM_STUDENT" || 
+      existing?.userType === "JDCOEM_STUDENT";
+
+    const resolvedUserType: "JDCOEM_STUDENT" | "FACULTY" | "EXTERNAL_STUDENT" = assignedRole === "FACULTY" 
+      ? "FACULTY" 
+      : isJdcoemStudent || assignedRole === "COUNCIL_ADMIN" 
+      ? "JDCOEM_STUDENT" 
+      : (user.userType === "FACULTY" || user.userType === "EXTERNAL_STUDENT" || user.userType === "JDCOEM_STUDENT" ? user.userType : (existing?.userType || "EXTERNAL_STUDENT"));
+
+    const resolvedIsCollegeStudent = assignedRole === "FACULTY" 
+      ? true 
+      : isJdcoemStudent 
+      ? true 
+      : Boolean(user.isCollegeStudent !== undefined ? user.isCollegeStudent : (existing?.isCollegeStudent ?? false));
+
+    const resolvedCollegeName = isJdcoemStudent 
+      ? ((user.collegeName && (user.collegeName.toLowerCase().includes("jdcoem") || user.collegeName.toLowerCase().includes("jd college"))) ? user.collegeName : "")
+      : (user.collegeName !== undefined ? user.collegeName : (existing?.collegeName || ""));
+
     const record: RegisteredUserRecord = {
       ...(existing || {}),
       ...user,
@@ -402,8 +517,8 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
       displayName: user.displayName || existing?.displayName || `${user.firstName || existing?.firstName || ""} ${user.lastName || existing?.lastName || ""}`.trim() || "Student",
       photoURL: user.photoURL !== undefined ? user.photoURL : (existing?.photoURL || null),
       role: assignedRole,
-      userType: user.userType || existing?.userType || (assignedRole === "FACULTY" ? "FACULTY" : cleanBtId ? "JDCOEM_STUDENT" : "EXTERNAL_STUDENT"),
-      isCollegeStudent: user.isCollegeStudent !== undefined ? user.isCollegeStudent : (existing?.isCollegeStudent !== undefined ? existing.isCollegeStudent : (assignedRole === "FACULTY" ? true : Boolean(cleanBtId))),
+      userType: resolvedUserType,
+      isCollegeStudent: resolvedIsCollegeStudent,
       firstName: user.firstName !== undefined ? user.firstName : (existing?.firstName || ""),
       lastName: user.lastName !== undefined ? user.lastName : (existing?.lastName || ""),
       btId: cleanBtId,
@@ -424,10 +539,10 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
       employeeId: user.employeeId !== undefined ? user.employeeId : existing?.employeeId,
 
       // External student fields
-      collegeName: user.collegeName !== undefined ? user.collegeName : existing?.collegeName,
-      city: user.city !== undefined ? user.city : existing?.city,
-      degree: user.degree || user.customBranch || existing?.degree || existing?.customBranch || "",
-      customBranch: user.customBranch || user.degree || existing?.customBranch || existing?.degree || "",
+      collegeName: resolvedCollegeName,
+      city: isJdcoemStudent ? (user.city || existing?.city || "Nagpur") : (user.city !== undefined ? user.city : existing?.city),
+      degree: isJdcoemStudent ? "" : (user.degree || user.customBranch || existing?.degree || existing?.customBranch || ""),
+      customBranch: isJdcoemStudent ? "" : (user.customBranch || user.degree || existing?.customBranch || existing?.degree || ""),
 
       isDeleted: user.isDeleted !== undefined ? user.isDeleted : (existing?.isDeleted || false),
       deletedAt: user.deletedAt || existing?.deletedAt,
