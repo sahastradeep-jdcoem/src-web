@@ -23,6 +23,7 @@ import {
   saveStoredDepartments, 
   resetStoredDepartments, 
   syncDepartmentsFromFirestore,
+  cascadeDepartmentRename,
   DEFAULT_DEPARTMENTS 
 } from "@/lib/departmentsStore";
 import { Badge } from "@/components/ui/Badge";
@@ -35,6 +36,7 @@ export default function AdminDepartmentsPage() {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [isSaved, setIsSaved] = useState(false);
+  const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setDepartments(getStoredDepartments());
@@ -90,11 +92,23 @@ export default function AdminDepartmentsPage() {
     const clean = editingValue.trim();
     if (!clean) return;
 
+    const oldName = departments[index];
     const updated = [...departments];
     updated[index] = clean;
     saveList(updated);
     setEditingIndex(null);
     setEditingValue("");
+
+    if (oldName && oldName.toLowerCase() !== clean.toLowerCase()) {
+      cascadeDepartmentRename(oldName, clean).then((stats) => {
+        if (stats.usersCount > 0 || stats.responsesCount > 0 || stats.councilCount > 0) {
+          setNoticeMessage(
+            `Switched ${stats.usersCount} student profile(s), ${stats.responsesCount} response(s), and ${stats.councilCount} council record(s) from "${oldName}" to "${clean}".`
+          );
+          setTimeout(() => setNoticeMessage(null), 6000);
+        }
+      });
+    }
   };
 
   const handleDeleteDepartment = (index: number, name: string) => {
@@ -175,6 +189,18 @@ export default function AdminDepartmentsPage() {
           </div>
           <span className="text-[11px] text-emerald-700 font-bold uppercase tracking-wider">
             Real-Time Sync Active
+          </span>
+        </div>
+      )}
+
+      {noticeMessage && (
+        <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-semibold flex items-center justify-between shadow-xs animate-in fade-in duration-300">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
+            <span>{noticeMessage}</span>
+          </div>
+          <span className="text-[11px] text-blue-700 font-bold uppercase tracking-wider shrink-0">
+            Auto-Cascaded
           </span>
         </div>
       )}

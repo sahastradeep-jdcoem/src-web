@@ -221,6 +221,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const handleUsersChange = () => {
+      try {
+        const rawAuth = localStorage.getItem("src_auth_user");
+        if (rawAuth) {
+          const parsed = JSON.parse(rawAuth);
+          setUser((prev) => {
+            if (!prev) return prev;
+            if (
+              prev.department !== parsed.department ||
+              prev.facultyDepartment !== parsed.facultyDepartment ||
+              prev.displayName !== parsed.displayName ||
+              prev.designationBadge !== parsed.designationBadge ||
+              prev.isCouncilOfficer !== parsed.isCouncilOfficer
+            ) {
+              return { ...prev, ...parsed };
+            }
+            return prev;
+          });
+        }
+      } catch {}
+    };
+
+    window.addEventListener("src_users_updated", handleUsersChange);
+    window.addEventListener("storage", handleUsersChange);
+    return () => {
+      window.removeEventListener("src_users_updated", handleUsersChange);
+      window.removeEventListener("storage", handleUsersChange);
+    };
+  }, []);
+
   const loginWithGoogle = async (selectedUserType?: "JDCOEM_STUDENT" | "FACULTY" | "EXTERNAL_STUDENT") => {
     setIsLoading(true);
     try {

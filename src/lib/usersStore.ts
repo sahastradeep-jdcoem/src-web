@@ -9,7 +9,7 @@ import {
   getClubLeaders
 } from "./councilStore";
 
-const USERS_STORAGE_KEY = "src_registered_users";
+export const USERS_STORAGE_KEY = "src_registered_users";
 
 export interface RegisteredUserRecord extends UserProfile {
   lastActive?: string;
