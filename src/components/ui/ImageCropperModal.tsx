@@ -21,7 +21,8 @@ import {
   FlipVertical,
   Sliders,
   Maximize,
-  Undo2
+  Undo2,
+  Lock
 } from "lucide-react";
 import { Modal } from "./Modal";
 import { Button } from "./Button";
@@ -34,6 +35,7 @@ interface ImageCropperModalProps {
   imageSrc: string;
   initialAspectRatio?: AspectRatioType;
   allowedAspectRatios?: AspectRatioType[];
+  lockAspectRatio?: boolean;
   isAvatar?: boolean;
   onCropComplete: (croppedDataUrl: string) => void;
   title?: string;
@@ -54,10 +56,16 @@ export function ImageCropperModal({
   imageSrc,
   initialAspectRatio = "16:9",
   allowedAspectRatios,
+  lockAspectRatio,
   isAvatar = false,
   onCropComplete,
   title = "Crop & Frame Photo",
 }: ImageCropperModalProps) {
+  const effectiveAllowedRatios: AspectRatioType[] | undefined = 
+    lockAspectRatio && initialAspectRatio && initialAspectRatio !== "auto" && initialAspectRatio !== "free"
+      ? [initialAspectRatio]
+      : allowedAspectRatios;
+
   const [selectedRatio, setSelectedRatio] = useState<AspectRatioType>(initialAspectRatio);
   const [zoom, setZoom] = useState<number>(1);
   const [rotationSteps, setRotationSteps] = useState<number>(0); // 90-degree increments
@@ -80,8 +88,8 @@ export function ImageCropperModal({
   useEffect(() => {
     if (isOpen) {
       let initial: AspectRatioType = initialAspectRatio === "auto" ? "16:9" : initialAspectRatio;
-      if (allowedAspectRatios && allowedAspectRatios.length > 0 && !allowedAspectRatios.includes(initial)) {
-        const first = allowedAspectRatios[0];
+      if (effectiveAllowedRatios && effectiveAllowedRatios.length > 0 && !effectiveAllowedRatios.includes(initial)) {
+        const first = effectiveAllowedRatios[0];
         initial = first === "auto" ? "16:9" : first;
       }
       setSelectedRatio(initial);
@@ -94,7 +102,7 @@ export function ImageCropperModal({
       setImageLoaded(false);
       setShowCircleMask(isAvatar || initial === "1:1");
     }
-  }, [isOpen, initialAspectRatio, allowedAspectRatios, isAvatar]);
+  }, [isOpen, initialAspectRatio, effectiveAllowedRatios, isAvatar]);
 
   // Compute aspect ratio numerical value
   const getRatioMultiplier = useCallback((ratio: AspectRatioType): number => {
@@ -345,8 +353,8 @@ export function ImageCropperModal({
     { id: "free", label: "Original Ratio", sublabel: "Natural Dimensions", ratio: 0, width: 14, height: 12 },
   ];
 
-  const ratioOptions = allowedAspectRatios && allowedAspectRatios.length > 0
-    ? allRatioOptions.filter((r) => allowedAspectRatios.includes(r.id))
+  const ratioOptions = effectiveAllowedRatios && effectiveAllowedRatios.length > 0
+    ? allRatioOptions.filter((r) => effectiveAllowedRatios.includes(r.id))
     : allRatioOptions;
 
   return (
@@ -401,45 +409,74 @@ export function ImageCropperModal({
             </div>
           </div>
 
-          {/* Ratio Pills Grid */}
-          <div className={
-            ratioOptions.length === 1
-              ? "grid grid-cols-1 sm:grid-cols-2 max-w-sm gap-2"
-              : "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2"
-          }>
-            {ratioOptions.map((opt) => {
-              const isSelected = selectedRatio === opt.id;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedRatio(opt.id);
-                    if (opt.id === "1:1" && isAvatar) setShowCircleMask(true);
-                    setPan({ x: 0, y: 0 });
-                  }}
-                  className={`p-2 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1 group ${
-                    isSelected
-                      ? "bg-[#17458F] border-[#17458F] text-white shadow-sm ring-2 ring-[#17458F]/30"
-                      : "bg-slate-50/80 border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold leading-tight line-clamp-1">{opt.label}</span>
-                    <div 
-                      className={`border rounded-xs shrink-0 transition-colors ${
-                        isSelected ? "border-white bg-white/30" : "border-slate-400 bg-slate-200"
-                      }`}
-                      style={{ width: `${opt.width}px`, height: `${opt.height}px` }}
-                    />
+          {/* Ratio Pills Grid or Locked Standard Banner */}
+          {ratioOptions.length === 1 ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-gradient-to-r from-blue-50/90 to-indigo-50/50 border border-blue-200/80 shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-[#17458F] text-white flex items-center justify-center shadow-xs shrink-0">
+                  <Lock className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-[#17458F]">
+                      Locked Standard: {ratioOptions[0].label}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#17458F] text-white tracking-wide shadow-2xs">
+                      {ratioOptions[0].id}
+                    </span>
                   </div>
-                  <span className={`text-[9px] line-clamp-1 ${isSelected ? "text-blue-200" : "text-slate-400"}`}>
-                    {opt.sublabel}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+                  <p className="text-[10px] text-slate-500 font-medium leading-tight mt-0.5">
+                    {ratioOptions[0].sublabel} • Crop frame calibrated strictly for this layout slot
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono text-blue-700/80 font-semibold bg-white/80 px-2.5 py-1 rounded-lg border border-blue-200">
+                  Fixed {ratioOptions[0].id}
+                </span>
+                <div 
+                  className="border-2 border-[#17458F] bg-[#17458F]/20 rounded-xs shrink-0 shadow-2xs"
+                  style={{ width: `${ratioOptions[0].width}px`, height: `${ratioOptions[0].height}px` }}
+                  title={`Calibrated ${ratioOptions[0].id} scale`}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+              {ratioOptions.map((opt) => {
+                const isSelected = selectedRatio === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedRatio(opt.id);
+                      if (opt.id === "1:1" && isAvatar) setShowCircleMask(true);
+                      setPan({ x: 0, y: 0 });
+                    }}
+                    className={`p-2 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1 group ${
+                      isSelected
+                        ? "bg-[#17458F] border-[#17458F] text-white shadow-sm ring-2 ring-[#17458F]/30"
+                        : "bg-slate-50/80 border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold leading-tight line-clamp-1">{opt.label}</span>
+                      <div 
+                        className={`border rounded-xs shrink-0 transition-colors ${
+                          isSelected ? "border-white bg-white/30" : "border-slate-400 bg-slate-200"
+                        }`}
+                        style={{ width: `${opt.width}px`, height: `${opt.height}px` }}
+                      />
+                    </div>
+                    <span className={`text-[9px] line-clamp-1 ${isSelected ? "text-blue-200" : "text-slate-400"}`}>
+                      {opt.sublabel}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Studio Darkroom Viewport */}

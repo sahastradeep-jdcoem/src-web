@@ -16,6 +16,7 @@ interface ImageUploadDropzoneProps {
   recommendedSize?: string;
   aspectRatio?: "16:9" | "3:4" | "4:5" | "21:9" | "1:1" | "auto";
   allowedAspectRatios?: AspectRatioType[];
+  lockAspectRatio?: boolean;
   previewUrl?: string;
   storagePath?: string;
   className?: string;
@@ -30,6 +31,7 @@ export function ImageUploadDropzone({
   recommendedSize,
   aspectRatio = "16:9",
   allowedAspectRatios,
+  lockAspectRatio,
   previewUrl,
   storagePath = "uploads",
   className = "",
@@ -418,21 +420,37 @@ export function ImageUploadDropzone({
       )}
 
       {/* Interactive Photo Cropper & Framing Modal */}
-      {isCropperOpen && rawImageToCrop && (
-        <ImageCropperModal
-          isOpen={isCropperOpen}
-          onClose={() => {
-            setIsCropperOpen(false);
-            setRawImageToCrop(null);
-          }}
-          imageSrc={rawImageToCrop}
-          initialAspectRatio={aspectRatio === "auto" ? "16:9" : (aspectRatio as AspectRatioType)}
-          allowedAspectRatios={allowedAspectRatios}
-          isAvatar={aspectRatio === "1:1" || storagePath.includes("avatars") || storagePath.includes("logo")}
-          onCropComplete={handleCropComplete}
-          title={`Crop & Frame ${label}`}
-        />
-      )}
+      {isCropperOpen && rawImageToCrop && (() => {
+        // Enforce aspect ratio locking strictly across the whole website:
+        // - 16:9 for Card Thumbnail (locks to 16:9 only)
+        // - 4:5 for Vertical Poster (locks to 4:5 only)
+        // - 21:9 for Header Banner (locks to 21:9 only)
+        // - 1:1 for Avatars and Logos (locks to 1:1 only)
+        const effectiveAllowedRatios: AspectRatioType[] = allowedAspectRatios && allowedAspectRatios.length > 0
+          ? allowedAspectRatios
+          : lockAspectRatio !== false && aspectRatio && aspectRatio !== "auto"
+          ? [aspectRatio as AspectRatioType]
+          : ["16:9", "4:5", "3:4", "21:9", "1:1", "free"];
+
+        const shouldLock = lockAspectRatio ?? (effectiveAllowedRatios.length === 1);
+
+        return (
+          <ImageCropperModal
+            isOpen={isCropperOpen}
+            onClose={() => {
+              setIsCropperOpen(false);
+              setRawImageToCrop(null);
+            }}
+            imageSrc={rawImageToCrop}
+            initialAspectRatio={aspectRatio === "auto" ? "16:9" : (aspectRatio as AspectRatioType)}
+            allowedAspectRatios={effectiveAllowedRatios}
+            lockAspectRatio={shouldLock}
+            isAvatar={aspectRatio === "1:1" || storagePath.includes("avatars") || storagePath.includes("logo")}
+            onCropComplete={handleCropComplete}
+            title={`Crop & Frame ${label}`}
+          />
+        );
+      })()}
     </div>
   );
 }
