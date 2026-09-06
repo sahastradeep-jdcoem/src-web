@@ -1125,12 +1125,12 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
                   </div>
 
-                  <div className="flex justify-end pt-4 border-t border-slate-100">
+                  <div className="flex flex-col sm:flex-row sm:justify-end pt-4 border-t border-slate-100">
                     <Button
                       onClick={handleProceedToStep2}
                       variant="primary"
                       size="md"
-                      className="gap-2 cursor-pointer"
+                      className="w-full sm:w-auto justify-center gap-2 cursor-pointer min-h-[44px]"
                     >
                       <span>Continue to Participation Format</span>
                       <ArrowRight className="w-4 h-4" />
@@ -1358,19 +1358,19 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                             />
                           </div>
 
-                          <div className="flex gap-2">
+                          <div className="flex flex-col sm:flex-row gap-2">
                             <input
                               type="text"
                               value={manualTeammate.department}
                               onChange={(e) => setManualTeammate({ ...manualTeammate, department: e.target.value })}
                               placeholder="Branch / Stream (e.g. Mechanical, CSE)"
-                              className="flex-1 px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F]"
+                              className="flex-1 px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F]"
                             />
                             <Button
                               type="submit"
                               variant="primary"
                               size="sm"
-                              className="gap-1.5 shrink-0 cursor-pointer text-xs"
+                              className="w-full sm:w-auto justify-center gap-1.5 shrink-0 cursor-pointer text-xs min-h-[44px] sm:min-h-0 py-2.5 px-4"
                             >
                               <Plus className="w-3.5 h-3.5" />
                               <span>Add to Squad</span>
@@ -1379,20 +1379,20 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                         </form>
                       ) : (
                         /* Lookup by JDCOEM BT ID */
-                        <form onSubmit={handleVerifyAndAddTeammate} className="flex gap-2 pt-1">
+                        <form onSubmit={handleVerifyAndAddTeammate} className="flex flex-col sm:flex-row gap-2 pt-1">
                           <input
                             type="text"
                             value={teammateBtIdInput}
                             onChange={(e) => setTeammateBtIdInput(e.target.value.toUpperCase())}
                             placeholder="e.g. BT240115DS"
-                            className="flex-1 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-mono font-bold uppercase focus:outline-none focus:border-[#17458F]"
+                            className="flex-1 px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-mono font-bold uppercase focus:outline-none focus:border-[#17458F]"
                           />
                           <Button
                             type="submit"
                             isLoading={isVerifyingTeammate}
                             variant="primary"
                             size="sm"
-                            className="gap-1.5 shrink-0 cursor-pointer text-xs"
+                            className="w-full sm:w-auto justify-center gap-1.5 shrink-0 cursor-pointer text-xs min-h-[44px] sm:min-h-0 py-2.5 px-4"
                           >
                             <Plus className="w-3.5 h-3.5" />
                             <span>Verify &amp; Add</span>
@@ -1628,12 +1628,12 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
           </div>
 
-          <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-100">
             <Button
               onClick={() => setCurrentStep(1)}
               variant="outline"
               size="md"
-              className="gap-2 cursor-pointer"
+              className="w-full sm:w-auto justify-center gap-2 cursor-pointer min-h-[44px]"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Back</span>
@@ -1643,7 +1643,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               onClick={handleProceedToStep3}
               variant="primary"
               size="md"
-              className="gap-2 cursor-pointer"
+              className="w-full sm:w-auto justify-center gap-2 cursor-pointer min-h-[44px]"
             >
               <span>Review Summary</span>
               <ArrowRight className="w-4 h-4" />
@@ -1855,12 +1855,12 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             </p>
           </div>
 
-          <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-100">
             <Button
               onClick={() => setCurrentStep(2)}
               variant="outline"
               size="md"
-              className="gap-2 cursor-pointer"
+              className="w-full sm:w-auto justify-center gap-2 cursor-pointer min-h-[44px]"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Back</span>
@@ -1871,7 +1871,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               isLoading={isSubmitting}
               variant="primary"
               size="md"
-              className="gap-2 cursor-pointer"
+              className="w-full sm:w-auto justify-center gap-2 cursor-pointer min-h-[44px]"
             >
               {totalPayableAmount > 0 ? (
                 <>

@@ -41,6 +41,13 @@
   ::-webkit-scrollbar-thumb:hover {
     background: #E78023;
   }
+
+  /* Prevent iOS Safari automatic zoom on focus by enforcing 16px minimum text size on inputs */
+  @media screen and (max-width: 767px) {
+    input, select, textarea {
+      font-size: 16px !important;
+    }
+  }
 }
 
 @layer utilities {

@@ -62,3 +62,10 @@ For detailed standards and implementation examples, refer to [DEVELOPMENT_RULES.
       2. Active real-time document or collection listeners (`subscribeTo*()`).
     - Submissions, votes, or modifications made on any device must reflect across all active admin and student screens with zero latency without requiring a page refresh.
 
+12. **Dual-Device Usability Invariant (Mobile & Laptop/PC)**:
+    - Every feature, dialog, flow, and page must operate reliably and efficiently on both mobile smartphones (360px–420px) and laptop/PC screens (1024px–1920px).
+    - **Preserve Desktop Baseline**: Treat the approved desktop visual design, theme, and layout structure as authoritative. Do not redesign desktop surfaces unless resolving explicit functional bugs, alignment glitches, or container overflow issues.
+    - **Permitted Mobile Adaptations**: Always adapt cramped mobile elements into full-width stacked touch buttons, responsive single-column layouts, and mobile sticky action bars to ensure friction-free usability.
+    - **Standards**: Zero horizontal overflow (`overflow-x: hidden`), minimum 44x44px touch targets on buttons/triggers, viewport-safe scrollable modals, and 16px minimum font size on mobile inputs to prevent iOS Safari auto-zooming.
+
+

@@ -597,7 +597,8 @@ export default function AdminListingsPage() {
               </p>
             </div>
           ) : (
-            <table className="w-full text-left text-xs border-collapse">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
                 <tr>
                   <th className="py-3.5 px-6">Listing Title</th>
@@ -713,7 +714,8 @@ export default function AdminListingsPage() {
                 })}
               </tbody>
             </table>
-          )}
+          </div>
+        )}
         </div>
       </div>
       </>

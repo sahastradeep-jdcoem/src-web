@@ -167,7 +167,7 @@ export default function EventDetailPage() {
   }));
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] pb-20 font-sans">
+    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] pb-28 md:pb-20 font-sans">
       
       {/* 1. CINEMATIC HERO BANNER */}
       <section className="relative h-[55vh] sm:h-[60vh] flex items-end pb-12 px-4 sm:px-6 lg:px-8 overflow-hidden bg-slate-900">
@@ -727,6 +727,23 @@ export default function EventDetailPage() {
 
         </div>
       </div>
+
+      {/* Mobile Sticky Action Bar */}
+      {isRegistrationOpen && !(isJdcoemOnly && isExternalStudent) && (
+        <div className="md:hidden fixed bottom-0 inset-x-0 z-40 p-3 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-2xl flex items-center justify-between gap-3 animate-in slide-in-from-bottom-2 duration-200">
+          <div className="pl-1">
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Registration Fee</span>
+            <span className="text-xs font-bold text-emerald-600">{event.entryFee || "Free Entry"}</span>
+          </div>
+          <Link
+            href={`/events/${event.slug}/register`}
+            className="flex-1 py-3 px-4 rounded-xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2 shadow-md shadow-[#E78023]/25 min-h-[44px]"
+          >
+            <span>REGISTER NOW</span>
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

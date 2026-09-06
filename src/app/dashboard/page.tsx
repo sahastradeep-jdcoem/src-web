@@ -503,12 +503,12 @@ export default function StudentDashboardPage() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2.5 w-full sm:w-auto">
             {!user ? (
               <button
                 type="button"
                 onClick={openAuthModal}
-                className="px-5 py-2.5 rounded-full bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-semibold uppercase tracking-wider transition-all shadow-md shadow-[#E78023]/25 flex items-center gap-2 font-sans cursor-pointer"
+                className="w-full sm:w-auto justify-center px-5 py-2.5 min-h-[44px] rounded-full bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-semibold uppercase tracking-wider transition-all shadow-md shadow-[#E78023]/25 flex items-center gap-2 font-sans cursor-pointer"
               >
                 <User className="w-4 h-4" />
                 <span>Sign In with College ID</span>
@@ -519,7 +519,7 @@ export default function StudentDashboardPage() {
                 <button
                   type="button"
                   onClick={openProfileModal}
-                  className="px-4 py-2.5 rounded-full bg-white hover:bg-slate-50 border border-slate-300 hover:border-[#17458F] text-slate-700 hover:text-[#17458F] text-xs font-semibold uppercase tracking-wider transition-all shadow-xs flex items-center gap-2 cursor-pointer font-sans"
+                  className="w-full sm:w-auto justify-center px-4 py-2.5 min-h-[44px] rounded-full bg-white hover:bg-slate-50 border border-slate-300 hover:border-[#17458F] text-slate-700 hover:text-[#17458F] text-xs font-semibold uppercase tracking-wider transition-all shadow-xs flex items-center gap-2 cursor-pointer font-sans"
                 >
                   <User className="w-3.5 h-3.5 text-[#E78023]" />
                   <span>Edit Profile</span>
@@ -529,7 +529,7 @@ export default function StudentDashboardPage() {
                 <button
                   type="button"
                   onClick={() => logout()}
-                  className="px-4 py-2.5 rounded-full bg-white hover:bg-rose-50 border border-slate-300 hover:border-rose-300 text-slate-700 hover:text-rose-600 text-xs font-semibold uppercase tracking-wider transition-all shadow-xs flex items-center gap-2 cursor-pointer font-sans"
+                  className="w-full sm:w-auto justify-center px-4 py-2.5 min-h-[44px] rounded-full bg-white hover:bg-rose-50 border border-slate-300 hover:border-rose-300 text-slate-700 hover:text-rose-600 text-xs font-semibold uppercase tracking-wider transition-all shadow-xs flex items-center gap-2 cursor-pointer font-sans"
                 >
                   <LogOut className="w-3.5 h-3.5 text-rose-500" />
                   <span>Sign Out</span>
@@ -539,7 +539,7 @@ export default function StudentDashboardPage() {
 
             <Link
               href="/events"
-              className="px-5 py-2.5 rounded-full bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-semibold uppercase tracking-wider transition-all duration-200 shadow-md shadow-[#E78023]/25 flex items-center gap-2 font-sans cursor-pointer group"
+              className="w-full sm:w-auto justify-center px-5 py-2.5 min-h-[44px] rounded-full bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-semibold uppercase tracking-wider transition-all duration-200 shadow-md shadow-[#E78023]/25 flex items-center gap-2 font-sans cursor-pointer group"
             >
               <span>Explore New Events</span>
               <ArrowRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
@@ -625,12 +625,12 @@ export default function StudentDashboardPage() {
           <div className="lg:col-span-2 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               {/* Tab Selector */}
-              <div className="inline-flex p-1 rounded-2xl bg-slate-200/80 border border-slate-200/60">
+              <div className="inline-flex p-1 rounded-2xl bg-slate-200/80 border border-slate-200/60 w-full sm:w-auto">
                 <button
                   type="button"
                   onClick={() => setActiveDashboardTab("passes")}
                   className={cn(
-                    "px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer",
+                    "flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px]",
                     activeDashboardTab === "passes"
                       ? "bg-white text-[#17458F] shadow-xs"
                       : "text-slate-600 hover:text-slate-900"
@@ -643,7 +643,7 @@ export default function StudentDashboardPage() {
                   type="button"
                   onClick={() => setActiveDashboardTab("hub")}
                   className={cn(
-                    "px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer",
+                    "flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px]",
                     activeDashboardTab === "hub"
                       ? "bg-white text-[#E78023] shadow-xs"
                       : "text-slate-600 hover:text-slate-900"

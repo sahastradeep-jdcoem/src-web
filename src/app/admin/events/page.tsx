@@ -475,121 +475,123 @@ export default function AdminEventsPage() {
               </div>
             </div>
           ) : (
-            <table className="w-full text-left text-xs border-collapse">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                <tr>
-                  <th className="py-3.5 px-6">Event Name</th>
-                  <th className="py-3.5 px-6">Organized By</th>
-                  <th className="py-3.5 px-6">Category</th>
-                  <th className="py-3.5 px-6">Scheduled Date</th>
-                  <th className="py-3.5 px-6">Audience</th>
-                  <th className="py-3.5 px-6">Status</th>
-                  <th className="py-3.5 px-6 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
-                {filteredEvents.map((evt) => (
-                  <tr key={evt.id || evt.slug} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-4 px-6">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="font-bold text-slate-900 block text-sm">{evt.name}</span>
-                        {evt.isParentFest && (
-                          <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 text-[#17458F] border border-indigo-200">
-                            Umbrella Event
-                          </span>
-                        )}
-                        {evt.parentEventName && (
-                          <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-                            Part of {evt.parentEventName}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[11px] text-slate-400 font-sans">{evt.venue}</span>
-                    </td>
-                    <td className="py-4 px-6">
-                      <div className="flex items-center gap-1.5 font-bold text-slate-800">
-                        <Users className="w-3.5 h-3.5 text-[#17458F] shrink-0" />
-                        <span className="truncate max-w-xs">{evt.organizer || "SRC Sahastradeep"}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-6">
-                      <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold uppercase tracking-wider">
-                        {evt.category}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6 text-slate-600 font-sans">
-                      <div className="flex items-center gap-1.5 font-semibold text-slate-700">
-                        <CalendarIcon className="w-3.5 h-3.5 text-[#E78023]" />
-                        <span>{evt.date}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-6">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleAudience(evt)}
-                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer border ${
-                          evt.targetAudience === "jdcoem_only"
-                            ? "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
-                            : "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"
-                        }`}
-                        title="Click to toggle between JDCOEM Only and Inter-College"
-                      >
-                        {evt.targetAudience === "jdcoem_only" ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
-                      </button>
-                    </td>
-                    <td className="py-4 px-6">
-                      <Badge
-                        variant={evt.status === "Registration Open" ? "orange" : "slate"}
-                        size="sm"
-                      >
-                        {evt.status}
-                      </Badge>
-                    </td>
-                    <td className="py-4 px-6 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Link
-                          href={`/admin/registrations?event=${encodeURIComponent(evt.name)}`}
-                          className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#17458F] transition-colors"
-                          title="View Registrations & Responses"
-                        >
-                          <Users className="w-3.5 h-3.5" />
-                        </Link>
-                        <Link
-                          href={`/events/${evt.slug}`}
-                          target="_blank"
-                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-[#17458F] transition-colors"
-                          title="View Public Page"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </Link>
-                        <button
-                          onClick={() => handleStartEdit(evt)}
-                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-[#17458F] transition-colors cursor-pointer"
-                          title="Edit Event"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDuplicate(evt)}
-                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-[#17458F] transition-colors cursor-pointer"
-                          title="Duplicate Event"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                  <tr>
+                    <th className="py-3.5 px-6">Event Name</th>
+                    <th className="py-3.5 px-6">Organized By</th>
+                    <th className="py-3.5 px-6">Category</th>
+                    <th className="py-3.5 px-6">Scheduled Date</th>
+                    <th className="py-3.5 px-6">Audience</th>
+                    <th className="py-3.5 px-6">Status</th>
+                    <th className="py-3.5 px-6 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
+                  {filteredEvents.map((evt) => (
+                    <tr key={evt.id || evt.slug} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-4 px-6">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-bold text-slate-900 block text-sm">{evt.name}</span>
+                          {evt.isParentFest && (
+                            <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 text-[#17458F] border border-indigo-200">
+                              Umbrella Event
+                            </span>
+                          )}
+                          {evt.parentEventName && (
+                            <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                              Part of {evt.parentEventName}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-slate-400 font-sans">{evt.venue}</span>
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                          <Users className="w-3.5 h-3.5 text-[#17458F] shrink-0" />
+                          <span className="truncate max-w-xs">{evt.organizer || "SRC Sahastradeep"}</span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-6">
+                        <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold uppercase tracking-wider">
+                          {evt.category}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6 text-slate-600 font-sans">
+                        <div className="flex items-center gap-1.5 font-semibold text-slate-700">
+                          <CalendarIcon className="w-3.5 h-3.5 text-[#E78023]" />
+                          <span>{evt.date}</span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-6">
                         <button
                           type="button"
-                          onClick={() => setEventToDelete(evt)}
-                          className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors cursor-pointer"
-                          title="Delete Event"
+                          onClick={() => handleToggleAudience(evt)}
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer border ${
+                            evt.targetAudience === "jdcoem_only"
+                              ? "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
+                              : "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"
+                          }`}
+                          title="Click to toggle between JDCOEM Only and Inter-College"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          {evt.targetAudience === "jdcoem_only" ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
                         </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </td>
+                      <td className="py-4 px-6">
+                        <Badge
+                          variant={evt.status === "Registration Open" ? "orange" : "slate"}
+                          size="sm"
+                        >
+                          {evt.status}
+                        </Badge>
+                      </td>
+                      <td className="py-4 px-6 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Link
+                            href={`/admin/registrations?event=${encodeURIComponent(evt.name)}`}
+                            className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#17458F] transition-colors"
+                            title="View Registrations & Responses"
+                          >
+                            <Users className="w-3.5 h-3.5" />
+                          </Link>
+                          <Link
+                            href={`/events/${evt.slug}`}
+                            target="_blank"
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-[#17458F] transition-colors"
+                            title="View Public Page"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </Link>
+                          <button
+                            onClick={() => handleStartEdit(evt)}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-[#17458F] transition-colors cursor-pointer"
+                            title="Edit Event"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDuplicate(evt)}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-[#17458F] transition-colors cursor-pointer"
+                            title="Duplicate Event"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEventToDelete(evt)}
+                            className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors cursor-pointer"
+                            title="Delete Event"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>

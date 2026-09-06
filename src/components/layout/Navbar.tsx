@@ -57,6 +57,18 @@ export default function Navbar() {
     setUserDropdownOpen(false);
   }, [pathname]);
 
+  // Lock body scroll when mobile menu drawer is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [mobileMenuOpen]);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -256,7 +268,8 @@ export default function Navbar() {
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(true)}
-                className="h-8 w-8 rounded-full bg-[#17458F] text-white flex items-center justify-center text-xs font-bold"
+                className="h-10 w-10 min-w-[44px] min-h-[44px] rounded-full bg-[#17458F] text-white flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer"
+                aria-label="Open student profile navigation"
               >
                 {user.displayName?.charAt(0).toUpperCase() || "U"}
               </button>
@@ -264,7 +277,7 @@ export default function Navbar() {
               <button
                 type="button"
                 onClick={openAuthModal}
-                className="px-3 py-1 rounded-full bg-[#E78023] text-white text-xs font-semibold uppercase tracking-wider shadow-xs"
+                className="px-4 py-2 min-h-[44px] rounded-full bg-[#E78023] text-white text-xs font-semibold uppercase tracking-wider shadow-xs flex items-center justify-center cursor-pointer"
               >
                 Sign In
               </button>
@@ -273,7 +286,7 @@ export default function Navbar() {
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               aria-label="Toggle Menu"
-              className="p-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:text-[#17458F] focus:outline-none shadow-xs cursor-pointer"
+              className="p-2.5 min-w-[44px] min-h-[44px] rounded-xl bg-white border border-slate-200 text-slate-700 hover:text-[#17458F] focus:outline-none shadow-xs cursor-pointer flex items-center justify-center"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -282,59 +295,91 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile Navigation Drawer */}
+      {/* Mobile Navigation Drawer & Backdrop */}
       {mobileMenuOpen && (
-        <div className="md:hidden bg-white border-b border-slate-200 px-4 pt-3 pb-6 space-y-3 shadow-xl animate-in slide-in-from-top-4 duration-200">
-          
-          {user && (
-            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-bold text-slate-900">{user.displayName}</p>
-                <p className="text-[10px] text-slate-500 font-mono">{user.email}</p>
+        <>
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 top-[65px] bg-slate-900/40 backdrop-blur-xs z-40 transition-opacity animate-in fade-in duration-200"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-hidden="true"
+          />
+
+          {/* Drawer Content */}
+          <div className="relative z-50 md:hidden bg-white border-b border-slate-200 px-4 pt-3 pb-6 space-y-3 shadow-2xl animate-in slide-in-from-top-4 duration-200 max-h-[calc(100vh-65px)] overflow-y-auto">
+            
+            {user && (
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0 flex-1 pr-2">
+                    <p className="text-xs font-bold text-slate-900 truncate">{user.displayName}</p>
+                    <p className="text-[10px] text-slate-500 font-mono truncate">{user.email}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      logout();
+                    }}
+                    className="p-2 min-h-[44px] min-w-[44px] rounded-xl bg-rose-50 text-rose-600 text-xs font-semibold flex items-center justify-center cursor-pointer hover:bg-rose-100"
+                    title="Sign Out"
+                    aria-label="Sign Out"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    openProfileModal();
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-3 min-h-[44px] rounded-xl bg-white border border-slate-200 text-slate-700 hover:text-[#17458F] text-xs font-bold uppercase tracking-wider shadow-2xs cursor-pointer"
+                >
+                  <User className="w-3.5 h-3.5 text-[#E78023]" />
+                  <span>Edit Student Profile</span>
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => logout()}
-                className="p-1.5 rounded-lg bg-rose-50 text-rose-600 text-xs font-semibold"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            {NAV_LINKS.map((link) => (
-              <Link
-                key={link.name}
-                href={link.href}
-                className="px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs font-bold uppercase tracking-wider text-slate-700 hover:bg-[#E78023] hover:text-white transition-all text-center"
-              >
-                {link.name}
-              </Link>
-            ))}
-          </div>
-
-          <div className="pt-2 border-t border-slate-100 flex flex-col gap-2">
-            <Link
-              href="/dashboard"
-              className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-800 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2"
-            >
-              <LayoutDashboard className="w-4 h-4 text-[#E78023]" />
-              <span>Student Dashboard</span>
-            </Link>
-
-            {/* ONLY visible in mobile menu if verified admin */}
-            {isUserAdmin && (
-              <Link
-                href="/admin"
-                className="w-full py-2.5 rounded-xl bg-[#17458F]/10 text-[#17458F] text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2"
-              >
-                <ShieldCheck className="w-4 h-4" />
-                <span>Admin Console</span>
-              </Link>
             )}
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              {NAV_LINKS.map((link) => (
+                <Link
+                  key={link.name}
+                  href={link.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="px-4 py-3 min-h-[44px] rounded-xl bg-slate-50 border border-slate-200/80 text-xs font-bold uppercase tracking-wider text-slate-700 hover:bg-[#E78023] hover:text-white transition-all flex items-center justify-center text-center"
+                >
+                  {link.name}
+                </Link>
+              ))}
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex flex-col gap-2">
+              <Link
+                href="/dashboard"
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full py-3 min-h-[44px] rounded-xl bg-slate-100 text-slate-800 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-slate-200 transition-colors"
+              >
+                <LayoutDashboard className="w-4 h-4 text-[#E78023]" />
+                <span>Student Dashboard</span>
+              </Link>
+
+              {/* ONLY visible in mobile menu if verified admin */}
+              {isUserAdmin && (
+                <Link
+                  href="/admin"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full py-3 min-h-[44px] rounded-xl bg-[#17458F]/10 text-[#17458F] text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-[#17458F]/20 transition-colors"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Admin Console</span>
+                </Link>
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
     </header>
   );

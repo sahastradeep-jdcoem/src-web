@@ -166,3 +166,24 @@
    - All store operations in `listingsStore.ts` must maintain the **Parallel Dual-Write Invariant** (`saveSiteContentToFirestore("listings", ...)` + `enqueueCloudWrite`), quota-safe compaction (`compactListingsDataset`), and cross-tab custom event dispatch (`src_listings_updated`).
    - Live polls must strictly enforce **1-vote-per-student integrity**, real-time percentage animation, and option-level vote tallies.
    - Grievance submissions must support encrypted/confidential routing and generate unique reference ticket IDs.
+
+---
+
+## 8. Practical Cross-Device Usability Invariant (Mobile & Laptop/PC)
+
+1. **PC & Laptop Baseline Preservation Policy**:
+   - The established desktop visual design, theme, color palette, navigation hierarchy, and layout structure are approved baselines. Do NOT overhaul or redesign the desktop experience.
+   - However, resolve any functional bugs, alignment glitches, cut-offs, table squeeze issues, or keyboard interaction flaws discovered on PC/laptops.
+   - All data tables on admin surfaces must reside inside horizontal scroll containers (`<div className="overflow-x-auto">`) so that laptop screens (1024px–1440px) with fixed sidebars never experience page-level horizontal blowouts.
+
+2. **Mobile Layout Adaptation Authority**:
+   - Selective adaptations of mobile layout components (360px–420px) are authoritatively permitted and encouraged wherever desktop arrangements feel forced, cramped, or awkward on smartphones.
+   - **Full-Width Touch Actions**: Convert cramped side-by-side action buttons into full-width stacked touch buttons (`flex flex-col-reverse sm:flex-row`).
+   - **Mobile Sticky Action Bars**: Long content pages (such as event detail descriptions) should provide a sleek, sticky bottom action bar (`md:hidden fixed bottom-0`) with a clear call-to-action to eliminate user scrolling fatigue.
+   - **Mobile-Adaptive Data Cards**: Multi-column data layouts and forms must stack vertically with zero horizontal clipping.
+
+3. **Core Responsive & Accessibility Standards**:
+   - **Zero Horizontal Overflow**: Every page, dialog, and modal must fit within `100vw` without unwanted horizontal scroll or layout bleed (`overflow-x: hidden`).
+   - **44x44px Minimum Touch Targets**: All buttons, triggers, hamburger icons, close buttons, and tab selectors must provide a minimum touch target area of `44x44px` with adequate adjacent spacing (minimum 8px gap).
+   - **16px Input Font Size Rule**: All form inputs, textareas, and `<select>` controls must maintain at least `16px` font size on screens `<= 767px` to prevent iOS Safari from automatically zooming the viewport upon focus.
+   - **Viewport-Safe Modals & Navigation Drawers**: All modals must enforce `max-h-[90vh]` or `max-h-[92vh]` with smooth `overflow-y-auto` scrolling. Mobile navigation drawers must feature backdrop tap-to-dismiss and body scroll locking while open.

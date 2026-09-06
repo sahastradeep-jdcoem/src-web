@@ -108,7 +108,7 @@ export function Modal({
       <div
         ref={modalRef}
         className={cn(
-          "relative w-full bg-white border border-slate-200 rounded-3xl shadow-2xl z-10 max-h-[90vh] flex flex-col overflow-hidden text-slate-800",
+          "relative w-full bg-white border border-slate-200 rounded-3xl shadow-2xl z-10 max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden text-slate-800",
           maxWidthClasses[maxWidth]
         )}
       >
@@ -134,7 +134,7 @@ export function Modal({
               <button
                 onClick={onClose}
                 aria-label="Close dialog"
-                className="p-2.5 min-w-[40px] min-h-[40px] rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer shrink-0 flex items-center justify-center"
+                className="p-2.5 min-w-[44px] min-h-[44px] rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer shrink-0 flex items-center justify-center"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -145,7 +145,7 @@ export function Modal({
             <button
               onClick={onClose}
               aria-label="Close dialog"
-              className="absolute top-3.5 right-3.5 sm:top-4 sm:right-4 z-20 p-2 min-w-[36px] min-h-[36px] rounded-full bg-slate-100/90 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer flex items-center justify-center shadow-xs"
+              className="absolute top-3.5 right-3.5 sm:top-4 sm:right-4 z-20 p-2 min-w-[44px] min-h-[44px] rounded-full bg-slate-100/90 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer flex items-center justify-center shadow-xs"
             >
               <X className="w-4 h-4" />
             </button>
