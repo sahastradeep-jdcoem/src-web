@@ -250,7 +250,7 @@ export default function GalleryPage() {
                         {photo.category}
                       </p>
                     </div>
-                    <span className="text-[9px] font-mono text-slate-400 shrink-0">
+                    <span className="hidden sm:inline-block text-[9px] font-mono text-slate-400 shrink-0">
                       {photo.date ? photo.date.split(" ").slice(-2).join(" ") : ""}
                     </span>
                   </div>
