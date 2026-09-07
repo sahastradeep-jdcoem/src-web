@@ -6,7 +6,7 @@ export type EventCategory =
   | "Workshops"
   | "Fest";
 
-export type EventStatus = "Registration Open" | "Upcoming" | "Completed" | "draft";
+export type EventStatus = "Registration Open" | "Upcoming" | "Completed" | "Cancelled" | "draft";
 
 export type TargetAudience = "jdcoem_only" | "inter_college";
 
@@ -89,6 +89,9 @@ export interface EventItem {
   subEventBadge?: string;
   targetAudience?: TargetAudience; // "jdcoem_only" | "inter_college"
   isInterCollege?: boolean;
+  isCancelled?: boolean;
+  cancelledAt?: string;
+  cancellationNotice?: string;
 }
 
 export interface ClubLeader {
@@ -208,6 +211,10 @@ export interface RegistrationRecord {
   cancellationReason?: string;
   cancelledAt?: string;
   cancelledBy?: string;
+  refundId?: string;
+  refundStatus?: "INITIATED" | "PROCESSED" | "FAILED";
+  refundAmount?: number;
+  refundedAt?: string;
 }
 
 export interface GalleryPhoto {

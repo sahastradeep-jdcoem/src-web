@@ -70,6 +70,10 @@ export interface StudentRegistrationRecord {
   cancellationReason?: string;
   cancelledAt?: string;
   cancelledBy?: string;
+  refundId?: string;
+  refundStatus?: "INITIATED" | "PROCESSED" | "FAILED";
+  refundAmount?: number;
+  refundedAt?: string;
 }
 
 const REGISTRATIONS_COLLECTION = "registrations";
@@ -619,6 +623,140 @@ export async function deleteRegistrationsForEvent(
   }
 
   return deletedCount;
+}
+
+/**
+ * Bulk-cancel all active registrations belonging to an event cancelled by SRC.
+ * Updates registrations to CANCELLED and assigns cancellation reason & timestamp.
+ */
+export async function cancelEventRegistrations(
+  eventId: string,
+  eventSlug?: string,
+  eventName?: string,
+  cancellationNotice?: string
+): Promise<number> {
+  let cancelledCount = 0;
+  const reasonText = cancellationNotice
+    ? `Event cancelled by SRC: ${cancellationNotice.trim()}`
+    : "Event cancelled by SRC Council administration.";
+  const nowIso = new Date().toISOString();
+
+  // 1. Update in Firestore
+  try {
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      const colRef = collection(db, REGISTRATIONS_COLLECTION);
+      const snapshot = await getDocs(colRef);
+
+      for (const d of snapshot.docs) {
+        const data = d.data();
+        const matchesEvent =
+          d.id.toLowerCase().includes(eventId.toLowerCase()) ||
+          (data.eventId && (data.eventId === eventId || (eventSlug && data.eventId === eventSlug))) ||
+          (data.eventTitle && eventName && data.eventTitle.toLowerCase().trim() === eventName.toLowerCase().trim()) ||
+          (data.eventTitle && eventName && data.eventTitle.toLowerCase().includes(eventName.toLowerCase())) ||
+          (eventSlug && d.id.toLowerCase().includes(eventSlug.toLowerCase()));
+
+        if (matchesEvent && data.status !== "CANCELLED") {
+          await updateDoc(doc(db, REGISTRATIONS_COLLECTION, d.id), {
+            status: "CANCELLED",
+            cancellationReason: reasonText,
+            cancelledAt: serverTimestamp(),
+            cancelledBy: "SRC Council Administration",
+          });
+          cancelledCount++;
+        }
+      }
+    }
+  } catch (error) {
+    console.warn("Firestore bulk cancellation error for event registrations:", error);
+  }
+
+  // 2. Update local storage
+  if (typeof window !== "undefined") {
+    try {
+      const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+      const updated = local.map((r: any) => {
+        const matchesEvent =
+          r.id.toLowerCase().includes(eventId.toLowerCase()) ||
+          (r.eventId && (r.eventId === eventId || (eventSlug && r.eventId === eventSlug))) ||
+          (r.eventTitle && eventName && r.eventTitle.toLowerCase().trim() === eventName.toLowerCase().trim()) ||
+          (r.eventTitle && eventName && r.eventTitle.toLowerCase().includes(eventName.toLowerCase())) ||
+          (eventSlug && r.id.toLowerCase().includes(eventSlug.toLowerCase()));
+
+        if (matchesEvent && r.status !== "CANCELLED") {
+          return {
+            ...r,
+            status: "CANCELLED",
+            cancellationReason: reasonText,
+            cancelledAt: nowIso,
+            cancelledBy: "SRC Council Administration",
+          };
+        }
+        return r;
+      });
+
+      localStorage.setItem("src_local_registrations", JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent("src_registrations_updated", { detail: updated }));
+    } catch (e) {
+      console.warn("Local storage update warning during bulk event cancellation:", e);
+    }
+  }
+
+  return cancelledCount;
+}
+
+/**
+ * Record a refund for a registration in Firestore and local storage
+ */
+export async function updateRegistrationRefundInFirestore(
+  registrationId: string,
+  refundDetails: {
+    refundId: string;
+    refundStatus: "INITIATED" | "PROCESSED" | "FAILED";
+    refundAmount: number;
+    refundedAt: string;
+  }
+): Promise<boolean> {
+  if (!registrationId) return false;
+
+  // 1. Update in Firestore
+  try {
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      const docRef = doc(db, REGISTRATIONS_COLLECTION, registrationId);
+      await updateDoc(docRef, {
+        refundId: refundDetails.refundId,
+        refundStatus: refundDetails.refundStatus,
+        refundAmount: refundDetails.refundAmount,
+        refundedAt: refundDetails.refundedAt,
+      });
+    }
+  } catch (error) {
+    console.warn("Firestore refund update error for registration:", registrationId, error);
+  }
+
+  // 2. Update local storage and dispatch cross-tab event
+  if (typeof window !== "undefined") {
+    try {
+      const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+      const updated = local.map((r: any) =>
+        r.id === registrationId || r.registrationId === registrationId
+          ? {
+              ...r,
+              refundId: refundDetails.refundId,
+              refundStatus: refundDetails.refundStatus,
+              refundAmount: refundDetails.refundAmount,
+              refundedAt: refundDetails.refundedAt,
+            }
+          : r
+      );
+      localStorage.setItem("src_local_registrations", JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent("src_registrations_updated", { detail: updated }));
+    } catch (e) {
+      console.warn("Local storage refund update error:", e);
+    }
+  }
+
+  return true;
 }
 
 const SITE_CONTENT_COLLECTION = "site_content";

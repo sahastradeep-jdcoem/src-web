@@ -39,7 +39,10 @@ import {
   Mail,
   Hash,
   AlertCircle,
-  XCircle
+  XCircle,
+  Banknote,
+  RefreshCw,
+  RotateCcw
 } from "lucide-react";
 import { RegistrationRecord, EventItem, CustomQuestion } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -62,6 +65,7 @@ import {
   getAllRegistrationsFromFirestore, 
   subscribeToRegistrationsFromFirestore, 
   deleteRegistrationFromFirestore,
+  updateRegistrationRefundInFirestore,
   subscribeToSiteContent,
   isTestPassRecord,
   isHubRecord
@@ -98,6 +102,11 @@ export default function AdminRegistrationsPage() {
   // Modal State
   const [selectedRecord, setSelectedRecord] = useState<RegistrationRecord | null>(null);
   const [checkInNotice, setCheckInNotice] = useState<string | null>(null);
+
+  // Refund Management State
+  const [refundingId, setRefundingId] = useState<string | null>(null);
+  const [bulkRefunding, setBulkRefunding] = useState(false);
+  const [bulkRefundProgress, setBulkRefundProgress] = useState({ current: 0, total: 0 });
 
   // Load and sync events, tenures & departments from local store & Firestore
   useEffect(() => {
@@ -257,6 +266,13 @@ export default function AdminRegistrationsPage() {
         qrPayload: r.qrPayload || `SRC:PASS:${r.id}`,
         btId: r.btId,
         customAnswers: r.customAnswers,
+        cancellationReason: r.cancellationReason,
+        cancelledAt: r.cancelledAt,
+        cancelledBy: r.cancelledBy,
+        refundId: r.refundId,
+        refundStatus: r.refundStatus,
+        refundAmount: r.refundAmount,
+        refundedAt: r.refundedAt,
       };
     });
   };
@@ -520,6 +536,20 @@ export default function AdminRegistrationsPage() {
       years[y] = (years[y] || 0) + 1;
     });
 
+    const refundedCount = eventRegistrations.filter((r) => r.refundStatus === "PROCESSED").length;
+    const refundedAmount = eventRegistrations.reduce(
+      (sum, r) => sum + (r.refundStatus === "PROCESSED" ? (r.refundAmount || r.amountPaid || 0) : 0),
+      0
+    );
+    const eligibleForRefund = eventRegistrations.filter(
+      (r) =>
+        r.status === "CANCELLED" &&
+        ((r.amountPaid && r.amountPaid > 0) || r.paymentStatus === "PAID") &&
+        r.refundStatus !== "PROCESSED" &&
+        r.paymentId &&
+        r.paymentId !== "N/A"
+    );
+
     return {
       total,
       checkedIn,
@@ -529,6 +559,10 @@ export default function AdminRegistrationsPage() {
       freeCount: total - paidCount,
       teamCount,
       soloCount,
+      refundedCount,
+      refundedAmount,
+      eligibleForRefund,
+      eligibleForRefundCount: eligibleForRefund.length,
       departments: Object.entries(depts).sort((a, b) => b[1] - a[1]),
       years: Object.entries(years).sort((a, b) => b[1] - a[1]),
     };
@@ -822,6 +856,154 @@ export default function AdminRegistrationsPage() {
         alert("Failed to delete registration from cloud. Please try again.");
       }
     }
+  };
+
+  const handleIndividualRefund = async (record: RegistrationRecord) => {
+    if (!record.paymentId || record.paymentId === "N/A" || record.paymentId.includes("Free")) {
+      alert("No valid Razorpay payment ID found for this registration.");
+      return;
+    }
+
+    const refundAmount = record.amountPaid || 0;
+    const confirmMsg = `Initiate Razorpay refund of ₹${refundAmount} for ${record.participantName} (${record.registrationId})?`;
+    if (!confirm(confirmMsg)) return;
+
+    setRefundingId(record.id);
+    try {
+      const res = await fetch("/api/razorpay/refund", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paymentId: record.paymentId,
+          amount: refundAmount,
+          registrationId: record.registrationId || record.id,
+          reason: "Refund initiated by SRC Council Admin",
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const nowIso = new Date().toISOString();
+        await updateRegistrationRefundInFirestore(record.id, {
+          refundId: data.refundId,
+          refundStatus: data.status,
+          refundAmount: data.amount || refundAmount,
+          refundedAt: nowIso,
+        });
+
+        setRegistrations((prev) =>
+          prev.map((r) =>
+            r.id === record.id || r.registrationId === record.registrationId
+              ? {
+                  ...r,
+                  refundId: data.refundId,
+                  refundStatus: data.status,
+                  refundAmount: data.amount || refundAmount,
+                  refundedAt: nowIso,
+                }
+              : r
+          )
+        );
+
+        if (selectedRecord && (selectedRecord.id === record.id || selectedRecord.registrationId === record.registrationId)) {
+          setSelectedRecord((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  refundId: data.refundId,
+                  refundStatus: data.status,
+                  refundAmount: data.amount || refundAmount,
+                  refundedAt: nowIso,
+                }
+              : null
+          );
+        }
+
+        setCheckInNotice(`Refund processed: ₹${data.amount || refundAmount} for ${record.participantName} (Refund ID: ${data.refundId})`);
+        setTimeout(() => setCheckInNotice(null), 5000);
+      } else {
+        alert(`Refund failed: ${data.error || "Unknown gateway error"}`);
+      }
+    } catch (err: any) {
+      console.error("Refund error:", err);
+      alert(`Refund request failed: ${err.message || "Network error"}`);
+    } finally {
+      setRefundingId(null);
+    }
+  };
+
+  const handleBulkRefund = async () => {
+    const eligible = metrics.eligibleForRefund;
+    if (eligible.length === 0) {
+      alert("No eligible un-refunded paid registrations found for this event.");
+      return;
+    }
+
+    const totalPayout = eligible.reduce((sum, r) => sum + (r.amountPaid || 0), 0);
+    const confirmMsg = `Are you sure you want to refund all ${eligible.length} paid delegate passes for "${currentSelectedEventObj?.name || selectedEventSlug}"?\n\nTotal refund amount: ₹${totalPayout.toLocaleString("en-IN")}\n\nThis will initiate direct refunds via Razorpay to delegates' original payment methods.`;
+    if (!confirm(confirmMsg)) return;
+
+    setBulkRefunding(true);
+    setBulkRefundProgress({ current: 0, total: eligible.length });
+
+    let successCount = 0;
+    let failedCount = 0;
+
+    for (let i = 0; i < eligible.length; i++) {
+      const record = eligible[i];
+      setBulkRefundProgress({ current: i + 1, total: eligible.length });
+
+      try {
+        const res = await fetch("/api/razorpay/refund", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            paymentId: record.paymentId,
+            amount: record.amountPaid || 0,
+            registrationId: record.registrationId || record.id,
+            reason: `Event cancelled by SRC: ${currentSelectedEventObj?.cancellationNotice || currentSelectedEventObj?.name || "Event cancelled"}`,
+          }),
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+          const nowIso = new Date().toISOString();
+          await updateRegistrationRefundInFirestore(record.id, {
+            refundId: data.refundId,
+            refundStatus: data.status,
+            refundAmount: data.amount || record.amountPaid || 0,
+            refundedAt: nowIso,
+          });
+
+          setRegistrations((prev) =>
+            prev.map((r) =>
+              r.id === record.id || r.registrationId === record.registrationId
+                ? {
+                    ...r,
+                    refundId: data.refundId,
+                    refundStatus: data.status,
+                    refundAmount: data.amount || record.amountPaid || 0,
+                    refundedAt: nowIso,
+                  }
+                : r
+            )
+          );
+          successCount++;
+        } else {
+          failedCount++;
+          console.warn(`Refund failed for ${record.id}:`, data.error);
+        }
+      } catch (err) {
+        failedCount++;
+        console.error(`Refund network error for ${record.id}:`, err);
+      }
+    }
+
+    setBulkRefunding(false);
+    setCheckInNotice(
+      `Bulk Refund Complete: ${successCount} successful${failedCount > 0 ? `, ${failedCount} failed` : ""}.`
+    );
+    setTimeout(() => setCheckInNotice(null), 6000);
   };
 
   const handleClearAll = () => {
@@ -1235,6 +1417,73 @@ export default function AdminRegistrationsPage() {
         </div>
       )}
 
+      {/* Event Cancellation & Refund Banner */}
+      {currentSelectedEventObj && (currentSelectedEventObj.isCancelled || currentSelectedEventObj.status === "Cancelled") && (
+        <div className="p-5 rounded-3xl bg-rose-50 border border-rose-200 text-rose-900 shadow-xs space-y-3 animate-in fade-in duration-300">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-heading font-extrabold text-sm uppercase tracking-wide text-rose-900">
+                    Event Cancelled by SRC Administration
+                  </span>
+                  <Badge variant="rose" size="sm">Cancelled</Badge>
+                </div>
+                <p className="text-xs text-rose-800 font-medium leading-relaxed">
+                  Notice: &quot;{currentSelectedEventObj.cancellationNotice || "This event has been officially cancelled. All delegate registration passes have been cancelled."}&quot;
+                </p>
+                {currentSelectedEventObj.cancelledAt && (
+                  <p className="text-[10px] text-rose-600 font-mono">
+                    Cancelled on: {new Date(currentSelectedEventObj.cancelledAt).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Bulk Refund Action Button */}
+            {metrics.eligibleForRefundCount > 0 && (
+              <button
+                type="button"
+                onClick={handleBulkRefund}
+                disabled={bulkRefunding}
+                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold transition-all shadow-xs inline-flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+              >
+                {bulkRefunding ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Refunding {bulkRefundProgress.current} of {bulkRefundProgress.total}...</span>
+                  </>
+                ) : (
+                  <>
+                    <Banknote className="w-4 h-4" />
+                    <span>Refund All Paid Delegates ({metrics.eligibleForRefundCount})</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+
+          {/* Quick Refund Progress Bar */}
+          {metrics.paidCount > 0 && (
+            <div className="pt-2 border-t border-rose-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-rose-800 font-medium">
+              <div className="flex items-center gap-2">
+                <span>Refund Progress:</span>
+                <span className="font-bold font-mono text-rose-900">
+                  {metrics.refundedCount} of {metrics.paidCount} refunded
+                </span>
+                <span>(₹{metrics.refundedAmount.toLocaleString("en-IN")} of ₹{metrics.revenue.toLocaleString("en-IN")})</span>
+              </div>
+              {metrics.eligibleForRefundCount === 0 && metrics.paidCount > 0 && (
+                <span className="text-emerald-700 font-bold inline-flex items-center gap-1 text-[11px]">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> All paid registrations refunded
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* GOOGLE FORMS STYLE 4-TAB NAVIGATION */}
       <div className="flex border-b border-slate-200 bg-white rounded-2xl p-1.5 shadow-xs">
         {[
@@ -1274,7 +1523,7 @@ export default function AdminRegistrationsPage() {
         <div className="space-y-8 animate-in fade-in duration-200">
           
           {/* Key Metrics Banner */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className={`grid grid-cols-2 ${metrics.refundedCount > 0 || (currentSelectedEventObj && (currentSelectedEventObj.isCancelled || currentSelectedEventObj.status === "Cancelled")) ? "lg:grid-cols-5" : "lg:grid-cols-4"} gap-4`}>
             <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">
                 Total Registrations
@@ -1331,6 +1580,30 @@ export default function AdminRegistrationsPage() {
                 <span className="text-xs text-slate-500 font-semibold">Solo / Squads</span>
               </div>
             </div>
+
+            {/* Refund Metric Card if Event is Cancelled or Has Refunds */}
+            {(metrics.refundedCount > 0 || (currentSelectedEventObj && (currentSelectedEventObj.isCancelled || currentSelectedEventObj.status === "Cancelled"))) && (
+              <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">
+                  Refunds (Razorpay)
+                </span>
+                <div className="flex items-baseline justify-between">
+                  <span className="font-heading font-extrabold text-2xl text-blue-600">
+                    ₹{metrics.refundedAmount.toLocaleString("en-IN")}
+                  </span>
+                  <span className="text-xs text-blue-700 font-semibold">
+                    {metrics.refundedCount} / {metrics.paidCount}
+                  </span>
+                </div>
+                {/* Progress bar */}
+                <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden mt-2">
+                  <div 
+                    className="bg-blue-500 h-full rounded-full transition-all duration-500"
+                    style={{ width: `${metrics.paidCount > 0 ? Math.round((metrics.refundedCount / metrics.paidCount) * 100) : 0}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {metrics.total === 0 ? (
