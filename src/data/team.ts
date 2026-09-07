@@ -139,7 +139,7 @@ export const clubLeadsData = [
   { club: "Creative Club", lead: "Club Head Placeholder", coLead: "Co-Head Placeholder", dept: "CSE / Management", count: "52 Members" },
   { club: "Nexus Club", lead: "Club Head Placeholder", coLead: "Co-Head Placeholder", dept: "MBA / IT", count: "44 Members" },
   { club: "Fitness Club", lead: "Club Head Placeholder", coLead: "Co-Head Placeholder", dept: "Civil / Mech", count: "88 Members" },
-  { club: "Event Club", lead: "Club Head Placeholder", coLead: "Co-Head Placeholder", dept: "Electrical / ETC", count: "75 Members" },
+  { club: "Event Club", lead: "Club Head Placeholder", coLead: "Sanskruti Tidke", dept: "CSE(Data Science)", count: "75 Members" },
   { club: "Publicity Club", lead: "Club Head Placeholder", coLead: "Co-Head Placeholder", dept: "Management / CSE", count: "50 Members" }
 ];
 

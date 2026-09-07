@@ -2,6 +2,7 @@ export interface UserProfile {
   uid: string;
   email: string | null;
   displayName: string | null;
+  name?: string;
   photoURL: string | null;
   role: "STUDENT" | "COUNCIL_ADMIN" | "FACULTY" | "GUEST";
   userType?: "JDCOEM_STUDENT" | "FACULTY" | "EXTERNAL_STUDENT";

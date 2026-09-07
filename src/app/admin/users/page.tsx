@@ -772,7 +772,7 @@ export default function AdminUsersPage() {
                             </Badge>
                           )}
                           {!isDeleted && (() => {
-                            const effectiveBadge = formatDesignationBadge((u.btId ? resolveDesignationByBtId(u.btId)?.designationBadge : null) || u.designationBadge);
+                            const effectiveBadge = formatDesignationBadge((u.btId ? resolveDesignationByBtId(u.btId, u.displayName || u.name || undefined)?.designationBadge : null) || u.designationBadge);
                             if (!effectiveBadge) return null;
                             return (
                               <div className="pt-0.5">
@@ -998,7 +998,7 @@ export default function AdminUsersPage() {
                     </Badge>
                   )}
                   {!selectedUser.isDeleted && (() => {
-                    const effectiveBadge = formatDesignationBadge((selectedUser.btId ? resolveDesignationByBtId(selectedUser.btId)?.designationBadge : null) || selectedUser.designationBadge);
+                    const effectiveBadge = formatDesignationBadge((selectedUser.btId ? resolveDesignationByBtId(selectedUser.btId, selectedUser.displayName || selectedUser.name || undefined)?.designationBadge : null) || selectedUser.designationBadge);
                     if (!effectiveBadge) return null;
                     return (
                       <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-full">

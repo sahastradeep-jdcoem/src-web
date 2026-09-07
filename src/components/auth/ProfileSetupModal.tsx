@@ -161,7 +161,7 @@ export function ProfileSetupModal() {
 
       if (user.btId) {
         setBtId(user.btId);
-        const match = resolveDesignationByBtId(user.btId);
+        const match = resolveDesignationByBtId(user.btId, user.displayName || user.name || user.email);
         if (match) setDetectedDesignation(match.designationBadge);
       }
       if (user.department) {
@@ -193,7 +193,8 @@ export function ProfileSetupModal() {
     setError(null);
 
     if (clean.length >= 3) {
-      const match = resolveDesignationByBtId(clean);
+      const currentName = `${firstName} ${lastName}`.trim() || user?.displayName || user?.name || user?.email;
+      const match = resolveDesignationByBtId(clean, currentName);
       if (match) {
         setDetectedDesignation(match.designationBadge);
       } else {
@@ -244,7 +245,7 @@ export function ProfileSetupModal() {
         return;
       }
 
-      const designationInfo = resolveDesignationByBtId(cleanBtId);
+      const designationInfo = resolveDesignationByBtId(cleanBtId, `${cleanFirst} ${cleanLast}`);
 
       setIsSubmitting(true);
       try {

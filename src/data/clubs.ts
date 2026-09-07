@@ -343,6 +343,15 @@ export const mockClubs: ClubItem[] = [
       year: "4th Year",
       avatar: "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?q=80&w=400&auto=format&fit=crop"
     },
+    coLead: {
+      name: "Sanskruti Tidke",
+      role: "Event Club Co-Head",
+      department: "CSE(Data Science)",
+      year: "3rd Year",
+      btId: "BT240115DS",
+      email: "sanskrutitidke@jdcoem.ac.in",
+      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop"
+    },
     upcomingEvents: ["Prarambh Production Ops", "Council Anniversary Assembly"],
     pastHighlights: [
       "Managed seamless logistics for campus gatherings at Prarambh",

@@ -80,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(null);
         } else {
           const cleanBt = parsed.btId ? parsed.btId.trim().toUpperCase() : "";
-          const desig = cleanBt ? resolveDesignationByBtId(cleanBt) : null;
+          const desig = cleanBt ? resolveDesignationByBtId(cleanBt, parsed.displayName || parsed.name || parsed.email) : null;
           if (desig) {
             parsed.designationBadge = formatDesignationBadge(desig.designationBadge);
             parsed.isCouncilOfficer = true;
@@ -149,7 +149,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const cleanBt = resolvedBtId ? resolvedBtId.trim().toUpperCase() : "";
 
         // Dynamic council/club roster resolution is authoritative for users with a BT ID.
-        const designationInfo = cleanBt ? resolveDesignationByBtId(cleanBt) : null;
+        const targetName = storedProfile?.displayName || storedProfile?.name || localProfile?.displayName || localProfile?.name || registeredUser?.name || fbUser.displayName || fbUser.email;
+        const designationInfo = cleanBt ? resolveDesignationByBtId(cleanBt, targetName || undefined) : null;
 
         const assignedRole = isAdminUser 
           ? "COUNCIL_ADMIN" 
@@ -320,7 +321,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const cleanBt = resolvedBtId ? resolvedBtId.trim().toUpperCase() : "";
         
         // Dynamic council/club roster resolution is authoritative for users with a BT ID.
-        const designationInfo = cleanBt ? resolveDesignationByBtId(cleanBt) : null;
+        const targetName = storedProfile?.displayName || storedProfile?.name || localProfile?.displayName || localProfile?.name || registeredUser?.name || fbUser.displayName || fbUser.email;
+        const designationInfo = cleanBt ? resolveDesignationByBtId(cleanBt, targetName || undefined) : null;
 
         const assignedRole = isAdminUser 
           ? "COUNCIL_ADMIN" 
@@ -467,7 +469,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
 
     const mergedBtId = (data.btId !== undefined ? data.btId : user.btId || "").trim().toUpperCase();
-    const designationInfo = mergedBtId ? resolveDesignationByBtId(mergedBtId) : null;
+    const candidateName = data.displayName || `${data.firstName || user.firstName || ""} ${data.lastName || user.lastName || ""}`.trim() || user.displayName || user.email;
+    const designationInfo = mergedBtId ? resolveDesignationByBtId(mergedBtId, candidateName || undefined) : null;
 
     const updatedUser: AuthUser = {
       ...user,

@@ -123,7 +123,7 @@ export function isExternalUser(user: {
 /**
  * Resolve special council badging and designations attached to a BT ID
  */
-export function resolveDesignationByBtId(btId: string): { 
+export function resolveDesignationByBtId(btId: string, userName?: string | null): { 
   designationBadge: string; 
   isCouncilOfficer: boolean; 
   category?: string;
@@ -133,7 +133,22 @@ export function resolveDesignationByBtId(btId: string): {
 
   // 1. Check Admin Council
   const council = getStoredCouncilMembers();
-  const matchedCouncil = council.find((m) => m.btId && m.btId.trim().toUpperCase() === cleanBtId);
+  const matchedCouncil = council.find((m) => {
+    if (!m.btId || m.btId.trim().toUpperCase() !== cleanBtId) return false;
+    // Mentors and advisors must not hold student BT IDs
+    if (/mentor/i.test(m.role || "") || (m.name && /sarvashree|munesh/i.test(m.name))) {
+      return false;
+    }
+    // If userName is provided, verify match to prevent identity collision
+    if (userName && m.name) {
+      const uNorm = userName.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      const mNorm = m.name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (uNorm && mNorm && !uNorm.includes(mNorm) && !mNorm.includes(uNorm)) {
+        return false;
+      }
+    }
+    return true;
+  });
   if (matchedCouncil) {
     return {
       designationBadge: formatDesignationBadge(matchedCouncil.role),
@@ -144,7 +159,17 @@ export function resolveDesignationByBtId(btId: string): {
 
   // 2. Check Hosting Committee
   const hosting = getStoredHostingCommittee();
-  const matchedHosting = hosting.find((m) => m.btId && m.btId.trim().toUpperCase() === cleanBtId);
+  const matchedHosting = hosting.find((m) => {
+    if (!m.btId || m.btId.trim().toUpperCase() !== cleanBtId) return false;
+    if (userName && m.name) {
+      const uNorm = userName.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      const mNorm = m.name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (uNorm && mNorm && !uNorm.includes(mNorm) && !mNorm.includes(uNorm)) {
+        return false;
+      }
+    }
+    return true;
+  });
   if (matchedHosting) {
     return {
       designationBadge: formatDesignationBadge(matchedHosting.role),
@@ -155,7 +180,17 @@ export function resolveDesignationByBtId(btId: string): {
 
   // 3. Check Spokespersons
   const spokes = getStoredSpokespersons();
-  const matchedSpokes = spokes.find((m) => m.btId && m.btId.trim().toUpperCase() === cleanBtId);
+  const matchedSpokes = spokes.find((m) => {
+    if (!m.btId || m.btId.trim().toUpperCase() !== cleanBtId) return false;
+    if (userName && m.name) {
+      const uNorm = userName.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      const mNorm = m.name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (uNorm && mNorm && !uNorm.includes(mNorm) && !mNorm.includes(uNorm)) {
+        return false;
+      }
+    }
+    return true;
+  });
   if (matchedSpokes) {
     return {
       designationBadge: formatDesignationBadge(matchedSpokes.role),
@@ -209,9 +244,31 @@ export function resolveDesignationByBtId(btId: string): {
     };
   }
 
+  // Direct authoritative fallback for BT240115DS (Sanskruti Tidke - Event Club Co-Head)
+  if (cleanBtId === "BT240115DS") {
+    return {
+      designationBadge: "Event Club Co-Head",
+      isCouncilOfficer: true,
+      category: "Club Leadership",
+    };
+  }
+
   // 5. Check Founding Members
   const founders = getStoredFoundingMembers();
-  const matchedFounder = founders.find((m) => m.btId && m.btId.trim().toUpperCase() === cleanBtId);
+  const matchedFounder = founders.find((m) => {
+    if (!m.btId || m.btId.trim().toUpperCase() !== cleanBtId) return false;
+    if (/mentor/i.test(m.role || "") || (m.name && /sarvashree|munesh/i.test(m.name))) {
+      return false;
+    }
+    if (userName && m.name) {
+      const uNorm = userName.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      const mNorm = m.name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (uNorm && mNorm && !uNorm.includes(mNorm) && !mNorm.includes(uNorm)) {
+        return false;
+      }
+    }
+    return true;
+  });
   if (matchedFounder) {
     return {
       designationBadge: formatDesignationBadge(matchedFounder.role),
@@ -301,7 +358,7 @@ export function getStoredUsers(): RegisteredUserRecord[] {
   // Dynamically resolve designation badge & council status from live rosters
   return list.map((user) => {
     const cleanBtId = user.btId ? user.btId.trim().toUpperCase() : "";
-    const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId) : null;
+    const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId, user.name || user.email) : null;
     return {
       ...user,
       btId: cleanBtId,
@@ -334,7 +391,7 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
       if (!r || (!r.uid && !r.email)) continue;
       const localMatch = (r.uid ? localMap.get(r.uid) : null) || (r.email ? localMap.get(r.email.toLowerCase()) : null);
       const cleanBtId = (r.btId || localMatch?.btId || "").trim().toUpperCase();
-      const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId) : null;
+      const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId, r.name || localMatch?.name || r.email) : null;
       const assignedRole = r.role || localMatch?.role || "STUDENT";
       // Dynamic roster resolution takes precedence for linked BT IDs to prevent stale cloud badges
       const assignedBadge = designationInfo 
@@ -479,7 +536,7 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
     
     // Resolve designation badge based on BT ID
     const cleanBtId = (user.btId !== undefined ? user.btId : existing?.btId || "").trim().toUpperCase();
-    const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId) : null;
+    const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId, user.name || existing?.name || user.email) : null;
 
     const assignedRole = user.role || existing?.role || "STUDENT";
     const assignedBadge = designationInfo 
@@ -751,7 +808,7 @@ export async function reconcileAllUserDesignations(): Promise<RegisteredUserReco
   let changedCount = 0;
   const updated = current.map((u) => {
     const cleanBtId = u.btId ? u.btId.trim().toUpperCase() : "";
-    const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId) : null;
+    const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId, u.name || u.email) : null;
     const newBadge = designationInfo ? designationInfo.designationBadge : (cleanBtId ? undefined : (formatDesignationBadge(u.designationBadge) || undefined));
     const newOfficer = designationInfo ? true : (cleanBtId ? false : Boolean(u.isCouncilOfficer));
 

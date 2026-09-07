@@ -199,13 +199,17 @@ export function repairCouncilSwapIfNeeded(members: TeamMember[], isFounding = fa
   const isSarveshSwapped = !!(sarvesh && (/technical/i.test(sarvesh.role || "") || /technical/i.test(sarvesh.designation || "")));
   const manaswi = members.find(m => m.name && /manaswi\s+burile/i.test(m.name));
   const isManaswiSwapped = !!(manaswi && (/chief\s+event/i.test(manaswi.role || "") || /chief\s+event/i.test(manaswi.designation || "")));
+  
+  // Detect if any mentor or non-Sanskruti member has BT240115DS or dummy BT000000CS
+  const hasLeakedBt = members.some(m => (!m.name || !/sanskruti/i.test(m.name)) && m.btId === "BT240115DS");
+  const hasDummyBt = members.some(m => m.btId === "BT000000CS");
 
-  // If no swapped roles, Harsh is present, and we have at least 13 members, nothing to repair
-  if (!isSarveshSwapped && !isManaswiSwapped && hasHarsh && members.length >= 13) {
+  // If no swapped roles, Harsh is present, no leaked BT IDs, and we have at least 13 members, nothing to repair
+  if (!isSarveshSwapped && !isManaswiSwapped && hasHarsh && !hasLeakedBt && !hasDummyBt && members.length >= 13) {
     return { repaired: false, members };
   }
 
-  console.warn(`⚠️ [Council Store] Detected swapped roles or missing pioneer in ${isFounding ? "founding members" : "1st tenure council"}. Auto-repairing to canonical roster...`);
+  console.warn(`⚠️ [Council Store] Detected swapped roles or leaked student BT ID in ${isFounding ? "founding members" : "1st tenure council"}. Auto-repairing to canonical roster...`);
 
   // Build repaired roster from canonical list in canonicalSource
   const canonical = stripCategoryAndLevel(canonicalSource);
@@ -213,6 +217,11 @@ export function repairCouncilSwapIfNeeded(members: TeamMember[], isFounding = fa
     // Match by human identity
     const existing = members.find(m => matchCouncilAndFounder(cMember, m));
     if (existing) {
+      let cleanBt = existing.btId || cMember.btId || "";
+      // Strip leaked student BT ID from mentors
+      if ((/mentor/i.test(cMember.role || "") || (cMember.name && /sarvashree|munesh/i.test(cMember.name))) && (cleanBt === "BT240115DS" || cleanBt === "BT000000CS")) {
+        cleanBt = "";
+      }
       return {
         ...existing,
         id: cMember.id,
@@ -220,7 +229,7 @@ export function repairCouncilSwapIfNeeded(members: TeamMember[], isFounding = fa
         role: cMember.role,
         designation: cMember.designation || cMember.role,
         department: existing.department || cMember.department,
-        btId: existing.btId || cMember.btId,
+        btId: cleanBt,
         avatar: (existing.avatar && existing.avatar.length > 10) ? existing.avatar : cMember.avatar,
         email: existing.email || cMember.email || "",
         linkedin: existing.linkedin || cMember.linkedin || "",
@@ -229,7 +238,11 @@ export function repairCouncilSwapIfNeeded(members: TeamMember[], isFounding = fa
         order: idx + 1
       };
     }
-    return { ...cMember, order: idx + 1 };
+    let cBt = cMember.btId || "";
+    if ((/mentor/i.test(cMember.role || "") || (cMember.name && /sarvashree|munesh/i.test(cMember.name))) && (cBt === "BT240115DS" || cBt === "BT000000CS")) {
+      cBt = "";
+    }
+    return { ...cMember, btId: cBt, order: idx + 1 };
   });
 
   return { repaired: true, members: repairedList };
@@ -568,6 +581,11 @@ export function syncCouncilAdminsToFounding(councilList?: TeamMember[], persist 
     const founderId = `founder-${baseId}`;
     const foundingRole = formatAdminRoleToFounding(admin.role);
 
+    let cleanBt = admin.btId || existing?.btId || "";
+    if ((/mentor/i.test(admin.role || "") || (admin.name && /sarvashree|munesh/i.test(admin.name))) && (cleanBt === "BT240115DS" || cleanBt === "BT000000CS")) {
+      cleanBt = "";
+    }
+
     return {
       ...admin,
       id: founderId,
@@ -577,7 +595,7 @@ export function syncCouncilAdminsToFounding(councilList?: TeamMember[], persist 
       email: admin.email || existing?.email || "",
       linkedin: admin.linkedin || existing?.linkedin || "",
       bio: admin.bio || existing?.bio || "",
-      btId: admin.btId || existing?.btId || "",
+      btId: cleanBt,
       department: admin.department || existing?.department || "",
       year: admin.year || existing?.year || "3rd Year",
       order: admin.order ?? idx + 1,
@@ -606,6 +624,11 @@ export function syncFoundingToCouncilAdmins(foundingList?: TeamMember[], persist
     const adminId = existing?.id || (baseId.startsWith("admin-") || baseId.startsWith("member-") ? baseId : `admin-${baseId}`);
     const adminRole = formatFoundingRoleToAdmin(founder.role);
 
+    let cleanBt = founder.btId || existing?.btId || "";
+    if ((/mentor/i.test(founder.role || "") || (founder.name && /sarvashree|munesh/i.test(founder.name))) && (cleanBt === "BT240115DS" || cleanBt === "BT000000CS")) {
+      cleanBt = "";
+    }
+
     return {
       ...founder,
       id: adminId,
@@ -615,7 +638,7 @@ export function syncFoundingToCouncilAdmins(foundingList?: TeamMember[], persist
       email: founder.email || existing?.email || "",
       linkedin: founder.linkedin || existing?.linkedin || "",
       bio: founder.bio || existing?.bio || "",
-      btId: founder.btId || existing?.btId || "",
+      btId: cleanBt,
       department: founder.department || existing?.department || "",
       year: founder.year || existing?.year || "3rd Year",
       order: founder.order ?? idx + 1,
