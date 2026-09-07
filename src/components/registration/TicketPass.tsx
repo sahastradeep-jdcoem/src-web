@@ -122,20 +122,19 @@ export function TicketPass({
         </div>
       )}
 
-      {/* Mobile Horizontal Swipe Indicator */}
-      <div className="sm:hidden flex items-center justify-center gap-2 text-[11px] font-bold text-slate-500 bg-slate-100/90 border border-slate-200 rounded-full px-3.5 py-1.5 w-fit mx-auto shadow-xs select-none">
-        <span className="text-[#E78023] animate-pulse">←</span>
-        <span>Swipe pass horizontally to view QR code</span>
-        <span className="text-[#E78023] animate-pulse">→</span>
-      </div>
+      {/* Mobile-Only Horizontal Swipe Indicator & Mobile Quick Save Button */}
+      <div className="sm:hidden flex flex-col items-center justify-center gap-2.5">
+        <div className="flex items-center justify-center gap-2 text-[11px] font-bold text-slate-500 bg-slate-100/90 border border-slate-200 rounded-full px-3.5 py-1.5 w-fit mx-auto shadow-xs select-none">
+          <span className="text-[#E78023] animate-pulse">←</span>
+          <span>Swipe pass horizontally to view QR code</span>
+          <span className="text-[#E78023] animate-pulse">→</span>
+        </div>
 
-      {/* Quick Save Pass Action Button (Export PNG) */}
-      <div className="flex items-center justify-center pt-1 pb-0.5">
         <button
           type="button"
           onClick={handleDownloadImage}
           disabled={isDownloading}
-          className="w-full sm:w-auto max-w-xs inline-flex items-center justify-center h-11 px-6 rounded-xl font-heading font-bold text-xs sm:text-sm uppercase tracking-wide text-white bg-[#17458F] hover:bg-[#123670] active:scale-[0.98] shadow-md shadow-[#17458F]/25 transition-colors duration-150 disabled:cursor-not-allowed disabled:bg-[#17458F] select-none"
+          className="w-full max-w-xs inline-flex items-center justify-center h-11 px-6 rounded-xl font-heading font-bold text-xs uppercase tracking-wide text-white bg-[#17458F] hover:bg-[#123670] active:scale-[0.98] shadow-md shadow-[#17458F]/25 transition-colors duration-150 disabled:cursor-not-allowed disabled:bg-[#17458F] select-none"
         >
           {isDownloading ? (
             <span key="exporting" className="inline-flex items-center gap-2">
