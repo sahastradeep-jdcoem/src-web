@@ -68,6 +68,9 @@ import {
   saveStoredDraftCouncil,
   getStoredDraftHosting,
   saveStoredDraftHosting,
+  getStoredDraftClubs,
+  saveStoredDraftClubs,
+  syncDraftClubsFromFirestore,
   CouncilTenure 
 } from "@/lib/tenureStore";
 import { getStoredDepartments, syncDepartmentsFromFirestore, getDepartmentShortName } from "@/lib/departmentsStore";
@@ -271,7 +274,14 @@ export default function AdminTeamPage() {
       setFoundingMembersList(isFirst ? (targetTenure.foundingMembers || getStoredFoundingMembers()) : []);
     }
 
-    setClubsList(getStoredClubs());
+    if (targetTenure?.isCurrent) {
+      setClubsList(getStoredClubs());
+    } else if (targetTenure) {
+      const draftClubs = getStoredDraftClubs(targetTenure.id);
+      setClubsList(draftClubs.length > 0 ? draftClubs : (targetTenure.clubs && targetTenure.clubs.length > 0 ? targetTenure.clubs : getStoredClubs()));
+    } else {
+      setClubsList(getStoredClubs());
+    }
     setPillarsList(getStoredInstitutionalPillars());
   };
 
@@ -294,6 +304,19 @@ export default function AdminTeamPage() {
     syncClubsFromFirestore().then((res) => {
       if (res) setClubsList(res);
     });
+
+    if (selectedTenureId) {
+      const allTenures = getStoredTenures();
+      const target = allTenures.find((t) => t.id === selectedTenureId);
+      if (target && !target.isCurrent) {
+        syncDraftClubsFromFirestore(selectedTenureId).then((res) => {
+          if (res && Array.isArray(res) && res.length > 0) {
+            setClubsList(res);
+          }
+        });
+      }
+    }
+
     syncDepartmentsFromFirestore().then((res) => {
       if (res) setDepartmentsList(res);
     });
@@ -302,7 +325,9 @@ export default function AdminTeamPage() {
     });
 
     const unsubClubs = subscribeToClubs((updated) => {
-      setClubsList(updated);
+      if (!selectedTenure || selectedTenure.isCurrent) {
+        setClubsList(updated);
+      }
     });
     const unsubPillars = subscribeToInstitutionalPillars((updated) => {
       if (updated && updated.length > 0) setPillarsList(updated);
@@ -312,12 +337,20 @@ export default function AdminTeamPage() {
       loadData();
     };
 
+    const handleDraftClubsUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.tenureId === selectedTenureId) {
+        loadData();
+      }
+    };
+
     window.addEventListener("src_tenures_updated", handleUpdate);
     window.addEventListener("src_tenure_changed", handleUpdate);
     window.addEventListener("src_council_team_updated", handleUpdate);
     window.addEventListener("src_hosting_updated", handleUpdate);
     window.addEventListener("src_founding_members_updated", handleUpdate);
     window.addEventListener("src_clubs_updated", handleUpdate);
+    window.addEventListener("src_draft_clubs_updated", handleDraftClubsUpdate);
     window.addEventListener("src_pillars_updated", handleUpdate);
 
     return () => {
@@ -329,6 +362,7 @@ export default function AdminTeamPage() {
       window.removeEventListener("src_hosting_updated", handleUpdate);
       window.removeEventListener("src_founding_members_updated", handleUpdate);
       window.removeEventListener("src_clubs_updated", handleUpdate);
+      window.removeEventListener("src_draft_clubs_updated", handleDraftClubsUpdate);
       window.removeEventListener("src_pillars_updated", handleUpdate);
     };
   }, [selectedTenureId]);
@@ -742,7 +776,13 @@ export default function AdminTeamPage() {
       });
 
       setClubsList(updatedClubs);
-      saveStoredClubs(updatedClubs);
+      if (selectedTenure?.isCurrent) {
+        saveStoredClubs(updatedClubs);
+        updateTenureRoster(selectedTenure.id, { clubs: updatedClubs });
+      } else if (selectedTenure) {
+        saveStoredDraftClubs(selectedTenure.id, updatedClubs);
+        updateTenureRoster(selectedTenure.id, { clubs: updatedClubs });
+      }
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
       setEditingMember(null);
@@ -802,7 +842,13 @@ export default function AdminTeamPage() {
         });
 
         setClubsList(updatedClubs);
-        saveStoredClubs(updatedClubs);
+        if (selectedTenure?.isCurrent) {
+          saveStoredClubs(updatedClubs);
+          updateTenureRoster(selectedTenure.id, { clubs: updatedClubs });
+        } else if (selectedTenure) {
+          saveStoredDraftClubs(selectedTenure.id, updatedClubs);
+          updateTenureRoster(selectedTenure.id, { clubs: updatedClubs });
+        }
         setIsSaved(true);
         setTimeout(() => setIsSaved(false), 3000);
         return;

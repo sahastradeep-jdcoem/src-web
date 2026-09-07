@@ -24,7 +24,15 @@ import {
 } from "lucide-react";
 import { getStoredClubs, saveStoredClubs, syncClubsFromFirestore, getClubLeaders } from "@/lib/councilStore";
 import { compactClubDataset } from "@/lib/dataSyncEngine";
-import { getStoredTenures, updateTenureRoster, syncTenuresFromFirestore, CouncilTenure } from "@/lib/tenureStore";
+import { 
+  getStoredTenures, 
+  updateTenureRoster, 
+  syncTenuresFromFirestore, 
+  getStoredDraftClubs,
+  saveStoredDraftClubs,
+  syncDraftClubsFromFirestore,
+  CouncilTenure 
+} from "@/lib/tenureStore";
 import { getStoredDepartments, syncDepartmentsFromFirestore, getDepartmentShortName } from "@/lib/departmentsStore";
 import { mockClubs } from "@/data/clubs";
 import { ClubItem } from "@/types";
@@ -52,6 +60,30 @@ export default function AdminClubsPage() {
     setPendingUploads((prev) => Math.max(0, prev + (uploading ? 1 : -1)));
   };
 
+  const getClubsForTenure = (t?: CouncilTenure, tenureList?: CouncilTenure[]): ClubItem[] => {
+    const list = tenureList || tenures;
+    const target = t || list.find((item) => item.id === selectedTenureId) || list.find((item) => item.isCurrent) || list[0];
+    if (!target || target.isCurrent) {
+      return getStoredClubs();
+    }
+    // Draft session: check dedicated draft clubs store first
+    const draftClubs = getStoredDraftClubs(target.id);
+    if (draftClubs && Array.isArray(draftClubs) && draftClubs.length > 0) {
+      return draftClubs;
+    }
+    // Check if tenure snapshot has clubs assigned
+    if (target.clubs && Array.isArray(target.clubs) && target.clubs.length > 0) {
+      return target.clubs;
+    }
+    // First-time opening draft session: initialize isolated draft copy from live clubs
+    const liveClubs = getStoredClubs();
+    if (liveClubs && liveClubs.length > 0) {
+      saveStoredDraftClubs(target.id, liveClubs);
+      return liveClubs;
+    }
+    return mockClubs;
+  };
+
   const loadData = () => {
     const tenureList = getStoredTenures();
     setTenures(tenureList);
@@ -61,8 +93,8 @@ export default function AdminClubsPage() {
       : active?.id || "tenure-2025-26";
     setSelectedTenureId(currentId);
 
-    // Always use stored active clubs roster as authoritative source of truth
-    setClubs(getStoredClubs());
+    const targetTenure = tenureList.find((t) => t.id === currentId) || active;
+    setClubs(getClubsForTenure(targetTenure, tenureList));
   };
 
   useEffect(() => {
@@ -86,17 +118,39 @@ export default function AdminClubsPage() {
         });
       }
     });
+
+    if (selectedTenureId) {
+      const allTenures = getStoredTenures();
+      const target = allTenures.find((t) => t.id === selectedTenureId);
+      if (target && !target.isCurrent) {
+        syncDraftClubsFromFirestore(selectedTenureId).then((res) => {
+          if (res && Array.isArray(res) && res.length > 0) {
+            setClubs(res);
+          }
+        });
+      }
+    }
+
     syncDepartmentsFromFirestore().then((res) => {
       if (res) setDepartmentsList(res);
     });
 
     const handleUpdate = () => loadData();
+    const handleDraftClubsUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.tenureId === selectedTenureId) {
+        loadData();
+      }
+    };
+
     window.addEventListener("src_tenures_updated", handleUpdate);
     window.addEventListener("src_clubs_updated", handleUpdate);
+    window.addEventListener("src_draft_clubs_updated", handleDraftClubsUpdate);
     window.addEventListener("storage", handleUpdate);
     return () => {
       window.removeEventListener("src_tenures_updated", handleUpdate);
       window.removeEventListener("src_clubs_updated", handleUpdate);
+      window.removeEventListener("src_draft_clubs_updated", handleDraftClubsUpdate);
       window.removeEventListener("storage", handleUpdate);
     };
   }, [selectedTenureId]);
@@ -106,15 +160,28 @@ export default function AdminClubsPage() {
 
   const handleSelectTenure = (tId: string) => {
     setSelectedTenureId(tId);
-    setClubs(getStoredClubs());
+    const targetTenure = tenures.find((t) => t.id === tId);
+    setClubs(getClubsForTenure(targetTenure));
+    if (targetTenure && !targetTenure.isCurrent) {
+      syncDraftClubsFromFirestore(tId).then((res) => {
+        if (res && Array.isArray(res) && res.length > 0) {
+          setClubs(res);
+        }
+      });
+    }
   };
 
   const saveList = async (updated: ClubItem[]) => {
     setIsSavingList(true);
     try {
       setClubs(updated);
-      await saveStoredClubs(updated);
-      if (selectedTenure?.id && !selectedTenure.isCurrent) {
+      if (selectedTenure?.isCurrent) {
+        // LIVE TENURE: Persist to live clubs store (localStorage & Firestore site_content/clubs)
+        await saveStoredClubs(updated);
+        updateTenureRoster(selectedTenure.id, { clubs: updated });
+      } else if (selectedTenure) {
+        // DRAFT SESSION: Strictly isolated to draft tenure! NEVER touch live stores!
+        saveStoredDraftClubs(selectedTenure.id, updated);
         updateTenureRoster(selectedTenure.id, { clubs: updated });
       }
       setIsSaved(true);
@@ -220,14 +287,24 @@ export default function AdminClubsPage() {
   };
 
   const handleDeleteClub = (id: string, name: string) => {
-    if (confirm(`Are you sure you want to delete "${name || "this club"}" from the directory?`)) {
+    const isDraft = selectedTenure && !selectedTenure.isCurrent;
+    const confirmMsg = isDraft
+      ? `Are you sure you want to remove "${name || "this club"}" from DRAFT session "${selectedTenure.label}"?\n\n(Note: The live platform and current tenure will NOT be affected.)`
+      : `Are you sure you want to delete "${name || "this club"}" from the LIVE clubs directory?`;
+
+    if (confirm(confirmMsg)) {
       const updated = clubs.filter((c) => c.id !== id);
       saveList(updated);
     }
   };
 
   const handleResetDefaults = () => {
-    if (confirm("Reset clubs directory to default templates?")) {
+    const isDraft = selectedTenure && !selectedTenure.isCurrent;
+    const confirmMsg = isDraft
+      ? `Reset DRAFT session "${selectedTenure.label}" clubs directory to default templates? (Live tenure will remain untouched)`
+      : `Reset LIVE clubs directory to default templates?`;
+
+    if (confirm(confirmMsg)) {
       saveList(mockClubs);
     }
   };

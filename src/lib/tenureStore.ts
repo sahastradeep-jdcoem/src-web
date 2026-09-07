@@ -114,6 +114,63 @@ export function saveStoredDraftHosting(tenureId: string, members: TeamMember[]):
   }
 }
 
+export const DRAFT_CLUBS_PREFIX = "src_draft_clubs_";
+
+export function getStoredDraftClubs(tenureId: string): ClubItem[] {
+  if (typeof window === "undefined" || !tenureId) return [];
+  try {
+    const raw = localStorage.getItem(`${DRAFT_CLUBS_PREFIX}${tenureId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {
+    console.warn("Could not read draft clubs from storage", e);
+  }
+  return [];
+}
+
+export function saveStoredDraftClubs(tenureId: string, clubs: ClubItem[]): void {
+  if (typeof window === "undefined" || !tenureId) return;
+  try {
+    const sanitized = cleanUndefined(clubs);
+    try {
+      localStorage.setItem(`${DRAFT_CLUBS_PREFIX}${tenureId}`, JSON.stringify(sanitized));
+    } catch (lsErr) {
+      console.warn("Direct localStorage write notice for draft clubs:", lsErr);
+    }
+    window.dispatchEvent(new CustomEvent("src_draft_clubs_updated", { detail: { tenureId, clubs: sanitized } }));
+    window.dispatchEvent(new CustomEvent("src_tenures_updated"));
+    saveSiteContentToFirestore(`draft_clubs_${tenureId}`, sanitized).catch((err) => {
+      console.warn(`Firestore direct write for draft clubs (${tenureId}) failed, enqueuing:`, err);
+    });
+    enqueueCloudWrite(`draft_clubs_${tenureId}`, sanitized, `Draft Clubs Roster (${tenureId})`);
+  } catch (e) {
+    console.error("Could not save draft clubs to storage", e);
+  }
+}
+
+export async function syncDraftClubsFromFirestore(tenureId: string): Promise<ClubItem[] | null> {
+  if (!tenureId) return null;
+  try {
+    if (hasPendingWritesFor(`draft_clubs_${tenureId}`)) return getStoredDraftClubs(tenureId);
+    const remote = await getSiteContentFromFirestore<ClubItem[]>(`draft_clubs_${tenureId}`);
+    if (remote !== null && Array.isArray(remote)) {
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem(`${DRAFT_CLUBS_PREFIX}${tenureId}`, JSON.stringify(remote));
+        } catch {}
+        window.dispatchEvent(new CustomEvent("src_draft_clubs_updated", { detail: { tenureId, clubs: remote } }));
+        window.dispatchEvent(new CustomEvent("src_tenures_updated"));
+      }
+      return remote;
+    }
+  } catch (e) {
+    console.warn(`Could not sync draft clubs for ${tenureId}:`, e);
+  }
+  return null;
+}
+
 export const initialDefaultTenures: CouncilTenure[] = [
   {
     id: "tenure-2025-26",
@@ -254,6 +311,11 @@ export function getStoredTenures(): CouncilTenure[] {
     // For draft / upcoming / past tenures: check dedicated draft stores first!
     const draftCouncil = getStoredDraftCouncil(t.id);
     const draftHosting = getStoredDraftHosting(t.id);
+    const hasExplicitDraftClubs = typeof window !== "undefined" && localStorage.getItem(`${DRAFT_CLUBS_PREFIX}${t.id}`) !== null;
+    const draftClubs = getStoredDraftClubs(t.id);
+    const resolvedClubs = hasExplicitDraftClubs
+      ? draftClubs
+      : (t.clubs && t.clubs.length > 0 ? t.clubs : activeClubs);
 
     // Determine if it's a draft or an archived past session:
     // If it has never been marked as live, has no startDate, or explicitly has isDraft / status === "draft"
@@ -269,7 +331,7 @@ export function getStoredTenures(): CouncilTenure[] {
       adminCouncil: stripCategoryAndLevel(draftCouncil.length > 0 ? draftCouncil : (t.adminCouncil && t.adminCouncil.length > 0 ? t.adminCouncil : [])),
       hostingCommittee: stripCategoryAndLevel(draftHosting.length > 0 ? draftHosting : (t.hostingCommittee && t.hostingCommittee.length > 0 ? t.hostingCommittee : [])),
       foundingMembers: stripCategoryAndLevel(isFirstTenure ? (t.foundingMembers || activeFounders) : []),
-      clubs: t.clubs && t.clubs.length > 0 ? t.clubs : activeClubs,
+      clubs: resolvedClubs,
     };
   });
 }
@@ -352,6 +414,7 @@ export function updateTenureRoster(
     // Draft tenure: save to dedicated draft stores immediately!
     if (updates.adminCouncil) saveStoredDraftCouncil(tenureId, updates.adminCouncil);
     if (updates.hostingCommittee) saveStoredDraftHosting(tenureId, updates.hostingCommittee);
+    if (updates.clubs) saveStoredDraftClubs(tenureId, updates.clubs);
   }
 
   const updatedTenures = tenures.map((t) => {
@@ -438,8 +501,10 @@ export function switchActiveTenure(targetTenureId: string, tenureBeginDate?: str
   if (targetTenure.foundingMembers && Array.isArray(targetTenure.foundingMembers) && targetTenure.foundingMembers.length > 0) {
     saveStoredFoundingMembers(targetTenure.foundingMembers);
   }
-  if (targetTenure.clubs && Array.isArray(targetTenure.clubs)) {
-    saveStoredClubs(targetTenure.clubs);
+  const draftClubs = getStoredDraftClubs(targetTenureId);
+  const targetClubs = draftClubs.length > 0 ? draftClubs : (targetTenure.clubs || []);
+  if (Array.isArray(targetClubs) && targetClubs.length > 0) {
+    saveStoredClubs(targetClubs);
   }
   if (targetTenure.events && Array.isArray(targetTenure.events)) {
     saveStoredEvents(targetTenure.events);
