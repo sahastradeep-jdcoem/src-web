@@ -15,6 +15,7 @@ interface ModalProps {
   closeOnEscape?: boolean;
   showCloseButton?: boolean;
   contentClassName?: string;
+  headerAction?: React.ReactNode;
 }
 
 // Module-level state to manage nested / multi-modal scroll locks cleanly
@@ -34,6 +35,7 @@ export function Modal({
   closeOnEscape = true,
   showCloseButton = true,
   contentClassName,
+  headerAction,
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -223,15 +225,18 @@ export function Modal({
                 </p>
               )}
             </div>
-            {showCloseButton && (
-              <button
-                onClick={onClose}
-                aria-label="Close dialog"
-                className="p-2.5 min-w-[44px] min-h-[44px] rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer shrink-0 flex items-center justify-center"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+            <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+              {headerAction}
+              {showCloseButton && (
+                <button
+                  onClick={onClose}
+                  aria-label="Close dialog"
+                  className="p-2.5 min-w-[44px] min-h-[44px] rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer shrink-0 flex items-center justify-center"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           showCloseButton && (

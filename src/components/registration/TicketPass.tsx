@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { downloadPassAsImage } from "@/lib/passExport";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
+import { cn } from "@/lib/utils";
 
 export interface TicketPassProps {
   registrationId: string;
@@ -93,18 +94,18 @@ export function TicketPass({
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6 sm:space-y-8">
+    <div className={cn("max-w-3xl mx-auto", mode === "dashboard" ? "space-y-4 sm:space-y-0" : "space-y-6 sm:space-y-8")}>
       {/* Top Banner */}
       {mode === "dashboard" ? (
-        <div className="text-center space-y-1.5 sm:space-y-2">
+        <div className="sm:hidden text-center space-y-1.5">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-[#17458F] text-xs font-bold font-heading uppercase tracking-wider">
             <ShieldCheck className="w-4 h-4 text-[#17458F]" />
             <span>Verified Official Delegate Pass</span>
           </div>
-          <h2 className="font-extrabold text-2xl sm:text-4xl text-[#0F172A] tracking-tight font-heading">
+          <h2 className="font-extrabold text-2xl text-[#0F172A] tracking-tight font-heading">
             {eventName}
           </h2>
-          <p className="text-xs sm:text-sm text-slate-500 max-w-lg mx-auto font-medium font-sans">
+          <p className="text-xs text-slate-500 max-w-lg mx-auto font-medium font-sans">
             Present this digital pass or scannable QR code at gate security for verified event check-in.
           </p>
         </div>
@@ -306,66 +307,77 @@ export function TicketPass({
       </div>
 
       {/* Action Buttons */}
-      <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 pt-2 sm:pt-4">
-        
-        {/* 1-Click Save Pass Image to Gallery (Desktop / Tablet) */}
-        <Button
-          onClick={handleDownloadImage}
-          disabled={isDownloading}
-          variant="primary"
-          size="md"
-          className="hidden sm:inline-flex gap-2 shadow-lg shadow-[#17458F]/20 font-semibold"
-        >
-          {isDownloading ? (
-            <span key="bottom-loading" className="inline-flex items-center gap-2">
-              <RefreshCw className="w-4 h-4 animate-spin text-[#E78023]" />
-              <span>Generating High-Res Pass...</span>
-            </span>
-          ) : downloadSuccess ? (
-            <span key="bottom-success" className="inline-flex items-center gap-2">
-              <Check className="w-4 h-4 text-emerald-300" />
-              <span>Pass Saved!</span>
-            </span>
-          ) : (
-            <span key="bottom-idle" className="inline-flex items-center gap-2">
-              <Download className="w-4 h-4" />
-              <span>Save Pass to Phone (PNG)</span>
-            </span>
-          )}
-        </Button>
-
-        <Button
-          onClick={handleAddToCalendar}
-          variant="outline"
-          size="md"
-          className="gap-2 font-semibold"
-        >
-          <CalendarIcon className="w-4 h-4 text-[#E78023]" />
-          <span>Add to Calendar</span>
-        </Button>
-
-        {/* Public Verification Link (Desktop / Tablet) */}
-        <Link
-          href={`/verify/${encodeURIComponent(registrationId)}`}
-          target="_blank"
-          className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold tracking-wide transition-all shadow-xs"
-        >
-          <ExternalLink className="w-3.5 h-3.5 text-[#17458F]" />
-          <span>Public Verification Link</span>
-        </Link>
-
-        {onClose && (
+      {mode === "dashboard" ? (
+        <div className="sm:hidden flex flex-wrap items-center justify-center gap-3 pt-2">
           <Button
-            onClick={onClose}
+            onClick={handleAddToCalendar}
             variant="outline"
             size="md"
-            className="gap-2 font-semibold text-slate-600 hover:text-slate-900"
+            className="gap-2 font-semibold"
           >
-            <span>Close Pass</span>
+            <CalendarIcon className="w-4 h-4 text-[#E78023]" />
+            <span>Add to Calendar</span>
           </Button>
-        )}
 
-        {mode !== "dashboard" && (
+          {onClose && (
+            <Button
+              onClick={onClose}
+              variant="outline"
+              size="md"
+              className="gap-2 font-semibold text-slate-600 hover:text-slate-900"
+            >
+              <span>Close Pass</span>
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 pt-2 sm:pt-4">
+          {/* 1-Click Save Pass Image to Gallery (Desktop / Tablet) */}
+          <Button
+            onClick={handleDownloadImage}
+            disabled={isDownloading}
+            variant="primary"
+            size="md"
+            className="gap-2 shadow-lg shadow-[#17458F]/20 font-semibold"
+          >
+            {isDownloading ? (
+              <span key="bottom-loading" className="inline-flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 animate-spin text-[#E78023]" />
+                <span>Generating High-Res Pass...</span>
+              </span>
+            ) : downloadSuccess ? (
+              <span key="bottom-success" className="inline-flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-300" />
+                <span>Pass Saved!</span>
+              </span>
+            ) : (
+              <span key="bottom-idle" className="inline-flex items-center gap-2">
+                <Download className="w-4 h-4" />
+                <span>Save Pass to Phone (PNG)</span>
+              </span>
+            )}
+          </Button>
+
+          <Button
+            onClick={handleAddToCalendar}
+            variant="outline"
+            size="md"
+            className="gap-2 font-semibold"
+          >
+            <CalendarIcon className="w-4 h-4 text-[#E78023]" />
+            <span>Add to Calendar</span>
+          </Button>
+
+          {/* Public Verification Link */}
+          <Link
+            href={`/verify/${encodeURIComponent(registrationId)}`}
+            target="_blank"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold tracking-wide transition-all shadow-xs"
+          >
+            <ExternalLink className="w-3.5 h-3.5 text-[#17458F]" />
+            <span>Public Verification Link</span>
+          </Link>
+
           <Link href="/dashboard">
             <Button
               variant="outline"
@@ -376,8 +388,8 @@ export function TicketPass({
               <ArrowRight className="w-4 h-4" />
             </Button>
           </Link>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Mobile Photo Save & Share Dialog */}
       {previewImage && (

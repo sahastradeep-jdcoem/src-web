@@ -58,6 +58,7 @@ import {
   StudentRegistrationRecord 
 } from "@/lib/firebase/firestore";
 import { cn } from "@/lib/utils";
+import { downloadPassAsImage } from "@/lib/passExport";
 
 export default function StudentDashboardPage() {
   const { user, openAuthModal, openProfileModal, logout } = useAuth();
@@ -69,6 +70,27 @@ export default function StudentDashboardPage() {
   const [activeDashboardTab, setActiveDashboardTab] = useState<"passes" | "hub">("passes");
   const [selectedTicket, setSelectedTicket] = useState<RegistrationRecord | null>(null);
   const [selectedHubSubmission, setSelectedHubSubmission] = useState<ListingResponseRecord | null>(null);
+  const [isDownloadingTicket, setIsDownloadingTicket] = useState(false);
+  const [ticketDownloadSuccess, setTicketDownloadSuccess] = useState(false);
+
+  const handleDownloadSelectedTicket = async () => {
+    if (!selectedTicket || isDownloadingTicket) return;
+    setIsDownloadingTicket(true);
+    try {
+      const res = await downloadPassAsImage(
+        "src-delegate-pass-card",
+        `${selectedTicket.registrationId}-${selectedTicket.eventName.replace(/\s+/g, "_")}_Pass.png`
+      );
+      if (res.success) {
+        setTicketDownloadSuccess(true);
+        setTimeout(() => setTicketDownloadSuccess(false), 3000);
+      }
+    } catch (e) {
+      console.error("Pass download error", e);
+    } finally {
+      setIsDownloadingTicket(false);
+    }
+  };
 
   useEffect(() => {
     let isCurrent = true;
@@ -1129,7 +1151,32 @@ export default function StudentDashboardPage() {
               title="Official Delegate Pass"
               subtitle={`Pass ID: ${selectedTicket.registrationId}`}
               maxWidth="4xl"
-              contentClassName="p-3 sm:p-7 overflow-x-hidden"
+              contentClassName="p-3 sm:p-6 overflow-x-auto sm:overflow-hidden flex items-center justify-center"
+              headerAction={
+                <button
+                  type="button"
+                  onClick={handleDownloadSelectedTicket}
+                  disabled={isDownloadingTicket}
+                  className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#17458F] hover:bg-[#123670] active:scale-98 text-white text-xs font-bold font-heading uppercase tracking-wider shadow-xs transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-80 select-none"
+                >
+                  {isDownloadingTicket ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#E78023]" />
+                      <span>Exporting...</span>
+                    </span>
+                  ) : ticketDownloadSuccess ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-300" />
+                      <span>Saved!</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Download className="w-3.5 h-3.5 text-[#E78023]" />
+                      <span>Save Pass</span>
+                    </span>
+                  )}
+                </button>
+              }
             >
               <TicketPass
                 registrationId={selectedTicket.registrationId}
