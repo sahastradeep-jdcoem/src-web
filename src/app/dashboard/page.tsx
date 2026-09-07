@@ -1151,7 +1151,7 @@ export default function StudentDashboardPage() {
               title="Official Delegate Pass"
               subtitle={`Pass ID: ${selectedTicket.registrationId}`}
               maxWidth="4xl"
-              contentClassName="p-3 sm:p-6 overflow-x-auto sm:overflow-hidden flex items-center justify-center"
+              contentClassName="p-3 sm:p-6 overflow-hidden flex flex-col items-center justify-center"
               headerAction={
                 <button
                   type="button"
