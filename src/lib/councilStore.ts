@@ -131,7 +131,7 @@ export function getStoredCouncilMembers(): TeamMember[] {
   return stripCategoryAndLevel(initialAdminCouncil);
 }
 
-export function saveStoredCouncilMembers(members: TeamMember[]): void {
+export function saveStoredCouncilMembers(members: TeamMember[], autoSyncToFounding = true): void {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(stripCategoryAndLevel(members));
@@ -154,6 +154,10 @@ export function saveStoredCouncilMembers(members: TeamMember[]): void {
       });
       enqueueCloudWrite("council_team", finalClean, `Council Leadership (${members.length} Members)`);
     });
+
+    if (autoSyncToFounding && Array.isArray(sanitized) && sanitized.length > 0) {
+      syncCouncilAdminsToFounding(sanitized, true);
+    }
   } catch (e) {
     console.error("Could not save council team to storage", e);
   }
@@ -396,24 +400,165 @@ export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => v
   });
 }
 
+// Role and identity synchronization helpers between 1st Tenure Council Admins & Founding Members
+export function formatAdminRoleToFounding(role?: string): string {
+  if (!role) return "Founding Council Member";
+  const trimmed = role.trim();
+  if (/^founding\s+/i.test(trimmed)) return trimmed;
+  return `Founding ${trimmed}`;
+}
+
+export function formatFoundingRoleToAdmin(role?: string): string {
+  if (!role) return "Council Admin Officer";
+  const trimmed = role.trim();
+  const stripped = trimmed.replace(/^founding\s+/i, "").trim();
+  return stripped || "Council Admin Officer";
+}
+
+export function matchCouncilAndFounder(m1: TeamMember, m2: TeamMember, idx1?: number, idx2?: number): boolean {
+  if (!m1 || !m2) return false;
+  // 1. Match by BT ID if present
+  if (m1.btId && m2.btId && m1.btId.trim().toLowerCase() === m2.btId.trim().toLowerCase()) {
+    return true;
+  }
+  // 2. Match by clean name
+  if (m1.name && m2.name) {
+    const n1 = m1.name.trim().toLowerCase();
+    const n2 = m2.name.trim().toLowerCase();
+    if (n1 === n2 && n1.length > 2 && !n1.includes("placeholder")) {
+      return true;
+    }
+  }
+  // 3. Match by order
+  if (m1.order !== undefined && m2.order !== undefined && m1.order === m2.order) {
+    return true;
+  }
+  // 4. Match by index
+  if (idx1 !== undefined && idx2 !== undefined && idx1 === idx2) {
+    return true;
+  }
+  return false;
+}
+
 // Helper to convert Founding Member to Council Admin Officer
 export function mapFoundingMemberToCouncilAdmin(founder: TeamMember, idx?: number): TeamMember {
   const customIdx = idx !== undefined ? idx : 0;
+  const adminRole = formatFoundingRoleToAdmin(founder.role);
   return {
     ...founder,
-    id: `council-admin-${founder.id || customIdx}`,
-    designation: founder.designation || "Council Admin Officer",
-    role: "Council Admin Officer",
+    id: `admin-${founder.id?.replace(/^(founder|council-admin)-/, "") || customIdx + 1}`,
+    designation: founder.designation || adminRole,
+    role: adminRole,
+    order: founder.order ?? customIdx + 1
   };
 }
 
-export function syncFoundingToCouncilAdmins(foundingList?: TeamMember[]): TeamMember[] {
+// Sync Council Admins to Founding Members (1st Tenure)
+export function syncCouncilAdminsToFounding(councilList?: TeamMember[], persist = true): TeamMember[] {
+  const council = councilList || getStoredCouncilMembers();
+  if (!Array.isArray(council) || council.length === 0) return getStoredFoundingMembers();
+
+  let currentFounders = getStoredFoundingMembers();
+  if (!Array.isArray(currentFounders) || currentFounders.length === 0) {
+    currentFounders = stripCategoryAndLevel(initialFoundingMembers);
+  }
+
+  const updatedFounders: TeamMember[] = council.map((admin, idx) => {
+    const existing = currentFounders.find((f, fIdx) => matchCouncilAndFounder(admin, f, idx, fIdx));
+    const founderId = existing?.id || `founder-${admin.id?.replace(/^(admin|council-admin)-/, "") || idx + 1}`;
+    const foundingRole = existing?.role && /^founding\s+/i.test(existing.role)
+      ? existing.role
+      : formatAdminRoleToFounding(admin.role);
+
+    return {
+      ...admin,
+      id: founderId,
+      role: foundingRole,
+      designation: existing?.designation || admin.designation || foundingRole,
+      order: admin.order ?? idx + 1,
+    };
+  });
+
+  if (persist) {
+    saveStoredFoundingMembers(updatedFounders, false);
+  }
+  return updatedFounders;
+}
+
+// Sync Founding Members to Council Admins (1st Tenure)
+export function syncFoundingToCouncilAdmins(foundingList?: TeamMember[], persist = true): TeamMember[] {
   const founders = foundingList || getStoredFoundingMembers();
   if (!Array.isArray(founders) || founders.length === 0) return getStoredCouncilMembers();
-  
-  const mapped = founders.map((f, idx) => mapFoundingMemberToCouncilAdmin(f, idx));
-  saveStoredCouncilMembers(mapped);
-  return mapped;
+
+  let currentCouncil = getStoredCouncilMembers();
+  if (!Array.isArray(currentCouncil) || currentCouncil.length === 0) {
+    currentCouncil = stripCategoryAndLevel(initialAdminCouncil);
+  }
+
+  const updatedCouncil: TeamMember[] = founders.map((founder, idx) => {
+    const existing = currentCouncil.find((a, aIdx) => matchCouncilAndFounder(founder, a, idx, aIdx));
+    const adminId = existing?.id || `admin-${founder.id?.replace(/^(founder|council-admin)-/, "") || idx + 1}`;
+    const adminRole = existing?.role && !/^founding\s+/i.test(existing.role)
+      ? existing.role
+      : formatFoundingRoleToAdmin(founder.role);
+
+    return {
+      ...founder,
+      id: adminId,
+      role: adminRole,
+      designation: existing?.designation || founder.designation || adminRole,
+      order: founder.order ?? idx + 1,
+    };
+  });
+
+  if (persist) {
+    saveStoredCouncilMembers(updatedCouncil, false);
+  }
+  return updatedCouncil;
+}
+
+// Automatic reconciliation between Council Admins and Founding Members
+export function reconcileCouncilAndFoundingSync(): TeamMember[] {
+  if (typeof window === "undefined") return getStoredFoundingMembers();
+  try {
+    const council = getStoredCouncilMembers();
+    if (!Array.isArray(council) || council.length === 0) return getStoredFoundingMembers();
+
+    const founders = getStoredFoundingMembers();
+    
+    let needsSync = false;
+    for (let i = 0; i < council.length; i++) {
+      const c = council[i];
+      const f = founders.find((item, idx) => matchCouncilAndFounder(c, item, i, idx));
+      if (!f) {
+        needsSync = true;
+        break;
+      }
+      if (c.avatar && c.avatar !== f.avatar) {
+        needsSync = true;
+        break;
+      }
+      if (c.name && c.name !== f.name) {
+        needsSync = true;
+        break;
+      }
+      if (c.department && c.department !== f.department) {
+        needsSync = true;
+        break;
+      }
+      if (c.btId && c.btId !== f.btId) {
+        needsSync = true;
+        break;
+      }
+    }
+
+    if (needsSync) {
+      return syncCouncilAdminsToFounding(council, true);
+    }
+  } catch (e) {
+    console.warn("reconcileCouncilAndFoundingSync notice:", e);
+  }
+  return getStoredFoundingMembers();
 }
 
 // Founding Members Store
@@ -439,6 +584,7 @@ export function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCounc
       localStorage.setItem("src_founding_members", JSON.stringify(sanitized));
     } catch {}
     window.dispatchEvent(new CustomEvent("src_founding_members_updated", { detail: sanitized }));
+    window.dispatchEvent(new CustomEvent("src_tenures_updated"));
     window.dispatchEvent(new CustomEvent("src_users_updated"));
 
     compactCouncilDataset(sanitized).then((compacted) => {
@@ -453,8 +599,7 @@ export function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCounc
     });
 
     if (autoSyncToCouncil && Array.isArray(sanitized) && sanitized.length > 0) {
-      const mapped = sanitized.map((f, i) => mapFoundingMemberToCouncilAdmin(f, i));
-      saveStoredCouncilMembers(mapped);
+      syncFoundingToCouncilAdmins(sanitized, true);
     }
   } catch (e) {
     console.error("Could not save founding members to storage", e);

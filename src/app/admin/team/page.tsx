@@ -41,6 +41,8 @@ import {
   getStoredFoundingMembers,
   saveStoredFoundingMembers,
   syncFoundingToCouncilAdmins,
+  syncCouncilAdminsToFounding,
+  reconcileCouncilAndFoundingSync,
   getStoredClubs,
   saveStoredClubs,
   getClubLeaders,
@@ -263,6 +265,9 @@ export default function AdminTeamPage() {
     const targetTenure = list.find((t) => t.id === currentId) || active;
     const isFirst = targetTenure?.id === "tenure-2025-26" || targetTenure?.label?.includes("2025") || targetTenure?.tenureNumber?.includes("1st");
     if (targetTenure?.isCurrent) {
+      if (isFirst) {
+        reconcileCouncilAndFoundingSync();
+      }
       setCouncilMembers(getStoredCouncilMembers());
       setHostingMembers(getStoredHostingCommittee());
       setFoundingMembersList(isFirst ? getStoredFoundingMembers() : []);
@@ -511,20 +516,28 @@ export default function AdminTeamPage() {
 
     if (activeTab === "council") {
       setCouncilMembers(indexed);
+      if (isFirstTenure) {
+        const syncedFounders = syncCouncilAdminsToFounding(indexed, false);
+        setFoundingMembersList(syncedFounders);
+      }
     } else if (activeTab === "hosting") {
       setHostingMembers(indexed);
     } else if (activeTab === "founding") {
       setFoundingMembersList(indexed);
+      if (isFirstTenure) {
+        const syncedCouncil = syncFoundingToCouncilAdmins(indexed, false);
+        setCouncilMembers(syncedCouncil);
+      }
     }
 
     if (selectedTenure?.isCurrent) {
       // Live active tenure
       if (activeTab === "council") {
-        saveStoredCouncilMembers(indexed);
+        saveStoredCouncilMembers(indexed, isFirstTenure);
       } else if (activeTab === "hosting") {
         saveStoredHostingCommittee(indexed);
       } else if (activeTab === "founding") {
-        saveStoredFoundingMembers(indexed);
+        saveStoredFoundingMembers(indexed, isFirstTenure);
       }
     } else if (selectedTenure) {
       // Draft / upcoming tenure: save to dedicated draft store first!
@@ -549,14 +562,26 @@ export default function AdminTeamPage() {
     setTimeout(() => setIsSaved(false), 3000);
   };
 
-  const handleSyncFromFounding = () => {
-    const listToSync = foundingMembersList.length > 0 ? foundingMembersList : getStoredFoundingMembers();
+  const handleSyncToFounding = () => {
+    const listToSync = councilMembers.length > 0 ? councilMembers : getStoredCouncilMembers();
     if (!Array.isArray(listToSync) || listToSync.length === 0) {
-      alert("No founding members found to sync.");
+      alert("No council members found to sync.");
       return;
     }
-    const synced = syncFoundingToCouncilAdmins(listToSync);
-    setCouncilMembers(synced);
+    const synced = syncCouncilAdminsToFounding(listToSync, true);
+    setFoundingMembersList(synced);
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 3000);
+  };
+
+  const handleSyncFromAdmins = () => {
+    const listToSync = councilMembers.length > 0 ? councilMembers : getStoredCouncilMembers();
+    if (!Array.isArray(listToSync) || listToSync.length === 0) {
+      alert("No council members found to sync.");
+      return;
+    }
+    const synced = syncCouncilAdminsToFounding(listToSync, true);
+    setFoundingMembersList(synced);
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
   };
@@ -1186,12 +1211,24 @@ export default function AdminTeamPage() {
           {isFirstTenure && activeTab === "council" && (
             <button
               type="button"
-              onClick={handleSyncFromFounding}
+              onClick={handleSyncToFounding}
               className="px-4 py-3 rounded-2xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 shadow-xs"
-              title="Sync 2025-26 Council Admins with Founding Members list"
+              title="Sync photos, names, and details to Founding Members"
             >
               <Sparkles className="w-4 h-4 text-[#E78023]" />
-              <span>Sync from Founding Members ({foundingMembersList.length})</span>
+              <span>Sync to Founding Members ({foundingMembersList.length})</span>
+            </button>
+          )}
+
+          {isFirstTenure && activeTab === "founding" && (
+            <button
+              type="button"
+              onClick={handleSyncFromAdmins}
+              className="px-4 py-3 rounded-2xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 shadow-xs"
+              title="Sync all photos, names, and details from 1st Tenure Admins"
+            >
+              <Sparkles className="w-4 h-4 text-[#E78023]" />
+              <span>Sync from 1st Tenure Admins ({councilMembers.length})</span>
             </button>
           )}
         </div>
