@@ -189,63 +189,50 @@ export function matchCouncilAndFounder(m1: TeamMember, m2: TeamMember): boolean 
 }
 
 export function repairCouncilSwapIfNeeded(members: TeamMember[], isFounding = false): { repaired: boolean; members: TeamMember[] } {
-  const canonicalSource = isFounding ? initialFoundingMembers : initialAdminCouncil;
   if (!Array.isArray(members) || members.length === 0) {
-    return { repaired: true, members: stripCategoryAndLevel(canonicalSource) };
+    return { repaired: false, members: [] };
   }
 
-  const sarvesh = members.find(m => m.name && /sarvesh\s+surkar/i.test(m.name));
-  const hasHarsh = members.some(m => m.name && /harsh\s+shende/i.test(m.name));
-  const isSarveshSwapped = !!(sarvesh && (/technical/i.test(sarvesh.role || "") || /technical/i.test(sarvesh.designation || "")));
-  const manaswi = members.find(m => m.name && /manaswi\s+burile/i.test(m.name));
-  const isManaswiSwapped = !!(manaswi && (/chief\s+event/i.test(manaswi.role || "") || /chief\s+event/i.test(manaswi.designation || "")));
-  
-  // Detect if any mentor or non-Sanskruti member has BT240115DS or dummy BT000000CS
-  const hasLeakedBt = members.some(m => (!m.name || !/sanskruti/i.test(m.name)) && m.btId === "BT240115DS");
-  const hasDummyBt = members.some(m => m.btId === "BT000000CS");
+  let repaired = false;
+  const repairedList = members.map((m) => {
+    let copy = { ...m };
 
-  // If no swapped roles, Harsh is present, no leaked BT IDs, and we have at least 13 members, nothing to repair
-  if (!isSarveshSwapped && !isManaswiSwapped && hasHarsh && !hasLeakedBt && !hasDummyBt && members.length >= 13) {
-    return { repaired: false, members };
-  }
-
-  console.warn(`⚠️ [Council Store] Detected swapped roles or leaked student BT ID in ${isFounding ? "founding members" : "1st tenure council"}. Auto-repairing to canonical roster...`);
-
-  // Build repaired roster from canonical list in canonicalSource
-  const canonical = stripCategoryAndLevel(canonicalSource);
-  const repairedList: TeamMember[] = canonical.map((cMember, idx) => {
-    // Match by human identity
-    const existing = members.find(m => matchCouncilAndFounder(cMember, m));
-    if (existing) {
-      let cleanBt = existing.btId || cMember.btId || "";
-      // Strip leaked student BT ID from mentors
-      if ((/mentor/i.test(cMember.role || "") || (cMember.name && /sarvashree|munesh/i.test(cMember.name))) && (cleanBt === "BT240115DS" || cleanBt === "BT000000CS")) {
-        cleanBt = "";
-      }
-      return {
-        ...existing,
-        id: cMember.id,
-        name: cMember.name,
-        role: cMember.role,
-        designation: cMember.designation || cMember.role,
-        department: existing.department || cMember.department,
-        btId: cleanBt,
-        avatar: (existing.avatar && existing.avatar.length > 10) ? existing.avatar : cMember.avatar,
-        email: existing.email || cMember.email || "",
-        linkedin: existing.linkedin || cMember.linkedin || "",
-        bio: existing.bio || cMember.bio || "",
-        year: existing.year || cMember.year,
-        order: idx + 1
-      };
+    // Strip leaked student BT ID from mentors
+    if (
+      (/mentor/i.test(copy.role || "") || (copy.name && /sarvashree|munesh/i.test(copy.name))) &&
+      (copy.btId === "BT240115DS" || copy.btId === "BT000000CS")
+    ) {
+      copy.btId = "";
+      repaired = true;
     }
-    let cBt = cMember.btId || "";
-    if ((/mentor/i.test(cMember.role || "") || (cMember.name && /sarvashree|munesh/i.test(cMember.name))) && (cBt === "BT240115DS" || cBt === "BT000000CS")) {
-      cBt = "";
+
+    // Fix swapped Sarvesh / Manaswi roles if detected in legacy cache
+    if (
+      copy.name &&
+      /sarvesh\s+surkar/i.test(copy.name) &&
+      (/technical/i.test(copy.role || "") || /technical/i.test(copy.designation || ""))
+    ) {
+      const targetRole = isFounding ? "Founding President" : "President";
+      copy.role = targetRole;
+      copy.designation = targetRole;
+      repaired = true;
     }
-    return { ...cMember, btId: cBt, order: idx + 1 };
+
+    if (
+      copy.name &&
+      /manaswi\s+burile/i.test(copy.name) &&
+      (/chief\s+event/i.test(copy.role || "") || /chief\s+event/i.test(copy.designation || ""))
+    ) {
+      const targetRole = isFounding ? "Founding Technical Affairs" : "Technical Affairs";
+      copy.role = targetRole;
+      copy.designation = targetRole;
+      repaired = true;
+    }
+
+    return copy;
   });
 
-  return { repaired: true, members: repairedList };
+  return { repaired, members: repairedList };
 }
 
 // Council Team Store
@@ -253,9 +240,9 @@ export function getStoredCouncilMembers(): TeamMember[] {
   if (typeof window === "undefined") return stripCategoryAndLevel(initialAdminCouncil);
   try {
     const stored = localStorage.getItem("src_council_team");
-    if (stored) {
+    if (stored !== null) {
       const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         const { repaired, members } = repairCouncilSwapIfNeeded(stripCategoryAndLevel(parsed));
         if (repaired && typeof window !== "undefined") {
           try {
@@ -297,7 +284,7 @@ export function saveStoredCouncilMembers(members: TeamMember[], autoSyncToFoundi
       enqueueCloudWrite("council_team", finalClean, `Council Leadership (${members.length} Members)`);
     });
 
-    if (autoSyncToFounding && Array.isArray(sanitized) && sanitized.length > 0) {
+    if (autoSyncToFounding && Array.isArray(sanitized)) {
       syncCouncilAdminsToFounding(sanitized, true);
     }
   } catch (e) {
@@ -309,7 +296,7 @@ export async function syncCouncilMembersFromFirestore(): Promise<TeamMember[]> {
   try {
     if (hasPendingWritesFor("council_team")) return getStoredCouncilMembers();
     const remote = await getSiteContentFromFirestore<TeamMember[]>("council_team");
-    if (remote !== null && Array.isArray(remote) && remote.length > 0) {
+    if (remote !== null && Array.isArray(remote)) {
       const current = getStoredCouncilMembers();
       let merged = stripCategoryAndLevel(reconcileArrayDatasets(current, remote));
       const { repaired, members } = repairCouncilSwapIfNeeded(merged);
@@ -668,28 +655,32 @@ export function reconcileCouncilAndFoundingSync(): TeamMember[] {
     const founders = getStoredFoundingMembers();
     
     let needsSync = false;
-    for (let i = 0; i < council.length; i++) {
-      const c = council[i];
-      const f = founders.find((item) => matchCouncilAndFounder(c, item));
-      if (!f) {
-        needsSync = true;
-        break;
-      }
-      if (c.avatar && c.avatar !== f.avatar) {
-        needsSync = true;
-        break;
-      }
-      if (c.name && c.name !== f.name) {
-        needsSync = true;
-        break;
-      }
-      if (c.department && c.department !== f.department) {
-        needsSync = true;
-        break;
-      }
-      if (c.btId && c.btId !== f.btId) {
-        needsSync = true;
-        break;
+    if (council.length !== founders.length) {
+      needsSync = true;
+    } else {
+      for (let i = 0; i < council.length; i++) {
+        const c = council[i];
+        const f = founders.find((item) => matchCouncilAndFounder(c, item));
+        if (!f) {
+          needsSync = true;
+          break;
+        }
+        if (c.avatar && c.avatar !== f.avatar) {
+          needsSync = true;
+          break;
+        }
+        if (c.name && c.name !== f.name) {
+          needsSync = true;
+          break;
+        }
+        if (c.department && c.department !== f.department) {
+          needsSync = true;
+          break;
+        }
+        if (c.btId && c.btId !== f.btId) {
+          needsSync = true;
+          break;
+        }
       }
     }
 
@@ -707,9 +698,9 @@ export function getStoredFoundingMembers(): TeamMember[] {
   if (typeof window === "undefined") return stripCategoryAndLevel(initialFoundingMembers);
   try {
     const stored = localStorage.getItem("src_founding_members");
-    if (stored) {
+    if (stored !== null) {
       const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         const { repaired, members } = repairCouncilSwapIfNeeded(stripCategoryAndLevel(parsed), true);
         if (repaired && typeof window !== "undefined") {
           try {
@@ -749,7 +740,7 @@ export function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCounc
       enqueueCloudWrite("founding_members", finalClean, `Founding Members (${members.length} Members)`);
     });
 
-    if (autoSyncToCouncil && Array.isArray(sanitized) && sanitized.length > 0) {
+    if (autoSyncToCouncil && Array.isArray(sanitized)) {
       syncFoundingToCouncilAdmins(sanitized, true);
     }
   } catch (e) {
@@ -761,7 +752,7 @@ export async function syncFoundingMembersFromFirestore(): Promise<TeamMember[]> 
   try {
     if (hasPendingWritesFor("founding_members")) return getStoredFoundingMembers();
     const remote = await getSiteContentFromFirestore<TeamMember[]>("founding_members");
-    if (remote !== null && Array.isArray(remote) && remote.length > 0) {
+    if (remote !== null && Array.isArray(remote)) {
       const current = getStoredFoundingMembers();
       let merged = stripCategoryAndLevel(reconcileArrayDatasets(current, remote));
       const { repaired, members } = repairCouncilSwapIfNeeded(merged, true);

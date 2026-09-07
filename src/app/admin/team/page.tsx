@@ -539,6 +539,13 @@ export default function AdminTeamPage() {
       } else if (activeTab === "founding") {
         saveStoredFoundingMembers(indexed, isFirstTenure);
       }
+      updateTenureRoster(selectedTenure.id, {
+        [activeTab === "council" ? "adminCouncil" : activeTab === "hosting" ? "hostingCommittee" : "foundingMembers"]: indexed
+      });
+      setTenures((prev) => prev.map((t) => t.id === selectedTenure.id ? {
+        ...t,
+        [activeTab === "council" ? "adminCouncil" : activeTab === "hosting" ? "hostingCommittee" : "foundingMembers"]: indexed
+      } : t));
     } else if (selectedTenure) {
       // Draft / upcoming tenure: save to dedicated draft store first!
       if (activeTab === "council") {
