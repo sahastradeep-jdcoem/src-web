@@ -126,14 +126,10 @@ export default function GalleryPage() {
         {/* VSCO Editorial Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-2 border-b border-slate-200/80">
           <div className="space-y-2 max-w-3xl">
-            <span className="font-mono text-[10px] sm:text-xs font-bold uppercase tracking-widest text-[#E78023] flex items-center gap-1.5">
-              <Camera className="w-3.5 h-3.5" />
-              <span>SAHASTRADEEP // VISUAL JOURNAL</span>
-            </span>
             <h1 className="font-heading font-extrabold text-3xl sm:text-5xl lg:text-6xl text-[#0F172A] tracking-tight uppercase leading-none">
               MOMENTS &amp;
               <br />
-              <span className="text-[#17458F]">ATMOSPHERE.</span>
+              <span className="text-[#E78023]">ATMOSPHERE.</span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 font-sans font-normal max-w-2xl pt-1 leading-relaxed">
               An editorial retrospective capturing student life, hackathon arenas, cultural amphitheaters, and council milestones at JDCOEM.
