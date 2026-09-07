@@ -132,6 +132,7 @@ export interface ClubItem {
   galleryImages: string[];
   isLive?: boolean;
   status?: "active" | "draft" | string;
+  order?: number;
 }
 
 export interface TeamMember {
