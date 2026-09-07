@@ -173,8 +173,8 @@
 
 1. **PC & Laptop Baseline Preservation Policy**:
    - The established desktop visual design, theme, color palette, navigation hierarchy, and layout structure are approved baselines. Do NOT overhaul or redesign the desktop experience.
-   - However, resolve any functional bugs, alignment glitches, cut-offs, table squeeze issues, or keyboard interaction flaws discovered on PC/laptops.
-   - All data tables on admin surfaces must reside inside horizontal scroll containers (`<div className="overflow-x-auto">`) so that laptop screens (1024px–1440px) with fixed sidebars never experience page-level horizontal blowouts.
+   - However, resolve any functional bugs, alignment glitches, cut-offs, or keyboard interaction flaws discovered on PC/laptops.
+   - **Admin Console Desktop Exclusivity**: The Admin Console (`/admin/*`) is strictly reserved for desktop PC/Mac workstations (enforced via a 'Desktop Required' barrier on mobile viewports). Never make mobile layout adaptations to admin console pages.
 
 2. **Mobile Layout Adaptation Authority**:
    - Selective adaptations of mobile layout components (360px–420px) are authoritatively permitted and encouraged wherever desktop arrangements feel forced, cramped, or awkward on smartphones.
