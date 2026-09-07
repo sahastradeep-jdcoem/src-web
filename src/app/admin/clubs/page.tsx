@@ -23,6 +23,7 @@ import {
   Loader2
 } from "lucide-react";
 import { getStoredClubs, saveStoredClubs, syncClubsFromFirestore, getClubLeaders } from "@/lib/councilStore";
+import { reconcileAllUserDesignations } from "@/lib/usersStore";
 import { compactClubDataset } from "@/lib/dataSyncEngine";
 import { 
   getStoredTenures, 
@@ -289,12 +290,38 @@ export default function AdminClubsPage() {
   const handleDeleteClub = (id: string, name: string) => {
     const isDraft = selectedTenure && !selectedTenure.isCurrent;
     const confirmMsg = isDraft
-      ? `Are you sure you want to remove "${name || "this club"}" from DRAFT session "${selectedTenure.label}"?\n\n(Note: The live platform and current tenure will NOT be affected.)`
-      : `Are you sure you want to delete "${name || "this club"}" from the LIVE clubs directory?`;
+      ? `Are you sure you want to remove "${name || "this club"}" from DRAFT session "${selectedTenure.label}"?\n\nAll associated Club Heads and Co-Heads will also be removed.\n(Note: The live platform and current tenure will NOT be affected.)`
+      : `Are you sure you want to delete "${name || "this club"}" from the LIVE clubs directory?\n\nAll associated Club Heads and Co-Heads will also be removed.`;
 
     if (confirm(confirmMsg)) {
-      const updated = clubs.filter((c) => c.id !== id);
+      const deletedClub = clubs.find((c) => c.id === id);
+      let updated = clubs.filter((c) => c.id !== id);
+
+      // Cascade-clean: remove stale clubIds/clubSlugs/clubNames references to the deleted club
+      // from leaders embedded in remaining clubs (handles multi-club head scenarios)
+      if (deletedClub) {
+        updated = updated.map((club) => {
+          if (!Array.isArray(club.leaders) || club.leaders.length === 0) return club;
+          const cleanedLeaders = club.leaders.map((leader) => {
+            if (!leader.clubIds && !leader.clubSlugs && !leader.clubNames) return leader;
+            return {
+              ...leader,
+              clubIds: (leader.clubIds || []).filter((cid: string) => cid !== id && cid !== deletedClub.slug),
+              clubSlugs: (leader.clubSlugs || []).filter((cs: string) => cs !== deletedClub.slug),
+              clubNames: (leader.clubNames || []).filter((cn: string) => cn !== deletedClub.name),
+            };
+          });
+          return { ...club, leaders: cleanedLeaders };
+        });
+      }
+
       saveList(updated);
+
+      // Reconcile user designation badges: clears stale "X Club Head" / "X Club Co-Head" badges
+      // for users who were heads of the deleted club (only for live tenure mutations)
+      if (!isDraft) {
+        reconcileAllUserDesignations().catch(() => {});
+      }
     }
   };
 
