@@ -17,6 +17,12 @@ interface ModalProps {
   contentClassName?: string;
 }
 
+// Module-level state to manage nested / multi-modal scroll locks cleanly
+let activeModalCount = 0;
+let originalBodyOverflow = "";
+let originalHtmlOverflow = "";
+let originalBodyPaddingRight = "";
+
 export function Modal({
   isOpen,
   onClose,
@@ -32,12 +38,40 @@ export function Modal({
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!isOpen) return;
+
+    // 1. Lock background scrolling (both body and html)
+    if (activeModalCount === 0) {
+      originalBodyOverflow = document.body.style.overflow;
+      originalHtmlOverflow = document.documentElement.style.overflow;
+      originalBodyPaddingRight = document.body.style.paddingRight;
+
+      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+      document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
+      if (scrollbarWidth > 0) {
+        document.body.style.paddingRight = `${scrollbarWidth}px`;
+      }
+    }
+    activeModalCount++;
+
+    // 2. Keyboard handler (Escape + Tab focus trapping)
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (closeOnEscape) {
           onClose();
         }
         return;
+      }
+
+      // Prevent Space or Arrow keys from scrolling the background if focus is not in an editable element
+      if (
+        (e.key === " " || e.key === "PageUp" || e.key === "PageDown") &&
+        !["INPUT", "TEXTAREA", "SELECT"].includes((e.target as HTMLElement)?.tagName)
+      ) {
+        if (!modalRef.current?.contains(e.target as Node)) {
+          e.preventDefault();
+        }
       }
 
       // Accessible Focus Trapping
@@ -64,18 +98,77 @@ export function Modal({
       }
     };
 
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-      window.addEventListener("keydown", handleKeyDown);
-    } else {
-      document.body.style.overflow = "unset";
-    }
+    // 3. Strict Mouse Wheel & Trackpad Interception:
+    // Ensures scroll is ONLY active within the modal dialog box and never leaks to the background.
+    const handleWheel = (e: WheelEvent) => {
+      // If mouse is outside the modal dialog (e.g. over the darkened backdrop or margin areas):
+      if (!modalRef.current || !modalRef.current.contains(e.target as Node)) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+
+      // If mouse is inside the modal dialog: check if the pointer is over a scrollable element
+      let el = e.target as HTMLElement | null;
+      let scrollableEl: HTMLElement | null = null;
+
+      while (el && el !== modalRef.current.parentElement) {
+        const style = window.getComputedStyle(el);
+        const overflowY = style.overflowY;
+        const isScrollableType = overflowY === "auto" || overflowY === "scroll";
+        if (isScrollableType && el.scrollHeight > el.clientHeight) {
+          scrollableEl = el;
+          break;
+        }
+        if (el === modalRef.current) break;
+        el = el.parentElement;
+      }
+
+      // If mouse is over a non-scrollable part of the modal (header, footer, buttons, margins):
+      if (!scrollableEl) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+
+      // Check boundaries to prevent scroll chaining to the background
+      const { scrollTop, scrollHeight, clientHeight } = scrollableEl;
+      const isScrollingUp = e.deltaY < 0;
+      const isScrollingDown = e.deltaY > 0;
+
+      const isAtTop = scrollTop <= 0;
+      const isAtBottom = Math.ceil(scrollTop + clientHeight) >= scrollHeight - 1;
+
+      if ((isScrollingUp && isAtTop) || (isScrollingDown && isAtBottom)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    // 4. Touch move interception for mobile / touchpads
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!modalRef.current || !modalRef.current.contains(e.target as Node)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("wheel", handleWheel, { passive: false });
+    window.addEventListener("touchmove", handleTouchMove, { passive: false });
 
     return () => {
-      document.body.style.overflow = "unset";
+      activeModalCount = Math.max(0, activeModalCount - 1);
+      if (activeModalCount === 0) {
+        document.body.style.overflow = originalBodyOverflow || "unset";
+        document.documentElement.style.overflow = originalHtmlOverflow || "unset";
+        document.body.style.paddingRight = originalBodyPaddingRight || "";
+      }
       window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("wheel", handleWheel);
+      window.removeEventListener("touchmove", handleTouchMove);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, closeOnEscape]);
 
   if (!isOpen) return null;
 
@@ -92,7 +185,7 @@ export function Modal({
 
   return (
     <div 
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 overflow-hidden overscroll-contain select-none"
       role="dialog"
       aria-modal="true"
       aria-labelledby={title ? "modal-headline-title" : undefined}
@@ -108,13 +201,13 @@ export function Modal({
       <div
         ref={modalRef}
         className={cn(
-          "relative w-full bg-white border border-slate-200 rounded-3xl shadow-2xl z-10 max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden text-slate-800",
+          "relative w-full bg-white border border-slate-200 rounded-3xl shadow-2xl z-10 max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden text-slate-800 overscroll-contain select-text",
           maxWidthClasses[maxWidth]
         )}
       >
         {/* Header - render dedicated header bar only when title or subtitle is supplied */}
         {(title || subtitle) ? (
-          <div className="flex items-start justify-between gap-4 p-5 sm:px-7 sm:py-5 border-b border-slate-100 bg-white shrink-0 z-10">
+          <div className="flex items-start justify-between gap-4 p-5 sm:px-7 sm:py-5 border-b border-slate-100 bg-white shrink-0 z-10 select-none">
             <div>
               {title && (
                 <h3 
@@ -152,8 +245,15 @@ export function Modal({
           )
         )}
 
-        {/* Content */}
-        <div className={cn("p-5 sm:p-7 overflow-y-auto flex-1", contentClassName)}>{children}</div>
+        {/* Content - strictly scrollable and overscroll-contained */}
+        <div 
+          className={cn(
+            "p-5 sm:p-7 overflow-y-auto flex-1 overscroll-contain", 
+            contentClassName
+          )}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );

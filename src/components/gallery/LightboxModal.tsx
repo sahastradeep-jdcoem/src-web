@@ -20,16 +20,26 @@ export function LightboxModal({ photo, onClose, onPrev, onNext }: LightboxModalP
       if (e.key === "ArrowRight") onNext();
     };
 
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
     if (photo) {
       document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
       window.addEventListener("keydown", handleKeyDown);
+      window.addEventListener("wheel", handleWheel, { passive: false });
     } else {
       document.body.style.overflow = "unset";
+      document.documentElement.style.overflow = "unset";
     }
 
     return () => {
       document.body.style.overflow = "unset";
+      document.documentElement.style.overflow = "unset";
       window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("wheel", handleWheel);
     };
   }, [photo, onClose, onPrev, onNext]);
 
