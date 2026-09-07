@@ -134,6 +134,28 @@ export function TicketPass({
         <span className="text-[#E78023] animate-pulse">→</span>
       </div>
 
+      {/* Quick Save Pass Action Button (Export PNG) */}
+      <div className="flex items-center justify-center pt-1 pb-0.5">
+        <Button
+          onClick={handleDownloadImage}
+          disabled={isDownloading}
+          variant="primary"
+          size="md"
+          className="w-full sm:w-auto max-w-xs gap-2 shadow-md shadow-[#17458F]/20 font-bold text-xs sm:text-sm px-6 py-2.5 bg-[#17458F] hover:bg-[#123670] text-white rounded-xl transition-all active:scale-98"
+        >
+          {isDownloading ? (
+            <RefreshCw className="w-4 h-4 animate-spin" />
+          ) : downloadSuccess ? (
+            <Check className="w-4 h-4 text-emerald-300" />
+          ) : (
+            <Download className="w-4 h-4 text-[#E78023]" />
+          )}
+          <span>
+            {downloadSuccess ? "Pass Exported!" : isDownloading ? "Exporting PNG..." : "Save Pass (PNG)"}
+          </span>
+        </Button>
+      </div>
+
       {/* Official Digital Ticket Pass Card (Exportable Target) */}
       <div className="w-full overflow-x-auto no-scrollbar py-2 touch-pan-x overscroll-x-contain">
         <div
