@@ -153,6 +153,7 @@ export default function PassVerificationPage() {
     );
   }
 
+  const isCancelled = record.status === "CANCELLED";
   const isAlreadyCheckedIn = record.status === "CHECKED_IN";
   const isPaid = record.paymentStatus === "PAID" || (record.amountPaid && record.amountPaid > 0);
 
@@ -181,7 +182,9 @@ export default function PassVerificationPage() {
         {/* Verification Status Hero Card */}
         <div
           className={`rounded-3xl p-6 sm:p-8 text-center space-y-4 border-2 shadow-lg relative overflow-hidden transition-all bg-white ${
-            isAlreadyCheckedIn
+            isCancelled
+              ? "border-rose-400 shadow-rose-500/10"
+              : isAlreadyCheckedIn
               ? "border-blue-400 shadow-blue-500/10"
               : "border-emerald-400 shadow-emerald-500/10"
           }`}
@@ -189,23 +192,29 @@ export default function PassVerificationPage() {
           {/* Subtle Color Accent Glow */}
           <div
             className={`absolute top-0 right-0 -mr-16 -mt-16 w-48 h-48 rounded-full blur-3xl opacity-15 pointer-events-none ${
-              isAlreadyCheckedIn ? "bg-blue-400" : "bg-emerald-400"
+              isCancelled ? "bg-rose-400" : isAlreadyCheckedIn ? "bg-blue-400" : "bg-emerald-400"
             }`}
           />
 
           <div
             className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto border ${
-              isAlreadyCheckedIn
+              isCancelled
+                ? "bg-rose-50 border-rose-200 text-rose-600"
+                : isAlreadyCheckedIn
                 ? "bg-blue-50 border-blue-200 text-[#17458F]"
                 : "bg-emerald-50 border-emerald-200 text-emerald-600 animate-bounce"
             }`}
           >
-            <ShieldCheck className="w-10 h-10" />
+            {isCancelled ? <XCircle className="w-10 h-10" /> : <ShieldCheck className="w-10 h-10" />}
           </div>
 
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider">
-              {isAlreadyCheckedIn ? (
+              {isCancelled ? (
+                <span className="bg-rose-100 text-rose-800 border border-rose-200 px-3.5 py-1 rounded-full">
+                  🔴 PASS CANCELLED • VOID
+                </span>
+              ) : isAlreadyCheckedIn ? (
                 <span className="bg-blue-100 text-blue-800 border border-blue-200 px-3.5 py-1 rounded-full">
                   🔵 ATTENDANCE ALREADY RECORDED
                 </span>
@@ -217,18 +226,47 @@ export default function PassVerificationPage() {
             </div>
 
             <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-slate-900 tracking-tight">
-              {isAlreadyCheckedIn ? "Participant Checked In" : "Valid Delegate Entry"}
+              {isCancelled
+                ? "Registration Cancelled"
+                : isAlreadyCheckedIn
+                ? "Participant Checked In"
+                : "Valid Delegate Entry"}
             </h1>
 
             <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed font-medium">
-              {isAlreadyCheckedIn
+              {isCancelled
+                ? "This accreditation pass was officially cancelled by the student and is no longer valid for gate entry."
+                : isAlreadyCheckedIn
                 ? "This pass has already been validated and marked as attended at the campus gates."
                 : "Officially registered delegate pass verified against SRC cloud ledger."}
             </p>
           </div>
 
+          {/* Cancellation details callout if cancelled */}
+          {isCancelled && (
+            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-left space-y-1.5 animate-in fade-in duration-200">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-800 block">
+                Cancellation Reason:
+              </span>
+              <p className="text-xs text-rose-900 font-medium italic">
+                &quot;{record.cancellationReason || "No specific reason provided by delegate."}&quot;
+              </p>
+              {record.cancelledAt && (
+                <span className="text-[10px] text-rose-500 block pt-1 font-mono">
+                  Cancelled on {new Date(record.cancelledAt).toLocaleString()}
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Quick Action Button / Verification Card */}
-          {!isAlreadyCheckedIn ? (
+          {isCancelled ? (
+            <div className="pt-2">
+              <div className="p-3.5 rounded-2xl bg-rose-100/80 border border-rose-300 text-rose-900 text-xs font-bold text-center">
+                ⛔ Gate Entry Denied — Inactive / Void Accreditation Pass
+              </div>
+            </div>
+          ) : !isAlreadyCheckedIn ? (
             isAdmin ? (
               /* Admin Check-In Action Allowed */
               <div className="pt-2 space-y-2">

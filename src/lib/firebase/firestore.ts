@@ -67,6 +67,9 @@ export interface StudentRegistrationRecord {
   parentEventId?: string;
   subEventBadge?: string;
   customAnswers?: Record<string, any>;
+  cancellationReason?: string;
+  cancelledAt?: string;
+  cancelledBy?: string;
 }
 
 const REGISTRATIONS_COLLECTION = "registrations";
@@ -297,6 +300,7 @@ export async function checkExistingStudentRegistration(
   const cleanEventSlug = eventSlug.trim().toLowerCase();
 
   const matchesRecord = (r: StudentRegistrationRecord): boolean => {
+    if (r.status === "CANCELLED") return false;
     const recEventId = (r.eventId || "").trim().toLowerCase();
     const isSameEvent = recEventId === cleanEventId || recEventId === cleanEventSlug;
     if (!isSameEvent) return false;
@@ -449,6 +453,91 @@ export function subscribeToRegistrationsFromFirestore(
     console.warn("Firestore subscription error for registrations", e);
     return () => {};
   }
+}
+
+/**
+ * Cancel an existing event registration (strictly for free events only).
+ * Requires a mandatory non-empty cancellation reason.
+ */
+export async function cancelRegistrationInFirestore(
+  id: string,
+  reason: string,
+  cancelledBy?: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!id) return { success: false, error: "Invalid registration ID." };
+  const cleanReason = (reason || "").trim();
+  if (!cleanReason || cleanReason.length < 5) {
+    return {
+      success: false,
+      error: "Please provide a valid cancellation reason (minimum 5 characters).",
+    };
+  }
+
+  // Verify registration exists and is free
+  let existing: StudentRegistrationRecord | null = await getRegistrationById(id);
+  if (!existing) {
+    try {
+      const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+      existing = local.find((r: any) => r.id === id) || null;
+    } catch {}
+  }
+
+  if (existing) {
+    if (existing.status === "CHECKED_IN") {
+      return {
+        success: false,
+        error: "Cannot cancel a pass that has already been verified and checked in at the venue.",
+      };
+    }
+    const isPaid = (existing.amountPaid && existing.amountPaid > 0) || existing.paymentStatus === "PAID";
+    if (isPaid) {
+      return {
+        success: false,
+        error: "Paid event registrations cannot be cancelled online. Please contact the event coordinator directly.",
+      };
+    }
+  }
+
+  const nowIso = new Date().toISOString();
+
+  // 1. Update in Firestore
+  try {
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      const docRef = doc(db, REGISTRATIONS_COLLECTION, id);
+      await updateDoc(docRef, {
+        status: "CANCELLED",
+        cancellationReason: cleanReason,
+        cancelledAt: serverTimestamp(),
+        ...(cancelledBy ? { cancelledBy } : {}),
+      });
+    }
+  } catch (error) {
+    console.warn("Firestore cancellation update warning:", error);
+  }
+
+  // 2. Update local storage cache and broadcast cross-tab event
+  if (typeof window !== "undefined") {
+    try {
+      const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+      const updated = local.map((r: any) =>
+        r.id === id
+          ? {
+              ...r,
+              status: "CANCELLED",
+              cancellationReason: cleanReason,
+              cancelledAt: nowIso,
+              ...(cancelledBy ? { cancelledBy } : {}),
+            }
+          : r
+      );
+      localStorage.setItem("src_local_registrations", JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent("src_registrations_updated", { detail: updated }));
+    } catch (e) {
+      console.warn("Local storage update warning on cancel registration:", e);
+    }
+  }
+
+  return { success: true };
 }
 
 /**

@@ -205,6 +205,9 @@ export interface RegistrationRecord {
   parentEventId?: string;
   subEventBadge?: string;
   customAnswers?: Record<string, string | number | boolean | string[] | { question?: string; answer?: any; type?: string; options?: string[] } | any>;
+  cancellationReason?: string;
+  cancelledAt?: string;
+  cancelledBy?: string;
 }
 
 export interface GalleryPhoto {

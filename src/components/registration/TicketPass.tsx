@@ -125,6 +125,20 @@ export function TicketPass({
           id="src-delegate-pass-card"
           className="relative w-[620px] sm:min-w-[680px] md:w-full max-w-[720px] shrink-0 rounded-3xl bg-white border border-slate-200 shadow-xl overflow-hidden text-left mx-auto font-sans"
         >
+          {/* Cancelled Pass Watermark Overlay */}
+          {status === "CANCELLED" && (
+            <div className="absolute inset-0 bg-white/70 backdrop-blur-[1px] z-20 flex items-center justify-center pointer-events-none p-6">
+              <div className="rotate-[-10deg] border-4 border-rose-600 px-8 py-4 rounded-2xl bg-rose-50/95 shadow-2xl text-center space-y-1 max-w-sm">
+                <span className="font-heading font-black text-2xl sm:text-3xl text-rose-600 tracking-widest block uppercase">
+                  CANCELLED • VOID
+                </span>
+                <span className="text-[11px] font-bold text-rose-800 tracking-wider block uppercase font-mono">
+                  Accreditation Inactivated
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Ticket Top Strip */}
           <div className="bg-[#17458F] px-6 py-5 sm:px-8 sm:py-6 flex flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3.5 sm:gap-4">
@@ -212,7 +226,11 @@ export function TicketPass({
                   <p className="font-bold text-slate-900 text-sm font-sans leading-snug pb-0.5">
                     {teamType === "Team" ? teamName || "Team Entry" : "Individual Entry"}
                   </p>
-                  <Badge variant={status === "CHECKED_IN" ? "success" : "orange"} size="sm" className="mt-1">
+                  <Badge 
+                    variant={status === "CHECKED_IN" ? "success" : status === "CANCELLED" ? "rose" : "orange"} 
+                    size="sm" 
+                    className="mt-1"
+                  >
                     {status || "CONFIRMED"}
                   </Badge>
                 </div>

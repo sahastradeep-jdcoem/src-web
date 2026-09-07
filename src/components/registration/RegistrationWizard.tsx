@@ -29,8 +29,10 @@ import {
   Building2,
   Search,
   CreditCard,
-  Lock
+  Lock,
+  XCircle
 } from "lucide-react";
+import { CancelRegistrationModal } from "@/components/registration/CancelRegistrationModal";
 import confetti from "canvas-confetti";
 import { 
   getStoredDepartments, 
@@ -155,6 +157,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
   const [existingRegistration, setExistingRegistration] = useState<StudentRegistrationRecord | null>(null);
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [generatedTicket, setGeneratedTicket] = useState<{
     registrationId: string;
     ticketCode: string;
@@ -957,6 +960,16 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                       <span>Public Verification Link</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
+                    {!event.isPaid && (!event.feeAmount || event.feeAmount === 0) && existingRegistration.status !== "CANCELLED" && existingRegistration.status !== "CHECKED_IN" && (
+                      <button
+                        type="button"
+                        onClick={() => setIsCancelModalOpen(true)}
+                        className="px-4 py-2.5 rounded-xl bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 hover:text-rose-800 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                        <span>Cancel Registration</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -1972,6 +1985,18 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             subEventBadge={event.subEventBadge}
           />
         </div>
+      )}
+
+      {/* Modal: Cancel Registration Dialog */}
+      {existingRegistration && (
+        <CancelRegistrationModal
+          isOpen={isCancelModalOpen}
+          onClose={() => setIsCancelModalOpen(false)}
+          registration={existingRegistration}
+          onCancelled={() => {
+            setExistingRegistration(null);
+          }}
+        />
       )}
 
     </div>

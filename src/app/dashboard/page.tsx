@@ -27,8 +27,10 @@ import {
   FileText,
   Pencil,
   Lock,
-  Sliders
+  Sliders,
+  XCircle
 } from "lucide-react";
+import { CancelRegistrationModal } from "@/components/registration/CancelRegistrationModal";
 import { mockRegistrations } from "@/data/registrations";
 import { Badge } from "@/components/ui/Badge";
 import { getDepartmentShortName } from "@/lib/departmentsStore";
@@ -69,6 +71,7 @@ export default function StudentDashboardPage() {
   const [hubResponses, setHubResponses] = useState<ListingResponseRecord[]>([]);
   const [activeDashboardTab, setActiveDashboardTab] = useState<"passes" | "hub">("passes");
   const [selectedTicket, setSelectedTicket] = useState<RegistrationRecord | null>(null);
+  const [cancellingTicket, setCancellingTicket] = useState<RegistrationRecord | null>(null);
   const [selectedHubSubmission, setSelectedHubSubmission] = useState<ListingResponseRecord | null>(null);
   const [isDownloadingTicket, setIsDownloadingTicket] = useState(false);
   const [ticketDownloadSuccess, setTicketDownloadSuccess] = useState(false);
@@ -258,6 +261,9 @@ export default function StudentDashboardPage() {
         qrPayload: r.qrPayload || `SRC:PASS:${r.id}`,
         amountPaid: r.amountPaid || 0,
         customAnswers: r.customAnswers,
+        cancellationReason: r.cancellationReason,
+        cancelledAt: r.cancelledAt,
+        cancelledBy: r.cancelledBy,
       };
     });
   };
@@ -724,12 +730,32 @@ export default function StudentDashboardPage() {
                   registrations.map((reg) => {
                     const isConfirmed = reg.status === "CONFIRMED" || reg.status === "CHECKED_IN";
                     const isPending = reg.status === "PENDING";
-                    const statusVariant = reg.status === "CHECKED_IN" ? "success" : isConfirmed ? "orange" : isPending ? "warning" : "slate";
+                    const isCancelled = reg.status === "CANCELLED";
+                    const statusVariant = reg.status === "CHECKED_IN" ? "success" : isCancelled ? "rose" : isConfirmed ? "orange" : isPending ? "warning" : "slate";
+
+                    const matchedEvent = events.find(
+                      (e) =>
+                        e.id.toLowerCase() === reg.eventSlug?.toLowerCase() ||
+                        e.slug?.toLowerCase() === reg.eventSlug?.toLowerCase() ||
+                        e.name.toLowerCase() === reg.eventName.toLowerCase()
+                    );
+
+                    const isFreeEvent =
+                      (!reg.amountPaid || reg.amountPaid === 0) &&
+                      reg.paymentStatus !== "PAID" &&
+                      (!matchedEvent || (!matchedEvent.isPaid && (!matchedEvent.feeAmount || matchedEvent.feeAmount === 0)));
+
+                    const canCancel = isFreeEvent && !isCancelled && reg.status !== "CHECKED_IN";
 
                     return (
                       <div
                         key={reg.id}
-                        className="p-6 rounded-3xl bg-white border border-slate-200 hover:border-[#17458F]/30 hover:shadow-md transition-all space-y-4 shadow-xs"
+                        className={cn(
+                          "p-6 rounded-3xl bg-white border transition-all space-y-4 shadow-xs",
+                          isCancelled
+                            ? "border-rose-200/80 bg-rose-50/20"
+                            : "border-slate-200 hover:border-[#17458F]/30 hover:shadow-md"
+                        )}
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
                           <div className="flex items-center gap-2">
@@ -745,6 +771,7 @@ export default function StudentDashboardPage() {
                           </span>
                         </div>
 
+                        {/* Event details and Squad/Individual format */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                           <div>
                             <h3 className="font-heading font-bold text-lg text-slate-900">
@@ -755,16 +782,49 @@ export default function StudentDashboardPage() {
                             </p>
                           </div>
 
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {canCancel && (
+                              <button
+                                type="button"
+                                onClick={() => setCancellingTicket(reg)}
+                                className="px-3.5 py-2 rounded-xl border border-rose-200 hover:bg-rose-50 active:bg-rose-100 text-rose-600 hover:text-rose-700 text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer font-sans"
+                              >
+                                <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                                <span>Cancel Registration</span>
+                              </button>
+                            )}
+
                             <button
                               onClick={() => setSelectedTicket(reg)}
                               className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-[#17458F] text-slate-700 hover:text-white text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer font-sans"
                             >
                               <QrCode className="w-3.5 h-3.5" />
-                              <span>View QR Pass</span>
+                              <span>{isCancelled ? "View Void Pass" : "View QR Pass"}</span>
                             </button>
                           </div>
                         </div>
+
+                        {/* Cancellation Reason Callout if Cancelled */}
+                        {isCancelled && (
+                          <div className="p-3.5 rounded-2xl bg-rose-50/80 border border-rose-200/80 text-xs text-rose-900 space-y-1 animate-in fade-in duration-200">
+                            <div className="flex items-center justify-between font-bold text-rose-800 text-[11px] uppercase tracking-wider">
+                              <span className="flex items-center gap-1.5">
+                                <XCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                                <span>Pass Cancelled by Student</span>
+                              </span>
+                              {reg.cancelledAt && (
+                                <span className="text-rose-500 font-mono text-[10px] lowercase">
+                                  {new Date(reg.cancelledAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </span>
+                              )}
+                            </div>
+                            {reg.cancellationReason && (
+                              <p className="text-rose-700 font-medium pl-5 leading-relaxed italic">
+                                &quot;{reg.cancellationReason}&quot;
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })
@@ -1144,6 +1204,12 @@ export default function StudentDashboardPage() {
           const eventDateStr = matchedEvent?.date || "10 September 2026";
           const eventVenueStr = matchedEvent?.venue || "JDCOEM Campus";
 
+          const isPassFree =
+            (!selectedTicket.amountPaid || selectedTicket.amountPaid === 0) &&
+            selectedTicket.paymentStatus !== "PAID" &&
+            (!matchedEvent || (!matchedEvent.isPaid && (!matchedEvent.feeAmount || matchedEvent.feeAmount === 0)));
+          const canCancelPass = isPassFree && selectedTicket.status !== "CANCELLED" && selectedTicket.status !== "CHECKED_IN";
+
           return (
             <Modal
               isOpen={!!selectedTicket}
@@ -1153,29 +1219,41 @@ export default function StudentDashboardPage() {
               maxWidth="4xl"
               contentClassName="p-3 sm:p-6 w-full max-w-full min-w-0 overflow-hidden flex flex-col items-center justify-center"
               headerAction={
-                <button
-                  type="button"
-                  onClick={handleDownloadSelectedTicket}
-                  disabled={isDownloadingTicket}
-                  className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#17458F] hover:bg-[#123670] active:scale-98 text-white text-xs font-bold font-heading uppercase tracking-wider shadow-xs transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-80 select-none"
-                >
-                  {isDownloadingTicket ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#E78023]" />
-                      <span>Exporting...</span>
-                    </span>
-                  ) : ticketDownloadSuccess ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-emerald-300" />
-                      <span>Saved!</span>
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5">
-                      <Download className="w-3.5 h-3.5 text-[#E78023]" />
-                      <span>Save Pass</span>
-                    </span>
+                <div className="flex items-center gap-2">
+                  {canCancelPass && (
+                    <button
+                      type="button"
+                      onClick={() => setCancellingTicket(selectedTicket)}
+                      className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-rose-200 bg-rose-50/80 hover:bg-rose-100 text-rose-700 text-xs font-bold font-heading uppercase tracking-wider transition-colors cursor-pointer"
+                    >
+                      <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                      <span>Cancel Registration</span>
+                    </button>
                   )}
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleDownloadSelectedTicket}
+                    disabled={isDownloadingTicket}
+                    className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#17458F] hover:bg-[#123670] active:scale-98 text-white text-xs font-bold font-heading uppercase tracking-wider shadow-xs transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-80 select-none"
+                  >
+                    {isDownloadingTicket ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#E78023]" />
+                        <span>Exporting...</span>
+                      </span>
+                    ) : ticketDownloadSuccess ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-300" />
+                        <span>Saved!</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Download className="w-3.5 h-3.5 text-[#E78023]" />
+                        <span>Save Pass</span>
+                      </span>
+                    )}
+                  </button>
+                </div>
               }
             >
               <TicketPass
@@ -1196,9 +1274,47 @@ export default function StudentDashboardPage() {
                 mode="dashboard"
                 onClose={() => setSelectedTicket(null)}
               />
+
+              {canCancelPass && (
+                <div className="sm:hidden w-full pt-3 pb-1 border-t border-slate-100 mt-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() => setCancellingTicket(selectedTicket)}
+                    className="w-full py-2.5 px-4 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 font-sans cursor-pointer"
+                  >
+                    <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Cancel This Registration</span>
+                  </button>
+                </div>
+              )}
             </Modal>
           );
         })()}
+
+        {/* Modal: Cancel Registration Dialog */}
+        <CancelRegistrationModal
+          isOpen={!!cancellingTicket}
+          onClose={() => setCancellingTicket(null)}
+          registration={cancellingTicket}
+          onCancelled={(cancelledId) => {
+            setRegistrations((prev) =>
+              prev.map((r) =>
+                r.id === cancelledId
+                  ? {
+                      ...r,
+                      status: "CANCELLED",
+                      cancelledAt: new Date().toISOString(),
+                    }
+                  : r
+              )
+            );
+            if (selectedTicket && selectedTicket.id === cancelledId) {
+              setSelectedTicket((prev) =>
+                prev ? { ...prev, status: "CANCELLED", cancelledAt: new Date().toISOString() } : null
+              );
+            }
+          }}
+        />
 
         {/* Modal: Inspect Submitted Hub Form / Application Responses */}
         {selectedHubSubmission && (
