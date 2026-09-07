@@ -136,24 +136,29 @@ export function TicketPass({
 
       {/* Quick Save Pass Action Button (Export PNG) */}
       <div className="flex items-center justify-center pt-1 pb-0.5">
-        <Button
+        <button
+          type="button"
           onClick={handleDownloadImage}
           disabled={isDownloading}
-          variant="primary"
-          size="md"
-          className="w-full sm:w-auto max-w-xs gap-2 shadow-md shadow-[#17458F]/20 font-bold text-xs sm:text-sm px-6 py-2.5 bg-[#17458F] hover:bg-[#123670] text-white rounded-xl transition-all active:scale-98"
+          className="w-full sm:w-auto max-w-xs inline-flex items-center justify-center h-11 px-6 rounded-xl font-heading font-bold text-xs sm:text-sm uppercase tracking-wide text-white bg-[#17458F] hover:bg-[#123670] active:scale-[0.98] shadow-md shadow-[#17458F]/25 transition-colors duration-150 disabled:cursor-not-allowed disabled:bg-[#17458F] select-none"
         >
           {isDownloading ? (
-            <RefreshCw className="w-4 h-4 animate-spin" />
+            <span key="exporting" className="inline-flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 animate-spin text-[#E78023]" />
+              <span>Exporting PNG...</span>
+            </span>
           ) : downloadSuccess ? (
-            <Check className="w-4 h-4 text-emerald-300" />
+            <span key="exported" className="inline-flex items-center gap-2">
+              <Check className="w-4 h-4 text-emerald-300" />
+              <span>Pass Exported!</span>
+            </span>
           ) : (
-            <Download className="w-4 h-4 text-[#E78023]" />
+            <span key="idle" className="inline-flex items-center gap-2">
+              <Download className="w-4 h-4 text-[#E78023]" />
+              <span>Save Pass (PNG)</span>
+            </span>
           )}
-          <span>
-            {downloadSuccess ? "Pass Exported!" : isDownloading ? "Exporting PNG..." : "Save Pass (PNG)"}
-          </span>
-        </Button>
+        </button>
       </div>
 
       {/* Official Digital Ticket Pass Card (Exportable Target) */}
@@ -318,13 +323,21 @@ export function TicketPass({
           className="gap-2 shadow-lg shadow-[#17458F]/20 font-semibold"
         >
           {isDownloading ? (
-            <RefreshCw className="w-4 h-4 animate-spin" />
+            <span key="bottom-loading" className="inline-flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 animate-spin text-[#E78023]" />
+              <span>Generating High-Res Pass...</span>
+            </span>
           ) : downloadSuccess ? (
-            <Check className="w-4 h-4 text-emerald-300" />
+            <span key="bottom-success" className="inline-flex items-center gap-2">
+              <Check className="w-4 h-4 text-emerald-300" />
+              <span>Pass Saved!</span>
+            </span>
           ) : (
-            <Download className="w-4 h-4" />
+            <span key="bottom-idle" className="inline-flex items-center gap-2">
+              <Download className="w-4 h-4" />
+              <span>Save Pass to Phone (PNG)</span>
+            </span>
           )}
-          <span>{downloadSuccess ? "Pass Saved!" : isDownloading ? "Generating High-Res Pass..." : "Save Pass to Phone (PNG)"}</span>
         </Button>
 
         <Button
