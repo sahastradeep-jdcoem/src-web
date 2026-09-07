@@ -1377,13 +1377,19 @@ export default function AdminTeamPage() {
                 {/* Photo & Name */}
                 <div className="flex items-center gap-3">
                   <div className="relative h-14 w-14 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
-                    <Image
-                      src={member.avatar}
-                      alt={member.name}
-                      fill
-                      unoptimized={true}
-                      className="object-cover"
-                    />
+                    {member.avatar ? (
+                      <Image
+                        src={member.avatar}
+                        alt={member.name || "Member"}
+                        fill
+                        unoptimized={true}
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400">
+                        <Users className="w-6 h-6" />
+                      </div>
+                    )}
                   </div>
                   <div className="min-w-0">
                     <h3 className="font-bold text-sm text-[#0F172A] truncate">
