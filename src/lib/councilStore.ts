@@ -136,9 +136,15 @@ export function normalizeMemberName(name?: string): string {
   return name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-export function matchCouncilAndFounder(m1: TeamMember, m2: TeamMember, idx1?: number, idx2?: number): boolean {
+export function getBaseMemberId(id?: string): string {
+  if (!id) return "";
+  return id.replace(/^(admin|council-admin|founder|member)-/i, "").trim();
+}
+
+export function matchCouncilAndFounder(m1: TeamMember, m2: TeamMember): boolean {
   if (!m1 || !m2) return false;
-  // 1. Match by clean normalized name (strictly human identity - never by index or order!)
+
+  // 1. Match by clean normalized name (strictly primary human identity)
   if (m1.name && m2.name) {
     const n1 = normalizeMemberName(m1.name);
     const n2 = normalizeMemberName(m2.name);
@@ -146,11 +152,19 @@ export function matchCouncilAndFounder(m1: TeamMember, m2: TeamMember, idx1?: nu
       return true;
     }
   }
-  // 2. Match by BT ID ONLY if names do NOT conflict
+
+  // 2. Match by unique Base ID if present (e.g. member-1788159155799 <-> founder-1788159155799)
+  const base1 = getBaseMemberId(m1.id);
+  const base2 = getBaseMemberId(m2.id);
+  if (base1 && base2 && base1 === base2 && base1 !== "" && !base1.includes("placeholder")) {
+    return true;
+  }
+
+  // 3. Match by BT ID ONLY if names do NOT conflict
   if (m1.btId && m2.btId) {
-    const b1 = m1.btId.trim().toLowerCase();
-    const b2 = m2.btId.trim().toLowerCase();
-    if (b1 === b2 && b1.length > 3 && b1 !== "000000" && !b1.includes("placeholder")) {
+    const b1 = m1.btId.trim().toUpperCase();
+    const b2 = m2.btId.trim().toUpperCase();
+    if (b1 === b2 && b1.length > 3 && b1 !== "000000" && !b1.includes("PLACEHOLDER")) {
       if (m1.name && m2.name) {
         const n1 = normalizeMemberName(m1.name);
         const n2 = normalizeMemberName(m2.name);
@@ -161,6 +175,16 @@ export function matchCouncilAndFounder(m1: TeamMember, m2: TeamMember, idx1?: nu
       return true;
     }
   }
+
+  // 4. Match by Email if present
+  if (m1.email && m2.email) {
+    const e1 = m1.email.trim().toLowerCase();
+    const e2 = m2.email.trim().toLowerCase();
+    if (e1 === e2 && e1.length > 5 && e1.includes("@") && !e1.includes("placeholder")) {
+      return true;
+    }
+  }
+
   return false;
 }
 
@@ -198,6 +222,9 @@ export function repairCouncilSwapIfNeeded(members: TeamMember[], isFounding = fa
         department: existing.department || cMember.department,
         btId: existing.btId || cMember.btId,
         avatar: (existing.avatar && existing.avatar.length > 10) ? existing.avatar : cMember.avatar,
+        email: existing.email || cMember.email || "",
+        linkedin: existing.linkedin || cMember.linkedin || "",
+        bio: existing.bio || cMember.bio || "",
         year: existing.year || cMember.year,
         order: idx + 1
       };
@@ -513,10 +540,12 @@ export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => v
 // Helper to convert Founding Member to Council Admin Officer
 export function mapFoundingMemberToCouncilAdmin(founder: TeamMember, idx?: number): TeamMember {
   const customIdx = idx !== undefined ? idx : 0;
+  const baseId = getBaseMemberId(founder.id) || `${customIdx + 1}`;
+  const adminId = baseId.startsWith("admin-") || baseId.startsWith("member-") ? baseId : `admin-${baseId}`;
   const adminRole = formatFoundingRoleToAdmin(founder.role);
   return {
     ...founder,
-    id: `admin-${founder.id?.replace(/^(founder|council-admin)-/, "") || customIdx + 1}`,
+    id: adminId,
     designation: adminRole,
     role: adminRole,
     order: founder.order ?? customIdx + 1
@@ -535,7 +564,8 @@ export function syncCouncilAdminsToFounding(councilList?: TeamMember[], persist 
 
   const updatedFounders: TeamMember[] = council.map((admin, idx) => {
     const existing = currentFounders.find((f) => matchCouncilAndFounder(admin, f));
-    const founderId = existing?.id || `founder-${admin.id?.replace(/^(admin|council-admin)-/, "") || idx + 1}`;
+    const baseId = getBaseMemberId(admin.id) || (existing ? getBaseMemberId(existing.id) : "") || `${idx + 1}`;
+    const founderId = `founder-${baseId}`;
     const foundingRole = formatAdminRoleToFounding(admin.role);
 
     return {
@@ -543,6 +573,13 @@ export function syncCouncilAdminsToFounding(councilList?: TeamMember[], persist 
       id: founderId,
       role: foundingRole,
       designation: foundingRole,
+      avatar: (admin.avatar && admin.avatar.length > 10) ? admin.avatar : (existing?.avatar || ""),
+      email: admin.email || existing?.email || "",
+      linkedin: admin.linkedin || existing?.linkedin || "",
+      bio: admin.bio || existing?.bio || "",
+      btId: admin.btId || existing?.btId || "",
+      department: admin.department || existing?.department || "",
+      year: admin.year || existing?.year || "3rd Year",
       order: admin.order ?? idx + 1,
     };
   });
@@ -565,7 +602,8 @@ export function syncFoundingToCouncilAdmins(foundingList?: TeamMember[], persist
 
   const updatedCouncil: TeamMember[] = founders.map((founder, idx) => {
     const existing = currentCouncil.find((a) => matchCouncilAndFounder(founder, a));
-    const adminId = existing?.id || `admin-${founder.id?.replace(/^(founder|council-admin)-/, "") || idx + 1}`;
+    const baseId = getBaseMemberId(founder.id) || (existing ? getBaseMemberId(existing.id) : "") || `${idx + 1}`;
+    const adminId = existing?.id || (baseId.startsWith("admin-") || baseId.startsWith("member-") ? baseId : `admin-${baseId}`);
     const adminRole = formatFoundingRoleToAdmin(founder.role);
 
     return {
@@ -573,6 +611,13 @@ export function syncFoundingToCouncilAdmins(foundingList?: TeamMember[], persist
       id: adminId,
       role: adminRole,
       designation: adminRole,
+      avatar: (founder.avatar && founder.avatar.length > 10) ? founder.avatar : (existing?.avatar || ""),
+      email: founder.email || existing?.email || "",
+      linkedin: founder.linkedin || existing?.linkedin || "",
+      bio: founder.bio || existing?.bio || "",
+      btId: founder.btId || existing?.btId || "",
+      department: founder.department || existing?.department || "",
+      year: founder.year || existing?.year || "3rd Year",
       order: founder.order ?? idx + 1,
     };
   });
