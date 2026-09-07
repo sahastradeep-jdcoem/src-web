@@ -203,7 +203,7 @@ export function Modal({
       <div
         ref={modalRef}
         className={cn(
-          "relative w-full bg-white border border-slate-200 rounded-3xl shadow-2xl z-10 max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden text-slate-800 overscroll-contain select-text",
+          "relative w-full max-w-full min-w-0 bg-white border border-slate-200 rounded-3xl shadow-2xl z-10 max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden text-slate-800 overscroll-contain select-text",
           maxWidthClasses[maxWidth]
         )}
       >
@@ -253,7 +253,7 @@ export function Modal({
         {/* Content - strictly scrollable and overscroll-contained */}
         <div 
           className={cn(
-            "p-5 sm:p-7 overflow-y-auto flex-1 overscroll-contain", 
+            "p-5 sm:p-7 overflow-y-auto flex-1 overscroll-contain min-w-0 max-w-full", 
             contentClassName
           )}
         >

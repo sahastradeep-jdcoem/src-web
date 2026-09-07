@@ -94,7 +94,7 @@ export function TicketPass({
   };
 
   return (
-    <div className={cn("max-w-3xl mx-auto", mode === "dashboard" ? "space-y-4 sm:space-y-0" : "space-y-6 sm:space-y-8")}>
+    <div className={cn("w-full max-w-3xl min-w-0 mx-auto", mode === "dashboard" ? "space-y-4 sm:space-y-0" : "space-y-6 sm:space-y-8")}>
       {/* Top Banner - only on registration completion page */}
       {mode !== "dashboard" && (
         <div className="text-center space-y-3">
@@ -120,10 +120,10 @@ export function TicketPass({
       </div>
 
       {/* Official Digital Ticket Pass Card (Exportable Target) */}
-      <div className="w-full overflow-x-auto no-scrollbar py-2 touch-pan-x overscroll-x-contain">
+      <div className="w-full max-w-full min-w-0 overflow-x-auto no-scrollbar py-2 touch-pan-x overscroll-x-contain">
         <div
           id="src-delegate-pass-card"
-          className="relative min-w-[620px] sm:min-w-[680px] md:w-full max-w-[720px] rounded-3xl bg-white border border-slate-200 shadow-xl overflow-hidden text-left mx-auto font-sans"
+          className="relative w-[620px] sm:min-w-[680px] md:w-full max-w-[720px] shrink-0 rounded-3xl bg-white border border-slate-200 shadow-xl overflow-hidden text-left mx-auto font-sans"
         >
           {/* Ticket Top Strip */}
           <div className="bg-[#17458F] px-6 py-5 sm:px-8 sm:py-6 flex flex-row items-center justify-between gap-4">
