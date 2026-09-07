@@ -108,7 +108,7 @@ export default function Navbar() {
               <span className="font-hero font-extrabold text-sm sm:text-base text-[#17458F] tracking-tight leading-tight group-hover:text-[#E78023] transition-colors uppercase">
                 SAHASTRADEEP
               </span>
-              <span className="text-[10px] sm:text-[11px] font-sans font-medium text-slate-500 uppercase tracking-widest leading-tight">
+              <span className="text-[10px] sm:text-[11px] font-sans font-semibold text-black uppercase tracking-widest leading-tight">
                 SRC JDCOEM
               </span>
             </div>
