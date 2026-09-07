@@ -3,17 +3,10 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { 
-  Filter, 
-  Sparkles, 
   Maximize2, 
-  Tag, 
-  Calendar, 
-  LayoutGrid, 
-  Rows3, 
   Search, 
   X, 
-  Camera,
-  ArrowRight
+  Camera 
 } from "lucide-react";
 import { 
   getStoredGalleryPhotos, 
@@ -28,7 +21,6 @@ export default function GalleryPage() {
   const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
-  const [viewMode, setViewMode] = useState<"grid" | "journal">("grid");
   const [activePhotoIndex, setActivePhotoIndex] = useState<number | null>(null);
 
   const categories = useMemo(() => {
@@ -167,10 +159,10 @@ export default function GalleryPage() {
             })}
           </div>
 
-          {/* Right Tools: Search Input + View Mode Switcher */}
+          {/* Right Tools: Search Input */}
           <div className="flex items-center gap-2 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 shrink-0">
             {/* Minimalist Search Box */}
-            <div className="relative flex-1 sm:w-56">
+            <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
               <input
                 type="text"
@@ -188,39 +180,6 @@ export default function GalleryPage() {
                   <X className="w-3 h-3" />
                 </button>
               )}
-            </div>
-
-            {/* View Mode Toggle: Grid vs Journal */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-full border border-slate-200">
-              <button
-                type="button"
-                onClick={() => setViewMode("grid")}
-                aria-label="Masonry Grid View"
-                title="Masonry Grid View"
-                className={cn(
-                  "p-1.5 rounded-full transition-all cursor-pointer",
-                  viewMode === "grid"
-                    ? "bg-white text-[#17458F] shadow-xs"
-                    : "text-slate-500 hover:text-slate-900"
-                )}
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setViewMode("journal")}
-                aria-label="Editorial Journal View"
-                title="Editorial Journal View"
-                className={cn(
-                  "p-1.5 rounded-full transition-all cursor-pointer",
-                  viewMode === "journal"
-                    ? "bg-white text-[#17458F] shadow-xs"
-                    : "text-slate-500 hover:text-slate-900"
-                )}
-              >
-                <Rows3 className="w-4 h-4" />
-              </button>
             </div>
           </div>
 
@@ -253,8 +212,8 @@ export default function GalleryPage() {
               </button>
             )}
           </div>
-        ) : viewMode === "grid" ? (
-          /* 1. MASONRY GRID LAYOUT (VSCO Signature Flow: 2-col on mobile, 3-col on tablet, 4-col on desktop) */
+        ) : (
+          /* MASONRY GRID LAYOUT (VSCO Signature Flow: 2-col on mobile, 3-col on tablet, 4-col on desktop) */
           <div className="columns-2 sm:columns-3 lg:columns-4 gap-3 sm:gap-5 [column-fill:_balance]">
             {filteredPhotos.map((photo, index) => {
               const aspectClass = getAspectClass(photo.aspectRatio);
@@ -316,87 +275,6 @@ export default function GalleryPage() {
                     </span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        ) : (
-          /* 2. EDITORIAL JOURNAL FEED LAYOUT (VSCO Magazine Single / Dual Column Experience) */
-          <div className="max-w-3xl mx-auto space-y-12 sm:space-y-16">
-            {filteredPhotos.map((photo, index) => {
-              const aspectClass = 
-                photo.aspectRatio === "portrait"
-                  ? "aspect-[4/5]"
-                  : photo.aspectRatio === "square"
-                  ? "aspect-square"
-                  : "aspect-[16/10]";
-
-              return (
-                <article
-                  key={photo.id}
-                  className="group rounded-3xl bg-white border border-slate-200/80 shadow-xs hover:shadow-xl transition-all duration-300 overflow-hidden"
-                >
-                  {/* Large Cinematic Photo Frame */}
-                  <div 
-                    onClick={() => setActivePhotoIndex(index)}
-                    className={cn(
-                      "relative w-full overflow-hidden bg-slate-100 cursor-pointer",
-                      aspectClass
-                    )}
-                  >
-                    <Image
-                      src={photo.imageUrl}
-                      alt={photo.title}
-                      fill
-                      unoptimized={true}
-                      className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.02]"
-                    />
-
-                    {/* Expand CTA overlay */}
-                    <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                      <div className="p-2.5 rounded-full bg-black/50 text-white backdrop-blur-md border border-white/20 shadow-md">
-                        <Maximize2 className="w-4 h-4" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Understated Editorial Caption Block */}
-                  <div className="p-5 sm:p-7 space-y-3">
-                    <div className="flex items-center justify-between gap-3 flex-wrap">
-                      <div className="flex items-center gap-2">
-                        <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-800 font-bold text-[10px] uppercase tracking-wider font-mono">
-                          {photo.category}
-                        </span>
-                        <span className="text-slate-400 text-xs">•</span>
-                        <span className="font-mono text-xs text-slate-500">
-                          {photo.date}
-                        </span>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => setActivePhotoIndex(index)}
-                        className="inline-flex items-center gap-1.5 text-xs font-bold text-[#17458F] hover:text-[#E78023] transition-colors cursor-pointer uppercase tracking-wider"
-                      >
-                        <span>Full Studio View</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    <div className="space-y-1">
-                      <h2 
-                        onClick={() => setActivePhotoIndex(index)}
-                        className="font-heading font-extrabold text-xl sm:text-2xl text-[#0F172A] tracking-tight hover:text-[#17458F] transition-colors cursor-pointer"
-                      >
-                        {photo.title}
-                      </h2>
-                      {photo.caption && (
-                        <p className="text-sm text-slate-600 font-sans font-normal leading-relaxed pt-1">
-                          {photo.caption}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </article>
               );
             })}
           </div>
