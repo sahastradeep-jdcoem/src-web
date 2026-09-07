@@ -23,7 +23,7 @@ import { Modal } from "@/components/ui/Modal";
 import { downloadPassAsImage } from "@/lib/passExport";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 
-interface TicketPassProps {
+export interface TicketPassProps {
   registrationId: string;
   eventName: string;
   eventDate: string;
@@ -37,6 +37,9 @@ interface TicketPassProps {
   ticketCode: string;
   parentEventName?: string;
   subEventBadge?: string;
+  status?: string;
+  mode?: "registration" | "dashboard";
+  onClose?: () => void;
 }
 
 export function TicketPass({
@@ -53,6 +56,9 @@ export function TicketPass({
   ticketCode,
   parentEventName,
   subEventBadge,
+  status = "CONFIRMED",
+  mode = "registration",
+  onClose,
 }: TicketPassProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
@@ -92,22 +98,44 @@ export function TicketPass({
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-8">
-      {/* Top Success Banner */}
-      <div className="text-center space-y-3">
-        <div className="inline-flex items-center justify-center p-3 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600 mb-2">
-          <CheckCircle2 className="w-10 h-10" />
+    <div className="max-w-3xl mx-auto space-y-6 sm:space-y-8">
+      {/* Top Banner */}
+      {mode === "dashboard" ? (
+        <div className="text-center space-y-1.5 sm:space-y-2">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-[#17458F] text-xs font-bold font-heading uppercase tracking-wider">
+            <ShieldCheck className="w-4 h-4 text-[#17458F]" />
+            <span>Verified Official Delegate Pass</span>
+          </div>
+          <h2 className="font-extrabold text-2xl sm:text-4xl text-[#0F172A] tracking-tight font-heading">
+            {eventName}
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-500 max-w-lg mx-auto font-medium font-sans">
+            Present this digital pass or scannable QR code at gate security for verified event check-in.
+          </p>
         </div>
-        <h2 className="font-extrabold text-3xl sm:text-5xl text-[#0F172A] tracking-tight font-heading">
-          YOU&apos;RE IN.
-        </h2>
-        <p className="text-base sm:text-lg text-slate-600 max-w-xl mx-auto font-medium">
-          Your official registration for <strong className="text-[#E78023]">{eventName}</strong> has been confirmed.
-        </p>
+      ) : (
+        <div className="text-center space-y-3">
+          <div className="inline-flex items-center justify-center p-3 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600 mb-2">
+            <CheckCircle2 className="w-10 h-10" />
+          </div>
+          <h2 className="font-extrabold text-3xl sm:text-5xl text-[#0F172A] tracking-tight font-heading">
+            YOU&apos;RE IN.
+          </h2>
+          <p className="text-base sm:text-lg text-slate-600 max-w-xl mx-auto font-medium font-sans">
+            Your official registration for <strong className="text-[#E78023]">{eventName}</strong> has been confirmed.
+          </p>
+        </div>
+      )}
+
+      {/* Mobile Horizontal Swipe Indicator */}
+      <div className="sm:hidden flex items-center justify-center gap-2 text-[11px] font-bold text-slate-500 bg-slate-100/90 border border-slate-200 rounded-full px-3.5 py-1.5 w-fit mx-auto shadow-xs select-none">
+        <span className="text-[#E78023] animate-pulse">←</span>
+        <span>Swipe pass horizontally to view QR code</span>
+        <span className="text-[#E78023] animate-pulse">→</span>
       </div>
 
       {/* Official Digital Ticket Pass Card (Exportable Target) */}
-      <div className="w-full overflow-x-auto no-scrollbar py-2">
+      <div className="w-full overflow-x-auto no-scrollbar py-2 touch-pan-x overscroll-x-contain">
         <div
           id="src-delegate-pass-card"
           className="relative min-w-[620px] sm:min-w-[680px] md:w-full max-w-[720px] rounded-3xl bg-white border border-slate-200 shadow-xl overflow-hidden text-left mx-auto font-sans"
@@ -199,8 +227,8 @@ export function TicketPass({
                   <p className="font-bold text-slate-900 text-sm font-sans leading-snug pb-0.5">
                     {teamType === "Team" ? teamName || "Team Entry" : "Individual Entry"}
                   </p>
-                  <Badge variant="success" size="sm" className="mt-1">
-                    CONFIRMED
+                  <Badge variant={status === "CHECKED_IN" ? "success" : "orange"} size="sm" className="mt-1">
+                    {status || "CONFIRMED"}
                   </Badge>
                 </div>
               </div>
@@ -257,7 +285,7 @@ export function TicketPass({
       </div>
 
       {/* Action Buttons */}
-      <div className="flex flex-wrap items-center justify-center gap-4 pt-4">
+      <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 pt-2 sm:pt-4">
         
         {/* 1-Click Save Pass Image to Gallery */}
         <Button
@@ -265,7 +293,7 @@ export function TicketPass({
           disabled={isDownloading}
           variant="primary"
           size="md"
-          className="gap-2 shadow-lg shadow-[#17458F]/20"
+          className="gap-2 shadow-lg shadow-[#17458F]/20 font-semibold"
         >
           {isDownloading ? (
             <RefreshCw className="w-4 h-4 animate-spin" />
@@ -281,7 +309,7 @@ export function TicketPass({
           onClick={handlePrint}
           variant="secondary"
           size="md"
-          className="gap-2"
+          className="gap-2 font-semibold"
         >
           <Printer className="w-4 h-4" />
           <span>Print / PDF</span>
@@ -291,22 +319,44 @@ export function TicketPass({
           onClick={handleAddToCalendar}
           variant="outline"
           size="md"
-          className="gap-2"
+          className="gap-2 font-semibold"
         >
           <CalendarIcon className="w-4 h-4 text-[#E78023]" />
           <span>Add to Calendar</span>
         </Button>
 
-        <Link href="/dashboard">
+        <Link
+          href={`/verify/${encodeURIComponent(registrationId)}`}
+          target="_blank"
+          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold tracking-wide transition-all shadow-xs"
+        >
+          <ExternalLink className="w-3.5 h-3.5 text-[#17458F]" />
+          <span>Public Verification Link</span>
+        </Link>
+
+        {onClose && (
           <Button
+            onClick={onClose}
             variant="outline"
             size="md"
-            className="gap-2 text-[#17458F] border-[#17458F]/30"
+            className="gap-2 font-semibold text-slate-600 hover:text-slate-900"
           >
-            <span>Student Dashboard</span>
-            <ArrowRight className="w-4 h-4" />
+            <span>Close Pass</span>
           </Button>
-        </Link>
+        )}
+
+        {mode !== "dashboard" && (
+          <Link href="/dashboard">
+            <Button
+              variant="outline"
+              size="md"
+              className="gap-2 text-[#17458F] border-[#17458F]/30 font-semibold"
+            >
+              <span>Student Dashboard</span>
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* Mobile Photo Save & Share Dialog */}

@@ -48,7 +48,7 @@ import { formatDesignationBadge, isExternalUser } from "@/lib/usersStore";
 import { resolveCanonicalDepartmentName } from "@/lib/departmentsStore";
 import { useAuth } from "@/context/AuthContext";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
-import { downloadPassAsImage } from "@/lib/passExport";
+import { TicketPass } from "@/components/registration/TicketPass";
 import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
 import { 
   getAllRegistrationsFromFirestore, 
@@ -69,9 +69,6 @@ export default function StudentDashboardPage() {
   const [activeDashboardTab, setActiveDashboardTab] = useState<"passes" | "hub">("passes");
   const [selectedTicket, setSelectedTicket] = useState<RegistrationRecord | null>(null);
   const [selectedHubSubmission, setSelectedHubSubmission] = useState<ListingResponseRecord | null>(null);
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadSuccess, setDownloadSuccess] = useState(false);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   useEffect(() => {
     let isCurrent = true;
@@ -1132,301 +1129,29 @@ export default function StudentDashboardPage() {
               title="Official Delegate Pass"
               subtitle={`Pass ID: ${selectedTicket.registrationId}`}
               maxWidth="4xl"
+              contentClassName="p-3 sm:p-7 overflow-x-hidden"
             >
-              <div className="space-y-6">
-                
-                {/* Official Digital Ticket Pass Card (Exportable Target) */}
-                <div className="w-full py-2">
-                  <div
-                    id="src-dashboard-delegate-pass"
-                    className="relative w-full max-w-[720px] rounded-3xl bg-white border border-slate-200 shadow-xl overflow-hidden text-left mx-auto font-sans"
-                  >
-                    {/* Ticket Top Strip */}
-                    <div className="bg-[#17458F] px-5 py-4 sm:px-8 sm:py-6 flex flex-row items-center justify-between gap-4">
-                      <div className="flex items-center gap-3.5 sm:gap-4">
-                        <div className="h-11 w-11 sm:h-12 sm:w-12 rounded-xl bg-white p-1 shrink-0 flex items-center justify-center overflow-hidden">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src="/assets/SRC Logo.png"
-                            alt="SRC Logo"
-                            width={48}
-                            height={48}
-                            className="w-full h-full object-contain"
-                            crossOrigin="anonymous"
-                          />
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-[#E78023] block leading-normal">
-                            Official Delegate Pass
-                          </span>
-                          <h3 className="font-bold text-lg sm:text-2xl text-white font-sans leading-snug pb-0.5">
-                            SAHASTRADEEP
-                          </h3>
-                          <p className="text-[11px] sm:text-xs text-slate-200 font-sans leading-normal">Student Representative Council • JDCOEM</p>
-                        </div>
-                      </div>
-
-                      <div className="text-right shrink-0">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-200 block leading-normal">
-                          Pass ID
-                        </span>
-                        <p className="font-mono font-bold text-sm sm:text-lg text-[#E78023] leading-normal">
-                          {selectedTicket.registrationId}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Ticket Perforation Notch */}
-                    <div className="relative py-2 flex items-center justify-between px-2 sm:px-4 bg-slate-50">
-                      <div className="w-5 h-5 -ml-5 sm:-ml-7 rounded-full bg-[#F8FAFC] border border-slate-200" />
-                      <div className="w-full border-t-2 border-dashed border-slate-300 mx-4" />
-                      <div className="w-5 h-5 -mr-5 sm:-mr-7 rounded-full bg-[#F8FAFC] border border-slate-200" />
-                    </div>
-
-                    {/* Ticket Body - Responsive Layout */}
-                    <div className="p-5 sm:p-8 flex flex-row items-center justify-between gap-6 sm:gap-8 bg-white">
-                      
-                      {/* Main Info */}
-                      <div className="flex-1 min-w-0 space-y-4">
-                        <div>
-                          <span className="text-[11px] sm:text-xs font-bold uppercase tracking-widest text-[#E78023] block leading-normal">
-                            Event Selection
-                          </span>
-                          <h4 className="font-extrabold text-xl sm:text-2xl text-[#0F172A] mt-0.5 font-sans leading-snug pb-1">
-                            {selectedTicket.eventName}
-                          </h4>
-                          <p className="text-xs text-slate-500 mt-0.5 font-medium font-sans leading-normal">
-                            {eventDateStr} • {eventVenueStr}
-                          </p>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4 text-xs">
-                          <div className="min-w-0">
-                            <span className="text-slate-500 uppercase font-bold text-[10px] block leading-normal">
-                              Participant
-                            </span>
-                            <p className="font-bold text-slate-900 text-sm font-sans leading-snug pb-0.5">{selectedTicket.participantName}</p>
-                            <p className="text-slate-600 text-[11px] font-medium font-sans leading-normal">
-                              {selectedTicket.department || displayDepartment} ({selectedTicket.year || displayYear})
-                            </p>
-                          </div>
-
-                          <div className="min-w-0">
-                            <span className="text-slate-500 uppercase font-bold text-[10px] block leading-normal">
-                              Category / Squad
-                            </span>
-                            <p className="font-bold text-slate-900 text-sm font-sans leading-snug pb-0.5">
-                              {selectedTicket.teamType === "Team" ? selectedTicket.teamName || "Team Entry" : "Individual Entry"}
-                            </p>
-                            <Badge variant={selectedTicket.status === "CHECKED_IN" ? "success" : "orange"} size="sm" className="mt-1">
-                              {selectedTicket.status}
-                            </Badge>
-                          </div>
-                        </div>
-
-                        {selectedTicket.teamMembers && selectedTicket.teamMembers.length > 0 && (
-                          <div className="pt-2 border-t border-slate-100 font-medium">
-                            <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block leading-normal">
-                              Roster Members:
-                            </span>
-                            <p className="text-xs text-slate-700 mt-0.5 font-sans leading-relaxed">
-                              {selectedTicket.teamMembers.join(" • ")}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Visual Scannable QR Code & Verification Block */}
-                      <div className="w-44 sm:w-48 shrink-0 flex flex-col items-center justify-center p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-2.5">
-                        <div className="relative p-2 bg-white rounded-xl shadow-xs border border-slate-200 flex items-center justify-center overflow-hidden">
-                          <ScannableQRCode
-                            value={
-                              typeof window !== "undefined"
-                                ? `${window.location.origin}/verify/${encodeURIComponent(selectedTicket.registrationId)}`
-                                : `https://srcjdcoem.in/verify/${encodeURIComponent(selectedTicket.registrationId)}`
-                            }
-                            size={116}
-                            level="H"
-                            includeMargin={true}
-                            fgColor="#0F172A"
-                            bgColor="#FFFFFF"
-                            renderAs="canvas"
-                          />
-                        </div>
-
-                        <div className="space-y-0.5">
-                          <span className="font-mono text-[11px] font-bold text-[#E78023] block tracking-wider leading-normal">
-                            {selectedTicket.ticketCode}
-                          </span>
-                          <p className="text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1 font-sans leading-normal">
-                            <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                            <span>Scan for Gate Check-In</span>
-                          </p>
-                        </div>
-                      </div>
-
-                    </div>
-
-                    {/* Ticket Bottom Endorsement Footer */}
-                    <div className="px-6 py-3.5 sm:px-8 sm:py-4 bg-slate-50 border-t border-slate-200 flex flex-row items-center justify-between text-[11px] sm:text-xs text-slate-500 font-medium gap-2 font-sans leading-normal">
-                      <p>Entry permitted only with valid physical College ID card.</p>
-                      <p className="font-semibold text-slate-700">JDCOEM Nagpur • SRC Sahastradeep</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Modal Action Buttons */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                  <Link
-                    href={`/verify/${encodeURIComponent(selectedTicket.registrationId)}`}
-                    target="_blank"
-                    className="inline-flex items-center gap-1.5 text-xs text-[#17458F] hover:underline font-semibold"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Public Verification Link</span>
-                  </Link>
-
-                  <div className="flex items-center gap-3">
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      disabled={isDownloading}
-                      onClick={async () => {
-                        setIsDownloading(true);
-                        try {
-                          const res = await downloadPassAsImage(
-                            "src-dashboard-delegate-pass",
-                            `${selectedTicket.registrationId}-${selectedTicket.eventName.replace(/\s+/g, "_")}_Pass.png`
-                          );
-                          if (res.success) {
-                            setDownloadSuccess(true);
-                            setTimeout(() => setDownloadSuccess(false), 3000);
-                            if (res.isMobile && res.imageUrl) {
-                              setPreviewImage(res.imageUrl);
-                            }
-                          }
-                        } catch (e) {
-                          console.error("Pass export error", e);
-                        } finally {
-                          setIsDownloading(false);
-                        }
-                      }}
-                      className="gap-2 shadow-md shadow-[#17458F]/20"
-                    >
-                      {isDownloading ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : downloadSuccess ? (
-                        <Check className="w-4 h-4 text-emerald-300" />
-                      ) : (
-                        <Download className="w-4 h-4" />
-                      )}
-                      <span>{downloadSuccess ? "Pass Ready!" : isDownloading ? "Generating..." : "Save Pass to Phone (PNG)"}</span>
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => window.print()}
-                      className="gap-1.5"
-                    >
-                      <Printer className="w-3.5 h-3.5" />
-                      <span>Print</span>
-                    </Button>
-
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setSelectedTicket(null)}
-                    >
-                      Close
-                    </Button>
-                  </div>
-                </div>
-
-              </div>
+              <TicketPass
+                registrationId={selectedTicket.registrationId}
+                eventName={selectedTicket.eventName}
+                eventDate={eventDateStr}
+                eventVenue={eventVenueStr}
+                participantName={selectedTicket.participantName}
+                department={selectedTicket.department || displayDepartment}
+                year={selectedTicket.year || displayYear}
+                teamType={selectedTicket.teamType}
+                teamName={selectedTicket.teamName}
+                teamMembers={selectedTicket.teamMembers}
+                ticketCode={selectedTicket.ticketCode}
+                parentEventName={matchedEvent?.parentEventName || selectedTicket.parentEventName}
+                subEventBadge={matchedEvent?.subEventBadge || selectedTicket.subEventBadge}
+                status={selectedTicket.status}
+                mode="dashboard"
+                onClose={() => setSelectedTicket(null)}
+              />
             </Modal>
           );
         })()}
-
-        {/* Mobile Photo Save & Share Dialog */}
-        {previewImage && selectedTicket && (
-          <Modal
-            isOpen={!!previewImage}
-            onClose={() => setPreviewImage(null)}
-            title="Official Delegate Pass Ready"
-            subtitle="Save directly to your phone gallery or share via WhatsApp"
-            maxWidth="lg"
-          >
-            <div className="space-y-5 text-center">
-              <div className="relative rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-slate-50 p-1">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={previewImage}
-                  alt="Official Delegate Pass"
-                  className="w-full h-auto object-contain rounded-xl"
-                />
-              </div>
-
-              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs font-semibold">
-                💡 <strong>Mobile Save Tip:</strong> Tap and hold the pass image above to select <strong>&quot;Save to Photos&quot;</strong>, or use the Share button below.
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={async () => {
-                    try {
-                      const res = await fetch(previewImage);
-                      const blob = await res.blob();
-                      const file = new File([blob], `${selectedTicket.registrationId}_Pass.png`, { type: "image/png" });
-                      if (typeof navigator !== "undefined" && navigator.canShare && navigator.canShare({ files: [file] })) {
-                        await navigator.share({
-                          files: [file],
-                          title: "SRC Official Delegate Pass",
-                          text: `My Official Delegate Pass for ${selectedTicket.eventName} (${selectedTicket.registrationId})`,
-                        });
-                      } else if (typeof navigator !== "undefined" && navigator.share) {
-                        await navigator.share({
-                          title: "SRC Official Delegate Pass",
-                          url: window.location.href,
-                        });
-                      }
-                    } catch (e) {
-                      console.warn(e);
-                    }
-                  }}
-                  className="w-full sm:w-auto gap-2 bg-[#E78023] hover:bg-[#D26E17] text-white shadow-md"
-                >
-                  <Share2 className="w-4 h-4" />
-                  <span>Share / Save Image</span>
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="md"
-                  onClick={() => {
-                    const w = window.open("");
-                    w?.document.write(`<img src="${previewImage}" style="max-width:100%; height:auto;" />`);
-                  }}
-                  className="w-full sm:w-auto gap-2"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  <span>Open Full Image</span>
-                </Button>
-
-                <Button
-                  variant="secondary"
-                  size="md"
-                  onClick={() => setPreviewImage(null)}
-                  className="w-full sm:w-auto"
-                >
-                  Done
-                </Button>
-              </div>
-            </div>
-          </Modal>
-        )}
 
         {/* Modal: Inspect Submitted Hub Form / Application Responses */}
         {selectedHubSubmission && (
