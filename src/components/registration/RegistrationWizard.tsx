@@ -1181,7 +1181,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                       size="md"
                       className="w-full sm:w-auto justify-center gap-2 cursor-pointer min-h-[44px]"
                     >
-                      <span>Continue to Participation Format</span>
+                      <span className="sm:hidden">Continue to Participation</span>
+                      <span className="hidden sm:inline">Continue to Participation Format</span>
                       <ArrowRight className="w-4 h-4" />
                     </Button>
                   </div>
