@@ -1817,14 +1817,14 @@ export default function AdminTeamPage() {
               </div>
             </div>
 
-            {/* Avatar Photo Upload / URL */}
+            {/* Portrait Card Photo Upload / URL */}
             <div className="space-y-2 pt-2 border-t border-slate-100">
               <label className="font-bold text-slate-700">
                 {activeTab === "pillars"
-                  ? "Postcard Portrait Photo (4:5 Aspect Ratio)"
+                  ? "Pillar Postcard Portrait Photo (4:5 Card Frame)"
                   : activeTab === "clubs"
-                  ? "Club Head / Co-Head Portrait Photo (PFP)"
-                  : "Officer Avatar Photo (Auto-Compressed WebP)"}
+                  ? "Club Head / Co-Head Portrait Photo (4:5 Card Frame)"
+                  : "Officer Portrait Photo (4:5 Card Frame)"}
               </label>
               
               <ImageUploadDropzone
@@ -1833,16 +1833,15 @@ export default function AdminTeamPage() {
                     ? "Postcard Portrait Photo"
                     : activeTab === "clubs"
                     ? "Club Head / Co-Head Portrait Photo"
-                    : "Officer Portrait / Headshot"
+                    : "Officer Portrait Photo"
                 }
-                sublabel={
-                  activeTab === "pillars"
-                    ? "Crop, zoom & frame headshot to portrait (4:5)"
-                    : "Crop, zoom & frame headshot to square (1:1)"
-                }
-                aspectRatio={activeTab === "pillars" ? "4:5" : "1:1"}
-                recommendedSize={activeTab === "pillars" ? "800 x 1000 px (4:5)" : "600 x 600 px (1:1)"}
-                storagePath={activeTab === "pillars" ? "pillars/portraits" : activeTab === "clubs" ? "clubs/leads" : "team/avatars"}
+                sublabel="Frame headshot to match actual team card portrait frame (4:5)"
+                aspectRatio="4:5"
+                allowedAspectRatios={["4:5", "3:4", "1:1", "free"]}
+                lockAspectRatio={false}
+                isAvatar={false}
+                recommendedSize="800 x 1000 px (4:5 Card Frame)"
+                storagePath={activeTab === "pillars" ? "pillars/portraits" : activeTab === "clubs" ? "clubs/leads" : "team/members"}
                 previewUrl={editingMember.avatar}
                 onUploadStateChange={handleUploadStateChange}
                 onUrlChange={(url) => {

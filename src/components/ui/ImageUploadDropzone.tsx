@@ -20,6 +20,7 @@ interface ImageUploadDropzoneProps {
   previewUrl?: string;
   storagePath?: string;
   className?: string;
+  isAvatar?: boolean;
 }
 
 export function ImageUploadDropzone({
@@ -35,6 +36,7 @@ export function ImageUploadDropzone({
   previewUrl,
   storagePath = "uploads",
   className = "",
+  isAvatar,
 }: ImageUploadDropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -445,7 +447,11 @@ export function ImageUploadDropzone({
             initialAspectRatio={aspectRatio === "auto" ? "16:9" : (aspectRatio as AspectRatioType)}
             allowedAspectRatios={effectiveAllowedRatios}
             lockAspectRatio={shouldLock}
-            isAvatar={aspectRatio === "1:1" || storagePath.includes("avatars") || storagePath.includes("logo")}
+            isAvatar={
+              isAvatar !== undefined
+                ? isAvatar
+                : (aspectRatio === "1:1" && (storagePath.includes("avatars") || storagePath.includes("logo")))
+            }
             onCropComplete={handleCropComplete}
             title={`Crop & Frame ${label}`}
           />

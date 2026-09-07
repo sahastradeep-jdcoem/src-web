@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { 
   ZoomIn, 
   ZoomOut, 
@@ -22,7 +22,8 @@ import {
   Sliders,
   Maximize,
   Undo2,
-  Lock
+  Lock,
+  User
 } from "lucide-react";
 import { Modal } from "./Modal";
 import { Button } from "./Button";
@@ -76,13 +77,27 @@ export function ImageCropperModal({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [showGrid, setShowGrid] = useState(true);
-  const [showCircleMask, setShowCircleMask] = useState(isAvatar || initialAspectRatio === "1:1");
+  const [showCardFrame, setShowCardFrame] = useState(initialAspectRatio === "4:5" || initialAspectRatio === "3:4");
+  const [showCircleMask, setShowCircleMask] = useState(isAvatar && (initialAspectRatio === "1:1" || initialAspectRatio === "auto"));
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imgNaturalSize, setImgNaturalSize] = useState({ width: 0, height: 0 });
   const [activeTab, setActiveTab] = useState<"crop" | "transform">("crop");
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+
+  // Preload natural image dimensions immediately upon receipt of imageSrc
+  useEffect(() => {
+    if (imageSrc && typeof window !== "undefined") {
+      const img = new window.Image();
+      img.crossOrigin = "anonymous";
+      img.src = imageSrc;
+      img.onload = () => {
+        setImgNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
+        setImageLoaded(true);
+      };
+    }
+  }, [imageSrc]);
 
   // Sync initial state when modal opens
   useEffect(() => {
@@ -100,7 +115,8 @@ export function ImageCropperModal({
       setFlipV(false);
       setPan({ x: 0, y: 0 });
       setImageLoaded(false);
-      setShowCircleMask(isAvatar || initial === "1:1");
+      setShowCardFrame(initial === "4:5" || initial === "3:4");
+      setShowCircleMask(isAvatar && initial === "1:1");
     }
   }, [isOpen, initialAspectRatio, effectiveAllowedRatios, isAvatar]);
 
@@ -128,6 +144,42 @@ export function ImageCropperModal({
 
   const currentRatio = getRatioMultiplier(selectedRatio);
   const totalAngle = (rotationSteps * 90) + fineAngle;
+
+  // Calibrated Viewport Box Boundaries (prevents any aspect-ratio squash or CSS distortion)
+  const cropBoxDims = useMemo(() => {
+    const maxBoxW = 460;
+    const maxBoxH = 360;
+    const ratio = currentRatio > 0 ? currentRatio : (16 / 9);
+
+    if (ratio >= (maxBoxW / maxBoxH)) {
+      const width = maxBoxW;
+      const height = Math.round(width / ratio);
+      return { width, height };
+    } else {
+      const height = maxBoxH;
+      const width = Math.round(height * ratio);
+      return { width, height };
+    }
+  }, [currentRatio]);
+
+  // Base rendered image dimensions covering the crop box at 100% zoom
+  const baseImgDims = useMemo(() => {
+    if (!imgNaturalSize.width || !imgNaturalSize.height || !cropBoxDims.width || !cropBoxDims.height) {
+      return { width: "100%", height: "auto" };
+    }
+    const imgRatio = imgNaturalSize.width / imgNaturalSize.height;
+    const boxRatio = cropBoxDims.width / cropBoxDims.height;
+
+    if (imgRatio >= boxRatio) {
+      const h = cropBoxDims.height;
+      const w = Math.round(h * imgRatio);
+      return { width: `${w}px`, height: `${h}px` };
+    } else {
+      const w = cropBoxDims.width;
+      const h = Math.round(w / imgRatio);
+      return { width: `${w}px`, height: `${h}px` };
+    }
+  }, [imgNaturalSize, cropBoxDims]);
 
   // Mouse & Touch Pointer Pan handlers
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -259,16 +311,14 @@ export function ImageCropperModal({
     const img = imageRef.current;
     const cropBox = containerRef.current.getBoundingClientRect();
     
-    // Output target dimensions based on target ratio (maximum crisp clarity without quota bloat):
-    let baseDimension = 1920;
+    // Output target dimensions based on target ratio:
+    let baseDimension = 1600;
     if (selectedRatio === "1:1") {
       baseDimension = 800; // 800x800 pristine crisp avatar / logo (~30KB)
-    } else if (isAvatar && (selectedRatio === "4:5" || selectedRatio === "3:4")) {
-      baseDimension = 1000; // 800x1000 high-density portrait postcard avatar (~40KB)
     } else if (selectedRatio === "4:5" || selectedRatio === "3:4") {
-      baseDimension = 1200; // 960x1200 high-res event poster (~70KB)
+      baseDimension = 1000; // 800x1000 high-density portrait postcard avatar (~40KB)
     } else if (selectedRatio === "21:9") {
-      baseDimension = 2560; // 2.5K Retina cinematic banner
+      baseDimension = 2100; // 2.1K Retina cinematic banner
     } else {
       baseDimension = 1600; // 1080p crisp card/banner
     }
@@ -313,17 +363,28 @@ export function ImageCropperModal({
     ctx.translate(pan.x * scaleFactor, pan.y * scaleFactor);
     ctx.scale(zoom, zoom);
 
-    // Compute base image rendered dimensions relative to the crop box
-    const renderedImgWidth = cropBox.width * scaleFactor;
-    const renderedImgHeight = (cropBox.width / (img.naturalWidth / img.naturalHeight)) * scaleFactor;
+    // Base rendered image dimensions covering the canvas exactly as in preview
+    const imgRatio = img.naturalWidth / img.naturalHeight;
+    const boxRatio = cropBox.width / cropBox.height;
+
+    let baseRenderedW = 0;
+    let baseRenderedH = 0;
+
+    if (imgRatio >= boxRatio) {
+      baseRenderedH = targetHeight;
+      baseRenderedW = Math.round(baseRenderedH * imgRatio);
+    } else {
+      baseRenderedW = targetWidth;
+      baseRenderedH = Math.round(baseRenderedW / imgRatio);
+    }
 
     // Draw the source image centered
     ctx.drawImage(
       img,
-      -renderedImgWidth / 2,
-      -renderedImgHeight / 2,
-      renderedImgWidth,
-      renderedImgHeight
+      -baseRenderedW / 2,
+      -baseRenderedH / 2,
+      baseRenderedW,
+      baseRenderedH
     );
 
     ctx.restore();
@@ -345,10 +406,10 @@ export function ImageCropperModal({
   if (!isOpen || !imageSrc) return null;
 
   const allRatioOptions: RatioPreset[] = [
+    { id: "4:5", label: "4:5 Team Card", sublabel: "Council Card / Portrait", ratio: 4 / 5, width: 12, height: 15 },
+    { id: "3:4", label: "3:4 Portrait", sublabel: "Portrait Postcard", ratio: 3 / 4, width: 12, height: 16 },
     { id: "1:1", label: "1:1 Square", sublabel: "Avatar / Logo / Badge", ratio: 1, width: 14, height: 14 },
     { id: "16:9", label: "16:9 Banner", sublabel: "Landscape Hero / Card", ratio: 16 / 9, width: 18, height: 10 },
-    { id: "4:5", label: "4:5 Poster", sublabel: "Event Story / Feed", ratio: 4 / 5, width: 12, height: 15 },
-    { id: "3:4", label: "3:4 Vertical", sublabel: "Portrait Card", ratio: 3 / 4, width: 12, height: 16 },
     { id: "21:9", label: "21:9 Panoramic", sublabel: "Ultrawide Banner", ratio: 21 / 9, width: 22, height: 9 },
     { id: "free", label: "Original Ratio", sublabel: "Natural Dimensions", ratio: 0, width: 14, height: 12 },
   ];
@@ -377,7 +438,23 @@ export function ImageCropperModal({
 
             {/* Quick Overlays Toolbar */}
             <div className="flex items-center gap-1.5">
-              {selectedRatio === "1:1" && (
+              {(selectedRatio === "4:5" || selectedRatio === "3:4") && (
+                <button
+                  type="button"
+                  onClick={() => setShowCardFrame(!showCardFrame)}
+                  className={`text-[11px] font-bold flex items-center gap-1.5 px-2.5 py-1 rounded-xl border transition-all cursor-pointer ${
+                    showCardFrame
+                      ? "bg-[#17458F]/15 border-[#17458F] text-[#17458F] shadow-xs"
+                      : "bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200"
+                  }`}
+                  title="Toggle Team Card Frame Guide"
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>Card Frame Guide</span>
+                </button>
+              )}
+
+              {selectedRatio === "1:1" && isAvatar && (
                 <button
                   type="button"
                   onClick={() => setShowCircleMask(!showCircleMask)}
@@ -451,7 +528,16 @@ export function ImageCropperModal({
                     type="button"
                     onClick={() => {
                       setSelectedRatio(opt.id);
-                      if (opt.id === "1:1" && isAvatar) setShowCircleMask(true);
+                      if (opt.id === "1:1" && isAvatar) {
+                        setShowCircleMask(true);
+                      } else {
+                        setShowCircleMask(false);
+                      }
+                      if (opt.id === "4:5" || opt.id === "3:4") {
+                        setShowCardFrame(true);
+                      } else {
+                        setShowCardFrame(false);
+                      }
                       setPan({ x: 0, y: 0 });
                     }}
                     className={`p-2 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1 group ${
@@ -492,13 +578,12 @@ export function ImageCropperModal({
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
-            className={`relative overflow-hidden cursor-grab active:cursor-grabbing border-2 border-[#E78023] rounded-2xl shadow-2xl transition-[aspect-ratio] duration-150 max-w-[94%] max-h-[380px] ring-4 ring-black/40 ${
+            className={`relative overflow-hidden cursor-grab active:cursor-grabbing border-2 border-[#E78023] rounded-2xl shadow-2xl transition-[width,height] duration-150 ring-4 ring-black/40 ${
               showCircleMask && selectedRatio === "1:1" ? "rounded-full" : ""
             }`}
             style={{
-              aspectRatio: `${currentRatio}`,
-              width: currentRatio >= 1 ? "100%" : "auto",
-              height: currentRatio < 1 ? "360px" : "auto",
+              width: `${cropBoxDims.width}px`,
+              height: `${cropBoxDims.height}px`,
             }}
           >
             {/* The Image being transformed */}
@@ -515,7 +600,13 @@ export function ImageCropperModal({
                 src={imageSrc}
                 alt="Framing preview"
                 onLoad={handleImageLoad}
-                className="max-w-none w-full h-auto pointer-events-none object-cover will-change-transform"
+                style={{
+                  width: baseImgDims.width,
+                  height: baseImgDims.height,
+                  maxWidth: "none",
+                  maxHeight: "none",
+                }}
+                className="pointer-events-none object-cover will-change-transform"
                 crossOrigin="anonymous"
               />
             </div>
@@ -524,6 +615,36 @@ export function ImageCropperModal({
             {showCircleMask && selectedRatio === "1:1" && (
               <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                 <div className="w-full h-full rounded-full border-2 border-dashed border-[#E78023] shadow-[0_0_0_9999px_rgba(11,15,23,0.65)]" />
+              </div>
+            )}
+
+            {/* Team Card Frame Simulated Guide (Card Header Badge & Bottom Text Overlay) */}
+            {showCardFrame && (selectedRatio === "4:5" || selectedRatio === "3:4") && (
+              <div className="absolute inset-0 pointer-events-none flex flex-col justify-between">
+                {/* Simulated Top Tag */}
+                <div className="p-3 flex items-center justify-between">
+                  <div className="px-2.5 py-1 rounded-full bg-white/95 text-[#E78023] font-bold text-[9px] uppercase tracking-wider shadow-sm border border-slate-200">
+                    Card Photo Frame
+                  </div>
+                  <div className="px-2 py-0.5 rounded-full bg-black/60 text-white font-mono text-[9px] backdrop-blur-xs">
+                    {selectedRatio} Card
+                  </div>
+                </div>
+
+                {/* Simulated Bottom Gradient and Council Member Label Preview */}
+                <div className="bg-gradient-to-t from-black/85 via-black/40 to-transparent pt-12 pb-3.5 px-3.5">
+                  <div className="space-y-0.5">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-[#E78023] block">
+                      Council Role
+                    </span>
+                    <div className="text-xs font-bold text-white leading-tight">
+                      Member Full Name
+                    </div>
+                    <div className="text-[10px] text-slate-300 font-medium">
+                      Department • Academic Year
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
