@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { EventItem } from "@/types";
 import { TicketPass } from "@/components/registration/TicketPass";
@@ -79,6 +79,42 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   const { user, openAuthModal, updateUserProfile } = useAuth();
   const [departmentsList, setDepartmentsList] = useState<string[]>(DEFAULT_DEPARTMENTS);
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
+  const stepContainerRef = useRef<HTMLDivElement>(null);
+  const isFirstRender = useRef(true);
+
+  // Smoothly scroll the window to the top of the step card when switching wizard steps
+  const scrollToStepTop = () => {
+    // Dismiss virtual keyboard if active to prevent erratic mobile viewport jumps
+    if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+
+    const performScroll = () => {
+      const target = stepContainerRef.current || (typeof document !== "undefined" ? document.getElementById("registration-step-card") : null);
+      if (target) {
+        const yOffset = -75; // Account for 65px fixed navbar + 10px breathing space
+        const y = target.getBoundingClientRect().top + window.scrollY + yOffset;
+        window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+      }
+    };
+
+    // Trigger across animation frame and post-keyboard retraction delays
+    if (typeof window !== "undefined") {
+      requestAnimationFrame(() => {
+        performScroll();
+        setTimeout(performScroll, 50);
+        setTimeout(performScroll, 160);
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    scrollToStepTop();
+  }, [currentStep]);
 
   // Determine available format
   const initialFormat = event.teamType === "Team" ? "Team" : "Individual";
@@ -406,7 +442,11 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       });
     }
 
+    if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     setCurrentStep(2);
+    scrollToStepTop();
   };
 
   const handleProceedToStep3 = () => {
@@ -453,7 +493,11 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       setCustomErrors({});
     }
 
+    if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     setCurrentStep(3);
+    scrollToStepTop();
   };
 
   // Dynamic Fee Calculation
@@ -758,7 +802,11 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
       {/* STEP 1: PARTICIPANT DETAILS (LOADED DIRECTLY FROM PROFILE) */}
       {currentStep === 1 && (
-        <div className="rounded-3xl bg-white border border-slate-200 p-6 sm:p-10 space-y-8 shadow-sm">
+        <div 
+          ref={stepContainerRef}
+          id="registration-step-card"
+          className="rounded-3xl bg-white border border-slate-200 p-6 sm:p-10 space-y-8 shadow-sm scroll-mt-20"
+        >
           <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <span className="text-xs font-bold uppercase tracking-wider text-[#E78023]">
@@ -892,6 +940,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                           ticketCode: (existingRegistration as any).ticketCode || `${existingRegistration.id}-TK`,
                         });
                         setCurrentStep(4);
+                        scrollToStepTop();
                       }}
                       variant="primary"
                       size="md"
@@ -1145,7 +1194,11 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
       {/* STEP 2: PARTICIPATION FORMAT & TEAM ROSTER */}
       {currentStep === 2 && (
-        <div className="rounded-3xl bg-white border border-slate-200 p-6 sm:p-10 space-y-8 shadow-sm">
+        <div 
+          ref={stepContainerRef}
+          id="registration-step-card"
+          className="rounded-3xl bg-white border border-slate-200 p-6 sm:p-10 space-y-8 shadow-sm scroll-mt-20"
+        >
           <div className="border-b border-slate-100 pb-4">
             <span className="text-xs font-bold uppercase tracking-wider text-[#E78023]">
               Step 02 of 03
@@ -1630,7 +1683,10 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
           <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-100">
             <Button
-              onClick={() => setCurrentStep(1)}
+              onClick={() => {
+                setCurrentStep(1);
+                scrollToStepTop();
+              }}
               variant="outline"
               size="md"
               className="w-full sm:w-auto justify-center gap-2 cursor-pointer min-h-[44px]"
@@ -1654,7 +1710,11 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
       {/* STEP 3: REVIEW & CONFIRM */}
       {currentStep === 3 && (
-        <div className="rounded-3xl bg-white border border-slate-200 p-6 sm:p-10 space-y-8 shadow-sm">
+        <div 
+          ref={stepContainerRef}
+          id="registration-step-card"
+          className="rounded-3xl bg-white border border-slate-200 p-6 sm:p-10 space-y-8 shadow-sm scroll-mt-20"
+        >
           <div className="border-b border-slate-100 pb-4">
             <span className="text-xs font-bold uppercase tracking-wider text-[#E78023]">
               Step 03 of 03
@@ -1857,7 +1917,10 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
           <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-100">
             <Button
-              onClick={() => setCurrentStep(2)}
+              onClick={() => {
+                setCurrentStep(2);
+                scrollToStepTop();
+              }}
               variant="outline"
               size="md"
               className="w-full sm:w-auto justify-center gap-2 cursor-pointer min-h-[44px]"
@@ -1891,21 +1954,23 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
       {/* STEP 4: PASS TICKET DISPLAY */}
       {currentStep === 4 && generatedTicket && (
-        <TicketPass
-          registrationId={generatedTicket.registrationId}
-          eventName={event.name}
-          eventDate={event.date}
-          eventVenue={event.venue}
-          participantName={formData.fullName}
-          department={isExternal ? (formData.collegeName ? `${formData.collegeName} • ${formData.department}` : formData.department) : formData.department}
-          year={isExternal ? (formData.city ? `📍 ${formData.city} • ${formData.year}` : formData.year) : formData.year}
-          teamType={formData.teamType}
-          teamName={formData.teamName}
-          teamMembers={formData.teamType === "Team" ? teamMembers.map((m) => isExternal ? `${m.name} (${m.department})` : `${m.name} (${m.btId})`) : undefined}
-          ticketCode={generatedTicket.ticketCode}
-          parentEventName={event.parentEventName}
-          subEventBadge={event.subEventBadge}
-        />
+        <div ref={stepContainerRef} id="registration-step-card" className="scroll-mt-20">
+          <TicketPass
+            registrationId={generatedTicket.registrationId}
+            eventName={event.name}
+            eventDate={event.date}
+            eventVenue={event.venue}
+            participantName={formData.fullName}
+            department={isExternal ? (formData.collegeName ? `${formData.collegeName} • ${formData.department}` : formData.department) : formData.department}
+            year={isExternal ? (formData.city ? `📍 ${formData.city} • ${formData.year}` : formData.year) : formData.year}
+            teamType={formData.teamType}
+            teamName={formData.teamName}
+            teamMembers={formData.teamType === "Team" ? teamMembers.map((m) => isExternal ? `${m.name} (${m.department})` : `${m.name} (${m.btId})`) : undefined}
+            ticketCode={generatedTicket.ticketCode}
+            parentEventName={event.parentEventName}
+            subEventBadge={event.subEventBadge}
+          />
+        </div>
       )}
 
     </div>
