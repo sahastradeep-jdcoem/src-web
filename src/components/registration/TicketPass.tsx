@@ -11,7 +11,6 @@ import {
   ShieldCheck, 
   ArrowRight, 
   Sparkles, 
-  Printer,
   Check,
   RefreshCw,
   Share2,
@@ -29,9 +28,9 @@ export interface TicketPassProps {
   eventDate: string;
   eventVenue: string;
   participantName: string;
-  department: string;
-  year: string;
-  teamType: string;
+  department?: string;
+  year?: string;
+  teamType?: "Individual" | "Team";
   teamName?: string;
   teamMembers?: string[];
   ticketCode: string;
@@ -48,9 +47,9 @@ export function TicketPass({
   eventDate,
   eventVenue,
   participantName,
-  department,
-  year,
-  teamType,
+  department = "Engineering & Technology",
+  year = "2nd Year",
+  teamType = "Individual",
   teamName,
   teamMembers,
   ticketCode,
@@ -83,10 +82,6 @@ export function TicketPass({
     } finally {
       setIsDownloading(false);
     }
-  };
-
-  const handlePrint = () => {
-    window.print();
   };
 
   const handleAddToCalendar = () => {
@@ -338,17 +333,6 @@ export function TicketPass({
               <span>Save Pass to Phone (PNG)</span>
             </span>
           )}
-        </Button>
-
-        {/* Print / PDF (Desktop / Tablet) */}
-        <Button
-          onClick={handlePrint}
-          variant="secondary"
-          size="md"
-          className="hidden sm:inline-flex gap-2 font-semibold"
-        >
-          <Printer className="w-4 h-4" />
-          <span>Print / PDF</span>
         </Button>
 
         <Button
