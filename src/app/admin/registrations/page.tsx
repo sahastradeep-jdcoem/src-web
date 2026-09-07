@@ -1192,6 +1192,10 @@ export default function AdminRegistrationsPage() {
         rowData["Amount Paid (INR)"] = Number(r.amountPaid) || 0;
         rowData["Payment Transaction ID"] = sanitizeExcelCell(r.paymentId || "N/A");
         rowData["Order ID"] = sanitizeExcelCell(r.orderId || "N/A");
+        rowData["Refund Status"] = sanitizeExcelCell(r.refundStatus || "—");
+        rowData["Refund ID"] = sanitizeExcelCell(r.refundId || "—");
+        rowData["Refund Amount (INR)"] = r.refundAmount !== undefined ? Number(r.refundAmount) : (r.refundStatus === "PROCESSED" ? Number(r.amountPaid) : 0);
+        rowData["Refunded At"] = sanitizeExcelCell(r.refundedAt ? new Date(r.refundedAt).toLocaleString() : "—");
       }
 
       return rowData;
