@@ -112,28 +112,8 @@ export default function GalleryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] py-10 sm:py-16 px-4 sm:px-6 lg:px-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-8 sm:space-y-12">
-        
-        {/* VSCO Editorial Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-2 border-b border-slate-200/80">
-          <div className="space-y-2 max-w-3xl">
-            <h1 className="font-heading font-extrabold text-3xl sm:text-5xl lg:text-6xl text-[#0F172A] tracking-tight uppercase leading-none">
-              MOMENTS &amp;
-              <br />
-              <span className="text-[#E78023]">ATMOSPHERE.</span>
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-600 font-sans font-normal max-w-2xl pt-1 leading-relaxed">
-              An editorial retrospective capturing student life, hackathon arenas, cultural amphitheaters, and council milestones at JDCOEM.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3 shrink-0 self-start md:self-end">
-            <span className="font-mono text-[11px] sm:text-xs font-bold text-slate-500 bg-white border border-slate-200 px-3.5 py-1.5 rounded-full shadow-2xs">
-              {filteredPhotos.length} {filteredPhotos.length === 1 ? "FRAME" : "FRAMES"}
-            </span>
-          </div>
-        </div>
+    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] py-8 sm:py-12 px-4 sm:px-6 lg:px-8 font-sans">
+      <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
 
         {/* Minimalist VSCO Filter & View Controls Toolbar */}
         <div className="p-3 sm:p-4 rounded-3xl bg-white border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
