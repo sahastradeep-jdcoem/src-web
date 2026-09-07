@@ -372,55 +372,97 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
     return Array.from(new Set(chosen.filter((item) => item !== undefined && item !== null && String(item).trim() !== ""))) as T[];
   }
 
-  // Create multi-key lookup map for local items
-  const localMap = new Map<string, T>();
-  const matchedLocalKeys = new Set<string>();
+  const isGenericPlaceholder = (text?: string): boolean => {
+    if (!text || typeof text !== "string") return true;
+    const t = text.trim().toLowerCase();
+    if (t.length <= 2) return true;
+    return (
+      t.includes("placeholder") ||
+      t.includes("untitled") ||
+      t === "faculty coordinator" ||
+      t === "tbd"
+    );
+  };
+
+  const getCleanBaseId = (id?: string): string => {
+    if (!id || typeof id !== "string") return "";
+    return id.replace(/^(admin|council-admin|founder|member|club|evt|list|gal|host|spoke|pillar)-/i, "").toLowerCase().trim();
+  };
+
+  // Create isolated, deterministic lookup maps for local items
+  const idMap = new Map<string, T>();
+  const baseIdMap = new Map<string, T>();
+  const slugMap = new Map<string, T>();
+  const btIdMap = new Map<string, T>();
+  const nameMap = new Map<string, T>();
 
   localList.forEach((item) => {
     if (!item || typeof item !== "object") return;
-    if (item.id) localMap.set(item.id.toLowerCase(), item);
-    if (item.slug) localMap.set(item.slug.toLowerCase(), item);
-    if ((item as any).name) localMap.set((item as any).name.toLowerCase(), item);
-    if ((item as any).title) localMap.set((item as any).title.toLowerCase(), item);
-    if ((item as any).position) localMap.set((item as any).position.toLowerCase(), item);
-    if ((item as any).question) localMap.set((item as any).question.toLowerCase(), item);
-    // Also handle "club-" prefix variations
-    if (item.id && item.id.startsWith("club-")) {
-      localMap.set(item.id.replace("club-", "").toLowerCase(), item);
+    if (item.id) {
+      const cleanId = item.id.toLowerCase().trim();
+      idMap.set(cleanId, item);
+      const base = getCleanBaseId(cleanId);
+      if (base && !baseIdMap.has(base) && !isGenericPlaceholder(base)) {
+        baseIdMap.set(base, item);
+      }
     }
-    if (item.slug && !item.slug.startsWith("club-")) {
-      localMap.set(`club-${item.slug.toLowerCase()}`, item);
+    if (item.slug && !isGenericPlaceholder(item.slug)) {
+      slugMap.set(item.slug.toLowerCase().trim(), item);
+    }
+    if ((item as any).btId && typeof (item as any).btId === "string") {
+      const b = (item as any).btId.trim().toUpperCase();
+      if (b.length > 3 && b !== "000000" && !b.includes("PLACEHOLDER")) {
+        btIdMap.set(b, item);
+      }
+    }
+    if ((item as any).name && !isGenericPlaceholder((item as any).name)) {
+      const n = (item as any).name.toLowerCase().trim().replace(/[^a-z0-9]/g, "");
+      if (n.length > 2) {
+        nameMap.set(n, item);
+      }
     }
   });
 
   const findMatchingLocal = (remoteItem: T): T | undefined => {
     if (!remoteItem || typeof remoteItem !== "object") return undefined;
-    if (remoteItem.id && localMap.has(remoteItem.id.toLowerCase())) {
-      return localMap.get(remoteItem.id.toLowerCase());
+
+    // 1. Direct ID match (highest priority, strictly unique)
+    if (remoteItem.id) {
+      const cleanRemoteId = remoteItem.id.toLowerCase().trim();
+      if (idMap.has(cleanRemoteId)) {
+        return idMap.get(cleanRemoteId);
+      }
+      // Base ID match (e.g. member-1788159155799 <-> founder-1788159155799)
+      const remoteBase = getCleanBaseId(cleanRemoteId);
+      if (remoteBase && baseIdMap.has(remoteBase)) {
+        return baseIdMap.get(remoteBase);
+      }
     }
-    if (remoteItem.slug && localMap.has(remoteItem.slug.toLowerCase())) {
-      return localMap.get(remoteItem.slug.toLowerCase());
+
+    // 2. Slug match (for clubs, events, listings)
+    if (remoteItem.slug) {
+      const cleanSlug = remoteItem.slug.toLowerCase().trim();
+      if (slugMap.has(cleanSlug)) {
+        return slugMap.get(cleanSlug);
+      }
     }
-    if ((remoteItem as any).name && localMap.has((remoteItem as any).name.toLowerCase())) {
-      return localMap.get((remoteItem as any).name.toLowerCase());
+
+    // 3. Verified BT ID match (for student council members)
+    if ((remoteItem as any).btId && typeof (remoteItem as any).btId === "string") {
+      const b = (remoteItem as any).btId.trim().toUpperCase();
+      if (btIdMap.has(b)) {
+        return btIdMap.get(b);
+      }
     }
-    if ((remoteItem as any).title && localMap.has((remoteItem as any).title.toLowerCase())) {
-      return localMap.get((remoteItem as any).title.toLowerCase());
+
+    // 4. Non-placeholder human name match
+    if ((remoteItem as any).name && !isGenericPlaceholder((remoteItem as any).name)) {
+      const n = (remoteItem as any).name.toLowerCase().trim().replace(/[^a-z0-9]/g, "");
+      if (n.length > 2 && nameMap.has(n)) {
+        return nameMap.get(n);
+      }
     }
-    if ((remoteItem as any).position && localMap.has((remoteItem as any).position.toLowerCase())) {
-      return localMap.get((remoteItem as any).position.toLowerCase());
-    }
-    if ((remoteItem as any).question && localMap.has((remoteItem as any).question.toLowerCase())) {
-      return localMap.get((remoteItem as any).question.toLowerCase());
-    }
-    if (remoteItem.id && remoteItem.id.startsWith("club-")) {
-      const stripped = remoteItem.id.replace("club-", "").toLowerCase();
-      if (localMap.has(stripped)) return localMap.get(stripped);
-    }
-    if (remoteItem.slug && !remoteItem.slug.startsWith("club-")) {
-      const prefixed = `club-${remoteItem.slug.toLowerCase()}`;
-      if (localMap.has(prefixed)) return localMap.get(prefixed);
-    }
+
     return undefined;
   };
 
@@ -428,14 +470,6 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
   const merged = remoteList.map((remoteItem) => {
     const localItem = findMatchingLocal(remoteItem);
     if (!localItem) return remoteItem;
-
-    const localKey = (localItem.id || localItem.slug || (localItem as any).name || (localItem as any).title || "").toLowerCase();
-    if (localKey) matchedLocalKeys.add(localKey);
-    if (localItem.id) matchedLocalKeys.add(localItem.id.toLowerCase());
-    if (localItem.slug) matchedLocalKeys.add(localItem.slug.toLowerCase());
-    if ((localItem as any).title) matchedLocalKeys.add((localItem as any).title.toLowerCase());
-    if ((localItem as any).position) matchedLocalKeys.add((localItem as any).position.toLowerCase());
-    if ((localItem as any).question) matchedLocalKeys.add((localItem as any).question.toLowerCase());
 
     // Remote is the authoritative cloud data source
     const result: any = { ...remoteItem };

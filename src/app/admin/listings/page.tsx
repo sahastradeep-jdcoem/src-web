@@ -158,9 +158,10 @@ export default function AdminListingsPage() {
     const defaultFallback = "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop";
     const primaryPoster = formData.posterImage || formData.cardImage || formData.headerImage || formData.poster || defaultFallback;
 
+    const randSuffix = Math.random().toString(36).substring(2, 6);
     const created: EventItem = {
-      id: `evt-${Date.now()}`,
-      slug: formData.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      id: `evt-${Date.now()}-${randSuffix}`,
+      slug: `${formData.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${randSuffix}`,
       name: formData.name,
       category: formData.category as any,
       date: formData.date || "TBD 2026",

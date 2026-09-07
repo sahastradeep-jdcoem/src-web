@@ -613,10 +613,11 @@ export default function AdminTeamPage() {
 
   const handleOpenAddModal = () => {
     setIsCreatingNew(true);
+    const randSuffix = Math.random().toString(36).substring(2, 7);
     if (activeTab === "clubs") {
       const firstClub = clubsList[0];
       setEditingMember({
-        id: `leader-${Date.now()}`,
+        id: `leader-${Date.now()}-${randSuffix}`,
         name: "",
         role: firstClub ? `${firstClub.name} Head` : "Club Head",
         clubId: firstClub?.id || "",
@@ -638,7 +639,7 @@ export default function AdminTeamPage() {
       } as any);
     } else {
       setEditingMember({
-        id: `member-${Date.now()}`,
+        id: `member-${Date.now()}-${randSuffix}`,
         name: "",
         role: "",
         department: "Computer Science and Engineering",

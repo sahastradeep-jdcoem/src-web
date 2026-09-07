@@ -141,9 +141,10 @@ export default function AdminEventsPage() {
           : `₹${formData.feeAmount} / person`)
       : "Free Entry";
 
+    const randSuffix = Math.random().toString(36).substring(2, 6);
     const created: EventItem = {
-      id: `evt-${Date.now()}`,
-      slug: formData.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      id: `evt-${Date.now()}-${randSuffix}`,
+      slug: `${formData.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${randSuffix}`,
       name: formData.name,
       category: formData.category as any,
       date: formData.date || "TBD 2026",
@@ -322,11 +323,12 @@ export default function AdminEventsPage() {
   };
 
   const handleDuplicate = (evt: EventItem) => {
+    const randSuffix = Math.random().toString(36).substring(2, 6);
     const duplicated: EventItem = {
       ...evt,
-      id: `evt-${Date.now()}`,
+      id: `evt-${Date.now()}-${randSuffix}`,
       name: `${evt.name} (Copy)`,
-      slug: `${evt.slug}-copy-${Date.now()}`,
+      slug: `${evt.slug}-copy-${randSuffix}`,
     };
     const updated = [duplicated, ...eventsList];
     setEventsList(updated);

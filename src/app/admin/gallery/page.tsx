@@ -106,7 +106,7 @@ export default function AdminGalleryPage() {
   const handleOpenAddModal = () => {
     setIsCreatingNew(true);
     setEditingPhoto({
-      id: `gal-${Date.now()}`,
+      id: `gal-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       title: "",
       category: "Events",
       imageUrl: "https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=1600&auto=format&fit=crop",

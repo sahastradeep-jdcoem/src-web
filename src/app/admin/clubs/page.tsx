@@ -220,9 +220,10 @@ export default function AdminClubsPage() {
   const handleOpenAddModal = () => {
     setIsCreatingNew(true);
     setModalTab("identity");
+    const rand = Math.random().toString(36).substring(2, 7);
     setEditingClub({
-      id: `club-${Date.now()}`,
-      slug: `club-${Date.now()}`,
+      id: `club-${Date.now()}-${rand}`,
+      slug: `club-${Date.now()}-${rand}`,
       name: "",
       tagline: "",
       category: "Cultural",
@@ -284,7 +285,7 @@ export default function AdminClubsPage() {
     if (isCreatingNew) {
       updated = [...clubs, clubToSave];
     } else {
-      updated = clubs.map((c) => (c.id === clubToSave.id || c.slug === clubToSave.slug ? clubToSave : c));
+      updated = clubs.map((c) => (c.id === clubToSave.id ? clubToSave : c));
     }
 
     saveList(updated);
