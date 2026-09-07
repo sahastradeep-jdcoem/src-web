@@ -314,13 +314,13 @@ export function TicketPass({
       {/* Action Buttons */}
       <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 pt-2 sm:pt-4">
         
-        {/* 1-Click Save Pass Image to Gallery */}
+        {/* 1-Click Save Pass Image to Gallery (Desktop / Tablet) */}
         <Button
           onClick={handleDownloadImage}
           disabled={isDownloading}
           variant="primary"
           size="md"
-          className="gap-2 shadow-lg shadow-[#17458F]/20 font-semibold"
+          className="hidden sm:inline-flex gap-2 shadow-lg shadow-[#17458F]/20 font-semibold"
         >
           {isDownloading ? (
             <span key="bottom-loading" className="inline-flex items-center gap-2">
@@ -340,11 +340,12 @@ export function TicketPass({
           )}
         </Button>
 
+        {/* Print / PDF (Desktop / Tablet) */}
         <Button
           onClick={handlePrint}
           variant="secondary"
           size="md"
-          className="gap-2 font-semibold"
+          className="hidden sm:inline-flex gap-2 font-semibold"
         >
           <Printer className="w-4 h-4" />
           <span>Print / PDF</span>
@@ -360,10 +361,11 @@ export function TicketPass({
           <span>Add to Calendar</span>
         </Button>
 
+        {/* Public Verification Link (Desktop / Tablet) */}
         <Link
           href={`/verify/${encodeURIComponent(registrationId)}`}
           target="_blank"
-          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold tracking-wide transition-all shadow-xs"
+          className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold tracking-wide transition-all shadow-xs"
         >
           <ExternalLink className="w-3.5 h-3.5 text-[#17458F]" />
           <span>Public Verification Link</span>
