@@ -1,7 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Calendar, MapPin, Users, ArrowRight, Layers } from "lucide-react";
+import { Calendar, MapPin, Users, Layers } from "lucide-react";
 import { EventItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
@@ -105,22 +105,14 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
               Event Details
             </Link>
 
-            {event.isParentFest ? (
+            {event.isParentFest && (
               <Link
                 href={`/events/${event.slug}#competitions`}
                 className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-[#17458F] to-[#0f2d5c] hover:from-[#123670] hover:to-[#0a2244] text-white text-xs font-sans font-bold uppercase tracking-wider text-center transition-all shadow-md shadow-[#17458F]/20 flex items-center justify-center cursor-pointer"
               >
                 <span>Explore</span>
               </Link>
-            ) : isRegistrationOpen ? (
-              <Link
-                href={`/events/${event.slug}/register`}
-                className="flex-1 py-3 px-4 rounded-xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-sans font-semibold uppercase tracking-wider text-center transition-all shadow-md shadow-[#E78023]/20 flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <span>Register</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            ) : null}
+            )}
           </div>
         </div>
 
@@ -206,25 +198,13 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
             Details
           </Link>
 
-          {event.isParentFest ? (
+          {event.isParentFest && (
             <Link
               href={`/events/${event.slug}#competitions`}
               className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#17458F] to-[#0f2d5c] hover:from-[#123670] hover:to-[#0a2244] text-white text-xs font-sans font-bold uppercase tracking-wider text-center transition-all shadow-xs hover:shadow-md flex items-center justify-center cursor-pointer"
             >
               <span>Explore</span>
             </Link>
-          ) : isRegistrationOpen ? (
-            <Link
-              href={`/events/${event.slug}/register`}
-              className="flex-1 py-2.5 px-3 rounded-xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-sans font-semibold uppercase tracking-wider text-center transition-colors shadow-xs flex items-center justify-center gap-1 cursor-pointer"
-            >
-              <span>Register</span>
-              <ArrowRight className="w-3 h-3" />
-            </Link>
-          ) : (
-            <span className="flex-1 py-2.5 px-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-400 text-xs font-sans font-medium uppercase tracking-wider text-center">
-              {event.status}
-            </span>
           )}
         </div>
       </div>
