@@ -249,12 +249,18 @@ export default function PassVerificationPage() {
                 Cancellation Reason:
               </span>
               <p className="text-xs text-rose-900 font-medium italic">
-                &quot;{record.cancellationReason || "No specific reason provided by delegate."}&quot;
+                &quot;{record.cancellationReason || "No specific reason provided."}&quot;
               </p>
               {record.cancelledAt && (
                 <span className="text-[10px] text-rose-500 block pt-1 font-mono">
                   Cancelled on {new Date(record.cancelledAt).toLocaleString()}
                 </span>
+              )}
+              {record.refundStatus === "PROCESSED" && (
+                <div className="pt-2 border-t border-rose-200 text-[11px] text-blue-700 font-mono font-semibold flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-blue-600" />
+                  <span>Refund of ₹{record.refundAmount || record.amountPaid} processed via Razorpay{record.refundId ? ` (${record.refundId})` : ""}</span>
+                </div>
               )}
             </div>
           )}

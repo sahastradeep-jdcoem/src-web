@@ -40,7 +40,7 @@ export interface EventFormData {
   venue: string;
   organizer: string;
   organizerClubSlug: string;
-  status: "Registration Open" | "Upcoming" | "Completed";
+  status: "Registration Open" | "Upcoming" | "Completed" | "Cancelled";
   poster: string;
   cardImage: string;
   posterImage: string;
@@ -565,6 +565,7 @@ export function EventFormModal({
                   <option value="Registration Open">Registration Open</option>
                   <option value="Upcoming">Upcoming</option>
                   <option value="Completed">Completed</option>
+                  <option value="Cancelled">Cancelled</option>
                 </select>
               </div>
             </div>

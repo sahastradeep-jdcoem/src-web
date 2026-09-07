@@ -53,7 +53,7 @@ export default function EventRegisterPage() {
 
   const findSubEvents = (allEvents: EventItem[], parent: EventItem): EventItem[] => {
     return allEvents
-      .filter((e) => e.isLive !== false && e.status !== "draft")
+      .filter((e) => e.isLive !== false && e.status !== "draft" && !e.isCancelled && e.status !== "Cancelled")
       .filter(
         (e) =>
           e.id !== parent.id &&
@@ -121,6 +121,39 @@ export default function EventRegisterPage() {
           className="px-6 py-3 rounded-2xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider transition-all hover:bg-[#123670] shadow-sm"
         >
           &larr; Browse All Events
+        </Link>
+      </div>
+    );
+  }
+
+  if (event.isCancelled || event.status === "Cancelled") {
+    return (
+      <div className="min-h-[70vh] bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center space-y-6">
+        <div className="p-4 rounded-3xl bg-rose-50 border border-rose-200 text-rose-600">
+          <AlertCircle className="w-10 h-10 mx-auto" />
+        </div>
+        <div className="space-y-3 max-w-lg">
+          <Badge variant="rose" size="md">Registration Closed • Event Cancelled</Badge>
+          <h1 className="font-heading font-extrabold text-2xl text-[#0F172A] uppercase">
+            {event.name}
+          </h1>
+          <div className="p-4 rounded-2xl bg-white border border-rose-200 text-left space-y-1.5 shadow-xs">
+            <span className="text-[10px] font-bold text-rose-600 uppercase tracking-widest block font-sans">
+              Cancellation Notice:
+            </span>
+            <p className="text-xs text-slate-700 leading-relaxed font-medium">
+              &quot;{event.cancellationNotice || "This event has been officially cancelled by the SRC administration. Registrations are closed."}&quot;
+            </p>
+          </div>
+          <p className="text-xs text-slate-500 leading-relaxed font-sans">
+            New registrations cannot be accepted for cancelled events.
+          </p>
+        </div>
+        <Link
+          href="/events"
+          className="px-6 py-3 rounded-2xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider transition-all hover:bg-[#123670] shadow-sm"
+        >
+          &larr; Browse Available Events
         </Link>
       </div>
     );

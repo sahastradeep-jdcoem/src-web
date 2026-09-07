@@ -264,6 +264,12 @@ export default function StudentDashboardPage() {
         cancellationReason: r.cancellationReason,
         cancelledAt: r.cancelledAt,
         cancelledBy: r.cancelledBy,
+        paymentId: r.paymentId,
+        orderId: r.orderId,
+        refundId: r.refundId,
+        refundStatus: r.refundStatus,
+        refundAmount: r.refundAmount,
+        refundedAt: r.refundedAt,
       };
     });
   };
@@ -806,14 +812,18 @@ export default function StudentDashboardPage() {
 
                         {/* Cancellation Reason Callout if Cancelled */}
                         {isCancelled && (
-                          <div className="p-3.5 rounded-2xl bg-rose-50/80 border border-rose-200/80 text-xs text-rose-900 space-y-1 animate-in fade-in duration-200">
+                          <div className="p-3.5 rounded-2xl bg-rose-50/80 border border-rose-200/80 text-xs text-rose-900 space-y-1.5 animate-in fade-in duration-200">
                             <div className="flex items-center justify-between font-bold text-rose-800 text-[11px] uppercase tracking-wider">
                               <span className="flex items-center gap-1.5">
                                 <XCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                                <span>Pass Cancelled by Student</span>
+                                <span>
+                                  {reg.cancelledBy && reg.cancelledBy.includes("Admin")
+                                    ? "Event Cancelled by SRC Administration"
+                                    : "Pass Cancelled by Student"}
+                                </span>
                               </span>
                               {reg.cancelledAt && (
-                                <span className="text-rose-500 font-mono text-[10px] lowercase">
+                                <span className="text-rose-500 font-mono text-[10px]">
                                   {new Date(reg.cancelledAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                                 </span>
                               )}
@@ -822,6 +832,12 @@ export default function StudentDashboardPage() {
                               <p className="text-rose-700 font-medium pl-5 leading-relaxed italic">
                                 &quot;{reg.cancellationReason}&quot;
                               </p>
+                            )}
+                            {reg.refundStatus === "PROCESSED" && (
+                              <div className="flex items-center gap-1.5 text-blue-700 bg-blue-50/80 px-2.5 py-1 rounded-xl border border-blue-200/80 font-mono text-[11px] font-bold mt-1">
+                                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                                <span>Refund of ₹{reg.refundAmount || reg.amountPaid} processed via Razorpay{reg.refundId ? ` (${reg.refundId})` : ""}</span>
+                              </div>
                             )}
                           </div>
                         )}
@@ -1274,6 +1290,34 @@ export default function StudentDashboardPage() {
                 mode="dashboard"
                 onClose={() => setSelectedTicket(null)}
               />
+
+              {selectedTicket.status === "CANCELLED" && (
+                <div className="w-full mt-3 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-900 space-y-1 text-left">
+                  <div className="flex items-center justify-between font-bold text-[11px] text-rose-800 uppercase tracking-wider">
+                    <span>
+                      {selectedTicket.cancelledBy && selectedTicket.cancelledBy.includes("Admin")
+                        ? "Event Cancelled by SRC Administration"
+                        : "Pass Cancelled by Student"}
+                    </span>
+                    {selectedTicket.cancelledAt && (
+                      <span className="font-mono text-[10px] text-rose-500 font-normal">
+                        {new Date(selectedTicket.cancelledAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                  {selectedTicket.cancellationReason && (
+                    <p className="text-rose-800 italic font-medium leading-relaxed">
+                      &quot;{selectedTicket.cancellationReason}&quot;
+                    </p>
+                  )}
+                  {selectedTicket.refundStatus === "PROCESSED" && (
+                    <div className="flex items-center gap-1.5 text-blue-700 bg-blue-50 px-2.5 py-1 rounded-xl border border-blue-200 font-mono text-[11px] font-bold mt-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>Refund of ₹{selectedTicket.refundAmount || selectedTicket.amountPaid} processed via Razorpay{selectedTicket.refundId ? ` (${selectedTicket.refundId})` : ""}</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {canCancelPass && (
                 <div className="sm:hidden w-full pt-3 pb-1 border-t border-slate-100 mt-2 text-center">

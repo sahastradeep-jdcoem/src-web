@@ -202,50 +202,12 @@ export function stripBase64Images<T>(obj: T): T {
   return result as T;
 }
 
-const localWriteTimestamps = new Map<string, number>();
-
-/**
- * Record that a local write has been made for a docId.
- */
-export function markLocalWrite(docId: string): void {
-  if (typeof window === "undefined") return;
-  localWriteTimestamps.set(docId, Date.now());
-  try {
-    sessionStorage.setItem(`src_last_write_${docId}`, String(Date.now()));
-  } catch {}
-}
-
-/**
- * Get the timestamp (in ms) of the most recent local write for a docId.
- */
-export function getLastLocalWriteTime(docId: string): number {
-  if (typeof window === "undefined") return 0;
-  const inMemory = localWriteTimestamps.get(docId);
-  if (inMemory) return inMemory;
-  try {
-    const raw = sessionStorage.getItem(`src_last_write_${docId}`);
-    return raw ? parseInt(raw, 10) || 0 : 0;
-  } catch {
-    return 0;
-  }
-}
-
-/**
- * Check if a local write was made within the last `withinMs` milliseconds (defaults to 15s).
- */
-export function isLocalWriteRecent(docId: string, withinMs = 15000): boolean {
-  const last = getLastLocalWriteTime(docId);
-  if (!last) return false;
-  return Date.now() - last < withinMs;
-}
-
 /**
  * Check if there are pending (un-flushed) cloud writes for a given docId.
  * Used by realtime subscribers to skip reconciliation when local data is newer.
  */
 export function hasPendingWritesFor(docId: string): boolean {
   if (typeof window === "undefined") return false;
-  if (isLocalWriteRecent(docId, 4000)) return true;
   const queue = getPendingQueue();
   return queue.some((item) => item.docId === docId);
 }
@@ -321,7 +283,6 @@ function savePendingQueue(queue: PendingSyncItem[]): void {
 }
 
 export async function enqueueCloudWrite<T>(docId: string, data: T, label = "Data Update"): Promise<boolean> {
-  markLocalWrite(docId);
   // Always record rolling backup snapshot first (Zero Data Loss guarantee)
   recordRollingSnapshot(docId, label, data);
 

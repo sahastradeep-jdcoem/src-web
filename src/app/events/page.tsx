@@ -42,18 +42,20 @@ export default function EventsPage() {
   }, []);
 
   const filteredEvents = useMemo(() => {
-    return eventsList.filter(e => e.isLive !== false && e.status !== 'draft').filter((event) => {
-      const matchesSearch =
-        event.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        event.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        event.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (event.tagline && event.tagline.toLowerCase().includes(searchQuery.toLowerCase()));
+    return eventsList
+      .filter(e => e.isLive !== false && e.status !== 'draft' && !e.isCancelled && e.status !== 'Cancelled')
+      .filter((event) => {
+        const matchesSearch =
+          event.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          event.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          event.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (event.tagline && event.tagline.toLowerCase().includes(searchQuery.toLowerCase()));
 
-      return matchesSearch;
-    });
+        return matchesSearch;
+      });
   }, [eventsList, searchQuery]);
 
-  const featuredEvent = eventsList.find((e) => e.isFeatured);
+  const featuredEvent = eventsList.find((e) => e.isFeatured && !e.isCancelled && e.status !== 'Cancelled');
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] py-12 px-4 sm:px-6 lg:px-8 space-y-12 text-[#0F172A]">

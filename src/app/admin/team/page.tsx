@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { 
@@ -111,7 +111,6 @@ export default function AdminTeamPage() {
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [pendingUploads, setPendingUploads] = useState(0);
-  const isSavingRef = useRef(false);
 
   // Copy positions from past tenure state
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
@@ -258,9 +257,7 @@ export default function AdminTeamPage() {
       currentId = active?.id || "tenure-2025-26";
     }
       
-    if (selectedTenureId !== currentId) {
-      setSelectedTenureId(currentId);
-    }
+    setSelectedTenureId(currentId);
     if (typeof window !== "undefined") {
       sessionStorage.setItem("src_admin_selected_tenure", currentId);
     }
@@ -298,19 +295,19 @@ export default function AdminTeamPage() {
     setDepartmentsList(getStoredDepartments());
 
     syncTenuresFromFirestore().then((res) => {
-      if (res && !isSavingRef.current) loadData();
+      if (res) loadData();
     });
     syncCouncilMembersFromFirestore().then((res) => {
-      if (res && !isSavingRef.current) loadData();
+      if (res) loadData();
     });
     syncHostingCommitteeFromFirestore().then((res) => {
-      if (res && !isSavingRef.current) loadData();
+      if (res) loadData();
     });
     syncFoundingMembersFromFirestore().then((res) => {
-      if (res && !isSavingRef.current) loadData();
+      if (res) loadData();
     });
     syncClubsFromFirestore().then((res) => {
-      if (res && !isSavingRef.current) setClubsList(res);
+      if (res) setClubsList(res);
     });
 
     if (selectedTenureId) {
@@ -318,7 +315,7 @@ export default function AdminTeamPage() {
       const target = allTenures.find((t) => t.id === selectedTenureId);
       if (target && !target.isCurrent) {
         syncDraftClubsFromFirestore(selectedTenureId).then((res) => {
-          if (res && Array.isArray(res) && res.length > 0 && !isSavingRef.current) {
+          if (res && Array.isArray(res) && res.length > 0) {
             setClubsList(res);
           }
         });
@@ -329,52 +326,23 @@ export default function AdminTeamPage() {
       if (res) setDepartmentsList(res);
     });
     syncInstitutionalPillarsFromFirestore().then((res) => {
-      if (res && res.length > 0 && !isSavingRef.current) setPillarsList(res);
+      if (res && res.length > 0) setPillarsList(res);
     });
 
-    const unsubCouncil = subscribeToCouncilMembers((remote) => {
-      if (isSavingRef.current) return;
-      const allTenures = getStoredTenures();
-      const cur = allTenures.find((t) => t.id === (selectedTenureId || "tenure-2025-26"));
-      if (!cur || cur.isCurrent) {
-        setCouncilMembers(remote);
-      }
-    });
-    const unsubHosting = subscribeToHostingCommittee((remote) => {
-      if (isSavingRef.current) return;
-      const allTenures = getStoredTenures();
-      const cur = allTenures.find((t) => t.id === (selectedTenureId || "tenure-2025-26"));
-      if (!cur || cur.isCurrent) {
-        setHostingMembers(remote);
-      }
-    });
-    const unsubFounders = subscribeToFoundingMembers((remote) => {
-      if (isSavingRef.current) return;
-      const allTenures = getStoredTenures();
-      const cur = allTenures.find((t) => t.id === (selectedTenureId || "tenure-2025-26"));
-      const isFirst = !cur || cur.id === "tenure-2025-26" || cur.label?.includes("2025");
-      if (isFirst) {
-        setFoundingMembersList(remote);
-      }
-    });
     const unsubClubs = subscribeToClubs((updated) => {
-      if (isSavingRef.current) return;
       if (!selectedTenure || selectedTenure.isCurrent) {
         setClubsList(updated);
       }
     });
     const unsubPillars = subscribeToInstitutionalPillars((updated) => {
-      if (isSavingRef.current) return;
       if (updated && updated.length > 0) setPillarsList(updated);
     });
 
     const handleUpdate = () => {
-      if (isSavingRef.current) return;
       loadData();
     };
 
     const handleDraftClubsUpdate = (e: Event) => {
-      if (isSavingRef.current) return;
       const customEvent = e as CustomEvent;
       if (customEvent.detail?.tenureId === selectedTenureId) {
         loadData();
@@ -391,9 +359,6 @@ export default function AdminTeamPage() {
     window.addEventListener("src_pillars_updated", handleUpdate);
 
     return () => {
-      unsubCouncil();
-      unsubHosting();
-      unsubFounders();
       unsubClubs();
       unsubPillars();
       window.removeEventListener("src_tenures_updated", handleUpdate);
@@ -543,8 +508,6 @@ export default function AdminTeamPage() {
   const saveCurrentList = (updated: TeamMember[]) => {
     if (activeTab === "clubs") return;
 
-    isSavingRef.current = true;
-
     // Re-index all orders to guarantee strict sequential 1..N order
     const indexed = updated.map((m, idx) => ({
       ...m,
@@ -578,7 +541,7 @@ export default function AdminTeamPage() {
       }
       updateTenureRoster(selectedTenure.id, {
         [activeTab === "council" ? "adminCouncil" : activeTab === "hosting" ? "hostingCommittee" : "foundingMembers"]: indexed
-      }, true);
+      });
       setTenures((prev) => prev.map((t) => t.id === selectedTenure.id ? {
         ...t,
         [activeTab === "council" ? "adminCouncil" : activeTab === "hosting" ? "hostingCommittee" : "foundingMembers"]: indexed
@@ -592,7 +555,7 @@ export default function AdminTeamPage() {
       }
       updateTenureRoster(selectedTenure.id, {
         [activeTab === "council" ? "adminCouncil" : activeTab === "hosting" ? "hostingCommittee" : "foundingMembers"]: indexed
-      }, true);
+      });
       setTenures((prev) => prev.map((t) => t.id === selectedTenure.id ? {
         ...t,
         [activeTab === "council" ? "adminCouncil" : activeTab === "hosting" ? "hostingCommittee" : "foundingMembers"]: indexed
@@ -603,10 +566,7 @@ export default function AdminTeamPage() {
     }
 
     setIsSaved(true);
-    setTimeout(() => {
-      setIsSaved(false);
-      isSavingRef.current = false;
-    }, 2000);
+    setTimeout(() => setIsSaved(false), 3000);
   };
 
   const handleSyncToFounding = () => {
@@ -849,19 +809,15 @@ export default function AdminTeamPage() {
       });
 
       setClubsList(updatedClubs);
-      isSavingRef.current = true;
       if (selectedTenure?.isCurrent) {
         saveStoredClubs(updatedClubs);
-        updateTenureRoster(selectedTenure.id, { clubs: updatedClubs }, true);
+        updateTenureRoster(selectedTenure.id, { clubs: updatedClubs });
       } else if (selectedTenure) {
         saveStoredDraftClubs(selectedTenure.id, updatedClubs);
-        updateTenureRoster(selectedTenure.id, { clubs: updatedClubs }, true);
+        updateTenureRoster(selectedTenure.id, { clubs: updatedClubs });
       }
       setIsSaved(true);
-      setTimeout(() => {
-        setIsSaved(false);
-        isSavingRef.current = false;
-      }, 2000);
+      setTimeout(() => setIsSaved(false), 3000);
       setEditingMember(null);
       setIsCreatingNew(false);
       return;
@@ -919,19 +875,15 @@ export default function AdminTeamPage() {
         });
 
         setClubsList(updatedClubs);
-        isSavingRef.current = true;
         if (selectedTenure?.isCurrent) {
           saveStoredClubs(updatedClubs);
-          updateTenureRoster(selectedTenure.id, { clubs: updatedClubs }, true);
+          updateTenureRoster(selectedTenure.id, { clubs: updatedClubs });
         } else if (selectedTenure) {
           saveStoredDraftClubs(selectedTenure.id, updatedClubs);
-          updateTenureRoster(selectedTenure.id, { clubs: updatedClubs }, true);
+          updateTenureRoster(selectedTenure.id, { clubs: updatedClubs });
         }
         setIsSaved(true);
-        setTimeout(() => {
-          setIsSaved(false);
-          isSavingRef.current = false;
-        }, 2000);
+        setTimeout(() => setIsSaved(false), 3000);
         return;
       }
     }

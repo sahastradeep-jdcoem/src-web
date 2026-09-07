@@ -20,13 +20,7 @@ import {
   subscribeToSiteContent,
   cleanUndefined
 } from "./firebase/firestore";
-import { 
-  enqueueCloudWrite, 
-  reconcileArrayDatasets, 
-  hasPendingWritesFor, 
-  markLocalWrite, 
-  getLastLocalWriteTime 
-} from "./dataSyncEngine";
+import { enqueueCloudWrite, reconcileArrayDatasets, hasPendingWritesFor } from "./dataSyncEngine";
 
 export interface CouncilTenure {
   id: string;
@@ -70,7 +64,6 @@ export function saveStoredDraftCouncil(tenureId: string, members: TeamMember[]):
   if (typeof window === "undefined" || !tenureId) return;
   try {
     const sanitized = cleanUndefined(members);
-    markLocalWrite(`draft_council_${tenureId}`);
     try {
       localStorage.setItem(`${DRAFT_COUNCIL_PREFIX}${tenureId}`, JSON.stringify(sanitized));
     } catch (lsErr) {
@@ -105,7 +98,6 @@ export function saveStoredDraftHosting(tenureId: string, members: TeamMember[]):
   if (typeof window === "undefined" || !tenureId) return;
   try {
     const sanitized = cleanUndefined(members);
-    markLocalWrite(`draft_hosting_${tenureId}`);
     try {
       localStorage.setItem(`${DRAFT_HOSTING_PREFIX}${tenureId}`, JSON.stringify(sanitized));
     } catch (lsErr) {
@@ -142,7 +134,6 @@ export function saveStoredDraftClubs(tenureId: string, clubs: ClubItem[]): void 
   if (typeof window === "undefined" || !tenureId) return;
   try {
     const sanitized = cleanUndefined(clubs);
-    markLocalWrite(`draft_clubs_${tenureId}`);
     try {
       localStorage.setItem(`${DRAFT_CLUBS_PREFIX}${tenureId}`, JSON.stringify(sanitized));
     } catch (lsErr) {
@@ -162,11 +153,8 @@ export function saveStoredDraftClubs(tenureId: string, clubs: ClubItem[]): void 
 export async function syncDraftClubsFromFirestore(tenureId: string): Promise<ClubItem[] | null> {
   if (!tenureId) return null;
   try {
-    const requestTime = Date.now();
-    const docKey = `draft_clubs_${tenureId}`;
-    if (hasPendingWritesFor(docKey) || getLastLocalWriteTime(docKey) >= requestTime) return getStoredDraftClubs(tenureId);
-    const remote = await getSiteContentFromFirestore<ClubItem[]>(docKey);
-    if (hasPendingWritesFor(docKey) || getLastLocalWriteTime(docKey) >= requestTime) return getStoredDraftClubs(tenureId);
+    if (hasPendingWritesFor(`draft_clubs_${tenureId}`)) return getStoredDraftClubs(tenureId);
+    const remote = await getSiteContentFromFirestore<ClubItem[]>(`draft_clubs_${tenureId}`);
     if (remote !== null && Array.isArray(remote)) {
       if (typeof window !== "undefined") {
         try {
@@ -361,7 +349,6 @@ export function saveStoredTenures(tenures: CouncilTenure[]): void {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(tenures);
-    markLocalWrite("council_tenures");
     try {
       localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(sanitized));
     } catch (lsErr) {
@@ -407,8 +394,7 @@ export function updateTenureRoster(
     events?: EventItem[];
     theme?: string;
     archiveNotes?: string;
-  },
-  skipActiveStoreSync = false
+  }
 ): void {
   if (typeof window === "undefined") return;
   const tenures = getStoredTenures();
@@ -417,14 +403,14 @@ export function updateTenureRoster(
 
   const isCurrentActive = target.isCurrent;
 
-  // If this is the currently active tenure, also update the live active stores unless skipped
-  if (isCurrentActive && !skipActiveStoreSync) {
+  // If this is the currently active tenure, also update the live active stores
+  if (isCurrentActive) {
     if (updates.adminCouncil) saveStoredCouncilMembers(updates.adminCouncil);
     if (updates.hostingCommittee) saveStoredHostingCommittee(updates.hostingCommittee);
     if (updates.foundingMembers) saveStoredFoundingMembers(updates.foundingMembers);
     if (updates.clubs) saveStoredClubs(updates.clubs);
     if (updates.events) saveStoredEvents(updates.events);
-  } else if (!isCurrentActive) {
+  } else {
     // Draft tenure: save to dedicated draft stores immediately!
     if (updates.adminCouncil) saveStoredDraftCouncil(tenureId, updates.adminCouncil);
     if (updates.hostingCommittee) saveStoredDraftHosting(tenureId, updates.hostingCommittee);
@@ -638,14 +624,8 @@ export function createAndActivateNewTenure(
 
 export async function syncTenuresFromFirestore(): Promise<CouncilTenure[]> {
   try {
-    const requestTime = Date.now();
-    if (hasPendingWritesFor("council_tenures") || getLastLocalWriteTime("council_tenures") >= requestTime) {
-      return getStoredTenures();
-    }
+    if (hasPendingWritesFor("council_tenures")) return getStoredTenures();
     const remote = await getSiteContentFromFirestore<CouncilTenure[]>("council_tenures");
-    if (hasPendingWritesFor("council_tenures") || getLastLocalWriteTime("council_tenures") >= requestTime) {
-      return getStoredTenures();
-    }
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
       const filtered = remote.filter((t: CouncilTenure) => t.id !== "tenure-2024-25" && !t.label.includes("2024"));
       const current = getStoredTenures();

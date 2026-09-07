@@ -62,7 +62,7 @@ export default function EventDetailPage() {
 
   const findSubEvents = (allEvents: EventItem[], parent: EventItem): EventItem[] => {
     return allEvents
-      .filter((e) => e.isLive !== false && e.status !== "draft")
+      .filter((e) => e.isLive !== false && e.status !== "draft" && !e.isCancelled && e.status !== "Cancelled")
       .filter(
         (e) =>
           e.id !== parent.id &&
@@ -149,6 +149,52 @@ export default function EventDetailPage() {
         >
           &larr; Browse All Events
         </Link>
+      </div>
+    );
+  }
+
+  if (event.isCancelled || event.status === "Cancelled") {
+    return (
+      <div className="min-h-[70vh] bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center space-y-6">
+        <div className="p-4 rounded-3xl bg-rose-50 border border-rose-200 text-rose-600">
+          <AlertCircle className="w-10 h-10 mx-auto" />
+        </div>
+        <div className="space-y-3 max-w-lg">
+          <Badge variant="rose" size="md">Event Officially Cancelled</Badge>
+          <h1 className="font-heading font-extrabold text-2xl text-[#0F172A] uppercase">
+            {event.name}
+          </h1>
+          <div className="p-4 rounded-2xl bg-white border border-rose-200 text-left space-y-1.5 shadow-xs">
+            <span className="text-[10px] font-bold text-rose-600 uppercase tracking-widest block font-sans">
+              Official Cancellation Notice:
+            </span>
+            <p className="text-xs text-slate-700 leading-relaxed font-medium">
+              &quot;{event.cancellationNotice || "This event has been officially cancelled by the Student Representative Council (SRC) administration."}&quot;
+            </p>
+            {event.cancelledAt && (
+              <p className="text-[10px] text-slate-400 font-mono pt-1">
+                Notice date: {new Date(event.cancelledAt).toLocaleDateString("en-IN", { dateStyle: "long" })}
+              </p>
+            )}
+          </div>
+          <p className="text-xs text-slate-500 leading-relaxed font-sans">
+            Registrations are closed. Registered delegates will find their pass status updated on their student dashboard.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Link
+            href="/events"
+            className="px-6 py-3 rounded-2xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider transition-all hover:bg-[#123670] shadow-sm"
+          >
+            &larr; Explore Other Events
+          </Link>
+          <Link
+            href="/dashboard"
+            className="px-6 py-3 rounded-2xl bg-white border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider transition-all hover:bg-slate-50 shadow-2xs"
+          >
+            Go to Student Passes
+          </Link>
+        </div>
       </div>
     );
   }

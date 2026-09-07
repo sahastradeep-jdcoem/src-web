@@ -2302,10 +2302,30 @@ export default function AdminRegistrationsPage() {
                         </td>
                         <td className="py-4 px-6">
                           {r.paymentStatus === "PAID" ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              <CreditCard className="w-3 h-3" />
-                              <span>PAID • ₹{r.amountPaid}</span>
-                            </span>
+                            <div className="space-y-1">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <CreditCard className="w-3 h-3" />
+                                <span>PAID • ₹{r.amountPaid}</span>
+                              </span>
+                              {r.refundStatus === "PROCESSED" && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-blue-50 text-blue-700 border border-blue-200 block w-fit">
+                                  <CheckCircle2 className="w-2.5 h-2.5" />
+                                  <span>Refunded</span>
+                                </span>
+                              )}
+                              {r.refundStatus === "INITIATED" && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-amber-50 text-amber-700 border border-amber-200 block w-fit">
+                                  <Clock className="w-2.5 h-2.5" />
+                                  <span>Refund Initiated</span>
+                                </span>
+                              )}
+                              {r.refundStatus === "FAILED" && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-rose-50 text-rose-700 border border-rose-200 block w-fit">
+                                  <AlertCircle className="w-2.5 h-2.5" />
+                                  <span>Refund Failed</span>
+                                </span>
+                              )}
+                            </div>
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
                               <span>FREE PASS</span>
@@ -2329,6 +2349,22 @@ export default function AdminRegistrationsPage() {
                             >
                               <Check className="w-3 h-3" />
                               <span>Check In</span>
+                            </button>
+                          )}
+                          {/* Individual Refund action for cancelled paid pass */}
+                          {r.status === "CANCELLED" && ((r.amountPaid && r.amountPaid > 0) || r.paymentStatus === "PAID") && r.refundStatus !== "PROCESSED" && r.paymentId && r.paymentId !== "N/A" && (
+                            <button
+                              onClick={() => handleIndividualRefund(r)}
+                              disabled={refundingId === r.id}
+                              className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#17458F] text-[11px] font-bold border border-blue-200 transition-colors cursor-pointer flex items-center gap-1 disabled:opacity-50"
+                              title={`Initiate Razorpay Refund of ₹${r.amountPaid}`}
+                            >
+                              {refundingId === r.id ? (
+                                <RefreshCw className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Banknote className="w-3 h-3" />
+                              )}
+                              <span>{refundingId === r.id ? "Refunding..." : `Refund ₹${r.amountPaid}`}</span>
                             </button>
                           )}
                           <button
@@ -2412,24 +2448,49 @@ export default function AdminRegistrationsPage() {
                 </Badge>
               </div>
 
-              <div className="p-3.5 rounded-xl bg-slate-50 space-y-1">
-                <span className="text-slate-500 uppercase text-[10px] font-bold">Finance / Gateway</span>
+              <div className="p-3.5 rounded-xl bg-slate-50 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 uppercase text-[10px] font-bold">Finance / Gateway</span>
+                  {selectedRecord.refundStatus === "PROCESSED" && (
+                    <Badge variant="success" size="sm">Refunded</Badge>
+                  )}
+                  {selectedRecord.refundStatus === "INITIATED" && (
+                    <Badge variant="warning" size="sm">Refund Pending</Badge>
+                  )}
+                  {selectedRecord.refundStatus === "FAILED" && (
+                    <Badge variant="rose" size="sm">Refund Failed</Badge>
+                  )}
+                </div>
                 <p className="font-bold text-slate-900 text-sm">
                   {selectedRecord.paymentStatus === "PAID" ? `₹${selectedRecord.amountPaid || 0}` : "Free Pass"}
                 </p>
                 <p className="text-[10px] font-mono text-slate-500 truncate" title={selectedRecord.paymentId || "Free"}>
                   ID: {selectedRecord.paymentId || "N/A (Free)"}
                 </p>
+                {selectedRecord.refundId && (
+                  <p className="text-[10px] font-mono text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 truncate" title={selectedRecord.refundId}>
+                    Refund ID: {selectedRecord.refundId}
+                  </p>
+                )}
+                {selectedRecord.refundedAt && (
+                  <p className="text-[9px] text-slate-400 font-mono">
+                    Refunded on: {new Date(selectedRecord.refundedAt).toLocaleString()}
+                  </p>
+                )}
               </div>
             </div>
 
             {/* Cancellation reason callout if cancelled */}
             {selectedRecord.status === "CANCELLED" && (
-              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-left text-xs space-y-1 animate-in fade-in duration-200">
+              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-left text-xs space-y-2 animate-in fade-in duration-200">
                 <div className="flex items-center justify-between font-bold text-rose-800 text-[11px] uppercase tracking-wider">
                   <span className="flex items-center gap-1.5">
                     <XCircle className="w-3.5 h-3.5 text-rose-600" />
-                    <span>Pass Cancelled by Delegate</span>
+                    <span>
+                      {selectedRecord.cancelledBy && selectedRecord.cancelledBy.includes("Admin")
+                        ? "Pass Cancelled by SRC Administration"
+                        : "Pass Cancelled"}
+                    </span>
                   </span>
                   {selectedRecord.cancelledAt && (
                     <span className="font-mono text-rose-500 font-normal text-[10px]">
@@ -2444,6 +2505,30 @@ export default function AdminRegistrationsPage() {
                   <span className="text-[10px] text-slate-500 block pt-0.5 pl-5 font-mono">
                     Cancelled by: {selectedRecord.cancelledBy}
                   </span>
+                )}
+
+                {/* Refund Action button inside inspection modal if paid and not yet refunded */}
+                {((selectedRecord.amountPaid && selectedRecord.amountPaid > 0) || selectedRecord.paymentStatus === "PAID") && selectedRecord.refundStatus !== "PROCESSED" && selectedRecord.paymentId && selectedRecord.paymentId !== "N/A" && (
+                  <div className="pt-2 border-t border-rose-200">
+                    <button
+                      type="button"
+                      onClick={() => handleIndividualRefund(selectedRecord)}
+                      disabled={refundingId === selectedRecord.id}
+                      className="w-full py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-xs inline-flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {refundingId === selectedRecord.id ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Processing Razorpay Refund...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Banknote className="w-3.5 h-3.5" />
+                          <span>Issue Razorpay Refund of ₹{selectedRecord.amountPaid}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 )}
               </div>
             )}

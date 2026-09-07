@@ -52,7 +52,7 @@ export default function HomeEventsSection() {
     };
   }, []);
 
-  const liveEvents = eventsList.filter(e => e.isLive !== false && e.status !== 'draft');
+  const liveEvents = eventsList.filter(e => e.isLive !== false && e.status !== 'draft' && !e.isCancelled && e.status !== 'Cancelled');
   const featuredEvent = liveEvents[0];
   const otherEvents = liveEvents.slice(1);
 
