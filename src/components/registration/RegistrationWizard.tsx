@@ -740,23 +740,19 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         const rzp = new (window as any).Razorpay(options);
         rzp.open();
       } else {
-        // Safe Sandbox Test Mode (for immediate testing before API keys are plugged in)
-        const mockPayId = `pay_test_${Math.floor(100000 + Math.random() * 900000)}`;
-        await completeRegistration({
-          paymentStatus: "PAID",
-          paymentId: mockPayId,
-          orderId: orderData.orderId || `order_test_${Date.now()}`,
-          amountPaid: totalPayableAmount,
-        });
+        alert(
+          orderData.notice ||
+          "Payment gateway is not configured on this server yet. Please add Razorpay API keys to proceed."
+        );
+        setIsSubmitting(false);
       }
     } catch (err: any) {
-      console.warn("Razorpay fallback triggered:", err);
-      // Fallback sandbox confirmation
-      await completeRegistration({
-        paymentStatus: "PAID",
-        paymentId: `pay_sandbox_${Date.now().toString().slice(-6)}`,
-        amountPaid: totalPayableAmount,
-      });
+      console.error("Razorpay processing error:", err);
+      alert(
+        err?.message ||
+        "Failed to initiate payment gateway. Please check your connection or contact the coordinator."
+      );
+      setIsSubmitting(false);
     }
   };
 
