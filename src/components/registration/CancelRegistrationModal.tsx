@@ -178,7 +178,7 @@ export function CancelRegistrationModal({
                 }}
                 disabled={isSubmitting}
                 rows={3}
-                placeholder="Please state why you are cancelling your registration (e.g. academic exams, personal emergency, scheduling conflict)..."
+                placeholder="State your reason"
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all resize-none font-sans"
               />
 
