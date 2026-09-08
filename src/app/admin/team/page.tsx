@@ -268,15 +268,25 @@ export default function AdminTeamPage() {
     const targetTenure = list.find((t) => t.id === currentId) || active;
     const isFirst = targetTenure?.id === "tenure-2025-26" || targetTenure?.label?.includes("2025") || targetTenure?.tenureNumber?.includes("1st");
     if (targetTenure?.isCurrent) {
-      setCouncilMembers(getStoredCouncilMembers());
+      const storedCouncil = getStoredCouncilMembers();
+      let storedFounders = isFirst ? getStoredFoundingMembers() : [];
+      if (isFirst && storedCouncil.length > 0 && storedCouncil.length !== storedFounders.length) {
+        storedFounders = syncCouncilAdminsToFounding(storedCouncil, true);
+      }
+      setCouncilMembers(storedCouncil);
       setHostingMembers(getStoredHostingCommittee());
-      setFoundingMembersList(isFirst ? getStoredFoundingMembers() : []);
+      setFoundingMembersList(storedFounders);
     } else if (targetTenure) {
       const draftCouncil = getStoredDraftCouncil(targetTenure.id);
       const draftHosting = getStoredDraftHosting(targetTenure.id);
-      setCouncilMembers(draftCouncil.length > 0 ? draftCouncil : (targetTenure.adminCouncil || []));
+      const councilList = draftCouncil.length > 0 ? draftCouncil : (targetTenure.adminCouncil || []);
+      let founderList = isFirst ? (targetTenure.foundingMembers || getStoredFoundingMembers()) : [];
+      if (isFirst && councilList.length > 0 && councilList.length !== founderList.length) {
+        founderList = syncCouncilAdminsToFounding(councilList, true);
+      }
+      setCouncilMembers(councilList);
       setHostingMembers(draftHosting.length > 0 ? draftHosting : (targetTenure.hostingCommittee || []));
-      setFoundingMembersList(isFirst ? (targetTenure.foundingMembers || getStoredFoundingMembers()) : []);
+      setFoundingMembersList(founderList);
     }
 
     if (targetTenure?.isCurrent) {
@@ -437,15 +447,25 @@ export default function AdminTeamPage() {
     const targetTenure = tenures.find((t) => t.id === tId);
     const isFirst = targetTenure?.id === "tenure-2025-26" || targetTenure?.label?.includes("2025") || targetTenure?.tenureNumber?.includes("1st");
     if (targetTenure?.isCurrent) {
-      setCouncilMembers(getStoredCouncilMembers());
+      const storedCouncil = getStoredCouncilMembers();
+      let storedFounders = isFirst ? getStoredFoundingMembers() : [];
+      if (isFirst && storedCouncil.length > 0 && storedCouncil.length !== storedFounders.length) {
+        storedFounders = syncCouncilAdminsToFounding(storedCouncil, true);
+      }
+      setCouncilMembers(storedCouncil);
       setHostingMembers(getStoredHostingCommittee());
-      setFoundingMembersList(isFirst ? getStoredFoundingMembers() : []);
+      setFoundingMembersList(storedFounders);
     } else if (targetTenure) {
       const draftCouncil = getStoredDraftCouncil(targetTenure.id);
       const draftHosting = getStoredDraftHosting(targetTenure.id);
-      setCouncilMembers(draftCouncil.length > 0 ? draftCouncil : (targetTenure.adminCouncil || []));
+      const councilList = draftCouncil.length > 0 ? draftCouncil : (targetTenure.adminCouncil || []);
+      let founderList = isFirst ? (targetTenure.foundingMembers || getStoredFoundingMembers()) : [];
+      if (isFirst && councilList.length > 0 && councilList.length !== founderList.length) {
+        founderList = syncCouncilAdminsToFounding(councilList, true);
+      }
+      setCouncilMembers(councilList);
       setHostingMembers(draftHosting.length > 0 ? draftHosting : (targetTenure.hostingCommittee || []));
-      setFoundingMembersList(isFirst ? (targetTenure.foundingMembers || getStoredFoundingMembers()) : []);
+      setFoundingMembersList(founderList);
     }
   };
 
@@ -560,10 +580,13 @@ export default function AdminTeamPage() {
       order: idx + 1
     }));
 
+    let syncedFounders: TeamMember[] = [];
+    let syncedCouncil: TeamMember[] = [];
+
     if (activeTab === "council") {
       setCouncilMembers(indexed);
       if (isFirstTenure) {
-        const syncedFounders = syncCouncilAdminsToFounding(indexed, false);
+        syncedFounders = syncCouncilAdminsToFounding(indexed, true);
         setFoundingMembersList(syncedFounders);
       }
     } else if (activeTab === "hosting") {
@@ -571,26 +594,35 @@ export default function AdminTeamPage() {
     } else if (activeTab === "founding") {
       setFoundingMembersList(indexed);
       if (isFirstTenure) {
-        const syncedCouncil = syncFoundingToCouncilAdmins(indexed, false);
+        syncedCouncil = syncFoundingToCouncilAdmins(indexed, true);
         setCouncilMembers(syncedCouncil);
+      }
+    }
+
+    const rosterUpdates: any = {
+      [activeTab === "council" ? "adminCouncil" : activeTab === "hosting" ? "hostingCommittee" : "foundingMembers"]: indexed
+    };
+    if (isFirstTenure) {
+      if (activeTab === "council" && syncedFounders.length > 0) {
+        rosterUpdates.foundingMembers = syncedFounders;
+      } else if (activeTab === "founding" && syncedCouncil.length > 0) {
+        rosterUpdates.adminCouncil = syncedCouncil;
       }
     }
 
     if (selectedTenure?.isCurrent) {
       // Live active tenure
       if (activeTab === "council") {
-        saveStoredCouncilMembers(indexed, isFirstTenure);
+        saveStoredCouncilMembers(indexed, false);
       } else if (activeTab === "hosting") {
         saveStoredHostingCommittee(indexed);
       } else if (activeTab === "founding") {
-        saveStoredFoundingMembers(indexed, isFirstTenure);
+        saveStoredFoundingMembers(indexed, false);
       }
-      updateTenureRoster(selectedTenure.id, {
-        [activeTab === "council" ? "adminCouncil" : activeTab === "hosting" ? "hostingCommittee" : "foundingMembers"]: indexed
-      }, true);
+      updateTenureRoster(selectedTenure.id, rosterUpdates, true);
       setTenures((prev) => prev.map((t) => t.id === selectedTenure.id ? {
         ...t,
-        [activeTab === "council" ? "adminCouncil" : activeTab === "hosting" ? "hostingCommittee" : "foundingMembers"]: indexed
+        ...rosterUpdates
       } : t));
     } else if (selectedTenure) {
       // Draft / upcoming tenure: save to dedicated draft store first!
@@ -599,12 +631,10 @@ export default function AdminTeamPage() {
       } else if (activeTab === "hosting") {
         saveStoredDraftHosting(selectedTenure.id, indexed);
       }
-      updateTenureRoster(selectedTenure.id, {
-        [activeTab === "council" ? "adminCouncil" : activeTab === "hosting" ? "hostingCommittee" : "foundingMembers"]: indexed
-      }, true);
+      updateTenureRoster(selectedTenure.id, rosterUpdates, true);
       setTenures((prev) => prev.map((t) => t.id === selectedTenure.id ? {
         ...t,
-        [activeTab === "council" ? "adminCouncil" : activeTab === "hosting" ? "hostingCommittee" : "foundingMembers"]: indexed
+        ...rosterUpdates
       } : t));
       if (typeof window !== "undefined") {
         sessionStorage.setItem("src_admin_selected_tenure", selectedTenure.id);
@@ -626,6 +656,10 @@ export default function AdminTeamPage() {
     }
     const synced = syncCouncilAdminsToFounding(listToSync, true);
     setFoundingMembersList(synced);
+    if (selectedTenure) {
+      updateTenureRoster(selectedTenure.id, { foundingMembers: synced }, true);
+      setTenures((prev) => prev.map((t) => t.id === selectedTenure.id ? { ...t, foundingMembers: synced } : t));
+    }
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
   };
@@ -638,6 +672,10 @@ export default function AdminTeamPage() {
     }
     const synced = syncCouncilAdminsToFounding(listToSync, true);
     setFoundingMembersList(synced);
+    if (selectedTenure) {
+      updateTenureRoster(selectedTenure.id, { foundingMembers: synced }, true);
+      setTenures((prev) => prev.map((t) => t.id === selectedTenure.id ? { ...t, foundingMembers: synced } : t));
+    }
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
   };

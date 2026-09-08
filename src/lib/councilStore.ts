@@ -330,6 +330,11 @@ export async function syncCouncilMembersFromFirestore(): Promise<TeamMember[]> {
         window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: merged }));
         window.dispatchEvent(new CustomEvent("src_users_updated"));
       }
+      // Auto-heal 1st tenure founding members if count is out of sync with council admins
+      const currentFounders = getStoredFoundingMembers();
+      if (merged.length > 0 && currentFounders.length !== merged.length) {
+        syncCouncilAdminsToFounding(merged, true);
+      }
       return merged;
     }
   } catch {}
@@ -498,6 +503,11 @@ export function subscribeToCouncilMembers(callback: (members: TeamMember[]) => v
           localStorage.setItem("src_council_team", JSON.stringify(merged));
         } catch {}
         window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: merged }));
+      }
+      // Auto-heal 1st tenure founding members if count is out of sync with council admins
+      const currentFounders = getStoredFoundingMembers();
+      if (merged.length > 0 && currentFounders.length !== merged.length) {
+        syncCouncilAdminsToFounding(merged, true);
       }
       callback(merged);
     }
@@ -798,6 +808,13 @@ export async function syncFoundingMembersFromFirestore(): Promise<TeamMember[]> 
       if (repaired) {
         merged = members;
       }
+      // If council has members and remote founding members has fewer members, auto-heal from council
+      const currentCouncil = getStoredCouncilMembers();
+      if (currentCouncil.length > 0 && merged.length < currentCouncil.length) {
+        merged = syncCouncilAdminsToFounding(currentCouncil, true);
+        return merged;
+      }
+
       if (typeof window !== "undefined") {
         try {
           localStorage.setItem("src_founding_members", JSON.stringify(merged));
@@ -821,12 +838,20 @@ export function subscribeToFoundingMembers(callback: (members: TeamMember[]) => 
       if (repaired) {
         merged = members;
         saveStoredFoundingMembers(merged, true);
-      } else if (typeof window !== "undefined") {
-        try {
-          localStorage.setItem("src_founding_members", JSON.stringify(merged));
-        } catch {}
-        window.dispatchEvent(new CustomEvent("src_founding_members_updated", { detail: merged }));
-        window.dispatchEvent(new CustomEvent("src_users_updated"));
+      } else {
+        const currentCouncil = getStoredCouncilMembers();
+        if (currentCouncil.length > 0 && merged.length < currentCouncil.length) {
+          merged = syncCouncilAdminsToFounding(currentCouncil, true);
+          callback(merged);
+          return;
+        }
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem("src_founding_members", JSON.stringify(merged));
+          } catch {}
+          window.dispatchEvent(new CustomEvent("src_founding_members_updated", { detail: merged }));
+          window.dispatchEvent(new CustomEvent("src_users_updated"));
+        }
       }
       callback(merged);
     }
