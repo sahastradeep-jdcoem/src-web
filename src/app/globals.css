@@ -100,5 +100,33 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  /* Mobile-safe floating modal & dialogue rules (guarantees uncropped edges on all mobile viewports & safe areas) */
+  .modal-overlay-container {
+    height: 100vh;
+    height: 100dvh;
+    padding-top: max(0.875rem, env(safe-area-inset-top, 0.875rem));
+    padding-bottom: max(0.875rem, env(safe-area-inset-bottom, 0.875rem));
+    padding-left: max(0.75rem, env(safe-area-inset-left, 0.75rem));
+    padding-right: max(0.75rem, env(safe-area-inset-right, 0.75rem));
+  }
+
+  @media (min-width: 640px) {
+    .modal-overlay-container {
+      padding: 1.5rem;
+    }
+  }
+
+  .modal-dialog-card {
+    max-height: calc(100vh - 2.5rem);
+    max-height: calc(100dvh - max(2.5rem, env(safe-area-inset-top, 0px) + env(safe-area-inset-bottom, 0px) + 2rem));
+  }
+
+  @media (min-width: 640px) {
+    .modal-dialog-card {
+      max-height: 88vh;
+    }
+  }
 }
+
 

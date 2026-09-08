@@ -1233,7 +1233,7 @@ export default function StudentDashboardPage() {
               title="Official Delegate Pass"
               subtitle={`Pass ID: ${selectedTicket.registrationId}`}
               maxWidth="4xl"
-              contentClassName="p-3 sm:p-6 w-full max-w-full min-w-0 overflow-hidden flex flex-col items-center justify-center"
+              contentClassName="p-3 sm:p-6 w-full max-w-full min-w-0 flex flex-col items-center justify-center"
               headerAction={
                 <div className="flex items-center gap-2">
                   {canCancelPass && (

@@ -691,8 +691,8 @@ export function CreateListingModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200">
-      <div className="relative w-full max-w-4xl rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden my-6 font-sans flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200 modal-overlay-container">
+      <div className="relative w-full max-w-4xl rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden my-auto font-sans flex flex-col modal-dialog-card">
         
         {/* Header Strip */}
         <div className="px-6 py-5 bg-gradient-to-r from-slate-900 to-[#17458F] text-white flex items-center justify-between border-b border-white/10 shrink-0">

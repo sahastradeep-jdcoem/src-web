@@ -61,12 +61,15 @@ export function LightboxModal({
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 md:p-8 bg-black/95 backdrop-blur-2xl select-none"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 md:p-8 bg-black/95 backdrop-blur-2xl select-none modal-overlay-container"
       role="dialog"
       aria-modal="true"
     >
       {/* Top HUD Toolbar */}
-      <div className="absolute top-0 inset-x-0 p-4 sm:p-6 flex items-center justify-between z-50 pointer-events-none">
+      <div 
+        className="absolute top-0 inset-x-0 p-4 sm:p-6 flex items-center justify-between z-50 pointer-events-none"
+        style={{ paddingTop: "max(1rem, env(safe-area-inset-top, 1rem))" }}
+      >
         <div className="flex items-center gap-3 pointer-events-auto">
           {formattedIndex && (
             <span className="font-mono text-[11px] text-white/80 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 font-bold tracking-wider">
@@ -106,8 +109,8 @@ export function LightboxModal({
       </button>
 
       {/* Main Image & Editorial Metadata Container */}
-      <div className="relative max-w-5xl w-full max-h-[88vh] flex flex-col items-center justify-center my-auto">
-        <div className="relative w-full h-[58vh] sm:h-[68vh] rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center">
+      <div className="relative max-w-5xl w-full max-h-[85dvh] sm:max-h-[88vh] flex flex-col items-center justify-center my-auto">
+        <div className="relative w-full h-[52dvh] sm:h-[68vh] rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center">
           <Image
             src={photo.imageUrl}
             alt={photo.title}
