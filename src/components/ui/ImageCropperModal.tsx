@@ -99,18 +99,23 @@ export function ImageCropperModal({
       e.preventDefault();
       e.stopPropagation();
 
+      let delta = e.deltaY;
+      if (e.deltaMode === 1) delta *= 24; // Line mode
+      else if (e.deltaMode === 2) delta *= 400; // Page mode
+
       let zoomStep = 0;
       if (e.ctrlKey) {
         // Pinch-to-zoom on macOS trackpad
-        zoomStep = -e.deltaY * 0.015;
+        zoomStep = -delta * 0.008;
       } else {
-        // Mouse scroll wheel
-        zoomStep = e.deltaY < 0 ? 0.08 : -0.08;
+        // Proportional mouse wheel / trackpad scroll with max clamp per event
+        const rawStep = -delta * 0.0018;
+        zoomStep = Math.max(-0.12, Math.min(0.12, rawStep));
       }
 
       setZoom((prev) => {
-        const next = +(prev + zoomStep).toFixed(2);
-        return Math.min(Math.max(0.5, next), 4);
+        const next = +(prev + zoomStep).toFixed(3);
+        return Math.min(Math.max(0.5, next), 3.5);
       });
     };
 
@@ -333,12 +338,12 @@ export function ImageCropperModal({
         case "+":
         case "=":
           e.preventDefault();
-          setZoom((z) => Math.min(4, +(z + 0.1).toFixed(2)));
+          setZoom((z) => Math.min(3.5, +(z + 0.1).toFixed(2)));
           break;
         case "-":
         case "_":
           e.preventDefault();
-          setZoom((z) => Math.max(0.7, +(z - 0.1).toFixed(2)));
+          setZoom((z) => Math.max(0.5, +(z - 0.1).toFixed(2)));
           break;
         case "r":
         case "R":
@@ -657,7 +662,7 @@ export function ImageCropperModal({
               className="w-full h-full flex items-center justify-center origin-center pointer-events-none"
               style={{
                 transform: `translate(${pan.x}px, ${pan.y}px) rotate(${totalAngle}deg) scale(${flipH ? -zoom : zoom}, ${flipV ? -zoom : zoom})`,
-                transition: isDragging ? "none" : "transform 0.1s ease-out",
+                transition: "none",
               }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -771,7 +776,7 @@ export function ImageCropperModal({
                 type="range"
                 min="0.5"
                 max="3.5"
-                step="0.05"
+                step="0.01"
                 value={zoom}
                 onChange={(e) => setZoom(parseFloat(e.target.value))}
                 className="w-full accent-[#E78023] cursor-pointer h-1.5 bg-white/20 rounded-lg"
@@ -892,7 +897,7 @@ export function ImageCropperModal({
                   type="range"
                   min="0.5"
                   max="3.5"
-                  step="0.05"
+                  step="0.01"
                   value={zoom}
                   onChange={(e) => setZoom(parseFloat(e.target.value))}
                   className="w-full accent-[#E78023] cursor-pointer h-2 bg-slate-200 rounded-lg"
