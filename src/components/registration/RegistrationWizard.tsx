@@ -691,7 +691,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           currency: orderData.currency || "INR",
           name: "SRC JDCOEM Sahastradeep",
           description: `${event.name} — Registration Fee`,
-          image: "/assets/JDCOEM-Logo-300x300.png",
+          image: "/assets/SRC%20Logo.png",
           order_id: orderData.orderId,
           prefill: {
             name: formData.fullName,
