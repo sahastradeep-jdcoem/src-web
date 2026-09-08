@@ -13,7 +13,17 @@ import {
   subscribeToSiteContent,
   cleanUndefined
 } from "./firebase/firestore";
-import { enqueueCloudWrite, reconcileArrayDatasets, hasPendingWritesFor, compactClubDataset, compactCouncilDataset, compactPillarsDataset } from "./dataSyncEngine";
+import { 
+  enqueueCloudWrite, 
+  reconcileArrayDatasets, 
+  hasPendingWritesFor, 
+  compactClubDataset, 
+  compactCouncilDataset, 
+  compactPillarsDataset,
+  markLocalWrite,
+  getLastLocalWriteTime,
+  isLocalWriteRecent
+} from "./dataSyncEngine";
 
 export function getClubLeaders(club: ClubItem): ClubLeader[] {
   if (!club) return [];
@@ -247,8 +257,6 @@ export function getStoredCouncilMembers(): TeamMember[] {
         if (repaired && typeof window !== "undefined") {
           try {
             localStorage.setItem("src_council_team", JSON.stringify(members));
-            window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: members }));
-            saveSiteContentToFirestore("council_team", members).catch(() => {});
           } catch {}
         }
         return members;
@@ -264,11 +272,19 @@ export function saveStoredCouncilMembers(members: TeamMember[], autoSyncToFoundi
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(stripCategoryAndLevel(members));
+    markLocalWrite("council_team");
     try {
       localStorage.setItem("src_council_team", JSON.stringify(sanitized));
     } catch (lsErr) {
       console.warn("Direct localStorage write notice, auto-compacting...", lsErr);
     }
+
+    // Direct cloud write & queue backup immediately (Directive #3)
+    saveSiteContentToFirestore("council_team", sanitized).catch((err) => {
+      console.warn("Firestore direct write for council team failed, enqueuing:", err);
+    });
+    enqueueCloudWrite("council_team", sanitized, `Council Leadership (${members.length} Members)`);
+
     window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: sanitized }));
     window.dispatchEvent(new CustomEvent("src_tenures_updated"));
     window.dispatchEvent(new CustomEvent("src_users_updated"));
@@ -278,10 +294,7 @@ export function saveStoredCouncilMembers(members: TeamMember[], autoSyncToFoundi
       try {
         localStorage.setItem("src_council_team", JSON.stringify(finalClean));
       } catch {}
-      saveSiteContentToFirestore("council_team", finalClean).catch((err) => {
-        console.warn("Firestore direct write for council team failed, enqueuing:", err);
-      });
-      enqueueCloudWrite("council_team", finalClean, `Council Leadership (${members.length} Members)`);
+      saveSiteContentToFirestore("council_team", finalClean).catch(() => {});
     });
 
     if (autoSyncToFounding && Array.isArray(sanitized)) {
@@ -294,16 +307,23 @@ export function saveStoredCouncilMembers(members: TeamMember[], autoSyncToFoundi
 
 export async function syncCouncilMembersFromFirestore(): Promise<TeamMember[]> {
   try {
-    if (hasPendingWritesFor("council_team")) return getStoredCouncilMembers();
+    const requestTime = Date.now();
+    if (hasPendingWritesFor("council_team") || getLastLocalWriteTime("council_team") >= requestTime) {
+      return getStoredCouncilMembers();
+    }
     const remote = await getSiteContentFromFirestore<TeamMember[]>("council_team");
+    // Verify no local writes occurred while waiting for network response
+    if (hasPendingWritesFor("council_team") || getLastLocalWriteTime("council_team") >= requestTime) {
+      return getStoredCouncilMembers();
+    }
     if (remote !== null && Array.isArray(remote)) {
       const current = getStoredCouncilMembers();
       let merged = stripCategoryAndLevel(reconcileArrayDatasets(current, remote));
       const { repaired, members } = repairCouncilSwapIfNeeded(merged);
       if (repaired) {
         merged = members;
-        saveStoredCouncilMembers(merged, true);
-      } else if (typeof window !== "undefined") {
+      }
+      if (typeof window !== "undefined") {
         try {
           localStorage.setItem("src_council_team", JSON.stringify(merged));
         } catch {}
@@ -335,9 +355,16 @@ export function saveStoredHostingCommittee(members: TeamMember[]): void {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(stripCategoryAndLevel(members));
+    markLocalWrite("hosting_committee");
     try {
       localStorage.setItem("src_hosting_committee", JSON.stringify(sanitized));
     } catch {}
+
+    saveSiteContentToFirestore("hosting_committee", sanitized).catch((err) => {
+      console.warn("Firestore direct write for hosting committee failed, enqueuing:", err);
+    });
+    enqueueCloudWrite("hosting_committee", sanitized, `Hosting Committee (${members.length} Members)`);
+
     window.dispatchEvent(new CustomEvent("src_hosting_updated", { detail: sanitized }));
     window.dispatchEvent(new CustomEvent("src_users_updated"));
 
@@ -346,10 +373,7 @@ export function saveStoredHostingCommittee(members: TeamMember[]): void {
       try {
         localStorage.setItem("src_hosting_committee", JSON.stringify(finalClean));
       } catch {}
-      saveSiteContentToFirestore("hosting_committee", finalClean).catch((err) => {
-        console.warn("Firestore direct write for hosting committee failed, enqueuing:", err);
-      });
-      enqueueCloudWrite("hosting_committee", finalClean, `Hosting Committee (${members.length} Members)`);
+      saveSiteContentToFirestore("hosting_committee", finalClean).catch(() => {});
     });
   } catch (e) {
     console.error("Could not save hosting committee to storage", e);
@@ -358,8 +382,14 @@ export function saveStoredHostingCommittee(members: TeamMember[]): void {
 
 export async function syncHostingCommitteeFromFirestore(): Promise<TeamMember[]> {
   try {
-    if (hasPendingWritesFor("hosting_committee")) return getStoredHostingCommittee();
+    const requestTime = Date.now();
+    if (hasPendingWritesFor("hosting_committee") || getLastLocalWriteTime("hosting_committee") >= requestTime) {
+      return getStoredHostingCommittee();
+    }
     const remote = await getSiteContentFromFirestore<TeamMember[]>("hosting_committee");
+    if (hasPendingWritesFor("hosting_committee") || getLastLocalWriteTime("hosting_committee") >= requestTime) {
+      return getStoredHostingCommittee();
+    }
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
       const current = getStoredHostingCommittee();
       const merged = stripCategoryAndLevel(reconcileArrayDatasets(current, remote));
@@ -648,8 +678,9 @@ export function reconcileCouncilAndFoundingSync(): TeamMember[] {
     const { repaired, members: repairedCouncil } = repairCouncilSwapIfNeeded(council, false);
     if (repaired) {
       council = repairedCouncil;
-      saveStoredCouncilMembers(council, true);
-      return getStoredFoundingMembers();
+      try {
+        localStorage.setItem("src_council_team", JSON.stringify(cleanUndefined(stripCategoryAndLevel(council))));
+      } catch {}
     }
 
     const founders = getStoredFoundingMembers();
@@ -705,8 +736,6 @@ export function getStoredFoundingMembers(): TeamMember[] {
         if (repaired && typeof window !== "undefined") {
           try {
             localStorage.setItem("src_founding_members", JSON.stringify(members));
-            window.dispatchEvent(new CustomEvent("src_founding_members_updated", { detail: members }));
-            saveSiteContentToFirestore("founding_members", members).catch(() => {});
           } catch {}
         }
         return members;
@@ -722,9 +751,16 @@ export function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCounc
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(stripCategoryAndLevel(members));
+    markLocalWrite("founding_members");
     try {
       localStorage.setItem("src_founding_members", JSON.stringify(sanitized));
     } catch {}
+
+    saveSiteContentToFirestore("founding_members", sanitized).catch((err) => {
+      console.warn("Firestore direct write for founding members failed, enqueuing:", err);
+    });
+    enqueueCloudWrite("founding_members", sanitized, `Founding Members (${members.length} Members)`);
+
     window.dispatchEvent(new CustomEvent("src_founding_members_updated", { detail: sanitized }));
     window.dispatchEvent(new CustomEvent("src_tenures_updated"));
     window.dispatchEvent(new CustomEvent("src_users_updated"));
@@ -734,10 +770,7 @@ export function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCounc
       try {
         localStorage.setItem("src_founding_members", JSON.stringify(finalClean));
       } catch {}
-      saveSiteContentToFirestore("founding_members", finalClean).catch((err) => {
-        console.warn("Firestore direct write for founding members failed, enqueuing:", err);
-      });
-      enqueueCloudWrite("founding_members", finalClean, `Founding Members (${members.length} Members)`);
+      saveSiteContentToFirestore("founding_members", finalClean).catch(() => {});
     });
 
     if (autoSyncToCouncil && Array.isArray(sanitized)) {
@@ -750,16 +783,22 @@ export function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCounc
 
 export async function syncFoundingMembersFromFirestore(): Promise<TeamMember[]> {
   try {
-    if (hasPendingWritesFor("founding_members")) return getStoredFoundingMembers();
+    const requestTime = Date.now();
+    if (hasPendingWritesFor("founding_members") || getLastLocalWriteTime("founding_members") >= requestTime) {
+      return getStoredFoundingMembers();
+    }
     const remote = await getSiteContentFromFirestore<TeamMember[]>("founding_members");
+    if (hasPendingWritesFor("founding_members") || getLastLocalWriteTime("founding_members") >= requestTime) {
+      return getStoredFoundingMembers();
+    }
     if (remote !== null && Array.isArray(remote)) {
       const current = getStoredFoundingMembers();
       let merged = stripCategoryAndLevel(reconcileArrayDatasets(current, remote));
       const { repaired, members } = repairCouncilSwapIfNeeded(merged, true);
       if (repaired) {
         merged = members;
-        saveStoredFoundingMembers(merged, true);
-      } else if (typeof window !== "undefined") {
+      }
+      if (typeof window !== "undefined") {
         try {
           localStorage.setItem("src_founding_members", JSON.stringify(merged));
         } catch {}

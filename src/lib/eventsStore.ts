@@ -6,7 +6,15 @@ import {
   subscribeToSiteContent,
   cleanUndefined
 } from "./firebase/firestore";
-import { enqueueCloudWrite, reconcileArrayDatasets, hasPendingWritesFor, compactEventDataset } from "./dataSyncEngine";
+import { 
+  enqueueCloudWrite, 
+  reconcileArrayDatasets, 
+  hasPendingWritesFor, 
+  compactEventDataset,
+  markLocalWrite,
+  getLastLocalWriteTime,
+  isLocalWriteRecent
+} from "./dataSyncEngine";
 
 const EVENTS_STORAGE_KEY = "src_events";
 
@@ -67,19 +75,28 @@ export function saveStoredEvents(events: EventItem[]): void {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(sanitizeEventsList(events));
-    try { localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(sanitized)); } catch (lsErr) { console.warn("localStorage quota exceeded for events:", lsErr); }
-    window.dispatchEvent(new CustomEvent("src_events_updated", { detail: sanitized }));
-    compactEventDataset(sanitized).then((compacted) => {
-      saveSiteContentToFirestore("events", compacted).catch((err) => {
-        console.warn("Firestore direct write for events failed, enqueuing:", err);
-      });
-      enqueueCloudWrite("events", compacted, `Events Roster (${events.length} Events)`);
-    }).catch(() => {
-      saveSiteContentToFirestore("events", sanitized).catch((err) => {
-        console.warn("Firestore direct write for events failed, enqueuing:", err);
-      });
-      enqueueCloudWrite("events", sanitized, `Events Roster (${events.length} Events)`);
+    markLocalWrite("events");
+    try { 
+      localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(sanitized)); 
+    } catch (lsErr) { 
+      console.warn("localStorage quota exceeded for events:", lsErr); 
+    }
+
+    // Direct cloud write & queue backup immediately (Directive #3)
+    saveSiteContentToFirestore("events", sanitized).catch((err) => {
+      console.warn("Firestore direct write for events failed, enqueuing:", err);
     });
+    enqueueCloudWrite("events", sanitized, `Events Roster (${events.length} Events)`);
+
+    window.dispatchEvent(new CustomEvent("src_events_updated", { detail: sanitized }));
+    
+    compactEventDataset(sanitized).then((compacted) => {
+      const cleanCompacted = cleanUndefined(compacted);
+      try {
+        localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(cleanCompacted));
+      } catch {}
+      saveSiteContentToFirestore("events", cleanCompacted).catch(() => {});
+    }).catch(() => {});
   } catch (e) {
     console.error("Could not save events to storage", e);
   }
@@ -90,13 +107,22 @@ export function saveStoredEvents(events: EventItem[]): void {
  */
 export async function syncEventsFromFirestore(): Promise<EventItem[]> {
   try {
-    if (hasPendingWritesFor("events")) return getStoredEvents();
+    const requestTime = Date.now();
+    if (hasPendingWritesFor("events") || getLastLocalWriteTime("events") >= requestTime) {
+      return getStoredEvents();
+    }
     const remote = await getSiteContentFromFirestore<EventItem[]>("events");
+    // Verify no local writes occurred while waiting for network response
+    if (hasPendingWritesFor("events") || getLastLocalWriteTime("events") >= requestTime) {
+      return getStoredEvents();
+    }
     if (remote !== null && Array.isArray(remote)) {
       const current = getStoredEvents();
       const merged = sanitizeEventsList(reconcileArrayDatasets(current, remote));
       if (typeof window !== "undefined") {
-        localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(merged));
+        try {
+          localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(merged));
+        } catch {}
         window.dispatchEvent(new CustomEvent("src_events_updated", { detail: merged }));
       }
       return merged;
@@ -113,11 +139,13 @@ export async function syncEventsFromFirestore(): Promise<EventItem[]> {
 export function subscribeToEvents(callback: (events: EventItem[]) => void): () => void {
   return subscribeToSiteContent<EventItem[]>("events", (remote) => {
     if (remote !== null && Array.isArray(remote)) {
-      if (hasPendingWritesFor("events")) return;
+      if (hasPendingWritesFor("events") || isLocalWriteRecent("events", 3000)) return;
       const current = getStoredEvents();
       const merged = sanitizeEventsList(reconcileArrayDatasets(current, remote));
       if (typeof window !== "undefined") {
-        localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(merged));
+        try {
+          localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(merged));
+        } catch {}
         window.dispatchEvent(new CustomEvent("src_events_updated", { detail: merged }));
       }
       callback(merged);

@@ -20,7 +20,13 @@ import {
   subscribeToSiteContent,
   cleanUndefined
 } from "./firebase/firestore";
-import { enqueueCloudWrite, reconcileArrayDatasets, hasPendingWritesFor } from "./dataSyncEngine";
+import { 
+  enqueueCloudWrite, 
+  reconcileArrayDatasets, 
+  hasPendingWritesFor, 
+  markLocalWrite, 
+  getLastLocalWriteTime 
+} from "./dataSyncEngine";
 
 export interface CouncilTenure {
   id: string;
@@ -349,23 +355,23 @@ export function saveStoredTenures(tenures: CouncilTenure[]): void {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(tenures);
+    markLocalWrite("council_tenures");
     try {
       localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(sanitized));
     } catch (lsErr) {
-      console.warn("Storage quota warning in saveStoredTenures, compacting duplicated clubs/events...", lsErr);
-      // Compact: strip duplicated clubs and events arrays to ensure tenures fit in localStorage
-      const compacted = sanitized.map((t: any) => ({
-        ...t,
-        clubs: [],
-        events: [],
-      }));
-      try { localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(compacted)); } catch {}
+      console.warn("Direct localStorage write notice for tenures, auto-compacting...", lsErr);
+      const compacted = sanitized.map((t: any) => ({ ...t, clubs: [], events: [] }));
+      try {
+        localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(compacted));
+      } catch {}
     }
     window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: sanitized }));
+
+    // Direct cloud write & queue backup immediately (Directive #3)
     saveSiteContentToFirestore("council_tenures", sanitized).catch((err) => {
       console.warn("Firestore direct write for tenures failed, enqueuing:", err);
     });
-    enqueueCloudWrite("council_tenures", sanitized, `Council Tenures (${tenures.length} Sessions)`);
+    enqueueCloudWrite("council_tenures", sanitized, `Council Tenures (${tenures.length} Tenures)`);
   } catch (e) {
     console.error("Could not save tenures to storage", e);
   }
@@ -394,7 +400,8 @@ export function updateTenureRoster(
     events?: EventItem[];
     theme?: string;
     archiveNotes?: string;
-  }
+  },
+  skipActiveStoreSync = false
 ): void {
   if (typeof window === "undefined") return;
   const tenures = getStoredTenures();
@@ -403,14 +410,14 @@ export function updateTenureRoster(
 
   const isCurrentActive = target.isCurrent;
 
-  // If this is the currently active tenure, also update the live active stores
-  if (isCurrentActive) {
+  // If this is the currently active tenure, also update the live active stores unless skipped
+  if (isCurrentActive && !skipActiveStoreSync) {
     if (updates.adminCouncil) saveStoredCouncilMembers(updates.adminCouncil);
     if (updates.hostingCommittee) saveStoredHostingCommittee(updates.hostingCommittee);
     if (updates.foundingMembers) saveStoredFoundingMembers(updates.foundingMembers);
     if (updates.clubs) saveStoredClubs(updates.clubs);
     if (updates.events) saveStoredEvents(updates.events);
-  } else {
+  } else if (!isCurrentActive) {
     // Draft tenure: save to dedicated draft stores immediately!
     if (updates.adminCouncil) saveStoredDraftCouncil(tenureId, updates.adminCouncil);
     if (updates.hostingCommittee) saveStoredDraftHosting(tenureId, updates.hostingCommittee);
@@ -624,8 +631,14 @@ export function createAndActivateNewTenure(
 
 export async function syncTenuresFromFirestore(): Promise<CouncilTenure[]> {
   try {
-    if (hasPendingWritesFor("council_tenures")) return getStoredTenures();
+    const requestTime = Date.now();
+    if (hasPendingWritesFor("council_tenures") || getLastLocalWriteTime("council_tenures") >= requestTime) {
+      return getStoredTenures();
+    }
     const remote = await getSiteContentFromFirestore<CouncilTenure[]>("council_tenures");
+    if (hasPendingWritesFor("council_tenures") || getLastLocalWriteTime("council_tenures") >= requestTime) {
+      return getStoredTenures();
+    }
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
       const filtered = remote.filter((t: CouncilTenure) => t.id !== "tenure-2024-25" && !t.label.includes("2024"));
       const current = getStoredTenures();
