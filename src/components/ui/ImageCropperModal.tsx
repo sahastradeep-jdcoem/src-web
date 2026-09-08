@@ -85,6 +85,40 @@ export function ImageCropperModal({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchStartDistRef = useRef<number | null>(null);
+  const pinchStartZoomRef = useRef<number>(1);
+
+  // Native non-passive wheel & trackpad pinch listener directly on darkroom viewport
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el || !isOpen) return;
+
+    const handleNativeWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      let zoomStep = 0;
+      if (e.ctrlKey) {
+        // Pinch-to-zoom on macOS trackpad
+        zoomStep = -e.deltaY * 0.015;
+      } else {
+        // Mouse scroll wheel
+        zoomStep = e.deltaY < 0 ? 0.08 : -0.08;
+      }
+
+      setZoom((prev) => {
+        const next = +(prev + zoomStep).toFixed(2);
+        return Math.min(Math.max(0.5, next), 4);
+      });
+    };
+
+    el.addEventListener("wheel", handleNativeWheel, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", handleNativeWheel);
+    };
+  }, [isOpen]);
 
   // Preload natural image dimensions immediately upon receipt of imageSrc
   useEffect(() => {
@@ -145,10 +179,10 @@ export function ImageCropperModal({
   const currentRatio = getRatioMultiplier(selectedRatio);
   const totalAngle = (rotationSteps * 90) + fineAngle;
 
-  // Calibrated Viewport Box Boundaries (prevents any aspect-ratio squash or CSS distortion)
+  // Calibrated Viewport Box Boundaries (fits comfortably within laptop displays)
   const cropBoxDims = useMemo(() => {
-    const maxBoxW = 460;
-    const maxBoxH = 360;
+    const maxBoxW = 420;
+    const maxBoxH = 280;
     const ratio = currentRatio > 0 ? currentRatio : (16 / 9);
 
     if (ratio >= (maxBoxW / maxBoxH)) {
@@ -181,35 +215,65 @@ export function ImageCropperModal({
     }
   }, [imgNaturalSize, cropBoxDims]);
 
-  // Mouse & Touch Pointer Pan handlers
+  // Mouse & Touch Pointer Pan and Touchscreen Pinch Zoom handlers
   const handlePointerDown = (e: React.PointerEvent) => {
-    setIsDragging(true);
-    setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+    activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (activePointersRef.current.size === 1) {
+      setIsDragging(true);
+      setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+    } else if (activePointersRef.current.size === 2) {
+      setIsDragging(false);
+      const points = Array.from(activePointersRef.current.values());
+      const dist = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+      pinchStartDistRef.current = dist;
+      pinchStartZoomRef.current = zoom;
+    }
+
     try {
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
     } catch {}
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDragging) return;
-    setPan({
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y,
-    });
+    if (activePointersRef.current.has(e.pointerId)) {
+      activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+
+    if (activePointersRef.current.size === 2 && pinchStartDistRef.current !== null) {
+      const points = Array.from(activePointersRef.current.values());
+      const currentDist = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+      if (pinchStartDistRef.current > 0) {
+        const factor = currentDist / pinchStartDistRef.current;
+        const newZoom = Math.min(Math.max(0.5, +(pinchStartZoomRef.current * factor).toFixed(2)), 4);
+        setZoom(newZoom);
+      }
+      return;
+    }
+
+    if (isDragging && activePointersRef.current.size === 1) {
+      setPan({
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y,
+      });
+    }
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    setIsDragging(false);
+    activePointersRef.current.delete(e.pointerId);
+    if (activePointersRef.current.size === 0) {
+      setIsDragging(false);
+      pinchStartDistRef.current = null;
+    } else if (activePointersRef.current.size === 1) {
+      const remaining = Array.from(activePointersRef.current.values())[0];
+      setDragStart({ x: remaining.x - pan.x, y: remaining.y - pan.y });
+      setIsDragging(true);
+      pinchStartDistRef.current = null;
+    }
+
     try {
       (e.target as HTMLElement).releasePointerCapture(e.pointerId);
     } catch {}
-  };
-
-  // Wheel to zoom smoothly
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const zoomStep = e.deltaY < 0 ? 0.08 : -0.08;
-    setZoom((prev) => Math.min(Math.max(0.7, +(prev + zoomStep).toFixed(2)), 4));
   };
 
   // Image load handler
@@ -425,8 +489,9 @@ export function ImageCropperModal({
       title={title}
       subtitle="Pan, zoom, level, and frame your photography with pixel-perfect studio precision."
       maxWidth="2xl"
+      contentClassName="p-4 sm:p-5"
     >
-      <div className="space-y-4">
+      <div className="space-y-3">
         
         {/* Aspect Ratio Selector Chips */}
         <div className="space-y-2">
@@ -567,9 +632,10 @@ export function ImageCropperModal({
 
         {/* Studio Darkroom Viewport */}
         <div 
-          className="relative w-full bg-[#0B0F17] rounded-3xl overflow-hidden border border-slate-800 flex items-center justify-center select-none shadow-2xl p-4 sm:p-6"
-          style={{ minHeight: "360px", maxHeight: "480px" }}
-          onWheel={handleWheel}
+          ref={viewportRef}
+          data-cropper-viewport="true"
+          className="relative w-full bg-[#0B0F17] rounded-3xl overflow-hidden border border-slate-800 flex items-center justify-center select-none shadow-2xl p-3 sm:p-4"
+          style={{ minHeight: "280px", maxHeight: "330px" }}
         >
           {/* Active Aspect Ratio Crop Window */}
           <div
@@ -669,22 +735,77 @@ export function ImageCropperModal({
             <div className="absolute bottom-2 left-2 w-3.5 h-3.5 border-b-2 border-l-2 border-white pointer-events-none drop-shadow-md" />
             <div className="absolute bottom-2 right-2 w-3.5 h-3.5 border-b-2 border-r-2 border-white pointer-events-none drop-shadow-md" />
 
-            {/* Floating Live Dimensions & Gesture Guide Tag */}
-            <div className="absolute bottom-2.5 left-2.5 px-2 py-1 rounded-lg bg-black/75 backdrop-blur-md text-[10px] font-mono text-white/90 pointer-events-none flex items-center gap-1.5 border border-white/10 shadow-lg">
-              <Move className="w-3 h-3 text-[#E78023]" />
-              <span>Drag to Pan • Wheel to Zoom</span>
-            </div>
+          </div>
 
-            {imgNaturalSize.width > 0 && (
-              <div className="absolute top-2.5 right-2.5 px-2 py-1 rounded-lg bg-black/75 backdrop-blur-md text-[10px] font-mono text-slate-300 pointer-events-none border border-white/10 shadow-lg">
-                Source: {imgNaturalSize.width} × {imgNaturalSize.height}
-              </div>
-            )}
+          {/* Floating Live Dimensions & Gesture Guide Tag */}
+          <div className="absolute bottom-2.5 left-2.5 z-20 px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md text-[10px] font-mono text-white/90 pointer-events-none flex items-center gap-1.5 border border-white/10 shadow-lg">
+            <Move className="w-3 h-3 text-[#E78023]" />
+            <span className="hidden sm:inline">Drag to Pan • Wheel/Pinch to Zoom</span>
+            <span className="sm:hidden">Pan • Pinch Zoom</span>
+          </div>
+
+          {imgNaturalSize.width > 0 && (
+            <div className="absolute top-2.5 right-2.5 z-20 px-2 py-1 rounded-lg bg-black/80 backdrop-blur-md text-[10px] font-mono text-slate-300 pointer-events-none border border-white/10 shadow-lg">
+              Source: {imgNaturalSize.width} × {imgNaturalSize.height}
+            </div>
+          )}
+
+          {/* Floating Studio Quick Zoom Bar */}
+          <div 
+            data-interactive-wheel="true"
+            className="absolute bottom-2.5 right-2.5 z-20 flex items-center gap-1 p-1 rounded-xl bg-black/85 backdrop-blur-md border border-white/15 shadow-xl select-none"
+          >
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setZoom((prev) => Math.max(0.5, +(prev - 0.15).toFixed(2)));
+              }}
+              className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 active:bg-white/30 text-white flex items-center justify-center transition-all cursor-pointer"
+              title="Zoom Out (-)"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <div className="w-16 sm:w-24 px-1 flex items-center">
+              <input
+                type="range"
+                min="0.5"
+                max="3.5"
+                step="0.05"
+                value={zoom}
+                onChange={(e) => setZoom(parseFloat(e.target.value))}
+                className="w-full accent-[#E78023] cursor-pointer h-1.5 bg-white/20 rounded-lg"
+                title="Adjust Zoom"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setZoom((prev) => Math.min(3.5, +(prev + 0.15).toFixed(2)));
+              }}
+              className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 active:bg-white/30 text-white flex items-center justify-center transition-all cursor-pointer"
+              title="Zoom In (+)"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setZoom(1);
+                setPan({ x: 0, y: 0 });
+              }}
+              className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 active:bg-white/30 text-[10px] font-mono font-bold text-amber-300 transition-all cursor-pointer"
+              title="Click to reset zoom to 100%"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
           </div>
         </div>
 
         {/* Professional Control Console (Tabbed: Scale & Crop, Straighten & Flip) */}
-        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3.5">
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
           
           {/* Controls Navigation Tabs */}
           <div className="flex items-center justify-between border-b border-slate-200/80 pb-2.5">
@@ -761,7 +882,7 @@ export function ImageCropperModal({
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => setZoom((prev) => Math.max(0.7, +(prev - 0.15).toFixed(2)))}
+                  onClick={() => setZoom((prev) => Math.max(0.5, +(prev - 0.15).toFixed(2)))}
                   className="p-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 cursor-pointer shadow-xs transition-colors"
                   title="Zoom Out"
                 >
@@ -769,7 +890,7 @@ export function ImageCropperModal({
                 </button>
                 <input
                   type="range"
-                  min="0.7"
+                  min="0.5"
                   max="3.5"
                   step="0.05"
                   value={zoom}

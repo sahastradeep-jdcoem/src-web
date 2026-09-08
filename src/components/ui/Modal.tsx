@@ -110,8 +110,13 @@ export function Modal({
         return;
       }
 
-      // If mouse is inside the modal dialog: check if the pointer is over a scrollable element
+      // If mouse is inside an element that handles its own wheel events (e.g. Image Cropper zoom, custom canvas):
       let el = e.target as HTMLElement | null;
+      if (el?.closest("[data-cropper-viewport]") || el?.closest("[data-interactive-wheel]")) {
+        return; // Allow wheel event to reach the local component for zooming
+      }
+
+      // If mouse is inside the modal dialog: check if the pointer is over a scrollable element
       let scrollableEl: HTMLElement | null = null;
 
       while (el && el !== modalRef.current.parentElement) {
@@ -203,7 +208,7 @@ export function Modal({
       <div
         ref={modalRef}
         className={cn(
-          "relative w-full max-w-full min-w-0 bg-white border border-slate-200 rounded-3xl shadow-2xl z-10 my-auto flex flex-col overflow-hidden text-slate-800 overscroll-contain select-text shrink-0 modal-dialog-card",
+          "relative w-full max-w-full min-w-0 bg-white border border-slate-200 rounded-3xl shadow-2xl z-10 my-auto flex flex-col max-h-[92vh] sm:max-h-[90vh] overflow-hidden text-slate-800 overscroll-contain select-text shrink-0 modal-dialog-card",
           maxWidthClasses[maxWidth]
         )}
       >
@@ -253,7 +258,7 @@ export function Modal({
         {/* Content - strictly scrollable and overscroll-contained */}
         <div 
           className={cn(
-            "p-5 sm:p-7 overflow-y-auto flex-1 overscroll-contain min-w-0 max-w-full", 
+            "p-5 sm:p-7 overflow-y-auto flex-1 min-h-0 overscroll-contain min-w-0 max-w-full", 
             contentClassName
           )}
         >
