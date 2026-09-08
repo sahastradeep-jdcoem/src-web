@@ -366,14 +366,20 @@ export async function processQueue(): Promise<boolean> {
         const latestQueue = getPendingQueue();
         const updatedQueue = latestQueue.filter((q) => q.id !== item.id && q.docId !== item.docId);
         savePendingQueue(updatedQueue);
-      } catch (err) {
+      } catch (err: any) {
         console.warn(`[SyncEngine] Firestore write failed for ${item.docId}, queued for auto-retry`, err);
         allSuccess = false;
         // On error, increment retry count and stop current loop (will auto-retry on reconnect)
         const latestQueue = getPendingQueue();
         const itemIdx = latestQueue.findIndex((q) => q.id === item.id);
         if (itemIdx >= 0) {
-          latestQueue[itemIdx].retryCount += 1;
+          latestQueue[itemIdx].retryCount = (latestQueue[itemIdx].retryCount || 0) + 1;
+          const errMsg = err?.message || String(err);
+          const isSizeError = errMsg.includes("exceeds maximum allowed size") || errMsg.includes("too large");
+          if (latestQueue[itemIdx].retryCount >= 3 || isSizeError) {
+            console.error(`[SyncEngine] Dropping unrecoverable queue item for ${item.docId} after ${latestQueue[itemIdx].retryCount} attempts:`, errMsg);
+            latestQueue.splice(itemIdx, 1);
+          }
           savePendingQueue(latestQueue);
         }
         break;

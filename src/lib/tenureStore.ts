@@ -351,18 +351,59 @@ export function getPublicTenures(): CouncilTenure[] {
   return all.filter((t) => !t.isDraft && (t.isCurrent || t.status === "active" || t.status === "archived"));
 }
 
+export function compactTenureForStorage(tenure: CouncilTenure): CouncilTenure {
+  const stripHeavy = (members?: TeamMember[]): TeamMember[] => {
+    if (!Array.isArray(members)) return [];
+    return members.map((m) => ({
+      ...m,
+      avatar: (m.avatar && m.avatar.startsWith("data:image/") && m.avatar.length > 5000) ? "" : m.avatar,
+    }));
+  };
+
+  const stripClubHeavy = (clubs?: ClubItem[]): ClubItem[] => {
+    if (!Array.isArray(clubs)) return [];
+    return clubs.map((c) => ({
+      ...c,
+      logoImage: (c.logoImage && c.logoImage.startsWith("data:image/") && c.logoImage.length > 5000) ? "" : c.logoImage,
+      cardImage: (c.cardImage && c.cardImage.startsWith("data:image/") && c.cardImage.length > 5000) ? "" : c.cardImage,
+      headerImage: (c.headerImage && c.headerImage.startsWith("data:image/") && c.headerImage.length > 5000) ? "" : c.headerImage,
+    }));
+  };
+
+  const stripEventHeavy = (events?: EventItem[]): EventItem[] => {
+    if (!Array.isArray(events)) return [];
+    return events.map((e) => ({
+      ...e,
+      poster: (e.poster && e.poster.startsWith("data:image/") && e.poster.length > 5000) ? "" : e.poster,
+      posterImage: (e.posterImage && e.posterImage.startsWith("data:image/") && e.posterImage.length > 5000) ? "" : e.posterImage,
+      cardImage: (e.cardImage && e.cardImage.startsWith("data:image/") && e.cardImage.length > 5000) ? "" : e.cardImage,
+      headerImage: (e.headerImage && e.headerImage.startsWith("data:image/") && e.headerImage.length > 5000) ? "" : e.headerImage,
+    }));
+  };
+
+  return {
+    ...tenure,
+    adminCouncil: stripHeavy(tenure.adminCouncil),
+    hostingCommittee: stripHeavy(tenure.hostingCommittee),
+    foundingMembers: stripHeavy(tenure.foundingMembers),
+    clubs: stripClubHeavy(tenure.clubs),
+    events: stripEventHeavy(tenure.events),
+  };
+}
+
 export function saveStoredTenures(tenures: CouncilTenure[]): void {
   if (typeof window === "undefined") return;
   try {
-    const sanitized = cleanUndefined(tenures);
+    const compactedTenures = tenures.map(compactTenureForStorage);
+    const sanitized = cleanUndefined(compactedTenures);
     markLocalWrite("council_tenures");
     try {
       localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(sanitized));
     } catch (lsErr) {
       console.warn("Direct localStorage write notice for tenures, auto-compacting...", lsErr);
-      const compacted = sanitized.map((t: any) => ({ ...t, clubs: [], events: [] }));
+      const minimalist = sanitized.map((t: any) => ({ ...t, clubs: [], events: [], adminCouncil: [], hostingCommittee: [], foundingMembers: [] }));
       try {
-        localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(compacted));
+        localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(minimalist));
       } catch {}
     }
     window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: sanitized }));

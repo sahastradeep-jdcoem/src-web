@@ -253,7 +253,21 @@ export function getStoredCouncilMembers(): TeamMember[] {
     if (stored !== null) {
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed)) {
-        const { repaired, members } = repairCouncilSwapIfNeeded(stripCategoryAndLevel(parsed));
+        let { repaired, members } = repairCouncilSwapIfNeeded(stripCategoryAndLevel(parsed));
+        // Auto-heal missing canonical officers from initialAdminCouncil (e.g. Nadeem Khan #11, Shruti Khadse #12, Vrutant Bingewar #13)
+        if (members.length < initialAdminCouncil.length) {
+          let healed = false;
+          for (const canon of initialAdminCouncil) {
+            if (!members.some((m) => matchCouncilAndFounder(m, canon))) {
+              members.push(canon);
+              healed = true;
+            }
+          }
+          if (healed) {
+            members.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
+            repaired = true;
+          }
+        }
         if (repaired && typeof window !== "undefined") {
           try {
             localStorage.setItem("src_council_team", JSON.stringify(members));
@@ -277,6 +291,13 @@ export function saveStoredCouncilMembers(members: TeamMember[], autoSyncToFoundi
       localStorage.setItem("src_council_team", JSON.stringify(sanitized));
     } catch (lsErr) {
       console.warn("Direct localStorage write notice, auto-compacting...", lsErr);
+      try {
+        const quotaSafe = sanitized.map((m: any) => ({
+          ...m,
+          avatar: (m.avatar && m.avatar.startsWith("data:image/") && m.avatar.length > 50000) ? "" : m.avatar
+        }));
+        localStorage.setItem("src_council_team", JSON.stringify(quotaSafe));
+      } catch {}
     }
 
     // Direct cloud write & queue backup immediately (Directive #3)
@@ -322,6 +343,20 @@ export async function syncCouncilMembersFromFirestore(): Promise<TeamMember[]> {
       const { repaired, members } = repairCouncilSwapIfNeeded(merged);
       if (repaired) {
         merged = members;
+      }
+      // Auto-heal missing canonical members if remote snapshot was missing them
+      if (merged.length < initialAdminCouncil.length) {
+        let healed = false;
+        for (const canon of initialAdminCouncil) {
+          if (!merged.some((m) => matchCouncilAndFounder(m, canon))) {
+            merged.push(canon);
+            healed = true;
+          }
+        }
+        if (healed) {
+          merged.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
+          saveSiteContentToFirestore("council_team", cleanUndefined(merged)).catch(() => {});
+        }
       }
       if (typeof window !== "undefined") {
         try {
@@ -497,6 +532,23 @@ export function subscribeToCouncilMembers(callback: (members: TeamMember[]) => v
       const { repaired, members } = repairCouncilSwapIfNeeded(merged);
       if (repaired) {
         merged = members;
+      }
+      if (merged.length < initialAdminCouncil.length) {
+        let healed = false;
+        for (const canon of initialAdminCouncil) {
+          if (!merged.some((m) => matchCouncilAndFounder(m, canon))) {
+            merged.push(canon);
+            healed = true;
+          }
+        }
+        if (healed) {
+          merged.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
+          saveStoredCouncilMembers(merged, true);
+          callback(merged);
+          return;
+        }
+      }
+      if (repaired) {
         saveStoredCouncilMembers(merged, true);
       } else if (typeof window !== "undefined") {
         try {
@@ -742,7 +794,21 @@ export function getStoredFoundingMembers(): TeamMember[] {
     if (stored !== null) {
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed)) {
-        const { repaired, members } = repairCouncilSwapIfNeeded(stripCategoryAndLevel(parsed), true);
+        let { repaired, members } = repairCouncilSwapIfNeeded(stripCategoryAndLevel(parsed), true);
+        // Auto-heal missing canonical pioneers from initialFoundingMembers (13 canonical positions)
+        if (members.length < initialFoundingMembers.length) {
+          let healed = false;
+          for (const canon of initialFoundingMembers) {
+            if (!members.some((m) => matchCouncilAndFounder(m, canon))) {
+              members.push(canon);
+              healed = true;
+            }
+          }
+          if (healed) {
+            members.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
+            repaired = true;
+          }
+        }
         if (repaired && typeof window !== "undefined") {
           try {
             localStorage.setItem("src_founding_members", JSON.stringify(members));
@@ -764,7 +830,16 @@ export function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCounc
     markLocalWrite("founding_members");
     try {
       localStorage.setItem("src_founding_members", JSON.stringify(sanitized));
-    } catch {}
+    } catch (lsErr) {
+      console.warn("Direct localStorage write notice for founders, auto-compacting...", lsErr);
+      try {
+        const quotaSafe = sanitized.map((m: any) => ({
+          ...m,
+          avatar: (m.avatar && m.avatar.startsWith("data:image/") && m.avatar.length > 50000) ? "" : m.avatar
+        }));
+        localStorage.setItem("src_founding_members", JSON.stringify(quotaSafe));
+      } catch {}
+    }
 
     saveSiteContentToFirestore("founding_members", sanitized).catch((err) => {
       console.warn("Firestore direct write for founding members failed, enqueuing:", err);
@@ -814,6 +889,19 @@ export async function syncFoundingMembersFromFirestore(): Promise<TeamMember[]> 
         merged = syncCouncilAdminsToFounding(currentCouncil, true);
         return merged;
       }
+      if (merged.length < initialFoundingMembers.length) {
+        let healed = false;
+        for (const canon of initialFoundingMembers) {
+          if (!merged.some((m) => matchCouncilAndFounder(m, canon))) {
+            merged.push(canon);
+            healed = true;
+          }
+        }
+        if (healed) {
+          merged.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
+          saveSiteContentToFirestore("founding_members", cleanUndefined(merged)).catch(() => {});
+        }
+      }
 
       if (typeof window !== "undefined") {
         try {
@@ -844,6 +932,21 @@ export function subscribeToFoundingMembers(callback: (members: TeamMember[]) => 
           merged = syncCouncilAdminsToFounding(currentCouncil, true);
           callback(merged);
           return;
+        }
+        if (merged.length < initialFoundingMembers.length) {
+          let healed = false;
+          for (const canon of initialFoundingMembers) {
+            if (!merged.some((m) => matchCouncilAndFounder(m, canon))) {
+              merged.push(canon);
+              healed = true;
+            }
+          }
+          if (healed) {
+            merged.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
+            saveStoredFoundingMembers(merged, true);
+            callback(merged);
+            return;
+          }
         }
         if (typeof window !== "undefined") {
           try {
