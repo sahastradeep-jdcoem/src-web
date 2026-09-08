@@ -40,7 +40,8 @@ import {
   getStoredVotedPolls,
   getStoredListingResponses,
   syncListingResponsesFromFirestore,
-  subscribeToListingResponses
+  subscribeToListingResponses,
+  getPollStats
 } from "@/lib/listingsStore";
 import { ListingItem, ListingResponseRecord } from "@/types/listings";
 import { useAuth } from "@/context/AuthContext";
@@ -261,6 +262,7 @@ export default function ListingDetailPage() {
       if (res.updatedListing) {
         setListing(res.updatedListing);
       }
+      setAllResponses(getStoredListingResponses());
       setVotedPolls(getStoredVotedPolls(user.uid));
       showToast("Vote recorded successfully!");
       try {
@@ -384,7 +386,6 @@ export default function ListingDetailPage() {
   const isOpp = listing.type === "opportunity";
   const isSub = listing.type === "submission";
   const isIssue = listing.type === "issue";
-  const totalPollVotes = listing.pollConfig?.totalVotes || 0;
   const isJdcoemOnly = listing.targetAudience === "jdcoem_only" || listing.isInterCollege === false;
 
   return (
@@ -516,7 +517,8 @@ export default function ListingDetailPage() {
           {isPoll && listing.pollConfig && (() => {
             const userVotedOptionId = user && listing ? votedPolls[listing.id] : null;
             const isOptionValid = Boolean(listing && userVotedOptionId && listing.pollConfig.options.some((o) => o.id === userVotedOptionId));
-            const hasVoted = Boolean(user) && Boolean(userVotedOptionId) && isOptionValid && totalPollVotes > 0;
+            const hasVoted = Boolean(user) && Boolean(userVotedOptionId) && isOptionValid;
+            const pollStats = getPollStats(listing, allResponses, user?.uid, userVotedOptionId);
 
             return (
               <div className="p-6 sm:p-8 border-t border-slate-200 space-y-5">
@@ -557,8 +559,8 @@ export default function ListingDetailPage() {
                 )}
 
                 <div className="space-y-3">
-                  {listing.pollConfig.options.map((opt) => {
-                    const pct = totalPollVotes > 0 ? Math.round((opt.votes / totalPollVotes) * 100) : 0;
+                  {pollStats.computedOptions.map((opt) => {
+                    const pct = pollStats.totalVotes > 0 ? Math.round((opt.votes / pollStats.totalVotes) * 100) : 0;
                     const isSelectedByUser = userVotedOptionId === opt.id;
 
                     return (

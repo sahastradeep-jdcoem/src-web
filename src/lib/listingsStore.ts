@@ -186,6 +186,105 @@ export function getStoredVotedPolls(userId?: string): Record<string, string> {
   }
 }
 
+export interface PollStats {
+  optionCounts: Record<string, number>;
+  computedOptions: { id: string; text: string; votes: number }[];
+  sortedOptions: { id: string; text: string; votes: number }[];
+  totalVotes: number;
+  leadingOption: { id: string; text: string; votes: number } | null;
+  leadingPct: number;
+}
+
+/**
+ * Centrally aggregates ballots from all students across the college (from Firestore registrations
+ * and listing_responses) alongside any baseline seed votes configured on the poll.
+ */
+export function getPollStats(
+  listing: ListingItem,
+  responses?: ListingResponseRecord[],
+  currentUserId?: string,
+  userSelectedOptionId?: string | null
+): PollStats {
+  if (!listing.pollConfig || !Array.isArray(listing.pollConfig.options)) {
+    return {
+      optionCounts: {},
+      computedOptions: [],
+      sortedOptions: [],
+      totalVotes: 0,
+      leadingOption: null,
+      leadingPct: 0,
+    };
+  }
+
+  const allResponses = responses && responses.length > 0 ? responses : getStoredListingResponses();
+  const pollResponses = allResponses.filter(
+    (r) => r.listingId === listing.id || r.listingSlug === listing.slug
+  );
+
+  const optionCounts: Record<string, number> = {};
+  const votersSeen = new Set<string>();
+
+  pollResponses.forEach((r) => {
+    const voterKey = r.id || r.userId || r.userEmail || r.btId;
+    if (voterKey) votersSeen.add(voterKey);
+
+    const ids: string[] =
+      r.selectedOptionIds && r.selectedOptionIds.length > 0
+        ? r.selectedOptionIds
+        : ((r as any).selectedOptionId ? [(r as any).selectedOptionId] : []);
+    if (ids.length === 0 && (r as any).customAnswers?.optionId) {
+      ids.push((r as any).customAnswers.optionId);
+    }
+    ids.forEach((optId) => {
+      optionCounts[optId] = (optionCounts[optId] || 0) + 1;
+    });
+  });
+
+  // Optimistic reconciliation: If the current user has selected an option locally,
+  // ensure their vote is tallied even before remote snapshot returns
+  if (userSelectedOptionId) {
+    const userVotedInResponses = pollResponses.some(
+      (r) =>
+        (currentUserId && (r.userId === currentUserId || r.id === `hub_poll_${listing.id}_${currentUserId}`)) ||
+        (r.selectedOptionIds && r.selectedOptionIds.includes(userSelectedOptionId) && currentUserId && (r.userId === currentUserId || r.id?.endsWith(`_${currentUserId}`)))
+    );
+    if (!userVotedInResponses) {
+      optionCounts[userSelectedOptionId] = (optionCounts[userSelectedOptionId] || 0) + 1;
+      votersSeen.add(`local_${currentUserId || "voter"}`);
+    }
+  }
+
+  const computedOptions = listing.pollConfig.options.map((opt) => {
+    const ballotVotes = optionCounts[opt.id] || 0;
+    const baseVotes = opt.votes || 0;
+    return {
+      ...opt,
+      votes: Math.max(baseVotes, ballotVotes),
+    };
+  });
+
+  const totalComputedOptionVotes = computedOptions.reduce((acc, opt) => acc + opt.votes, 0);
+  const totalVotes = Math.max(
+    listing.pollConfig.totalVotes || 0,
+    votersSeen.size,
+    pollResponses.length,
+    totalComputedOptionVotes
+  );
+
+  const sortedOptions = [...computedOptions].sort((a, b) => b.votes - a.votes);
+  const leadingOption = sortedOptions[0] || null;
+  const leadingPct = totalVotes > 0 && leadingOption ? Math.round((leadingOption.votes / totalVotes) * 100) : 0;
+
+  return {
+    optionCounts,
+    computedOptions,
+    sortedOptions,
+    totalVotes,
+    leadingOption,
+    leadingPct,
+  };
+}
+
 export function voteOnListingPoll(
   listingId: string, 
   optionId: string, 

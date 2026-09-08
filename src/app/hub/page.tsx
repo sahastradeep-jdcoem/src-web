@@ -28,9 +28,12 @@ import {
   syncListingsFromFirestore,
   voteOnListingPoll, 
   getStoredVotedPolls,
-  syncListingResponsesFromFirestore
+  syncListingResponsesFromFirestore,
+  getStoredListingResponses,
+  subscribeToListingResponses,
+  getPollStats
 } from "@/lib/listingsStore";
-import { ListingItem, ListingPillar } from "@/types/listings";
+import { ListingItem, ListingPillar, ListingResponseRecord } from "@/types/listings";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { isExternalUser as checkIsExternalUser } from "@/lib/usersStore";
@@ -40,6 +43,7 @@ export default function StudentHubPage() {
   const { user, openAuthModal } = useAuth();
   const isExternalUser = checkIsExternalUser(user);
   const [listings, setListings] = useState<ListingItem[]>([]);
+  const [responses, setResponses] = useState<ListingResponseRecord[]>([]);
   const [selectedPillar, setSelectedPillar] = useState<ListingPillar | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [votedPolls, setVotedPolls] = useState<Record<string, string>>({});
@@ -90,6 +94,7 @@ export default function StudentHubPage() {
 
   useEffect(() => {
     setListings(getStoredListings());
+    setResponses(getStoredListingResponses());
 
     // CRITICAL: Fetch fresh from Firestore on mount
     syncListingsFromFirestore().then((remote) => {
@@ -98,7 +103,13 @@ export default function StudentHubPage() {
       }
     });
 
-    const unsub = subscribeToListings((updated) => {
+    syncListingResponsesFromFirestore().then((res) => {
+      if (res && Array.isArray(res)) {
+        setResponses(res);
+      }
+    });
+
+    const unsubListings = subscribeToListings((updated) => {
       if (updated && Array.isArray(updated)) {
         setListings(updated);
         if (user?.uid) {
@@ -106,7 +117,17 @@ export default function StudentHubPage() {
         }
       }
     });
-    return () => unsub();
+
+    const unsubResponses = subscribeToListingResponses((updated) => {
+      if (updated && Array.isArray(updated)) {
+        setResponses(updated);
+      }
+    });
+
+    return () => {
+      unsubListings();
+      unsubResponses();
+    };
   }, [user]);
 
   const showToast = (msg: string) => {
@@ -157,6 +178,7 @@ export default function StudentHubPage() {
       if (res.updatedListing) {
         setListings((prev) => prev.map((l) => (l.id === listingId ? res.updatedListing! : l)));
       }
+      setResponses(getStoredListingResponses());
       setVotedPolls(getStoredVotedPolls(user.uid));
       showToast("Your vote has been cast successfully!");
       try {
@@ -240,7 +262,6 @@ export default function StudentHubPage() {
             const isOpp = item.type === "opportunity";
             const isIssue = item.type === "issue";
             const isSub = item.type === "submission";
-            const totalPollVotes = item.pollConfig?.totalVotes || 0;
 
             return (
               <div
@@ -315,100 +336,102 @@ export default function StudentHubPage() {
                   </div>
 
                   {/* LIVE POLL INTERACTIVE WIDGET */}
-                  {isPoll && item.pollConfig && (
-                    <div className="space-y-3 pt-2 border-t border-slate-100">
-                      <div className="space-y-2">
-                        {item.pollConfig.options.map((opt) => {
-                          const userVotedOptionId = user ? (votedPolls[item.id] || (user as any).votedPolls?.[item.id]) : null;
-                          const isOptionValid = Boolean(item.pollConfig?.options.some((o) => o.id === userVotedOptionId));
-                          const hasVoted = Boolean(user) && Boolean(userVotedOptionId) && isOptionValid;
-                          const isSelectedByUser = hasVoted && userVotedOptionId === opt.id;
-                          const effectiveTotal = Math.max(totalPollVotes, hasVoted ? 1 : 0);
-                          const effectiveOptionVotes = opt.votes + (isSelectedByUser && opt.votes === 0 ? 1 : 0);
-                          const pct = effectiveTotal > 0 ? Math.round((effectiveOptionVotes / effectiveTotal) * 100) : 0;
+                  {isPoll && item.pollConfig && (() => {
+                    const userVotedOptionId = user ? (votedPolls[item.id] || (user as any).votedPolls?.[item.id]) : null;
+                    const isOptionValid = Boolean(item.pollConfig?.options.some((o) => o.id === userVotedOptionId));
+                    const hasVoted = Boolean(user) && Boolean(userVotedOptionId) && isOptionValid;
+                    const pollStats = getPollStats(item, responses, user?.uid, userVotedOptionId);
 
-                          return (
-                            <button
-                              key={opt.id}
-                              type="button"
-                              disabled={hasVoted}
-                              onClick={() => {
-                                if (!user) {
-                                  openAuthModal();
-                                  showToast("Please sign in with your student account to vote.");
-                                  return;
-                                }
-                                if (!hasVoted) {
-                                  handleVote(item.id, opt.id);
-                                }
-                              }}
-                              className={cn(
-                                "w-full relative overflow-hidden rounded-xl border p-3 text-left transition-all",
-                                hasVoted
-                                  ? isSelectedByUser
-                                    ? "border-[#17458F] bg-blue-50/40 cursor-default"
-                                    : "border-slate-200 bg-slate-50/60 cursor-default"
-                                  : "border-slate-200 bg-slate-50 hover:bg-white hover:border-[#17458F] hover:shadow-2xs cursor-pointer group/opt"
-                              )}
-                            >
-                              {/* Background percentage fill bar — ONLY shown after selecting your vote */}
-                              {hasVoted && (
-                                <div
-                                  className={cn(
-                                    "absolute left-0 top-0 bottom-0 -z-10 transition-all duration-700",
-                                    isSelectedByUser ? "bg-[#17458F]/15" : "bg-slate-200/60"
-                                  )}
-                                  style={{ width: `${pct}%` }}
-                                />
-                              )}
-                              
-                              <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                                <div className="flex items-center gap-2">
-                                  {!hasVoted ? (
-                                    <span className="w-3.5 h-3.5 rounded-full border border-slate-300 group-hover/opt:border-[#17458F] flex items-center justify-center shrink-0">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-transparent group-hover/opt:bg-[#17458F] transition-colors" />
-                                    </span>
-                                  ) : isSelectedByUser ? (
-                                    <span className="w-3.5 h-3.5 rounded-full bg-[#17458F] text-white flex items-center justify-center shrink-0 text-[9px]">
-                                      ✓
-                                    </span>
-                                  ) : (
-                                    <span className="w-3.5 h-3.5 rounded-full border border-slate-200 shrink-0" />
-                                  )}
-                                  <span className={cn(
-                                    hasVoted ? (isSelectedByUser ? "text-[#17458F] font-extrabold" : "text-slate-700") : "group-hover/opt:text-[#17458F] transition-colors"
-                                  )}>
-                                    {opt.text}
-                                  </span>
-                                </div>
+                    return (
+                      <div className="space-y-3 pt-2 border-t border-slate-100">
+                        <div className="space-y-2">
+                          {pollStats.computedOptions.map((opt) => {
+                            const isSelectedByUser = hasVoted && userVotedOptionId === opt.id;
+                            const pct = pollStats.totalVotes > 0 ? Math.round((opt.votes / pollStats.totalVotes) * 100) : 0;
 
-                                {/* ONLY show percent, and ONLY after selecting your vote. NO no of votes! */}
-                                {hasVoted && (
-                                  <div className="flex items-center gap-1.5 shrink-0">
-                                    {isSelectedByUser && (
-                                      <span className="text-[10px] font-mono font-bold text-[#17458F] bg-blue-100/70 px-1.5 py-0.2 rounded-md">
-                                        Your Vote
-                                      </span>
-                                    )}
-                                    <span className="font-mono text-xs font-extrabold text-[#17458F]">{pct}%</span>
-                                  </div>
+                            return (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                disabled={hasVoted}
+                                onClick={() => {
+                                  if (!user) {
+                                    openAuthModal();
+                                    showToast("Please sign in with your student account to vote.");
+                                    return;
+                                  }
+                                  if (!hasVoted) {
+                                    handleVote(item.id, opt.id);
+                                  }
+                                }}
+                                className={cn(
+                                  "w-full relative overflow-hidden rounded-xl border p-3 text-left transition-all",
+                                  hasVoted
+                                    ? isSelectedByUser
+                                      ? "border-[#17458F] bg-blue-50/40 cursor-default"
+                                      : "border-slate-200 bg-slate-50/60 cursor-default"
+                                    : "border-slate-200 bg-slate-50 hover:bg-white hover:border-[#17458F] hover:shadow-2xs cursor-pointer group/opt"
                                 )}
-                              </div>
-                            </button>
-                          );
-                        })}
+                              >
+                                {/* Background percentage fill bar — ONLY shown after selecting your vote */}
+                                {hasVoted && (
+                                  <div
+                                    className={cn(
+                                      "absolute left-0 top-0 bottom-0 -z-10 transition-all duration-700",
+                                      isSelectedByUser ? "bg-[#17458F]/15" : "bg-slate-200/60"
+                                    )}
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                )}
+                                
+                                <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                                  <div className="flex items-center gap-2">
+                                    {!hasVoted ? (
+                                      <span className="w-3.5 h-3.5 rounded-full border border-slate-300 group-hover/opt:border-[#17458F] flex items-center justify-center shrink-0">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-transparent group-hover/opt:bg-[#17458F] transition-colors" />
+                                      </span>
+                                    ) : isSelectedByUser ? (
+                                      <span className="w-3.5 h-3.5 rounded-full bg-[#17458F] text-white flex items-center justify-center shrink-0 text-[9px]">
+                                        ✓
+                                      </span>
+                                    ) : (
+                                      <span className="w-3.5 h-3.5 rounded-full border border-slate-200 shrink-0" />
+                                    )}
+                                    <span className={cn(
+                                      hasVoted ? (isSelectedByUser ? "text-[#17458F] font-extrabold" : "text-slate-700") : "group-hover/opt:text-[#17458F] transition-colors"
+                                    )}>
+                                      {opt.text}
+                                    </span>
+                                  </div>
+
+                                  {/* ONLY show percent, and ONLY after selecting your vote. NO no of votes! */}
+                                  {hasVoted && (
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      {isSelectedByUser && (
+                                        <span className="text-[10px] font-mono font-bold text-[#17458F] bg-blue-100/70 px-1.5 py-0.2 rounded-md">
+                                          Your Vote
+                                        </span>
+                                      )}
+                                      <span className="font-mono text-xs font-extrabold text-[#17458F]">{pct}%</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] pt-1">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                            {!user
+                              ? "🔒 Sign in to vote"
+                              : (votedPolls[item.id] || (user as any).votedPolls?.[item.id]) && item.pollConfig?.options.some((o) => o.id === (votedPolls[item.id] || (user as any).votedPolls?.[item.id]))
+                              ? "✓ Your vote recorded" 
+                              : "Select an option to vote"}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between text-[11px] pt-1">
-                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                          {!user
-                            ? "🔒 Sign in to vote"
-                            : (votedPolls[item.id] || (user as any).votedPolls?.[item.id]) && item.pollConfig?.options.some((o) => o.id === (votedPolls[item.id] || (user as any).votedPolls?.[item.id]))
-                            ? "✓ Your vote recorded" 
-                            : "Select an option to vote"}
-                        </span>
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* OPPORTUNITY PARAMETERS */}
                   {isOpp && item.opportunityConfig && (

@@ -32,7 +32,7 @@ import {
   RotateCcw
 } from "lucide-react";
 import { ListingItem, ListingResponseRecord } from "@/types/listings";
-import { resolveResponseWithUserProfile } from "@/lib/listingsStore";
+import { resolveResponseWithUserProfile, getPollStats } from "@/lib/listingsStore";
 import { CustomQuestion } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -238,33 +238,7 @@ export function ListingResponsesView({
   // --------------------------------------------------------------------------
   if (listing.type === "poll") {
     const pollResponses = responses.filter((r) => r.listingId === listing.id || r.listingSlug === listing.slug);
-    const optionCounts: Record<string, number> = {};
-    pollResponses.forEach((r) => {
-      const ids: string[] = r.selectedOptionIds && r.selectedOptionIds.length > 0 
-        ? r.selectedOptionIds 
-        : ((r as any).selectedOptionId ? [(r as any).selectedOptionId] : []);
-      if (ids.length === 0 && (r as any).customAnswers?.optionId) {
-        ids.push((r as any).customAnswers.optionId);
-      }
-      ids.forEach((optId) => {
-        optionCounts[optId] = (optionCounts[optId] || 0) + 1;
-      });
-    });
-
-    const computedOptions = (listing.pollConfig?.options || []).map((opt) => ({
-      ...opt,
-      votes: Math.max(opt.votes || 0, optionCounts[opt.id] || 0),
-    }));
-
-    const totalVotes = Math.max(
-      listing.pollConfig?.totalVotes || 0,
-      pollResponses.length,
-      computedOptions.reduce((s, o) => s + (o.votes || 0), 0)
-    );
-
-    const sortedOptions = [...computedOptions].sort((a, b) => b.votes - a.votes);
-    const leadingOption = sortedOptions[0] || null;
-    const leadingPct = totalVotes > 0 && leadingOption ? Math.round((leadingOption.votes / totalVotes) * 100) : 0;
+    const { optionCounts, computedOptions, sortedOptions, totalVotes, leadingOption, leadingPct } = getPollStats(listing, responses);
 
     return (
       <div className="space-y-8 animate-in fade-in duration-200 font-sans text-left">

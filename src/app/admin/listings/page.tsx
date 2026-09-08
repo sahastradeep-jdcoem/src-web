@@ -35,7 +35,8 @@ import {
   subscribeToListingResponses,
   saveStoredListingResponse,
   deleteStoredListingResponse,
-  RESPONSES_STORAGE_KEY
+  RESPONSES_STORAGE_KEY,
+  getPollStats
 } from "@/lib/listingsStore";
 import { saveSiteContentToFirestore } from "@/lib/firebase/firestore";
 import { db } from "@/lib/firebase/config";
@@ -354,28 +355,7 @@ export default function AdminListingsPage() {
       const wb = XLSX.utils.book_new();
 
       if (inspectingListing.type === "poll" && inspectingListing.pollConfig) {
-        const pollResponses = responses.filter((r) => r.listingId === inspectingListing.id || r.listingSlug === inspectingListing.slug);
-        const optionCounts: Record<string, number> = {};
-        pollResponses.forEach((r) => {
-          const ids: string[] = r.selectedOptionIds && r.selectedOptionIds.length > 0 
-            ? r.selectedOptionIds 
-            : ((r as any).selectedOptionId ? [(r as any).selectedOptionId] : []);
-          if (ids.length === 0 && (r as any).customAnswers?.optionId) {
-            ids.push((r as any).customAnswers.optionId);
-          }
-          ids.forEach((optId) => {
-            optionCounts[optId] = (optionCounts[optId] || 0) + 1;
-          });
-        });
-        const computedOptions = (inspectingListing.pollConfig.options || []).map((opt) => ({
-          ...opt,
-          votes: Math.max(opt.votes || 0, optionCounts[opt.id] || 0),
-        }));
-        const totalVotes = Math.max(
-          inspectingListing.pollConfig.totalVotes || 0,
-          pollResponses.length,
-          computedOptions.reduce((s, o) => s + (o.votes || 0), 0)
-        );
+        const { computedOptions, totalVotes } = getPollStats(inspectingListing, responses);
         const sortedOptions = [...computedOptions].sort((a, b) => b.votes - a.votes);
         const pollRows = sortedOptions.map((opt, idx) => {
           const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
@@ -615,7 +595,7 @@ export default function AdminListingsPage() {
                   const pollBallots = responses.filter((r) => r.listingId === item.id || r.listingSlug === item.slug);
                   const respCount = pollBallots.length;
                   const voteCount = item.type === "poll"
-                    ? Math.max(item.pollConfig?.totalVotes || 0, pollBallots.length)
+                    ? getPollStats(item, responses).totalVotes
                     : respCount;
 
                   return (
