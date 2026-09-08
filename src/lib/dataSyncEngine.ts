@@ -663,10 +663,10 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
       }
 
       // For standard text/number fields:
-      // If remote has a non-empty/defined value, keep remote
-      if (remoteVal !== undefined && remoteVal !== null && remoteVal !== "") {
+      // Remote is strictly authoritative if the field is defined on remote (even if empty string "")
+      if (remoteVal !== undefined && remoteVal !== null) {
         result[k] = remoteVal;
-      } else if (localVal !== undefined && localVal !== null && localVal !== "") {
+      } else if (localVal !== undefined && localVal !== null) {
         result[k] = localVal;
       }
     }

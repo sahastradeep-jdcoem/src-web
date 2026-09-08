@@ -13,6 +13,10 @@ interface CouncilMemberCardProps {
 
 export function CouncilMemberCard({ member, categoryLabel = "ADMIN" }: CouncilMemberCardProps) {
   const hasBio = Boolean(member.bio && member.bio.trim().length > 0 && !isHardcodedBio(member.bio));
+  const cleanEmail = member.email?.trim();
+  const cleanLinkedin = member.linkedin?.trim();
+  const hasEmail = Boolean(cleanEmail && cleanEmail !== "undefined" && cleanEmail !== "null");
+  const hasLinkedin = Boolean(cleanLinkedin && cleanLinkedin !== "undefined" && cleanLinkedin !== "null");
 
   return (
     <div className="group rounded-2xl bg-white border border-slate-200 hover:border-[#17458F]/30 hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col justify-between shadow-xs font-sans">
@@ -104,18 +108,18 @@ export function CouncilMemberCard({ member, categoryLabel = "ADMIN" }: CouncilMe
           )}
 
           <div className="flex items-center gap-1.5 sm:gap-2">
-            {member.email && (
+            {hasEmail && (
               <a
-                href={`mailto:${member.email}`}
+                href={`mailto:${cleanEmail}`}
                 className="p-1.5 sm:p-2 rounded-lg bg-slate-100 hover:bg-[#E78023] text-slate-700 hover:text-white transition-colors"
                 aria-label="Email"
               >
                 <Mail className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
               </a>
             )}
-            {member.linkedin && (
+            {hasLinkedin && (
               <a
-                href={member.linkedin}
+                href={cleanLinkedin}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-1.5 sm:p-2 rounded-lg bg-slate-100 hover:bg-[#17458F] text-slate-700 hover:text-white transition-colors"

@@ -14,8 +14,8 @@ export const hostingCommitteeMembers: TeamMember[] = [
     year: "4th Year",
     avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
     bio: "",
-    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
-    email: "src.hosting@jdcoem.ac.in",
+    linkedin: "",
+    email: "",
     order: 1
   },
   {
@@ -26,8 +26,8 @@ export const hostingCommitteeMembers: TeamMember[] = [
     year: "3rd Year",
     avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=600&auto=format&fit=crop",
     bio: "",
-    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
-    email: "src.hosting.cultural@jdcoem.ac.in",
+    linkedin: "",
+    email: "",
     order: 2
   },
   {
@@ -38,8 +38,8 @@ export const hostingCommitteeMembers: TeamMember[] = [
     year: "3rd Year",
     avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=600&auto=format&fit=crop",
     bio: "",
-    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
-    email: "src.hosting.tech@jdcoem.ac.in",
+    linkedin: "",
+    email: "",
     order: 3
   },
   {
@@ -50,8 +50,8 @@ export const hostingCommitteeMembers: TeamMember[] = [
     year: "2nd Year",
     avatar: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=600&auto=format&fit=crop",
     bio: "",
-    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
-    email: "src.hosting.associate@jdcoem.ac.in",
+    linkedin: "",
+    email: "",
     order: 4
   },
   {
@@ -62,8 +62,8 @@ export const hostingCommitteeMembers: TeamMember[] = [
     year: "4th Year",
     avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
     bio: "",
-    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
-    email: "src.spokesperson1@jdcoem.ac.in",
+    linkedin: "",
+    email: "",
     order: 5
   },
   {
@@ -74,8 +74,8 @@ export const hostingCommitteeMembers: TeamMember[] = [
     year: "4th Year",
     avatar: "https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?q=80&w=600&auto=format&fit=crop",
     bio: "",
-    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
-    email: "src.spokesperson2@jdcoem.ac.in",
+    linkedin: "",
+    email: "",
     order: 6
   },
   {
@@ -86,8 +86,8 @@ export const hostingCommitteeMembers: TeamMember[] = [
     year: "3rd Year",
     avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=600&auto=format&fit=crop",
     bio: "",
-    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
-    email: "src.spokesperson3@jdcoem.ac.in",
+    linkedin: "",
+    email: "",
     order: 7
   },
   {
@@ -98,8 +98,8 @@ export const hostingCommitteeMembers: TeamMember[] = [
     year: "2nd Year",
     avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=600&auto=format&fit=crop",
     bio: "",
-    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
-    email: "src.spokesperson4@jdcoem.ac.in",
+    linkedin: "",
+    email: "",
     order: 8
   },
   {
@@ -110,8 +110,8 @@ export const hostingCommitteeMembers: TeamMember[] = [
     year: "2nd Year",
     avatar: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=600&auto=format&fit=crop",
     bio: "",
-    linkedin: "https://www.linkedin.com/company/src-jdcoem/",
-    email: "src.spokesperson5@jdcoem.ac.in",
+    linkedin: "",
+    email: "",
     order: 9
   }
 ];
