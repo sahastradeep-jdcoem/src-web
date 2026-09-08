@@ -146,6 +146,18 @@ export function normalizeMemberName(name?: string): string {
   return name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+// Phonetic / transliteration equivalence for Indian surnames/names (e.g. Jambulkar / Jambhulkar)
+export function normalizePhoneticMemberName(name?: string): string {
+  if (!name) return "";
+  return normalizeMemberName(name)
+    .replace(/bh/g, "b")
+    .replace(/dh/g, "d")
+    .replace(/th/g, "t")
+    .replace(/sh/g, "s")
+    .replace(/kh/g, "k")
+    .replace(/gh/g, "g");
+}
+
 export function getBaseMemberId(id?: string): string {
   if (!id) return "";
   return id.replace(/^(admin|council-admin|founder|member)-/i, "").trim();
@@ -154,11 +166,16 @@ export function getBaseMemberId(id?: string): string {
 export function matchCouncilAndFounder(m1: TeamMember, m2: TeamMember): boolean {
   if (!m1 || !m2) return false;
 
-  // 1. Match by clean normalized name (strictly primary human identity)
+  // 1. Match by clean normalized name or phonetic transliteration
   if (m1.name && m2.name) {
     const n1 = normalizeMemberName(m1.name);
     const n2 = normalizeMemberName(m2.name);
     if (n1 === n2 && n1.length > 2 && !n1.includes("placeholder")) {
+      return true;
+    }
+    const p1 = normalizePhoneticMemberName(m1.name);
+    const p2 = normalizePhoneticMemberName(m2.name);
+    if (p1 === p2 && p1.length > 2 && !p1.includes("placeholder")) {
       return true;
     }
   }
@@ -170,17 +187,20 @@ export function matchCouncilAndFounder(m1: TeamMember, m2: TeamMember): boolean 
     return true;
   }
 
-  // 3. Match by BT ID ONLY if names do NOT conflict
+  // 3. Match by BT ID (with same first name or matching phonetic name)
   if (m1.btId && m2.btId) {
     const b1 = m1.btId.trim().toUpperCase();
     const b2 = m2.btId.trim().toUpperCase();
-    if (b1 === b2 && b1.length > 3 && b1 !== "000000" && !b1.includes("PLACEHOLDER")) {
+    if (b1 === b2 && b1.length > 3 && b1 !== "000000" && !b1.includes("PLACEHOLDER") && !b1.startsWith("BT00") && !b1.startsWith("BT01")) {
       if (m1.name && m2.name) {
-        const n1 = normalizeMemberName(m1.name);
-        const n2 = normalizeMemberName(m2.name);
-        if (n1 && n2 && n1 !== n2) {
-          return false;
+        const fn1 = m1.name.trim().toLowerCase().split(/\s+/)[0];
+        const fn2 = m2.name.trim().toLowerCase().split(/\s+/)[0];
+        const p1 = normalizePhoneticMemberName(m1.name);
+        const p2 = normalizePhoneticMemberName(m2.name);
+        if (p1 === p2 || fn1 === fn2) {
+          return true;
         }
+        return false;
       }
       return true;
     }
@@ -196,6 +216,60 @@ export function matchCouncilAndFounder(m1: TeamMember, m2: TeamMember): boolean 
   }
 
   return false;
+}
+
+export function deduplicateTeamMembers(members: TeamMember[]): TeamMember[] {
+  if (!Array.isArray(members)) return [];
+  const result: TeamMember[] = [];
+  const seenBaseIds = new Set<string>();
+  const seenBtIds = new Set<string>();
+  const seenPhoneticNames = new Set<string>();
+
+  for (const m of members) {
+    if (!m) continue;
+    const baseId = getBaseMemberId(m.id);
+    const cleanBt = m.btId?.trim().toUpperCase();
+    const pName = normalizePhoneticMemberName(m.name);
+    const firstName = m.name?.trim().toLowerCase().split(/\s+/)[0] || "";
+
+    let isDuplicate = false;
+
+    if (baseId && seenBaseIds.has(baseId)) {
+      isDuplicate = true;
+    }
+
+    if (!isDuplicate && cleanBt && cleanBt.length > 3 && cleanBt !== "BT00" && cleanBt !== "BT01" && !cleanBt.includes("PLACEHOLDER")) {
+      if (seenBtIds.has(cleanBt)) {
+        const match = result.find((existing) => {
+          const exBt = existing.btId?.trim().toUpperCase();
+          if (exBt !== cleanBt) return false;
+          const exFn = existing.name?.trim().toLowerCase().split(/\s+/)[0] || "";
+          const exP = normalizePhoneticMemberName(existing.name);
+          return exFn === firstName || exP === pName;
+        });
+        if (match) {
+          isDuplicate = true;
+        }
+      }
+    }
+
+    if (!isDuplicate && pName && pName.length > 3) {
+      if (seenPhoneticNames.has(pName)) {
+        isDuplicate = true;
+      }
+    }
+
+    if (!isDuplicate) {
+      if (baseId) seenBaseIds.add(baseId);
+      if (cleanBt && cleanBt.length > 3 && cleanBt !== "BT00" && cleanBt !== "BT01" && !cleanBt.includes("PLACEHOLDER")) {
+        seenBtIds.add(cleanBt);
+      }
+      if (pName && pName.length > 3) seenPhoneticNames.add(pName);
+      result.push(m);
+    }
+  }
+
+  return result;
 }
 
 export function repairCouncilSwapIfNeeded(members: TeamMember[], isFounding = false): { repaired: boolean; members: TeamMember[] } {
@@ -247,13 +321,14 @@ export function repairCouncilSwapIfNeeded(members: TeamMember[], isFounding = fa
 
 // Council Team Store
 export function getStoredCouncilMembers(): TeamMember[] {
-  if (typeof window === "undefined") return stripCategoryAndLevel(initialAdminCouncil);
+  if (typeof window === "undefined") return deduplicateTeamMembers(stripCategoryAndLevel(initialAdminCouncil));
   try {
     const stored = localStorage.getItem("src_council_team");
     if (stored !== null) {
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed)) {
         let { repaired, members } = repairCouncilSwapIfNeeded(stripCategoryAndLevel(parsed));
+        members = deduplicateTeamMembers(members);
         // Auto-heal missing canonical officers from initialAdminCouncil (e.g. Nadeem Khan #11, Shruti Khadse #12, Vrutant Bingewar #13)
         if (members.length < initialAdminCouncil.length) {
           let healed = false;
@@ -264,6 +339,7 @@ export function getStoredCouncilMembers(): TeamMember[] {
             }
           }
           if (healed) {
+            members = deduplicateTeamMembers(members);
             members.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
             repaired = true;
           }
@@ -273,19 +349,19 @@ export function getStoredCouncilMembers(): TeamMember[] {
             localStorage.setItem("src_council_team", JSON.stringify(members));
           } catch {}
         }
-        return members;
+        return deduplicateTeamMembers(members);
       }
     }
   } catch (e) {
     console.warn("Could not read council team from storage", e);
   }
-  return stripCategoryAndLevel(initialAdminCouncil);
+  return deduplicateTeamMembers(stripCategoryAndLevel(initialAdminCouncil));
 }
 
 export function saveStoredCouncilMembers(members: TeamMember[], autoSyncToFounding = true): void {
   if (typeof window === "undefined") return;
   try {
-    const sanitized = cleanUndefined(stripCategoryAndLevel(members));
+    const sanitized = cleanUndefined(deduplicateTeamMembers(stripCategoryAndLevel(members)));
     markLocalWrite("council_team");
     try {
       localStorage.setItem("src_council_team", JSON.stringify(sanitized));
@@ -339,10 +415,10 @@ export async function syncCouncilMembersFromFirestore(): Promise<TeamMember[]> {
     }
     if (remote !== null && Array.isArray(remote)) {
       const current = getStoredCouncilMembers();
-      let merged = stripCategoryAndLevel(reconcileArrayDatasets(current, remote));
+      let merged = deduplicateTeamMembers(stripCategoryAndLevel(reconcileArrayDatasets(current, remote)));
       const { repaired, members } = repairCouncilSwapIfNeeded(merged);
       if (repaired) {
-        merged = members;
+        merged = deduplicateTeamMembers(members);
       }
       // Auto-heal missing canonical members if remote snapshot was missing them
       if (merged.length < initialAdminCouncil.length) {
@@ -354,6 +430,7 @@ export async function syncCouncilMembersFromFirestore(): Promise<TeamMember[]> {
           }
         }
         if (healed) {
+          merged = deduplicateTeamMembers(merged);
           merged.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
           saveSiteContentToFirestore("council_team", cleanUndefined(merged)).catch(() => {});
         }
@@ -528,10 +605,10 @@ export function subscribeToCouncilMembers(callback: (members: TeamMember[]) => v
     if (remote !== null && Array.isArray(remote)) {
       if (hasPendingWritesFor("council_team")) return;
       const current = getStoredCouncilMembers();
-      let merged = stripCategoryAndLevel(reconcileArrayDatasets(current, remote));
+      let merged = deduplicateTeamMembers(stripCategoryAndLevel(reconcileArrayDatasets(current, remote)));
       const { repaired, members } = repairCouncilSwapIfNeeded(merged);
       if (repaired) {
-        merged = members;
+        merged = deduplicateTeamMembers(members);
       }
       if (merged.length < initialAdminCouncil.length) {
         let healed = false;
@@ -542,6 +619,7 @@ export function subscribeToCouncilMembers(callback: (members: TeamMember[]) => v
           }
         }
         if (healed) {
+          merged = deduplicateTeamMembers(merged);
           merged.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
           saveStoredCouncilMembers(merged, true);
           callback(merged);
@@ -681,10 +759,12 @@ export function syncCouncilAdminsToFounding(councilList?: TeamMember[], persist 
     };
   });
 
+  const deduplicated = deduplicateTeamMembers(updatedFounders);
+
   if (persist) {
-    saveStoredFoundingMembers(updatedFounders, false);
+    saveStoredFoundingMembers(deduplicated, false);
   }
-  return updatedFounders;
+  return deduplicated;
 }
 
 // Sync Founding Members to Council Admins (1st Tenure)
@@ -788,13 +868,14 @@ export function reconcileCouncilAndFoundingSync(): TeamMember[] {
 
 // Founding Members Store
 export function getStoredFoundingMembers(): TeamMember[] {
-  if (typeof window === "undefined") return stripCategoryAndLevel(initialFoundingMembers);
+  if (typeof window === "undefined") return deduplicateTeamMembers(stripCategoryAndLevel(initialFoundingMembers));
   try {
     const stored = localStorage.getItem("src_founding_members");
     if (stored !== null) {
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed)) {
         let { repaired, members } = repairCouncilSwapIfNeeded(stripCategoryAndLevel(parsed), true);
+        members = deduplicateTeamMembers(members);
         // Auto-heal missing canonical pioneers from initialFoundingMembers (13 canonical positions)
         if (members.length < initialFoundingMembers.length) {
           let healed = false;
@@ -805,6 +886,7 @@ export function getStoredFoundingMembers(): TeamMember[] {
             }
           }
           if (healed) {
+            members = deduplicateTeamMembers(members);
             members.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
             repaired = true;
           }
@@ -814,19 +896,19 @@ export function getStoredFoundingMembers(): TeamMember[] {
             localStorage.setItem("src_founding_members", JSON.stringify(members));
           } catch {}
         }
-        return members;
+        return deduplicateTeamMembers(members);
       }
     }
   } catch (e) {
     console.warn("Could not read founding members from storage", e);
   }
-  return stripCategoryAndLevel(initialFoundingMembers);
+  return deduplicateTeamMembers(stripCategoryAndLevel(initialFoundingMembers));
 }
 
 export function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCouncil = true): void {
   if (typeof window === "undefined") return;
   try {
-    const sanitized = cleanUndefined(stripCategoryAndLevel(members));
+    const sanitized = cleanUndefined(deduplicateTeamMembers(stripCategoryAndLevel(members)));
     markLocalWrite("founding_members");
     try {
       localStorage.setItem("src_founding_members", JSON.stringify(sanitized));
@@ -878,14 +960,14 @@ export async function syncFoundingMembersFromFirestore(): Promise<TeamMember[]> 
     }
     if (remote !== null && Array.isArray(remote)) {
       const current = getStoredFoundingMembers();
-      let merged = stripCategoryAndLevel(reconcileArrayDatasets(current, remote));
+      let merged = deduplicateTeamMembers(stripCategoryAndLevel(reconcileArrayDatasets(current, remote)));
       const { repaired, members } = repairCouncilSwapIfNeeded(merged, true);
       if (repaired) {
-        merged = members;
+        merged = deduplicateTeamMembers(members);
       }
-      // If council has members and remote founding members has fewer members, auto-heal from council
+      // If council has members and remote founding members count is out of sync, auto-heal from council (1st tenure 1:1)
       const currentCouncil = getStoredCouncilMembers();
-      if (currentCouncil.length > 0 && merged.length < currentCouncil.length) {
+      if (currentCouncil.length > 0 && merged.length !== currentCouncil.length) {
         merged = syncCouncilAdminsToFounding(currentCouncil, true);
         return merged;
       }
@@ -898,6 +980,7 @@ export async function syncFoundingMembersFromFirestore(): Promise<TeamMember[]> 
           }
         }
         if (healed) {
+          merged = deduplicateTeamMembers(merged);
           merged.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
           saveSiteContentToFirestore("founding_members", cleanUndefined(merged)).catch(() => {});
         }
@@ -921,14 +1004,14 @@ export function subscribeToFoundingMembers(callback: (members: TeamMember[]) => 
     if (remote !== null && Array.isArray(remote)) {
       if (hasPendingWritesFor("founding_members")) return;
       const current = getStoredFoundingMembers();
-      let merged = stripCategoryAndLevel(reconcileArrayDatasets(current, remote));
+      let merged = deduplicateTeamMembers(stripCategoryAndLevel(reconcileArrayDatasets(current, remote)));
       const { repaired, members } = repairCouncilSwapIfNeeded(merged, true);
       if (repaired) {
-        merged = members;
+        merged = deduplicateTeamMembers(members);
         saveStoredFoundingMembers(merged, true);
       } else {
         const currentCouncil = getStoredCouncilMembers();
-        if (currentCouncil.length > 0 && merged.length < currentCouncil.length) {
+        if (currentCouncil.length > 0 && merged.length !== currentCouncil.length) {
           merged = syncCouncilAdminsToFounding(currentCouncil, true);
           callback(merged);
           return;
@@ -942,6 +1025,7 @@ export function subscribeToFoundingMembers(callback: (members: TeamMember[]) => 
             }
           }
           if (healed) {
+            merged = deduplicateTeamMembers(merged);
             merged.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
             saveStoredFoundingMembers(merged, true);
             callback(merged);
