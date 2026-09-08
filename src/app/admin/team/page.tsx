@@ -486,13 +486,18 @@ export default function AdminTeamPage() {
       leaders.forEach((leader, leaderIndex) => {
         if (!leader || (!leader.name && !leader.role)) return;
 
+        const isCoLead = leader.roleType === "coLead" || (leader.role && leader.role.toLowerCase().includes("co-head"));
         const cleanName = (leader.name || "").trim().toLowerCase();
         const cleanBt = (leader.btId || "").trim().toUpperCase();
+        const isPlaceholder = !cleanName || cleanName.includes("placeholder") || cleanName === "tba" || cleanName === "club head" || cleanName === "club co-head";
+
         const groupKey = cleanBt 
           ? `bt-${cleanBt}` 
-          : (leader.id && !leader.id.includes("-leader-") && !leader.id.startsWith("lead-") 
-              ? `id-${leader.id}` 
-              : (cleanName ? `name-${cleanName}` : `club-${club.id}-${leaderIndex}`));
+          : (isPlaceholder
+              ? `club-${club.id}-${isCoLead ? "coLead" : "lead"}-${leaderIndex}`
+              : (leader.id && !leader.id.includes("-leader-") && !leader.id.startsWith("lead-") 
+                  ? `id-${leader.id}` 
+                  : (cleanName ? `name-${cleanName}` : `club-${club.id}-${leaderIndex}`)));
 
         const existing = leaderMap.get(groupKey);
         const clubInfo = { id: club.id, name: club.name, slug: club.slug };
@@ -519,17 +524,17 @@ export default function AdminTeamPage() {
             : [club.name];
 
           leaderMap.set(groupKey, {
-            id: leader.id || `lead-${club.id}-${leaderIndex}-${Date.now()}`,
+            id: leader.id || `${club.id || club.slug}-${isCoLead ? "colead" : "lead"}-${leaderIndex}`,
             name: leader.name || "",
-            role: leader.role || (leader.roleType === "coLead" ? `${club.name} Co-Lead` : `${club.name} Head`),
+            role: leader.role || (isCoLead ? `${club.name} Co-Lead` : `${club.name} Head`),
             department: leader.department || "Computer Science & Engineering",
-            year: leader.year || (leader.roleType === "coLead" ? "3rd Year" : "4th Year"),
+            year: leader.year || (isCoLead ? "3rd Year" : "4th Year"),
             avatar: leader.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
             bio: leader.bio || "",
             email: leader.email || "",
             linkedin: leader.linkedin || "",
             btId: leader.btId || "",
-            order: clubIndex * 2 + (leader.roleType === "coLead" ? 2 : 1),
+            order: clubIndex * 2 + (isCoLead ? 2 : 1),
             clubId: club.id,
             clubSlug: club.slug,
             clubName: club.name,
@@ -537,7 +542,7 @@ export default function AdminTeamPage() {
             clubSlugs,
             clubNames,
             clubs: [clubInfo],
-            roleType: leader.roleType || (leaderIndex === 0 ? "lead" : "coLead")
+            roleType: isCoLead ? "coLead" : "lead"
           });
         }
       });
@@ -822,40 +827,85 @@ export default function AdminTeamPage() {
       }
 
       const leaderPayload: ClubLeader = {
-        id: editingMember.id,
-        name: editingMember.name,
+        id: editingMember.id || `${targetClubIds[0] || "club"}-${targetRoleType}-${Date.now()}`,
+        name: editingMember.name.trim(),
         role: finalRole,
         roleType: targetRoleType,
-        department: editingMember.department,
+        department: editingMember.department || "Computer Science & Engineering",
         year: editingMember.year || (targetRoleType === "lead" ? "4th Year" : "3rd Year"),
-        avatar: editingMember.avatar,
+        avatar: editingMember.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
         bio: editingMember.bio || "",
         email: editingMember.email || "",
         linkedin: editingMember.linkedin || "",
-        btId: editingMember.btId || "",
+        btId: (editingMember.btId || "").trim().toUpperCase(),
         clubIds: targetClubIds,
         clubSlugs,
         clubNames,
       };
+
+      const matchBtId = match?.btId ? match.btId.trim().toUpperCase() : "";
+      const matchName = match?.name ? match.name.trim().toLowerCase() : "";
 
       const updatedClubs = clubsList.map((club) => {
         const isSelectedForClub = targetClubIds.includes(club.id) || targetClubIds.includes(club.slug);
         const currentLeaders = getClubLeaders(club);
 
         if (isSelectedForClub) {
-          let newLeaders: ClubLeader[];
-          const existingIdx = currentLeaders.findIndex(
-            (l) => l.id === editingMember.id || (editingMember.btId && l.btId && l.btId.trim().toUpperCase() === editingMember.btId.trim().toUpperCase())
-          );
+          let existingIdx = -1;
 
+          // 1. Match by exact ID
+          if (editingMember.id) {
+            existingIdx = currentLeaders.findIndex((l) => l.id === editingMember.id);
+          }
+
+          // 2. Match by BT ID (current or previous)
+          if (existingIdx === -1 && leaderPayload.btId) {
+            existingIdx = currentLeaders.findIndex(
+              (l) => l.btId && l.btId.trim().toUpperCase() === leaderPayload.btId
+            );
+          }
+          if (existingIdx === -1 && matchBtId) {
+            existingIdx = currentLeaders.findIndex(
+              (l) => l.btId && l.btId.trim().toUpperCase() === matchBtId
+            );
+          }
+
+          // 3. Match by previous name if editing
+          if (existingIdx === -1 && matchName) {
+            existingIdx = currentLeaders.findIndex(
+              (l) => l.name && l.name.trim().toLowerCase() === matchName
+            );
+          }
+
+          // 4. Match by new name if already exists in this club
+          if (existingIdx === -1 && leaderPayload.name) {
+            existingIdx = currentLeaders.findIndex(
+              (l) => l.name && l.name.trim().toLowerCase() === leaderPayload.name.toLowerCase()
+            );
+          }
+
+          // 5. Fallback for editing existing card: match by target roleType if not creating new
+          if (existingIdx === -1 && !isCreatingNew) {
+            existingIdx = currentLeaders.findIndex(
+              (l) => (l.roleType || (l.role?.toLowerCase().includes("co-head") ? "coLead" : "lead")) === targetRoleType
+            );
+          }
+
+          let newLeaders: ClubLeader[];
           if (existingIdx !== -1) {
             newLeaders = [...currentLeaders];
-            newLeaders[existingIdx] = leaderPayload;
+            newLeaders[existingIdx] = {
+              ...currentLeaders[existingIdx],
+              ...leaderPayload,
+              id: currentLeaders[existingIdx].id || leaderPayload.id,
+            };
           } else {
             newLeaders = [...currentLeaders, leaderPayload];
           }
 
-          const primaryLead = newLeaders.find((l) => l.roleType === "lead") || newLeaders[0] || leaderPayload;
+          const primaryLead = targetRoleType === "lead" 
+            ? (newLeaders.find((l) => l.id === leaderPayload.id) || leaderPayload)
+            : (newLeaders.find((l) => l.roleType === "lead") || newLeaders[0] || leaderPayload);
           const coLeadsList = newLeaders.filter((l) => l.roleType === "coLead");
 
           return {
@@ -867,9 +917,22 @@ export default function AdminTeamPage() {
           };
         } else {
           // If club was previously selected for this leader but is now unselected, remove them
-          const existingIdx = currentLeaders.findIndex(
-            (l) => l.id === editingMember.id || (editingMember.btId && l.btId && l.btId.trim().toUpperCase() === editingMember.btId.trim().toUpperCase())
-          );
+          let existingIdx = currentLeaders.findIndex((l) => l.id === editingMember.id);
+          if (existingIdx === -1 && leaderPayload.btId) {
+            existingIdx = currentLeaders.findIndex(
+              (l) => l.btId && l.btId.trim().toUpperCase() === leaderPayload.btId
+            );
+          }
+          if (existingIdx === -1 && matchBtId) {
+            existingIdx = currentLeaders.findIndex(
+              (l) => l.btId && l.btId.trim().toUpperCase() === matchBtId
+            );
+          }
+          if (existingIdx === -1 && matchName) {
+            existingIdx = currentLeaders.findIndex(
+              (l) => l.name && l.name.trim().toLowerCase() === matchName
+            );
+          }
 
           if (existingIdx !== -1) {
             const newLeaders = currentLeaders.filter((_, idx) => idx !== existingIdx);
@@ -897,8 +960,8 @@ export default function AdminTeamPage() {
 
       setClubsList(updatedClubs);
       isSavingRef.current = true;
+      await saveStoredClubs(updatedClubs);
       if (selectedTenure?.isCurrent) {
-        saveStoredClubs(updatedClubs);
         updateTenureRoster(selectedTenure.id, { clubs: updatedClubs }, true);
       } else if (selectedTenure) {
         saveStoredDraftClubs(selectedTenure.id, updatedClubs);
@@ -933,18 +996,24 @@ export default function AdminTeamPage() {
     setIsCreatingNew(false);
   };
 
-  const handleDeleteMember = (id: string, name: string) => {
+  const handleDeleteMember = async (id: string, name: string) => {
     if (!confirm(`Are you sure you want to remove ${name || "this member"}?`)) return;
 
     if (activeTab === "clubs") {
       const match = clubLeadMembers.find((m) => m.id === id);
       if (match) {
         const targetIds = (match.clubIds && match.clubIds.length > 0) ? match.clubIds : [match.clubId];
+        const delBtId = match.btId ? match.btId.trim().toUpperCase() : "";
+        const delName = match.name ? match.name.trim().toLowerCase() : "";
+
         const updatedClubs = clubsList.map((club) => {
           if (targetIds.includes(club.id) || targetIds.includes(club.slug)) {
-            const currentLeaders = getClubLeaders(club).filter(
-              (l) => l.id !== id && (!match.btId || l.btId !== match.btId)
-            );
+            const currentLeaders = getClubLeaders(club).filter((l) => {
+              if (l.id === id) return false;
+              if (delBtId && l.btId && l.btId.trim().toUpperCase() === delBtId) return false;
+              if (delName && l.name && l.name.trim().toLowerCase() === delName) return false;
+              return true;
+            });
             const primaryLead = currentLeaders.find((l) => l.roleType === "lead") || currentLeaders[0] || {
               name: "",
               role: `${club.name} Head`,
@@ -967,8 +1036,8 @@ export default function AdminTeamPage() {
 
         setClubsList(updatedClubs);
         isSavingRef.current = true;
+        await saveStoredClubs(updatedClubs);
         if (selectedTenure?.isCurrent) {
-          saveStoredClubs(updatedClubs);
           updateTenureRoster(selectedTenure.id, { clubs: updatedClubs }, true);
         } else if (selectedTenure) {
           saveStoredDraftClubs(selectedTenure.id, updatedClubs);

@@ -664,7 +664,23 @@ export async function saveStoredClubs(clubs: ClubItem[]): Promise<void> {
   try {
     const compacted = await compactClubDataset(clubs);
     const sanitized = cleanUndefined(compacted);
-    localStorage.setItem("src_clubs_roster", JSON.stringify(sanitized));
+    markLocalWrite("clubs");
+    try {
+      localStorage.setItem("src_clubs_roster", JSON.stringify(sanitized));
+    } catch (lsErr) {
+      console.warn("Direct localStorage write notice for clubs, applying fallback:", lsErr);
+      try {
+        const stripped = sanitized.map((c: any) => ({
+          ...c,
+          cardImage: c.cardImage?.startsWith("data:") ? "" : c.cardImage,
+          headerImage: c.headerImage?.startsWith("data:") ? "" : c.headerImage,
+          lead: c.lead ? { ...c.lead, avatar: c.lead.avatar?.startsWith("data:") ? "" : c.lead.avatar } : c.lead,
+          coLead: c.coLead ? { ...c.coLead, avatar: c.coLead.avatar?.startsWith("data:") ? "" : c.coLead.avatar } : c.coLead,
+          leaders: Array.isArray(c.leaders) ? c.leaders.map((l: any) => ({ ...l, avatar: l.avatar?.startsWith("data:") ? "" : l.avatar })) : c.leaders,
+        }));
+        localStorage.setItem("src_clubs_roster", JSON.stringify(stripped));
+      } catch {}
+    }
     window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: sanitized }));
     window.dispatchEvent(new CustomEvent("src_tenures_updated"));
     window.dispatchEvent(new CustomEvent("src_users_updated"));

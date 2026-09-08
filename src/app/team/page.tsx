@@ -120,11 +120,14 @@ export default function TeamPage() {
         const isCoLead = leader.roleType === "coLead" || (leader.role && leader.role.toLowerCase().includes("co-head"));
         const cleanName = (leader.name || "").trim().toLowerCase();
         const cleanBt = (leader.btId || "").trim().toUpperCase();
+        const isPlaceholder = !cleanName || cleanName.includes("placeholder") || cleanName === "tba" || cleanName === "club head" || cleanName === "club co-head";
         const groupKey = cleanBt 
           ? `bt-${cleanBt}` 
-          : (leader.id && !leader.id.includes("-leader-") && !leader.id.startsWith("lead-") 
-              ? `id-${leader.id}` 
-              : (cleanName ? `name-${cleanName}` : `club-${club.id}-${leaderIndex}`));
+          : (isPlaceholder
+              ? `club-${club.id}-${isCoLead ? "coLead" : "lead"}-${leaderIndex}`
+              : (leader.id && !leader.id.includes("-leader-") && !leader.id.startsWith("lead-") 
+                  ? `id-${leader.id}` 
+                  : (cleanName ? `name-${cleanName}` : `club-${club.id}-${leaderIndex}`)));
 
         const existing = leaderMap.get(groupKey);
         const clubInfo = { id: club.id, name: club.name, slug: club.slug };

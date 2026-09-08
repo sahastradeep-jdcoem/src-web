@@ -67,7 +67,15 @@ export async function compactBase64Image(dataUrl: string, maxDim = 160, quality 
 /**
  * Recursively compacts any oversized base64 images in a club dataset
  */
-export async function compactClubDataset<T extends { logoImage?: string; cardImage?: string; headerImage?: string }>(
+export async function compactClubDataset<T extends {
+  logoImage?: string;
+  cardImage?: string;
+  headerImage?: string;
+  lead?: any;
+  coLead?: any;
+  coLeads?: any[];
+  leaders?: any[];
+}>(
   clubs: T[]
 ): Promise<T[]> {
   if (!Array.isArray(clubs)) return clubs;
@@ -87,11 +95,49 @@ export async function compactClubDataset<T extends { logoImage?: string; cardIma
         header = await compactBase64Image(header, 700, 0.70);
       }
 
+      let lead = c.lead;
+      if (lead?.avatar && lead.avatar.startsWith("data:image/") && lead.avatar.length > 30000) {
+        lead = { ...lead, avatar: await compactBase64Image(lead.avatar, 400, 0.84) };
+      }
+
+      let coLead = c.coLead;
+      if (coLead?.avatar && coLead.avatar.startsWith("data:image/") && coLead.avatar.length > 30000) {
+        coLead = { ...coLead, avatar: await compactBase64Image(coLead.avatar, 400, 0.84) };
+      }
+
+      let coLeads = c.coLeads;
+      if (Array.isArray(coLeads)) {
+        coLeads = await Promise.all(
+          coLeads.map(async (cl) => {
+            if (cl?.avatar && cl.avatar.startsWith("data:image/") && cl.avatar.length > 30000) {
+              return { ...cl, avatar: await compactBase64Image(cl.avatar, 400, 0.84) };
+            }
+            return cl;
+          })
+        );
+      }
+
+      let leaders = c.leaders;
+      if (Array.isArray(leaders)) {
+        leaders = await Promise.all(
+          leaders.map(async (l) => {
+            if (l?.avatar && l.avatar.startsWith("data:image/") && l.avatar.length > 30000) {
+              return { ...l, avatar: await compactBase64Image(l.avatar, 400, 0.84) };
+            }
+            return l;
+          })
+        );
+      }
+
       return {
         ...c,
         logoImage: logo,
         cardImage: card,
         headerImage: header,
+        lead,
+        coLead,
+        coLeads,
+        leaders,
       };
     })
   );

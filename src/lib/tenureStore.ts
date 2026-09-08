@@ -1,4 +1,4 @@
-import { TeamMember, EventItem, ClubItem } from "@/types";
+import { TeamMember, EventItem, ClubItem, ClubLeader } from "@/types";
 import { adminCouncilMembers, hostingCommitteeMembers, foundingMembers } from "@/data/team";
 import { mockEvents } from "@/data/events";
 import { mockClubs } from "@/data/clubs";
@@ -362,12 +362,38 @@ export function compactTenureForStorage(tenure: CouncilTenure): CouncilTenure {
 
   const stripClubHeavy = (clubs?: ClubItem[]): ClubItem[] => {
     if (!Array.isArray(clubs)) return [];
-    return clubs.map((c) => ({
-      ...c,
-      logoImage: (c.logoImage && c.logoImage.startsWith("data:image/") && c.logoImage.length > 5000) ? "" : c.logoImage,
-      cardImage: (c.cardImage && c.cardImage.startsWith("data:image/") && c.cardImage.length > 5000) ? "" : c.cardImage,
-      headerImage: (c.headerImage && c.headerImage.startsWith("data:image/") && c.headerImage.length > 5000) ? "" : c.headerImage,
-    }));
+    return clubs.map((c) => {
+      const cleanLead: ClubLeader = {
+        ...c.lead,
+        avatar: (c.lead?.avatar && c.lead.avatar.startsWith("data:image/") && c.lead.avatar.length > 5000) ? "" : (c.lead?.avatar || ""),
+      };
+
+      const cleanCoLead: ClubLeader | undefined = c.coLead ? {
+        ...c.coLead,
+        avatar: (c.coLead.avatar && c.coLead.avatar.startsWith("data:image/") && c.coLead.avatar.length > 5000) ? "" : (c.coLead.avatar || ""),
+      } : undefined;
+
+      const cleanCoLeads: ClubLeader[] | undefined = Array.isArray(c.coLeads) ? c.coLeads.map((cl) => ({
+        ...cl,
+        avatar: (cl.avatar && cl.avatar.startsWith("data:image/") && cl.avatar.length > 5000) ? "" : (cl.avatar || ""),
+      })) : undefined;
+
+      const cleanLeaders: ClubLeader[] | undefined = Array.isArray(c.leaders) ? c.leaders.map((l) => ({
+        ...l,
+        avatar: (l.avatar && l.avatar.startsWith("data:image/") && l.avatar.length > 5000) ? "" : (l.avatar || ""),
+      })) : undefined;
+
+      return {
+        ...c,
+        logoImage: (c.logoImage && c.logoImage.startsWith("data:image/") && c.logoImage.length > 5000) ? "" : c.logoImage,
+        cardImage: (c.cardImage && c.cardImage.startsWith("data:image/") && c.cardImage.length > 5000) ? "" : c.cardImage,
+        headerImage: (c.headerImage && c.headerImage.startsWith("data:image/") && c.headerImage.length > 5000) ? "" : c.headerImage,
+        lead: cleanLead,
+        coLead: cleanCoLead,
+        ...(cleanCoLeads ? { coLeads: cleanCoLeads } : {}),
+        ...(cleanLeaders ? { leaders: cleanLeaders } : {}),
+      };
+    });
   };
 
   const stripEventHeavy = (events?: EventItem[]): EventItem[] => {
