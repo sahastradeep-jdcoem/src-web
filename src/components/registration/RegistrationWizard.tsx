@@ -29,7 +29,6 @@ import {
   Building2,
   Search,
   CreditCard,
-  Lock,
   XCircle
 } from "lucide-react";
 import { CancelRegistrationModal } from "@/components/registration/CancelRegistrationModal";
@@ -1859,61 +1858,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               </div>
             )}
 
-            {/* Fee Breakdown Card for Paid Events */}
-            {totalPayableAmount > 0 ? (
-              <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-50/80 to-amber-50/80 border border-[#17458F]/20 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-[#17458F] text-white flex items-center justify-center">
-                      <CreditCard className="w-4 h-4 text-[#E78023]" />
-                    </div>
-                    <div>
-                      <h4 className="font-heading font-extrabold text-sm text-[#0F172A]">
-                        REGISTRATION FEE SUMMARY
-                      </h4>
-                      <p className="text-[11px] text-slate-500 font-medium">
-                        {formData.teamType === "Team"
-                          ? event.feePricingModel === "per_team"
-                            ? "Flat Squad Registration Fee"
-                            : `₹${event.feeAmount || 100} × ${teamMembers.length} Verified Squad Members`
-                          : "Individual Delegate Pass Fee"}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-mono text-xl font-extrabold text-[#17458F]">
-                      ₹{totalPayableAmount}
-                    </span>
-                    <span className="text-[10px] text-slate-400 block font-sans">
-                      (Inclusive of all taxes)
-                    </span>
-                  </div>
-                </div>
 
-                <div className="pt-2 border-t border-slate-200/60 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 font-medium">
-                  <span className="flex items-center gap-1">
-                    <Lock className="w-3 h-3 text-emerald-600" />
-                    <span>256-bit SSL Encrypted Razorpay Gateway</span>
-                  </span>
-                  <div className="flex items-center gap-1.5 font-bold text-[10px] text-slate-500 uppercase tracking-wider">
-                    <span className="px-1.5 py-0.5 rounded bg-white border border-slate-200">UPI</span>
-                    <span className="px-1.5 py-0.5 rounded bg-white border border-slate-200">GPay</span>
-                    <span className="px-1.5 py-0.5 rounded bg-white border border-slate-200">Cards</span>
-                    <span className="px-1.5 py-0.5 rounded bg-white border border-slate-200">NetBanking</span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs">
-                <span className="font-bold text-emerald-900 flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-emerald-600" />
-                  <span>Complimentary Event — No Registration Fee</span>
-                </span>
-                <Badge variant="success" size="sm">
-                  FREE PASS
-                </Badge>
-              </div>
-            )}
           </div>
 
           <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1 font-medium">
