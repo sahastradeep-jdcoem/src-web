@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { 
   FileText, 
   Ticket, 
@@ -22,7 +22,9 @@ import {
   Check,
   Building2,
   Info,
-  AlertCircle
+  AlertCircle,
+  CheckCircle2,
+  X
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -38,9 +40,14 @@ export interface EventFormData {
   category: string;
   rawDate: string;
   date: string;
+  isMultiDay?: boolean;
+  rawEndDate?: string;
+  endDate?: string;
+  time: string;
   venue: string;
   organizer: string;
   organizerClubSlug: string;
+  collaboratingClubs?: { id?: string; name: string; slug: string }[];
   status: "Registration Open" | "Upcoming" | "Completed" | "Cancelled";
   poster: string;
   cardImage: string;
@@ -53,6 +60,7 @@ export interface EventFormData {
   teamType: "Individual" | "Team" | "Both";
   minTeamSize: number;
   maxTeamSize: number;
+  noRegistrationRequired?: boolean;
   registrationStartDate: string;
   registrationDeadline: string;
   isPaid: boolean;
@@ -67,6 +75,33 @@ export interface EventFormData {
   subEventBadge: string;
   targetAudience: TargetAudience;
   isInterCollege: boolean;
+}
+
+export function formatDateRangeToReadable(startIso: string, endIso: string): string {
+  if (!startIso) return "";
+  if (!endIso || endIso === startIso) return formatDateToReadable(startIso);
+  try {
+    const [sYear, sMonth, sDay] = startIso.split("-").map(Number);
+    const [eYear, eMonth, eDay] = endIso.split("-").map(Number);
+    if (!sYear || !sMonth || !sDay || !eYear || !eMonth || !eDay) {
+      return `${formatDateToReadable(startIso)} - ${formatDateToReadable(endIso)}`;
+    }
+    const sDate = new Date(sYear, sMonth - 1, sDay);
+    const eDate = new Date(eYear, eMonth - 1, eDay);
+
+    const sMonthName = sDate.toLocaleDateString("en-GB", { month: "short" });
+    const eMonthName = eDate.toLocaleDateString("en-GB", { month: "short" });
+
+    if (sYear === eYear && sMonth === eMonth) {
+      return `${sDay} to ${eDay} ${sMonthName} ${sYear}`;
+    } else if (sYear === eYear) {
+      return `${sDay} ${sMonthName} to ${eDay} ${eMonthName} ${sYear}`;
+    } else {
+      return `${sDay} ${sMonthName} ${sYear} to ${eDay} ${eMonthName} ${eYear}`;
+    }
+  } catch {
+    return `${formatDateToReadable(startIso)} - ${formatDateToReadable(endIso)}`;
+  }
 }
 
 export function formatDateToReadable(dateStr: string): string {
@@ -179,14 +214,22 @@ export function EventFormModal({
 
   const defaultRawDate = new Date().toISOString().split("T")[0];
 
+  const initialIsMulti = initialData?.isMultiDay || (Boolean(initialData?.rawEndDate) && initialData?.rawEndDate !== initialData?.rawDate) || false;
+  const initialRawEndDate = initialData?.rawEndDate || initialData?.rawDate || defaultRawDate;
+
   const [form, setForm] = useState<EventFormData>({
     name: initialData?.name || "",
     category: initialData?.category || "Technical",
     rawDate: initialData?.rawDate || defaultRawDate,
-    date: initialData?.date || formatDateToReadable(defaultRawDate),
+    rawEndDate: initialRawEndDate,
+    date: initialData?.date || (initialIsMulti ? formatDateRangeToReadable(initialData?.rawDate || defaultRawDate, initialRawEndDate) : formatDateToReadable(defaultRawDate)),
+    endDate: initialData?.endDate || (initialIsMulti ? formatDateToReadable(initialRawEndDate) : ""),
+    isMultiDay: initialIsMulti,
+    time: initialData?.time || "10:00 AM IST",
     venue: initialData?.venue || "JDCOEM Campus",
     organizer: initialData?.organizer || "SRC JDCOEM",
     organizerClubSlug: initialData?.organizerClubSlug || "src-council",
+    collaboratingClubs: initialData?.collaboratingClubs || [],
     status: initialData?.status || "Registration Open",
     poster: initialData?.poster || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
     cardImage: initialData?.cardImage || "",
@@ -199,6 +242,7 @@ export function EventFormModal({
     teamType: initialData?.teamType || "Both",
     minTeamSize: initialData?.minTeamSize || 2,
     maxTeamSize: initialData?.maxTeamSize || 4,
+    noRegistrationRequired: Boolean(initialData?.noRegistrationRequired),
     registrationStartDate: initialData?.registrationStartDate || defaultRawDate,
     registrationDeadline: initialData?.registrationDeadline || "",
     isPaid: initialData?.isPaid || false,
@@ -217,9 +261,17 @@ export function EventFormModal({
 
   useEffect(() => {
     if (initialData) {
+      const isMulti = initialData.isMultiDay || (Boolean(initialData.rawEndDate) && initialData.rawEndDate !== initialData.rawDate) || false;
+      const endVal = initialData.rawEndDate || initialData.rawDate || form.rawDate;
       setForm((prev) => ({
         ...prev,
         ...initialData,
+        isMultiDay: isMulti,
+        rawEndDate: endVal,
+        endDate: initialData.endDate || (isMulti ? formatDateToReadable(endVal) : ""),
+        time: initialData.time || prev.time || "10:00 AM IST",
+        noRegistrationRequired: Boolean(initialData.noRegistrationRequired),
+        collaboratingClubs: initialData.collaboratingClubs || [],
         whatToExpect: initialData.whatToExpect && initialData.whatToExpect.length > 0 ? initialData.whatToExpect : [""],
         rules: initialData.rules && initialData.rules.length > 0 ? initialData.rules : [""],
         customQuestions: initialData.customQuestions || [],
@@ -227,12 +279,79 @@ export function EventFormModal({
     }
   }, [initialData]);
 
-  const handleDateChange = (val: string) => {
-    const formatted = formatDateToReadable(val);
+  const handleStartDateChange = (val: string) => {
+    setForm((prev) => {
+      const isMulti = Boolean(prev.isMultiDay);
+      const endVal = prev.rawEndDate && prev.rawEndDate >= val ? prev.rawEndDate : val;
+      const formatted = isMulti
+        ? formatDateRangeToReadable(val, endVal)
+        : formatDateToReadable(val);
+      return {
+        ...prev,
+        rawDate: val,
+        rawEndDate: isMulti ? endVal : val,
+        date: formatted || val,
+        endDate: isMulti ? formatDateToReadable(endVal) : "",
+      };
+    });
+  };
+
+  const handleEndDateChange = (val: string) => {
+    setForm((prev) => {
+      const formatted = formatDateRangeToReadable(prev.rawDate, val);
+      return {
+        ...prev,
+        rawEndDate: val,
+        date: formatted || prev.rawDate,
+        endDate: formatDateToReadable(val),
+      };
+    });
+  };
+
+  const handleToggleMultiDay = (isMulti: boolean) => {
+    setForm((prev) => {
+      const endVal = prev.rawEndDate && prev.rawEndDate >= prev.rawDate ? prev.rawEndDate : prev.rawDate;
+      const formatted = isMulti
+        ? formatDateRangeToReadable(prev.rawDate, endVal)
+        : formatDateToReadable(prev.rawDate);
+      return {
+        ...prev,
+        isMultiDay: isMulti,
+        rawEndDate: isMulti ? endVal : prev.rawDate,
+        date: formatted || prev.rawDate,
+        endDate: isMulti ? formatDateToReadable(endVal) : "",
+      };
+    });
+  };
+
+  const availableCollabClubs = useMemo(() => {
+    const selectedSlugs = new Set((form.collaboratingClubs || []).map((c) => c.slug));
+    return clubsList.filter(
+      (c) => c.slug !== form.organizerClubSlug && c.name !== form.organizer && !selectedSlugs.has(c.slug)
+    );
+  }, [clubsList, form.organizerClubSlug, form.organizer, form.collaboratingClubs]);
+
+  const handleAddCollaboratingClub = (clubSlug: string) => {
+    if (!clubSlug) return;
+    const clubObj = clubsList.find((c) => c.slug === clubSlug);
+    if (!clubObj) return;
+    setForm((prev) => {
+      const exists = (prev.collaboratingClubs || []).some((c) => c.slug === clubSlug);
+      if (exists) return prev;
+      return {
+        ...prev,
+        collaboratingClubs: [
+          ...(prev.collaboratingClubs || []),
+          { id: clubObj.id, name: clubObj.name, slug: clubObj.slug },
+        ],
+      };
+    });
+  };
+
+  const handleRemoveCollaboratingClub = (clubSlug: string) => {
     setForm((prev) => ({
       ...prev,
-      rawDate: val,
-      date: formatted || val,
+      collaboratingClubs: (prev.collaboratingClubs || []).filter((c) => c.slug !== clubSlug),
     }));
   };
 
@@ -256,7 +375,7 @@ export function EventFormModal({
       case "details":
         return form.category;
       case "registration":
-        return form.isPaid ? `₹${form.feeAmount}` : "Free";
+        return form.noRegistrationRequired ? "Open Walk-in" : form.isPaid ? `₹${form.feeAmount}` : "Free";
       case "participation":
         return form.teamType;
       case "visuals": {
@@ -284,8 +403,8 @@ export function EventFormModal({
     >
       <form onSubmit={handleSubmit} className="space-y-6">
         
-        {/* Sticky Tactile Section Navigation Bar */}
-        <div className="sticky -top-5 sm:-top-7 z-20 bg-white/95 backdrop-blur-md pt-1 pb-3 border-b border-slate-200/80 -mx-5 sm:-mx-7 px-5 sm:px-7 space-y-2">
+        {/* Sticky Tactile Section Navigation Bar - solid bg to eliminate GPU compositing lag */}
+        <div className="sticky -top-5 sm:-top-7 z-20 bg-white pt-1 pb-3 border-b border-slate-200/80 -mx-5 sm:-mx-7 px-5 sm:px-7 space-y-2">
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
             {SECTIONS.map((section) => {
               const Icon = section.icon;
@@ -402,6 +521,76 @@ export function EventFormModal({
               <p className="text-[10px] text-slate-400">
                 Select whether this is an institutional council flagship event or hosted by one of the 12 chartered student clubs.
               </p>
+            </div>
+
+            {/* In Collaboration With (Multi-club collaboration) */}
+            <div className="space-y-2 p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-[#E78023]" />
+                  <span>In Collaboration With (Optional)</span>
+                </label>
+                {(form.collaboratingClubs || []).length > 0 && (
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-blue-50 text-[#17458F] border border-blue-200">
+                    {(form.collaboratingClubs || []).length} Co-Organizing {(form.collaboratingClubs || []).length === 1 ? "Club" : "Clubs"}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500">
+                If this event is hosted jointly between multiple chartered student clubs, select them here.
+              </p>
+
+              {/* Selected Collaborating Clubs Chips */}
+              {(form.collaboratingClubs || []).length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {(form.collaboratingClubs || []).map((club) => (
+                    <span
+                      key={club.slug || club.name}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-800 shadow-2xs"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#E78023]" />
+                      <span>{club.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCollaboratingClub(club.slug)}
+                        className="text-slate-400 hover:text-rose-600 transition-colors p-0.5 rounded-md hover:bg-slate-100 cursor-pointer"
+                        title={`Remove ${club.name}`}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Selector to add more clubs */}
+              {availableCollabClubs.length > 0 ? (
+                <div className="flex items-center gap-2 pt-1">
+                  <select
+                    defaultValue=""
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        handleAddCollaboratingClub(e.target.value);
+                        e.target.value = "";
+                      }
+                    }}
+                    className="flex-1 px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-800 text-xs font-medium focus:outline-none focus:border-[#17458F] cursor-pointer"
+                  >
+                    <option value="" disabled>
+                      + Add collaborating partner club...
+                    </option>
+                    {availableCollabClubs.map((club) => (
+                      <option key={club.id || club.slug} value={club.slug}>
+                        {club.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <p className="text-[10px] text-slate-400 italic pt-1">
+                  All available chartered student clubs have been added.
+                </p>
+              )}
             </div>
 
             {/* Dynamic Festival & Competition Hierarchy */}
@@ -571,45 +760,171 @@ export function EventFormModal({
               </div>
             </div>
 
-            {/* Event Date (Interactive Calendar Picker) & Venue */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+            {/* Event Date (Interactive Single or Multi-Day Date Range) & Venue */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="space-y-0.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
                     <CalendarIcon className="w-3.5 h-3.5 text-[#E78023]" />
-                    <span>Event Date (Calendar) *</span>
+                    <span>Event Date &amp; Duration *</span>
                   </label>
-                  {form.date && (
-                    <span className="text-[10px] text-[#17458F] font-bold truncate">
-                      {form.date}
-                    </span>
-                  )}
+                  <p className="text-[11px] text-slate-500">
+                    Choose whether the event is held on a single day or spans across multiple days.
+                  </p>
                 </div>
-                
-                <input
-                  type="date"
-                  required
-                  value={form.rawDate}
-                  onChange={(e) => handleDateChange(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
-                />
-                <p className="text-[10px] text-slate-400">
-                  Display format: <strong className="text-slate-700">{form.date || "Selected Date"}</strong>
-                </p>
+
+                {/* Duration Mode Switch */}
+                <div className="inline-flex p-1 bg-slate-200/70 rounded-xl shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleMultiDay(false)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                      !form.isMultiDay
+                        ? "bg-white text-[#17458F] shadow-xs"
+                        : "text-slate-600 hover:text-slate-900"
+                    )}
+                  >
+                    Single Day
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleMultiDay(true)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                      form.isMultiDay
+                        ? "bg-white text-[#E78023] shadow-xs"
+                        : "text-slate-600 hover:text-slate-900"
+                    )}
+                  >
+                    Multi-Day (Period)
+                  </button>
+                </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-[#E78023]" />
-                  <span>Venue</span>
-                </label>
-                <input
-                  type="text"
-                  value={form.venue}
-                  onChange={(e) => setForm({ ...form, venue: e.target.value })}
-                  placeholder="e.g. Central Auditorium"
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
-                />
+              {/* Date & Time Input Fields */}
+              {!form.isMultiDay ? (
+                <div className="space-y-3 pt-1">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+                      Date (Calendar) *
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={form.rawDate}
+                      onChange={(e) => handleStartDateChange(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-[#E78023]" />
+                        <span>Event Time *</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={form.time}
+                        onChange={(e) => setForm({ ...form, time: e.target.value })}
+                        placeholder="e.g. 10:00 AM IST or 10:00 AM - 04:00 PM"
+                        className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-[#E78023]" />
+                        <span>Venue *</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={form.venue}
+                        onChange={(e) => setForm({ ...form, venue: e.target.value })}
+                        placeholder="e.g. Central Auditorium"
+                        className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+                        Start Date *
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={form.rawDate}
+                        onChange={(e) => handleStartDateChange(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+                        End Date *
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        min={form.rawDate}
+                        value={form.rawEndDate || form.rawDate}
+                        onChange={(e) => handleEndDateChange(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-[#E78023]" />
+                        <span>Event Daily Schedule / Time *</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={form.time}
+                        onChange={(e) => setForm({ ...form, time: e.target.value })}
+                        placeholder="e.g. 10:00 AM Daily or 09:30 AM - 05:30 PM"
+                        className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-[#E78023]" />
+                        <span>Venue *</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={form.venue}
+                        onChange={(e) => setForm({ ...form, venue: e.target.value })}
+                        placeholder="e.g. Campus Grounds & Auditorium"
+                        className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] pt-2 border-t border-slate-200/70 text-slate-500">
+                <div className="flex items-center gap-2">
+                  <span>Public Display Format:</span>
+                  <span className="font-bold text-[#17458F] bg-blue-50 border border-blue-100 px-2.5 py-0.5 rounded-md">
+                    {form.date || "Selected Date"}
+                  </span>
+                </div>
+                {form.time && (
+                  <div className="flex items-center gap-1.5 font-semibold text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-md">
+                    <Clock className="w-3 h-3 text-[#E78023]" />
+                    <span>{form.time}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -662,161 +977,264 @@ export function EventFormModal({
               </div>
             )}
 
-            {/* Registration Dates */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-[#E78023]" />
-                  <span>Registration Opens</span>
-                </label>
-                <input
-                  type="date"
-                  value={form.registrationStartDate}
-                  onChange={(e) => setForm({ ...form, registrationStartDate: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-rose-500" />
-                  <span>Registration Closes</span>
-                </label>
-                <input
-                  type="date"
-                  value={form.registrationDeadline}
-                  onChange={(e) => setForm({ ...form, registrationDeadline: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
-                />
-              </div>
-            </div>
-
-            {/* Registration Fee & Gateway Pricing */}
-            <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
-                  <span>Registration Fee (Razorpay Gateway)</span>
-                </label>
-                <span
-                  className={cn(
-                    "text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border",
-                    form.isPaid
-                      ? "bg-blue-50 text-[#17458F] border-[#17458F]/30"
-                      : "bg-emerald-50 text-emerald-800 border-emerald-200"
-                  )}
-                >
-                  {form.isPaid ? "Paid Event" : "Free Entry"}
+            {/* Registration Requirement Mode Card */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-50/70 to-slate-50 border border-blue-100 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-[#17458F]" />
+                    <span>Registration Requirement</span>
+                  </label>
+                  <p className="text-xs text-slate-600 leading-relaxed font-sans">
+                    Is student/attendee registration mandatory on the portal for this event?
+                  </p>
+                </div>
+                <span className={cn(
+                  "text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border shrink-0",
+                  form.noRegistrationRequired
+                    ? "bg-amber-50 text-amber-800 border-amber-200"
+                    : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                )}>
+                  {form.noRegistrationRequired ? "No Registration Required" : "Registration Mandatory"}
                 </span>
               </div>
 
-              {/* Free vs Paid Toggle */}
-              <div className="grid grid-cols-2 gap-2">
+              {/* 2-Option Card Switch */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                 <button
                   type="button"
-                  onClick={() => setForm({ ...form, isPaid: false })}
+                  onClick={() => setForm({ ...form, noRegistrationRequired: false })}
                   className={cn(
-                    "py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer flex items-center justify-center gap-1.5",
-                    !form.isPaid
-                      ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
-                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                    "p-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-start gap-3",
+                    !form.noRegistrationRequired
+                      ? "bg-white border-[#17458F] shadow-sm ring-2 ring-[#17458F]/20"
+                      : "bg-white/60 border-slate-200 hover:bg-white text-slate-600"
                   )}
                 >
-                  <Check className={cn("w-3.5 h-3.5", !form.isPaid ? "opacity-100" : "opacity-0")} />
-                  <span>Free Event (₹0)</span>
+                  <div className={cn(
+                    "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 mt-0.5",
+                    !form.noRegistrationRequired ? "border-[#17458F] bg-[#17458F] text-white" : "border-slate-300"
+                  )}>
+                    {!form.noRegistrationRequired && <Check className="w-3 h-3 stroke-[3]" />}
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-900">Require Registrations</div>
+                    <div className="text-[11px] text-slate-500 font-normal mt-0.5 leading-snug">
+                      Students register via portal, answer questions, receive tickets, and pay fees if applicable.
+                    </div>
+                  </div>
                 </button>
+
                 <button
                   type="button"
-                  onClick={() => setForm({ ...form, isPaid: true })}
+                  onClick={() => setForm({ ...form, noRegistrationRequired: true, isPaid: false })}
                   className={cn(
-                    "py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer flex items-center justify-center gap-1.5",
-                    form.isPaid
-                      ? "bg-[#17458F] text-white border-[#17458F] shadow-xs"
-                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                    "p-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-start gap-3",
+                    form.noRegistrationRequired
+                      ? "bg-white border-amber-500 shadow-sm ring-2 ring-amber-500/20"
+                      : "bg-white/60 border-slate-200 hover:bg-white text-slate-600"
                   )}
                 >
-                  <Sparkles className={cn("w-3.5 h-3.5", form.isPaid ? "opacity-100" : "opacity-0")} />
-                  <span>Paid Event (₹ Fees)</span>
+                  <div className={cn(
+                    "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 mt-0.5",
+                    form.noRegistrationRequired ? "border-amber-600 bg-amber-600 text-white" : "border-slate-300"
+                  )}>
+                    {form.noRegistrationRequired && <Check className="w-3 h-3 stroke-[3]" />}
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-900">No Registrations Required</div>
+                    <div className="text-[11px] text-slate-500 font-normal mt-0.5 leading-snug">
+                      Open attendance / informational listing only. No registration deadlines, tickets, or fees required.
+                    </div>
+                  </div>
                 </button>
               </div>
+            </div>
 
-              {form.isPaid && (
-                <div className="p-4 rounded-2xl bg-white border border-[#17458F]/20 space-y-3 shadow-xs animate-in fade-in duration-200">
-                  {form.teamType !== "Individual" && (
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-                        Team Pricing Structure
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setForm({ ...form, feePricingModel: "per_person" })}
-                          className={cn(
-                            "py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                            form.feePricingModel === "per_person"
-                              ? "bg-[#17458F] text-white border-[#17458F]"
-                              : "bg-slate-50 text-slate-700 border-slate-200"
-                          )}
-                        >
-                          Per Member (₹ × Squad)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setForm({ ...form, feePricingModel: "per_team" })}
-                          className={cn(
-                            "py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                            form.feePricingModel === "per_team"
-                              ? "bg-[#17458F] text-white border-[#17458F]"
-                              : "bg-slate-50 text-slate-700 border-slate-200"
-                          )}
-                        >
-                          Flat Team Fee (₹ Fixed)
-                        </button>
-                      </div>
-                    </div>
-                  )}
+            {form.noRegistrationRequired ? (
+              <div className="p-5 rounded-2xl bg-emerald-50/80 border border-emerald-200 text-emerald-950 space-y-3 animate-in fade-in duration-200">
+                <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-emerald-800">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Open Attendance Listing Active</span>
+                </div>
+                <p className="text-xs text-emerald-900/90 leading-relaxed font-medium font-sans">
+                  This event will be published purely as an informational listing for student and visitor discovery. 
+                  No registration fees, opening dates, or closing deadlines are required, and no student signups will be collected on the portal.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-[11px] font-semibold text-emerald-800">
+                  <div className="p-2.5 rounded-xl bg-white border border-emerald-200/70 flex items-center gap-2 shadow-xs">
+                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Free Walk-in Entry</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white border border-emerald-200/70 flex items-center gap-2 shadow-xs">
+                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>No Deadlines Enforced</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white border border-emerald-200/70 flex items-center gap-2 shadow-xs">
+                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>No Ticketing Gateway</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Registration Dates */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-[#E78023]" />
+                      <span>Registration Opens</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={form.registrationStartDate}
+                      onChange={(e) => setForm({ ...form, registrationStartDate: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-rose-500" />
+                      <span>Registration Closes</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={form.registrationDeadline}
+                      onChange={(e) => setForm({ ...form, registrationDeadline: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
+                    />
+                  </div>
+                </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                        {form.feePricingModel === "per_team" && form.teamType !== "Individual"
-                          ? "Solo Delegate Fee (₹)"
-                          : "Fee Per Participant (₹)"}
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        step={10}
-                        value={form.feeAmount}
-                        onChange={(e) => setForm({ ...form, feeAmount: Math.max(0, parseInt(e.target.value) || 0) })}
-                        placeholder="e.g. 100"
-                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
-                      />
-                    </div>
-
-                    {form.teamType !== "Individual" && form.feePricingModel === "per_team" && (
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                          Flat Squad Fee (₹ / Team)
-                        </label>
-                        <input
-                          type="number"
-                          min={0}
-                          step={10}
-                          value={form.teamFeeAmount}
-                          onChange={(e) => setForm({ ...form, teamFeeAmount: Math.max(0, parseInt(e.target.value) || 0) })}
-                          placeholder="e.g. 300"
-                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
-                        />
-                      </div>
-                    )}
+                {/* Registration Fee & Gateway Pricing */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
+                      <span>Registration Fee (Razorpay Gateway)</span>
+                    </label>
+                    <span
+                      className={cn(
+                        "text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border",
+                        form.isPaid
+                          ? "bg-blue-50 text-[#17458F] border-[#17458F]/30"
+                          : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                      )}
+                    >
+                      {form.isPaid ? "Paid Event" : "Free Entry"}
+                    </span>
                   </div>
 
-                  <p className="text-[10px] text-slate-500 font-medium">
-                    Integrated with Razorpay Gateway. Registrations will securely charge this amount via UPI (GPay/PhonePe), Cards, or NetBanking before issuing delegate passes.
-                  </p>
+                  {/* Free vs Paid Toggle */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, isPaid: false })}
+                      className={cn(
+                        "py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                        !form.isPaid
+                          ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                      )}
+                    >
+                      <Check className={cn("w-3.5 h-3.5", !form.isPaid ? "opacity-100" : "opacity-0")} />
+                      <span>Free Event (₹0)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, isPaid: true })}
+                      className={cn(
+                        "py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                        form.isPaid
+                          ? "bg-[#17458F] text-white border-[#17458F] shadow-xs"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                      )}
+                    >
+                      <Sparkles className={cn("w-3.5 h-3.5", form.isPaid ? "opacity-100" : "opacity-0")} />
+                      <span>Paid Event (₹ Fees)</span>
+                    </button>
+                  </div>
+
+                  {form.isPaid && (
+                    <div className="p-4 rounded-2xl bg-white border border-[#17458F]/20 space-y-3 shadow-xs animate-in fade-in duration-200">
+                      {form.teamType !== "Individual" && (
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+                            Team Pricing Structure
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setForm({ ...form, feePricingModel: "per_person" })}
+                              className={cn(
+                                "py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                                form.feePricingModel === "per_person"
+                                  ? "bg-[#17458F] text-white border-[#17458F]"
+                                  : "bg-slate-50 text-slate-700 border-slate-200"
+                              )}
+                            >
+                              Per Member (₹ × Squad)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setForm({ ...form, feePricingModel: "per_team" })}
+                              className={cn(
+                                "py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                                form.feePricingModel === "per_team"
+                                  ? "bg-[#17458F] text-white border-[#17458F]"
+                                  : "bg-slate-50 text-slate-700 border-slate-200"
+                              )}
+                            >
+                              Flat Team Fee (₹ Fixed)
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                            {form.feePricingModel === "per_team" && form.teamType !== "Individual"
+                              ? "Solo Delegate Fee (₹)"
+                              : "Fee Per Participant (₹)"}
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            step={10}
+                            value={form.feeAmount}
+                            onChange={(e) => setForm({ ...form, feeAmount: Math.max(0, parseInt(e.target.value) || 0) })}
+                            placeholder="e.g. 150"
+                            className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
+                          />
+                        </div>
+
+                        {form.teamType !== "Individual" && form.feePricingModel === "per_team" && (
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                              Flat Squad Fee (₹ / Team)
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              step={10}
+                              value={form.teamFeeAmount}
+                              onChange={(e) => setForm({ ...form, teamFeeAmount: Math.max(0, parseInt(e.target.value) || 0) })}
+                              placeholder="e.g. 300"
+                              className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      <p className="text-[10px] text-slate-500 font-medium">
+                        Integrated with Razorpay Gateway. Registrations will securely charge this amount via UPI (GPay/PhonePe), Cards, or NetBanking before issuing delegate passes.
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </>
+            )}
           </div>
         )}
 

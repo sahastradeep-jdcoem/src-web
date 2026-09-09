@@ -1,7 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Calendar, MapPin, Users, Layers } from "lucide-react";
+import { Calendar, Clock, MapPin, Users, Layers } from "lucide-react";
 import { EventItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
@@ -56,9 +56,15 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
             )}>
               {event.targetAudience === "jdcoem_only" || event.isInterCollege === false ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
             </span>
-            <Badge variant={statusVariant} size="sm">
-              {event.status}
-            </Badge>
+            {event.noRegistrationRequired ? (
+              <span className="text-[10px] font-sans font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-600 text-white shadow-md">
+                Open Walk-in
+              </span>
+            ) : (
+              <Badge variant={statusVariant} size="sm">
+                {event.status}
+              </Badge>
+            )}
           </div>
         </div>
 
@@ -84,14 +90,35 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-[#E78023] shrink-0" />
                 <span className="font-semibold text-[#0F172A]">{event.date}</span>
+                {event.isMultiDay && (
+                  <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                    Multi-Day
+                  </span>
+                )}
               </div>
+              {event.time && (
+                <div className="flex items-center gap-2 text-slate-500">
+                  <Clock className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span>{event.time}</span>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-[#17458F] shrink-0" />
                 <span className="truncate">{event.venue}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-slate-500 shrink-0" />
-                <span className="text-slate-500">Organized By: <strong className="text-[#17458F] font-semibold">{event.organizer}</strong></span>
+              <div className="flex items-start gap-2">
+                <Users className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
+                <span className="text-slate-500 leading-snug">
+                  Organized By: <strong className="text-[#17458F] font-semibold">{event.organizer}</strong>
+                  {event.collaboratingClubs && event.collaboratingClubs.length > 0 && (
+                    <span className="text-slate-500">
+                      {" "}with{" "}
+                      <strong className="text-slate-800 font-semibold">
+                        {event.collaboratingClubs.map((c) => c.name).join(", ")}
+                      </strong>
+                    </span>
+                  )}
+                </span>
               </div>
             </div>
           </div>
@@ -154,9 +181,15 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
           )}>
             {event.targetAudience === "jdcoem_only" || event.isInterCollege === false ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
           </span>
-          <Badge variant={statusVariant} size="sm">
-            {event.status}
-          </Badge>
+          {event.noRegistrationRequired ? (
+            <span className="text-[10px] font-sans font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-600 text-white shadow-xs">
+              Open Walk-in
+            </span>
+          ) : (
+            <Badge variant={statusVariant} size="sm">
+              {event.status}
+            </Badge>
+          )}
         </div>
       </div>
 
@@ -181,11 +214,33 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
         <div className="space-y-1.5 text-xs text-slate-600 pt-3 border-t border-slate-100 font-sans font-medium">
           <div className="flex items-center gap-2">
             <Calendar className="w-3.5 h-3.5 text-[#E78023] shrink-0" />
-            <span className="font-semibold text-[#0F172A]">{event.date}</span>
+            <span className="font-semibold text-[#0F172A] truncate">{event.date}</span>
+            {event.isMultiDay && (
+              <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
+                Multi-Day
+              </span>
+            )}
           </div>
+          {event.time && (
+            <div className="flex items-center gap-2 text-slate-500 text-[11px]">
+              <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span className="truncate">{event.time}</span>
+            </div>
+          )}
           <div className="flex items-center gap-2 text-slate-500 text-[11px]">
             <MapPin className="w-3.5 h-3.5 text-[#17458F] shrink-0" />
             <span className="truncate">{event.venue}</span>
+          </div>
+          <div className="flex items-center gap-2 text-slate-500 text-[11px]">
+            <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span className="truncate">
+              {event.organizer}
+              {event.collaboratingClubs && event.collaboratingClubs.length > 0 && (
+                <span className="text-[#E78023] font-bold ml-1">
+                  +{event.collaboratingClubs.length} co-host{event.collaboratingClubs.length > 1 ? "s" : ""}
+                </span>
+              )}
+            </span>
           </div>
         </div>
 

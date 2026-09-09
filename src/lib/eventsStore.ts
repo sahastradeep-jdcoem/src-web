@@ -25,6 +25,17 @@ export function sanitizeEventItem(event: EventItem): EventItem {
   if (!event || typeof event !== "object") return event;
   return {
     ...event,
+    collaboratingClubs: Array.isArray(event.collaboratingClubs)
+      ? event.collaboratingClubs.filter((c) => c && c.name && c.slug)
+      : undefined,
+    coOrganizers: Array.isArray(event.coOrganizers)
+      ? event.coOrganizers.filter(Boolean)
+      : undefined,
+    rawDate: event.rawDate || undefined,
+    rawEndDate: event.rawEndDate || undefined,
+    endDate: event.endDate || undefined,
+    isMultiDay: Boolean(event.isMultiDay),
+    noRegistrationRequired: Boolean(event.noRegistrationRequired),
     whatToExpect: Array.isArray(event.whatToExpect)
       ? Array.from(
           new Set(
@@ -51,7 +62,7 @@ const MONTH_MAP: Record<string, number> = {
   february: 1, feb: 1,
   march: 2, mar: 2,
   april: 3, apr: 3,
-  may: 4,
+  may: 4,  may_: 4,
   june: 5, jun: 5,
   july: 6, jul: 6,
   august: 7, aug: 7,
@@ -82,6 +93,17 @@ export function getEventDateTimestamp(event: Partial<EventItem> | null | undefin
   if (!event) return Number.MAX_SAFE_INTEGER;
   const dateStr = (event.date || "").trim();
   const timeOffset = parseTimeString(event.time);
+
+  // 0. Try event.rawDate if specified in YYYY-MM-DD format
+  if (event.rawDate) {
+    const rawMatch = event.rawDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (rawMatch) {
+      const y = parseInt(rawMatch[1], 10);
+      const m = parseInt(rawMatch[2], 10) - 1;
+      const d = parseInt(rawMatch[3], 10);
+      return new Date(y, m, d).getTime() + timeOffset;
+    }
+  }
 
   if (!dateStr || /\b(tbd|to be decided|coming soon|announced soon)\b/i.test(dateStr)) {
     if (event.registrationStartDate) {

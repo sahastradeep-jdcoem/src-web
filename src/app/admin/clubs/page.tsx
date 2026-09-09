@@ -44,6 +44,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
+import { ClubFormModal } from "@/components/admin/clubs/ClubFormModal";
 import { cn } from "@/lib/utils";
 
 export default function AdminClubsPage() {
@@ -57,7 +58,6 @@ export default function AdminClubsPage() {
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [isSavingList, setIsSavingList] = useState(false);
-  const [modalTab, setModalTab] = useState<"identity" | "about" | "media">("identity");
   const [pendingUploads, setPendingUploads] = useState(0);
 
   const handleUploadStateChange = (uploading: boolean) => {
@@ -211,7 +211,6 @@ export default function AdminClubsPage() {
 
   const handleOpenAddModal = () => {
     setIsCreatingNew(true);
-    setModalTab("identity");
     const rand = Math.random().toString(36).substring(2, 7);
     setEditingClub({
       id: `club-${Date.now()}-${rand}`,
@@ -248,29 +247,30 @@ export default function AdminClubsPage() {
     });
   };
 
-  const handleSaveClub = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingClub) return;
+  const handleSaveClub = (clubOverride?: ClubItem, e?: React.FormEvent) => {
+    if (e?.preventDefault) e.preventDefault();
+    const club = clubOverride || editingClub;
+    if (!club) return;
 
-    if (!editingClub.name.trim()) {
+    if (!club.name.trim()) {
       alert("Please provide a Club Name.");
       return;
     }
 
     // Auto generate clean slug from name if new
     const cleanSlug = isCreatingNew
-      ? editingClub.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
-      : editingClub.slug;
+      ? club.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+      : club.slug;
 
-    const defaultHero = editingClub.headerImage || editingClub.cardImage || editingClub.heroImage || "https://images.unsplash.com/photo-1547153760-18fc86324498?q=80&w=1600&auto=format&fit=crop";
+    const defaultHero = club.headerImage || club.cardImage || club.heroImage || "https://images.unsplash.com/photo-1547153760-18fc86324498?q=80&w=1600&auto=format&fit=crop";
 
     const clubToSave: ClubItem = {
-      ...editingClub,
+      ...club,
       slug: cleanSlug,
       heroImage: defaultHero,
-      cardImage: editingClub.cardImage || defaultHero,
-      headerImage: editingClub.headerImage || defaultHero,
-      logoImage: editingClub.logoImage || "",
+      cardImage: club.cardImage || defaultHero,
+      headerImage: club.headerImage || defaultHero,
+      logoImage: club.logoImage || "",
     };
 
     let updated: ClubItem[];
@@ -708,7 +708,6 @@ export default function AdminClubsPage() {
                         cardImage: club.cardImage || "",
                         headerImage: club.headerImage || "",
                       });
-                      setModalTab("identity");
                     }}
                     className="px-3.5 py-1.5 rounded-xl bg-[#17458F] hover:bg-[#0E2F66] text-white text-[11px] font-bold uppercase transition-colors cursor-pointer shadow-xs flex items-center gap-1"
                   >
@@ -736,361 +735,18 @@ export default function AdminClubsPage() {
       )}
 
       {/* EDIT / CREATE CLUB MODAL */}
-      {editingClub && (
-        <Modal
-          isOpen={!!editingClub}
-          onClose={() => {
-            setEditingClub(null);
-            setIsCreatingNew(false);
-          }}
-          title={isCreatingNew ? "Charter New Student Club" : `Edit: ${editingClub.name || "Club"}`}
-          subtitle="Configure club identity, domain category, description, and visual assets."
-          maxWidth="3xl"
-        >
-          <form onSubmit={handleSaveClub} className="flex flex-col h-full text-xs text-slate-900">
-            
-            {/* Modal Tabs Header */}
-            <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-2xl border border-slate-200 mb-5 overflow-x-auto shrink-0">
-              <button
-                type="button"
-                onClick={() => setModalTab("identity")}
-                className={cn(
-                  "flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap",
-                  modalTab === "identity" 
-                    ? "bg-white text-[#17458F] shadow-xs" 
-                    : "text-slate-600 hover:text-slate-900"
-                )}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>1. Identity & Domain</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setModalTab("about")}
-                className={cn(
-                  "flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap",
-                  modalTab === "about" 
-                    ? "bg-white text-[#17458F] shadow-xs" 
-                    : "text-slate-600 hover:text-slate-900"
-                )}
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>2. About & Mission</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setModalTab("media")}
-                className={cn(
-                  "flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap",
-                  modalTab === "media" 
-                    ? "bg-white text-[#17458F] shadow-xs" 
-                    : "text-slate-600 hover:text-slate-900"
-                )}
-              >
-                <Eye className="w-3.5 h-3.5" />
-                <span>3. Banner & Media</span>
-              </button>
-            </div>
-
-            {/* Tab 1: Identity & Domain */}
-            {modalTab === "identity" && (
-              <div className="space-y-5 animate-in fade-in duration-200">
-                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/70 border border-slate-200 space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="font-bold text-slate-800 text-xs">
-                      Club Full Name <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. AI & Robotics Society, Dance Club, Music Society..."
-                      value={editingClub.name}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setEditingClub((prev) => (prev ? { ...prev, name: val } : null));
-                      }}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F] shadow-xs"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="font-bold text-slate-800 text-xs">
-                        Domain Category <span className="text-rose-500">*</span>
-                      </label>
-                      <span className="text-[10px] text-slate-500">Pick a preset or enter custom</span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-1.5">
-                      {[
-                        "Cultural",
-                        "Technical",
-                        "Creative & Media",
-                        "Sports",
-                        "Literary",
-                        "Social & Environment",
-                        "Innovation & Startups"
-                      ].map((cat) => (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() => setEditingClub((prev) => (prev ? { ...prev, category: cat } : null))}
-                          className={cn(
-                            "px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer",
-                            editingClub.category === cat
-                              ? "bg-[#17458F] text-white shadow-xs font-bold"
-                              : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-100"
-                          )}
-                        >
-                          {cat}
-                        </button>
-                      ))}
-                    </div>
-
-                    <input
-                      type="text"
-                      required
-                      placeholder="Or type custom domain..."
-                      value={editingClub.category}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setEditingClub((prev) => (prev ? { ...prev, category: val } : null));
-                      }}
-                      className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
-                    />
-                  </div>
-                </div>
-
-                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/70 border border-slate-200 space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="font-bold text-slate-800 text-xs">Club Tagline / Official Motto</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Rhythm in Motion, Passion on Stage"
-                      value={editingClub.tagline}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setEditingClub((prev) => (prev ? { ...prev, tagline: val } : null));
-                      }}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="font-bold text-slate-800 text-xs">Active Registered Members</label>
-                      <input
-                        type="number"
-                        min="1"
-                        placeholder="e.g. 50"
-                        value={editingClub.memberCount}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setEditingClub((prev) => (prev ? { ...prev, memberCount: val } : null));
-                        }}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="font-bold text-slate-800 text-xs">Chartered / Est. Year</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 2024"
-                        value={editingClub.established || "2024"}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setEditingClub((prev) => (prev ? { ...prev, established: val } : null));
-                        }}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Tab 2: About & Mission */}
-            {modalTab === "about" && (
-              <div className="space-y-5 animate-in fade-in duration-200">
-                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/70 border border-slate-200 space-y-2">
-                  <label className="font-bold text-slate-800 text-xs flex items-center justify-between">
-                    <span>About Description</span>
-                    <span className="text-[10px] text-slate-400 font-normal">Displayed on public club directory</span>
-                  </label>
-                  <textarea
-                    rows={4}
-                    placeholder="Describe the club's origin, activities, audition process, and regular collegiate engagements..."
-                    value={editingClub.description}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setEditingClub((prev) => (prev ? { ...prev, description: val } : null));
-                    }}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F] resize-none leading-relaxed"
-                  />
-                </div>
-
-                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/70 border border-slate-200 space-y-2">
-                  <label className="font-bold text-slate-800 text-xs flex items-center justify-between">
-                    <span>Official Mission Statement</span>
-                    <span className="text-[10px] text-slate-400 font-normal">Displayed on club charter page</span>
-                  </label>
-                  <textarea
-                    rows={4}
-                    placeholder="Enter the official mission, values, and student growth aspirations for this charter..."
-                    value={editingClub.mission}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setEditingClub((prev) => (prev ? { ...prev, mission: val } : null));
-                    }}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F] resize-none leading-relaxed"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Tab 3: Multi-Size Visual Assets & Media */}
-            {modalTab === "media" && (
-              <div className="space-y-6 animate-in fade-in duration-200">
-                <div className="space-y-1">
-                  <h4 className="font-heading font-extrabold text-xs uppercase tracking-wider text-[#17458F]">
-                    Club Visual Asset Suite (Multi-Size Imagery)
-                  </h4>
-                  <p className="text-[11px] text-slate-500 font-sans">
-                    Upload dedicated photos tailored for club directory cards, detail page banners, and circular insignia badges.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* 1. Directory Card (16:9) */}
-                  <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-                    <ImageUploadDropzone
-                      label="1. Directory Card"
-                      sublabel="For /clubs directory grid (16:9)"
-                      aspectRatio="16:9"
-                      allowedAspectRatios={["16:9", "4:5", "3:4", "1:1", "21:9", "free"]}
-                      lockAspectRatio={false}
-                      recommendedSize="1200 x 675 px (16:9)"
-                      storagePath="clubs/cards"
-                      previewUrl={editingClub.cardImage}
-                      onUploadStateChange={handleUploadStateChange}
-                      onUrlChange={(url) => {
-                        setEditingClub((prev) => (prev ? { ...prev, cardImage: url } : null));
-                      }}
-                    />
-                  </div>
-
-                  {/* 2. Hero Header Banner (21:9) */}
-                  <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-                    <ImageUploadDropzone
-                      label="2. Header Banner"
-                      sublabel="Cinematic backdrop on /clubs/[slug]"
-                      aspectRatio="21:9"
-                      allowedAspectRatios={["21:9", "16:9", "free"]}
-                      lockAspectRatio={false}
-                      recommendedSize="1920 x 820 px (21:9)"
-                      storagePath="clubs/headers"
-                      previewUrl={editingClub.headerImage}
-                      onUploadStateChange={handleUploadStateChange}
-                      onUrlChange={(url) => {
-                        setEditingClub((prev) => (prev ? { ...prev, headerImage: url } : null));
-                      }}
-                    />
-                  </div>
-
-                  {/* 3. Official Logo / Insignia (1:1) */}
-                  <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-                    <ImageUploadDropzone
-                      label="3. Official Club Logo"
-                      sublabel="Circular insignia emblem (1:1)"
-                      aspectRatio="1:1"
-                      allowedAspectRatios={["1:1", "free"]}
-                      lockAspectRatio={false}
-                      isAvatar={true}
-                      recommendedSize="500 x 500 px (Circle PNG)"
-                      storagePath="clubs/logos"
-                      previewUrl={editingClub.logoImage}
-                      onUploadStateChange={handleUploadStateChange}
-                      onUrlChange={(url) => {
-                        setEditingClub((prev) => (prev ? { ...prev, logoImage: url } : null));
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Modal Actions Footer */}
-            <div className="flex items-center justify-between pt-5 mt-6 border-t border-slate-200 shrink-0">
-              <div className="flex items-center gap-2">
-                {modalTab !== "identity" && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      if (modalTab === "media") setModalTab("about");
-                      else if (modalTab === "about") setModalTab("identity");
-                    }}
-                  >
-                    &larr; Back
-                  </Button>
-                )}
-                {modalTab !== "media" && (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      if (modalTab === "identity") setModalTab("about");
-                      else if (modalTab === "about") setModalTab("media");
-                    }}
-                  >
-                    Next &rarr;
-                  </Button>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setEditingClub(null);
-                    setIsCreatingNew(false);
-                  }}
-                >
-                  Cancel
-                </Button>
-
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="sm"
-                  disabled={pendingUploads > 0}
-                  className="gap-2 cursor-pointer shadow-md shadow-[#E78023]/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {pendingUploads > 0 ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin text-white" />
-                      <span>Uploading ({pendingUploads})...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4" />
-                      <span>{isCreatingNew ? "Charter Club" : "Save Changes"}</span>
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-
-          </form>
-        </Modal>
-      )}
+      <ClubFormModal
+        isOpen={!!editingClub}
+        onClose={() => {
+          setEditingClub(null);
+          setIsCreatingNew(false);
+        }}
+        initialClub={editingClub}
+        isCreatingNew={isCreatingNew}
+        pendingUploads={pendingUploads}
+        onUploadStateChange={handleUploadStateChange}
+        onSave={(updatedClub) => handleSaveClub(updatedClub)}
+      />
 
     </div>
   );

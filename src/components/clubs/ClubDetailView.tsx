@@ -15,6 +15,7 @@ import {
   Image as ImageIcon 
 } from "lucide-react";
 import { getStoredClubs, syncClubsFromFirestore, subscribeToClubs, getClubLeaders } from "@/lib/councilStore";
+import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
 import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { ClubItem, EventItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -27,6 +28,7 @@ interface ClubDetailViewProps {
 
 export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailViewProps) {
   const [club, setClub] = useState<ClubItem>(initialClub);
+  const [events, setEvents] = useState<EventItem[]>(clubEvents);
 
   useEffect(() => {
     const applyClub = (list: ClubItem[]) => {
@@ -64,6 +66,32 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
       window.removeEventListener("storage", handleUpdate);
     };
   }, [initialClub]);
+
+  useEffect(() => {
+    const applyEvents = (list: EventItem[]) => {
+      const filtered = list.filter(
+        (e) => e.organizerClubSlug === club.slug || e.collaboratingClubs?.some((c) => c.slug === club.slug)
+      );
+      setEvents(filtered);
+    };
+
+    applyEvents(getStoredEvents());
+    syncEventsFromFirestore().then((remote) => {
+      if (remote) applyEvents(remote);
+    });
+    const unsubEvents = subscribeToEvents((remote) => {
+      applyEvents(remote);
+    });
+    const handleEventsUpdate = () => {
+      applyEvents(getStoredEvents());
+    };
+    window.addEventListener("src_events_updated", handleEventsUpdate);
+
+    return () => {
+      unsubEvents();
+      window.removeEventListener("src_events_updated", handleEventsUpdate);
+    };
+  }, [club.slug]);
 
   const allLeaders = getClubLeaders(club);
 
@@ -219,15 +247,23 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
         </section>
 
         {/* Club Events */}
-        {clubEvents.length > 0 && (
+        {events.length > 0 && (
           <section className="space-y-6">
-            <div className="border-b border-slate-200 pb-4">
-              <h3 className="font-extrabold text-2xl text-[#17458F] uppercase font-heading">
-                ORGANIZED BY {club.name}
-              </h3>
+            <div className="border-b border-slate-200 pb-4 flex items-center justify-between">
+              <div>
+                <h3 className="font-extrabold text-2xl text-[#17458F] uppercase font-heading">
+                  EVENTS &amp; INITIATIVES
+                </h3>
+                <p className="text-xs text-slate-500 font-medium pt-1">
+                  Official campus showcases organized by or in collaboration with {club.name}.
+                </p>
+              </div>
+              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                {events.length} {events.length === 1 ? "Event" : "Events"}
+              </span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {clubEvents.map((evt) => (
+              {events.map((evt) => (
                 <EventCard key={evt.id} event={evt} />
               ))}
             </div>

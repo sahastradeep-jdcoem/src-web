@@ -38,6 +38,10 @@ export function Modal({
   headerAction,
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const closeOnEscapeRef = useRef(closeOnEscape);
+  closeOnEscapeRef.current = closeOnEscape;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -60,8 +64,8 @@ export function Modal({
     // 2. Keyboard handler (Escape + Tab focus trapping)
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (closeOnEscape) {
-          onClose();
+        if (closeOnEscapeRef.current) {
+          onCloseRef.current();
         }
         return;
       }
@@ -175,7 +179,7 @@ export function Modal({
       window.removeEventListener("wheel", handleWheel);
       window.removeEventListener("touchmove", handleTouchMove);
     };
-  }, [isOpen, onClose, closeOnEscape]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

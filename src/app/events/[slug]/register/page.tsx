@@ -160,6 +160,47 @@ export default function EventRegisterPage() {
     );
   }
 
+  if (event.noRegistrationRequired) {
+    return (
+      <div className="min-h-[70vh] bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center space-y-6">
+        <div className="p-4 rounded-3xl bg-emerald-50 border border-emerald-200 text-emerald-600">
+          <CheckCircle2 className="w-10 h-10 mx-auto text-emerald-600" />
+        </div>
+        <div className="space-y-3 max-w-lg">
+          <Badge variant="success" size="md">Open Walk-in • No Registration Required</Badge>
+          <h1 className="font-heading font-extrabold text-2xl text-[#0F172A] uppercase">
+            {event.name}
+          </h1>
+          <div className="p-4 rounded-2xl bg-white border border-emerald-200 text-left space-y-1.5 shadow-xs">
+            <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest block font-sans">
+              Admission Notice:
+            </span>
+            <p className="text-xs text-slate-700 leading-relaxed font-medium">
+              This event does not require online portal registration or passes. All students and delegates are welcome to attend directly at <strong>{event.venue || "JDCOEM Campus"}</strong> on <strong>{event.date}</strong> at <strong>{event.time || "10:00 AM IST"}</strong>!
+            </p>
+          </div>
+          <p className="text-xs text-slate-500 leading-relaxed font-sans">
+            No registration fee or ticketing is required.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Link
+            href={`/events/${event.slug}`}
+            className="px-6 py-3 rounded-2xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider transition-all hover:bg-[#123670] shadow-sm"
+          >
+            View Event Details
+          </Link>
+          <Link
+            href="/events"
+            className="px-6 py-3 rounded-2xl bg-slate-100 text-slate-700 text-xs font-bold uppercase tracking-wider transition-all hover:bg-slate-200 border border-slate-200"
+          >
+            Browse All Events
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const isEventCompleted = event.status === "Completed" || event.status?.toLowerCase() === "completed";
   if (isEventCompleted) {
     return (

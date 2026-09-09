@@ -49,10 +49,20 @@ export interface EventItem {
   tagline?: string;
   category: EventCategory;
   date: string;
+  rawDate?: string; // ISO format (YYYY-MM-DD) for start date
+  endDate?: string; // Formatted end date string
+  rawEndDate?: string; // ISO format (YYYY-MM-DD) for end date
+  isMultiDay?: boolean; // True when event spans multiple days
   time: string;
   venue: string;
   organizer: string;
   organizerClubSlug?: string;
+  collaboratingClubs?: {
+    id?: string;
+    name: string;
+    slug: string;
+  }[];
+  coOrganizers?: string[]; // Quick list of collaborating entity names
   status: EventStatus;
   isLive?: boolean;
   isFeatured?: boolean;
@@ -69,8 +79,9 @@ export interface EventItem {
   teamType: "Individual" | "Team" | "Both";
   maxTeamSize?: number;
   minTeamSize?: number;
+  noRegistrationRequired?: boolean; // True if event does not require portal registration (open walk-in / informational)
   registrationStartDate?: string;
-  registrationDeadline: string;
+  registrationDeadline?: string;
   entryFee?: string;
   isPaid?: boolean;
   feeAmount?: number; // Base fee per person in INR
@@ -106,6 +117,9 @@ export interface ClubLeader {
   bio?: string;
   email?: string;
   linkedin?: string;
+  clubId?: string;
+  clubSlug?: string;
+  clubName?: string;
   clubIds?: string[];
   clubSlugs?: string[];
   clubNames?: string[];

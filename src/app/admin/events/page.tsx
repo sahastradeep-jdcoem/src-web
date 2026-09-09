@@ -137,11 +137,16 @@ export default function AdminEventsPage() {
   const handleCreateSubmit = (formData: EventFormData) => {
     const cleanWhatToExpect = Array.from(new Set(formData.whatToExpect.map((s) => s.trim()).filter(Boolean)));
     const cleanRules = Array.from(new Set(formData.rules.map((s) => s.trim()).filter(Boolean)));
-    const regDeadlineFormatted = formData.registrationDeadline
+    const isNoReg = Boolean(formData.noRegistrationRequired);
+    const regDeadlineFormatted = isNoReg
+      ? "Not Required"
+      : formData.registrationDeadline
       ? formatDateToReadable(formData.registrationDeadline)
-      : "TBD";
+      : (formData.date || "TBD 2026");
 
-    const entryFeeText = formData.isPaid
+    const entryFeeText = isNoReg
+      ? "Free Walk-in Entry"
+      : formData.isPaid
       ? (formData.feePricingModel === "per_team" && formData.teamFeeAmount 
           ? `₹${formData.teamFeeAmount} / team`
           : `₹${formData.feeAmount} / person`)
@@ -154,11 +159,17 @@ export default function AdminEventsPage() {
       name: formData.name,
       category: formData.category as any,
       date: formData.date || "TBD 2026",
-      time: "10:00 AM IST",
+      rawDate: formData.rawDate || undefined,
+      rawEndDate: formData.isMultiDay ? (formData.rawEndDate || formData.rawDate) : undefined,
+      endDate: formData.isMultiDay ? (formData.endDate || undefined) : undefined,
+      isMultiDay: Boolean(formData.isMultiDay),
+      time: formData.time || "10:00 AM IST",
       venue: formData.venue,
       organizer: formData.organizer || "SRC JDCOEM",
       organizerClubSlug: formData.organizerClubSlug || (formData.organizer === "SRC JDCOEM" ? "src-council" : undefined),
-      status: formData.status,
+      collaboratingClubs: formData.collaboratingClubs && formData.collaboratingClubs.length > 0 ? formData.collaboratingClubs : undefined,
+      coOrganizers: formData.collaboratingClubs && formData.collaboratingClubs.length > 0 ? formData.collaboratingClubs.map((c) => c.name) : undefined,
+      status: isNoReg && formData.status === "Registration Open" ? "Upcoming" : formData.status,
       poster: formData.poster || formData.cardImage || formData.posterImage || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
       cardImage: formData.cardImage || formData.poster,
       posterImage: formData.posterImage || formData.poster,
@@ -172,13 +183,14 @@ export default function AdminEventsPage() {
       teamType: formData.teamType,
       minTeamSize: formData.teamType !== "Individual" ? formData.minTeamSize : undefined,
       maxTeamSize: formData.teamType !== "Individual" ? formData.maxTeamSize : undefined,
-      registrationStartDate: formData.registrationStartDate || new Date().toISOString().split("T")[0],
+      noRegistrationRequired: isNoReg,
+      registrationStartDate: isNoReg ? undefined : (formData.registrationStartDate || new Date().toISOString().split("T")[0]),
       registrationDeadline: regDeadlineFormatted,
       entryFee: entryFeeText,
-      isPaid: formData.isPaid,
-      feeAmount: formData.isPaid ? Number(formData.feeAmount) || 0 : 0,
-      teamFeeAmount: formData.isPaid && formData.feePricingModel === "per_team" ? Number(formData.teamFeeAmount) || 0 : undefined,
-      feePricingModel: formData.isPaid ? formData.feePricingModel : undefined,
+      isPaid: isNoReg ? false : formData.isPaid,
+      feeAmount: isNoReg ? 0 : (formData.isPaid ? Number(formData.feeAmount) || 0 : 0),
+      teamFeeAmount: !isNoReg && formData.isPaid && formData.feePricingModel === "per_team" ? Number(formData.teamFeeAmount) || 0 : undefined,
+      feePricingModel: isNoReg ? undefined : (formData.isPaid ? formData.feePricingModel : undefined),
       customQuestions: formData.customQuestions && formData.customQuestions.length > 0 ? formData.customQuestions : undefined,
       isParentFest: formData.isParentFest,
       parentEventId: formData.parentEventId || undefined,
@@ -218,18 +230,24 @@ export default function AdminEventsPage() {
 
   const editingInitialData: Partial<EventFormData> | undefined = useMemo(() => {
     if (!editingEvent) return undefined;
-    const parsedEventDate = parseToIsoDate(editingEvent.date);
+    const rawStartDate = editingEvent.rawDate || parseToIsoDate(editingEvent.date);
+    const rawEndDate = editingEvent.rawEndDate || parseToIsoDate(editingEvent.endDate) || rawStartDate;
     const parsedStartDate = parseToIsoDate(editingEvent.registrationStartDate) || new Date().toISOString().split("T")[0];
-    const parsedDeadline = parseToIsoDate(editingEvent.registrationDeadline) || parsedEventDate;
+    const parsedDeadline = parseToIsoDate(editingEvent.registrationDeadline) || rawStartDate;
 
     return {
       name: editingEvent.name,
       category: editingEvent.category,
-      rawDate: parsedEventDate,
+      rawDate: rawStartDate,
+      rawEndDate: rawEndDate,
       date: editingEvent.date,
+      endDate: editingEvent.endDate || "",
+      isMultiDay: Boolean(editingEvent.isMultiDay || (editingEvent.rawEndDate && editingEvent.rawEndDate !== editingEvent.rawDate)),
+      time: editingEvent.time || "10:00 AM IST",
       venue: editingEvent.venue,
       organizer: editingEvent.organizer || "SRC JDCOEM",
       organizerClubSlug: editingEvent.organizerClubSlug || (editingEvent.organizer === "SRC JDCOEM" ? "src-council" : ""),
+      collaboratingClubs: editingEvent.collaboratingClubs ? JSON.parse(JSON.stringify(editingEvent.collaboratingClubs)) : [],
       status: editingEvent.status as any,
       poster: editingEvent.poster || "",
       cardImage: editingEvent.cardImage || "",
@@ -242,6 +260,7 @@ export default function AdminEventsPage() {
       teamType: editingEvent.teamType || "Both",
       minTeamSize: editingEvent.minTeamSize || 2,
       maxTeamSize: editingEvent.maxTeamSize || 4,
+      noRegistrationRequired: Boolean(editingEvent.noRegistrationRequired),
       registrationStartDate: parsedStartDate,
       registrationDeadline: parsedDeadline,
       isPaid: Boolean(editingEvent.isPaid || (editingEvent.feeAmount && editingEvent.feeAmount > 0)),
@@ -268,11 +287,16 @@ export default function AdminEventsPage() {
 
     const cleanWhatToExpect = Array.from(new Set(formData.whatToExpect.map((s) => s.trim()).filter(Boolean)));
     const cleanRules = Array.from(new Set(formData.rules.map((s) => s.trim()).filter(Boolean)));
-    const regDeadlineFormatted = formData.registrationDeadline
+    const isNoReg = Boolean(formData.noRegistrationRequired);
+    const regDeadlineFormatted = isNoReg
+      ? "Not Required"
+      : formData.registrationDeadline
       ? formatDateToReadable(formData.registrationDeadline)
       : undefined;
 
-    const entryFeeText = formData.isPaid
+    const entryFeeText = isNoReg
+      ? "Free Walk-in Entry"
+      : formData.isPaid
       ? (formData.feePricingModel === "per_team" && formData.teamFeeAmount 
           ? `₹${formData.teamFeeAmount} / team`
           : `₹${formData.feeAmount} / person`)
@@ -287,11 +311,18 @@ export default function AdminEventsPage() {
             ...item,
             name: formData.name,
             category: formData.category as any,
-            date: formData.rawDate ? formatDateToReadable(formData.rawDate) : formData.date,
+            date: formData.date,
+            rawDate: formData.rawDate || undefined,
+            rawEndDate: formData.isMultiDay ? (formData.rawEndDate || formData.rawDate) : undefined,
+            endDate: formData.isMultiDay ? (formData.endDate || undefined) : undefined,
+            isMultiDay: Boolean(formData.isMultiDay),
+            time: formData.time || item.time || "10:00 AM IST",
             venue: formData.venue,
             organizer: formData.organizer,
             organizerClubSlug: formData.organizerClubSlug || item.organizerClubSlug,
-            status: formData.status,
+            collaboratingClubs: formData.collaboratingClubs && formData.collaboratingClubs.length > 0 ? formData.collaboratingClubs : undefined,
+            coOrganizers: formData.collaboratingClubs && formData.collaboratingClubs.length > 0 ? formData.collaboratingClubs.map((c) => c.name) : undefined,
+            status: isNoReg && formData.status === "Registration Open" ? "Upcoming" : formData.status,
             poster: primaryPoster,
             cardImage: formData.cardImage || primaryPoster,
             posterImage: formData.posterImage || primaryPoster,
@@ -303,13 +334,14 @@ export default function AdminEventsPage() {
             teamType: formData.teamType,
             minTeamSize: formData.teamType !== "Individual" ? formData.minTeamSize : undefined,
             maxTeamSize: formData.teamType !== "Individual" ? formData.maxTeamSize : undefined,
-            registrationStartDate: formData.registrationStartDate,
-            registrationDeadline: regDeadlineFormatted || item.registrationDeadline,
+            noRegistrationRequired: isNoReg,
+            registrationStartDate: isNoReg ? undefined : formData.registrationStartDate,
+            registrationDeadline: regDeadlineFormatted || (isNoReg ? "Not Required" : item.registrationDeadline),
             entryFee: entryFeeText,
-            isPaid: formData.isPaid,
-            feeAmount: formData.isPaid ? Number(formData.feeAmount) || 0 : 0,
-            teamFeeAmount: formData.isPaid && formData.feePricingModel === "per_team" ? Number(formData.teamFeeAmount) || 0 : undefined,
-            feePricingModel: formData.isPaid ? formData.feePricingModel : undefined,
+            isPaid: isNoReg ? false : formData.isPaid,
+            feeAmount: isNoReg ? 0 : (formData.isPaid ? Number(formData.feeAmount) || 0 : 0),
+            teamFeeAmount: !isNoReg && formData.isPaid && formData.feePricingModel === "per_team" ? Number(formData.teamFeeAmount) || 0 : undefined,
+            feePricingModel: isNoReg ? undefined : (formData.isPaid ? formData.feePricingModel : undefined),
             customQuestions: formData.customQuestions && formData.customQuestions.length > 0 ? formData.customQuestions : undefined,
             isParentFest: formData.isParentFest,
             parentEventId: formData.parentEventId || undefined,
@@ -562,6 +594,19 @@ export default function AdminEventsPage() {
                         <Users className="w-3.5 h-3.5 text-[#17458F] shrink-0" />
                         <span className="truncate max-w-xs">{evt.organizer || "SRC Sahastradeep"}</span>
                       </div>
+                      {evt.collaboratingClubs && evt.collaboratingClubs.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          <span className="text-[9px] text-slate-400 font-medium">with</span>
+                          {evt.collaboratingClubs.map((collab) => (
+                            <span
+                              key={collab.slug || collab.name}
+                              className="text-[9px] font-semibold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200"
+                            >
+                              {collab.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td className="py-4 px-6">
                       <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold uppercase tracking-wider">
@@ -573,6 +618,17 @@ export default function AdminEventsPage() {
                         <CalendarIcon className="w-3.5 h-3.5 text-[#E78023]" />
                         <span>{evt.date}</span>
                       </div>
+                      {evt.time && (
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          <span>{evt.time}</span>
+                        </div>
+                      )}
+                      {evt.isMultiDay && (
+                        <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 mt-1 inline-block">
+                          Multi-Day
+                        </span>
+                      )}
                     </td>
                     <td className="py-4 px-6">
                       <button
@@ -589,28 +645,36 @@ export default function AdminEventsPage() {
                       </button>
                     </td>
                     <td className="py-4 px-6">
-                      <Badge
-                        variant={
-                          evt.isCancelled || evt.status === "Cancelled"
-                            ? "rose"
-                            : evt.status === "Registration Open"
-                            ? "orange"
-                            : "slate"
-                        }
-                        size="sm"
-                      >
-                        {evt.isCancelled || evt.status === "Cancelled" ? "Cancelled" : evt.status}
-                      </Badge>
+                      {evt.noRegistrationRequired ? (
+                        <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1">
+                          🚶 Open Walk-in
+                        </span>
+                      ) : (
+                        <Badge
+                          variant={
+                            evt.isCancelled || evt.status === "Cancelled"
+                              ? "rose"
+                              : evt.status === "Registration Open"
+                              ? "orange"
+                              : "slate"
+                          }
+                          size="sm"
+                        >
+                          {evt.isCancelled || evt.status === "Cancelled" ? "Cancelled" : evt.status}
+                        </Badge>
+                      )}
                     </td>
                     <td className="py-4 px-6 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <Link
-                          href={`/admin/registrations?event=${encodeURIComponent(evt.name)}`}
-                          className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#17458F] transition-colors"
-                          title="View Registrations & Responses"
-                        >
-                          <Users className="w-3.5 h-3.5" />
-                        </Link>
+                        {!evt.noRegistrationRequired && (
+                          <Link
+                            href={`/admin/registrations?event=${encodeURIComponent(evt.name)}`}
+                            className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#17458F] transition-colors"
+                            title="View Registrations & Responses"
+                          >
+                            <Users className="w-3.5 h-3.5" />
+                          </Link>
+                        )}
                         <Link
                           href={`/events/${evt.slug}`}
                           target="_blank"

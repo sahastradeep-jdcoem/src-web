@@ -295,6 +295,11 @@ export default function EventDetailPage() {
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-[#E78023] shrink-0" />
               <span className="font-bold text-white">{event.date}</span>
+              {event.isMultiDay && (
+                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                  Multi-Day
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-slate-300 shrink-0" />
@@ -306,7 +311,25 @@ export default function EventDetailPage() {
             </div>
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-slate-300 shrink-0" />
-              <span>Organized by: <strong className="text-white">{event.organizer}</strong></span>
+              <span>
+                Organized by: <strong className="text-white">{event.organizer}</strong>
+                {event.collaboratingClubs && event.collaboratingClubs.length > 0 && (
+                  <span className="text-slate-300">
+                    {" "}in collaboration with{" "}
+                    {event.collaboratingClubs.map((club, idx) => (
+                      <React.Fragment key={club.slug || club.name}>
+                        <Link
+                          href={`/clubs/${club.slug}`}
+                          className="text-[#E78023] hover:underline font-bold"
+                        >
+                          {club.name}
+                        </Link>
+                        {idx < (event.collaboratingClubs?.length ?? 0) - 1 ? ", " : ""}
+                      </React.Fragment>
+                    ))}
+                  </span>
+                )}
+              </span>
             </div>
           </div>
         </div>
@@ -331,6 +354,32 @@ export default function EventDetailPage() {
               <p className="text-slate-700 leading-relaxed text-sm sm:text-base font-medium font-sans">
                 {event.about || event.description}
               </p>
+
+              {/* COLLABORATING CLUBS SPOTLIGHT */}
+              {event.collaboratingClubs && event.collaboratingClubs.length > 0 && (
+                <div className="p-5 sm:p-6 rounded-3xl bg-blue-50/60 border border-blue-100 space-y-3 mt-6">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#17458F]">
+                    <Users className="w-4 h-4 text-[#E78023]" />
+                    <span>Joint Student Collaboration</span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-medium">
+                    This official campus event is hosted jointly by <strong className="text-slate-900 font-semibold">{event.organizer}</strong> in strategic partnership and co-production with:
+                  </p>
+                  <div className="flex flex-wrap gap-2.5 pt-1">
+                    {event.collaboratingClubs.map((club) => (
+                      <Link
+                        key={club.slug || club.name}
+                        href={`/clubs/${club.slug}`}
+                        className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-slate-200 hover:border-[#17458F] text-xs font-bold text-[#17458F] hover:shadow-xs transition-all cursor-pointer group"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-[#E78023]" />
+                        <span>{club.name}</span>
+                        <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#17458F] group-hover:translate-x-0.5 transition-transform" />
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
             </section>
 
             {/* DYNAMIC FESTIVAL SUB-EVENTS & COMPETITIONS */}
@@ -418,6 +467,11 @@ export default function EventDetailPage() {
                               <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 text-xs font-bold uppercase tracking-wider">
                                 <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
                                 <span>Completed</span>
+                              </span>
+                            ) : sub.noRegistrationRequired ? (
+                              <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold uppercase tracking-wider">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Open Walk-in</span>
                               </span>
                             ) : (
                               <Link
@@ -636,6 +690,23 @@ export default function EventDetailPage() {
                       This festival is reserved exclusively for JDCOEM students. Non-JDCOEM / external delegates cannot register.
                     </p>
                   </div>
+                ) : event.noRegistrationRequired ? (
+                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 space-y-2 text-center">
+                    <div className="flex items-center justify-center gap-1.5 font-bold text-xs uppercase tracking-wider text-emerald-800">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>No Registration Required</span>
+                    </div>
+                    <p className="text-xs text-emerald-900/90 font-medium leading-relaxed">
+                      This festival is open for walk-in attendance. Simply arrive on campus during event dates to attend!
+                    </p>
+                    <a
+                      href="#competitions"
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-[#17458F] hover:underline pt-1"
+                    >
+                      <span>View Schedule & Lineup</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
                 ) : subEvents.length > 0 ? (
                   <div className="space-y-2.5 pt-1">
                     {/* Primary High-Impact CTA: Choose Competition & Register */}
@@ -699,14 +770,16 @@ export default function EventDetailPage() {
             ) : (
               <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-6">
                 <div className="space-y-2">
-                  <Badge variant={isRegistrationOpen ? "orange" : "slate"} size="md">
-                    {event.status}
+                  <Badge variant={event.noRegistrationRequired ? "success" : isRegistrationOpen ? "orange" : "slate"} size="md">
+                    {event.noRegistrationRequired ? "Open Attendance" : event.status}
                   </Badge>
                   <h3 className="font-heading font-extrabold text-2xl text-[#0F172A]">
-                    Registration Portal
+                    {event.noRegistrationRequired ? "Event Access & Entry" : "Registration Portal"}
                   </h3>
                   <p className="text-xs text-slate-500 font-medium">
-                    Secure your official entry pass for {event.name}.
+                    {event.noRegistrationRequired
+                      ? `Official entry and attendance details for ${event.name}.`
+                      : `Secure your official entry pass for ${event.name}.`}
                   </p>
                 </div>
 
@@ -714,17 +787,21 @@ export default function EventDetailPage() {
                 <div className="space-y-3 pt-4 border-t border-slate-100 text-xs">
                   <div className="flex justify-between items-center py-1 border-b border-slate-100">
                     <span className="text-slate-500">Participation Format:</span>
-                    <span className="font-bold text-slate-900">{event.teamType || "Individual"}</span>
+                    <span className="font-bold text-slate-900">
+                      {event.noRegistrationRequired ? "Open Walk-in" : (event.teamType || "Individual")}
+                    </span>
                   </div>
-                  {event.maxTeamSize && (
+                  {!event.noRegistrationRequired && event.maxTeamSize && (
                     <div className="flex justify-between items-center py-1 border-b border-slate-100">
                       <span className="text-slate-500">Team Size:</span>
                       <span className="font-bold text-slate-900">{event.minTeamSize || 1} – {event.maxTeamSize} Members</span>
                     </div>
                   )}
                   <div className="flex justify-between items-center py-1 border-b border-slate-100">
-                    <span className="text-slate-500">Registration Closes:</span>
-                    <span className="font-bold text-[#E78023]">{event.registrationDeadline || "Open until slots filled"}</span>
+                    <span className="text-slate-500">Registration:</span>
+                    <span className="font-bold text-[#E78023]">
+                      {event.noRegistrationRequired ? "Not Required (Walk-in)" : (event.registrationDeadline || "Open until slots filled")}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center py-1 border-b border-slate-100">
                     <span className="text-slate-500">Audience Eligibility:</span>
@@ -746,13 +823,25 @@ export default function EventDetailPage() {
                     </span>
                   </div>
                   <div className="flex justify-between items-center py-1">
-                    <span className="text-slate-500">Fee:</span>
-                    <span className="font-bold text-emerald-600">{event.entryFee || "Free Entry"}</span>
+                    <span className="text-slate-500">Entry / Fee:</span>
+                    <span className="font-bold text-emerald-600">
+                      {event.noRegistrationRequired ? "Free Walk-in Entry" : (event.entryFee || "Free Entry")}
+                    </span>
                   </div>
                 </div>
 
                 {/* Action Button */}
-                {isRegistrationOpen ? (
+                {event.noRegistrationRequired ? (
+                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 space-y-2 text-center">
+                    <div className="flex items-center justify-center gap-1.5 font-bold text-xs uppercase tracking-wider text-emerald-800">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>No Registration Required</span>
+                    </div>
+                    <p className="text-xs text-emerald-900/90 font-medium leading-relaxed">
+                      This event is open for walk-in attendance. Simply arrive at <strong>{event.venue || "JDCOEM Campus"}</strong> on <strong>{event.date}</strong> at <strong>{event.time || "10:00 AM IST"}</strong>.
+                    </p>
+                  </div>
+                ) : isRegistrationOpen ? (
                   isJdcoemOnly && isExternalStudent ? (
                     <div className="space-y-2">
                       <div className="w-full py-3.5 px-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2">
@@ -804,7 +893,7 @@ export default function EventDetailPage() {
       </div>
 
       {/* Mobile Sticky Action Bar */}
-      {isRegistrationOpen && !(isJdcoemOnly && isExternalStudent) && (
+      {!event.noRegistrationRequired && isRegistrationOpen && !(isJdcoemOnly && isExternalStudent) && (
         <div className="md:hidden fixed bottom-0 inset-x-0 z-40 p-3 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-2xl flex items-center justify-between gap-3 animate-in slide-in-from-bottom-2 duration-200">
           <div className="pl-1">
             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Registration Fee</span>
