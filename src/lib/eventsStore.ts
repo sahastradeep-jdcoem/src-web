@@ -97,7 +97,7 @@ export function getEventDateTimestamp(event: Partial<EventItem> | null | undefin
     const y = parseInt(isoMatch[1], 10);
     const m = parseInt(isoMatch[2], 10) - 1;
     const d = parseInt(isoMatch[3], 10);
-    return new Date(Date.UTC(y, m, d)).getTime() + timeOffset;
+    return new Date(y, m, d).getTime() + timeOffset;
   }
 
   // 2. Try day month year pattern e.g. "8 October 2025", "8th Oct 2025", "8 - 10 October 2025"
@@ -107,7 +107,7 @@ export function getEventDateTimestamp(event: Partial<EventItem> | null | undefin
     const mStr = dmyMatch[2].toLowerCase();
     const year = parseInt(dmyMatch[3], 10);
     if (MONTH_MAP[mStr] !== undefined) {
-      return new Date(Date.UTC(year, MONTH_MAP[mStr], day)).getTime() + timeOffset;
+      return new Date(year, MONTH_MAP[mStr], day).getTime() + timeOffset;
     }
   }
 
@@ -118,7 +118,7 @@ export function getEventDateTimestamp(event: Partial<EventItem> | null | undefin
     const day = parseInt(mdyMatch[2], 10);
     const year = parseInt(mdyMatch[3], 10);
     if (MONTH_MAP[mStr] !== undefined) {
-      return new Date(Date.UTC(year, MONTH_MAP[mStr], day)).getTime() + timeOffset;
+      return new Date(year, MONTH_MAP[mStr], day).getTime() + timeOffset;
     }
   }
 
@@ -140,16 +140,53 @@ export function getEventDateTimestamp(event: Partial<EventItem> | null | undefin
 }
 
 /**
- * Sort events chronologically by event date (earliest first).
+ * Sort events so that the nearest upcoming event is on top, and oldest on bottom:
+ * 1. Upcoming events (happening today or in the future, not completed) sorted chronologically (nearest first).
+ * 2. Past / Completed events placed after upcoming, sorted so the oldest event is at the very bottom.
  */
-export function sortEventsByDate<T extends Partial<EventItem>>(events: T[]): T[] {
+export function sortEventsByDate<T extends Partial<EventItem>>(events: T[], referenceDate: Date = new Date()): T[] {
   if (!Array.isArray(events)) return [];
-  return [...events].sort((a, b) => {
-    const timeA = getEventDateTimestamp(a);
-    const timeB = getEventDateTimestamp(b);
-    if (timeA !== timeB) return timeA - timeB;
+  const startOfToday = new Date(
+    referenceDate.getFullYear(),
+    referenceDate.getMonth(),
+    referenceDate.getDate()
+  ).getTime();
+
+  const isPast = (e: Partial<EventItem>) => {
+    if (e.status === "Completed" || e.status?.toLowerCase() === "completed") return true;
+    const ts = getEventDateTimestamp(e);
+    if (ts === Number.MAX_SAFE_INTEGER) return false;
+    return ts < startOfToday;
+  };
+
+  const upcoming: T[] = [];
+  const past: T[] = [];
+
+  for (const e of events) {
+    if (isPast(e)) {
+      past.push(e);
+    } else {
+      upcoming.push(e);
+    }
+  }
+
+  // Upcoming: nearest first (ascending)
+  upcoming.sort((a, b) => {
+    const tA = getEventDateTimestamp(a);
+    const tB = getEventDateTimestamp(b);
+    if (tA !== tB) return tA - tB;
     return (a.name || "").localeCompare(b.name || "");
   });
+
+  // Past: most recent past first, oldest on bottom (descending)
+  past.sort((a, b) => {
+    const tA = getEventDateTimestamp(a);
+    const tB = getEventDateTimestamp(b);
+    if (tA !== tB) return tB - tA;
+    return (a.name || "").localeCompare(b.name || "");
+  });
+
+  return [...upcoming, ...past];
 }
 
 export function sanitizeEventsList(events: EventItem[]): EventItem[] {
