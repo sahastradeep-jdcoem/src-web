@@ -137,14 +137,20 @@ export default function LeadershipSpotlightSection() {
                 
                 {/* Photo with Gold Ring */}
                 <div className="relative shrink-0">
-                  <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl overflow-hidden ring-4 ring-amber-400/30 shadow-md relative bg-slate-100">
-                    <Image
-                      src={president.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop"}
-                      alt={president.name}
-                      fill
-                      unoptimized={true}
-                      className="object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
+                  <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl overflow-hidden ring-4 ring-amber-400/30 shadow-md relative bg-slate-100 flex items-center justify-center">
+                    {president.avatar ? (
+                      <Image
+                        src={president.avatar}
+                        alt={president.name}
+                        fill
+                        unoptimized={true}
+                        className="object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                    ) : (
+                      <span className="text-3xl sm:text-4xl font-bold text-slate-400">
+                        {(president.name || "PR").slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
                   </div>
                   <div className="absolute -bottom-2 -right-2 p-1.5 rounded-xl bg-[#E78023] text-white shadow-md">
                     <Crown className="w-4 h-4" />

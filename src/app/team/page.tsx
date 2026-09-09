@@ -52,24 +52,15 @@ export default function TeamPage() {
     setSpokespersons(getStoredSpokespersons());
 
     const initialClubs = getStoredClubs();
-    if (initialTenure?.isCurrent && Array.isArray(initialTenure.clubs) && initialTenure.clubs.length > 0) {
-      setClubs(reconcileArrayDatasets(initialClubs, initialTenure.clubs));
-    } else {
-      setClubs(initialClubs);
-    }
+    setClubs(initialClubs);
 
     syncCouncilMembersFromFirestore().then((res) => { if (res) setCouncilMembers(res); });
     syncHostingCommitteeFromFirestore().then((res) => { if (res) setHostingMembers(res); });
     syncSpokespersonsFromFirestore().then((res) => { if (res) setSpokespersons(res); });
 
     syncClubsFromFirestore().then((res) => {
-      if (res) {
-        const active = getCurrentTenure();
-        if (active?.isCurrent && Array.isArray(active.clubs) && active.clubs.length > 0) {
-          setClubs(reconcileArrayDatasets(res, active.clubs));
-        } else {
-          setClubs(res);
-        }
+      if (res && res.length > 0) {
+        setClubs(res);
       }
     });
 
@@ -77,9 +68,6 @@ export default function TeamPage() {
       const active = tenures.find((t) => t.isCurrent);
       if (active) {
         setCurrentTenure(active);
-        if (Array.isArray(active.clubs) && active.clubs.length > 0) {
-          setClubs((prev) => reconcileArrayDatasets(prev, active.clubs || []));
-        }
       }
     });
 
@@ -87,10 +75,7 @@ export default function TeamPage() {
     const unsubHosting = subscribeToHostingCommittee((remote) => setHostingMembers(remote));
     const unsubSpokes = subscribeToSpokespersons((remote) => setSpokespersons(remote));
     const unsubClubs = subscribeToClubs((remote) => {
-      const active = getCurrentTenure();
-      if (active?.isCurrent && Array.isArray(active.clubs) && active.clubs.length > 0) {
-        setClubs(reconcileArrayDatasets(remote, active.clubs));
-      } else {
+      if (remote && remote.length > 0) {
         setClubs(remote);
       }
     });
@@ -98,9 +83,6 @@ export default function TeamPage() {
       const active = tenures.find((t) => t.isCurrent);
       if (active) {
         setCurrentTenure(active);
-        if (Array.isArray(active.clubs) && active.clubs.length > 0) {
-          setClubs((prev) => reconcileArrayDatasets(prev, active.clubs || []));
-        }
       }
     });
 
@@ -110,12 +92,7 @@ export default function TeamPage() {
       setCouncilMembers(getStoredCouncilMembers());
       setHostingMembers(getStoredHostingCommittee());
       setSpokespersons(getStoredSpokespersons());
-      const updatedClubs = getStoredClubs();
-      if (cur?.isCurrent && Array.isArray(cur.clubs) && cur.clubs.length > 0) {
-        setClubs(reconcileArrayDatasets(updatedClubs, cur.clubs));
-      } else {
-        setClubs(updatedClubs);
-      }
+      setClubs(getStoredClubs());
     };
 
     window.addEventListener("src_tenures_updated", handleUpdate);
@@ -220,7 +197,7 @@ export default function TeamPage() {
             clubs: [clubInfo],
             department: leader.department || "JDCOEM Nagpur",
             year: leader.year || (isCoLead ? "3rd Year" : "4th Year"),
-            avatar: leader.avatar || (isCoLead ? "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop" : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"),
+            avatar: leader.avatar || "",
             bio: leader.bio || "",
             email: leader.email?.trim() || "",
             linkedin: leader.linkedin?.trim() || "",

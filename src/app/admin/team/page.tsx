@@ -530,7 +530,7 @@ export default function AdminTeamPage() {
             role: leader.role || (isCoLead ? `${club.name} Co-Lead` : `${club.name} Head`),
             department: leader.department || "Computer Science & Engineering",
             year: leader.year || (isCoLead ? "3rd Year" : "4th Year"),
-            avatar: leader.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
+            avatar: leader.avatar || "",
             bio: leader.bio || "",
             email: leader.email || "",
             linkedin: leader.linkedin || "",
@@ -731,7 +731,7 @@ export default function AdminTeamPage() {
         department: "Computer Science & Engineering",
         year: "4th Year",
         bio: "",
-        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
+        avatar: "",
         order: currentMembers.length + 1,
         email: "",
         linkedin: "",
@@ -745,7 +745,7 @@ export default function AdminTeamPage() {
         department: "Computer Science and Engineering",
         year: "4th Year",
         bio: "",
-        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
+        avatar: "",
         order: currentMembers.length + 1,
         email: "",
         linkedin: "",
@@ -835,7 +835,7 @@ export default function AdminTeamPage() {
         roleType: targetRoleType,
         department: m.department || "Computer Science & Engineering",
         year: m.year || (targetRoleType === "lead" ? "4th Year" : "3rd Year"),
-        avatar: m.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
+        avatar: m.avatar || "",
         bio: m.bio || "",
         email: m.email || "",
         linkedin: m.linkedin || "",
@@ -1080,7 +1080,7 @@ export default function AdminTeamPage() {
               role: "Mentor",
               department: "Computer Science and Engineering",
               year: "4th Year",
-              avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
+              avatar: "",
               bio: "",
               email: "mentor@jdcoem.ac.in",
               order: 1
@@ -1091,7 +1091,7 @@ export default function AdminTeamPage() {
               role: "President",
               department: "Artificial Intelligence Engineering",
               year: "4th Year",
-              avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
+              avatar: "",
               bio: "",
               email: "president@jdcoem.ac.in",
               order: 2
@@ -1102,7 +1102,7 @@ export default function AdminTeamPage() {
               role: "Vice President",
               department: "Information Technology",
               year: "4th Year",
-              avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=600&auto=format&fit=crop",
+              avatar: "",
               bio: "",
               email: "vp@jdcoem.ac.in",
               order: 3
@@ -1421,15 +1421,21 @@ export default function AdminTeamPage() {
                 className="p-4 sm:p-5 rounded-3xl bg-white border border-slate-200 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4"
               >
                 <div className="space-y-3">
-                  <div className="relative aspect-[4/5] rounded-2xl overflow-hidden bg-slate-100 border border-slate-200/80 shadow-inner">
-                    <Image
-                      src={pillar.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"}
-                      alt={pillar.name}
-                      fill
-                      unoptimized={true}
-                      className="object-cover object-top"
-                    />
-                    </div>
+                  <div className="relative aspect-[4/5] rounded-2xl overflow-hidden bg-slate-100 border border-slate-200/80 shadow-inner flex items-center justify-center">
+                    {pillar.avatar ? (
+                      <Image
+                        src={pillar.avatar}
+                        alt={pillar.name}
+                        fill
+                        unoptimized={true}
+                        className="object-cover object-top"
+                      />
+                    ) : (
+                      <span className="text-2xl font-bold text-slate-400">
+                        {(pillar.name || "P").slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
 
                   <div className="space-y-1">
                     <h4 className="font-heading font-extrabold text-sm sm:text-base text-[#0F172A] leading-snug">

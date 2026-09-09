@@ -210,7 +210,7 @@ export const initialDefaultTenures: CouncilTenure[] = [
         role: "Mentor",
         department: "Computer Science and Engineering",
         year: "4th Year",
-        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
+        avatar: "",
         bio: "",
         email: "mentor@jdcoem.ac.in",
         order: 1
@@ -221,7 +221,7 @@ export const initialDefaultTenures: CouncilTenure[] = [
         role: "President",
         department: "Artificial Intelligence Engineering",
         year: "4th Year",
-        avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
+        avatar: "",
         bio: "",
         email: "president@jdcoem.ac.in",
         order: 2
@@ -232,7 +232,7 @@ export const initialDefaultTenures: CouncilTenure[] = [
         role: "Vice President",
         department: "Information Technology",
         year: "4th Year",
-        avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=600&auto=format&fit=crop",
+        avatar: "",
         bio: "",
         email: "vp@jdcoem.ac.in",
         order: 3
@@ -356,7 +356,7 @@ export function compactTenureForStorage(tenure: CouncilTenure): CouncilTenure {
     if (!Array.isArray(members)) return [];
     return members.map((m) => ({
       ...m,
-      avatar: (m.avatar && m.avatar.startsWith("data:image/") && m.avatar.length > 350000) ? "" : m.avatar,
+      avatar: m.avatar || "",
     }));
   };
 
@@ -365,22 +365,22 @@ export function compactTenureForStorage(tenure: CouncilTenure): CouncilTenure {
     return clubs.map((c) => {
       const cleanLead: ClubLeader = {
         ...c.lead,
-        avatar: (c.lead?.avatar && c.lead.avatar.startsWith("data:image/") && c.lead.avatar.length > 350000) ? "" : (c.lead?.avatar || ""),
+        avatar: c.lead?.avatar || "",
       };
 
       const cleanCoLead: ClubLeader | undefined = c.coLead ? {
         ...c.coLead,
-        avatar: (c.coLead.avatar && c.coLead.avatar.startsWith("data:image/") && c.coLead.avatar.length > 350000) ? "" : (c.coLead.avatar || ""),
+        avatar: c.coLead.avatar || "",
       } : undefined;
 
       const cleanCoLeads: ClubLeader[] | undefined = Array.isArray(c.coLeads) ? c.coLeads.map((cl) => ({
         ...cl,
-        avatar: (cl.avatar && cl.avatar.startsWith("data:image/") && cl.avatar.length > 350000) ? "" : (cl.avatar || ""),
+        avatar: cl.avatar || "",
       })) : undefined;
 
       const cleanLeaders: ClubLeader[] | undefined = Array.isArray(c.leaders) ? c.leaders.map((l) => ({
         ...l,
-        avatar: (l.avatar && l.avatar.startsWith("data:image/") && l.avatar.length > 350000) ? "" : (l.avatar || ""),
+        avatar: l.avatar || "",
       })) : undefined;
 
       return {
@@ -611,7 +611,7 @@ export function createNewDraftTenure(
           role: "Mentor",
           department: "Computer Science and Engineering",
           year: "4th Year",
-          avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
+          avatar: "",
           bio: "",
           email: "mentor@jdcoem.ac.in",
           order: 1
@@ -622,7 +622,7 @@ export function createNewDraftTenure(
           role: "President",
           department: "Artificial Intelligence Engineering",
           year: "4th Year",
-          avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
+          avatar: "",
           bio: "",
           email: "president@jdcoem.ac.in",
           order: 2
@@ -633,7 +633,7 @@ export function createNewDraftTenure(
           role: "Vice President",
           department: "Information Technology",
           year: "4th Year",
-          avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=600&auto=format&fit=crop",
+          avatar: "",
           bio: "",
           email: "vp@jdcoem.ac.in",
           order: 3
@@ -751,16 +751,6 @@ export async function syncTenuresFromFirestore(): Promise<CouncilTenure[]> {
           localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(merged));
         } catch {}
         window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: merged }));
-        const activeTenure = merged.find((t: CouncilTenure) => t.isCurrent);
-        if (activeTenure && Array.isArray(activeTenure.clubs) && activeTenure.clubs.length > 0) {
-          try {
-            const currentClubs = getStoredClubs();
-            const reconciledClubs = reconcileArrayDatasets(currentClubs, activeTenure.clubs);
-            localStorage.setItem("src_clubs_roster", JSON.stringify(reconciledClubs));
-            window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: reconciledClubs }));
-            saveSiteContentToFirestore("clubs", cleanUndefined(reconciledClubs)).catch(() => {});
-          } catch {}
-        }
       }
       return getStoredTenures();
     }
@@ -813,16 +803,6 @@ export function subscribeToTenures(callback: (tenures: CouncilTenure[]) => void)
           localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(merged));
         } catch {}
         window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: merged }));
-        const activeTenure = merged.find((t: CouncilTenure) => t.isCurrent);
-        if (activeTenure && Array.isArray(activeTenure.clubs) && activeTenure.clubs.length > 0) {
-          try {
-            const currentClubs = getStoredClubs();
-            const reconciledClubs = reconcileArrayDatasets(currentClubs, activeTenure.clubs);
-            localStorage.setItem("src_clubs_roster", JSON.stringify(reconciledClubs));
-            window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: reconciledClubs }));
-            saveSiteContentToFirestore("clubs", cleanUndefined(reconciledClubs)).catch(() => {});
-          } catch {}
-        }
       }
       callback(getStoredTenures());
     }

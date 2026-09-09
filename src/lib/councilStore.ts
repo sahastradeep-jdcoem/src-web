@@ -673,13 +673,14 @@ export async function saveStoredClubs(clubs: ClubItem[]): Promise<void> {
     } catch (lsErr) {
       console.warn("Direct localStorage write notice for clubs, applying fallback:", lsErr);
       try {
+        // Strip heavy presentation banners if quota is reached, but NEVER strip member/leader avatars (Directive #4)
         const stripped = sanitized.map((c: any) => ({
           ...c,
-          cardImage: c.cardImage?.startsWith("data:") ? "" : c.cardImage,
-          headerImage: c.headerImage?.startsWith("data:") ? "" : c.headerImage,
-          lead: c.lead ? { ...c.lead, avatar: c.lead.avatar?.startsWith("data:") ? "" : c.lead.avatar } : c.lead,
-          coLead: c.coLead ? { ...c.coLead, avatar: c.coLead.avatar?.startsWith("data:") ? "" : c.coLead.avatar } : c.coLead,
-          leaders: Array.isArray(c.leaders) ? c.leaders.map((l: any) => ({ ...l, avatar: l.avatar?.startsWith("data:") ? "" : l.avatar })) : c.leaders,
+          cardImage: c.cardImage?.startsWith("data:") && c.cardImage.length > 50000 ? "" : c.cardImage,
+          headerImage: c.headerImage?.startsWith("data:") && c.headerImage.length > 50000 ? "" : c.headerImage,
+          lead: c.lead ? { ...c.lead, avatar: c.lead.avatar || "" } : c.lead,
+          coLead: c.coLead ? { ...c.coLead, avatar: c.coLead.avatar || "" } : c.coLead,
+          leaders: Array.isArray(c.leaders) ? c.leaders.map((l: any) => ({ ...l, avatar: l.avatar || "" })) : c.leaders,
         }));
         localStorage.setItem("src_clubs_roster", JSON.stringify(stripped));
       } catch {}

@@ -18,14 +18,14 @@ export const mockClubs: ClubItem[] = [
       role: "Club Head",
       department: "Computer Science & Engineering",
       year: "4th Year",
-      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop"
+      avatar: ""
     },
     coLead: {
       name: "Club Co-Head Placeholder",
       role: "Club Co-Head",
       department: "Artificial Intelligence & Data Science",
       year: "3rd Year",
-      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=400&auto=format&fit=crop"
+      avatar: ""
     },
     upcomingEvents: ["Natyam Choreo Night", "Street Cypher Workshop"],
     pastHighlights: [
@@ -56,14 +56,14 @@ export const mockClubs: ClubItem[] = [
       role: "Club Head",
       department: "Information Technology",
       year: "4th Year",
-      avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=400&auto=format&fit=crop"
+      avatar: ""
     },
     coLead: {
       name: "Club Co-Head Placeholder",
       role: "Club Co-Head",
       department: "Electronics & Telecommunication",
       year: "3rd Year",
-      avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=400&auto=format&fit=crop"
+      avatar: ""
     },
     upcomingEvents: ["Battle of the Bands", "Acoustic Sunset Unplugged"],
     pastHighlights: [
@@ -94,7 +94,7 @@ export const mockClubs: ClubItem[] = [
       role: "Club Head",
       department: "Mechanical Engineering",
       year: "4th Year",
-      avatar: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=400&auto=format&fit=crop"
+      avatar: ""
     },
     upcomingEvents: ["Nukkad Natak Street Fest", "Annual Stage Play"],
     pastHighlights: [
@@ -124,7 +124,7 @@ export const mockClubs: ClubItem[] = [
       role: "Club Head",
       department: "Computer Science & Engineering",
       year: "3rd Year",
-      avatar: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=400&auto=format&fit=crop"
+      avatar: ""
     },
     upcomingEvents: ["Valorant Campus Cup", "FIFA & BGMI Mega Championship"],
     pastHighlights: [
@@ -154,14 +154,14 @@ export const mockClubs: ClubItem[] = [
       role: "Club Head",
       department: "Computer Science & Engineering",
       year: "4th Year",
-      avatar: "https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?q=80&w=400&auto=format&fit=crop"
+      avatar: ""
     },
     coLead: {
       name: "Club Co-Head Placeholder",
       role: "Club Co-Head",
       department: "Data Science",
       year: "3rd Year",
-      avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=400&auto=format&fit=crop"
+      avatar: ""
     },
     upcomingEvents: ["CodeStorm 24H Hackathon", "LeetCode Speed Sprint"],
     pastHighlights: [
@@ -191,7 +191,7 @@ export const mockClubs: ClubItem[] = [
       role: "Club Head",
       department: "Mechanical / Mechatronics",
       year: "4th Year",
-      avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=400&auto=format&fit=crop"
+      avatar: ""
     },
     upcomingEvents: ["Robo Rage 2026", "Drone Pilot & FPV Workshop"],
     pastHighlights: [
@@ -221,7 +221,7 @@ export const mockClubs: ClubItem[] = [
       role: "Club Head",
       department: "Artificial Intelligence & Machine Learning",
       year: "3rd Year",
-      avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=400&auto=format&fit=crop"
+      avatar: ""
     },
     upcomingEvents: ["Golden Lens Short Film Fest", "Campus Lens Photo Exhibition"],
     pastHighlights: [
@@ -251,7 +251,7 @@ export const mockClubs: ClubItem[] = [
       role: "Club Head",
       department: "Computer Science & Engineering",
       year: "3rd Year",
-      avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=400&auto=format&fit=crop"
+      avatar: ""
     },
     upcomingEvents: ["Design Sprint Bootcamp", "Creative Brand Slam"],
     pastHighlights: [
@@ -281,7 +281,7 @@ export const mockClubs: ClubItem[] = [
       role: "Club Head",
       department: "Management Studies (MBA)",
       year: "2nd Year",
-      avatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=400&auto=format&fit=crop"
+      avatar: ""
     },
     upcomingEvents: ["Venture Pitch Summit", "JDCOEM Founders Round-table"],
     pastHighlights: [
@@ -311,7 +311,7 @@ export const mockClubs: ClubItem[] = [
       role: "Club Head",
       department: "Civil Engineering",
       year: "4th Year",
-      avatar: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?q=80&w=400&auto=format&fit=crop"
+      avatar: ""
     },
     upcomingEvents: ["Clash of Departments (COD)", "Marathon for Green Nagpur"],
     pastHighlights: [
@@ -341,7 +341,7 @@ export const mockClubs: ClubItem[] = [
       role: "Club Head",
       department: "Electrical Engineering",
       year: "4th Year",
-      avatar: "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?q=80&w=400&auto=format&fit=crop"
+      avatar: ""
     },
     coLead: {
       name: "Sanskruti Tidke",
@@ -350,7 +350,7 @@ export const mockClubs: ClubItem[] = [
       year: "3rd Year",
       btId: "BT240115DS",
       email: "sanskrutitidke@jdcoem.ac.in",
-      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop"
+      avatar: ""
     },
     upcomingEvents: ["Prarambh Production Ops", "Council Anniversary Assembly"],
     pastHighlights: [
@@ -380,7 +380,7 @@ export const mockClubs: ClubItem[] = [
       role: "Club Head",
       department: "Management Studies",
       year: "2nd Year",
-      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop"
+      avatar: ""
     },
     upcomingEvents: ["Prarambh Digital Campaign", "Campus Media Conclave"],
     pastHighlights: [

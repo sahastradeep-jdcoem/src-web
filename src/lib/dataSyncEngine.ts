@@ -595,7 +595,13 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
           continue;
         }
         if (!isLocalValid && isRemoteValid) {
-          result[k] = remoteVal;
+          // Do NOT resurrect stock Unsplash model photos onto real student positions (Directive #4)
+          const isRemoteUnsplash = remoteVal.includes("images.unsplash.com");
+          if (isRemoteUnsplash && (remoteItem as any)?.name && !isGenericPlaceholder((remoteItem as any).name)) {
+            result[k] = "";
+          } else {
+            result[k] = remoteVal;
+          }
           continue;
         }
         if (isLocalValid && isRemoteValid) {
@@ -620,19 +626,37 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
       if ((k === "lead" || k === "coLead") && ((localVal && typeof localVal === "object") || (remoteVal && typeof remoteVal === "object"))) {
         const localObj = (localVal && typeof localVal === "object") ? localVal : {};
         const remoteObj = (remoteVal && typeof remoteVal === "object") ? remoteVal : {};
-        const mergedObj = { ...localObj, ...remoteObj };
+
+        const isLocalPlaceholder = isGenericPlaceholder(localObj.name);
+        const isRemotePlaceholder = isGenericPlaceholder(remoteObj.name);
+
+        let mergedObj: any;
+        if (isRemotePlaceholder && !isLocalPlaceholder) {
+          // Local has actual student leader, remote is a generic placeholder -> local takes precedence!
+          mergedObj = { ...remoteObj, ...localObj };
+        } else if (isLocalPlaceholder && !isRemotePlaceholder) {
+          // Remote has actual student leader, local is a placeholder -> remote takes precedence
+          mergedObj = { ...localObj, ...remoteObj };
+        } else {
+          mergedObj = { ...localObj, ...remoteObj };
+        }
 
         const isLocalAvatarValid = localObj.avatar && typeof localObj.avatar === "string" && localObj.avatar.trim() !== "" && !localObj.avatar.includes("images.unsplash.com");
         const isRemoteAvatarValid = remoteObj.avatar && typeof remoteObj.avatar === "string" && remoteObj.avatar.trim() !== "" && !remoteObj.avatar.includes("images.unsplash.com");
 
         if (isLocalAvatarValid && !isRemoteAvatarValid) {
-          if (remoteObj.name && localObj.name && remoteObj.name.trim().toLowerCase() === localObj.name.trim().toLowerCase()) {
-            mergedObj.avatar = localObj.avatar;
-          } else if (!remoteObj.name) {
-            mergedObj.avatar = "";
-          } else {
+          mergedObj.avatar = localObj.avatar;
+        } else if (!isLocalAvatarValid && isRemoteAvatarValid) {
+          mergedObj.avatar = remoteObj.avatar;
+        } else if (isLocalAvatarValid && isRemoteAvatarValid) {
+          const isRemoteUnsplash = remoteObj.avatar.includes("images.unsplash.com");
+          const isLocalCustom = !localObj.avatar.includes("images.unsplash.com");
+          if (isLocalCustom && isRemoteUnsplash) {
             mergedObj.avatar = localObj.avatar;
           }
+        } else if (remoteObj.avatar && remoteObj.avatar.includes("images.unsplash.com") && !isGenericPlaceholder(mergedObj.name)) {
+          // Don't inject unsplash mock faces onto real named students
+          mergedObj.avatar = localObj.avatar && !localObj.avatar.includes("images.unsplash.com") ? localObj.avatar : "";
         }
 
         result[k] = mergedObj;

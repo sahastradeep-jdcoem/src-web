@@ -203,14 +203,20 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
               const isCoLead = leader.roleType === "coLead" || (leader.role && leader.role.toLowerCase().includes("co-head"));
               return (
                 <div key={leader.id || idx} className="p-6 rounded-3xl bg-white border border-slate-200 flex items-center gap-4 shadow-xs">
-                  <div className="relative h-16 w-16 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
-                    <Image
-                      src={leader.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"}
-                      alt={leader.name}
-                      fill
-                      unoptimized={true}
-                      className="object-cover"
-                    />
+                  <div className="relative h-16 w-16 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shrink-0 flex items-center justify-center">
+                    {leader.avatar ? (
+                      <Image
+                        src={leader.avatar}
+                        alt={leader.name}
+                        fill
+                        unoptimized={true}
+                        className="object-cover"
+                      />
+                    ) : (
+                      <span className="text-lg font-bold text-slate-500">
+                        {(leader.name || "CH").slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
                   </div>
                   <div className="space-y-0.5 min-w-0">
                     <span className={`text-[10px] font-bold uppercase tracking-wider ${isCoLead ? "text-[#17458F]" : "text-[#E78023]"}`} title={leader.role}>

@@ -76,15 +76,21 @@ export function PillarsOfStrengthSection({ className = "", boxed = true }: Pilla
               >
 
                 {/* Framed Portrait Photo (matching Team card) */}
-                <div className="relative h-44 sm:h-72 w-full overflow-hidden bg-slate-100">
-                  <Image
-                    src={pillar.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"}
-                    alt={pillar.name}
-                    fill
-                    unoptimized={true}
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                    className="object-cover object-top transition-transform duration-500 group-hover:scale-[1.02]"
-                  />
+                <div className="relative h-44 sm:h-72 w-full overflow-hidden bg-slate-100 flex items-center justify-center">
+                  {pillar.avatar ? (
+                    <Image
+                      src={pillar.avatar}
+                      alt={pillar.name}
+                      fill
+                      unoptimized={true}
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                      className="object-cover object-top transition-transform duration-500 group-hover:scale-[1.02]"
+                    />
+                  ) : (
+                    <span className="text-3xl sm:text-4xl font-bold text-slate-400">
+                      {(pillar.name || "P").slice(0, 2).toUpperCase()}
+                    </span>
+                  )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
                 </div>
 
@@ -148,15 +154,21 @@ export function PillarsOfStrengthSection({ className = "", boxed = true }: Pilla
           >
 
             {/* Framed Portrait Photo (matching Team card) */}
-            <div className="relative h-44 sm:h-72 w-full overflow-hidden bg-slate-100">
-              <Image
-                src={pillar.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"}
-                alt={pillar.name}
-                fill
-                unoptimized={true}
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                className="object-cover object-top transition-transform duration-500 group-hover:scale-[1.02]"
-              />
+            <div className="relative h-44 sm:h-72 w-full overflow-hidden bg-slate-100 flex items-center justify-center">
+              {pillar.avatar ? (
+                <Image
+                  src={pillar.avatar}
+                  alt={pillar.name}
+                  fill
+                  unoptimized={true}
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                  className="object-cover object-top transition-transform duration-500 group-hover:scale-[1.02]"
+                />
+              ) : (
+                <span className="text-3xl sm:text-4xl font-bold text-slate-400">
+                  {(pillar.name || "P").slice(0, 2).toUpperCase()}
+                </span>
+              )}
               <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
             </div>
 

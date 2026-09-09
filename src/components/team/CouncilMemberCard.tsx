@@ -23,14 +23,24 @@ export function CouncilMemberCard({ member, categoryLabel = "ADMIN" }: CouncilMe
       
       {/* Top Banner / Avatar */}
       <div className="relative h-44 sm:h-72 w-full overflow-hidden bg-slate-100">
-        <Image
-          src={member.avatar}
-          alt={member.role}
-          fill
-          unoptimized={true}
-          className="object-cover object-top transition-transform duration-500 group-hover:scale-[1.02]"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+        {member.avatar ? (
+          <>
+            <Image
+              src={member.avatar}
+              alt={member.role}
+              fill
+              unoptimized={true}
+              className="object-cover object-top transition-transform duration-500 group-hover:scale-[1.02]"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+          </>
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#17458F]/10 via-slate-100 to-amber-500/10 text-slate-400">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#17458F]/15 flex items-center justify-center text-[#17458F] font-heading font-extrabold text-lg sm:text-2xl border border-[#17458F]/20">
+              {member.name.split(" ").map((n) => n[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "SRC"}
+            </div>
+          </div>
+        )}
 
         {/* Club Tag (Only for Club Heads) */}
         {Boolean(member.clubSlug || (member.clubSlugs && member.clubSlugs.length > 0)) && (

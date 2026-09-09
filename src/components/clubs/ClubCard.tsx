@@ -105,19 +105,25 @@ export function ClubCard({ club }: ClubCardProps) {
           const primaryLead = leaders.find((l) => l.roleType === "lead") || leaders[0] || club.lead || {
             name: "Club Head",
             role: "Club Head",
-            avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop",
+            avatar: "",
           };
           return (
             <div className="pt-3.5 border-t border-slate-100 flex items-center justify-between font-sans">
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="relative h-7 w-7 rounded-full overflow-hidden border border-slate-200 shrink-0">
-                  <Image
-                    src={primaryLead.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"}
-                    alt={primaryLead.name || club.name}
-                    fill
-                    unoptimized={true}
-                    className="object-cover"
-                  />
+                <div className="relative h-7 w-7 rounded-full overflow-hidden border border-slate-200 shrink-0 bg-slate-100 flex items-center justify-center">
+                  {primaryLead.avatar ? (
+                    <Image
+                      src={primaryLead.avatar}
+                      alt={primaryLead.name || club.name}
+                      fill
+                      unoptimized={true}
+                      className="object-cover"
+                    />
+                  ) : (
+                    <span className="text-[10px] font-bold text-slate-600">
+                      {(primaryLead.name || "CH").slice(0, 2).toUpperCase()}
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs min-w-0">
                   <p className="text-slate-800 font-semibold leading-tight truncate">{primaryLead.name || "Club Head"}</p>
