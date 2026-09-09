@@ -616,6 +616,29 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
         continue;
       }
 
+      // For leader object fields (lead, coLead)
+      if ((k === "lead" || k === "coLead") && ((localVal && typeof localVal === "object") || (remoteVal && typeof remoteVal === "object"))) {
+        const localObj = (localVal && typeof localVal === "object") ? localVal : {};
+        const remoteObj = (remoteVal && typeof remoteVal === "object") ? remoteVal : {};
+        const mergedObj = { ...localObj, ...remoteObj };
+
+        const isLocalAvatarValid = localObj.avatar && typeof localObj.avatar === "string" && localObj.avatar.trim() !== "" && !localObj.avatar.includes("images.unsplash.com");
+        const isRemoteAvatarValid = remoteObj.avatar && typeof remoteObj.avatar === "string" && remoteObj.avatar.trim() !== "" && !remoteObj.avatar.includes("images.unsplash.com");
+
+        if (isLocalAvatarValid && !isRemoteAvatarValid) {
+          if (remoteObj.name && localObj.name && remoteObj.name.trim().toLowerCase() === localObj.name.trim().toLowerCase()) {
+            mergedObj.avatar = localObj.avatar;
+          } else if (!remoteObj.name) {
+            mergedObj.avatar = "";
+          } else {
+            mergedObj.avatar = localObj.avatar;
+          }
+        }
+
+        result[k] = mergedObj;
+        continue;
+      }
+
       // For nested array fields (e.g. whatToExpect, rules, adminCouncil, schedule, prizes, events):
       if (Array.isArray(localVal) || Array.isArray(remoteVal)) {
         const localArr = Array.isArray(localVal) ? localVal : [];

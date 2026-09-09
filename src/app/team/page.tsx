@@ -29,7 +29,8 @@ import {
   subscribeToClubs,
   getClubLeaders
 } from "@/lib/councilStore";
-import { getCurrentTenure, CouncilTenure } from "@/lib/tenureStore";
+import { getCurrentTenure, syncTenuresFromFirestore, subscribeToTenures, CouncilTenure } from "@/lib/tenureStore";
+import { reconcileArrayDatasets } from "@/lib/dataSyncEngine";
 import { TeamMember, ClubItem } from "@/types";
 import { CouncilMemberCard } from "@/components/team/CouncilMemberCard";
 import { Badge } from "@/components/ui/Badge";
@@ -44,28 +45,77 @@ export default function TeamPage() {
   const [currentTenure, setCurrentTenure] = useState<CouncilTenure | null>(null);
 
   useEffect(() => {
-    setCurrentTenure(getCurrentTenure());
+    const initialTenure = getCurrentTenure();
+    setCurrentTenure(initialTenure);
     setCouncilMembers(getStoredCouncilMembers());
     setHostingMembers(getStoredHostingCommittee());
     setSpokespersons(getStoredSpokespersons());
-    setClubs(getStoredClubs());
+
+    const initialClubs = getStoredClubs();
+    if (initialTenure?.isCurrent && Array.isArray(initialTenure.clubs) && initialTenure.clubs.length > 0) {
+      setClubs(reconcileArrayDatasets(initialClubs, initialTenure.clubs));
+    } else {
+      setClubs(initialClubs);
+    }
 
     syncCouncilMembersFromFirestore().then((res) => { if (res) setCouncilMembers(res); });
     syncHostingCommitteeFromFirestore().then((res) => { if (res) setHostingMembers(res); });
     syncSpokespersonsFromFirestore().then((res) => { if (res) setSpokespersons(res); });
-    syncClubsFromFirestore().then((res) => { if (res) setClubs(res); });
+
+    syncClubsFromFirestore().then((res) => {
+      if (res) {
+        const active = getCurrentTenure();
+        if (active?.isCurrent && Array.isArray(active.clubs) && active.clubs.length > 0) {
+          setClubs(reconcileArrayDatasets(res, active.clubs));
+        } else {
+          setClubs(res);
+        }
+      }
+    });
+
+    syncTenuresFromFirestore().then((tenures) => {
+      const active = tenures.find((t) => t.isCurrent);
+      if (active) {
+        setCurrentTenure(active);
+        if (Array.isArray(active.clubs) && active.clubs.length > 0) {
+          setClubs((prev) => reconcileArrayDatasets(prev, active.clubs || []));
+        }
+      }
+    });
 
     const unsubCouncil = subscribeToCouncilMembers((remote) => setCouncilMembers(remote));
     const unsubHosting = subscribeToHostingCommittee((remote) => setHostingMembers(remote));
     const unsubSpokes = subscribeToSpokespersons((remote) => setSpokespersons(remote));
-    const unsubClubs = subscribeToClubs((remote) => setClubs(remote));
+    const unsubClubs = subscribeToClubs((remote) => {
+      const active = getCurrentTenure();
+      if (active?.isCurrent && Array.isArray(active.clubs) && active.clubs.length > 0) {
+        setClubs(reconcileArrayDatasets(remote, active.clubs));
+      } else {
+        setClubs(remote);
+      }
+    });
+    const unsubTenures = subscribeToTenures((tenures) => {
+      const active = tenures.find((t) => t.isCurrent);
+      if (active) {
+        setCurrentTenure(active);
+        if (Array.isArray(active.clubs) && active.clubs.length > 0) {
+          setClubs((prev) => reconcileArrayDatasets(prev, active.clubs || []));
+        }
+      }
+    });
 
     const handleUpdate = () => {
-      setCurrentTenure(getCurrentTenure());
+      const cur = getCurrentTenure();
+      setCurrentTenure(cur);
       setCouncilMembers(getStoredCouncilMembers());
       setHostingMembers(getStoredHostingCommittee());
       setSpokespersons(getStoredSpokespersons());
-      setClubs(getStoredClubs());
+      const updatedClubs = getStoredClubs();
+      if (cur?.isCurrent && Array.isArray(cur.clubs) && cur.clubs.length > 0) {
+        setClubs(reconcileArrayDatasets(updatedClubs, cur.clubs));
+      } else {
+        setClubs(updatedClubs);
+      }
     };
 
     window.addEventListener("src_tenures_updated", handleUpdate);
@@ -80,6 +130,7 @@ export default function TeamPage() {
       unsubHosting();
       unsubSpokes();
       unsubClubs();
+      unsubTenures();
       window.removeEventListener("src_tenures_updated", handleUpdate);
       window.removeEventListener("src_tenure_changed", handleUpdate);
       window.removeEventListener("src_council_team_updated", handleUpdate);

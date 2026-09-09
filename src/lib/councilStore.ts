@@ -656,39 +656,6 @@ export function getStoredClubs(): ClubItem[] {
         clubs = parsed;
       }
     }
-    // Cross-check with current active tenure clubs to heal any missing leaders
-    const tenuresRaw = localStorage.getItem("src_council_tenures");
-    if (tenuresRaw) {
-      const tenures = JSON.parse(tenuresRaw);
-      const currentTenure = Array.isArray(tenures) ? tenures.find((t: any) => t.isCurrent) : null;
-      if (currentTenure && Array.isArray(currentTenure.clubs) && currentTenure.clubs.length > 0) {
-        let healed = false;
-        const reconciled = clubs.map((c) => {
-          const tClub = currentTenure.clubs.find((tc: any) => tc.id === c.id || tc.slug === c.slug);
-          if (tClub) {
-            const tLeaders = Array.isArray(tClub.leaders) ? tClub.leaders : [];
-            const cLeaders = Array.isArray(c.leaders) ? c.leaders : [];
-            if (tLeaders.length > cLeaders.length) {
-              healed = true;
-              return {
-                ...c,
-                lead: tClub.lead || c.lead,
-                coLead: tClub.coLead || c.coLead,
-                coLeads: (Array.isArray(tClub.coLeads) && tClub.coLeads.length > 0) ? tClub.coLeads : c.coLeads,
-                leaders: tLeaders
-              };
-            }
-          }
-          return c;
-        });
-        if (healed) {
-          clubs = reconciled;
-          try {
-            localStorage.setItem("src_clubs_roster", JSON.stringify(clubs));
-          } catch {}
-        }
-      }
-    }
   } catch (e) {
     console.warn("Could not read clubs from storage", e);
   }

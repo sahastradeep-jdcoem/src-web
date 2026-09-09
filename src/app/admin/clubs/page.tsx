@@ -233,14 +233,14 @@ export default function AdminClubsPage() {
         role: "Club Head",
         department: "Computer Science & Engineering",
         year: "4th Year",
-        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop"
+        avatar: ""
       },
       coLead: {
         name: "",
         role: "Club Co-Head",
         department: "Artificial Intelligence & Data Science",
         year: "3rd Year",
-        avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=400&auto=format&fit=crop"
+        avatar: ""
       },
       upcomingEvents: [],
       pastHighlights: [],

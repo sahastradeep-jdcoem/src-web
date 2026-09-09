@@ -356,7 +356,7 @@ export function compactTenureForStorage(tenure: CouncilTenure): CouncilTenure {
     if (!Array.isArray(members)) return [];
     return members.map((m) => ({
       ...m,
-      avatar: (m.avatar && m.avatar.startsWith("data:image/") && m.avatar.length > 5000) ? "" : m.avatar,
+      avatar: (m.avatar && m.avatar.startsWith("data:image/") && m.avatar.length > 350000) ? "" : m.avatar,
     }));
   };
 
@@ -365,29 +365,29 @@ export function compactTenureForStorage(tenure: CouncilTenure): CouncilTenure {
     return clubs.map((c) => {
       const cleanLead: ClubLeader = {
         ...c.lead,
-        avatar: (c.lead?.avatar && c.lead.avatar.startsWith("data:image/") && c.lead.avatar.length > 5000) ? "" : (c.lead?.avatar || ""),
+        avatar: (c.lead?.avatar && c.lead.avatar.startsWith("data:image/") && c.lead.avatar.length > 350000) ? "" : (c.lead?.avatar || ""),
       };
 
       const cleanCoLead: ClubLeader | undefined = c.coLead ? {
         ...c.coLead,
-        avatar: (c.coLead.avatar && c.coLead.avatar.startsWith("data:image/") && c.coLead.avatar.length > 5000) ? "" : (c.coLead.avatar || ""),
+        avatar: (c.coLead.avatar && c.coLead.avatar.startsWith("data:image/") && c.coLead.avatar.length > 350000) ? "" : (c.coLead.avatar || ""),
       } : undefined;
 
       const cleanCoLeads: ClubLeader[] | undefined = Array.isArray(c.coLeads) ? c.coLeads.map((cl) => ({
         ...cl,
-        avatar: (cl.avatar && cl.avatar.startsWith("data:image/") && cl.avatar.length > 5000) ? "" : (cl.avatar || ""),
+        avatar: (cl.avatar && cl.avatar.startsWith("data:image/") && cl.avatar.length > 350000) ? "" : (cl.avatar || ""),
       })) : undefined;
 
       const cleanLeaders: ClubLeader[] | undefined = Array.isArray(c.leaders) ? c.leaders.map((l) => ({
         ...l,
-        avatar: (l.avatar && l.avatar.startsWith("data:image/") && l.avatar.length > 5000) ? "" : (l.avatar || ""),
+        avatar: (l.avatar && l.avatar.startsWith("data:image/") && l.avatar.length > 350000) ? "" : (l.avatar || ""),
       })) : undefined;
 
       return {
         ...c,
-        logoImage: (c.logoImage && c.logoImage.startsWith("data:image/") && c.logoImage.length > 5000) ? "" : c.logoImage,
-        cardImage: (c.cardImage && c.cardImage.startsWith("data:image/") && c.cardImage.length > 5000) ? "" : c.cardImage,
-        headerImage: (c.headerImage && c.headerImage.startsWith("data:image/") && c.headerImage.length > 5000) ? "" : c.headerImage,
+        logoImage: (c.logoImage && c.logoImage.startsWith("data:image/") && c.logoImage.length > 350000) ? "" : c.logoImage,
+        cardImage: (c.cardImage && c.cardImage.startsWith("data:image/") && c.cardImage.length > 350000) ? "" : c.cardImage,
+        headerImage: (c.headerImage && c.headerImage.startsWith("data:image/") && c.headerImage.length > 350000) ? "" : c.headerImage,
         lead: cleanLead,
         coLead: cleanCoLead,
         ...(cleanCoLeads ? { coLeads: cleanCoLeads } : {}),
@@ -400,10 +400,10 @@ export function compactTenureForStorage(tenure: CouncilTenure): CouncilTenure {
     if (!Array.isArray(events)) return [];
     return events.map((e) => ({
       ...e,
-      poster: (e.poster && e.poster.startsWith("data:image/") && e.poster.length > 5000) ? "" : e.poster,
-      posterImage: (e.posterImage && e.posterImage.startsWith("data:image/") && e.posterImage.length > 5000) ? "" : e.posterImage,
-      cardImage: (e.cardImage && e.cardImage.startsWith("data:image/") && e.cardImage.length > 5000) ? "" : e.cardImage,
-      headerImage: (e.headerImage && e.headerImage.startsWith("data:image/") && e.headerImage.length > 5000) ? "" : e.headerImage,
+      poster: (e.poster && e.poster.startsWith("data:image/") && e.poster.length > 350000) ? "" : e.poster,
+      posterImage: (e.posterImage && e.posterImage.startsWith("data:image/") && e.posterImage.length > 350000) ? "" : e.posterImage,
+      cardImage: (e.cardImage && e.cardImage.startsWith("data:image/") && e.cardImage.length > 350000) ? "" : e.cardImage,
+      headerImage: (e.headerImage && e.headerImage.startsWith("data:image/") && e.headerImage.length > 350000) ? "" : e.headerImage,
     }));
   };
 
@@ -758,6 +758,7 @@ export async function syncTenuresFromFirestore(): Promise<CouncilTenure[]> {
             const reconciledClubs = reconcileArrayDatasets(currentClubs, activeTenure.clubs);
             localStorage.setItem("src_clubs_roster", JSON.stringify(reconciledClubs));
             window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: reconciledClubs }));
+            saveSiteContentToFirestore("clubs", cleanUndefined(reconciledClubs)).catch(() => {});
           } catch {}
         }
       }
@@ -819,6 +820,7 @@ export function subscribeToTenures(callback: (tenures: CouncilTenure[]) => void)
             const reconciledClubs = reconcileArrayDatasets(currentClubs, activeTenure.clubs);
             localStorage.setItem("src_clubs_roster", JSON.stringify(reconciledClubs));
             window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: reconciledClubs }));
+            saveSiteContentToFirestore("clubs", cleanUndefined(reconciledClubs)).catch(() => {});
           } catch {}
         }
       }

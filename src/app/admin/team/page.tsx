@@ -939,9 +939,9 @@ export default function AdminTeamPage() {
             const primaryLead = newLeaders.find((l) => l.roleType === "lead") || newLeaders[0] || {
               name: "",
               role: `${club.name} Head`,
-              department: "Computer Science & Engineering",
-              year: "4th Year",
-              avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"
+              department: "",
+              year: "",
+              avatar: ""
             };
             const coLeadsList = newLeaders.filter((l) => l.roleType === "coLead");
 
@@ -1017,9 +1017,9 @@ export default function AdminTeamPage() {
             const primaryLead = currentLeaders.find((l) => l.roleType === "lead") || currentLeaders[0] || {
               name: "",
               role: `${club.name} Head`,
-              department: "Computer Science & Engineering",
-              year: "4th Year",
-              avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop"
+              department: "",
+              year: "",
+              avatar: ""
             };
             const coLeadsList = currentLeaders.filter((l) => l.roleType === "coLead");
 
