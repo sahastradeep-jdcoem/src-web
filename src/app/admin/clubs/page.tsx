@@ -112,14 +112,6 @@ export default function AdminClubsPage() {
     syncClubsFromFirestore().then((res) => {
       if (res && Array.isArray(res) && res.length > 0) {
         loadData();
-        // Check and auto-compact any legacy oversized base64 images to free up Firestore space
-        compactClubDataset(res).then((compacted) => {
-          const oldLen = JSON.stringify(res).length;
-          const newLen = JSON.stringify(compacted).length;
-          if (oldLen > 250000 && newLen < oldLen) {
-            saveStoredClubs(compacted);
-          }
-        });
       }
     });
 

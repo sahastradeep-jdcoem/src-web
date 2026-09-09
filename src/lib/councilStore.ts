@@ -647,16 +647,52 @@ export function subscribeToCouncilMembers(callback: (members: TeamMember[]) => v
 // Clubs Roster Store
 export function getStoredClubs(): ClubItem[] {
   if (typeof window === "undefined") return initialClubs;
+  let clubs: ClubItem[] = initialClubs;
   try {
     const stored = localStorage.getItem("src_clubs_roster");
     if (stored) {
       const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        clubs = parsed;
+      }
+    }
+    // Cross-check with current active tenure clubs to heal any missing leaders
+    const tenuresRaw = localStorage.getItem("src_council_tenures");
+    if (tenuresRaw) {
+      const tenures = JSON.parse(tenuresRaw);
+      const currentTenure = Array.isArray(tenures) ? tenures.find((t: any) => t.isCurrent) : null;
+      if (currentTenure && Array.isArray(currentTenure.clubs) && currentTenure.clubs.length > 0) {
+        let healed = false;
+        const reconciled = clubs.map((c) => {
+          const tClub = currentTenure.clubs.find((tc: any) => tc.id === c.id || tc.slug === c.slug);
+          if (tClub) {
+            const tLeaders = Array.isArray(tClub.leaders) ? tClub.leaders : [];
+            const cLeaders = Array.isArray(c.leaders) ? c.leaders : [];
+            if (tLeaders.length > cLeaders.length) {
+              healed = true;
+              return {
+                ...c,
+                lead: tClub.lead || c.lead,
+                coLead: tClub.coLead || c.coLead,
+                coLeads: (Array.isArray(tClub.coLeads) && tClub.coLeads.length > 0) ? tClub.coLeads : c.coLeads,
+                leaders: tLeaders
+              };
+            }
+          }
+          return c;
+        });
+        if (healed) {
+          clubs = reconciled;
+          try {
+            localStorage.setItem("src_clubs_roster", JSON.stringify(clubs));
+          } catch {}
+        }
+      }
     }
   } catch (e) {
     console.warn("Could not read clubs from storage", e);
   }
-  return initialClubs;
+  return clubs;
 }
 
 export async function saveStoredClubs(clubs: ClubItem[]): Promise<void> {
@@ -684,11 +720,12 @@ export async function saveStoredClubs(clubs: ClubItem[]): Promise<void> {
     window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: sanitized }));
     window.dispatchEvent(new CustomEvent("src_tenures_updated"));
     window.dispatchEvent(new CustomEvent("src_users_updated"));
-    // Direct cloud write to Firestore site_content/clubs
+
+    // Direct cloud write & queue backup immediately (Directive #3)
     saveSiteContentToFirestore("clubs", sanitized).catch((err) => {
-      console.warn("Firestore direct write failed, enqueuing:", err);
-      enqueueCloudWrite("clubs", sanitized, `Clubs Directory (${clubs.length} Clubs)`);
+      console.warn("Firestore direct write for clubs failed, enqueuing:", err);
     });
+    enqueueCloudWrite("clubs", sanitized, `Clubs Directory (${clubs.length} Clubs)`);
   } catch (e) {
     console.error("Could not save clubs to storage", e);
   }
@@ -696,29 +733,50 @@ export async function saveStoredClubs(clubs: ClubItem[]): Promise<void> {
 
 export async function syncClubsFromFirestore(): Promise<ClubItem[]> {
   try {
+    const requestTime = Date.now();
+    if (hasPendingWritesFor("clubs") || getLastLocalWriteTime("clubs") >= requestTime || isLocalWriteRecent("clubs", 5000)) {
+      return getStoredClubs();
+    }
     const remote = await getSiteContentFromFirestore<ClubItem[]>("clubs");
+    if (hasPendingWritesFor("clubs") || getLastLocalWriteTime("clubs") >= requestTime || isLocalWriteRecent("clubs", 5000)) {
+      return getStoredClubs();
+    }
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
+      const current = getStoredClubs();
+      const merged = reconcileArrayDatasets(current, remote);
       if (typeof window !== "undefined") {
-        localStorage.setItem("src_clubs_roster", JSON.stringify(remote));
-        window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: remote }));
+        try {
+          localStorage.setItem("src_clubs_roster", JSON.stringify(merged));
+        } catch (lsErr) {
+          console.warn("localStorage quota exceeded for clubs roster:", lsErr);
+        }
+        window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: merged }));
         window.dispatchEvent(new CustomEvent("src_users_updated"));
       }
-      return remote;
+      return merged;
     }
-  } catch {}
+  } catch (e) {
+    console.warn("Could not sync clubs from Firestore:", e);
+  }
   return getStoredClubs();
 }
 
 export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => void {
   return subscribeToSiteContent<ClubItem[]>("clubs", (remote) => {
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
-      if (hasPendingWritesFor("clubs")) return;
+      if (hasPendingWritesFor("clubs") || isLocalWriteRecent("clubs", 5000)) return;
+      const current = getStoredClubs();
+      const merged = reconcileArrayDatasets(current, remote);
       if (typeof window !== "undefined") {
-        localStorage.setItem("src_clubs_roster", JSON.stringify(remote));
-        window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: remote }));
+        try {
+          localStorage.setItem("src_clubs_roster", JSON.stringify(merged));
+        } catch (lsErr) {
+          console.warn("localStorage quota exceeded for clubs roster in subscription:", lsErr);
+        }
+        window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: merged }));
         window.dispatchEvent(new CustomEvent("src_users_updated"));
       }
-      callback(remote);
+      callback(merged);
     }
   });
 }

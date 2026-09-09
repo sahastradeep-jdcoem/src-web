@@ -255,9 +255,11 @@ const localWriteTimestamps = new Map<string, number>();
  */
 export function markLocalWrite(docId: string): void {
   if (typeof window === "undefined") return;
-  localWriteTimestamps.set(docId, Date.now());
+  const now = Date.now();
+  localWriteTimestamps.set(docId, now);
   try {
-    sessionStorage.setItem(`src_last_write_${docId}`, String(Date.now()));
+    localStorage.setItem(`src_last_write_${docId}`, String(now));
+    sessionStorage.setItem(`src_last_write_${docId}`, String(now));
   } catch {}
 }
 
@@ -266,14 +268,18 @@ export function markLocalWrite(docId: string): void {
  */
 export function getLastLocalWriteTime(docId: string): number {
   if (typeof window === "undefined") return 0;
-  const inMemory = localWriteTimestamps.get(docId);
-  if (inMemory) return inMemory;
+  const inMemory = localWriteTimestamps.get(docId) || 0;
+  let fromLocal = 0;
+  let fromSession = 0;
   try {
-    const raw = sessionStorage.getItem(`src_last_write_${docId}`);
-    return raw ? parseInt(raw, 10) || 0 : 0;
-  } catch {
-    return 0;
-  }
+    const rawLocal = localStorage.getItem(`src_last_write_${docId}`);
+    if (rawLocal) fromLocal = parseInt(rawLocal, 10) || 0;
+  } catch {}
+  try {
+    const rawSession = sessionStorage.getItem(`src_last_write_${docId}`);
+    if (rawSession) fromSession = parseInt(rawSession, 10) || 0;
+  } catch {}
+  return Math.max(inMemory, fromLocal, fromSession);
 }
 
 /**
@@ -651,6 +657,37 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
           result[k] = remoteArr;
           continue;
         }
+
+        const isLeaderOrClubSubArray = k === "leaders" || k === "coLeads" || k === "clubs";
+        const hasRecentSubArrayWrites =
+          isLocalWriteRecent("clubs", 30000) ||
+          isLocalWriteRecent("council_tenures", 30000) ||
+          hasPendingWritesFor("clubs") ||
+          hasPendingWritesFor("council_tenures");
+
+        if (isLeaderOrClubSubArray && (hasRecentSubArrayWrites || localArr.length > remoteArr.length)) {
+          const reconciled = reconcileArrayDatasets(localArr, remoteArr);
+          const localOnly = localArr.filter((locItem: any) => {
+            const locId = locItem?.id || locItem?.slug || locItem?.btId;
+            const locName = locItem?.name?.trim().toLowerCase();
+            const isMatch = reconciled.some((r: any) => {
+              const rId = r?.id || r?.slug || r?.btId;
+              const rName = r?.name?.trim().toLowerCase();
+              return (locId && rId && locId === rId) || (locName && rName && locName === rName);
+            });
+            if (isMatch) return false;
+            // Keep if there were recent local writes, or if it is a recently generated local leader ID
+            if (hasRecentSubArrayWrites) return true;
+            if (typeof locId === "string" && locId.startsWith("leader-")) {
+              const createdTs = parseInt(locId.split("-")[1] || "0", 10);
+              if (createdTs > 0 && Date.now() - createdTs < 300000) return true;
+            }
+            return false;
+          });
+          result[k] = [...reconciled, ...localOnly];
+          continue;
+        }
+
         result[k] = reconcileArrayDatasets(localArr, remoteArr);
         continue;
       }

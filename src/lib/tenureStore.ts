@@ -751,6 +751,15 @@ export async function syncTenuresFromFirestore(): Promise<CouncilTenure[]> {
           localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(merged));
         } catch {}
         window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: merged }));
+        const activeTenure = merged.find((t: CouncilTenure) => t.isCurrent);
+        if (activeTenure && Array.isArray(activeTenure.clubs) && activeTenure.clubs.length > 0) {
+          try {
+            const currentClubs = getStoredClubs();
+            const reconciledClubs = reconcileArrayDatasets(currentClubs, activeTenure.clubs);
+            localStorage.setItem("src_clubs_roster", JSON.stringify(reconciledClubs));
+            window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: reconciledClubs }));
+          } catch {}
+        }
       }
       return getStoredTenures();
     }
@@ -803,6 +812,15 @@ export function subscribeToTenures(callback: (tenures: CouncilTenure[]) => void)
           localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(merged));
         } catch {}
         window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: merged }));
+        const activeTenure = merged.find((t: CouncilTenure) => t.isCurrent);
+        if (activeTenure && Array.isArray(activeTenure.clubs) && activeTenure.clubs.length > 0) {
+          try {
+            const currentClubs = getStoredClubs();
+            const reconciledClubs = reconcileArrayDatasets(currentClubs, activeTenure.clubs);
+            localStorage.setItem("src_clubs_roster", JSON.stringify(reconciledClubs));
+            window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: reconciledClubs }));
+          } catch {}
+        }
       }
       callback(getStoredTenures());
     }
