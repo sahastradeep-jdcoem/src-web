@@ -46,9 +46,116 @@ export function sanitizeEventItem(event: EventItem): EventItem {
   };
 }
 
+const MONTH_MAP: Record<string, number> = {
+  january: 0, jan: 0,
+  february: 1, feb: 1,
+  march: 2, mar: 2,
+  april: 3, apr: 3,
+  may: 4,
+  june: 5, jun: 5,
+  july: 6, jul: 6,
+  august: 7, aug: 7,
+  september: 8, sep: 8, sept: 8,
+  october: 9, oct: 9,
+  november: 10, nov: 10,
+  december: 11, dec: 11,
+};
+
+export function parseTimeString(timeStr?: string): number {
+  if (!timeStr || typeof timeStr !== "string") return 0;
+  const match = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if (!match) return 0;
+  let hours = parseInt(match[1], 10);
+  const minutes = match[2] ? parseInt(match[2], 10) : 0;
+  const meridiem = match[3] ? match[3].toLowerCase() : null;
+
+  if (meridiem === "pm" && hours < 12) hours += 12;
+  if (meridiem === "am" && hours === 12) hours = 0;
+
+  return (hours * 3600 + minutes * 60) * 1000;
+}
+
+/**
+ * Extract a comparable Unix timestamp (earliest first) from an event's date, time, and fallback fields.
+ */
+export function getEventDateTimestamp(event: Partial<EventItem> | null | undefined): number {
+  if (!event) return Number.MAX_SAFE_INTEGER;
+  const dateStr = (event.date || "").trim();
+  const timeOffset = parseTimeString(event.time);
+
+  if (!dateStr || /\b(tbd|to be decided|coming soon|announced soon)\b/i.test(dateStr)) {
+    if (event.registrationStartDate) {
+      const regStart = Date.parse(event.registrationStartDate);
+      if (!isNaN(regStart)) return regStart + timeOffset;
+    }
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  // 1. Try ISO date (YYYY-MM-DD)
+  const isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    const y = parseInt(isoMatch[1], 10);
+    const m = parseInt(isoMatch[2], 10) - 1;
+    const d = parseInt(isoMatch[3], 10);
+    return new Date(Date.UTC(y, m, d)).getTime() + timeOffset;
+  }
+
+  // 2. Try day month year pattern e.g. "8 October 2025", "8th Oct 2025", "8 - 10 October 2025"
+  const dmyMatch = dateStr.match(/(\d{1,2})(?:st|nd|rd|th)?(?:\s*[-–—to]+\s*\d{1,2}(?:st|nd|rd|th)?)?[\s\-_]+([A-Za-z]+)[\s\-_,]+(\d{4})/i);
+  if (dmyMatch) {
+    const day = parseInt(dmyMatch[1], 10);
+    const mStr = dmyMatch[2].toLowerCase();
+    const year = parseInt(dmyMatch[3], 10);
+    if (MONTH_MAP[mStr] !== undefined) {
+      return new Date(Date.UTC(year, MONTH_MAP[mStr], day)).getTime() + timeOffset;
+    }
+  }
+
+  // 3. Try month day year pattern e.g. "October 8, 2025", "Oct 8 - 10, 2025"
+  const mdyMatch = dateStr.match(/([A-Za-z]+)[\s\-_]+(\d{1,2})(?:st|nd|rd|th)?(?:\s*[-–—to]+\s*\d{1,2}(?:st|nd|rd|th)?)?[\s\-_,]+(\d{4})/i);
+  if (mdyMatch) {
+    const mStr = mdyMatch[1].toLowerCase();
+    const day = parseInt(mdyMatch[2], 10);
+    const year = parseInt(mdyMatch[3], 10);
+    if (MONTH_MAP[mStr] !== undefined) {
+      return new Date(Date.UTC(year, MONTH_MAP[mStr], day)).getTime() + timeOffset;
+    }
+  }
+
+  // 4. Try standard Date.parse
+  const direct = Date.parse(dateStr);
+  if (!isNaN(direct)) return direct + timeOffset;
+
+  // 5. Fallback to registration dates
+  if (event.registrationStartDate) {
+    const regStart = Date.parse(event.registrationStartDate);
+    if (!isNaN(regStart)) return regStart + timeOffset;
+  }
+  if (event.registrationDeadline) {
+    const regDead = Date.parse(event.registrationDeadline);
+    if (!isNaN(regDead)) return regDead + timeOffset;
+  }
+
+  return Number.MAX_SAFE_INTEGER;
+}
+
+/**
+ * Sort events chronologically by event date (earliest first).
+ */
+export function sortEventsByDate<T extends Partial<EventItem>>(events: T[]): T[] {
+  if (!Array.isArray(events)) return [];
+  return [...events].sort((a, b) => {
+    const timeA = getEventDateTimestamp(a);
+    const timeB = getEventDateTimestamp(b);
+    if (timeA !== timeB) return timeA - timeB;
+    return (a.name || "").localeCompare(b.name || "");
+  });
+}
+
 export function sanitizeEventsList(events: EventItem[]): EventItem[] {
   if (!Array.isArray(events)) return [];
-  return events.map(sanitizeEventItem);
+  const sanitized = events.map(sanitizeEventItem);
+  return sortEventsByDate(sanitized);
 }
 
 /**

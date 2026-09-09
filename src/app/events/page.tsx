@@ -6,7 +6,7 @@ import { mockEvents } from "@/data/events";
 import { EventCard } from "@/components/events/EventCard";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
-import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
+import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, sortEventsByDate } from "@/lib/eventsStore";
 import { EventItem } from "@/types";
 
 export default function EventsPage() {
@@ -42,7 +42,7 @@ export default function EventsPage() {
   }, []);
 
   const filteredEvents = useMemo(() => {
-    return eventsList
+    const filtered = eventsList
       .filter(e => e.isLive !== false && e.status !== 'draft' && !e.isCancelled && e.status !== 'Cancelled')
       .filter((event) => {
         const matchesSearch =
@@ -53,6 +53,8 @@ export default function EventsPage() {
 
         return matchesSearch;
       });
+
+    return sortEventsByDate(filtered);
   }, [eventsList, searchQuery]);
 
   const featuredEvent = eventsList.find((e) => e.isFeatured && !e.isCancelled && e.status !== 'Cancelled');

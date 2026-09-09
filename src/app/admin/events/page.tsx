@@ -44,7 +44,8 @@ import {
   getStoredEvents, 
   saveStoredEvents, 
   syncEventsFromFirestore,
-  subscribeToEvents
+  subscribeToEvents,
+  sortEventsByDate
 } from "@/lib/eventsStore";
 import { getStoredClubs } from "@/lib/councilStore";
 import { deleteRegistrationsForEvent, cancelEventRegistrations } from "@/lib/firebase/firestore";
@@ -125,11 +126,12 @@ export default function AdminEventsPage() {
 
   const filteredEvents = useMemo(() => {
     const q = searchQuery.toLowerCase();
-    return eventsList.filter((e) =>
+    const filtered = eventsList.filter((e) =>
       e.name.toLowerCase().includes(q) ||
       e.category.toLowerCase().includes(q) ||
       (e.organizer && e.organizer.toLowerCase().includes(q))
     );
+    return sortEventsByDate(filtered);
   }, [eventsList, searchQuery]);
 
   const handleCreateSubmit = (formData: EventFormData) => {

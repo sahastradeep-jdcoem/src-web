@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Flame, ArrowRight, Calendar, Inbox } from "lucide-react";
 import { EventCard } from "@/components/events/EventCard";
 import { EventItem } from "@/types";
-import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
+import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, sortEventsByDate } from "@/lib/eventsStore";
 import LeadershipSpotlightSection from "./LeadershipSpotlightSection";
 
 export default function HomeEventsSection() {
@@ -52,9 +52,11 @@ export default function HomeEventsSection() {
     };
   }, []);
 
-  const liveEvents = eventsList.filter(e => e.isLive !== false && e.status !== 'draft' && !e.isCancelled && e.status !== 'Cancelled');
-  const featuredEvent = liveEvents[0];
-  const otherEvents = liveEvents.slice(1);
+  const liveEvents = sortEventsByDate(
+    eventsList.filter(e => e.isLive !== false && e.status !== 'draft' && !e.isCancelled && e.status !== 'Cancelled')
+  );
+  const featuredEvent = liveEvents.find(e => e.isFeatured) || liveEvents[0];
+  const otherEvents = liveEvents.filter(e => (e.id || e.slug) !== (featuredEvent?.id || featuredEvent?.slug));
 
   if (liveEvents.length === 0) {
     if (isSyncing) {
