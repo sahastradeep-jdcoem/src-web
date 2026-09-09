@@ -15,7 +15,8 @@ import {
   Lock,
   GraduationCap,
   Globe,
-  LogIn
+  LogIn,
+  CheckCircle2
 } from "lucide-react";
 import { mockEvents } from "@/data/events";
 import { getStoredEvents, syncEventsFromFirestore } from "@/lib/eventsStore";
@@ -155,6 +156,48 @@ export default function EventRegisterPage() {
         >
           &larr; Browse Available Events
         </Link>
+      </div>
+    );
+  }
+
+  const isEventCompleted = event.status === "Completed" || event.status?.toLowerCase() === "completed";
+  if (isEventCompleted) {
+    return (
+      <div className="min-h-[70vh] bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center space-y-6">
+        <div className="p-4 rounded-3xl bg-slate-100 border border-slate-200 text-slate-600">
+          <CheckCircle2 className="w-10 h-10 mx-auto text-slate-500" />
+        </div>
+        <div className="space-y-3 max-w-lg">
+          <Badge variant="slate" size="md">Registration Closed • Event Completed</Badge>
+          <h1 className="font-heading font-extrabold text-2xl text-[#0F172A] uppercase">
+            {event.name}
+          </h1>
+          <div className="p-4 rounded-2xl bg-white border border-slate-200 text-left space-y-1.5 shadow-xs">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block font-sans">
+              Event Status:
+            </span>
+            <p className="text-xs text-slate-700 leading-relaxed font-medium">
+              This event has officially concluded and is marked as <strong>Completed</strong>. Public registrations are closed.
+            </p>
+          </div>
+          <p className="text-xs text-slate-500 leading-relaxed font-sans">
+            Delegates who previously registered can access their verified event passes and credentials on their Student Dashboard.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Link
+            href="/events"
+            className="px-6 py-3 rounded-2xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider transition-all hover:bg-[#123670] shadow-sm"
+          >
+            &larr; Browse Upcoming Events
+          </Link>
+          <Link
+            href="/dashboard"
+            className="px-6 py-3 rounded-2xl bg-white border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider transition-all hover:bg-slate-50 shadow-2xs"
+          >
+            Go to Student Dashboard
+          </Link>
+        </div>
       </div>
     );
   }
@@ -336,7 +379,12 @@ export default function EventRegisterPage() {
                             </span>
                           </div>
 
-                          {subIsRestricted ? (
+                          {sub.status === "Completed" || sub.status?.toLowerCase() === "completed" ? (
+                            <div className="px-3.5 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 text-xs font-bold flex items-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
+                              <span>Event Completed</span>
+                            </div>
+                          ) : subIsRestricted ? (
                             <div className="px-3.5 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold flex items-center gap-1.5">
                               <Lock className="w-3.5 h-3.5 text-amber-700" />
                               <span>JDCOEM Only</span>

@@ -21,7 +21,8 @@ import {
   ChevronLeft,
   Check,
   Building2,
-  Info
+  Info,
+  AlertCircle
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -647,6 +648,20 @@ export function EventFormModal({
         {/* ========================================================= */}
         {activeSection === "registration" && (
           <div className="space-y-5 animate-in fade-in duration-200">
+            {form.status === "Completed" && (
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-amber-900">
+                    Registration Locked • Event Marked As Completed
+                  </h4>
+                  <p className="text-xs text-amber-800 leading-relaxed font-medium">
+                    Since this event is marked as <strong>Completed</strong>, public registrations are locked on the portal regardless of registration dates or fee configurations.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Registration Dates */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">

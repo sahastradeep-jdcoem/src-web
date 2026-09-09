@@ -399,8 +399,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   };
 
   const handleProceedToStep2 = async () => {
-    if (event.status && event.status !== "Registration Open") {
-      alert(`Registrations are currently closed for this event (${event.status}).`);
+    if (event.status === "Completed" || event.status?.toLowerCase() === "completed" || (event.status && event.status !== "Registration Open")) {
+      alert(`Registrations are closed for this event (${event.status}). Registration cannot happen.`);
       return;
     }
     if (!user) {
@@ -621,6 +621,10 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
   const handleConfirmRegistration = async () => {
     if (isSubmitting) return;
+    if (event.status === "Completed" || event.status?.toLowerCase() === "completed" || (event.status && event.status !== "Registration Open")) {
+      alert(`Registrations are closed for this event (${event.status}). Registration cannot happen.`);
+      return;
+    }
     setIsSubmitting(true);
 
     // Safeguard duplicate check before processing registration
@@ -754,6 +758,33 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       setIsSubmitting(false);
     }
   };
+
+  if (event.status === "Completed" || event.status?.toLowerCase() === "completed") {
+    return (
+      <div className="max-w-xl mx-auto p-8 rounded-3xl bg-white border border-slate-200 text-center space-y-5 shadow-sm">
+        <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto text-slate-500">
+          <CheckCircle2 className="w-7 h-7" />
+        </div>
+        <div className="space-y-2">
+          <Badge variant="slate" size="md">Registration Closed • Event Completed</Badge>
+          <h3 className="font-heading font-extrabold text-2xl text-[#0F172A] uppercase">
+            {event.name}
+          </h3>
+          <p className="text-xs text-slate-600 leading-relaxed font-medium">
+            This event has officially concluded and is marked as <strong>Completed</strong>. Registration is closed and cannot be submitted.
+          </p>
+        </div>
+        <div className="pt-2">
+          <Link
+            href="/events"
+            className="inline-flex px-6 py-3 rounded-2xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#123670] transition-all shadow-sm"
+          >
+            &larr; Explore Available Events
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const steps = [
     { number: 1, title: "01 DETAILS", shortTitle: "01 INFO" },

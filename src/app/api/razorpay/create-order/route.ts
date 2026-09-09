@@ -25,12 +25,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Server-side price validation to prevent price tampering
+    // Server-side price & status validation to prevent price tampering and registration for completed events
     if (eventId) {
       const canonicalEvent = mockEvents.find(
         (e) => e.id === eventId || e.slug === eventId
       );
-      if (canonicalEvent && canonicalEvent.isPaid) {
+      if (canonicalEvent) {
+        if (canonicalEvent.status === "Completed" || canonicalEvent.status?.toLowerCase() === "completed") {
+          return NextResponse.json(
+            { error: "Registrations are closed because this event has concluded and is marked as Completed." },
+            { status: 400 }
+          );
+        }
+
+        if (canonicalEvent.isPaid) {
         let expectedFee = canonicalEvent.feeAmount || 0;
         if (teamType === "Team" && canonicalEvent.feePricingModel === "per_team" && canonicalEvent.teamFeeAmount) {
           expectedFee = canonicalEvent.teamFeeAmount;
@@ -46,6 +54,7 @@ export async function POST(req: NextRequest) {
         }
       }
     }
+  }
 
     const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;

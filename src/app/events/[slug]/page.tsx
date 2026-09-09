@@ -414,13 +414,20 @@ export default function EventDetailPage() {
                             >
                               Details
                             </Link>
-                            <Link
-                              href={`/events/${sub.slug}/register`}
-                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-xs"
-                            >
-                              <span>Register</span>
-                              <ArrowRight className="w-3.5 h-3.5" />
-                            </Link>
+                            {sub.status === "Completed" || sub.status?.toLowerCase() === "completed" || event.status === "Completed" || event.status?.toLowerCase() === "completed" ? (
+                              <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 text-xs font-bold uppercase tracking-wider">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
+                                <span>Completed</span>
+                              </span>
+                            ) : (
+                              <Link
+                                href={`/events/${sub.slug}/register`}
+                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-xs"
+                              >
+                                <span>Register</span>
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </Link>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -602,7 +609,24 @@ export default function EventDetailPage() {
                 </div>
 
                 {/* Action Buttons: Enhanced Pro Max CTA Stack */}
-                {isJdcoemOnly && isExternalStudent ? (
+                {event.status === "Completed" || event.status?.toLowerCase() === "completed" ? (
+                  <div className="space-y-3 pt-1">
+                    <div className="w-full py-3.5 px-4 rounded-2xl bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2 shadow-xs">
+                      <CheckCircle2 className="w-4 h-4 text-slate-500 shrink-0" />
+                      <span>Festival Completed • Registrations Closed</span>
+                    </div>
+                    {subEvents.length > 0 && (
+                      <a
+                        href="#competitions"
+                        className="w-full py-3 px-4 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200/80 border border-slate-200 text-[#17458F] text-xs font-bold uppercase tracking-wider text-center transition-all flex items-center justify-center gap-2 group cursor-pointer"
+                      >
+                        <Layers className="w-3.5 h-3.5 text-[#17458F]" />
+                        <span>Explore Lineup &amp; Highlights ({subEvents.length})</span>
+                        <ArrowDown className="w-3.5 h-3.5 transition-transform group-hover:translate-y-0.5 text-[#E78023]" />
+                      </a>
+                    )}
+                  </div>
+                ) : isJdcoemOnly && isExternalStudent ? (
                   <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 space-y-2 text-center">
                     <div className="flex items-center justify-center gap-1.5 font-bold text-xs text-amber-900 uppercase tracking-wider">
                       <Lock className="w-4 h-4 text-amber-700" />
@@ -748,6 +772,11 @@ export default function EventDetailPage() {
                       <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                     </Link>
                   )
+                ) : (event.status === "Completed" || event.status?.toLowerCase() === "completed") ? (
+                  <div className="w-full py-3.5 px-4 rounded-2xl bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Event Completed • Registration Closed</span>
+                  </div>
                 ) : (
                   <div className="w-full py-3.5 rounded-2xl bg-slate-100 text-slate-400 text-xs font-bold uppercase tracking-wider text-center">
                     Registration Closed
