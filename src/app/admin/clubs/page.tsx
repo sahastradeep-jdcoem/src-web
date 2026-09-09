@@ -970,6 +970,8 @@ export default function AdminClubsPage() {
                       label="1. Directory Card"
                       sublabel="For /clubs directory grid (16:9)"
                       aspectRatio="16:9"
+                      allowedAspectRatios={["16:9", "4:5", "3:4", "1:1", "21:9", "free"]}
+                      lockAspectRatio={false}
                       recommendedSize="1200 x 675 px (16:9)"
                       storagePath="clubs/cards"
                       previewUrl={editingClub.cardImage}
@@ -986,6 +988,8 @@ export default function AdminClubsPage() {
                       label="2. Header Banner"
                       sublabel="Cinematic backdrop on /clubs/[slug]"
                       aspectRatio="21:9"
+                      allowedAspectRatios={["21:9", "16:9", "free"]}
+                      lockAspectRatio={false}
                       recommendedSize="1920 x 820 px (21:9)"
                       storagePath="clubs/headers"
                       previewUrl={editingClub.headerImage}
@@ -1002,6 +1006,9 @@ export default function AdminClubsPage() {
                       label="3. Official Club Logo"
                       sublabel="Circular insignia emblem (1:1)"
                       aspectRatio="1:1"
+                      allowedAspectRatios={["1:1", "free"]}
+                      lockAspectRatio={false}
+                      isAvatar={true}
                       recommendedSize="500 x 500 px (Circle PNG)"
                       storagePath="clubs/logos"
                       previewUrl={editingClub.logoImage}

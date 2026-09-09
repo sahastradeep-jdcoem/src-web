@@ -82,6 +82,9 @@ export function ImageCropperModal({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imgNaturalSize, setImgNaturalSize] = useState({ width: 0, height: 0 });
   const [activeTab, setActiveTab] = useState<"crop" | "transform">("crop");
+  const [safeSrc, setSafeSrc] = useState<string>(imageSrc);
+  const [isResolvingImage, setIsResolvingImage] = useState<boolean>(false);
+  const createdObjectUrlRef = useRef<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -90,74 +93,65 @@ export function ImageCropperModal({
   const pinchStartDistRef = useRef<number | null>(null);
   const pinchStartZoomRef = useRef<number>(1);
 
-  // Native non-passive wheel & trackpad pinch listener directly on darkroom viewport
+  // Safely resolve remote image URLs through local proxy to completely avoid tainted canvas CORS SecurityError
   useEffect(() => {
-    const el = viewportRef.current;
-    if (!el || !isOpen) return;
+    let isCancelled = false;
 
-    const handleNativeWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
+    if (createdObjectUrlRef.current) {
+      URL.revokeObjectURL(createdObjectUrlRef.current);
+      createdObjectUrlRef.current = null;
+    }
 
-      let delta = e.deltaY;
-      if (e.deltaMode === 1) delta *= 24; // Line mode
-      else if (e.deltaMode === 2) delta *= 400; // Page mode
+    if (!imageSrc) {
+      setSafeSrc("");
+      return;
+    }
 
-      let zoomStep = 0;
-      if (e.ctrlKey) {
-        // Pinch-to-zoom on macOS trackpad
-        zoomStep = -delta * 0.008;
-      } else {
-        // Proportional mouse wheel / trackpad scroll with max clamp per event
-        const rawStep = -delta * 0.0018;
-        zoomStep = Math.max(-0.12, Math.min(0.12, rawStep));
-      }
+    if (imageSrc.startsWith("data:") || imageSrc.startsWith("blob:")) {
+      setSafeSrc(imageSrc);
+      return;
+    }
 
-      setZoom((prev) => {
-        const next = +(prev + zoomStep).toFixed(3);
-        return Math.min(Math.max(0.5, next), 3.5);
-      });
-    };
+    if (imageSrc.startsWith("http://") || imageSrc.startsWith("https://")) {
+      setIsResolvingImage(true);
+      const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageSrc)}`;
 
-    el.addEventListener("wheel", handleNativeWheel, { passive: false });
-    return () => {
-      el.removeEventListener("wheel", handleNativeWheel);
-    };
-  }, [isOpen]);
+      fetch(proxyUrl)
+        .then((res) => {
+          if (!res.ok) throw new Error(`Proxy error status: ${res.status}`);
+          return res.blob();
+        })
+        .then((blob) => {
+          if (isCancelled) return;
+          const blobUrl = URL.createObjectURL(blob);
+          createdObjectUrlRef.current = blobUrl;
+          setSafeSrc(blobUrl);
+          setIsResolvingImage(false);
+        })
+        .catch((err) => {
+          console.warn("Proxy notice, falling back to direct URL:", err);
+          if (!isCancelled) {
+            setSafeSrc(imageSrc);
+            setIsResolvingImage(false);
+          }
+        });
 
-  // Preload natural image dimensions immediately upon receipt of imageSrc
-  useEffect(() => {
-    if (imageSrc && typeof window !== "undefined") {
-      const img = new window.Image();
-      img.crossOrigin = "anonymous";
-      img.src = imageSrc;
-      img.onload = () => {
-        setImgNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
-        setImageLoaded(true);
+      return () => {
+        isCancelled = true;
       };
     }
-  }, [imageSrc]);
 
-  // Sync initial state when modal opens
+    setSafeSrc(imageSrc);
+  }, [imageSrc, isOpen]);
+
   useEffect(() => {
-    if (isOpen) {
-      let initial: AspectRatioType = initialAspectRatio === "auto" ? "16:9" : initialAspectRatio;
-      if (effectiveAllowedRatios && effectiveAllowedRatios.length > 0 && !effectiveAllowedRatios.includes(initial)) {
-        const first = effectiveAllowedRatios[0];
-        initial = first === "auto" ? "16:9" : first;
+    return () => {
+      if (createdObjectUrlRef.current) {
+        URL.revokeObjectURL(createdObjectUrlRef.current);
+        createdObjectUrlRef.current = null;
       }
-      setSelectedRatio(initial);
-      setZoom(1);
-      setRotationSteps(0);
-      setFineAngle(0);
-      setFlipH(false);
-      setFlipV(false);
-      setPan({ x: 0, y: 0 });
-      setImageLoaded(false);
-      setShowCardFrame(initial === "4:5" || initial === "3:4");
-      setShowCircleMask(isAvatar && initial === "1:1");
-    }
-  }, [isOpen, initialAspectRatio, effectiveAllowedRatios, isAvatar]);
+    };
+  }, []);
 
   // Compute aspect ratio numerical value
   const getRatioMultiplier = useCallback((ratio: AspectRatioType): number => {
@@ -186,17 +180,17 @@ export function ImageCropperModal({
 
   // Calibrated Viewport Box Boundaries (fits comfortably within laptop displays)
   const cropBoxDims = useMemo(() => {
-    const maxBoxW = 420;
-    const maxBoxH = 280;
+    const maxBoxW = 440;
+    const maxBoxH = 290;
     const ratio = currentRatio > 0 ? currentRatio : (16 / 9);
 
     if (ratio >= (maxBoxW / maxBoxH)) {
       const width = maxBoxW;
-      const height = Math.round(width / ratio);
+      const height = Math.max(80, Math.round(width / ratio));
       return { width, height };
     } else {
       const height = maxBoxH;
-      const width = Math.round(height * ratio);
+      const width = Math.max(80, Math.round(height * ratio));
       return { width, height };
     }
   }, [currentRatio]);
@@ -220,8 +214,111 @@ export function ImageCropperModal({
     }
   }, [imgNaturalSize, cropBoxDims]);
 
+  // Exact zoom factor required to fit the full image inside the crop frame
+  const fitZoom = useMemo(() => {
+    if (!imgNaturalSize.width || !imgNaturalSize.height || !cropBoxDims.width || !cropBoxDims.height) {
+      return 1;
+    }
+    const imgRatio = imgNaturalSize.width / imgNaturalSize.height;
+    const boxRatio = cropBoxDims.width / cropBoxDims.height;
+    const fit = Math.min(boxRatio / imgRatio, imgRatio / boxRatio);
+    return Math.max(0.1, Math.min(1, +fit.toFixed(3)));
+  }, [imgNaturalSize, cropBoxDims]);
+
+  const minZoom = useMemo(() => {
+    return Math.min(0.2, +(fitZoom * 0.85).toFixed(2));
+  }, [fitZoom]);
+
+  // Native non-passive wheel & trackpad pinch listener directly on darkroom viewport
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el || !isOpen) return;
+
+    const handleNativeWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      let delta = e.deltaY;
+      if (e.deltaMode === 1) delta *= 24; // Line mode
+      else if (e.deltaMode === 2) delta *= 400; // Page mode
+
+      let zoomStep = 0;
+      if (e.ctrlKey) {
+        // Pinch-to-zoom on macOS trackpad
+        zoomStep = -delta * 0.008;
+      } else {
+        // Proportional mouse wheel / trackpad scroll with max clamp per event
+        const rawStep = -delta * 0.0018;
+        zoomStep = Math.max(-0.12, Math.min(0.12, rawStep));
+      }
+
+      setZoom((prev) => {
+        const next = +(prev + zoomStep).toFixed(3);
+        return Math.min(Math.max(minZoom, next), 4.0);
+      });
+    };
+
+    el.addEventListener("wheel", handleNativeWheel, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", handleNativeWheel);
+    };
+  }, [isOpen, minZoom]);
+
+  // Preload natural image dimensions immediately upon receipt of safeSrc
+  useEffect(() => {
+    if (safeSrc && typeof window !== "undefined") {
+      let isMounted = true;
+      const img = new window.Image();
+      if (!safeSrc.startsWith("blob:") && !safeSrc.startsWith("data:")) {
+        img.crossOrigin = "anonymous";
+      }
+      img.src = safeSrc;
+      img.onload = () => {
+        if (!isMounted) return;
+        setImgNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
+        setImageLoaded(true);
+      };
+      img.onerror = () => {
+        if (!isMounted) return;
+        const retry = new window.Image();
+        retry.src = safeSrc;
+        retry.onload = () => {
+          if (!isMounted) return;
+          setImgNaturalSize({ width: retry.naturalWidth, height: retry.naturalHeight });
+          setImageLoaded(true);
+        };
+      };
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [safeSrc]);
+
+  // Sync initial state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      let initial: AspectRatioType = initialAspectRatio === "auto" ? "16:9" : initialAspectRatio;
+      if (effectiveAllowedRatios && effectiveAllowedRatios.length > 0 && !effectiveAllowedRatios.includes(initial)) {
+        const first = effectiveAllowedRatios[0];
+        initial = first === "auto" ? "16:9" : first;
+      }
+      setSelectedRatio(initial);
+      setZoom(1);
+      setRotationSteps(0);
+      setFineAngle(0);
+      setFlipH(false);
+      setFlipV(false);
+      setPan({ x: 0, y: 0 });
+      setShowCardFrame(initial === "4:5" || initial === "3:4");
+      setShowCircleMask(isAvatar && initial === "1:1");
+    }
+  }, [isOpen, initialAspectRatio, effectiveAllowedRatios, isAvatar]);
+
   // Mouse & Touch Pointer Pan and Touchscreen Pinch Zoom handlers
   const handlePointerDown = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest("input")) {
+      return;
+    }
     activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (activePointersRef.current.size === 1) {
@@ -236,7 +333,7 @@ export function ImageCropperModal({
     }
 
     try {
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     } catch {}
   };
 
@@ -250,7 +347,7 @@ export function ImageCropperModal({
       const currentDist = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
       if (pinchStartDistRef.current > 0) {
         const factor = currentDist / pinchStartDistRef.current;
-        const newZoom = Math.min(Math.max(0.5, +(pinchStartZoomRef.current * factor).toFixed(2)), 4);
+        const newZoom = Math.min(Math.max(minZoom, +(pinchStartZoomRef.current * factor).toFixed(2)), 4.0);
         setZoom(newZoom);
       }
       return;
@@ -277,7 +374,7 @@ export function ImageCropperModal({
     }
 
     try {
-      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
     } catch {}
   };
 
@@ -300,12 +397,12 @@ export function ImageCropperModal({
 
   // Quick fit / fill
   const handleFit = () => {
-    setZoom(0.9);
+    setZoom(fitZoom);
     setPan({ x: 0, y: 0 });
   };
 
   const handleFill = () => {
-    setZoom(1.25);
+    setZoom(1);
     setPan({ x: 0, y: 0 });
   };
 
@@ -338,12 +435,12 @@ export function ImageCropperModal({
         case "+":
         case "=":
           e.preventDefault();
-          setZoom((z) => Math.min(3.5, +(z + 0.1).toFixed(2)));
+          setZoom((z) => Math.min(4.0, +(z + 0.1).toFixed(2)));
           break;
         case "-":
         case "_":
           e.preventDefault();
-          setZoom((z) => Math.max(0.5, +(z - 0.1).toFixed(2)));
+          setZoom((z) => Math.max(minZoom, +(z - 0.1).toFixed(2)));
           break;
         case "r":
         case "R":
@@ -371,14 +468,13 @@ export function ImageCropperModal({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, selectedRatio]);
+  }, [isOpen, selectedRatio, minZoom]);
 
   // Execute canvas crop with crystal-clear high resolution export
   const handleApplyCrop = useCallback(() => {
     if (!imageRef.current || !containerRef.current) return;
 
     const img = imageRef.current;
-    const cropBox = containerRef.current.getBoundingClientRect();
     
     // Output target dimensions based on target ratio:
     let baseDimension = 1600;
@@ -417,24 +513,26 @@ export function ImageCropperModal({
 
     // Coordinate transformation
     ctx.save();
+    // 1. Center origin on canvas
     ctx.translate(targetWidth / 2, targetHeight / 2);
 
-    // Apply rotation & leveling
+    // Calculate scale ratio between preview bounding box and export canvas
+    const scaleFactor = targetWidth / cropBoxDims.width;
+
+    // 2. Apply user pan in screen/canvas space (matches CSS translate before rotate/scale)
+    ctx.translate(pan.x * scaleFactor, pan.y * scaleFactor);
+
+    // 3. Apply rotation & leveling
     ctx.rotate((totalAngle * Math.PI) / 180);
 
-    // Apply mirroring
-    ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
-
-    // Calculate scale ratio between preview bounding box and export canvas
-    const scaleFactor = targetWidth / cropBox.width;
-
-    // Apply user pan and zoom
-    ctx.translate(pan.x * scaleFactor, pan.y * scaleFactor);
-    ctx.scale(zoom, zoom);
+    // 4. Apply mirroring & zoom
+    ctx.scale((flipH ? -1 : 1) * zoom, (flipV ? -1 : 1) * zoom);
 
     // Base rendered image dimensions covering the canvas exactly as in preview
-    const imgRatio = img.naturalWidth / img.naturalHeight;
-    const boxRatio = cropBox.width / cropBox.height;
+    const imgNaturalW = img.naturalWidth || imgNaturalSize.width || targetWidth;
+    const imgNaturalH = img.naturalHeight || imgNaturalSize.height || targetHeight;
+    const imgRatio = imgNaturalW / imgNaturalH;
+    const boxRatio = targetWidth / targetHeight;
 
     let baseRenderedW = 0;
     let baseRenderedH = 0;
@@ -460,7 +558,7 @@ export function ImageCropperModal({
 
     // Export as clean, pristine crystal-clear WebP / PNG
     try {
-      const isPng = imageSrc.includes("image/png") || imageSrc.includes(".png");
+      const isPng = (imageSrc.includes("image/png") || imageSrc.includes(".png") || selectedRatio === "1:1");
       const exportType = isPng ? "image/png" : "image/webp";
       const croppedDataUrl = canvas.toDataURL(exportType, isPng ? 0.95 : 0.90);
       onCropComplete(croppedDataUrl);
@@ -470,7 +568,20 @@ export function ImageCropperModal({
       onCropComplete(imageSrc);
       onClose();
     }
-  }, [currentRatio, totalAngle, flipH, flipV, pan, zoom, imageSrc, onCropComplete, onClose, selectedRatio]);
+  }, [
+    currentRatio,
+    totalAngle,
+    flipH,
+    flipV,
+    pan,
+    zoom,
+    imageSrc,
+    onCropComplete,
+    onClose,
+    selectedRatio,
+    cropBoxDims,
+    imgNaturalSize
+  ]);
 
   if (!isOpen || !imageSrc) return null;
 
@@ -639,17 +750,26 @@ export function ImageCropperModal({
         <div 
           ref={viewportRef}
           data-cropper-viewport="true"
-          className="relative w-full bg-[#0B0F17] rounded-3xl overflow-hidden border border-slate-800 flex items-center justify-center select-none shadow-2xl p-3 sm:p-4"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          className="relative w-full bg-[#0B0F17] rounded-3xl overflow-hidden border border-slate-800 flex items-center justify-center select-none shadow-2xl p-3 sm:p-4 touch-none cursor-grab active:cursor-grabbing"
           style={{ minHeight: "280px", maxHeight: "330px" }}
         >
+          {isResolvingImage && (
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-30">
+              <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-black/80 border border-white/10 text-white text-xs font-semibold shadow-lg">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#E78023]" />
+                <span>Loading Studio Asset...</span>
+              </div>
+            </div>
+          )}
+
           {/* Active Aspect Ratio Crop Window */}
           <div
             ref={containerRef}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            className={`relative overflow-hidden cursor-grab active:cursor-grabbing border-2 border-[#E78023] rounded-2xl shadow-2xl transition-[width,height] duration-150 ring-4 ring-black/40 ${
+            className={`relative overflow-hidden border-2 border-[#E78023] rounded-2xl shadow-2xl transition-[width,height] duration-150 ring-4 ring-black/40 ${
               showCircleMask && selectedRatio === "1:1" ? "rounded-full" : ""
             }`}
             style={{
@@ -668,7 +788,7 @@ export function ImageCropperModal({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 ref={imageRef}
-                src={imageSrc}
+                src={safeSrc}
                 alt="Framing preview"
                 onLoad={handleImageLoad}
                 style={{
@@ -678,7 +798,7 @@ export function ImageCropperModal({
                   maxHeight: "none",
                 }}
                 className="pointer-events-none object-cover will-change-transform"
-                crossOrigin="anonymous"
+                crossOrigin={!safeSrc.startsWith("blob:") && !safeSrc.startsWith("data:") ? "anonymous" : undefined}
               />
             </div>
 
@@ -764,7 +884,7 @@ export function ImageCropperModal({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                setZoom((prev) => Math.max(0.5, +(prev - 0.15).toFixed(2)));
+                setZoom((prev) => Math.max(minZoom, +(prev - 0.15).toFixed(2)));
               }}
               className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 active:bg-white/30 text-white flex items-center justify-center transition-all cursor-pointer"
               title="Zoom Out (-)"
@@ -774,8 +894,8 @@ export function ImageCropperModal({
             <div className="w-16 sm:w-24 px-1 flex items-center">
               <input
                 type="range"
-                min="0.5"
-                max="3.5"
+                min={minZoom}
+                max={4}
                 step="0.01"
                 value={zoom}
                 onChange={(e) => setZoom(parseFloat(e.target.value))}
@@ -787,7 +907,7 @@ export function ImageCropperModal({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                setZoom((prev) => Math.min(3.5, +(prev + 0.15).toFixed(2)));
+                setZoom((prev) => Math.min(4.0, +(prev + 0.15).toFixed(2)));
               }}
               className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 active:bg-white/30 text-white flex items-center justify-center transition-all cursor-pointer"
               title="Zoom In (+)"
@@ -847,7 +967,7 @@ export function ImageCropperModal({
               <button
                 type="button"
                 onClick={handleFit}
-                className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-[11px] font-bold cursor-pointer transition-colors"
+                className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-[11px] font-bold cursor-pointer transition-colors shadow-2xs"
                 title="Fit entire image into frame"
               >
                 Fit
@@ -855,7 +975,7 @@ export function ImageCropperModal({
               <button
                 type="button"
                 onClick={handleFill}
-                className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-[11px] font-bold cursor-pointer transition-colors"
+                className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-[11px] font-bold cursor-pointer transition-colors shadow-2xs"
                 title="Fill frame"
               >
                 Fill
@@ -863,7 +983,7 @@ export function ImageCropperModal({
               <button
                 type="button"
                 onClick={handleReset}
-                className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-[11px] font-bold cursor-pointer transition-colors flex items-center gap-1"
+                className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-[11px] font-bold cursor-pointer transition-colors flex items-center gap-1 shadow-2xs"
                 title="Reset all transforms"
               >
                 <RefreshCw className="w-3 h-3 text-[#E78023]" />
@@ -887,7 +1007,7 @@ export function ImageCropperModal({
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => setZoom((prev) => Math.max(0.5, +(prev - 0.15).toFixed(2)))}
+                  onClick={() => setZoom((prev) => Math.max(minZoom, +(prev - 0.15).toFixed(2)))}
                   className="p-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 cursor-pointer shadow-xs transition-colors"
                   title="Zoom Out"
                 >
@@ -895,8 +1015,8 @@ export function ImageCropperModal({
                 </button>
                 <input
                   type="range"
-                  min="0.5"
-                  max="3.5"
+                  min={minZoom}
+                  max={4}
                   step="0.01"
                   value={zoom}
                   onChange={(e) => setZoom(parseFloat(e.target.value))}
@@ -904,7 +1024,7 @@ export function ImageCropperModal({
                 />
                 <button
                   type="button"
-                  onClick={() => setZoom((prev) => Math.min(3.5, +(prev + 0.15).toFixed(2)))}
+                  onClick={() => setZoom((prev) => Math.min(4.0, +(prev + 0.15).toFixed(2)))}
                   className="p-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 cursor-pointer shadow-xs transition-colors"
                   title="Zoom In"
                 >

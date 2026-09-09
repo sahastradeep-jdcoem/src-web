@@ -49,10 +49,14 @@ export function ImageUploadDropzone({
   const [isCropperOpen, setIsCropperOpen] = useState(false);
   const [originalFileName, setOriginalFileName] = useState<string>("image.webp");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const localDataUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     setPreview(previewUrl || "");
     setManualUrl(previewUrl || "");
+    if (!previewUrl) {
+      localDataUrlRef.current = null;
+    }
   }, [previewUrl]);
 
   const getOptimalResolution = (ratio: string, path: string) => {
@@ -103,6 +107,7 @@ export function ImageUploadDropzone({
         outputFormat: isPngOrSvg ? "image/png" : "image/webp",
       });
 
+      localDataUrlRef.current = immediateOptimized.dataUrl;
       setPreview(immediateOptimized.dataUrl);
       setManualUrl(immediateOptimized.dataUrl);
       if (onUrlChange) {
@@ -155,6 +160,7 @@ export function ImageUploadDropzone({
     onUploadStateChange?.(true);
     try {
       // 1. Immediately sync cropped image to state so user can save anytime
+      localDataUrlRef.current = croppedDataUrl;
       setPreview(croppedDataUrl);
       setManualUrl(croppedDataUrl);
       if (onUrlChange) {
@@ -190,14 +196,16 @@ export function ImageUploadDropzone({
 
   const openExistingImageInCropper = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (preview) {
-      setRawImageToCrop(preview);
+    const candidate = localDataUrlRef.current || preview;
+    if (candidate) {
+      setRawImageToCrop(candidate);
       setIsCropperOpen(true);
     }
   };
 
   const handleClear = (e: React.MouseEvent) => {
     e.stopPropagation();
+    localDataUrlRef.current = null;
     setPreview("");
     setManualUrl("");
     setCompressionStats(null);
@@ -423,18 +431,13 @@ export function ImageUploadDropzone({
 
       {/* Interactive Photo Cropper & Framing Modal */}
       {isCropperOpen && rawImageToCrop && (() => {
-        // Enforce aspect ratio locking strictly across the whole website:
-        // - 16:9 for Card Thumbnail (locks to 16:9 only)
-        // - 4:5 for Vertical Poster (locks to 4:5 only)
-        // - 21:9 for Header Banner (locks to 21:9 only)
-        // - 1:1 for Avatars and Logos (locks to 1:1 only)
         const effectiveAllowedRatios: AspectRatioType[] = allowedAspectRatios && allowedAspectRatios.length > 0
           ? allowedAspectRatios
-          : lockAspectRatio !== false && aspectRatio && aspectRatio !== "auto"
+          : lockAspectRatio === true && aspectRatio && aspectRatio !== "auto"
           ? [aspectRatio as AspectRatioType]
           : ["16:9", "4:5", "3:4", "21:9", "1:1", "free"];
 
-        const shouldLock = lockAspectRatio ?? (effectiveAllowedRatios.length === 1);
+        const shouldLock = lockAspectRatio === true;
 
         return (
           <ImageCropperModal

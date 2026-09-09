@@ -996,6 +996,8 @@ export function EventFormModal({
                   label="1. Card Thumbnail"
                   sublabel="For catalog cards & dashboard"
                   aspectRatio="16:9"
+                  allowedAspectRatios={["16:9", "4:5", "3:4", "1:1", "21:9", "free"]}
+                  lockAspectRatio={false}
                   recommendedSize="1200 x 675 px (16:9)"
                   storagePath="events/cards"
                   previewUrl={form.cardImage}
@@ -1012,6 +1014,8 @@ export function EventFormModal({
                   label="2. Vertical Poster"
                   sublabel="For official notices & passes"
                   aspectRatio="4:5"
+                  allowedAspectRatios={["4:5", "3:4", "16:9", "1:1", "free"]}
+                  lockAspectRatio={false}
                   recommendedSize="1080 x 1350 px (4:5)"
                   storagePath="events/posters"
                   previewUrl={form.posterImage}
@@ -1028,6 +1032,8 @@ export function EventFormModal({
                   label="3. Header Banner"
                   sublabel="Cinematic backdrop on detail page"
                   aspectRatio="21:9"
+                  allowedAspectRatios={["21:9", "16:9", "free"]}
+                  lockAspectRatio={false}
                   recommendedSize="1920 x 820 px (21:9)"
                   storagePath="events/headers"
                   previewUrl={form.headerImage}
