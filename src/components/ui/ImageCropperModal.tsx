@@ -23,7 +23,11 @@ import {
   Maximize,
   Undo2,
   Lock,
-  User
+  User,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ArrowDown
 } from "lucide-react";
 import { Modal } from "./Modal";
 import { Button } from "./Button";
@@ -406,69 +410,10 @@ export function ImageCropperModal({
     setPan({ x: 0, y: 0 });
   };
 
-  // Keyboard navigation for precision fine-tuning
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (["INPUT", "TEXTAREA"].includes((e.target as HTMLElement)?.tagName)) return;
-
-      const step = e.shiftKey ? 20 : 4;
-
-      switch (e.key) {
-        case "ArrowLeft":
-          e.preventDefault();
-          setPan((p) => ({ ...p, x: p.x - step }));
-          break;
-        case "ArrowRight":
-          e.preventDefault();
-          setPan((p) => ({ ...p, x: p.x + step }));
-          break;
-        case "ArrowUp":
-          e.preventDefault();
-          setPan((p) => ({ ...p, y: p.y - step }));
-          break;
-        case "ArrowDown":
-          e.preventDefault();
-          setPan((p) => ({ ...p, y: p.y + step }));
-          break;
-        case "+":
-        case "=":
-          e.preventDefault();
-          setZoom((z) => Math.min(4.0, +(z + 0.1).toFixed(2)));
-          break;
-        case "-":
-        case "_":
-          e.preventDefault();
-          setZoom((z) => Math.max(minZoom, +(z - 0.1).toFixed(2)));
-          break;
-        case "r":
-        case "R":
-          e.preventDefault();
-          setRotationSteps((r) => (r + 1) % 4);
-          break;
-        case "g":
-        case "G":
-          e.preventDefault();
-          setShowGrid((g) => !g);
-          break;
-        case "c":
-        case "C":
-          if (selectedRatio === "1:1") {
-            e.preventDefault();
-            setShowCircleMask((m) => !m);
-          }
-          break;
-        case "Enter":
-          e.preventDefault();
-          handleApplyCrop();
-          break;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, selectedRatio, minZoom]);
+  // Nudge pan helper function for on-screen arrow buttons and keyboard navigation
+  const nudge = useCallback((dx: number, dy: number) => {
+    setPan((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+  }, []);
 
   // Execute canvas crop with crystal-clear high resolution export
   const handleApplyCrop = useCallback(() => {
@@ -582,6 +527,98 @@ export function ImageCropperModal({
     cropBoxDims,
     imgNaturalSize
   ]);
+
+  // Keyboard navigation for precision fine-tuning
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      // Do not capture arrow keys if user is typing inside text fields
+      const isTextEditable =
+        target?.tagName === "TEXTAREA" ||
+        (target?.tagName === "INPUT" && (target as HTMLInputElement).type !== "range");
+
+      if (isTextEditable) return;
+
+      const step = e.shiftKey ? 48 : 16;
+
+      switch (e.key) {
+        case "ArrowLeft":
+        case "a":
+        case "A":
+          if (target?.tagName === "INPUT") (target as HTMLElement).blur();
+          e.preventDefault();
+          e.stopPropagation();
+          setPan((p) => ({ ...p, x: p.x - step }));
+          break;
+        case "ArrowRight":
+        case "d":
+        case "D":
+          if (target?.tagName === "INPUT") (target as HTMLElement).blur();
+          e.preventDefault();
+          e.stopPropagation();
+          setPan((p) => ({ ...p, x: p.x + step }));
+          break;
+        case "ArrowUp":
+        case "w":
+        case "W":
+          if (target?.tagName === "INPUT") (target as HTMLElement).blur();
+          e.preventDefault();
+          e.stopPropagation();
+          setPan((p) => ({ ...p, y: p.y - step }));
+          break;
+        case "ArrowDown":
+        case "s":
+        case "S":
+          if (target?.tagName === "INPUT") (target as HTMLElement).blur();
+          e.preventDefault();
+          e.stopPropagation();
+          setPan((p) => ({ ...p, y: p.y + step }));
+          break;
+        case "+":
+        case "=":
+          e.preventDefault();
+          setZoom((z) => Math.min(4.0, +(z + 0.15).toFixed(2)));
+          break;
+        case "-":
+        case "_":
+          e.preventDefault();
+          setZoom((z) => Math.max(minZoom, +(z - 0.15).toFixed(2)));
+          break;
+        case "r":
+        case "R":
+          if (!target?.closest("input")) {
+            e.preventDefault();
+            setRotationSteps((r) => (r + 1) % 4);
+          }
+          break;
+        case "g":
+        case "G":
+          if (!target?.closest("input")) {
+            e.preventDefault();
+            setShowGrid((g) => !g);
+          }
+          break;
+        case "c":
+        case "C":
+          if (!target?.closest("input") && selectedRatio === "1:1") {
+            e.preventDefault();
+            setShowCircleMask((m) => !m);
+          }
+          break;
+        case "Enter":
+          if (!target?.closest("button")) {
+            e.preventDefault();
+            handleApplyCrop();
+          }
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, selectedRatio, minZoom, handleApplyCrop]);
 
   if (!isOpen || !imageSrc) return null;
 
@@ -862,6 +899,74 @@ export function ImageCropperModal({
 
           </div>
 
+          {/* Floating Studio Directional Arrow Controls Pad */}
+          <div 
+            data-interactive-wheel="true"
+            className="absolute top-2.5 left-2.5 z-20 flex items-center gap-1 p-1 rounded-xl bg-black/85 backdrop-blur-md border border-white/15 shadow-xl select-none"
+            title="Directional Arrow Controls (Click to pan/nudge framing)"
+          >
+            <span className="text-[9px] font-mono font-bold text-slate-300 px-1.5 uppercase tracking-wider hidden sm:inline">
+              Pan
+            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                nudge(-16, 0);
+              }}
+              className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 active:bg-[#E78023] text-white flex items-center justify-center transition-all cursor-pointer"
+              title="Nudge Left (← / A)"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                nudge(0, -16);
+              }}
+              className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 active:bg-[#E78023] text-white flex items-center justify-center transition-all cursor-pointer"
+              title="Nudge Up (↑ / W)"
+            >
+              <ArrowUp className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                nudge(0, 16);
+              }}
+              className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 active:bg-[#E78023] text-white flex items-center justify-center transition-all cursor-pointer"
+              title="Nudge Down (↓ / S)"
+            >
+              <ArrowDown className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                nudge(16, 0);
+              }}
+              className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 active:bg-[#E78023] text-white flex items-center justify-center transition-all cursor-pointer"
+              title="Nudge Right (→ / D)"
+            >
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            {(pan.x !== 0 || pan.y !== 0) && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPan({ x: 0, y: 0 });
+                }}
+                className="px-1.5 py-1 rounded-lg bg-[#E78023]/20 hover:bg-[#E78023]/40 text-[#E78023] text-[9px] font-mono font-bold transition-all cursor-pointer"
+                title="Reset Pan to Center"
+              >
+                0,0
+              </button>
+            )}
+          </div>
+
           {/* Floating Live Dimensions & Gesture Guide Tag */}
           <div className="absolute bottom-2.5 left-2.5 z-20 px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md text-[10px] font-mono text-white/90 pointer-events-none flex items-center gap-1.5 border border-white/10 shadow-lg">
             <Move className="w-3 h-3 text-[#E78023]" />
@@ -1030,6 +1135,67 @@ export function ImageCropperModal({
                 >
                   <ZoomIn className="w-4 h-4" />
                 </button>
+              </div>
+
+              {/* Arrow Controls: Pan & Precision Nudge */}
+              <div className="pt-2 border-t border-slate-200/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                    <Move className="w-3.5 h-3.5 text-[#E78023]" />
+                    <span>Arrow Controls (Pan &amp; Framing)</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-mono">
+                    Offset: X: {pan.x > 0 ? `+${pan.x}` : pan.x}px • Y: {pan.y > 0 ? `+${pan.y}` : pan.y}px
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="inline-flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => nudge(-16, 0)}
+                      className="p-1.5 rounded-lg hover:bg-slate-100 active:bg-[#E78023]/15 active:text-[#E78023] text-slate-700 cursor-pointer transition-colors"
+                      title="Nudge Left (← / A)"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => nudge(0, -16)}
+                      className="p-1.5 rounded-lg hover:bg-slate-100 active:bg-[#E78023]/15 active:text-[#E78023] text-slate-700 cursor-pointer transition-colors"
+                      title="Nudge Up (↑ / W)"
+                    >
+                      <ArrowUp className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => nudge(0, 16)}
+                      className="p-1.5 rounded-lg hover:bg-slate-100 active:bg-[#E78023]/15 active:text-[#E78023] text-slate-700 cursor-pointer transition-colors"
+                      title="Nudge Down (↓ / S)"
+                    >
+                      <ArrowDown className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => nudge(16, 0)}
+                      className="p-1.5 rounded-lg hover:bg-slate-100 active:bg-[#E78023]/15 active:text-[#E78023] text-slate-700 cursor-pointer transition-colors"
+                      title="Nudge Right (→ / D)"
+                    >
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {(pan.x !== 0 || pan.y !== 0) && (
+                    <button
+                      type="button"
+                      onClick={() => setPan({ x: 0, y: 0 })}
+                      className="px-2.5 py-1.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 text-[11px] font-bold cursor-pointer transition-colors shadow-2xs"
+                      title="Reset Framing Position to Center (0, 0)"
+                    >
+                      Center
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           )}
