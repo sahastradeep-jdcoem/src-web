@@ -501,11 +501,11 @@ export function ImageCropperModal({
 
     ctx.restore();
 
-    // Export as clean, pristine crystal-clear WebP / PNG
+    // Export as clean, high-density WebP (or PNG only if source is transparent PNG)
     try {
-      const isPng = (imageSrc.includes("image/png") || imageSrc.includes(".png") || selectedRatio === "1:1");
-      const exportType = isPng ? "image/png" : "image/webp";
-      const croppedDataUrl = canvas.toDataURL(exportType, isPng ? 0.95 : 0.90);
+      const isTransparentPng = (imageSrc.includes("image/png") || imageSrc.includes(".png")) && selectedRatio === "free";
+      const exportType = isTransparentPng ? "image/png" : "image/webp";
+      const croppedDataUrl = canvas.toDataURL(exportType, 0.88);
       onCropComplete(croppedDataUrl);
       onClose();
     } catch (e) {

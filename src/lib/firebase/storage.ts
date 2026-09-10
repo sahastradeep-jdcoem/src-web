@@ -54,14 +54,15 @@ export async function uploadImageToStorage(
     console.warn("Firebase Storage direct upload notice:", (error as any)?.message || error);
   }
 
-  // Fallback: if it was a file and storage is unreachable, generate ultra high-res data URL
+  // Fallback: if it was a file and storage is unreachable, generate compact high-density data URL
   if (fileOrDataUrl instanceof File) {
     try {
+      const isAvatar = storagePath.includes("avatars") || storagePath.includes("pillars") || storagePath.includes("leads") || storagePath.includes("members");
       const isPng = fileOrDataUrl.type === "image/png" || fileOrDataUrl.type === "image/svg+xml";
       const compressed = await compressImage(fileOrDataUrl, {
-        maxWidth: 2560,
-        maxHeight: 2560,
-        quality: 0.95,
+        maxWidth: isAvatar ? 480 : 1200,
+        maxHeight: isAvatar ? 600 : 800,
+        quality: isAvatar ? 0.82 : 0.80,
         outputFormat: isPng ? "image/png" : "image/webp",
       });
       return compressed.dataUrl;

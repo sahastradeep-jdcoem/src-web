@@ -965,20 +965,26 @@ export default function AdminTeamPage() {
 
       setClubsList(updatedClubs);
       isSavingRef.current = true;
-      await saveStoredClubs(updatedClubs);
-      if (selectedTenure?.isCurrent) {
-        updateTenureRoster(selectedTenure.id, { clubs: updatedClubs }, true);
-      } else if (selectedTenure) {
-        saveStoredDraftClubs(selectedTenure.id, updatedClubs);
-        updateTenureRoster(selectedTenure.id, { clubs: updatedClubs }, true);
-      }
-      setIsSaved(true);
-      setTimeout(() => {
-        setIsSaved(false);
+      try {
+        await saveStoredClubs(updatedClubs);
+        if (selectedTenure?.isCurrent) {
+          updateTenureRoster(selectedTenure.id, { clubs: updatedClubs }, true);
+        } else if (selectedTenure) {
+          saveStoredDraftClubs(selectedTenure.id, updatedClubs);
+          updateTenureRoster(selectedTenure.id, { clubs: updatedClubs }, true);
+        }
+        setIsSaved(true);
+        setTimeout(() => {
+          setIsSaved(false);
+          isSavingRef.current = false;
+        }, 2000);
+        setEditingMember(null);
+        setIsCreatingNew(false);
+      } catch (saveErr) {
+        console.error("Cloud save failed:", saveErr);
         isSavingRef.current = false;
-      }, 2000);
-      setEditingMember(null);
-      setIsCreatingNew(false);
+        alert("⚠️ Cloud Save Error: Could not save your changes to the cloud database due to network connectivity issues. Your changes are still held in this edit window. Please check your internet connection and click Save Changes again.");
+      }
       return;
     }
 

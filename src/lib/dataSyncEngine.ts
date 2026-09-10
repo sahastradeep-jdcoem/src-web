@@ -96,21 +96,21 @@ export async function compactClubDataset<T extends {
       }
 
       let lead = c.lead;
-      if (lead?.avatar && lead.avatar.startsWith("data:image/") && lead.avatar.length > 30000) {
-        lead = { ...lead, avatar: await compactBase64Image(lead.avatar, 400, 0.84) };
+      if (lead?.avatar && lead.avatar.startsWith("data:image/") && lead.avatar.length > 25000) {
+        lead = { ...lead, avatar: await compactBase64Image(lead.avatar, 400, 0.80) };
       }
 
       let coLead = c.coLead;
-      if (coLead?.avatar && coLead.avatar.startsWith("data:image/") && coLead.avatar.length > 30000) {
-        coLead = { ...coLead, avatar: await compactBase64Image(coLead.avatar, 400, 0.84) };
+      if (coLead?.avatar && coLead.avatar.startsWith("data:image/") && coLead.avatar.length > 25000) {
+        coLead = { ...coLead, avatar: await compactBase64Image(coLead.avatar, 400, 0.80) };
       }
 
       let coLeads = c.coLeads;
       if (Array.isArray(coLeads)) {
         coLeads = await Promise.all(
           coLeads.map(async (cl) => {
-            if (cl?.avatar && cl.avatar.startsWith("data:image/") && cl.avatar.length > 30000) {
-              return { ...cl, avatar: await compactBase64Image(cl.avatar, 400, 0.84) };
+            if (cl?.avatar && cl.avatar.startsWith("data:image/") && cl.avatar.length > 25000) {
+              return { ...cl, avatar: await compactBase64Image(cl.avatar, 400, 0.80) };
             }
             return cl;
           })
@@ -121,8 +121,8 @@ export async function compactClubDataset<T extends {
       if (Array.isArray(leaders)) {
         leaders = await Promise.all(
           leaders.map(async (l) => {
-            if (l?.avatar && l.avatar.startsWith("data:image/") && l.avatar.length > 30000) {
-              return { ...l, avatar: await compactBase64Image(l.avatar, 400, 0.84) };
+            if (l?.avatar && l.avatar.startsWith("data:image/") && l.avatar.length > 25000) {
+              return { ...l, avatar: await compactBase64Image(l.avatar, 400, 0.80) };
             }
             return l;
           })
@@ -557,6 +557,18 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
       if (n.length > 2 && nameMap.has(n)) {
         return nameMap.get(n);
       }
+    }
+
+    // 5. Role and club match for leaders
+    if ((remoteItem as any).role && ((remoteItem as any).clubId || (remoteItem as any).clubSlug)) {
+      const rRole = (remoteItem as any).role.toLowerCase().trim();
+      const rClub = ((remoteItem as any).clubId || (remoteItem as any).clubSlug || "").toLowerCase().trim();
+      const match = localList.find((loc: any) => {
+        const lClub = (loc.clubId || loc.clubSlug || "").toLowerCase().trim();
+        const lRole = (loc.role || "").toLowerCase().trim();
+        return lClub === rClub && lRole === rRole;
+      });
+      if (match) return match;
     }
 
     return undefined;

@@ -101,9 +101,9 @@ export function ImageUploadDropzone({
       const isAvatar = storagePath.includes("avatars") || storagePath.includes("pillars") || storagePath.includes("leads") || aspectRatio === "1:1" || aspectRatio === "4:5";
 
       const immediateOptimized = await compressImage(file, {
-        maxWidth: isAvatar ? (aspectRatio === "1:1" ? 600 : 800) : 1600,
-        maxHeight: isAvatar ? (aspectRatio === "1:1" ? 600 : 1000) : 1200,
-        quality: 0.90,
+        maxWidth: isAvatar ? (aspectRatio === "1:1" ? 400 : 480) : 1200,
+        maxHeight: isAvatar ? (aspectRatio === "1:1" ? 400 : 600) : 800,
+        quality: isAvatar ? 0.82 : 0.84,
         outputFormat: isPngOrSvg ? "image/png" : "image/webp",
       });
 
@@ -118,14 +118,17 @@ export function ImageUploadDropzone({
       const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
       const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}`;
 
-      const cloudUrl = await uploadImageToStorage(file, finalStoragePath);
-
-      if (cloudUrl && cloudUrl.startsWith("http")) {
-        setPreview(cloudUrl);
-        setManualUrl(cloudUrl);
-        if (onUrlChange) {
-          onUrlChange(cloudUrl);
+      try {
+        const cloudUrl = await uploadImageToStorage(file, finalStoragePath);
+        if (cloudUrl && cloudUrl.startsWith("http")) {
+          setPreview(cloudUrl);
+          setManualUrl(cloudUrl);
+          if (onUrlChange) {
+            onUrlChange(cloudUrl);
+          }
         }
+      } catch (uploadErr) {
+        console.warn("Cloud storage upload notice, using optimized local WebP fallback:", uploadErr);
       }
     } catch (err) {
       console.error("Image direct processing error", err);
@@ -173,13 +176,17 @@ export function ImageUploadDropzone({
       const ext = isPng ? ".png" : ".webp";
       const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}${ext}`;
 
-      const cloudUrl = await uploadImageToStorage(croppedDataUrl, finalStoragePath);
-      if (cloudUrl && cloudUrl.startsWith("http")) {
-        setPreview(cloudUrl);
-        setManualUrl(cloudUrl);
-        if (onUrlChange) {
-          onUrlChange(cloudUrl);
+      try {
+        const cloudUrl = await uploadImageToStorage(croppedDataUrl, finalStoragePath);
+        if (cloudUrl && cloudUrl.startsWith("http")) {
+          setPreview(cloudUrl);
+          setManualUrl(cloudUrl);
+          if (onUrlChange) {
+            onUrlChange(cloudUrl);
+          }
         }
+      } catch (uploadErr) {
+        console.warn("Cloud storage upload notice for crop, using optimized local WebP fallback:", uploadErr);
       }
     } catch (err) {
       console.error("Image crop and storage error", err);

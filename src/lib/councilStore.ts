@@ -665,7 +665,30 @@ export function getStoredClubs(): ClubItem[] {
 export async function saveStoredClubs(clubs: ClubItem[]): Promise<void> {
   if (typeof window === "undefined") return;
   try {
-    const compacted = await compactClubDataset(clubs);
+    // Keep club.lead and club.coLead avatars tightly synchronized with club.leaders
+    const syncedClubs = clubs.map((c) => {
+      const leaders = Array.isArray(c.leaders) ? c.leaders : [];
+      const primaryLead = leaders.find((l) => l.roleType === "lead") || leaders[0];
+      const primaryCoLead = leaders.find((l) => l.roleType === "coLead");
+
+      const lead = c.lead ? {
+        ...c.lead,
+        avatar: primaryLead?.avatar || c.lead.avatar || "",
+      } : (primaryLead ? { ...primaryLead } : c.lead);
+
+      const coLead = c.coLead ? {
+        ...c.coLead,
+        avatar: primaryCoLead?.avatar || c.coLead.avatar || "",
+      } : (primaryCoLead ? { ...primaryCoLead } : c.coLead);
+
+      return {
+        ...c,
+        lead,
+        coLead,
+      };
+    });
+
+    const compacted = await compactClubDataset(syncedClubs);
     const sanitized = cleanUndefined(compacted);
     markLocalWrite("clubs");
     try {
@@ -690,12 +713,21 @@ export async function saveStoredClubs(clubs: ClubItem[]): Promise<void> {
     window.dispatchEvent(new CustomEvent("src_users_updated"));
 
     // Direct cloud write & queue backup immediately (Directive #3)
-    saveSiteContentToFirestore("clubs", sanitized).catch((err) => {
+    let cloudWriteError: any = null;
+    try {
+      await saveSiteContentToFirestore("clubs", sanitized);
+    } catch (err) {
       console.warn("Firestore direct write for clubs failed, enqueuing:", err);
-    });
+      cloudWriteError = err;
+    }
     enqueueCloudWrite("clubs", sanitized, `Clubs Directory (${clubs.length} Clubs)`);
+
+    if (cloudWriteError) {
+      throw cloudWriteError;
+    }
   } catch (e) {
     console.error("Could not save clubs to storage", e);
+    throw e;
   }
 }
 

@@ -44,6 +44,7 @@ export function PositionFormModal({
   onDelete,
 }: PositionFormModalProps) {
   const [formMember, setFormMember] = useState<TeamMember | null>(initialMember);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     setFormMember(initialMember);
@@ -51,10 +52,15 @@ export function PositionFormModal({
 
   if (!isOpen || !formMember) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (formMember) {
-      onSave(formMember);
+    if (formMember && !isSubmitting) {
+      try {
+        setIsSubmitting(true);
+        await onSave(formMember);
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -491,13 +497,18 @@ export function PositionFormModal({
               type="submit"
               variant="primary"
               size="sm"
-              disabled={pendingUploads > 0}
+              disabled={pendingUploads > 0 || isSubmitting}
               className="gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {pendingUploads > 0 ? (
+              {isSubmitting ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
-                  <span>Uploading ({pendingUploads})...</span>
+                  <span>Saving to Cloud...</span>
+                </>
+              ) : pendingUploads > 0 ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                  <span>Uploading Image...</span>
                 </>
               ) : (
                 <>
