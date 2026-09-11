@@ -84,11 +84,21 @@ export default function AdminHeroSettingsPage() {
     };
   }, []);
 
-  const saveAndBroadcast = (newSettings: HeroSettings) => {
+  const [isSaving, setIsSaving] = useState(false);
+
+  const saveAndBroadcast = async (newSettings: HeroSettings) => {
     setSettings(newSettings);
-    saveStoredHeroSettings(newSettings);
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+    setIsSaving(true);
+    try {
+      await saveStoredHeroSettings(newSettings);
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch (err: any) {
+      console.error("Cloud database save failed for hero settings:", err);
+      showNotice("Cloud sync failed: " + (err?.message || "Check connection"));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleUpdate = (field: keyof HeroSettings, value: string) => {
@@ -110,11 +120,16 @@ export default function AdminHeroSettingsPage() {
     showNotice(`Activated backdrop: "${preset.name}".`);
   };
 
-  const handleDeletePreset = (e: React.MouseEvent, presetToDelete: { name: string; url: string; category: string }) => {
+  const handleDeletePreset = async (e: React.MouseEvent, presetToDelete: { name: string; url: string; category: string }) => {
     e.stopPropagation();
     const updatedPresets = presets.filter((p) => p.url !== presetToDelete.url);
     setPresets(updatedPresets);
-    saveStoredHeroPresets(updatedPresets);
+    try {
+      await saveStoredHeroPresets(updatedPresets);
+    } catch (err: any) {
+      console.error("Failed to delete preset from cloud:", err);
+      showNotice("Cloud delete failed: " + (err?.message || "Check connection"));
+    }
 
     // If the active background was this deleted image, immediately switch to the next preset or council photo!
     if (settings.bgImageUrl === presetToDelete.url) {
@@ -135,7 +150,7 @@ export default function AdminHeroSettingsPage() {
     showNotice(`Deleted preset "${presetToDelete.name}".`);
   };
 
-  const handleAddCurrentAsPreset = () => {
+  const handleAddCurrentAsPreset = async () => {
     if (!settings.bgImageUrl) return;
     const exists = presets.some((p) => p.url === settings.bgImageUrl);
     if (exists) {
@@ -149,22 +164,35 @@ export default function AdminHeroSettingsPage() {
     };
     const updated = [newPreset, ...presets];
     setPresets(updated);
-    saveStoredHeroPresets(updated);
-    showNotice(`Added current backdrop to presets gallery.`);
+    try {
+      await saveStoredHeroPresets(updated);
+      showNotice(`Added current backdrop to presets gallery.`);
+    } catch (err: any) {
+      showNotice("Failed to save preset to cloud: " + (err?.message || "Check connection"));
+    }
   };
 
-  const handleResetPresets = () => {
+  const handleResetPresets = async () => {
     setPresets(PRESET_HERO_BG_IMAGES);
-    saveStoredHeroPresets(PRESET_HERO_BG_IMAGES);
-    showNotice("Restored default landmark presets.");
+    try {
+      await saveStoredHeroPresets(PRESET_HERO_BG_IMAGES);
+      showNotice("Restored default landmark presets.");
+    } catch (err: any) {
+      showNotice("Failed to reset presets in cloud: " + (err?.message || "Check connection"));
+    }
   };
 
-  const handleResetAll = () => {
+  const handleResetAll = async () => {
     if (confirm("Reset hero background and texts to default values?")) {
       setSettings(DEFAULT_HERO_SETTINGS);
       localStorage.removeItem("src_hero_settings");
       window.dispatchEvent(new CustomEvent("src_hero_updated", { detail: DEFAULT_HERO_SETTINGS }));
-      showNotice("Hero settings reset to defaults.");
+      try {
+        await saveStoredHeroSettings(DEFAULT_HERO_SETTINGS);
+        showNotice("Hero settings reset to defaults.");
+      } catch (err: any) {
+        showNotice("Failed to reset cloud settings: " + (err?.message || "Check connection"));
+      }
     }
   };
 
@@ -212,7 +240,14 @@ export default function AdminHeroSettingsPage() {
         </div>
       </div>
 
-      {notice && (
+      {isSaving && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold flex items-center gap-2 shadow-xs animate-in fade-in duration-200">
+          <Loader2 className="w-4 h-4 animate-spin text-amber-600 shrink-0" />
+          <span>Syncing hero configuration with cloud database...</span>
+        </div>
+      )}
+
+      {notice && !isSaving && (
         <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2 shadow-xs animate-in fade-in duration-300">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>{notice}</span>

@@ -72,7 +72,7 @@ export function getStoredListings(): ListingItem[] {
   }
 }
 
-export function saveStoredListings(listings: ListingItem[]): void {
+export async function saveStoredListings(listings: ListingItem[]): Promise<void> {
   const compacted = compactListingsDataset(listings);
 
   // 1. Safe localStorage write
@@ -94,11 +94,19 @@ export function saveStoredListings(listings: ListingItem[]): void {
   }
 
   // 3. Instant Cloud Dual-Write Invariant: Direct Firestore + Atomic Offline Queue
-  saveSiteContentToFirestore("listings", compacted).catch((cloudErr) => {
+  let cloudWriteError: any = null;
+  try {
+    await saveSiteContentToFirestore("listings", compacted);
+  } catch (cloudErr) {
     console.warn("Firestore direct write for listings failed, enqueuing:", cloudErr);
-  });
+    cloudWriteError = cloudErr;
+  }
 
   enqueueCloudWrite("listings", compacted, "Listings Update");
+
+  if (cloudWriteError) {
+    throw cloudWriteError;
+  }
 }
 
 export async function syncListingsFromFirestore(): Promise<ListingItem[] | null> {

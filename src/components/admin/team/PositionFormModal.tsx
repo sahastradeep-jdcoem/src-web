@@ -7,7 +7,8 @@ import {
   Hash, 
   Trash2, 
   Save, 
-  Loader2 
+  Loader2,
+  AlertCircle 
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -45,9 +46,11 @@ export function PositionFormModal({
 }: PositionFormModalProps) {
   const [formMember, setFormMember] = useState<TeamMember | null>(initialMember);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     setFormMember(initialMember);
+    setFormError(null);
   }, [initialMember]);
 
   if (!isOpen || !formMember) return null;
@@ -57,7 +60,10 @@ export function PositionFormModal({
     if (formMember && !isSubmitting) {
       try {
         setIsSubmitting(true);
+        setFormError(null);
         await onSave(formMember);
+      } catch (err: any) {
+        setFormError(err?.message || "Failed to save changes to cloud database. Please check your internet connection and try again.");
       } finally {
         setIsSubmitting(false);
       }
@@ -89,6 +95,13 @@ export function PositionFormModal({
       maxWidth="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-5 text-xs text-slate-900">
+        
+        {formError && (
+          <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2.5 shadow-xs">
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+            <span className="font-medium leading-relaxed">{formError}</span>
+          </div>
+        )}
         
         {/* Pillars Form (When in 4 Pillars of Strength tab) */}
         {activeTab === "pillars" && (

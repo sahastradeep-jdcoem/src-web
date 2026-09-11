@@ -40,6 +40,9 @@ export function ImageUploadDropzone({
 }: ImageUploadDropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "cloud_synced" | "upload_failed">(
+    previewUrl && previewUrl.startsWith("http") ? "cloud_synced" : previewUrl && previewUrl.startsWith("data:") ? "upload_failed" : "idle"
+  );
   const [compressionStats, setCompressionStats] = useState<CompressionResult | null>(null);
   const [preview, setPreview] = useState<string>(previewUrl || "");
   const [inputMode, setInputMode] = useState<"upload" | "url">("upload");
@@ -50,12 +53,21 @@ export function ImageUploadDropzone({
   const [originalFileName, setOriginalFileName] = useState<string>("image.webp");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const localDataUrlRef = useRef<string | null>(null);
+  const lastProcessedFileRef = useRef<File | null>(null);
+  const lastCroppedDataUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     setPreview(previewUrl || "");
     setManualUrl(previewUrl || "");
     if (!previewUrl) {
       localDataUrlRef.current = null;
+      lastProcessedFileRef.current = null;
+      lastCroppedDataUrlRef.current = null;
+      setUploadStatus("idle");
+    } else if (previewUrl.startsWith("http")) {
+      setUploadStatus("cloud_synced");
+    } else if (previewUrl.startsWith("data:")) {
+      setUploadStatus("upload_failed");
     }
   }, [previewUrl]);
 
@@ -91,8 +103,11 @@ export function ImageUploadDropzone({
       return;
     }
     setError(null);
+    lastProcessedFileRef.current = file;
+    lastCroppedDataUrlRef.current = null;
     setOriginalFileName(file.name);
     setIsProcessing(true);
+    setUploadStatus("uploading");
     onUploadStateChange?.(true);
 
     try {
@@ -110,29 +125,37 @@ export function ImageUploadDropzone({
       localDataUrlRef.current = immediateOptimized.dataUrl;
       setPreview(immediateOptimized.dataUrl);
       setManualUrl(immediateOptimized.dataUrl);
-      if (onUrlChange) {
-        onUrlChange(immediateOptimized.dataUrl);
-      }
 
-      // 2. Upload file to Firebase Cloud Storage in background
+      // 2. Upload file to Firebase Cloud Storage with honest verification
       const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
       const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}`;
 
       try {
-        const cloudUrl = await uploadImageToStorage(file, finalStoragePath);
+        const cloudUrl = await uploadImageToStorage(file, finalStoragePath, { throwOnError: true });
         if (cloudUrl && cloudUrl.startsWith("http")) {
           setPreview(cloudUrl);
           setManualUrl(cloudUrl);
+          setUploadStatus("cloud_synced");
+          setError(null);
           if (onUrlChange) {
             onUrlChange(cloudUrl);
           }
+        } else {
+          throw new Error("Storage service did not return an accessible cloud URL.");
         }
-      } catch (uploadErr) {
-        console.warn("Cloud storage upload notice, using optimized local WebP fallback:", uploadErr);
+      } catch (uploadErr: any) {
+        console.warn("Cloud storage upload notice:", uploadErr);
+        setUploadStatus("upload_failed");
+        setError(`⚠️ Cloud Upload Failed: Unable to store image in cloud storage (${uploadErr?.message || "network error"}). You can retry the upload.`);
+        // Pass local optimized WebP so work is not lost, but keep honest failed status in UI
+        if (onUrlChange) {
+          onUrlChange(immediateOptimized.dataUrl);
+        }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Image direct processing error", err);
-      setError("Failed to process image.");
+      setUploadStatus("upload_failed");
+      setError(err?.message || "Failed to process image.");
     } finally {
       setIsProcessing(false);
       onUploadStateChange?.(false);
@@ -160,43 +183,88 @@ export function ImageUploadDropzone({
 
   const handleCropComplete = async (croppedDataUrl: string) => {
     setIsProcessing(true);
+    setUploadStatus("uploading");
     onUploadStateChange?.(true);
+    setError(null);
+    lastCroppedDataUrlRef.current = croppedDataUrl;
+
     try {
-      // 1. Immediately sync cropped image to state so user can save anytime
+      // 1. Immediately sync cropped image to state
       localDataUrlRef.current = croppedDataUrl;
       setPreview(croppedDataUrl);
       setManualUrl(croppedDataUrl);
-      if (onUrlChange) {
-        onUrlChange(croppedDataUrl);
-      }
 
-      // 2. Upload crop to Firebase Storage in background
+      // 2. Upload crop to Firebase Storage with honest verification
       const cleanName = originalFileName.replace(/[^a-zA-Z0-9.-]/g, "_").replace(/\.[^/.]+$/, "");
       const isPng = croppedDataUrl.includes("image/png");
       const ext = isPng ? ".png" : ".webp";
       const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}${ext}`;
 
       try {
-        const cloudUrl = await uploadImageToStorage(croppedDataUrl, finalStoragePath);
+        const cloudUrl = await uploadImageToStorage(croppedDataUrl, finalStoragePath, { throwOnError: true });
         if (cloudUrl && cloudUrl.startsWith("http")) {
           setPreview(cloudUrl);
           setManualUrl(cloudUrl);
+          setUploadStatus("cloud_synced");
+          setError(null);
           if (onUrlChange) {
             onUrlChange(cloudUrl);
           }
+        } else {
+          throw new Error("Storage service did not return an accessible cloud URL.");
         }
-      } catch (uploadErr) {
-        console.warn("Cloud storage upload notice for crop, using optimized local WebP fallback:", uploadErr);
+      } catch (uploadErr: any) {
+        console.warn("Cloud storage upload notice for crop:", uploadErr);
+        setUploadStatus("upload_failed");
+        setError(`⚠️ Cloud Upload Failed: Unable to store cropped image in cloud storage (${uploadErr?.message || "network error"}). Please retry.`);
+        if (onUrlChange) {
+          onUrlChange(croppedDataUrl);
+        }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Image crop and storage error", err);
-      setError("Failed to save cropped image.");
+      setUploadStatus("upload_failed");
+      setError(err?.message || "Failed to save cropped image.");
     } finally {
       setIsProcessing(false);
       onUploadStateChange?.(false);
       setRawImageToCrop(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const handleRetryUpload = async (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (lastProcessedFileRef.current) {
+      await processFileDirectly(lastProcessedFileRef.current);
+    } else if (lastCroppedDataUrlRef.current) {
+      await handleCropComplete(lastCroppedDataUrlRef.current);
+    } else if (localDataUrlRef.current) {
+      setIsProcessing(true);
+      setUploadStatus("uploading");
+      onUploadStateChange?.(true);
+      setError(null);
+      try {
+        const cleanName = originalFileName.replace(/[^a-zA-Z0-9.-]/g, "_").replace(/\.[^/.]+$/, "");
+        const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}.webp`;
+        const cloudUrl = await uploadImageToStorage(localDataUrlRef.current, finalStoragePath, { throwOnError: true });
+        if (cloudUrl && cloudUrl.startsWith("http")) {
+          setPreview(cloudUrl);
+          setManualUrl(cloudUrl);
+          setUploadStatus("cloud_synced");
+          setError(null);
+          if (onUrlChange) onUrlChange(cloudUrl);
+        } else {
+          throw new Error("Storage service did not return an accessible cloud URL.");
+        }
+      } catch (err: any) {
+        setUploadStatus("upload_failed");
+        setError(`⚠️ Cloud Upload Failed: Unable to store image in cloud (${err?.message || "network error"}). Please retry.`);
+      } finally {
+        setIsProcessing(false);
+        onUploadStateChange?.(false);
       }
     }
   };
@@ -389,9 +457,33 @@ export function ImageUploadDropzone({
                 </button>
               </div>
 
-              <div className="absolute bottom-2.5 left-2.5 px-2 py-0.5 rounded-full bg-slate-900/85 backdrop-blur-md text-white text-[10px] font-semibold flex items-center gap-1 border border-white/10 shadow-sm">
-                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                <span>{compressionStats ? "2.5K Retina" : "Original Quality"}</span>
+              <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 z-10">
+                {uploadStatus === "uploading" || isProcessing ? (
+                  <div className="px-2.5 py-1 rounded-full bg-slate-900/90 backdrop-blur-md text-amber-300 text-[10px] font-bold flex items-center gap-1.5 border border-amber-400/30 shadow-md">
+                    <RefreshCw className="w-3 h-3 animate-spin text-amber-400" />
+                    <span>Uploading to Cloud...</span>
+                  </div>
+                ) : uploadStatus === "cloud_synced" || (preview && preview.startsWith("http")) ? (
+                  <div className="px-2.5 py-1 rounded-full bg-slate-900/90 backdrop-blur-md text-emerald-300 text-[10px] font-bold flex items-center gap-1.5 border border-emerald-400/30 shadow-md">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                    <span>Verified Cloud Storage</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <div className="px-2.5 py-1 rounded-full bg-rose-950/90 backdrop-blur-md text-rose-300 text-[10px] font-bold flex items-center gap-1.5 border border-rose-400/30 shadow-md">
+                      <AlertCircle className="w-3 h-3 text-rose-400" />
+                      <span>Upload Failed (Local Draft)</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRetryUpload}
+                      className="px-2.5 py-1 rounded-full bg-[#E78023] hover:bg-[#d06f19] text-white text-[10px] font-bold transition-all flex items-center gap-1 shadow-md cursor-pointer border border-white/20"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>Retry Upload</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ) : (
@@ -418,9 +510,22 @@ export function ImageUploadDropzone({
       )}
 
       {error && (
-        <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{error}</span>
+        <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+          {(uploadStatus === "upload_failed" || localDataUrlRef.current) && (
+            <button
+              type="button"
+              onClick={handleRetryUpload}
+              disabled={isProcessing}
+              className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] shrink-0 transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3 h-3 ${isProcessing ? "animate-spin" : ""}`} />
+              <span>Retry</span>
+            </button>
+          )}
         </div>
       )}
 

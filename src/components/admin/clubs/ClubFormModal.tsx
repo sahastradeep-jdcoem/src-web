@@ -6,7 +6,8 @@ import {
   Sparkles, 
   Eye, 
   Save, 
-  Loader2 
+  Loader2,
+  AlertCircle 
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -21,7 +22,7 @@ interface ClubFormModalProps {
   isCreatingNew: boolean;
   pendingUploads: number;
   onUploadStateChange: (uploading: boolean) => void;
-  onSave: (club: ClubItem) => void;
+  onSave: (club: ClubItem) => void | Promise<void>;
 }
 
 export function ClubFormModal({
@@ -35,18 +36,29 @@ export function ClubFormModal({
 }: ClubFormModalProps) {
   const [formClub, setFormClub] = useState<ClubItem | null>(initialClub);
   const [modalTab, setModalTab] = useState<"identity" | "about" | "media">("identity");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     setFormClub(initialClub);
     setModalTab("identity");
+    setFormError(null);
   }, [initialClub]);
 
   if (!isOpen || !formClub) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (formClub) {
-      onSave(formClub);
+    if (formClub && !isSubmitting) {
+      try {
+        setIsSubmitting(true);
+        setFormError(null);
+        await onSave(formClub);
+      } catch (err: any) {
+        setFormError(err?.message || "Failed to save club to cloud database. Please verify connection and try again.");
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -60,6 +72,13 @@ export function ClubFormModal({
     >
       <form onSubmit={handleSubmit} className="flex flex-col h-full text-xs text-slate-900">
         
+        {formError && (
+          <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2.5 mb-4 shadow-xs">
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+            <span className="font-medium leading-relaxed">{formError}</span>
+          </div>
+        )}
+
         {/* Modal Tabs Header */}
         <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-2xl border border-slate-200 mb-5 overflow-x-auto shrink-0">
           <button
@@ -378,10 +397,15 @@ export function ClubFormModal({
               type="submit"
               variant="primary"
               size="sm"
-              disabled={pendingUploads > 0}
+              disabled={pendingUploads > 0 || isSubmitting}
               className="gap-2 cursor-pointer shadow-md shadow-[#E78023]/20 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {pendingUploads > 0 ? (
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Saving to Cloud...</span>
+                </>
+              ) : pendingUploads > 0 ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-white" />
                   <span>Uploading ({pendingUploads})...</span>

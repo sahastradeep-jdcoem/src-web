@@ -148,7 +148,7 @@ interface EventFormModalProps {
   eventsList: EventItem[];
   clubsList: ClubItem[];
   editingEventId?: string;
-  onSubmit: (data: EventFormData) => void;
+  onSubmit: (data: EventFormData) => void | Promise<void>;
   pendingUploads: number;
   onUploadStateChange: (uploading: boolean) => void;
 }
@@ -211,6 +211,7 @@ export function EventFormModal({
 }: EventFormModalProps) {
   const [activeSection, setActiveSection] = useState<EventModalSection>("details");
   const [formError, setFormError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const defaultRawDate = new Date().toISOString().split("T")[0];
 
@@ -359,15 +360,24 @@ export function EventFormModal({
   const prevSection = currentSectionIndex > 0 ? SECTIONS[currentSectionIndex - 1] : null;
   const nextSection = currentSectionIndex < SECTIONS.length - 1 ? SECTIONS[currentSectionIndex + 1] : null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) {
       setActiveSection("details");
       setFormError("Please enter an Event Title.");
       return;
     }
-    setFormError(null);
-    onSubmit(form);
+    if (isSubmitting) return;
+
+    try {
+      setIsSubmitting(true);
+      setFormError(null);
+      await onSubmit(form);
+    } catch (err: any) {
+      setFormError(err?.message || "Failed to save event to cloud database. Please verify connection and try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const getSectionBadge = (id: EventModalSection) => {
@@ -1522,10 +1532,15 @@ export function EventFormModal({
             type="submit"
             variant="primary"
             size="sm"
-            disabled={pendingUploads > 0}
+            disabled={pendingUploads > 0 || isSubmitting}
             className="w-full sm:w-auto order-1 sm:order-3 disabled:opacity-50 disabled:cursor-not-allowed gap-2"
           >
-            {pendingUploads > 0 ? (
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
+                <span>Saving to Cloud Database...</span>
+              </>
+            ) : pendingUploads > 0 ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin text-white" />
                 <span>Uploading ({pendingUploads})...</span>

@@ -177,14 +177,15 @@ export default function AdminClubsPage() {
         updateTenureRoster(selectedTenure.id, { clubs: updated });
       } else if (selectedTenure) {
         // DRAFT SESSION: Strictly isolated to draft tenure! NEVER touch live stores!
-        saveStoredDraftClubs(selectedTenure.id, updated);
+        await saveStoredDraftClubs(selectedTenure.id, updated);
         updateTenureRoster(selectedTenure.id, { clubs: updated });
       }
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
     } catch (error) {
       console.error("Failed to save clubs:", error);
-      alert("Failed to save changes to cloud. Please try again.");
+      alert("⚠️ Cloud Save Error: Could not save changes to cloud database. Please check your internet connection and try again.");
+      throw error;
     } finally {
       setIsSavingList(false);
     }
@@ -247,7 +248,7 @@ export default function AdminClubsPage() {
     });
   };
 
-  const handleSaveClub = (clubOverride?: ClubItem, e?: React.FormEvent) => {
+  const handleSaveClub = async (clubOverride?: ClubItem, e?: React.FormEvent) => {
     if (e?.preventDefault) e.preventDefault();
     const club = clubOverride || editingClub;
     if (!club) return;
@@ -280,9 +281,13 @@ export default function AdminClubsPage() {
       updated = clubs.map((c) => (c.id === clubToSave.id ? clubToSave : c));
     }
 
-    saveList(updated);
-    setEditingClub(null);
-    setIsCreatingNew(false);
+    try {
+      await saveList(updated);
+      setEditingClub(null);
+      setIsCreatingNew(false);
+    } catch (err) {
+      throw err;
+    }
   };
 
   const handleDeleteClub = (id: string, name: string) => {

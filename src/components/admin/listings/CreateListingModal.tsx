@@ -343,6 +343,7 @@ export function CreateListingModal({
   const [activeSection, setActiveSection] = useState<ListingModalSection>("details");
   const [formError, setFormError] = useState<string | null>(null);
   const [pendingUploads, setPendingUploads] = useState<number>(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // 1. Details Section State
   const [title, setTitle] = useState("");
@@ -521,7 +522,7 @@ export function CreateListingModal({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPillarOption) return;
 
@@ -531,19 +532,113 @@ export function CreateListingModal({
       return;
     }
 
-    // EDIT MODE: Update existing item in place
-    if (mode === "edit" && initialData) {
-      const baseSlug = title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)/g, "");
-      const oldSuffix = initialData.slug.split("-").pop() || Date.now().toString().slice(-4);
-      const newSlug = initialData.title !== title.trim() ? `${baseSlug}-${oldSuffix}` : initialData.slug;
+    try {
+      setIsSubmitting(true);
+      setFormError(null);
 
-      const updatedListing: ListingItem = {
-        ...initialData,
+      // EDIT MODE: Update existing item in place
+      if (mode === "edit" && initialData) {
+        const baseSlug = title
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/(^-|-$)/g, "");
+        const oldSuffix = initialData.slug.split("-").pop() || Date.now().toString().slice(-4);
+        const newSlug = initialData.title !== title.trim() ? `${baseSlug}-${oldSuffix}` : initialData.slug;
+
+        const updatedListing: ListingItem = {
+          ...initialData,
+          title: title.trim(),
+          slug: newSlug,
+          targetAudience,
+          isInterCollege: targetAudience === "inter_college",
+          summary: summary.trim() || title.trim(),
+          description: description.trim() || summary.trim() || title.trim(),
+          organizer: organizer.trim() || "SRC JDCOEM",
+          coverImage: coverImage || PRESET_COVERS[0].url,
+          deadline: deadline || undefined,
+          allowResponseEditing: selectedPillarOption.type === "poll" ? false : allowResponseEditing,
+          requiresApproval: selectedPillarOption.type === "poll" ? false : requiresApproval,
+          customQuestions: customQuestions.length > 0 ? customQuestions : undefined,
+        };
+
+        if (selectedPillarOption.type === "poll") {
+          const existingOpts = initialData.pollConfig?.options || [];
+          const isQuestionChanged = initialData.title !== title.trim();
+
+          const newOptionTexts = pollOptions.filter((o) => o.trim());
+          let optionsChanged = false;
+          if (newOptionTexts.length !== existingOpts.length) {
+            optionsChanged = true;
+          } else {
+            for (let i = 0; i < newOptionTexts.length; i++) {
+              if (newOptionTexts[i].trim().toLowerCase() !== (existingOpts[i]?.text || "").trim().toLowerCase()) {
+                optionsChanged = true;
+                break;
+              }
+            }
+          }
+
+          const shouldResetVotes = isQuestionChanged || optionsChanged;
+
+          updatedListing.pollConfig = {
+            ...initialData.pollConfig,
+            options: newOptionTexts.map((text, idx) => {
+              const prev = existingOpts[idx];
+              return {
+                id: shouldResetVotes ? `opt-${Date.now().toString().slice(-4)}-${idx + 1}` : (prev?.id || `opt-${idx + 1}`),
+                text: text.trim(),
+                votes: shouldResetVotes ? 0 : (prev?.votes || 0),
+              };
+            }),
+            isAnonymous: pollAnonymous,
+            allowMultipleChoices: pollMultipleChoices,
+            totalVotes: shouldResetVotes ? 0 : (initialData.pollConfig?.totalVotes || 0),
+          };
+        } else if (selectedPillarOption.type === "opportunity") {
+          updatedListing.opportunityConfig = {
+            opportunityType: oppRoleType,
+            stipend: oppStipend.trim() || undefined,
+            duration: oppDuration.trim() || undefined,
+            location: oppLocation,
+            openings: Number(oppOpenings) || 1,
+            perks: oppPerks ? oppPerks.split("\n").filter((p) => p.trim()) : undefined,
+          };
+        } else if (selectedPillarOption.type === "submission") {
+          updatedListing.submissionConfig = {
+            allowedFileTypes: subAllowedTypes,
+            maxFileSizeMB: Number(subMaxMb) || 20,
+            evaluationCriteria: subRules ? subRules.split("\n").filter((r) => r.trim()) : undefined,
+          };
+        } else if (selectedPillarOption.type === "issue") {
+          updatedListing.issueConfig = {
+            targetDepartment: issueDept.trim() || "Central Campus Administration",
+            isConfidential: issueConfidential,
+            allowAnonymous: issueAnonymous,
+            priorityLevel: issuePriority,
+          };
+        }
+
+        const current = getStoredListings();
+        const updated = current.map((item) => (item.id === initialData.id ? updatedListing : item));
+        await saveStoredListings(updated);
+
+        if (onSuccess) onSuccess(updatedListing);
+        onClose();
+        return;
+      }
+
+      // CREATE MODE: Create fresh listing item
+      const baseSlug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+      const uniqueSlug = `${baseSlug}-${Date.now().toString().slice(-4)}`;
+
+      const newListing: ListingItem = {
+        id: `list-${Date.now()}`,
+        slug: uniqueSlug,
         title: title.trim(),
-        slug: newSlug,
+        pillar: selectedPillarOption.pillar,
+        type: selectedPillarOption.type,
+        status: "active",
+        isLive: true,
         targetAudience,
         isInterCollege: targetAudience === "inter_college",
         summary: summary.trim() || title.trim(),
@@ -556,41 +651,20 @@ export function CreateListingModal({
         customQuestions: customQuestions.length > 0 ? customQuestions : undefined,
       };
 
+      // Attach Subtype Configs
       if (selectedPillarOption.type === "poll") {
-        const existingOpts = initialData.pollConfig?.options || [];
-        const isQuestionChanged = initialData.title !== title.trim();
-
-        const newOptionTexts = pollOptions.filter((o) => o.trim());
-        let optionsChanged = false;
-        if (newOptionTexts.length !== existingOpts.length) {
-          optionsChanged = true;
-        } else {
-          for (let i = 0; i < newOptionTexts.length; i++) {
-            if (newOptionTexts[i].trim().toLowerCase() !== (existingOpts[i]?.text || "").trim().toLowerCase()) {
-              optionsChanged = true;
-              break;
-            }
-          }
-        }
-
-        const shouldResetVotes = isQuestionChanged || optionsChanged;
-
-        updatedListing.pollConfig = {
-          ...initialData.pollConfig,
-          options: newOptionTexts.map((text, idx) => {
-            const prev = existingOpts[idx];
-            return {
-              id: shouldResetVotes ? `opt-${Date.now().toString().slice(-4)}-${idx + 1}` : (prev?.id || `opt-${idx + 1}`),
-              text: text.trim(),
-              votes: shouldResetVotes ? 0 : (prev?.votes || 0),
-            };
-          }),
+        newListing.pollConfig = {
+          options: pollOptions.filter((o) => o.trim()).map((text, idx) => ({
+            id: `opt-${idx + 1}`,
+            text: text.trim(),
+            votes: 0,
+          })),
           isAnonymous: pollAnonymous,
           allowMultipleChoices: pollMultipleChoices,
-          totalVotes: shouldResetVotes ? 0 : (initialData.pollConfig?.totalVotes || 0),
+          totalVotes: 0,
         };
       } else if (selectedPillarOption.type === "opportunity") {
-        updatedListing.opportunityConfig = {
+        newListing.opportunityConfig = {
           opportunityType: oppRoleType,
           stipend: oppStipend.trim() || undefined,
           duration: oppDuration.trim() || undefined,
@@ -599,13 +673,13 @@ export function CreateListingModal({
           perks: oppPerks ? oppPerks.split("\n").filter((p) => p.trim()) : undefined,
         };
       } else if (selectedPillarOption.type === "submission") {
-        updatedListing.submissionConfig = {
+        newListing.submissionConfig = {
           allowedFileTypes: subAllowedTypes,
           maxFileSizeMB: Number(subMaxMb) || 20,
           evaluationCriteria: subRules ? subRules.split("\n").filter((r) => r.trim()) : undefined,
         };
       } else if (selectedPillarOption.type === "issue") {
-        updatedListing.issueConfig = {
+        newListing.issueConfig = {
           targetDepartment: issueDept.trim() || "Central Campus Administration",
           isConfidential: issueConfidential,
           allowAnonymous: issueAnonymous,
@@ -614,80 +688,17 @@ export function CreateListingModal({
       }
 
       const current = getStoredListings();
-      const updated = current.map((item) => (item.id === initialData.id ? updatedListing : item));
-      saveStoredListings(updated);
+      const updated = [newListing, ...current];
+      await saveStoredListings(updated);
 
-      if (onSuccess) onSuccess(updatedListing);
+      if (onSuccess) onSuccess(newListing);
       onClose();
-      return;
+    } catch (err: any) {
+      console.error("Failed to save listing to cloud:", err);
+      setFormError(err?.message || "Cloud Database Save Failed. Please check your internet connection and try again.");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    // CREATE MODE: Create fresh listing item
-    const baseSlug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-    const uniqueSlug = `${baseSlug}-${Date.now().toString().slice(-4)}`;
-
-    const newListing: ListingItem = {
-      id: `list-${Date.now()}`,
-      slug: uniqueSlug,
-      title: title.trim(),
-      pillar: selectedPillarOption.pillar,
-      type: selectedPillarOption.type,
-      status: "active",
-      isLive: true,
-      targetAudience,
-      isInterCollege: targetAudience === "inter_college",
-      summary: summary.trim() || title.trim(),
-      description: description.trim() || summary.trim() || title.trim(),
-      organizer: organizer.trim() || "SRC JDCOEM",
-      coverImage: coverImage || PRESET_COVERS[0].url,
-      deadline: deadline || undefined,
-      allowResponseEditing: selectedPillarOption.type === "poll" ? false : allowResponseEditing,
-      requiresApproval: selectedPillarOption.type === "poll" ? false : requiresApproval,
-      customQuestions: customQuestions.length > 0 ? customQuestions : undefined,
-    };
-
-    // Attach Subtype Configs
-    if (selectedPillarOption.type === "poll") {
-      newListing.pollConfig = {
-        options: pollOptions.filter((o) => o.trim()).map((text, idx) => ({
-          id: `opt-${idx + 1}`,
-          text: text.trim(),
-          votes: 0,
-        })),
-        isAnonymous: pollAnonymous,
-        allowMultipleChoices: pollMultipleChoices,
-        totalVotes: 0,
-      };
-    } else if (selectedPillarOption.type === "opportunity") {
-      newListing.opportunityConfig = {
-        opportunityType: oppRoleType,
-        stipend: oppStipend.trim() || undefined,
-        duration: oppDuration.trim() || undefined,
-        location: oppLocation,
-        openings: Number(oppOpenings) || 1,
-        perks: oppPerks ? oppPerks.split("\n").filter((p) => p.trim()) : undefined,
-      };
-    } else if (selectedPillarOption.type === "submission") {
-      newListing.submissionConfig = {
-        allowedFileTypes: subAllowedTypes,
-        maxFileSizeMB: Number(subMaxMb) || 20,
-        evaluationCriteria: subRules ? subRules.split("\n").filter((r) => r.trim()) : undefined,
-      };
-    } else if (selectedPillarOption.type === "issue") {
-      newListing.issueConfig = {
-        targetDepartment: issueDept.trim() || "Central Campus Administration",
-        isConfidential: issueConfidential,
-        allowAnonymous: issueAnonymous,
-        priorityLevel: issuePriority,
-      };
-    }
-
-    const current = getStoredListings();
-    const updated = [newListing, ...current];
-    saveStoredListings(updated);
-
-    if (onSuccess) onSuccess(newListing);
-    onClose();
   };
 
   return (
@@ -1546,10 +1557,15 @@ export function CreateListingModal({
               {/* Primary Publish Button */}
               <button
                 type="submit"
-                disabled={pendingUploads > 0}
+                disabled={pendingUploads > 0 || isSubmitting}
                 className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer order-1 sm:order-3"
               >
-                {pendingUploads > 0 ? (
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Saving to Cloud Database...</span>
+                  </>
+                ) : pendingUploads > 0 ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin text-white" />
                     <span>Uploading Image ({pendingUploads})...</span>

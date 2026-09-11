@@ -16,7 +16,9 @@ import {
   ArrowDown, 
   Eye, 
   GraduationCap,
-  Sparkles
+  Sparkles,
+  Loader2,
+  AlertCircle
 } from "lucide-react";
 import { 
   getStoredDepartments, 
@@ -36,7 +38,9 @@ export default function AdminDepartmentsPage() {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [isSaved, setIsSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setDepartments(getStoredDepartments());
@@ -61,64 +65,81 @@ export default function AdminDepartmentsPage() {
     };
   }, []);
 
-  const saveList = (updated: string[]) => {
+  const saveList = async (updated: string[]) => {
     setDepartments(updated);
-    saveStoredDepartments(updated);
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+    setIsSaving(true);
+    setErrorMessage(null);
+    try {
+      await saveStoredDepartments(updated);
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch (err: any) {
+      console.error("Cloud database save failed for departments:", err);
+      setErrorMessage(err?.message || "Cloud Database Save Failed. Please check your internet connection.");
+      throw err;
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleAddDepartment = (e: React.FormEvent) => {
+  const handleAddDepartment = async (e: React.FormEvent) => {
     e.preventDefault();
     const clean = newDeptName.trim();
     if (!clean) return;
 
     if (departments.some((d) => d.toLowerCase() === clean.toLowerCase())) {
-      alert("A department with this name already exists.");
+      setErrorMessage("A department with this name already exists.");
       return;
     }
 
     const updated = [...departments, clean];
-    saveList(updated);
-    setNewDeptName("");
+    try {
+      await saveList(updated);
+      setNewDeptName("");
+    } catch {}
   };
 
   const handleStartEdit = (index: number, currentName: string) => {
     setEditingIndex(index);
     setEditingValue(currentName);
+    setErrorMessage(null);
   };
 
-  const handleSaveEdit = (index: number) => {
+  const handleSaveEdit = async (index: number) => {
     const clean = editingValue.trim();
     if (!clean) return;
 
     const oldName = departments[index];
     const updated = [...departments];
     updated[index] = clean;
-    saveList(updated);
-    setEditingIndex(null);
-    setEditingValue("");
+    try {
+      await saveList(updated);
+      setEditingIndex(null);
+      setEditingValue("");
 
-    if (oldName && oldName.toLowerCase() !== clean.toLowerCase()) {
-      cascadeDepartmentRename(oldName, clean).then((stats) => {
-        if (stats.usersCount > 0 || stats.responsesCount > 0 || stats.councilCount > 0 || stats.regsCount > 0) {
-          setNoticeMessage(
-            `Switched ${stats.usersCount} student profile(s), ${stats.regsCount || 0} registration(s), ${stats.responsesCount} response(s), and ${stats.councilCount} council record(s) from "${oldName}" to "${clean}".`
-          );
-          setTimeout(() => setNoticeMessage(null), 6000);
-        }
-      });
-    }
+      if (oldName && oldName.toLowerCase() !== clean.toLowerCase()) {
+        cascadeDepartmentRename(oldName, clean).then((stats) => {
+          if (stats.usersCount > 0 || stats.responsesCount > 0 || stats.councilCount > 0 || stats.regsCount > 0) {
+            setNoticeMessage(
+              `Switched ${stats.usersCount} student profile(s), ${stats.regsCount || 0} registration(s), ${stats.responsesCount} response(s), and ${stats.councilCount} council record(s) from "${oldName}" to "${clean}".`
+            );
+            setTimeout(() => setNoticeMessage(null), 6000);
+          }
+        });
+      }
+    } catch {}
   };
 
-  const handleDeleteDepartment = (index: number, name: string) => {
+  const handleDeleteDepartment = async (index: number, name: string) => {
     if (confirm(`Are you sure you want to discontinue / delete "${name}"?`)) {
       const updated = departments.filter((_, i) => i !== index);
-      saveList(updated);
+      try {
+        await saveList(updated);
+      } catch {}
     }
   };
 
-  const handleMove = (index: number, direction: "up" | "down") => {
+  const handleMove = async (index: number, direction: "up" | "down") => {
     const targetIndex = direction === "up" ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= departments.length) return;
 
@@ -126,15 +147,25 @@ export default function AdminDepartmentsPage() {
     const temp = updated[index];
     updated[index] = updated[targetIndex];
     updated[targetIndex] = temp;
-    saveList(updated);
+    try {
+      await saveList(updated);
+    } catch {}
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     if (confirm("Reset departments to official JDCOEM roster (15 departments)?")) {
       const res = resetStoredDepartments();
       setDepartments(res);
-      setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 3000);
+      setIsSaving(true);
+      try {
+        await saveStoredDepartments(res);
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 3000);
+      } catch (err: any) {
+        setErrorMessage("Failed to reset departments in cloud: " + (err?.message || "Check connection"));
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
@@ -181,7 +212,26 @@ export default function AdminDepartmentsPage() {
         </div>
       </div>
 
-      {isSaved && (
+      {isSaving && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold flex items-center gap-2 shadow-xs animate-in fade-in duration-200">
+          <Loader2 className="w-4 h-4 animate-spin text-amber-600 shrink-0" />
+          <span>Syncing department changes with Cloud Database...</span>
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center justify-between shadow-xs animate-in fade-in duration-300">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+          <button onClick={() => setErrorMessage(null)} className="text-[11px] font-bold underline cursor-pointer">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {isSaved && !isSaving && (
         <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between shadow-xs animate-in fade-in duration-300">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
@@ -232,10 +282,20 @@ export default function AdminDepartmentsPage() {
             type="submit"
             variant="primary"
             size="sm"
-            className="gap-1.5 cursor-pointer shadow-xs whitespace-nowrap"
+            disabled={isSaving}
+            className="gap-1.5 cursor-pointer shadow-xs whitespace-nowrap disabled:opacity-50"
           >
-            <Plus className="w-4 h-4" />
-            <span>Add Department</span>
+            {isSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
+                <span>Saving...</span>
+              </>
+            ) : (
+              <>
+                <Plus className="w-4 h-4" />
+                <span>Add Department</span>
+              </>
+            )}
           </Button>
         </form>
       </div>

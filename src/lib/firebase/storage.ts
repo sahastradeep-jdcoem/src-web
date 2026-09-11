@@ -12,16 +12,22 @@ const UPLOAD_TIMEOUT_MS = 8000; // 8s safe timeout so UI is always responsive
  */
 export async function uploadImageToStorage(
   fileOrDataUrl: File | string,
-  storagePath: string
+  storagePath: string,
+  options?: { throwOnError?: boolean }
 ): Promise<string> {
   // If user provided a remote URL already (like unsplash or external CDN), return as-is
   if (typeof fileOrDataUrl === "string" && fileOrDataUrl.startsWith("http")) {
     return fileOrDataUrl;
   }
 
-  // Attempt Firebase Cloud Storage upload with pristine fidelity
-  try {
-    if (storage && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+  const throwOnError = options?.throwOnError ?? true;
+
+  if (!storage || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    const msg = "Firebase Cloud Storage is not configured on this client.";
+    if (throwOnError) throw new Error(msg);
+    console.warn("Storage upload notice:", msg);
+  } else {
+    try {
       const storageRef = ref(storage, storagePath);
 
       const uploadTask = (async () => {
@@ -42,19 +48,26 @@ export async function uploadImageToStorage(
       })();
 
       const timeoutTask = new Promise<string>((_, reject) => {
-        setTimeout(() => reject(new Error("Storage upload timed out")), UPLOAD_TIMEOUT_MS);
+        setTimeout(
+          () => reject(new Error("Storage upload timed out (12s). Check your internet connection.")),
+          12000
+        );
       });
 
       const cloudUrl = await Promise.race([uploadTask, timeoutTask]);
       if (cloudUrl && cloudUrl.startsWith("http")) {
         return cloudUrl;
       }
+      throw new Error("Cloud Storage upload did not return a valid download URL.");
+    } catch (error: any) {
+      console.warn("Firebase Storage direct upload notice:", error?.message || error);
+      if (throwOnError) {
+        throw error;
+      }
     }
-  } catch (error) {
-    console.warn("Firebase Storage direct upload notice:", (error as any)?.message || error);
   }
 
-  // Fallback: if it was a file and storage is unreachable, generate compact high-density data URL
+  // Fallback: if caller opted out of throwOnError and it was a file, generate local compact data URL
   if (fileOrDataUrl instanceof File) {
     try {
       const isAvatar = storagePath.includes("avatars") || storagePath.includes("pillars") || storagePath.includes("leads") || storagePath.includes("members");

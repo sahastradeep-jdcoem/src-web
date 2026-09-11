@@ -135,16 +135,28 @@ export function getStoredDepartments(): string[] {
   return DEFAULT_DEPARTMENTS;
 }
 
-export function saveStoredDepartments(departments: string[]): void {
+export async function saveStoredDepartments(departments: string[]): Promise<void> {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(departments);
     try { localStorage.setItem("src_departments", JSON.stringify(sanitized)); } catch {}
     window.dispatchEvent(new CustomEvent("src_departments_updated", { detail: sanitized }));
-    saveSiteContentToFirestore("departments", sanitized).catch((err) => { console.warn("Firestore direct write for departments failed, enqueuing:", err); });
+    
+    let cloudWriteError: any = null;
+    try {
+      await saveSiteContentToFirestore("departments", sanitized);
+    } catch (err) {
+      console.warn("Firestore direct write for departments failed, enqueuing:", err);
+      cloudWriteError = err;
+    }
     enqueueCloudWrite("departments", sanitized, `Academic Departments (${departments.length} Branches)`);
+
+    if (cloudWriteError) {
+      throw cloudWriteError;
+    }
   } catch (e) {
     console.error("Could not save departments", e);
+    throw e;
   }
 }
 

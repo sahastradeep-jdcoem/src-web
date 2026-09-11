@@ -575,7 +575,7 @@ export default function AdminTeamPage() {
     ? foundingMembersList
     : clubLeadMembers;
 
-  const saveCurrentList = (updated: TeamMember[]) => {
+  const saveCurrentList = async (updated: TeamMember[]) => {
     if (activeTab === "clubs") return;
 
     isSavingRef.current = true;
@@ -616,42 +616,48 @@ export default function AdminTeamPage() {
       }
     }
 
-    if (selectedTenure?.isCurrent) {
-      // Live active tenure
-      if (activeTab === "council") {
-        saveStoredCouncilMembers(indexed, false);
-      } else if (activeTab === "hosting") {
-        saveStoredHostingCommittee(indexed);
-      } else if (activeTab === "founding") {
-        saveStoredFoundingMembers(indexed, false);
+    try {
+      if (selectedTenure?.isCurrent) {
+        // Live active tenure
+        if (activeTab === "council") {
+          await saveStoredCouncilMembers(indexed, false);
+        } else if (activeTab === "hosting") {
+          await saveStoredHostingCommittee(indexed);
+        } else if (activeTab === "founding") {
+          await saveStoredFoundingMembers(indexed, false);
+        }
+        updateTenureRoster(selectedTenure.id, rosterUpdates, true);
+        setTenures((prev) => prev.map((t) => t.id === selectedTenure.id ? {
+          ...t,
+          ...rosterUpdates
+        } : t));
+      } else if (selectedTenure) {
+        // Draft / upcoming tenure: save to dedicated draft store first!
+        if (activeTab === "council") {
+          await saveStoredDraftCouncil(selectedTenure.id, indexed);
+        } else if (activeTab === "hosting") {
+          await saveStoredDraftHosting(selectedTenure.id, indexed);
+        }
+        updateTenureRoster(selectedTenure.id, rosterUpdates, true);
+        setTenures((prev) => prev.map((t) => t.id === selectedTenure.id ? {
+          ...t,
+          ...rosterUpdates
+        } : t));
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("src_admin_selected_tenure", selectedTenure.id);
+        }
       }
-      updateTenureRoster(selectedTenure.id, rosterUpdates, true);
-      setTenures((prev) => prev.map((t) => t.id === selectedTenure.id ? {
-        ...t,
-        ...rosterUpdates
-      } : t));
-    } else if (selectedTenure) {
-      // Draft / upcoming tenure: save to dedicated draft store first!
-      if (activeTab === "council") {
-        saveStoredDraftCouncil(selectedTenure.id, indexed);
-      } else if (activeTab === "hosting") {
-        saveStoredDraftHosting(selectedTenure.id, indexed);
-      }
-      updateTenureRoster(selectedTenure.id, rosterUpdates, true);
-      setTenures((prev) => prev.map((t) => t.id === selectedTenure.id ? {
-        ...t,
-        ...rosterUpdates
-      } : t));
-      if (typeof window !== "undefined") {
-        sessionStorage.setItem("src_admin_selected_tenure", selectedTenure.id);
-      }
-    }
 
-    setIsSaved(true);
-    setTimeout(() => {
-      setIsSaved(false);
+      setIsSaved(true);
+      setTimeout(() => {
+        setIsSaved(false);
+        isSavingRef.current = false;
+      }, 2000);
+    } catch (saveErr) {
+      console.error("Cloud save failed in saveCurrentList:", saveErr);
       isSavingRef.current = false;
-    }, 2000);
+      throw saveErr;
+    }
   };
 
   const handleSyncToFounding = () => {
@@ -785,12 +791,18 @@ export default function AdminTeamPage() {
         return p;
       });
 
-      await saveStoredInstitutionalPillars(updatedPillars);
-      setPillarsList(updatedPillars);
-      setEditingMember(null);
-      setIsCreatingNew(false);
-      setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 3000);
+      try {
+        await saveStoredInstitutionalPillars(updatedPillars);
+        setPillarsList(updatedPillars);
+        setEditingMember(null);
+        setIsCreatingNew(false);
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 3000);
+      } catch (saveErr: any) {
+        console.error("Cloud save failed for pillars:", saveErr);
+        alert("⚠️ Cloud Save Error: Could not save your changes to the cloud database due to network connectivity issues. Your changes are still held in this edit window. Please check your internet connection and click Save Changes again.");
+        throw saveErr;
+      }
       return;
     }
 
@@ -1002,9 +1014,15 @@ export default function AdminTeamPage() {
       updated = listFiltered;
     }
 
-    saveCurrentList(updated);
-    setEditingMember(null);
-    setIsCreatingNew(false);
+    try {
+      await saveCurrentList(updated);
+      setEditingMember(null);
+      setIsCreatingNew(false);
+    } catch (saveErr: any) {
+      console.error("Cloud save failed for member:", saveErr);
+      alert("⚠️ Cloud Save Error: Could not save your changes to the cloud database due to network connectivity issues. Your changes are still held in this edit window. Please check your internet connection and click Save Changes again.");
+      throw saveErr;
+    }
   };
 
   const handleDeleteMember = async (id: string, name: string) => {

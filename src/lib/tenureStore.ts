@@ -66,7 +66,7 @@ export function getStoredDraftCouncil(tenureId: string): TeamMember[] {
   return [];
 }
 
-export function saveStoredDraftCouncil(tenureId: string, members: TeamMember[]): void {
+export async function saveStoredDraftCouncil(tenureId: string, members: TeamMember[]): Promise<void> {
   if (typeof window === "undefined" || !tenureId) return;
   try {
     const sanitized = cleanUndefined(members);
@@ -77,12 +77,22 @@ export function saveStoredDraftCouncil(tenureId: string, members: TeamMember[]):
     }
     window.dispatchEvent(new CustomEvent("src_draft_roster_updated", { detail: { tenureId, members: sanitized } }));
     window.dispatchEvent(new CustomEvent("src_tenures_updated"));
-    saveSiteContentToFirestore(`draft_council_${tenureId}`, sanitized).catch((err) => {
+    
+    let cloudWriteError: any = null;
+    try {
+      await saveSiteContentToFirestore(`draft_council_${tenureId}`, sanitized);
+    } catch (err) {
       console.warn(`Firestore direct write for draft council (${tenureId}) failed, enqueuing:`, err);
-    });
+      cloudWriteError = err;
+    }
     enqueueCloudWrite(`draft_council_${tenureId}`, sanitized, `Draft Council Roster (${tenureId})`);
+
+    if (cloudWriteError) {
+      throw cloudWriteError;
+    }
   } catch (e) {
     console.error("Could not save draft council to storage", e);
+    throw e;
   }
 }
 
@@ -100,7 +110,7 @@ export function getStoredDraftHosting(tenureId: string): TeamMember[] {
   return [];
 }
 
-export function saveStoredDraftHosting(tenureId: string, members: TeamMember[]): void {
+export async function saveStoredDraftHosting(tenureId: string, members: TeamMember[]): Promise<void> {
   if (typeof window === "undefined" || !tenureId) return;
   try {
     const sanitized = cleanUndefined(members);
@@ -111,12 +121,22 @@ export function saveStoredDraftHosting(tenureId: string, members: TeamMember[]):
     }
     window.dispatchEvent(new CustomEvent("src_draft_roster_updated", { detail: { tenureId, members: sanitized } }));
     window.dispatchEvent(new CustomEvent("src_tenures_updated"));
-    saveSiteContentToFirestore(`draft_hosting_${tenureId}`, sanitized).catch((err) => {
+    
+    let cloudWriteError: any = null;
+    try {
+      await saveSiteContentToFirestore(`draft_hosting_${tenureId}`, sanitized);
+    } catch (err) {
       console.warn(`Firestore direct write for draft hosting (${tenureId}) failed, enqueuing:`, err);
-    });
+      cloudWriteError = err;
+    }
     enqueueCloudWrite(`draft_hosting_${tenureId}`, sanitized, `Draft Hosting Roster (${tenureId})`);
+
+    if (cloudWriteError) {
+      throw cloudWriteError;
+    }
   } catch (e) {
     console.error("Could not save draft hosting to storage", e);
+    throw e;
   }
 }
 
@@ -136,7 +156,7 @@ export function getStoredDraftClubs(tenureId: string): ClubItem[] {
   return [];
 }
 
-export function saveStoredDraftClubs(tenureId: string, clubs: ClubItem[]): void {
+export async function saveStoredDraftClubs(tenureId: string, clubs: ClubItem[]): Promise<void> {
   if (typeof window === "undefined" || !tenureId) return;
   try {
     const sanitized = cleanUndefined(clubs);
@@ -147,12 +167,22 @@ export function saveStoredDraftClubs(tenureId: string, clubs: ClubItem[]): void 
     }
     window.dispatchEvent(new CustomEvent("src_draft_clubs_updated", { detail: { tenureId, clubs: sanitized } }));
     window.dispatchEvent(new CustomEvent("src_tenures_updated"));
-    saveSiteContentToFirestore(`draft_clubs_${tenureId}`, sanitized).catch((err) => {
+    
+    let cloudWriteError: any = null;
+    try {
+      await saveSiteContentToFirestore(`draft_clubs_${tenureId}`, sanitized);
+    } catch (err) {
       console.warn(`Firestore direct write for draft clubs (${tenureId}) failed, enqueuing:`, err);
-    });
+      cloudWriteError = err;
+    }
     enqueueCloudWrite(`draft_clubs_${tenureId}`, sanitized, `Draft Clubs Roster (${tenureId})`);
+
+    if (cloudWriteError) {
+      throw cloudWriteError;
+    }
   } catch (e) {
     console.error("Could not save draft clubs to storage", e);
+    throw e;
   }
 }
 
@@ -417,7 +447,7 @@ export function compactTenureForStorage(tenure: CouncilTenure): CouncilTenure {
   };
 }
 
-export function saveStoredTenures(tenures: CouncilTenure[]): void {
+export async function saveStoredTenures(tenures: CouncilTenure[]): Promise<void> {
   if (typeof window === "undefined") return;
   try {
     const compactedTenures = tenures.map(compactTenureForStorage);
@@ -435,12 +465,21 @@ export function saveStoredTenures(tenures: CouncilTenure[]): void {
     window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: sanitized }));
 
     // Direct cloud write & queue backup immediately (Directive #3)
-    saveSiteContentToFirestore("council_tenures", sanitized).catch((err) => {
+    let cloudWriteError: any = null;
+    try {
+      await saveSiteContentToFirestore("council_tenures", sanitized);
+    } catch (err) {
       console.warn("Firestore direct write for tenures failed, enqueuing:", err);
-    });
+      cloudWriteError = err;
+    }
     enqueueCloudWrite("council_tenures", sanitized, `Council Tenures (${tenures.length} Tenures)`);
+
+    if (cloudWriteError) {
+      throw cloudWriteError;
+    }
   } catch (e) {
     console.error("Could not save tenures to storage", e);
+    throw e;
   }
 }
 

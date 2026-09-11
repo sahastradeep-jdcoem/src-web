@@ -134,7 +134,7 @@ export default function AdminEventsPage() {
     return sortEventsByDate(filtered);
   }, [eventsList, searchQuery]);
 
-  const handleCreateSubmit = (formData: EventFormData) => {
+  const handleCreateSubmit = async (formData: EventFormData) => {
     const cleanWhatToExpect = Array.from(new Set(formData.whatToExpect.map((s) => s.trim()).filter(Boolean)));
     const cleanRules = Array.from(new Set(formData.rules.map((s) => s.trim()).filter(Boolean)));
     const isNoReg = Boolean(formData.noRegistrationRequired);
@@ -203,9 +203,14 @@ export default function AdminEventsPage() {
 
     const updated = [created, ...eventsList];
     setEventsList(updated);
-    saveStoredEvents(updated);
-    setIsCreateOpen(false);
-    showNotice(`Event "${created.name}" published by "${created.organizer}".`);
+    try {
+      await saveStoredEvents(updated);
+      setIsCreateOpen(false);
+      showNotice(`Event "${created.name}" published by "${created.organizer}".`);
+    } catch (saveErr: any) {
+      console.error("Cloud save failed for event:", saveErr);
+      throw saveErr;
+    }
   };
 
   const handleToggleAudience = (evt: EventItem) => {
@@ -282,7 +287,7 @@ export default function AdminEventsPage() {
     setEditingEvent(evt);
   };
 
-  const handleEditSubmit = (formData: EventFormData) => {
+  const handleEditSubmit = async (formData: EventFormData) => {
     if (!editingEvent) return;
 
     const cleanWhatToExpect = Array.from(new Set(formData.whatToExpect.map((s) => s.trim()).filter(Boolean)));
@@ -355,9 +360,14 @@ export default function AdminEventsPage() {
     );
 
     setEventsList(updated);
-    saveStoredEvents(updated);
-    setEditingEvent(null);
-    showNotice(`Changes saved for "${formData.name}".`);
+    try {
+      await saveStoredEvents(updated);
+      setEditingEvent(null);
+      showNotice(`Changes saved for "${formData.name}".`);
+    } catch (saveErr: any) {
+      console.error("Cloud save failed for event edit:", saveErr);
+      throw saveErr;
+    }
   };
 
   const handleDuplicate = (evt: EventItem) => {

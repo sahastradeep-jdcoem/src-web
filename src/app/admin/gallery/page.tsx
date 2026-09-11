@@ -17,7 +17,8 @@ import {
   Calendar,
   Layers,
   Tag,
-  Loader2
+  Loader2,
+  AlertCircle
 } from "lucide-react";
 import { 
   getStoredGalleryPhotos, 
@@ -60,6 +61,8 @@ export default function AdminGalleryPage() {
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [pendingUploads, setPendingUploads] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const handleUploadStateChange = (uploading: boolean) => {
     setPendingUploads((prev) => Math.max(0, prev + (uploading ? 1 : -1)));
@@ -96,15 +99,22 @@ export default function AdminGalleryPage() {
     };
   }, []);
 
-  const saveList = (updated: GalleryPhoto[]) => {
+  const saveList = async (updated: GalleryPhoto[]) => {
     setPhotos(updated);
-    saveStoredGalleryPhotos(updated);
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+    try {
+      await saveStoredGalleryPhotos(updated);
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch (err: any) {
+      console.error("Cloud database save failed for gallery:", err);
+      alert(err?.message || "Failed to save gallery changes to Cloud Database. Please check your internet connection.");
+      throw err;
+    }
   };
 
   const handleOpenAddModal = () => {
     setIsCreatingNew(true);
+    setFormError(null);
     setEditingPhoto({
       id: `gal-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       title: "",
@@ -116,12 +126,12 @@ export default function AdminGalleryPage() {
     });
   };
 
-  const handleSavePhoto = (e: React.FormEvent) => {
+  const handleSavePhoto = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingPhoto) return;
 
     if (!editingPhoto.title.trim() || !editingPhoto.imageUrl.trim()) {
-      alert("Please provide both a Title and an Image URL.");
+      setFormError("Please provide both a Title and an Image URL.");
       return;
     }
 
@@ -132,24 +142,39 @@ export default function AdminGalleryPage() {
       updated = photos.map((p) => (p.id === editingPhoto.id ? editingPhoto : p));
     }
 
-    saveList(updated);
-    setEditingPhoto(null);
-    setIsCreatingNew(false);
-  };
-
-  const handleDeletePhoto = (id: string, title: string) => {
-    if (confirm(`Are you sure you want to remove "${title || "this photo"}" from the gallery?`)) {
-      const updated = photos.filter((p) => p.id !== id);
-      saveList(updated);
+    try {
+      setIsSubmitting(true);
+      setFormError(null);
+      await saveList(updated);
+      setEditingPhoto(null);
+      setIsCreatingNew(false);
+    } catch (err: any) {
+      setFormError(err?.message || "Cloud Database Save Failed. Please check your connection and retry.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleResetDefaults = () => {
+  const handleDeletePhoto = async (id: string, title: string) => {
+    if (confirm(`Are you sure you want to remove "${title || "this photo"}" from the gallery?`)) {
+      const updated = photos.filter((p) => p.id !== id);
+      try {
+        await saveList(updated);
+      } catch {}
+    }
+  };
+
+  const handleResetDefaults = async () => {
     if (confirm("Reset gallery to default photographs?")) {
       const defs = resetGalleryToDefaults();
       setPhotos(defs);
-      setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 3000);
+      try {
+        await saveStoredGalleryPhotos(defs);
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 3000);
+      } catch (err: any) {
+        alert("Failed to reset defaults in cloud: " + (err?.message || "Check network"));
+      }
     }
   };
 
@@ -340,6 +365,7 @@ export default function AdminGalleryPage() {
               <button
                 onClick={() => {
                   setIsCreatingNew(false);
+                  setFormError(null);
                   setEditingPhoto(photo);
                 }}
                 className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
@@ -381,6 +407,13 @@ export default function AdminGalleryPage() {
           title={isCreatingNew ? "Add New Photograph to Gallery" : "Edit Photograph Details"}
         >
           <form onSubmit={handleSavePhoto} className="space-y-4 text-xs">
+            {formError && (
+              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{formError}</span>
+              </div>
+            )}
+
             {/* Title */}
             <div className="space-y-1.5">
               <label className="font-bold text-slate-700">Photo Title *</label>
@@ -498,10 +531,15 @@ export default function AdminGalleryPage() {
                 type="submit"
                 variant="primary"
                 size="sm"
-                disabled={pendingUploads > 0}
+                disabled={pendingUploads > 0 || isSubmitting}
                 className="disabled:opacity-50 disabled:cursor-not-allowed gap-2"
               >
-                {pendingUploads > 0 ? (
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Saving to Cloud...</span>
+                  </>
+                ) : pendingUploads > 0 ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin text-white" />
                     <span>Uploading ({pendingUploads})...</span>

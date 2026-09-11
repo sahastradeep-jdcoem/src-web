@@ -237,7 +237,7 @@ export function getStoredEvents(): EventItem[] {
 /**
  * Persist events list with write-ahead queue and automatic retry
  */
-export function saveStoredEvents(events: EventItem[]): void {
+export async function saveStoredEvents(events: EventItem[]): Promise<void> {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(sanitizeEventsList(events));
@@ -248,13 +248,17 @@ export function saveStoredEvents(events: EventItem[]): void {
       console.warn("localStorage quota exceeded for events:", lsErr); 
     }
 
-    // Direct cloud write & queue backup immediately (Directive #3)
-    saveSiteContentToFirestore("events", sanitized).catch((err) => {
-      console.warn("Firestore direct write for events failed, enqueuing:", err);
-    });
-    enqueueCloudWrite("events", sanitized, `Events Roster (${events.length} Events)`);
-
     window.dispatchEvent(new CustomEvent("src_events_updated", { detail: sanitized }));
+
+    // Direct cloud write & queue backup immediately (Directive #3)
+    let cloudWriteError: any = null;
+    try {
+      await saveSiteContentToFirestore("events", sanitized);
+    } catch (err) {
+      console.warn("Firestore direct write for events failed, enqueuing:", err);
+      cloudWriteError = err;
+    }
+    enqueueCloudWrite("events", sanitized, `Events Roster (${events.length} Events)`);
     
     compactEventDataset(sanitized).then((compacted) => {
       const cleanCompacted = cleanUndefined(compacted);
@@ -263,8 +267,13 @@ export function saveStoredEvents(events: EventItem[]): void {
       } catch {}
       saveSiteContentToFirestore("events", cleanCompacted).catch(() => {});
     }).catch(() => {});
+
+    if (cloudWriteError) {
+      throw cloudWriteError;
+    }
   } catch (e) {
     console.error("Could not save events to storage", e);
+    throw e;
   }
 }
 

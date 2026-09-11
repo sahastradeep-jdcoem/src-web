@@ -358,7 +358,7 @@ export function getStoredCouncilMembers(): TeamMember[] {
   return deduplicateTeamMembers(stripCategoryAndLevel(initialAdminCouncil));
 }
 
-export function saveStoredCouncilMembers(members: TeamMember[], autoSyncToFounding = true): void {
+export async function saveStoredCouncilMembers(members: TeamMember[], autoSyncToFounding = true): Promise<void> {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(deduplicateTeamMembers(stripCategoryAndLevel(members)));
@@ -367,24 +367,21 @@ export function saveStoredCouncilMembers(members: TeamMember[], autoSyncToFoundi
       localStorage.setItem("src_council_team", JSON.stringify(sanitized));
     } catch (lsErr) {
       console.warn("Direct localStorage write notice, auto-compacting...", lsErr);
-      try {
-        const quotaSafe = sanitized.map((m: any) => ({
-          ...m,
-          avatar: (m.avatar && m.avatar.startsWith("data:image/") && m.avatar.length > 50000) ? "" : m.avatar
-        }));
-        localStorage.setItem("src_council_team", JSON.stringify(quotaSafe));
-      } catch {}
     }
-
-    // Direct cloud write & queue backup immediately (Directive #3)
-    saveSiteContentToFirestore("council_team", sanitized).catch((err) => {
-      console.warn("Firestore direct write for council team failed, enqueuing:", err);
-    });
-    enqueueCloudWrite("council_team", sanitized, `Council Leadership (${members.length} Members)`);
 
     window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: sanitized }));
     window.dispatchEvent(new CustomEvent("src_tenures_updated"));
     window.dispatchEvent(new CustomEvent("src_users_updated"));
+
+    // Direct cloud write & queue backup immediately (Directive #3)
+    let cloudWriteError: any = null;
+    try {
+      await saveSiteContentToFirestore("council_team", sanitized);
+    } catch (err) {
+      console.warn("Firestore direct write for council team failed, enqueuing:", err);
+      cloudWriteError = err;
+    }
+    enqueueCloudWrite("council_team", sanitized, `Council Leadership (${members.length} Members)`);
 
     compactCouncilDataset(sanitized).then((compacted) => {
       const finalClean = cleanUndefined(compacted);
@@ -397,8 +394,13 @@ export function saveStoredCouncilMembers(members: TeamMember[], autoSyncToFoundi
     if (autoSyncToFounding && Array.isArray(sanitized)) {
       syncCouncilAdminsToFounding(sanitized, true);
     }
+
+    if (cloudWriteError) {
+      throw cloudWriteError;
+    }
   } catch (e) {
     console.error("Could not save council team to storage", e);
+    throw e;
   }
 }
 
@@ -468,7 +470,7 @@ export function getStoredHostingCommittee(): TeamMember[] {
   return stripCategoryAndLevel(initialHosting);
 }
 
-export function saveStoredHostingCommittee(members: TeamMember[]): void {
+export async function saveStoredHostingCommittee(members: TeamMember[]): Promise<void> {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(stripCategoryAndLevel(members));
@@ -477,13 +479,17 @@ export function saveStoredHostingCommittee(members: TeamMember[]): void {
       localStorage.setItem("src_hosting_committee", JSON.stringify(sanitized));
     } catch {}
 
-    saveSiteContentToFirestore("hosting_committee", sanitized).catch((err) => {
-      console.warn("Firestore direct write for hosting committee failed, enqueuing:", err);
-    });
-    enqueueCloudWrite("hosting_committee", sanitized, `Hosting Committee (${members.length} Members)`);
-
     window.dispatchEvent(new CustomEvent("src_hosting_updated", { detail: sanitized }));
     window.dispatchEvent(new CustomEvent("src_users_updated"));
+
+    let cloudWriteError: any = null;
+    try {
+      await saveSiteContentToFirestore("hosting_committee", sanitized);
+    } catch (err) {
+      console.warn("Firestore direct write for hosting committee failed, enqueuing:", err);
+      cloudWriteError = err;
+    }
+    enqueueCloudWrite("hosting_committee", sanitized, `Hosting Committee (${members.length} Members)`);
 
     compactCouncilDataset(sanitized).then((compacted) => {
       const finalClean = cleanUndefined(compacted);
@@ -492,8 +498,13 @@ export function saveStoredHostingCommittee(members: TeamMember[]): void {
       } catch {}
       saveSiteContentToFirestore("hosting_committee", finalClean).catch(() => {});
     });
+
+    if (cloudWriteError) {
+      throw cloudWriteError;
+    }
   } catch (e) {
     console.error("Could not save hosting committee to storage", e);
+    throw e;
   }
 }
 
@@ -979,7 +990,7 @@ export function getStoredFoundingMembers(): TeamMember[] {
   return deduplicateTeamMembers(stripCategoryAndLevel(initialFoundingMembers));
 }
 
-export function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCouncil = true): void {
+export async function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCouncil = true): Promise<void> {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(deduplicateTeamMembers(stripCategoryAndLevel(members)));
@@ -988,23 +999,20 @@ export function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCounc
       localStorage.setItem("src_founding_members", JSON.stringify(sanitized));
     } catch (lsErr) {
       console.warn("Direct localStorage write notice for founders, auto-compacting...", lsErr);
-      try {
-        const quotaSafe = sanitized.map((m: any) => ({
-          ...m,
-          avatar: (m.avatar && m.avatar.startsWith("data:image/") && m.avatar.length > 50000) ? "" : m.avatar
-        }));
-        localStorage.setItem("src_founding_members", JSON.stringify(quotaSafe));
-      } catch {}
     }
-
-    saveSiteContentToFirestore("founding_members", sanitized).catch((err) => {
-      console.warn("Firestore direct write for founding members failed, enqueuing:", err);
-    });
-    enqueueCloudWrite("founding_members", sanitized, `Founding Members (${members.length} Members)`);
 
     window.dispatchEvent(new CustomEvent("src_founding_members_updated", { detail: sanitized }));
     window.dispatchEvent(new CustomEvent("src_tenures_updated"));
     window.dispatchEvent(new CustomEvent("src_users_updated"));
+
+    let cloudWriteError: any = null;
+    try {
+      await saveSiteContentToFirestore("founding_members", sanitized);
+    } catch (err) {
+      console.warn("Firestore direct write for founding members failed, enqueuing:", err);
+      cloudWriteError = err;
+    }
+    enqueueCloudWrite("founding_members", sanitized, `Founding Members (${members.length} Members)`);
 
     compactCouncilDataset(sanitized).then((compacted) => {
       const finalClean = cleanUndefined(compacted);
@@ -1017,8 +1025,13 @@ export function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCounc
     if (autoSyncToCouncil && Array.isArray(sanitized)) {
       syncFoundingToCouncilAdmins(sanitized, true);
     }
+
+    if (cloudWriteError) {
+      throw cloudWriteError;
+    }
   } catch (e) {
     console.error("Could not save founding members to storage", e);
+    throw e;
   }
 }
 
@@ -1158,12 +1171,21 @@ export async function saveStoredInstitutionalPillars(pillars: InstitutionalPilla
     window.dispatchEvent(new CustomEvent("src_pillars_updated", { detail: sanitized }));
 
     // Direct cloud write to Firestore site_content/pillars_of_strength
-    saveSiteContentToFirestore("pillars_of_strength", sanitized).catch((err) => {
+    let cloudWriteError: any = null;
+    try {
+      await saveSiteContentToFirestore("pillars_of_strength", sanitized);
+    } catch (err) {
       console.warn("Firestore direct write for pillars failed, enqueuing:", err);
-      enqueueCloudWrite("pillars_of_strength", sanitized, `4 Pillars of Strength (${pillars.length} Patrons)`);
-    });
+      cloudWriteError = err;
+    }
+    enqueueCloudWrite("pillars_of_strength", sanitized, `4 Pillars of Strength (${pillars.length} Patrons)`);
+
+    if (cloudWriteError) {
+      throw cloudWriteError;
+    }
   } catch (e) {
     console.error("Could not save pillars to storage", e);
+    throw e;
   }
 }
 

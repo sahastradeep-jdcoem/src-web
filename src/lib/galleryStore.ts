@@ -24,16 +24,28 @@ export function getStoredGalleryPhotos(): GalleryPhoto[] {
   return initialPhotos;
 }
 
-export function saveStoredGalleryPhotos(photos: GalleryPhoto[]): void {
+export async function saveStoredGalleryPhotos(photos: GalleryPhoto[]): Promise<void> {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(photos);
     try { localStorage.setItem(GALLERY_STORAGE_KEY, JSON.stringify(sanitized)); } catch {}
     window.dispatchEvent(new CustomEvent("src_gallery_updated", { detail: sanitized }));
-    saveSiteContentToFirestore("gallery_photos", sanitized).catch((err) => { console.warn("Firestore direct write for gallery photos failed, enqueuing:", err); });
+    
+    let cloudWriteError: any = null;
+    try {
+      await saveSiteContentToFirestore("gallery_photos", sanitized);
+    } catch (err) {
+      console.warn("Firestore direct write for gallery photos failed, enqueuing:", err);
+      cloudWriteError = err;
+    }
     enqueueCloudWrite("gallery_photos", sanitized, `Gallery Photos (${photos.length} Photos)`);
+
+    if (cloudWriteError) {
+      throw cloudWriteError;
+    }
   } catch (e) {
     console.error("Could not save gallery photos to storage", e);
+    throw e;
   }
 }
 
