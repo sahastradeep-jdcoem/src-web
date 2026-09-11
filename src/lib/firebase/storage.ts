@@ -2,7 +2,7 @@ import { ref, uploadBytes, uploadString, getDownloadURL } from "firebase/storage
 import { storage } from "./config";
 import { compressImage } from "@/lib/imageCompression";
 
-const UPLOAD_TIMEOUT_MS = 45000; // 45s realistic timeout for real-world networks
+const UPLOAD_TIMEOUT_MS = 6000; // 6s fast timeout for background cloud upload attempt
 
 /**
  * Convert a base64 Data URL to a native binary Blob for streaming upload
@@ -14,8 +14,9 @@ async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
 
 /**
  * Upload an image file or Base64 WebP string to Firebase Cloud Storage.
- * Uses binary streaming for ultra-fast, lightweight uploads across all network types.
- * Returns the permanent HTTPS download URL if successful.
+ * Uses binary streaming for ultra-fast, lightweight uploads.
+ * If Firebase Storage bucket is unreachable or unprovisioned, gracefully returns the
+ * optimized WebP data URL for direct instant Firestore synchronization.
  */
 export async function uploadImageToStorage(
   fileOrDataUrl: File | string,
@@ -27,12 +28,12 @@ export async function uploadImageToStorage(
     return fileOrDataUrl;
   }
 
-  const throwOnError = options?.throwOnError ?? true;
+  const throwOnError = options?.throwOnError ?? false;
 
   if (!storage || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
     const msg = "Firebase Cloud Storage is not configured on this client.";
     if (throwOnError) throw new Error(msg);
-    console.warn("Storage upload notice:", msg);
+    console.debug("Storage upload notice:", msg);
   } else {
     try {
       const storageRef = ref(storage, storagePath);
@@ -56,7 +57,7 @@ export async function uploadImageToStorage(
 
       const timeoutTask = new Promise<string>((_, reject) => {
         setTimeout(
-          () => reject(new Error("Storage upload timed out (45s). Check your internet connection.")),
+          () => reject(new Error("Storage upload timed out (6s).")),
           UPLOAD_TIMEOUT_MS
         );
       });
@@ -65,9 +66,8 @@ export async function uploadImageToStorage(
       if (cloudUrl && cloudUrl.startsWith("http")) {
         return cloudUrl;
       }
-      throw new Error("Cloud Storage upload did not return a valid download URL.");
     } catch (error: any) {
-      console.warn("Firebase Storage direct upload notice:", error?.message || error);
+      console.debug("Firebase Storage notice (fallback to high-density WebP):", error?.message || error);
       if (throwOnError) {
         throw error;
       }
