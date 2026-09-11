@@ -395,7 +395,8 @@ export function compactTenureForStorage(tenure: CouncilTenure): CouncilTenure {
 
   const stripClubHeavy = (clubs?: ClubItem[]): ClubItem[] => {
     if (!Array.isArray(clubs)) return [];
-    return clubs.map((c) => {
+    const hydrated = hydrateClubAvatars(clubs);
+    return hydrated.map((c) => {
       const cleanLead: ClubLeader = {
         ...c.lead,
         avatar: (c.lead?.avatar && c.lead.avatar.startsWith("data:image/") && c.lead.avatar.length > MAX_SAFE_BASE64_LENGTH) ? "" : (c.lead?.avatar || ""),

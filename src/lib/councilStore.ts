@@ -42,10 +42,12 @@ export function getClubLeaders(club: ClubItem): ClubLeader[] {
         const isCoLead = l.roleType === "coLead" || (l.role && l.role.toLowerCase().includes("co-head"));
         const fallbackAvatar = isCoLead ? (club.coLead?.avatar || "") : (club.lead?.avatar || "");
         const rawAvatar = l.avatar || fallbackAvatar || "";
+        const roleType = l.roleType || (isCoLead ? "coLead" : "lead");
+        const defaultId = `${club.id || club.slug}-${roleType === "coLead" ? "colead" : "lead"}-${i}`;
         return {
           ...l,
-          id: l.id || `${club.id || club.slug}-leader-${i}`,
-          roleType: l.roleType || (isCoLead ? "coLead" : "lead"),
+          id: l.id || defaultId,
+          roleType,
           avatar: sanitizeAvatar(rawAvatar),
         };
       });
@@ -55,7 +57,7 @@ export function getClubLeaders(club: ClubItem): ClubLeader[] {
   if (club.lead && club.lead.name && club.lead.name.trim().length > 0) {
     list.push({
       ...club.lead,
-      id: club.lead.id || `${club.id || club.slug}-lead`,
+      id: club.lead.id || `${club.id || club.slug}-lead-0`,
       roleType: "lead",
       avatar: sanitizeAvatar(club.lead.avatar),
     });
@@ -75,7 +77,7 @@ export function getClubLeaders(club: ClubItem): ClubLeader[] {
   } else if (club.coLead && club.coLead.name && club.coLead.name.trim().length > 0) {
     list.push({
       ...club.coLead,
-      id: club.coLead.id || `${club.id || club.slug}-colead`,
+      id: club.coLead.id || `${club.id || club.slug}-colead-0`,
       roleType: "coLead",
       avatar: sanitizeAvatar(club.coLead.avatar),
     });
@@ -104,49 +106,79 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
     // Find primary lead & coLead avatars from leaders
     const leadLeader = leaders.find(
       (l) => (l.roleType === "lead" || (l.role && !l.role.toLowerCase().includes("co-head"))) && l.avatar && !l.avatar.includes("images.unsplash.com")
-    ) || leaders[0];
+    ) || leaders.find((l) => (l.roleType === "lead" || (l.role && !l.role.toLowerCase().includes("co-head")))) || leaders[0];
 
     const coLeadLeader = leaders.find(
       (l) => (l.roleType === "coLead" || (l.role && l.role.toLowerCase().includes("co-head"))) && l.avatar && !l.avatar.includes("images.unsplash.com")
-    );
+    ) || leaders.find((l) => (l.roleType === "coLead" || (l.role && l.role.toLowerCase().includes("co-head"))));
 
     const leadAvatar = sanitizeAvatar(leadLeader?.avatar) || sanitizeAvatar(c.lead?.avatar);
     const coLeadAvatar = sanitizeAvatar(coLeadLeader?.avatar) || sanitizeAvatar(c.coLead?.avatar);
 
-    const lead = c.lead ? {
-      ...c.lead,
-      avatar: sanitizeAvatar(c.lead.avatar) || leadAvatar,
-    } : (leadLeader ? { ...leadLeader, roleType: "lead" as const, avatar: leadAvatar } : c.lead);
+    let lead = c.lead;
+    if (leadLeader) {
+      lead = {
+        ...leadLeader,
+        roleType: "lead" as const,
+        avatar: leadAvatar,
+        ...(c.lead && c.lead.name?.trim() ? c.lead : {}),
+        name: (c.lead && c.lead.name?.trim()) ? c.lead.name.trim() : (leadLeader.name || ""),
+      };
+    } else if (c.lead) {
+      lead = {
+        ...c.lead,
+        avatar: sanitizeAvatar(c.lead.avatar) || leadAvatar,
+      };
+    }
 
-    const coLead = c.coLead ? {
-      ...c.coLead,
-      avatar: sanitizeAvatar(c.coLead.avatar) || coLeadAvatar,
-    } : (coLeadLeader ? { ...coLeadLeader, roleType: "coLead" as const, avatar: coLeadAvatar } : c.coLead);
+    let coLead = c.coLead;
+    if (coLeadLeader) {
+      coLead = {
+        ...coLeadLeader,
+        roleType: "coLead" as const,
+        avatar: coLeadAvatar,
+        ...(c.coLead && c.coLead.name?.trim() ? c.coLead : {}),
+        name: (c.coLead && c.coLead.name?.trim()) ? c.coLead.name.trim() : (coLeadLeader.name || ""),
+      };
+    } else if (c.coLead) {
+      coLead = {
+        ...c.coLead,
+        avatar: sanitizeAvatar(c.coLead.avatar) || coLeadAvatar,
+      };
+    }
 
-    const coLeads = Array.isArray(c.coLeads)
-      ? c.coLeads.map((cl) => {
+    const coLeads = Array.isArray(c.coLeads) && c.coLeads.length > 0
+      ? c.coLeads.map((cl, i) => {
           const matchingLeader = leaders.find(
             (l) => (l.id && l.id === cl.id) || (l.name && cl.name && l.name.toLowerCase().trim() === cl.name.toLowerCase().trim())
           );
           const avatar = sanitizeAvatar(matchingLeader?.avatar) || sanitizeAvatar(cl.avatar) || coLeadAvatar;
-          return { ...cl, avatar };
+          return {
+            ...cl,
+            avatar,
+            name: (cl.name && cl.name.trim()) ? cl.name.trim() : (matchingLeader?.name || ""),
+          };
         })
       : (coLead ? [coLead] : []);
 
-    // Ensure leaders array is properly populated with canonical avatars
-    let finalLeaders = leaders.map((l) => {
+    // Ensure leaders array is properly populated with canonical avatars and deterministic IDs
+    let finalLeaders = leaders.map((l, i) => {
       const isCoLead = l.roleType === "coLead" || (l.role && l.role.toLowerCase().includes("co-head"));
       const fallback = isCoLead ? coLeadAvatar : leadAvatar;
       const safeAvatar = sanitizeAvatar(l.avatar) || fallback || "";
+      const roleType = l.roleType || (isCoLead ? "coLead" : "lead");
+      const defaultId = `${c.id || c.slug}-${roleType === "coLead" ? "colead" : "lead"}-${i}`;
       return {
         ...l,
+        id: l.id || defaultId,
+        roleType,
         avatar: safeAvatar,
       };
     });
 
     if (finalLeaders.length === 0) {
-      if (lead && lead.name) finalLeaders.push({ ...lead, roleType: "lead" });
-      if (coLead && coLead.name) finalLeaders.push({ ...coLead, roleType: "coLead" });
+      if (lead && lead.name) finalLeaders.push({ ...lead, roleType: "lead", id: `${c.id || c.slug}-lead-0` });
+      if (coLead && coLead.name) finalLeaders.push({ ...coLead, roleType: "coLead", id: `${c.id || c.slug}-colead-0` });
     }
 
     return {
@@ -825,31 +857,32 @@ export async function saveStoredClubs(clubs: ClubItem[]): Promise<void> {
 
     const compacted = await compactClubDataset(syncedClubs);
     const sanitized = cleanUndefined(compacted);
+    // 2. Prepare deduplicated payload for Firestore & LocalStorage (strips 4x duplicate base64 from lead/coLead)
+    // Single source of truth is leaders[i].avatar, dropping document from 1.15MB down to ~510KB!
+    const cloudPayload = deduplicateClubAvatarsForCloud(sanitized);
+
     markLocalWrite("clubs");
     try {
-      localStorage.setItem("src_clubs_roster", JSON.stringify(sanitized));
+      // Store deduplicated cloudPayload (511KB) instead of sanitized (1.15MB) to prevent 5MB quota errors
+      localStorage.setItem("src_clubs_roster", JSON.stringify(cloudPayload));
     } catch (lsErr) {
       console.warn("Direct localStorage write notice for clubs, applying fallback:", lsErr);
       try {
         // Strip heavy presentation banners if quota is reached, but NEVER strip member/leader avatars (Directive #4)
-        const stripped = sanitized.map((c: any) => ({
+        const stripped = cloudPayload.map((c: any) => ({
           ...c,
           cardImage: c.cardImage?.startsWith("data:") && c.cardImage.length > 50000 ? "" : c.cardImage,
           headerImage: c.headerImage?.startsWith("data:") && c.headerImage.length > 50000 ? "" : c.headerImage,
-          lead: c.lead ? { ...c.lead, avatar: c.lead.avatar || "" } : c.lead,
-          coLead: c.coLead ? { ...c.coLead, avatar: c.coLead.avatar || "" } : c.coLead,
           leaders: Array.isArray(c.leaders) ? c.leaders.map((l: any) => ({ ...l, avatar: l.avatar || "" })) : c.leaders,
         }));
         localStorage.setItem("src_clubs_roster", JSON.stringify(stripped));
-      } catch {}
+      } catch (err2) {
+        console.error("Critical: Failed to save clubs to localStorage even after fallback", err2);
+      }
     }
-    window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: sanitized }));
+    window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: syncedClubs }));
     window.dispatchEvent(new CustomEvent("src_tenures_updated"));
     window.dispatchEvent(new CustomEvent("src_users_updated"));
-
-    // 2. Prepare deduplicated payload for Firestore (strips 4x duplicate base64 from lead/coLead)
-    // Single source of truth is leaders[i].avatar, dropping document from 1MB down to ~510KB!
-    const cloudPayload = deduplicateClubAvatarsForCloud(sanitized);
 
     // Direct cloud write & queue backup immediately (Directive #3)
     let cloudWriteError: any = null;
@@ -865,6 +898,9 @@ export async function saveStoredClubs(clubs: ClubItem[]): Promise<void> {
       const errMsg = cloudWriteError?.message || String(cloudWriteError);
       if (errMsg.includes("permission-denied") || errMsg.includes("Missing or insufficient permissions")) {
         throw new Error("Admin session expired. Please refresh the page and sign in again.");
+      }
+      if (errMsg.includes("longer than") || errMsg.includes("exceeds the maximum") || errMsg.includes("invalid-argument")) {
+        throw new Error(`Cloud document size limit reached: ${errMsg}`);
       }
     }
   } catch (e) {
@@ -889,7 +925,8 @@ export async function syncClubsFromFirestore(): Promise<ClubItem[]> {
       const hydrated = hydrateClubAvatars(merged);
       if (typeof window !== "undefined") {
         try {
-          localStorage.setItem("src_clubs_roster", JSON.stringify(hydrated));
+          const compactForStorage = deduplicateClubAvatarsForCloud(hydrated);
+          localStorage.setItem("src_clubs_roster", JSON.stringify(compactForStorage));
         } catch (lsErr) {
           console.warn("localStorage quota exceeded for clubs roster:", lsErr);
         }
@@ -913,7 +950,8 @@ export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => v
       const hydrated = hydrateClubAvatars(merged);
       if (typeof window !== "undefined") {
         try {
-          localStorage.setItem("src_clubs_roster", JSON.stringify(hydrated));
+          const compactForStorage = deduplicateClubAvatarsForCloud(hydrated);
+          localStorage.setItem("src_clubs_roster", JSON.stringify(compactForStorage));
         } catch (lsErr) {
           console.warn("localStorage quota exceeded for clubs roster in subscription:", lsErr);
         }
