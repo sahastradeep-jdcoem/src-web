@@ -761,21 +761,23 @@ export async function updateRegistrationRefundInFirestore(
 
 const SITE_CONTENT_COLLECTION = "site_content";
 
-function stripOversizedBase64<T>(obj: T, maxLen = 40000): T {
+function stripOversizedBase64<T>(obj: T, maxLen = 100000, parentKey = ""): T {
   if (obj === null || obj === undefined) return obj;
   if (typeof obj === "string") {
-    if (obj.startsWith("data:image/") && obj.length > maxLen) {
+    // Preserve avatars up to 350,000 bytes (Directive #4) so profile pictures are never wiped by background compaction
+    const effectiveMax = (parentKey === "avatar" || parentKey === "photoUrl" || parentKey === "profileImage") ? 350000 : maxLen;
+    if (obj.startsWith("data:image/") && obj.length > effectiveMax) {
       return "" as unknown as T;
     }
     return obj;
   }
   if (typeof obj !== "object") return obj;
   if (Array.isArray(obj)) {
-    return obj.map((item) => stripOversizedBase64(item, maxLen)) as unknown as T;
+    return obj.map((item) => stripOversizedBase64(item, maxLen, parentKey)) as unknown as T;
   }
   const result: any = {};
   for (const key of Object.keys(obj as any)) {
-    result[key] = stripOversizedBase64((obj as any)[key], maxLen);
+    result[key] = stripOversizedBase64((obj as any)[key], maxLen, key);
   }
   return result as T;
 }
@@ -793,7 +795,7 @@ export async function saveSiteContentToFirestore<T>(docId: string, data: T): Pro
         const jsonStr = JSON.stringify(sanitized);
         if (jsonStr.length > 900000) {
           console.warn(`[Firestore] Document [${docId}] is near 1MB quota (${jsonStr.length} bytes). Compacting oversized base64 images...`);
-          sanitized = stripOversizedBase64(sanitized, 35000);
+          sanitized = stripOversizedBase64(sanitized, 100000);
         }
       } catch {}
 

@@ -17,8 +17,8 @@ export interface PendingSyncItem {
 // -------------------------------------------------------------
 // 0. BASE64 IMAGE SANITIZER & AUTO-COMPACTOR
 // -------------------------------------------------------------
-const BASE64_PREFIX = "data:image/";
-const MAX_SAFE_BASE64_LENGTH = 350000; // ~250 KB max per individual image
+export const BASE64_PREFIX = "data:image/";
+export const MAX_SAFE_BASE64_LENGTH = 350000; // ~250 KB max per individual image
 
 /**
  * Downscales a base64 image data-url using HTML5 canvas
@@ -659,6 +659,11 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
             continue;
           }
 
+          if (isLocalWriteRecent("clubs", 30000) || isLocalWriteRecent("council_team", 30000) || hasPendingWritesFor("clubs") || hasPendingWritesFor("council_team")) {
+            result[k] = localVal;
+            continue;
+          }
+
           // Otherwise remote is authoritative
           result[k] = remoteVal;
           continue;
@@ -698,6 +703,10 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
           const isLocalCustom = !localObj.avatar.includes("images.unsplash.com");
           if (isLocalCustom && isRemoteUnsplash) {
             mergedObj.avatar = localObj.avatar;
+          } else if (isLocalWriteRecent("clubs", 30000) || hasPendingWritesFor("clubs")) {
+            mergedObj.avatar = localObj.avatar;
+          } else {
+            mergedObj.avatar = remoteObj.avatar;
           }
         } else if (remoteObj.avatar && remoteObj.avatar.includes("images.unsplash.com") && !isGenericPlaceholder(mergedObj.name)) {
           // Don't inject unsplash mock faces onto real named students

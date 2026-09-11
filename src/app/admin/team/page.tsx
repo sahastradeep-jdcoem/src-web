@@ -513,6 +513,9 @@ export default function AdminTeamPage() {
           if (leader.role && !["Club Head", "Club Co-Head"].includes(leader.role.trim())) {
             existing.role = leader.role;
           }
+          if (leader.avatar && !existing.avatar) {
+            existing.avatar = leader.avatar;
+          }
         } else {
           const clubIds = leader.clubIds && Array.isArray(leader.clubIds) && leader.clubIds.length > 0
             ? Array.from(new Set([club.id, ...leader.clubIds]))
@@ -937,15 +940,18 @@ export default function AdminTeamPage() {
           }
 
           const primaryLead = targetRoleType === "lead" 
-            ? (newLeaders.find((l) => l.id === leaderPayload.id) || leaderPayload)
+            ? (newLeaders.find((l) => l.id === leaderPayload.id) || (existingIdx !== -1 ? newLeaders[existingIdx] : undefined) || leaderPayload)
             : (newLeaders.find((l) => l.roleType === "lead") || newLeaders[0] || leaderPayload);
           const coLeadsList = newLeaders.filter((l) => l.roleType === "coLead");
+          const targetCoLead = targetRoleType === "coLead"
+            ? (newLeaders.find((l) => l.id === leaderPayload.id) || (existingIdx !== -1 ? newLeaders[existingIdx] : undefined) || leaderPayload)
+            : coLeadsList[0];
 
           return {
             ...club,
             leaders: newLeaders,
             lead: primaryLead,
-            coLead: coLeadsList[0] || undefined,
+            coLead: targetCoLead || coLeadsList[0] || undefined,
             coLeads: coLeadsList
           };
         } else {

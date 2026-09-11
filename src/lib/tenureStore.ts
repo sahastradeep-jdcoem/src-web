@@ -25,7 +25,8 @@ import {
   reconcileArrayDatasets, 
   hasPendingWritesFor, 
   markLocalWrite, 
-  getLastLocalWriteTime 
+  getLastLocalWriteTime,
+  MAX_SAFE_BASE64_LENGTH
 } from "./dataSyncEngine";
 
 export interface CouncilTenure {
@@ -386,8 +387,8 @@ export function compactTenureForStorage(tenure: CouncilTenure): CouncilTenure {
     if (!Array.isArray(members)) return [];
     return members.map((m) => ({
       ...m,
-      // In tenure snapshots, never store raw or oversized base64 data URLs (they belong in council_team store)
-      avatar: (m.avatar && m.avatar.startsWith("data:image/") && m.avatar.length > 20000) ? "" : (m.avatar || ""),
+      // Never strip compact base64 avatars (Directive #4)
+      avatar: (m.avatar && m.avatar.startsWith("data:image/") && m.avatar.length > MAX_SAFE_BASE64_LENGTH) ? "" : (m.avatar || ""),
     }));
   };
 
@@ -396,22 +397,22 @@ export function compactTenureForStorage(tenure: CouncilTenure): CouncilTenure {
     return clubs.map((c) => {
       const cleanLead: ClubLeader = {
         ...c.lead,
-        avatar: (c.lead?.avatar && c.lead.avatar.startsWith("data:image/") && c.lead.avatar.length > 20000) ? "" : (c.lead?.avatar || ""),
+        avatar: (c.lead?.avatar && c.lead.avatar.startsWith("data:image/") && c.lead.avatar.length > MAX_SAFE_BASE64_LENGTH) ? "" : (c.lead?.avatar || ""),
       };
 
       const cleanCoLead: ClubLeader | undefined = c.coLead ? {
         ...c.coLead,
-        avatar: (c.coLead?.avatar && c.coLead.avatar.startsWith("data:image/") && c.coLead.avatar.length > 20000) ? "" : (c.coLead?.avatar || ""),
+        avatar: (c.coLead?.avatar && c.coLead.avatar.startsWith("data:image/") && c.coLead.avatar.length > MAX_SAFE_BASE64_LENGTH) ? "" : (c.coLead?.avatar || ""),
       } : undefined;
 
       const cleanCoLeads: ClubLeader[] | undefined = Array.isArray(c.coLeads) ? c.coLeads.map((cl) => ({
         ...cl,
-        avatar: (cl?.avatar && cl.avatar.startsWith("data:image/") && cl.avatar.length > 20000) ? "" : (cl?.avatar || ""),
+        avatar: (cl?.avatar && cl.avatar.startsWith("data:image/") && cl.avatar.length > MAX_SAFE_BASE64_LENGTH) ? "" : (cl?.avatar || ""),
       })) : undefined;
 
       const cleanLeaders: ClubLeader[] | undefined = Array.isArray(c.leaders) ? c.leaders.map((l) => ({
         ...l,
-        avatar: (l?.avatar && l.avatar.startsWith("data:image/") && l.avatar.length > 20000) ? "" : (l?.avatar || ""),
+        avatar: (l?.avatar && l.avatar.startsWith("data:image/") && l.avatar.length > MAX_SAFE_BASE64_LENGTH) ? "" : (l?.avatar || ""),
       })) : undefined;
 
       return {

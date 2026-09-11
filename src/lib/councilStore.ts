@@ -30,11 +30,16 @@ export function getClubLeaders(club: ClubItem): ClubLeader[] {
   if (Array.isArray(club.leaders) && club.leaders.length > 0) {
     return club.leaders
       .filter((l) => l && l.name && l.name.trim().length > 0)
-      .map((l, i) => ({
-        ...l,
-        id: l.id || `${club.id || club.slug}-leader-${i}`,
-        roleType: l.roleType || (l.role && l.role.toLowerCase().includes("co-head") ? "coLead" : "lead")
-      }));
+      .map((l, i) => {
+        const isCoLead = l.roleType === "coLead" || (l.role && l.role.toLowerCase().includes("co-head"));
+        const fallbackAvatar = isCoLead ? (club.coLead?.avatar || "") : (club.lead?.avatar || "");
+        return {
+          ...l,
+          id: l.id || `${club.id || club.slug}-leader-${i}`,
+          roleType: l.roleType || (isCoLead ? "coLead" : "lead"),
+          avatar: l.avatar || fallbackAvatar || "",
+        };
+      });
   }
 
   const list: ClubLeader[] = [];
@@ -42,7 +47,8 @@ export function getClubLeaders(club: ClubItem): ClubLeader[] {
     list.push({
       ...club.lead,
       id: club.lead.id || `${club.id || club.slug}-lead`,
-      roleType: "lead"
+      roleType: "lead",
+      avatar: club.lead.avatar || "",
     });
   }
 
@@ -52,7 +58,8 @@ export function getClubLeaders(club: ClubItem): ClubLeader[] {
         list.push({
           ...cl,
           id: cl.id || `${club.id || club.slug}-colead-${i}`,
-          roleType: "coLead"
+          roleType: "coLead",
+          avatar: cl.avatar || club.coLead?.avatar || "",
         });
       }
     });
@@ -60,7 +67,8 @@ export function getClubLeaders(club: ClubItem): ClubLeader[] {
     list.push({
       ...club.coLead,
       id: club.coLead.id || `${club.id || club.slug}-colead`,
-      roleType: "coLead"
+      roleType: "coLead",
+      avatar: club.coLead.avatar || "",
     });
   }
 
@@ -682,26 +690,52 @@ export function getStoredClubs(): ClubItem[] {
 export async function saveStoredClubs(clubs: ClubItem[]): Promise<void> {
   if (typeof window === "undefined") return;
   try {
-    // Keep club.lead and club.coLead avatars tightly synchronized with club.leaders
+    // Keep club.lead, club.coLead, club.coLeads, AND club.leaders avatars tightly synchronized!
     const syncedClubs = clubs.map((c) => {
-      const leaders = Array.isArray(c.leaders) ? c.leaders : [];
-      const primaryLead = leaders.find((l) => l.roleType === "lead") || leaders[0];
-      const primaryCoLead = leaders.find((l) => l.roleType === "coLead");
+      const rawLeaders = Array.isArray(c.leaders) ? c.leaders : [];
+      const primaryLead = rawLeaders.find((l) => l.roleType === "lead") || rawLeaders[0] || c.lead;
+      const primaryCoLead = rawLeaders.find((l) => l.roleType === "coLead") || c.coLead;
+
+      // Ensure avatar is preserved across all representations
+      const leadAvatar = primaryLead?.avatar || c.lead?.avatar || "";
+      const coLeadAvatar = primaryCoLead?.avatar || c.coLead?.avatar || "";
 
       const lead = c.lead ? {
         ...c.lead,
-        avatar: primaryLead?.avatar || c.lead.avatar || "",
-      } : (primaryLead ? { ...primaryLead } : c.lead);
+        avatar: leadAvatar,
+      } : (primaryLead ? { ...primaryLead, avatar: leadAvatar } : c.lead);
 
       const coLead = c.coLead ? {
         ...c.coLead,
-        avatar: primaryCoLead?.avatar || c.coLead.avatar || "",
-      } : (primaryCoLead ? { ...primaryCoLead } : c.coLead);
+        avatar: coLeadAvatar,
+      } : (primaryCoLead ? { ...primaryCoLead, avatar: coLeadAvatar } : c.coLead);
+
+      // CRITICAL: Synchronize avatars BACK INTO c.leaders and c.coLeads so getClubLeaders never sees blank avatars!
+      const updatedLeaders = rawLeaders.map((l) => {
+        const isCoLead = l.roleType === "coLead" || (l.role && l.role.toLowerCase().includes("co-head"));
+        const targetAvatar = l.avatar || (isCoLead ? coLeadAvatar : leadAvatar);
+        return {
+          ...l,
+          avatar: targetAvatar,
+        };
+      });
+
+      // If c.leaders was empty but lead or coLead exists, populate c.leaders
+      const finalLeaders = updatedLeaders.length > 0 ? updatedLeaders : [
+        ...(lead && lead.name ? [{ ...lead, roleType: "lead" as const }] : []),
+        ...(coLead && coLead.name ? [{ ...coLead, roleType: "coLead" as const }] : []),
+      ];
+
+      const coLeads = Array.isArray(c.coLeads)
+        ? c.coLeads.map((cl) => ({ ...cl, avatar: cl.avatar || coLeadAvatar }))
+        : (coLead ? [coLead] : []);
 
       return {
         ...c,
         lead,
         coLead,
+        coLeads,
+        leaders: finalLeaders,
       };
     });
 
