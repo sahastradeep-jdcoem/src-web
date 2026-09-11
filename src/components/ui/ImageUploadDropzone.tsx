@@ -127,11 +127,13 @@ export function ImageUploadDropzone({
       setManualUrl(immediateOptimized.dataUrl);
 
       // 2. Upload file to Firebase Cloud Storage with honest verification
-      const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
-      const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}`;
+      const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_").replace(/\.[^/.]+$/, "");
+      const ext = isPngOrSvg ? ".png" : ".webp";
+      const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}${ext}`;
 
       try {
-        const cloudUrl = await uploadImageToStorage(file, finalStoragePath, { throwOnError: true });
+        // Upload the high-density optimized WebP (~80KB) rather than a multi-megabyte camera file to prevent network timeouts
+        const cloudUrl = await uploadImageToStorage(immediateOptimized.dataUrl, finalStoragePath, { throwOnError: true });
         if (cloudUrl && cloudUrl.startsWith("http")) {
           setPreview(cloudUrl);
           setManualUrl(cloudUrl);
@@ -187,6 +189,8 @@ export function ImageUploadDropzone({
     onUploadStateChange?.(true);
     setError(null);
     lastCroppedDataUrlRef.current = croppedDataUrl;
+    // CRITICAL: Clear lastProcessedFileRef so retry NEVER reverts to raw uncropped file!
+    lastProcessedFileRef.current = null;
 
     try {
       // 1. Immediately sync cropped image to state
@@ -237,19 +241,21 @@ export function ImageUploadDropzone({
 
   const handleRetryUpload = async (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (lastProcessedFileRef.current) {
-      await processFileDirectly(lastProcessedFileRef.current);
-    } else if (lastCroppedDataUrlRef.current) {
-      await handleCropComplete(lastCroppedDataUrlRef.current);
-    } else if (localDataUrlRef.current) {
+
+    // 1. Prioritize uploading the cropped image or current local data URL so crops are NEVER reset!
+    const targetDataUrl = lastCroppedDataUrlRef.current || localDataUrlRef.current;
+    if (targetDataUrl) {
       setIsProcessing(true);
       setUploadStatus("uploading");
       onUploadStateChange?.(true);
       setError(null);
       try {
-        const cleanName = originalFileName.replace(/[^a-zA-Z0-9.-]/g, "_").replace(/\.[^/.]+$/, "");
-        const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}.webp`;
-        const cloudUrl = await uploadImageToStorage(localDataUrlRef.current, finalStoragePath, { throwOnError: true });
+        const cleanName = (originalFileName || "image").replace(/[^a-zA-Z0-9.-]/g, "_").replace(/\.[^/.]+$/, "");
+        const isPng = targetDataUrl.includes("image/png");
+        const ext = isPng ? ".png" : ".webp";
+        const finalStoragePath = `${storagePath}/${Date.now()}_${cleanName}${ext}`;
+
+        const cloudUrl = await uploadImageToStorage(targetDataUrl, finalStoragePath, { throwOnError: true });
         if (cloudUrl && cloudUrl.startsWith("http")) {
           setPreview(cloudUrl);
           setManualUrl(cloudUrl);
@@ -260,12 +266,19 @@ export function ImageUploadDropzone({
           throw new Error("Storage service did not return an accessible cloud URL.");
         }
       } catch (err: any) {
+        console.warn("Retry upload error:", err);
         setUploadStatus("upload_failed");
-        setError(`⚠️ Cloud Upload Failed: Unable to store image in cloud (${err?.message || "network error"}). Please retry.`);
+        setError(`⚠️ Cloud Upload Failed: Unable to store image in cloud storage (${err?.message || "network error"}). You can retry the upload.`);
       } finally {
         setIsProcessing(false);
         onUploadStateChange?.(false);
       }
+      return;
+    }
+
+    // 2. Only if no local data url exists, reprocess the raw file
+    if (lastProcessedFileRef.current) {
+      await processFileDirectly(lastProcessedFileRef.current);
     }
   };
 
