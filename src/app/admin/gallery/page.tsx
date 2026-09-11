@@ -30,7 +30,7 @@ import {
 import { GalleryPhoto } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
+import { UniversalImageUploader } from "@/components/ui/UniversalImageUploader";
 
 export default function AdminGalleryPage() {
   const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
@@ -482,11 +482,12 @@ export default function AdminGalleryPage() {
             {/* Image Upload Dropzone */}
             <div className="space-y-1.5">
               <label className="font-bold text-slate-700">Photograph Upload / Image URL *</label>
-              <ImageUploadDropzone
+              <UniversalImageUploader
+                purpose="gallery"
                 label="Drop Photograph Here"
                 sublabel="Raw DSLR photos are automatically optimized to crystal-clear Full HD WebP"
                 storagePath="gallery"
-                aspectRatio={editingPhoto.aspectRatio === "portrait" ? "3:4" : editingPhoto.aspectRatio === "square" ? "1:1" : "16:9"}
+                aspectRatioOverride={editingPhoto.aspectRatio === "portrait" ? "3:4" : editingPhoto.aspectRatio === "square" ? "1:1" : "16:9"}
                 previewUrl={editingPhoto.imageUrl}
                 onUploadStateChange={handleUploadStateChange}
                 onUrlChange={(url) => {

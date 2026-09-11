@@ -43,7 +43,6 @@ import { ClubItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
 import { ClubFormModal } from "@/components/admin/clubs/ClubFormModal";
 import { cn } from "@/lib/utils";
 

@@ -31,7 +31,8 @@ import {
   History,
   Layers,
   GraduationCap,
-  Award
+  Award,
+  RefreshCw
 } from "lucide-react";
 import { 
   getStoredCouncilMembers, 
@@ -81,7 +82,6 @@ import { TeamMember, ClubItem, ClubLeader, InstitutionalPillar } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
 import { PositionFormModal } from "@/components/admin/team/PositionFormModal";
 import { cn } from "@/lib/utils";
 
@@ -111,6 +111,7 @@ export default function AdminTeamPage() {
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [isSyncingClubs, setIsSyncingClubs] = useState(false);
   const [pendingUploads, setPendingUploads] = useState(0);
   const isSavingRef = useRef(false);
 
@@ -1015,18 +1016,13 @@ export default function AdminTeamPage() {
         setEditingMember(null);
         setIsCreatingNew(false);
       } catch (saveErr: any) {
-        console.error("Cloud save notice for club leader:", saveErr);
+        console.error("Cloud save error for club leader:", saveErr);
         isSavingRef.current = false;
         const msg = saveErr?.message || String(saveErr);
         if (msg.includes("Admin session expired") || msg.includes("permission-denied") || msg.includes("Missing or insufficient permissions")) {
           alert("⚠️ Admin Session Expired: Please refresh the page and sign in again with your admin credentials.");
         } else {
-          setIsSaved(true);
-          setTimeout(() => {
-            setIsSaved(false);
-          }, 2000);
-          setEditingMember(null);
-          setIsCreatingNew(false);
+          alert(`⚠️ Save Notice: ${msg}`);
         }
       }
       return;
@@ -1467,6 +1463,36 @@ export default function AdminTeamPage() {
             >
               <Sparkles className="w-4 h-4 text-[#E78023]" />
               <span>Sync from 1st Tenure Admins ({councilMembers.length})</span>
+            </button>
+          )}
+
+          {activeTab === "clubs" && (
+            <button
+              type="button"
+              disabled={isSyncingClubs}
+              onClick={async () => {
+                try {
+                  setIsSyncingClubs(true);
+                  isSavingRef.current = true;
+                  await saveStoredClubs(clubsList);
+                  setIsSaved(true);
+                  setTimeout(() => {
+                    setIsSaved(false);
+                    isSavingRef.current = false;
+                  }, 3000);
+                  alert("✅ All club leader photos have been compacted, deduplicated, and synced to Cloud Firestore.");
+                } catch (err: any) {
+                  isSavingRef.current = false;
+                  alert(`⚠️ Sync Failed: ${err?.message || err}`);
+                } finally {
+                  setIsSyncingClubs(false);
+                }
+              }}
+              className="px-4 py-3 rounded-2xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#17458F] text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 shadow-xs disabled:opacity-50"
+              title="Deduplicate and sync all club leadership photos to Cloud Firestore"
+            >
+              <RefreshCw className={`w-4 h-4 text-[#17458F] ${isSyncingClubs ? "animate-spin" : ""}`} />
+              <span>{isSyncingClubs ? "Syncing..." : "Sync All Photos to Cloud"}</span>
             </button>
           )}
         </div>

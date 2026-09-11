@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
+import { UniversalImageUploader } from "@/components/ui/UniversalImageUploader";
 import { TeamMember, ClubItem } from "@/types";
 
 interface PositionFormModalProps {
@@ -452,7 +452,8 @@ export function PositionFormModal({
               : "Officer Portrait Photo (4:5 Card Frame)"}
           </label>
           
-          <ImageUploadDropzone
+          <UniversalImageUploader
+            purpose="avatar"
             label={
               activeTab === "pillars"
                 ? "Postcard Portrait Photo"
@@ -461,10 +462,6 @@ export function PositionFormModal({
                 : "Officer Portrait Photo"
             }
             sublabel="Frame headshot to match actual team card portrait frame (4:5)"
-            aspectRatio="4:5"
-            allowedAspectRatios={["4:5", "3:4", "1:1", "free"]}
-            lockAspectRatio={false}
-            isAvatar={false}
             recommendedSize="800 x 1000 px (4:5 Card Frame)"
             storagePath={activeTab === "pillars" ? "pillars/portraits" : activeTab === "clubs" ? "clubs/leads" : "team/members"}
             previewUrl={formMember.avatar}

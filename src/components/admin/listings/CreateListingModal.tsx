@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import { ListingItem, ListingType, ListingPillar, TargetAudience } from "@/types/listings";
 import { CustomQuestionsBuilder } from "@/components/admin/events/CustomQuestionsBuilder";
-import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
+import { UniversalImageUploader } from "@/components/ui/UniversalImageUploader";
 import { CustomQuestion } from "@/types";
 import { saveStoredListings, getStoredListings } from "@/lib/listingsStore";
 import { cn } from "@/lib/utils";
@@ -1439,12 +1439,10 @@ export function CreateListingModal({
                 <div className="space-y-6 animate-in fade-in duration-200">
                   {/* Dropzone Component */}
                   <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                    <ImageUploadDropzone
+                    <UniversalImageUploader
+                      purpose="cardCover"
                       label="Cover Banner (16:9)"
                       sublabel="Displayed on listing cards, discovery hub, and share previews"
-                      aspectRatio="16:9"
-                      allowedAspectRatios={selectedPillarOption?.type === "poll" ? ["16:9"] : ["16:9", "4:5", "3:4", "1:1", "21:9", "free"]}
-                      lockAspectRatio={false}
                       recommendedSize="1200 x 675 px (16:9)"
                       storagePath="listings/covers"
                       previewUrl={coverImage}

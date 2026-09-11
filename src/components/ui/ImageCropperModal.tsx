@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import type { ImagePurpose } from "@/lib/image/imageProfiles";
+import { getExportDimensions, getEffectiveFormat, getImageProfile } from "@/lib/image/imageProfiles";
 import { 
   ZoomIn, 
   ZoomOut, 
@@ -44,6 +46,8 @@ interface ImageCropperModalProps {
   isAvatar?: boolean;
   onCropComplete: (croppedDataUrl: string) => void;
   title?: string;
+  /** When provided, export dimensions and format are driven by the UIS profile */
+  purpose?: ImagePurpose;
 }
 
 interface RatioPreset {
@@ -65,6 +69,7 @@ export function ImageCropperModal({
   isAvatar = false,
   onCropComplete,
   title = "Crop & Frame Photo",
+  purpose,
 }: ImageCropperModalProps) {
   const effectiveAllowedRatios: AspectRatioType[] | undefined = 
     lockAspectRatio && initialAspectRatio && initialAspectRatio !== "auto" && initialAspectRatio !== "free"
@@ -421,25 +426,35 @@ export function ImageCropperModal({
 
     const img = imageRef.current;
     
-    // Output target dimensions based on target ratio (Retina-sharp & lightweight for instant Firestore cloud sync):
-    let baseDimension = 1200;
-    if (selectedRatio === "1:1") {
-      baseDimension = 480; // 480x480 crisp avatar / logo (~15KB)
-    } else if (selectedRatio === "4:5" || selectedRatio === "3:4") {
-      baseDimension = 560; // 448x560 portrait postcard avatar (~16KB)
-    } else if (selectedRatio === "21:9") {
-      baseDimension = 1600; // Crisp cinematic banner
+    // Output target dimensions: use UIS profile when available, fallback to legacy hardcoded values
+    let targetWidth: number;
+    let targetHeight: number;
+
+    if (purpose) {
+      // Profile-aware: dimensions tuned for the image's purpose
+      const dims = getExportDimensions(purpose, currentRatio);
+      targetWidth = dims.width;
+      targetHeight = dims.height;
     } else {
-      baseDimension = 1200; // High-DPI card/banner
-    }
+      // Legacy fallback for direct ImageCropperModal usage without UIS
+      let baseDimension = 1200;
+      if (selectedRatio === "1:1") {
+        baseDimension = 480;
+      } else if (selectedRatio === "4:5" || selectedRatio === "3:4") {
+        baseDimension = 560;
+      } else if (selectedRatio === "21:9") {
+        baseDimension = 1600;
+      } else {
+        baseDimension = 1200;
+      }
 
-    let targetWidth = baseDimension;
-    let targetHeight = Math.round(baseDimension / currentRatio);
+      targetWidth = baseDimension;
+      targetHeight = Math.round(baseDimension / currentRatio);
 
-    if (currentRatio < 1) {
-      // Portrait like 4:5 or 3:4
-      targetHeight = baseDimension;
-      targetWidth = Math.round(baseDimension * currentRatio);
+      if (currentRatio < 1) {
+        targetHeight = baseDimension;
+        targetWidth = Math.round(baseDimension * currentRatio);
+      }
     }
 
     const canvas = document.createElement("canvas");
@@ -501,11 +516,24 @@ export function ImageCropperModal({
 
     ctx.restore();
 
-    // Export as clean, high-density WebP (or PNG only if source is transparent PNG)
+    // Export as clean, high-density WebP (or PNG for transparent logos)
     try {
-      const isTransparentPng = (imageSrc.includes("image/png") || imageSrc.includes(".png")) && selectedRatio === "free";
-      const exportType = isTransparentPng ? "image/png" : "image/webp";
-      const croppedDataUrl = canvas.toDataURL(exportType, 0.82);
+      let exportType: string;
+      let exportQuality: number;
+
+      if (purpose) {
+        // Profile-aware format and quality
+        const profile = getImageProfile(purpose);
+        exportType = getEffectiveFormat(purpose, imageSrc);
+        exportQuality = profile.quality;
+      } else {
+        // Legacy fallback
+        const isTransparentPng = (imageSrc.includes("image/png") || imageSrc.includes(".png")) && selectedRatio === "free";
+        exportType = isTransparentPng ? "image/png" : "image/webp";
+        exportQuality = 0.82;
+      }
+
+      const croppedDataUrl = canvas.toDataURL(exportType, exportQuality);
       onCropComplete(croppedDataUrl);
       onClose();
     } catch (e) {
@@ -525,7 +553,8 @@ export function ImageCropperModal({
     onClose,
     selectedRatio,
     cropBoxDims,
-    imgNaturalSize
+    imgNaturalSize,
+    purpose
   ]);
 
   // Keyboard navigation for precision fine-tuning

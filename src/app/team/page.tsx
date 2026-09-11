@@ -172,6 +172,12 @@ export default function TeamPage() {
           if (leader.role && !["Club Head", "Club Co-Head"].includes(leader.role.trim())) {
             existing.role = leader.role;
           }
+          // Preserve and prioritize real uploaded avatar over empty or placeholder
+          if (leader.avatar && !leader.avatar.includes("images.unsplash.com")) {
+            if (!existing.avatar || existing.avatar.includes("images.unsplash.com")) {
+              existing.avatar = leader.avatar;
+            }
+          }
         } else {
           const clubIds = leader.clubIds && Array.isArray(leader.clubIds) && leader.clubIds.length > 0
             ? Array.from(new Set([club.id, ...leader.clubIds]))

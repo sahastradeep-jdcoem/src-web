@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
+import { UniversalImageUploader } from "@/components/ui/UniversalImageUploader";
 import { 
   DEFAULT_HERO_SETTINGS, 
   HeroSettings, 
@@ -333,7 +333,8 @@ export default function AdminHeroSettingsPage() {
               </p>
             </div>
 
-            <ImageUploadDropzone
+            <UniversalImageUploader
+              purpose="banner"
               label="Drop Campus Backdrop Here"
               sublabel="Auto-converts DSLR photos to lightweight WebP"
               storagePath="hero"

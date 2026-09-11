@@ -11,7 +11,8 @@ import {
   saveStoredFoundingMembers,
   getStoredClubs,
   saveStoredClubs,
-  stripCategoryAndLevel
+  stripCategoryAndLevel,
+  hydrateClubAvatars
 } from "./councilStore";
 import { getStoredEvents, saveStoredEvents } from "./eventsStore";
 import { 
@@ -368,7 +369,7 @@ export function getStoredTenures(): CouncilTenure[] {
       adminCouncil: stripCategoryAndLevel(draftCouncil.length > 0 ? draftCouncil : (t.adminCouncil && t.adminCouncil.length > 0 ? t.adminCouncil : [])),
       hostingCommittee: stripCategoryAndLevel(draftHosting.length > 0 ? draftHosting : (t.hostingCommittee && t.hostingCommittee.length > 0 ? t.hostingCommittee : [])),
       foundingMembers: stripCategoryAndLevel(isFirstTenure ? (t.foundingMembers || activeFounders) : []),
-      clubs: resolvedClubs,
+      clubs: hydrateClubAvatars(resolvedClubs),
     };
   });
 }
@@ -414,6 +415,18 @@ export function compactTenureForStorage(tenure: CouncilTenure): CouncilTenure {
         ...l,
         avatar: (l?.avatar && l.avatar.startsWith("data:image/") && l.avatar.length > MAX_SAFE_BASE64_LENGTH) ? "" : (l?.avatar || ""),
       })) : undefined;
+
+      // Deduplication: If leaders array contains the avatars, strip duplicate base64 from cleanLead/cleanCoLead
+      const hasLeaderAvatars = cleanLeaders && cleanLeaders.some((l) => l.avatar && l.avatar.startsWith("data:image/"));
+      if (hasLeaderAvatars) {
+        if (cleanLead.avatar && cleanLead.avatar.startsWith("data:image/")) cleanLead.avatar = "";
+        if (cleanCoLead && cleanCoLead.avatar && cleanCoLead.avatar.startsWith("data:image/")) cleanCoLead.avatar = "";
+        if (cleanCoLeads) {
+          cleanCoLeads.forEach((cl) => {
+            if (cl.avatar && cl.avatar.startsWith("data:image/")) cl.avatar = "";
+          });
+        }
+      }
 
       return {
         ...c,

@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
+import { UniversalImageUploader } from "@/components/ui/UniversalImageUploader";
 import { ClubItem } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -296,12 +296,10 @@ export function ClubFormModal({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* 1. Directory Card (16:9) */}
               <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-                <ImageUploadDropzone
+                <UniversalImageUploader
+                  purpose="cardCover"
                   label="1. Directory Card"
                   sublabel="For /clubs directory grid (16:9)"
-                  aspectRatio="16:9"
-                  allowedAspectRatios={["16:9", "4:5", "3:4", "1:1", "21:9", "free"]}
-                  lockAspectRatio={false}
                   recommendedSize="1200 x 675 px (16:9)"
                   storagePath="clubs/cards"
                   previewUrl={formClub.cardImage}
@@ -314,12 +312,10 @@ export function ClubFormModal({
 
               {/* 2. Hero Header Banner (21:9) */}
               <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-                <ImageUploadDropzone
+                <UniversalImageUploader
+                  purpose="banner"
                   label="2. Header Banner"
                   sublabel="Cinematic backdrop on /clubs/[slug]"
-                  aspectRatio="21:9"
-                  allowedAspectRatios={["21:9", "16:9", "free"]}
-                  lockAspectRatio={false}
                   recommendedSize="1920 x 820 px (21:9)"
                   storagePath="clubs/headers"
                   previewUrl={formClub.headerImage}
@@ -332,13 +328,10 @@ export function ClubFormModal({
 
               {/* 3. Official Logo / Insignia (1:1) */}
               <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-                <ImageUploadDropzone
+                <UniversalImageUploader
+                  purpose="logo"
                   label="3. Official Club Logo"
                   sublabel="Circular insignia emblem (1:1)"
-                  aspectRatio="1:1"
-                  allowedAspectRatios={["1:1", "free"]}
-                  lockAspectRatio={false}
-                  isAvatar={true}
                   recommendedSize="500 x 500 px (Circle PNG)"
                   storagePath="clubs/logos"
                   previewUrl={formClub.logoImage}

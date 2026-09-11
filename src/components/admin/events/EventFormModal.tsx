@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
+import { UniversalImageUploader } from "@/components/ui/UniversalImageUploader";
 import { CustomQuestionsBuilder } from "@/components/admin/events/CustomQuestionsBuilder";
 import { EventItem, ClubItem, CustomQuestion, TargetAudience } from "@/types";
 import { cn } from "@/lib/utils";
@@ -1415,12 +1415,10 @@ export function EventFormModal({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* 1. Event Card Thumbnail (16:9) */}
               <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-                <ImageUploadDropzone
+                <UniversalImageUploader
+                  purpose="cardCover"
                   label="1. Card Thumbnail"
                   sublabel="For catalog cards & dashboard"
-                  aspectRatio="16:9"
-                  allowedAspectRatios={["16:9", "4:5", "3:4", "1:1", "21:9", "free"]}
-                  lockAspectRatio={false}
                   recommendedSize="1200 x 675 px (16:9)"
                   storagePath="events/cards"
                   previewUrl={form.cardImage}
@@ -1433,12 +1431,10 @@ export function EventFormModal({
 
               {/* 2. Official Vertical Poster (4:5) */}
               <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-                <ImageUploadDropzone
+                <UniversalImageUploader
+                  purpose="eventPoster"
                   label="2. Vertical Poster"
                   sublabel="For official notices & passes"
-                  aspectRatio="4:5"
-                  allowedAspectRatios={["4:5", "3:4", "16:9", "1:1", "free"]}
-                  lockAspectRatio={false}
                   recommendedSize="1080 x 1350 px (4:5)"
                   storagePath="events/posters"
                   previewUrl={form.posterImage}
@@ -1451,12 +1447,10 @@ export function EventFormModal({
 
               {/* 3. Hero Header Backdrop (21:9) */}
               <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-                <ImageUploadDropzone
+                <UniversalImageUploader
+                  purpose="banner"
                   label="3. Header Banner"
                   sublabel="Cinematic backdrop on detail page"
-                  aspectRatio="21:9"
-                  allowedAspectRatios={["21:9", "16:9", "free"]}
-                  lockAspectRatio={false}
                   recommendedSize="1920 x 820 px (21:9)"
                   storagePath="events/headers"
                   previewUrl={form.headerImage}
