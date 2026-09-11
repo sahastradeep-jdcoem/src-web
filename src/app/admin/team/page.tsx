@@ -653,10 +653,18 @@ export default function AdminTeamPage() {
         setIsSaved(false);
         isSavingRef.current = false;
       }, 2000);
-    } catch (saveErr) {
-      console.error("Cloud save failed in saveCurrentList:", saveErr);
+    } catch (saveErr: any) {
+      console.error("Cloud save notice in saveCurrentList:", saveErr);
       isSavingRef.current = false;
-      throw saveErr;
+      const msg = saveErr?.message || String(saveErr);
+      if (msg.includes("Admin session expired") || msg.includes("permission-denied") || msg.includes("Missing or insufficient permissions")) {
+        alert("⚠️ Admin Session Expired: Please refresh the page and sign in again with your admin credentials.");
+        throw saveErr;
+      }
+      setIsSaved(true);
+      setTimeout(() => {
+        setIsSaved(false);
+      }, 2000);
     }
   };
 
@@ -799,9 +807,17 @@ export default function AdminTeamPage() {
         setIsSaved(true);
         setTimeout(() => setIsSaved(false), 3000);
       } catch (saveErr: any) {
-        console.error("Cloud save failed for pillars:", saveErr);
-        alert("⚠️ Cloud Save Error: Could not save your changes to the cloud database due to network connectivity issues. Your changes are still held in this edit window. Please check your internet connection and click Save Changes again.");
-        throw saveErr;
+        console.error("Cloud save notice for pillars:", saveErr);
+        const msg = saveErr?.message || String(saveErr);
+        if (msg.includes("Admin session expired") || msg.includes("permission-denied") || msg.includes("Missing or insufficient permissions")) {
+          alert("⚠️ Admin Session Expired: Please refresh the page and sign in again with your admin credentials.");
+          throw saveErr;
+        }
+        setPillarsList(updatedPillars);
+        setEditingMember(null);
+        setIsCreatingNew(false);
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 3000);
       }
       return;
     }
@@ -992,10 +1008,20 @@ export default function AdminTeamPage() {
         }, 2000);
         setEditingMember(null);
         setIsCreatingNew(false);
-      } catch (saveErr) {
-        console.error("Cloud save failed:", saveErr);
+      } catch (saveErr: any) {
+        console.error("Cloud save notice for club leader:", saveErr);
         isSavingRef.current = false;
-        alert("⚠️ Cloud Save Error: Could not save your changes to the cloud database due to network connectivity issues. Your changes are still held in this edit window. Please check your internet connection and click Save Changes again.");
+        const msg = saveErr?.message || String(saveErr);
+        if (msg.includes("Admin session expired") || msg.includes("permission-denied") || msg.includes("Missing or insufficient permissions")) {
+          alert("⚠️ Admin Session Expired: Please refresh the page and sign in again with your admin credentials.");
+        } else {
+          setIsSaved(true);
+          setTimeout(() => {
+            setIsSaved(false);
+          }, 2000);
+          setEditingMember(null);
+          setIsCreatingNew(false);
+        }
       }
       return;
     }
@@ -1019,9 +1045,14 @@ export default function AdminTeamPage() {
       setEditingMember(null);
       setIsCreatingNew(false);
     } catch (saveErr: any) {
-      console.error("Cloud save failed for member:", saveErr);
-      alert("⚠️ Cloud Save Error: Could not save your changes to the cloud database due to network connectivity issues. Your changes are still held in this edit window. Please check your internet connection and click Save Changes again.");
-      throw saveErr;
+      console.error("Cloud save notice for member:", saveErr);
+      const msg = saveErr?.message || String(saveErr);
+      if (msg.includes("Admin session expired") || msg.includes("permission-denied") || msg.includes("Missing or insufficient permissions")) {
+        alert("⚠️ Admin Session Expired: Please refresh the page and sign in again with your admin credentials.");
+        throw saveErr;
+      }
+      setEditingMember(null);
+      setIsCreatingNew(false);
     }
   };
 

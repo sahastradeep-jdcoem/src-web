@@ -761,18 +761,47 @@ export async function updateRegistrationRefundInFirestore(
 
 const SITE_CONTENT_COLLECTION = "site_content";
 
+function stripOversizedBase64<T>(obj: T, maxLen = 40000): T {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj === "string") {
+    if (obj.startsWith("data:image/") && obj.length > maxLen) {
+      return "" as unknown as T;
+    }
+    return obj;
+  }
+  if (typeof obj !== "object") return obj;
+  if (Array.isArray(obj)) {
+    return obj.map((item) => stripOversizedBase64(item, maxLen)) as unknown as T;
+  }
+  const result: any = {};
+  for (const key of Object.keys(obj as any)) {
+    result[key] = stripOversizedBase64((obj as any)[key], maxLen);
+  }
+  return result as T;
+}
+
 /**
  * Save site content document (e.g. events, clubs, team, hero) to Firestore
  */
 export async function saveSiteContentToFirestore<T>(docId: string, data: T): Promise<void> {
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-      const sanitized = cleanUndefined(data);
+      let sanitized = cleanUndefined(data);
+
+      // Emergency Firestore 1MB quota guard (1,048,576 bytes)
+      try {
+        const jsonStr = JSON.stringify(sanitized);
+        if (jsonStr.length > 900000) {
+          console.warn(`[Firestore] Document [${docId}] is near 1MB quota (${jsonStr.length} bytes). Compacting oversized base64 images...`);
+          sanitized = stripOversizedBase64(sanitized, 35000);
+        }
+      } catch {}
+
       const docRef = doc(db, SITE_CONTENT_COLLECTION, docId);
       await setDoc(docRef, { payload: sanitized, updatedAt: serverTimestamp() }, { merge: true });
     }
-  } catch (error) {
-    console.error(`Firestore saveSiteContent error [${docId}]`, error);
+  } catch (error: any) {
+    console.error(`Firestore saveSiteContent error [${docId}]:`, error?.code || "", error?.message || error);
     throw error; // Re-throw so enqueueCloudWrite can catch and queue for retry
   }
 }

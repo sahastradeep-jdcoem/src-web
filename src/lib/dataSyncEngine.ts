@@ -26,12 +26,14 @@ const MAX_SAFE_BASE64_LENGTH = 350000; // ~250 KB max per individual image
  */
 export async function compactBase64Image(dataUrl: string, maxDim = 160, quality = 0.70): Promise<string> {
   if (typeof window === "undefined" || !dataUrl.startsWith("data:image/")) return dataUrl;
-  if (dataUrl.length < 25000) return dataUrl; // Already compact
+  if (dataUrl.length < 18000) return dataUrl; // Already compact
 
   try {
     return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(dataUrl), 1500); // 1.5s safety timeout
       const img = new Image();
       img.onload = () => {
+        clearTimeout(timer);
         let w = img.width;
         let h = img.height;
         if (w > h) {
@@ -56,7 +58,10 @@ export async function compactBase64Image(dataUrl: string, maxDim = 160, quality 
         const compactUrl = canvas.toDataURL("image/webp", quality);
         resolve(compactUrl);
       };
-      img.onerror = () => resolve(dataUrl);
+      img.onerror = () => {
+        clearTimeout(timer);
+        resolve(dataUrl);
+      };
       img.src = dataUrl;
     });
   } catch {
@@ -71,6 +76,7 @@ export async function compactClubDataset<T extends {
   logoImage?: string;
   cardImage?: string;
   headerImage?: string;
+  galleryImages?: string[];
   lead?: any;
   coLead?: any;
   coLeads?: any[];
@@ -79,38 +85,66 @@ export async function compactClubDataset<T extends {
   clubs: T[]
 ): Promise<T[]> {
   if (!Array.isArray(clubs)) return clubs;
+
+  // Memoize avatar compaction by data URL so duplicate references to the same avatar only compress once
+  const avatarCache = new Map<string, Promise<string>>();
+  const compactAvatar = (avatar?: string): Promise<string> => {
+    if (!avatar || !avatar.startsWith("data:image/") || avatar.length <= 18000) {
+      return Promise.resolve(avatar || "");
+    }
+    if (avatarCache.has(avatar)) {
+      return avatarCache.get(avatar)!;
+    }
+    // 400px width at 0.78 quality produces crisp 4:5 Retina portrait at ~10-14KB
+    const p = compactBase64Image(avatar, 400, 0.78);
+    avatarCache.set(avatar, p);
+    return p;
+  };
+
   const processed = await Promise.all(
     clubs.map(async (c) => {
       let logo = c.logoImage;
       let card = c.cardImage;
       let header = c.headerImage;
 
-      if (logo && logo.startsWith("data:image/") && logo.length > 25000) {
+      if (logo && logo.startsWith("data:image/") && logo.length > 20000) {
         logo = await compactBase64Image(logo, 160, 0.70);
       }
-      if (card && card.startsWith("data:image/") && card.length > 60000) {
-        card = await compactBase64Image(card, 500, 0.70);
+      if (card && card.startsWith("data:image/") && card.length > 40000) {
+        card = await compactBase64Image(card, 500, 0.65);
       }
-      if (header && header.startsWith("data:image/") && header.length > 80000) {
-        header = await compactBase64Image(header, 700, 0.70);
+      if (header && header.startsWith("data:image/") && header.length > 50000) {
+        header = await compactBase64Image(header, 700, 0.65);
+      }
+
+      let galleryImages = c.galleryImages;
+      if (Array.isArray(galleryImages)) {
+        galleryImages = await Promise.all(
+          galleryImages.map(async (g) => {
+            if (g && g.startsWith("data:image/") && g.length > 40000) {
+              return await compactBase64Image(g, 600, 0.65);
+            }
+            return g;
+          })
+        );
       }
 
       let lead = c.lead;
-      if (lead?.avatar && lead.avatar.startsWith("data:image/") && lead.avatar.length > 25000) {
-        lead = { ...lead, avatar: await compactBase64Image(lead.avatar, 400, 0.80) };
+      if (lead?.avatar) {
+        lead = { ...lead, avatar: await compactAvatar(lead.avatar) };
       }
 
       let coLead = c.coLead;
-      if (coLead?.avatar && coLead.avatar.startsWith("data:image/") && coLead.avatar.length > 25000) {
-        coLead = { ...coLead, avatar: await compactBase64Image(coLead.avatar, 400, 0.80) };
+      if (coLead?.avatar) {
+        coLead = { ...coLead, avatar: await compactAvatar(coLead.avatar) };
       }
 
       let coLeads = c.coLeads;
       if (Array.isArray(coLeads)) {
         coLeads = await Promise.all(
           coLeads.map(async (cl) => {
-            if (cl?.avatar && cl.avatar.startsWith("data:image/") && cl.avatar.length > 25000) {
-              return { ...cl, avatar: await compactBase64Image(cl.avatar, 400, 0.80) };
+            if (cl?.avatar) {
+              return { ...cl, avatar: await compactAvatar(cl.avatar) };
             }
             return cl;
           })
@@ -121,8 +155,8 @@ export async function compactClubDataset<T extends {
       if (Array.isArray(leaders)) {
         leaders = await Promise.all(
           leaders.map(async (l) => {
-            if (l?.avatar && l.avatar.startsWith("data:image/") && l.avatar.length > 25000) {
-              return { ...l, avatar: await compactBase64Image(l.avatar, 400, 0.80) };
+            if (l?.avatar) {
+              return { ...l, avatar: await compactAvatar(l.avatar) };
             }
             return l;
           })
@@ -134,6 +168,7 @@ export async function compactClubDataset<T extends {
         logoImage: logo,
         cardImage: card,
         headerImage: header,
+        galleryImages,
         lead,
         coLead,
         coLeads,
@@ -158,17 +193,17 @@ export async function compactEventDataset<T extends { poster?: string; cardImage
       let posterImg = e.posterImage;
       let header = e.headerImage;
 
-      if (poster && poster.startsWith("data:image/") && poster.length > 60000) {
-        poster = await compactBase64Image(poster, 600, 0.70);
+      if (poster && poster.startsWith("data:image/") && poster.length > 40000) {
+        poster = await compactBase64Image(poster, 500, 0.70);
       }
-      if (card && card.startsWith("data:image/") && card.length > 60000) {
-        card = await compactBase64Image(card, 600, 0.70);
+      if (card && card.startsWith("data:image/") && card.length > 40000) {
+        card = await compactBase64Image(card, 500, 0.70);
       }
-      if (posterImg && posterImg.startsWith("data:image/") && posterImg.length > 60000) {
-        posterImg = await compactBase64Image(posterImg, 600, 0.70);
+      if (posterImg && posterImg.startsWith("data:image/") && posterImg.length > 40000) {
+        posterImg = await compactBase64Image(posterImg, 500, 0.70);
       }
-      if (header && header.startsWith("data:image/") && header.length > 80000) {
-        header = await compactBase64Image(header, 800, 0.70);
+      if (header && header.startsWith("data:image/") && header.length > 50000) {
+        header = await compactBase64Image(header, 700, 0.70);
       }
 
       return {
@@ -193,8 +228,8 @@ export async function compactCouncilDataset<T extends { avatar?: string }>(
   const processed = await Promise.all(
     members.map(async (m) => {
       let av = m.avatar;
-      if (av && av.startsWith("data:image/") && av.length > 30000) {
-        av = await compactBase64Image(av, 400, 0.84);
+      if (av && av.startsWith("data:image/") && av.length > 20000) {
+        av = await compactBase64Image(av, 400, 0.78);
       }
       return {
         ...m,
@@ -207,8 +242,6 @@ export async function compactCouncilDataset<T extends { avatar?: string }>(
 
 /**
  * Recursively compacts any oversized base64 avatars in the institutional pillars dataset
- * Optimizes to 4:5 portrait (600px height at 0.85 WebP, ~25-35KB), perfectly sized for postcards
- * and guaranteed to never exceed localStorage or Firestore quotas.
  */
 export async function compactPillarsDataset<T extends { avatar?: string }>(
   pillars: T[]
@@ -217,8 +250,8 @@ export async function compactPillarsDataset<T extends { avatar?: string }>(
   const processed = await Promise.all(
     pillars.map(async (p) => {
       let av = p.avatar;
-      if (av && av.startsWith("data:image/") && av.length > 25000) {
-        av = await compactBase64Image(av, 600, 0.85);
+      if (av && av.startsWith("data:image/") && av.length > 20000) {
+        av = await compactBase64Image(av, 480, 0.80);
       }
       return {
         ...p,

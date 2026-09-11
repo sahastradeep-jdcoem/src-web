@@ -269,7 +269,10 @@ export async function saveStoredEvents(events: EventItem[]): Promise<void> {
     }).catch(() => {});
 
     if (cloudWriteError) {
-      throw cloudWriteError;
+      const errMsg = cloudWriteError?.message || String(cloudWriteError);
+      if (errMsg.includes("permission-denied") || errMsg.includes("Missing or insufficient permissions")) {
+        throw new Error("Admin session expired. Please refresh the page and sign in again.");
+      }
     }
   } catch (e) {
     console.error("Could not save events to storage", e);

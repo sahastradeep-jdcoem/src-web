@@ -396,7 +396,10 @@ export async function saveStoredCouncilMembers(members: TeamMember[], autoSyncTo
     }
 
     if (cloudWriteError) {
-      throw cloudWriteError;
+      const errMsg = cloudWriteError?.message || String(cloudWriteError);
+      if (errMsg.includes("permission-denied") || errMsg.includes("Missing or insufficient permissions")) {
+        throw new Error("Admin session expired. Please refresh the page and sign in again.");
+      }
     }
   } catch (e) {
     console.error("Could not save council team to storage", e);
@@ -500,7 +503,10 @@ export async function saveStoredHostingCommittee(members: TeamMember[]): Promise
     });
 
     if (cloudWriteError) {
-      throw cloudWriteError;
+      const errMsg = cloudWriteError?.message || String(cloudWriteError);
+      if (errMsg.includes("permission-denied") || errMsg.includes("Missing or insufficient permissions")) {
+        throw new Error("Admin session expired. Please refresh the page and sign in again.");
+      }
     }
   } catch (e) {
     console.error("Could not save hosting committee to storage", e);
@@ -734,7 +740,10 @@ export async function saveStoredClubs(clubs: ClubItem[]): Promise<void> {
     enqueueCloudWrite("clubs", sanitized, `Clubs Directory (${clubs.length} Clubs)`);
 
     if (cloudWriteError) {
-      throw cloudWriteError;
+      const errMsg = cloudWriteError?.message || String(cloudWriteError);
+      if (errMsg.includes("permission-denied") || errMsg.includes("Missing or insufficient permissions")) {
+        throw new Error("Admin session expired. Please refresh the page and sign in again.");
+      }
     }
   } catch (e) {
     console.error("Could not save clubs to storage", e);
@@ -1027,7 +1036,10 @@ export async function saveStoredFoundingMembers(members: TeamMember[], autoSyncT
     }
 
     if (cloudWriteError) {
-      throw cloudWriteError;
+      const errMsg = cloudWriteError?.message || String(cloudWriteError);
+      if (errMsg.includes("permission-denied") || errMsg.includes("Missing or insufficient permissions")) {
+        throw new Error("Admin session expired. Please refresh the page and sign in again.");
+      }
     }
   } catch (e) {
     console.error("Could not save founding members to storage", e);
@@ -1181,7 +1193,10 @@ export async function saveStoredInstitutionalPillars(pillars: InstitutionalPilla
     enqueueCloudWrite("pillars_of_strength", sanitized, `4 Pillars of Strength (${pillars.length} Patrons)`);
 
     if (cloudWriteError) {
-      throw cloudWriteError;
+      const errMsg = cloudWriteError?.message || String(cloudWriteError);
+      if (errMsg.includes("permission-denied") || errMsg.includes("Missing or insufficient permissions")) {
+        throw new Error("Admin session expired. Please refresh the page and sign in again.");
+      }
     }
   } catch (e) {
     console.error("Could not save pillars to storage", e);

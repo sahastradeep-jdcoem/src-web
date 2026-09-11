@@ -421,16 +421,16 @@ export function ImageCropperModal({
 
     const img = imageRef.current;
     
-    // Output target dimensions based on target ratio:
-    let baseDimension = 1600;
+    // Output target dimensions based on target ratio (Retina-sharp & lightweight for instant Firestore cloud sync):
+    let baseDimension = 1200;
     if (selectedRatio === "1:1") {
-      baseDimension = 800; // 800x800 pristine crisp avatar / logo (~30KB)
+      baseDimension = 480; // 480x480 crisp avatar / logo (~15KB)
     } else if (selectedRatio === "4:5" || selectedRatio === "3:4") {
-      baseDimension = 1000; // 800x1000 high-density portrait postcard avatar (~40KB)
+      baseDimension = 560; // 448x560 portrait postcard avatar (~16KB)
     } else if (selectedRatio === "21:9") {
-      baseDimension = 2100; // 2.1K Retina cinematic banner
+      baseDimension = 1600; // Crisp cinematic banner
     } else {
-      baseDimension = 1600; // 1080p crisp card/banner
+      baseDimension = 1200; // High-DPI card/banner
     }
 
     let targetWidth = baseDimension;
@@ -505,7 +505,7 @@ export function ImageCropperModal({
     try {
       const isTransparentPng = (imageSrc.includes("image/png") || imageSrc.includes(".png")) && selectedRatio === "free";
       const exportType = isTransparentPng ? "image/png" : "image/webp";
-      const croppedDataUrl = canvas.toDataURL(exportType, 0.88);
+      const croppedDataUrl = canvas.toDataURL(exportType, 0.82);
       onCropComplete(croppedDataUrl);
       onClose();
     } catch (e) {

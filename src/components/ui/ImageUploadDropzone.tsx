@@ -112,12 +112,12 @@ export function ImageUploadDropzone({
     try {
       // 1. Instant high-fidelity local optimization (< 50ms)
       const isPngOrSvg = file.type === "image/png" || file.type === "image/svg+xml";
-      const isAvatar = storagePath.includes("avatars") || storagePath.includes("pillars") || storagePath.includes("leads") || aspectRatio === "1:1" || aspectRatio === "4:5";
+      const isAvatar = storagePath.includes("avatars") || storagePath.includes("pillars") || storagePath.includes("leads") || aspectRatio === "1:1" || aspectRatio === "4:5" || aspectRatio === "3:4";
 
       const immediateOptimized = await compressImage(file, {
-        maxWidth: isAvatar ? (aspectRatio === "1:1" ? 600 : 640) : 1400,
-        maxHeight: isAvatar ? (aspectRatio === "1:1" ? 600 : 800) : 1000,
-        quality: 0.86,
+        maxWidth: isAvatar ? (aspectRatio === "1:1" ? 480 : 450) : 1200,
+        maxHeight: isAvatar ? (aspectRatio === "1:1" ? 480 : 560) : 800,
+        quality: 0.82,
         outputFormat: isPngOrSvg ? "image/png" : "image/webp",
       });
 
