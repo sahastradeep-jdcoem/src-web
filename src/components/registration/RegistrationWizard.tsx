@@ -173,7 +173,6 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   const autoDetectCompletedRef = useRef(false);
   const [paytmUtr, setPaytmUtr] = useState("");
   const [isVerifyingPaytm, setIsVerifyingPaytm] = useState(false);
-  const [isCopiedUpi, setIsCopiedUpi] = useState(false);
   const [customAnswers, setCustomAnswers] = useState<Record<string, any>>({});
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
   const [existingRegistration, setExistingRegistration] = useState<StudentRegistrationRecord | null>(null);
@@ -2283,36 +2282,15 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               </div>
             </div>
 
-            {/* Copy UPI ID */}
-            <div className="flex items-center justify-center gap-2 text-xs text-slate-600 pt-0.5">
-              <span>UPI: <strong className="font-mono text-slate-900">{paytmCheckoutData.upiId}</strong></span>
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText(paytmCheckoutData.upiId);
-                  setIsCopiedUpi(true);
-                  setTimeout(() => setIsCopiedUpi(false), 2000);
-                }}
-                className="px-2.5 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 text-[10px] font-bold transition-all min-h-[28px]"
-              >
-                {isCopiedUpi ? "Copied!" : "Copy ID"}
-              </button>
-            </div>
-
-            {/* Live Auto-Approval Radar Banner (Zero typing required!) */}
+            {/* Live Auto-Approval Radar Banner */}
             <div className="p-4 rounded-2xl bg-emerald-50/90 border border-emerald-300 text-left space-y-2.5 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <span className="relative flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-600"></span>
-                  </span>
-                  <span className="text-xs font-black text-emerald-950 uppercase tracking-wider">
-                    Auto-Approval Radar Active
-                  </span>
-                </div>
-                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                  Zero UTR Needed
+              <div className="flex items-center gap-2.5">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-600"></span>
+                </span>
+                <span className="text-xs font-black text-emerald-950 uppercase tracking-wider">
+                  Auto-Approval Radar Active
                 </span>
               </div>
               <p className="text-xs text-emerald-900 leading-relaxed font-medium">
