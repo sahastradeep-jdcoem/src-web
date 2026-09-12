@@ -3,6 +3,7 @@ import { db } from "@/lib/firebase/config";
 import { 
   collection, 
   doc, 
+  getDoc,
   setDoc, 
   getDocs, 
   query, 
@@ -139,65 +140,143 @@ export async function POST(req: NextRequest) {
 
     const now = new Date().toISOString();
 
-    // 3. Save to verified_upi_payments ledger in Firestore
+    // 3. Save to verified_upi_payments ledger & match active sessions / registrations
     let matchedRegistrationId: string | null = null;
+    let matchedOrderId: string | null = null;
     let matchedStudentName: string | null = null;
 
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       const paymentDocRef = doc(db, "verified_upi_payments", utr);
 
-      // Check if registration with this UTR is already in Firestore
-      const regQuery = query(
-        collection(db, "student_registrations"),
-        where("paymentId", "==", utr)
-      );
-      const regSnap = await getDocs(regQuery);
+      // 3A. Match active checkout session (for zero-touch hands-free auto-approval on the student's checkout screen)
+      const orderIdRegex = combinedText.match(/SRC-PTM-\d+-\d+/i);
+      const explicitOrderId = (rawBody.orderId || (orderIdRegex ? orderIdRegex[0] : null) || "").trim();
 
-      if (!regSnap.empty) {
-        // Auto-approve existing registration immediately!
-        const matchingDoc = regSnap.docs[0];
-        matchedRegistrationId = matchingDoc.id;
-        matchedStudentName = matchingDoc.data()?.participantName || matchingDoc.data()?.leaderName || "Student";
-
-        await updateDoc(matchingDoc.ref, {
-          paymentStatus: "PAID",
-          paidAt: now,
-          verifiedBy: "Paytm Auto-Gateway (Webhook)",
-          verifiedAt: now,
-        });
-
-        // Save ledger entry as MATCHED
-        await setDoc(paymentDocRef, {
-          utr,
-          amount,
-          rawNotification: combinedText,
-          status: "MATCHED",
-          matchedRegistrationId,
-          matchedStudentName,
-          receivedAt: now,
-          matchedAt: now,
-        }, { merge: true });
-      } else {
-        // Registration not submitted yet: store as UNCLAIMED for instant match when student clicks submit
-        await setDoc(paymentDocRef, {
-          utr,
-          amount,
-          rawNotification: combinedText,
-          status: "UNCLAIMED",
-          receivedAt: now,
-        }, { merge: true });
+      if (explicitOrderId) {
+        try {
+          const sessionRef = doc(db, "active_checkout_sessions", explicitOrderId);
+          const sessionSnap = await getDoc(sessionRef);
+          if (sessionSnap.exists()) {
+            matchedOrderId = sessionSnap.id;
+            const sData = sessionSnap.data();
+            matchedStudentName = sData?.participantName || sData?.leaderName || sData?.email || "Student";
+            await updateDoc(sessionRef, {
+              status: "COMPLETED",
+              utr,
+              receivedAmount: amount,
+              paidAt: now,
+              rawNotification: combinedText,
+            });
+          }
+        } catch (sessErr) {
+          console.warn("Notice: explicit session matching error:", sessErr);
+        }
       }
+
+      // If not matched by explicit order ID, match by amount from recent WAITING sessions (within last 30 min)
+      if (!matchedOrderId && amount > 0) {
+        try {
+          const waitingSessionsQuery = query(
+            collection(db, "active_checkout_sessions"),
+            where("status", "==", "WAITING")
+          );
+          const waitingSnap = await getDocs(waitingSessionsQuery);
+          if (!waitingSnap.empty) {
+            const candidates = waitingSnap.docs
+              .map((d) => ({ ref: d.ref, id: d.id, data: d.data() }))
+              .filter((d) => {
+                const expectedAmt = Number(d.data.amount) || 0;
+                return Math.abs(expectedAmt - Number(amount)) < 0.5;
+              })
+              .sort((a, b) => {
+                const tA = new Date(a.data.createdAt || 0).getTime();
+                const tB = new Date(b.data.createdAt || 0).getTime();
+                return tB - tA;
+              });
+
+            if (candidates.length > 0) {
+              const bestMatch = candidates[0];
+              const createdMs = new Date(bestMatch.data.createdAt || 0).getTime();
+              // Check if session was created within the last 30 minutes
+              if (Date.now() - createdMs < 30 * 60 * 1000) {
+                matchedOrderId = bestMatch.id;
+                matchedStudentName = bestMatch.data.participantName || bestMatch.data.leaderName || bestMatch.data.email || "Student";
+                await updateDoc(bestMatch.ref, {
+                  status: "COMPLETED",
+                  utr,
+                  receivedAmount: amount,
+                  paidAt: now,
+                  rawNotification: combinedText,
+                });
+              }
+            }
+          }
+        } catch (autoErr) {
+          console.warn("Notice: auto-match waiting session error:", autoErr);
+        }
+      }
+
+      // 3B. Check if registration with this UTR or matched Order ID already exists in Firestore
+      try {
+        const regQuery = query(
+          collection(db, "student_registrations"),
+          where("paymentId", "==", utr)
+        );
+        let regSnap = await getDocs(regQuery);
+
+        if (regSnap.empty && matchedOrderId) {
+          const orderRegQuery = query(
+            collection(db, "student_registrations"),
+            where("orderId", "==", matchedOrderId)
+          );
+          regSnap = await getDocs(orderRegQuery);
+        }
+
+        if (!regSnap.empty) {
+          // Auto-approve existing registration immediately!
+          const matchingDoc = regSnap.docs[0];
+          matchedRegistrationId = matchingDoc.id;
+          matchedStudentName = matchingDoc.data()?.participantName || matchingDoc.data()?.leaderName || matchedStudentName || "Student";
+
+          await updateDoc(matchingDoc.ref, {
+            paymentStatus: "PAID",
+            paymentId: utr,
+            paidAt: now,
+            verifiedBy: "Paytm Auto-Gateway (Webhook)",
+            verifiedAt: now,
+          });
+        }
+      } catch (regErr) {
+        console.warn("Notice: student_registrations update error:", regErr);
+      }
+
+      // 3C. Save ledger entry in verified_upi_payments
+      const isMatched = Boolean(matchedRegistrationId || matchedOrderId);
+      await setDoc(paymentDocRef, {
+        utr,
+        amount,
+        rawNotification: combinedText,
+        status: isMatched ? "MATCHED" : "UNCLAIMED",
+        matchedRegistrationId: matchedRegistrationId || null,
+        matchedOrderId: matchedOrderId || null,
+        matchedStudentName: matchedStudentName || null,
+        receivedAt: now,
+        matchedAt: isMatched ? now : null,
+      }, { merge: true });
     }
 
     return NextResponse.json({
       success: true,
       utr,
       amount,
-      matched: Boolean(matchedRegistrationId),
+      matched: Boolean(matchedRegistrationId || matchedOrderId),
       matchedRegistrationId,
+      matchedOrderId,
       matchedStudentName,
       message: matchedRegistrationId
         ? `Payment matched and pass auto-approved for ${matchedStudentName} (${matchedRegistrationId}).`
+        : matchedOrderId
+        ? `Active checkout session auto-approved for ${matchedStudentName} (${matchedOrderId}). Instant pass rendered on device.`
         : "Payment verified and recorded in ledger. Awaiting student registration submit.",
     });
 

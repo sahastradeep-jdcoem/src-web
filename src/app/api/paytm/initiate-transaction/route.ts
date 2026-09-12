@@ -146,6 +146,28 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Register active checkout session in Firestore for zero-touch auto-detection
+    try {
+      const { db } = await import("@/lib/firebase/config");
+      const { doc, setDoc } = await import("firebase/firestore");
+      if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+        await setDoc(doc(db, "active_checkout_sessions", orderId), {
+          orderId,
+          amount: Number(amount),
+          eventId: eventId || "",
+          eventName: eventName || "",
+          participantName: participantName || "",
+          email: email || "",
+          phone: phone || "",
+          status: "WAITING",
+          createdAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+        });
+      }
+    } catch (sessionErr) {
+      console.warn("Notice: could not record active_checkout_sessions:", sessionErr);
+    }
+
     return NextResponse.json({
       success: true,
       orderId,

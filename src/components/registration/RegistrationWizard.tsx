@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { saveRegistrationToFirestore, checkExistingStudentRegistration, StudentRegistrationRecord } from "@/lib/firebase/firestore";
 import { db } from "@/lib/firebase/config";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
 import { 
   User, 
@@ -168,6 +168,9 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   } | null>(null);
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(() => getStoredPaymentConfig());
   const [showQrOnMobile, setShowQrOnMobile] = useState(false);
+  const [showManualUtr, setShowManualUtr] = useState(false);
+  const [isAutoDetectingPayment, setIsAutoDetectingPayment] = useState(false);
+  const autoDetectCompletedRef = useRef(false);
   const [paytmUtr, setPaytmUtr] = useState("");
   const [isVerifyingPaytm, setIsVerifyingPaytm] = useState(false);
   const [isCopiedUpi, setIsCopiedUpi] = useState(false);
@@ -770,6 +773,9 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         throw new Error(orderData.error || "Failed to generate payment payload.");
       }
 
+      setShowManualUtr(false);
+      setPaytmUtr("");
+      autoDetectCompletedRef.current = false;
       setPaytmCheckoutData({
         orderId: orderData.orderId,
         amount: orderData.amount,
@@ -782,6 +788,24 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         payeeName: orderData.payeeName || paymentConfig.payeeName,
         upiId: orderData.upiId || paymentConfig.upiId,
       });
+
+      if (db && orderData.orderId) {
+        try {
+          await setDoc(doc(db, "active_checkout_sessions", orderData.orderId), {
+            orderId: orderData.orderId,
+            amount: Number(orderData.amount),
+            eventId: event.id,
+            eventName: event.name,
+            participantName: formData.fullName || user?.displayName || user?.name || "Student",
+            email: formData.email || user?.email || "",
+            phone: formData.phone || user?.phone || "",
+            status: "WAITING",
+            createdAt: new Date().toISOString(),
+          }, { merge: true });
+        } catch (e) {
+          console.warn("Client active_checkout_sessions mirror notice:", e);
+        }
+      }
       setIsSubmitting(false);
     } catch (err: any) {
       console.error("Payment initialization error:", err);
@@ -821,6 +845,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
       const verifyData = await verifyRes.json();
       if (verifyData.verified) {
+        autoDetectCompletedRef.current = true;
         // Sets status to "PENDING" (awaiting Treasurer confirmation) or "PAID"
         const targetPaymentStatus = (verifyData.paymentStatus as "PAID" | "PENDING") || "PENDING";
 
@@ -841,6 +866,78 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       setIsVerifyingPaytm(false);
     }
   };
+
+  // Hands-Free Auto-Detection: Listen for incoming MacroDroid webhook payment confirmation
+  useEffect(() => {
+    if (!paytmCheckoutData?.orderId) {
+      setIsAutoDetectingPayment(false);
+      return;
+    }
+
+    setIsAutoDetectingPayment(true);
+    autoDetectCompletedRef.current = false;
+    const currentOrderId = paytmCheckoutData.orderId;
+    const currentAmount = paytmCheckoutData.amount;
+
+    const handleAutoSuccess = async (completedUtr: string) => {
+      if (autoDetectCompletedRef.current) return;
+      autoDetectCompletedRef.current = true;
+      setIsAutoDetectingPayment(false);
+
+      await completeRegistration({
+        paymentStatus: "PAID",
+        paymentId: completedUtr || `UPI-AUTO-${Date.now().toString().slice(-8)}`,
+        orderId: currentOrderId,
+        amountPaid: currentAmount,
+      });
+      setPaytmCheckoutData(null);
+    };
+
+    // 1. Real-time Firestore snapshot listener on active_checkout_sessions doc
+    let unsubscribeSnapshot: (() => void) | null = null;
+    if (db) {
+      try {
+        const sessionDocRef = doc(db, "active_checkout_sessions", currentOrderId);
+        unsubscribeSnapshot = onSnapshot(
+          sessionDocRef,
+          (snap) => {
+            if (snap.exists()) {
+              const data = snap.data();
+              if (data?.status === "COMPLETED" && !autoDetectCompletedRef.current) {
+                handleAutoSuccess(data.utr || "");
+              }
+            }
+          },
+          (err) => {
+            console.warn("active_checkout_sessions listener notice:", err);
+          }
+        );
+      } catch (e) {
+        console.warn("Failed to attach session listener:", e);
+      }
+    }
+
+    // 2. Fallback polling interval every 3 seconds
+    const pollInterval = setInterval(async () => {
+      if (autoDetectCompletedRef.current) return;
+      try {
+        const res = await fetch(`/api/upi/check-status?orderId=${encodeURIComponent(currentOrderId)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.status === "PAID" && !autoDetectCompletedRef.current) {
+            handleAutoSuccess(data.utr || "");
+          }
+        }
+      } catch (e) {
+        // Silent polling error catch
+      }
+    }, 3000);
+
+    return () => {
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
+      clearInterval(pollInterval);
+    };
+  }, [paytmCheckoutData?.orderId]);
 
 
   if (event.status === "Completed" || event.status?.toLowerCase() === "completed") {
@@ -2202,55 +2299,98 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               </button>
             </div>
 
-            {/* Verification and Pass Generation */}
-            <div className="pt-4 border-t border-slate-200 text-left space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1 flex items-center justify-between">
-                  <span>12-Digit UPI Reference / UTR Number *</span>
-                  <span className="text-[10px] text-rose-600 font-semibold lowercase">Required for entry</span>
-                </label>
-                <p className="text-[11px] text-slate-500 mb-2">
-                  After completing payment on Google Pay, PhonePe, or Paytm, copy the <strong>12-digit numeric UTR</strong> from your receipt and paste it below.
-                </p>
-                <input
-                  type="text"
-                  maxLength={12}
-                  placeholder="e.g. 425512345678 (12 digits)"
-                  value={paytmUtr}
-                  onChange={(e) => {
-                    const onlyNums = e.target.value.replace(/\D/g, "");
-                    setPaytmUtr(onlyNums);
-                  }}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono text-slate-900 tracking-wider focus:outline-none focus:ring-2 focus:ring-[#002970]/30"
-                />
-                <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1 font-mono">
-                  <span>Digits: {paytmUtr.length}/12</span>
-                  {paytmUtr.length === 12 ? (
-                    <span className="text-emerald-600 font-bold">✓ Complete 12-digit UTR</span>
-                  ) : (
-                    <span>Enter exactly 12 digits</span>
-                  )}
+            {/* Live Auto-Approval Radar Banner (Zero typing required!) */}
+            <div className="p-4 rounded-2xl bg-emerald-50/90 border border-emerald-300 text-left space-y-2.5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-600"></span>
+                  </span>
+                  <span className="text-xs font-black text-emerald-950 uppercase tracking-wider">
+                    Auto-Approval Radar Active
+                  </span>
                 </div>
-              </div>
-
-              <Button
-                onClick={handleVerifyPaytmPayment}
-                isLoading={isVerifyingPaytm}
-                disabled={paytmUtr.length !== 12 || isVerifyingPaytm}
-                variant="primary"
-                size="md"
-                className="w-full justify-center gap-2 cursor-pointer min-h-[46px] disabled:opacity-50"
-              >
-                <Check className="w-4 h-4" />
-                <span>Submit UTR &amp; Register for Event</span>
-              </Button>
-
-              <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 text-[11px] text-amber-900 flex items-start gap-2">
-                <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <span>
-                  <strong>Anti-Fraud Protection:</strong> Passes are issued in <strong>Pending Verification</strong> status. The Treasurer matches your 12-digit UTR with the Paytm account before gate entry is activated.
+                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  Zero UTR Needed
                 </span>
               </div>
+              <p className="text-xs text-emerald-900 leading-relaxed font-medium">
+                Pay using Google Pay, PhonePe, Paytm, or scan the QR code. Once payment completes, your registration pass will <strong>automatically generate on this screen</strong> within seconds!
+              </p>
+              <div className="flex items-center gap-1.5 text-[10px] text-emerald-700 font-mono">
+                <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Waiting for payment signal • Listening live...</span>
+              </div>
+            </div>
+
+            {/* Manual Fallback (If phone was off or notification delayed) */}
+            <div className="pt-2 text-center">
+              {!showManualUtr ? (
+                <button
+                  type="button"
+                  onClick={() => setShowManualUtr(true)}
+                  className="text-[11px] text-slate-500 hover:text-slate-800 font-semibold underline underline-offset-4 py-1.5 transition-colors cursor-pointer inline-flex items-center gap-1"
+                >
+                  <span>Paid but pass didn&apos;t auto-activate? Enter 12-digit UTR manually &rarr;</span>
+                </button>
+              ) : (
+                <div className="pt-3 border-t border-slate-200 text-left space-y-3 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      12-Digit UPI Reference / UTR Number
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowManualUtr(false)}
+                      className="text-[11px] text-slate-400 hover:text-slate-600 font-medium cursor-pointer"
+                    >
+                      Hide manual entry
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    If auto-detection was delayed, copy the 12-digit UTR from your UPI payment receipt and paste below.
+                  </p>
+                  <input
+                    type="text"
+                    maxLength={12}
+                    placeholder="e.g. 425512345678 (12 digits)"
+                    value={paytmUtr}
+                    onChange={(e) => {
+                      const onlyNums = e.target.value.replace(/\D/g, "");
+                      setPaytmUtr(onlyNums);
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono text-slate-900 tracking-wider focus:outline-none focus:ring-2 focus:ring-[#002970]/30"
+                  />
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1 font-mono">
+                    <span>Digits: {paytmUtr.length}/12</span>
+                    {paytmUtr.length === 12 ? (
+                      <span className="text-emerald-600 font-bold">✓ Complete 12-digit UTR</span>
+                    ) : (
+                      <span>Enter exactly 12 digits</span>
+                    )}
+                  </div>
+
+                  <Button
+                    onClick={handleVerifyPaytmPayment}
+                    isLoading={isVerifyingPaytm}
+                    disabled={paytmUtr.length !== 12 || isVerifyingPaytm}
+                    variant="primary"
+                    size="md"
+                    className="w-full justify-center gap-2 cursor-pointer min-h-[46px] disabled:opacity-50"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>Submit UTR &amp; Register for Event</span>
+                  </Button>
+
+                  <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 text-[11px] text-amber-900 flex items-start gap-2">
+                    <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Manual Fallback:</strong> If submitted manually, the pass will be issued in <strong>Pending Verification</strong> status and cross-verified against the ledger before gate clearance.
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </Modal>
