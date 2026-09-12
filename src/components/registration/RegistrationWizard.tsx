@@ -53,7 +53,12 @@ import {
   isExternalUser
 } from "@/lib/usersStore";
 
-import { getStoredPaymentConfig } from "@/lib/paymentConfigStore";
+import { 
+  getStoredPaymentConfig,
+  syncPaymentConfigFromFirestore,
+  subscribeToPaymentConfig,
+  PaymentConfig 
+} from "@/lib/paymentConfigStore";
 
 interface RegistrationWizardProps {
   event: EventItem;
@@ -151,9 +156,15 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     amount: number;
     formattedAmount: string;
     upiLink: string;
+    gpayLink?: string;
+    phonepeLink?: string;
+    paytmLink?: string;
+    bhimLink?: string;
     payeeName: string;
     upiId: string;
   } | null>(null);
+  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(() => getStoredPaymentConfig());
+  const [showQrOnMobile, setShowQrOnMobile] = useState(false);
   const [paytmUtr, setPaytmUtr] = useState("");
   const [isVerifyingPaytm, setIsVerifyingPaytm] = useState(false);
   const [isCopiedUpi, setIsCopiedUpi] = useState(false);
@@ -166,6 +177,25 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     registrationId: string;
     ticketCode: string;
   } | null>(null);
+
+  // Realtime synchronization of Payment Gateway and Treasurer UPI settings
+  useEffect(() => {
+    let isMounted = true;
+    syncPaymentConfigFromFirestore().then((cfg) => {
+      if (isMounted && cfg) {
+        setPaymentConfig(cfg);
+      }
+    });
+    const unsub = subscribeToPaymentConfig((cfg) => {
+      if (isMounted && cfg) {
+        setPaymentConfig(cfg);
+      }
+    });
+    return () => {
+      isMounted = false;
+      unsub();
+    };
+  }, []);
 
   // Check if current user is already registered for this event
   useEffect(() => {
@@ -675,6 +705,9 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           teamType: formData.teamType,
           teamSize: formData.teamType === "Team" ? teamMembers.length : 1,
           tenureId: "2025-26",
+          upiId: paymentConfig.upiId,
+          payeeName: paymentConfig.payeeName,
+          paytmMid: paymentConfig.paytmMid,
         }),
       });
 
@@ -693,8 +726,12 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         amount: orderData.amount,
         formattedAmount: orderData.formattedAmount,
         upiLink: orderData.upiLink,
-        payeeName: orderData.payeeName,
-        upiId: orderData.upiId,
+        gpayLink: orderData.gpayLink,
+        phonepeLink: orderData.phonepeLink,
+        paytmLink: orderData.paytmLink,
+        bhimLink: orderData.bhimLink,
+        payeeName: orderData.payeeName || paymentConfig.payeeName,
+        upiId: orderData.upiId || paymentConfig.upiId,
       });
       setIsSubmitting(false);
     } catch (err: any) {
@@ -1986,41 +2023,115 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               </div>
             </div>
 
-            {/* Dynamic QR Code for Desktop / Laptop */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 inline-block mx-auto shadow-sm">
-              <div className="p-3 bg-white rounded-xl inline-block border border-slate-200">
-                <ScannableQRCode value={paytmCheckoutData.upiLink} size={170} />
+            {/* Choose Your UPI App (Mobile-First 1-Tap App Grid) */}
+            <div className="space-y-2.5 text-left">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  Tap to Pay with your UPI App
+                </span>
+                <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                  Pre-Locked ₹{paytmCheckoutData.formattedAmount}
+                </span>
               </div>
-              <p className="text-[11px] font-medium text-slate-500 mt-2">
-                Scan with Google Pay, PhonePe, or Paytm
-              </p>
-            </div>
 
-            {/* Mobile 1-Tap Payment Action */}
-            <div className="space-y-2">
+              {/* Grid of Dedicated UPI Apps */}
+              <div className="grid grid-cols-3 gap-2">
+                {/* Google Pay */}
+                <a
+                  href={paytmCheckoutData.gpayLink || paytmCheckoutData.upiLink}
+                  className="flex flex-col items-center justify-center p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 shadow-sm active:scale-95 transition-all text-center min-h-[64px] no-underline"
+                >
+                  <span className="text-sm font-extrabold text-slate-800 flex items-center gap-0.5 tracking-tight">
+                    <span className="text-[#4285F4]">G</span>
+                    <span className="text-[#EA4335]">P</span>
+                    <span className="text-[#FBBC05]">a</span>
+                    <span className="text-[#34A853]">y</span>
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-medium mt-0.5">Google Pay</span>
+                </a>
+
+                {/* PhonePe */}
+                <a
+                  href={paytmCheckoutData.phonepeLink || paytmCheckoutData.upiLink}
+                  className="flex flex-col items-center justify-center p-3 rounded-xl border border-[#5f259f]/20 bg-[#5f259f]/5 hover:bg-[#5f259f]/10 hover:border-[#5f259f]/40 shadow-sm active:scale-95 transition-all text-center min-h-[64px] no-underline"
+                >
+                  <span className="text-sm font-extrabold text-[#5f259f] tracking-tight">PhonePe</span>
+                  <span className="text-[10px] text-[#5f259f]/80 font-medium mt-0.5">Instant App</span>
+                </a>
+
+                {/* Paytm */}
+                <a
+                  href={paytmCheckoutData.paytmLink || paytmCheckoutData.upiLink}
+                  className="flex flex-col items-center justify-center p-3 rounded-xl border border-[#00b9f5]/30 bg-[#00b9f5]/5 hover:bg-[#00b9f5]/10 hover:border-[#00b9f5]/50 shadow-sm active:scale-95 transition-all text-center min-h-[64px] no-underline"
+                >
+                  <span className="text-sm font-extrabold text-[#002970] tracking-tight">Paytm</span>
+                  <span className="text-[10px] text-[#00b9f5] font-bold mt-0.5">Fast UPI</span>
+                </a>
+              </div>
+
+              {/* Any / Other UPI App (WhatsApp, Cred, BHIM, Bank Apps) */}
               <a
                 href={paytmCheckoutData.upiLink}
-                className="w-full py-3 px-4 rounded-xl bg-[#002970] hover:bg-[#001f54] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-sm transition-all min-h-[44px]"
+                className="w-full py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-98 min-h-[42px] no-underline"
               >
-                <CreditCard className="w-4 h-4 text-[#00b9f5]" />
-                <span>Pay ₹{paytmCheckoutData.formattedAmount} via UPI App</span>
+                <CreditCard className="w-3.5 h-3.5 text-slate-600" />
+                <span>Other UPI Apps (WhatsApp, Cred, BHIM, Bank Apps)</span>
               </a>
+            </div>
 
-              {/* Copy UPI ID */}
-              <div className="flex items-center justify-center gap-2 text-xs text-slate-600 pt-1">
-                <span>UPI: <strong className="font-mono text-slate-900">{paytmCheckoutData.upiId}</strong></span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(paytmCheckoutData.upiId);
-                    setIsCopiedUpi(true);
-                    setTimeout(() => setIsCopiedUpi(false), 2000);
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 text-[10px] font-bold transition-all min-h-[28px]"
-                >
-                  {isCopiedUpi ? "Copied!" : "Copy ID"}
-                </button>
+            {/* Dynamic QR Code Section (Prominent on desktop/laptop, compact/toggleable on mobile) */}
+            <div className="pt-1">
+              <div className="hidden sm:block p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center shadow-sm">
+                <div className="p-3 bg-white rounded-xl inline-block border border-slate-200">
+                  <ScannableQRCode value={paytmCheckoutData.upiLink} size={160} />
+                </div>
+                <p className="text-[11px] font-medium text-slate-500 mt-2">
+                  Scan QR with any UPI App on your phone
+                </p>
               </div>
+
+              {/* Mobile QR Toggle */}
+              <div className="sm:hidden text-center">
+                {!showQrOnMobile ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowQrOnMobile(true)}
+                    className="text-xs text-[#002970] font-bold hover:underline py-1.5 inline-flex items-center gap-1.5 min-h-[36px]"
+                  >
+                    <QrCode className="w-3.5 h-3.5 text-[#002970]" />
+                    <span>Paying from another phone? Show QR Code</span>
+                  </button>
+                ) : (
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 inline-block mx-auto text-center">
+                    <div className="p-2 bg-white rounded-lg inline-block border border-slate-200">
+                      <ScannableQRCode value={paytmCheckoutData.upiLink} size={140} />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowQrOnMobile(false)}
+                      className="block mx-auto text-[11px] text-slate-500 hover:text-slate-700 font-semibold mt-1 py-1"
+                    >
+                      Hide QR Code
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Copy UPI ID */}
+            <div className="flex items-center justify-center gap-2 text-xs text-slate-600 pt-0.5">
+              <span>UPI: <strong className="font-mono text-slate-900">{paytmCheckoutData.upiId}</strong></span>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(paytmCheckoutData.upiId);
+                  setIsCopiedUpi(true);
+                  setTimeout(() => setIsCopiedUpi(false), 2000);
+                }}
+                className="px-2.5 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 text-[10px] font-bold transition-all min-h-[28px]"
+              >
+                {isCopiedUpi ? "Copied!" : "Copy ID"}
+              </button>
             </div>
 
             {/* Verification and Pass Generation */}

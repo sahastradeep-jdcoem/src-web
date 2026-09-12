@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { mockEvents } from "@/data/events";
-import { getStoredPaymentConfig } from "@/lib/paymentConfigStore";
+import { PaymentConfig } from "@/lib/paymentConfigStore";
+import { getSiteContentFromFirestore } from "@/lib/firebase/firestore";
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,7 +16,10 @@ export async function POST(req: NextRequest) {
       btId, 
       teamType,
       teamSize,
-      tenureId 
+      tenureId,
+      upiId: clientUpiId,
+      payeeName: clientPayeeName,
+      paytmMid: clientMid
     } = body;
 
     if (!amount || Number(amount) <= 0) {
@@ -47,19 +51,50 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Load server environment or stored payment config
-    const mid = process.env.PAYTM_MID || process.env.NEXT_PUBLIC_PAYTM_MID || "";
-    const merchantKey = process.env.PAYTM_MERCHANT_KEY || "";
-    const upiId = process.env.NEXT_PUBLIC_PAYTM_UPI_ID || "8237981028@paytm";
-    const payeeName = "SRC JDCOEM";
+    // Dynamic config resolution: Server Firestore -> Client Payload -> Environment Defaults
+    let mid = process.env.PAYTM_MID || process.env.NEXT_PUBLIC_PAYTM_MID || "";
+    let merchantKey = process.env.PAYTM_MERCHANT_KEY || "";
+    let upiId = process.env.NEXT_PUBLIC_PAYTM_UPI_ID || "8237981028@paytm";
+    let payeeName = "SRC JDCOEM";
+
+    try {
+      const remoteConfig = await getSiteContentFromFirestore<PaymentConfig>("payment_config");
+      if (remoteConfig) {
+        if (remoteConfig.upiId?.trim()) upiId = remoteConfig.upiId.trim();
+        if (remoteConfig.payeeName?.trim()) payeeName = remoteConfig.payeeName.trim();
+        if (remoteConfig.paytmMid?.trim()) mid = remoteConfig.paytmMid.trim();
+        if (remoteConfig.paytmMerchantKey?.trim()) merchantKey = remoteConfig.paytmMerchantKey.trim();
+      }
+    } catch (fsErr) {
+      console.warn("Firestore payment_config read notice in API route:", fsErr);
+    }
+
+    // If client provided active values from localStorage store, use if valid
+    if (clientUpiId && typeof clientUpiId === "string" && clientUpiId.includes("@")) {
+      upiId = clientUpiId.trim();
+    }
+    if (clientPayeeName && typeof clientPayeeName === "string" && clientPayeeName.trim()) {
+      payeeName = clientPayeeName.trim();
+    }
+    if (clientMid && typeof clientMid === "string" && clientMid.trim()) {
+      mid = clientMid.trim();
+    }
 
     const formattedAmount = Number(amount).toFixed(2);
     const orderId = `SRC-PTM-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
 
-    // Build standard NPCI-compliant UPI deep link with locked amount
+    // Build standard NPCI-compliant UPI deep links with locked amount
     const sanitizedPayee = encodeURIComponent(payeeName);
     const note = encodeURIComponent(`${orderId} ${eventName || "SRC Event"}`.slice(0, 50));
-    const upiLink = `upi://pay?pa=${upiId}&pn=${sanitizedPayee}&am=${formattedAmount}&cu=INR&tn=${note}&tr=${orderId}`;
+    
+    // Core parameters for locked payment: pa (VPA), pn (Payee Name), am (Amount), cu (Currency), tn (Transaction Note), tr (Tracking Ref)
+    const baseUpiParams = `pa=${encodeURIComponent(upiId)}&pn=${sanitizedPayee}&am=${formattedAmount}&cu=INR&tn=${note}&tr=${orderId}`;
+
+    const upiLink = `upi://pay?${baseUpiParams}`;
+    const gpayLink = `tez://upi/pay?${baseUpiParams}`;
+    const phonepeLink = `phonepe://pay?${baseUpiParams}`;
+    const paytmLink = `paytmmp://pay?${baseUpiParams}`;
+    const bhimLink = `bhim://pay?${baseUpiParams}`;
 
     let txnToken = "";
     let isPaytmSdkConfigured = false;
@@ -120,6 +155,10 @@ export async function POST(req: NextRequest) {
       upiId,
       payeeName,
       upiLink,
+      gpayLink,
+      phonepeLink,
+      paytmLink,
+      bhimLink,
       txnToken,
       mid,
       isPaytmSdkConfigured,
