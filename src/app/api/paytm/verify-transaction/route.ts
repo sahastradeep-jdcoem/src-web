@@ -122,9 +122,47 @@ export async function POST(req: NextRequest) {
       console.warn("Notice: could not run server-side duplicate UTR check:", dbErr);
     }
 
+    // Check if the 12-digit UTR was already confirmed via our live mobile webhook
+    let autoVerifiedViaWebhook = false;
+    try {
+      const { db } = await import("@/lib/firebase/config");
+      const { doc, getDoc, updateDoc } = await import("firebase/firestore");
+      if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+        const paymentDocRef = doc(db, "verified_upi_payments", utr);
+        const paymentSnap = await getDoc(paymentDocRef);
+        if (paymentSnap.exists()) {
+          const paymentData = paymentSnap.data();
+          const expectedAmount = Number(amount || 0);
+          // If amount is valid or matches expected fee
+          if (!expectedAmount || (paymentData.amount && paymentData.amount >= expectedAmount)) {
+            autoVerifiedViaWebhook = true;
+            await updateDoc(paymentDocRef, {
+              status: "MATCHED",
+              matchedOrderId: orderId,
+              matchedAt: new Date().toISOString(),
+            });
+          }
+        }
+      }
+    } catch (whErr) {
+      console.warn("Notice: could not query verified_upi_payments:", whErr);
+    }
+
+    if (autoVerifiedViaWebhook) {
+      return NextResponse.json({
+        verified: true,
+        paymentStatus: "PAID", // Auto-approved on the spot!
+        paymentId: utr,
+        orderId: orderId,
+        amount: Number(amount || 0),
+        gateway: "Paytm Auto-Gateway",
+        message: "Payment confirmed in real-time via Paytm webhook! Pass activated.",
+      });
+    }
+
     return NextResponse.json({
       verified: true,
-      paymentStatus: "PENDING", // Strictly PENDING until approved by Treasurer
+      paymentStatus: "PENDING", // PENDING until approved by Treasurer or phone webhook
       paymentId: utr,
       orderId: orderId,
       amount: Number(amount || 0),

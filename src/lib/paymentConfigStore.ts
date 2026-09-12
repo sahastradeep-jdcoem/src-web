@@ -14,6 +14,8 @@ export interface PaymentConfig {
   upiId: string;
   payeeName: string;
   isGatewayActive: boolean;
+  webhookSecret?: string;
+  isWebhookActive?: boolean;
   instructions?: string;
   updatedAt?: string;
   updatedBy?: string;
@@ -32,6 +34,8 @@ export const DEFAULT_PAYMENT_CONFIG: PaymentConfig = {
   upiId: "8237981028@paytm",
   payeeName: "SRC JDCOEM",
   isGatewayActive: true,
+  webhookSecret: "SRC_UPI_2026_GATEWAY",
+  isWebhookActive: true,
   instructions: "Scan QR or tap to open UPI App. Amount is pre-locked for this event.",
   updatedAt: new Date().toISOString(),
   updatedBy: "System",

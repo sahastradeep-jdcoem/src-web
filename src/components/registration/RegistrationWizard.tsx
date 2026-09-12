@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { saveRegistrationToFirestore, checkExistingStudentRegistration, StudentRegistrationRecord } from "@/lib/firebase/firestore";
+import { db } from "@/lib/firebase/config";
+import { doc, onSnapshot } from "firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
 import { 
   User, 
@@ -199,6 +201,48 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       unsub();
     };
   }, []);
+
+  // Realtime subscription for instant auto-approval when phone webhook lands
+  useEffect(() => {
+    if (!generatedTicket || generatedTicket.paymentStatus !== "PENDING" || !generatedTicket.registrationId) {
+      return;
+    }
+
+    // 1. Listen to Firestore doc
+    let unsubFirestore: (() => void) | null = null;
+    try {
+      if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+        const docRef = doc(db, "student_registrations", generatedTicket.registrationId);
+        unsubFirestore = onSnapshot(docRef, (snap) => {
+          if (snap.exists()) {
+            const data = snap.data();
+            if (data?.paymentStatus === "PAID") {
+              setGeneratedTicket((prev) => prev ? { ...prev, paymentStatus: "PAID" } : null);
+              confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+            }
+          }
+        });
+      }
+    } catch (e) {
+      console.warn("Realtime pass subscription error:", e);
+    }
+
+    // 2. Also listen for custom event across tabs
+    const handleUpdate = (e: any) => {
+      const list = e.detail || [];
+      const item = list.find((r: any) => r.id === generatedTicket.registrationId || r.registrationId === generatedTicket.registrationId);
+      if (item && item.paymentStatus === "PAID") {
+        setGeneratedTicket((prev) => prev ? { ...prev, paymentStatus: "PAID" } : null);
+        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+      }
+    };
+    window.addEventListener("src_registrations_updated", handleUpdate);
+
+    return () => {
+      if (unsubFirestore) unsubFirestore();
+      window.removeEventListener("src_registrations_updated", handleUpdate);
+    };
+  }, [generatedTicket?.registrationId, generatedTicket?.paymentStatus]);
 
   // Check if current user is already registered for this event
   useEffect(() => {
