@@ -48,7 +48,7 @@ export interface StudentRegistrationRecord {
     isLeader?: boolean;
   }>;
   status: "CONFIRMED" | "WAITLISTED" | "CHECKED_IN" | "CANCELLED";
-  paymentStatus?: "FREE" | "PAID" | "PENDING";
+  paymentStatus?: "FREE" | "PAID" | "PENDING" | "FAILED";
   paymentId?: string; // Gateway Payment / Transaction ID
   orderId?: string; // Gateway Order ID
   amountPaid?: number; // In INR (e.g. 150)
@@ -753,6 +753,59 @@ export async function updateRegistrationRefundInFirestore(
       window.dispatchEvent(new CustomEvent("src_registrations_updated", { detail: updated }));
     } catch (e) {
       console.warn("Local storage refund update error:", e);
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Admin / Treasurer 1-Tap Approval for UPI UTR Registrations
+ * Transitions a registration from PENDING to PAID (or FAILED)
+ */
+export async function updateRegistrationPaymentStatus(
+  registrationId: string,
+  paymentStatus: "PAID" | "PENDING" | "FAILED",
+  verifiedBy: string = "Admin / Treasurer"
+): Promise<boolean> {
+  if (!registrationId) return false;
+
+  const now = new Date().toISOString();
+
+  // 1. Update in Firestore
+  try {
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      const docRef = doc(db, REGISTRATIONS_COLLECTION, registrationId);
+      await updateDoc(docRef, {
+        paymentStatus,
+        paidAt: paymentStatus === "PAID" ? now : undefined,
+        verifiedBy,
+        verifiedAt: now,
+      });
+    }
+  } catch (error) {
+    console.warn("Firestore payment status update error for registration:", registrationId, error);
+  }
+
+  // 2. Update local storage and dispatch cross-tab event
+  if (typeof window !== "undefined") {
+    try {
+      const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+      const updated = local.map((r: any) =>
+        r.id === registrationId || r.registrationId === registrationId
+          ? {
+              ...r,
+              paymentStatus,
+              paidAt: paymentStatus === "PAID" ? now : r.paidAt,
+              verifiedBy,
+              verifiedAt: now,
+            }
+          : r
+      );
+      localStorage.setItem("src_local_registrations", JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent("src_registrations_updated", { detail: updated }));
+    } catch (e) {
+      console.warn("Local storage update error for payment status:", e);
     }
   }
 

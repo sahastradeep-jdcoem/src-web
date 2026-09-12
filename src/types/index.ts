@@ -206,7 +206,7 @@ export interface RegistrationRecord {
   createdAt?: string | Date | { seconds: number; nanoseconds?: number };
   paidAt?: string;
   status: "CONFIRMED" | "PENDING" | "COMPLETED" | "CHECKED_IN" | "CANCELLED";
-  paymentStatus?: "FREE" | "PAID" | "PENDING";
+  paymentStatus?: "FREE" | "PAID" | "PENDING" | "FAILED";
   paymentId?: string;
   orderId?: string;
   amountPaid?: number;

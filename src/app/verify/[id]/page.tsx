@@ -155,7 +155,8 @@ export default function PassVerificationPage() {
 
   const isCancelled = record.status === "CANCELLED";
   const isAlreadyCheckedIn = record.status === "CHECKED_IN";
-  const isPaid = record.paymentStatus === "PAID" || (record.amountPaid && record.amountPaid > 0);
+  const isPaymentPending = record.paymentStatus === "PENDING";
+  const isPaid = record.paymentStatus === "PAID" || (record.amountPaid && record.amountPaid > 0 && !isPaymentPending);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col items-center justify-start p-4 sm:p-6 lg:p-10 font-sans">
@@ -184,6 +185,8 @@ export default function PassVerificationPage() {
           className={`rounded-3xl p-6 sm:p-8 text-center space-y-4 border-2 shadow-lg relative overflow-hidden transition-all bg-white ${
             isCancelled
               ? "border-rose-400 shadow-rose-500/10"
+              : isPaymentPending
+              ? "border-amber-400 shadow-amber-500/10"
               : isAlreadyCheckedIn
               ? "border-blue-400 shadow-blue-500/10"
               : "border-emerald-400 shadow-emerald-500/10"
@@ -192,7 +195,13 @@ export default function PassVerificationPage() {
           {/* Subtle Color Accent Glow */}
           <div
             className={`absolute top-0 right-0 -mr-16 -mt-16 w-48 h-48 rounded-full blur-3xl opacity-15 pointer-events-none ${
-              isCancelled ? "bg-rose-400" : isAlreadyCheckedIn ? "bg-blue-400" : "bg-emerald-400"
+              isCancelled 
+                ? "bg-rose-400" 
+                : isPaymentPending
+                ? "bg-amber-400"
+                : isAlreadyCheckedIn 
+                ? "bg-blue-400" 
+                : "bg-emerald-400"
             }`}
           />
 
@@ -200,12 +209,20 @@ export default function PassVerificationPage() {
             className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto border ${
               isCancelled
                 ? "bg-rose-50 border-rose-200 text-rose-600"
+                : isPaymentPending
+                ? "bg-amber-50 border-amber-200 text-amber-600"
                 : isAlreadyCheckedIn
                 ? "bg-blue-50 border-blue-200 text-[#17458F]"
                 : "bg-emerald-50 border-emerald-200 text-emerald-600 animate-bounce"
             }`}
           >
-            {isCancelled ? <XCircle className="w-10 h-10" /> : <ShieldCheck className="w-10 h-10" />}
+            {isCancelled ? (
+              <XCircle className="w-10 h-10" />
+            ) : isPaymentPending ? (
+              <Clock className="w-10 h-10 animate-pulse" />
+            ) : (
+              <ShieldCheck className="w-10 h-10" />
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -213,6 +230,10 @@ export default function PassVerificationPage() {
               {isCancelled ? (
                 <span className="bg-rose-100 text-rose-800 border border-rose-200 px-3.5 py-1 rounded-full">
                   🔴 PASS CANCELLED • VOID
+                </span>
+              ) : isPaymentPending ? (
+                <span className="bg-amber-100 text-amber-900 border border-amber-300 px-3.5 py-1 rounded-full animate-pulse">
+                  ⚠️ PAYMENT VERIFICATION PENDING
                 </span>
               ) : isAlreadyCheckedIn ? (
                 <span className="bg-blue-100 text-blue-800 border border-blue-200 px-3.5 py-1 rounded-full">
@@ -228,6 +249,8 @@ export default function PassVerificationPage() {
             <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-slate-900 tracking-tight">
               {isCancelled
                 ? "Registration Cancelled"
+                : isPaymentPending
+                ? "Payment Awaiting Verification"
                 : isAlreadyCheckedIn
                 ? "Participant Checked In"
                 : "Valid Delegate Entry"}
@@ -236,6 +259,8 @@ export default function PassVerificationPage() {
             <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed font-medium">
               {isCancelled
                 ? "This accreditation pass was officially cancelled by the student and is no longer valid for gate entry."
+                : isPaymentPending
+                ? "This registration is recorded, but the student's Paytm payment is awaiting verification by the Treasurer. Gate admission is withheld until verified."
                 : isAlreadyCheckedIn
                 ? "This pass has already been validated and marked as attended at the campus gates."
                 : "Officially registered delegate pass verified against SRC cloud ledger."}
@@ -271,6 +296,32 @@ export default function PassVerificationPage() {
               <div className="p-3.5 rounded-2xl bg-rose-100/80 border border-rose-300 text-rose-900 text-xs font-bold text-center">
                 ⛔ Gate Entry Denied — Inactive / Void Accreditation Pass
               </div>
+            </div>
+          ) : isPaymentPending ? (
+            <div className="pt-2 space-y-2.5">
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-left space-y-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-amber-900 text-xs">
+                  <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Gate Clearance Blocked — UTR Review Required</span>
+                </div>
+                <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
+                  The student submitted Paytm UPI Reference: <span className="font-mono font-bold text-slate-900 bg-amber-100/80 px-1.5 py-0.5 rounded">{record.paymentId || "Pending"}</span> for ₹{record.amountPaid || 0}. Gate entry is not allowed until verified.
+                </p>
+              </div>
+
+              {isAdmin ? (
+                <Link
+                  href="/admin/registrations"
+                  className="w-full py-3.5 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs uppercase tracking-wider transition-all shadow-md shadow-amber-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Open Admin Console to Approve Pass</span>
+                </Link>
+              ) : (
+                <div className="p-3 rounded-xl bg-slate-100 text-slate-600 text-xs font-semibold text-center border border-slate-200">
+                  Please show your UPI payment receipt (UTR: {record.paymentId}) to the SRC desk volunteer.
+                </div>
+              )}
             </div>
           ) : !isAlreadyCheckedIn ? (
             isAdmin ? (
@@ -388,18 +439,18 @@ export default function PassVerificationPage() {
                 Payment Clearance
               </span>
               <div className="flex items-center gap-2 pt-0.5">
-                <Badge variant={isPaid ? "success" : "slate"} size="sm">
-                  {isPaid ? "PAID" : "FREE ENTRY"}
+                <Badge variant={isPaymentPending ? "warning" : isPaid ? "success" : "slate"} size="sm">
+                  {isPaymentPending ? "PENDING REVIEW" : isPaid ? "PAID" : "FREE ENTRY"}
                 </Badge>
-                {isPaid && (
-                  <span className="font-bold text-emerald-700 text-sm">
+                {(isPaid || isPaymentPending) && (
+                  <span className={`font-bold text-sm ${isPaymentPending ? "text-amber-700" : "text-emerald-700"}`}>
                     ₹{record.amountPaid || 0}
                   </span>
                 )}
               </div>
               {record.paymentId && (
-                <p className="text-[10px] font-mono text-slate-500 truncate pt-1">
-                  Txn: {record.paymentId}
+                <p className="text-[10px] font-mono text-slate-600 truncate pt-1">
+                  UTR: <span className="font-bold text-slate-900">{record.paymentId}</span>
                 </p>
               )}
             </div>

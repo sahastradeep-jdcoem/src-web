@@ -33,7 +33,8 @@ import {
   QrCode,
   Copy,
   ExternalLink,
-  XCircle
+  XCircle,
+  Clock
 } from "lucide-react";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { CancelRegistrationModal } from "@/components/registration/CancelRegistrationModal";
@@ -176,6 +177,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   const [generatedTicket, setGeneratedTicket] = useState<{
     registrationId: string;
     ticketCode: string;
+    paymentStatus?: string;
+    paymentId?: string;
   } | null>(null);
 
   // Realtime synchronization of Payment Gateway and Treasurer UPI settings
@@ -558,7 +561,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   }
 
   const completeRegistration = async (paymentDetails?: {
-    paymentStatus: "FREE" | "PAID";
+    paymentStatus: "FREE" | "PAID" | "PENDING";
     paymentId?: string;
     orderId?: string;
     amountPaid?: number;
@@ -623,7 +626,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         orderId: paymentDetails?.orderId,
         amountPaid: paymentDetails?.amountPaid || 0,
         currency: "INR",
-        paidAt: new Date().toISOString(),
+        paidAt: paymentDetails?.paymentStatus === "PAID" ? new Date().toISOString() : undefined,
         registeredAt: new Date().toISOString(),
         tenureId: "tenure-2025-26",
         customAnswers: Object.keys(structuredAnswers).length > 0 ? structuredAnswers : undefined,
@@ -636,6 +639,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       setGeneratedTicket({
         registrationId: regId,
         ticketCode: tkCode,
+        paymentStatus: paymentDetails?.paymentStatus,
+        paymentId: paymentDetails?.paymentId,
       });
       setIsSubmitting(false);
       setCurrentStep(4);
@@ -746,6 +751,18 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
   const handleVerifyPaytmPayment = async () => {
     if (!paytmCheckoutData) return;
+
+    const cleanedUtr = paytmUtr.trim();
+    if (!cleanedUtr) {
+      alert("Please enter the 12-digit UPI Reference (UTR) Number from your Google Pay, PhonePe, or Paytm receipt.");
+      return;
+    }
+
+    if (!/^\d{12}$/.test(cleanedUtr)) {
+      alert(`Invalid UTR: "${cleanedUtr}". All Indian UPI payment receipts provide an exact 12-digit numeric reference (e.g. 425512345678).`);
+      return;
+    }
+
     setIsVerifyingPaytm(true);
     try {
       const verifyRes = await fetch("/api/paytm/verify-transaction", {
@@ -753,16 +770,19 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           orderId: paytmCheckoutData.orderId,
-          txnId: paytmUtr.trim() || `PTM_UPI_${Date.now().toString().slice(-8)}`,
+          txnId: cleanedUtr,
           amount: paytmCheckoutData.amount,
         }),
       });
 
       const verifyData = await verifyRes.json();
       if (verifyData.verified) {
+        // Sets status to "PENDING" (awaiting Treasurer confirmation) or "PAID"
+        const targetPaymentStatus = (verifyData.paymentStatus as "PAID" | "PENDING") || "PENDING";
+
         await completeRegistration({
-          paymentStatus: "PAID",
-          paymentId: verifyData.paymentId,
+          paymentStatus: targetPaymentStatus,
+          paymentId: verifyData.paymentId || cleanedUtr,
           orderId: paytmCheckoutData.orderId,
           amountPaid: totalPayableAmount,
         });
@@ -987,6 +1007,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                         setGeneratedTicket({
                           registrationId: existingRegistration.id,
                           ticketCode: (existingRegistration as any).ticketCode || `${existingRegistration.id}-TK`,
+                          paymentStatus: existingRegistration.paymentStatus,
+                          paymentId: existingRegistration.paymentId,
                         });
                         setCurrentStep(4);
                         scrollToStepTop();
@@ -1975,6 +1997,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             ticketCode={generatedTicket.ticketCode}
             parentEventName={event.parentEventName}
             subEventBadge={event.subEventBadge}
+            paymentStatus={generatedTicket.paymentStatus}
+            paymentId={generatedTicket.paymentId}
           />
         </div>
       )}
@@ -2137,32 +2161,52 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             {/* Verification and Pass Generation */}
             <div className="pt-4 border-t border-slate-200 text-left space-y-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  UPI Reference / UTR Number (Optional)
+                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1 flex items-center justify-between">
+                  <span>12-Digit UPI Reference / UTR Number *</span>
+                  <span className="text-[10px] text-rose-600 font-semibold lowercase">Required for entry</span>
                 </label>
+                <p className="text-[11px] text-slate-500 mb-2">
+                  After completing payment on Google Pay, PhonePe, or Paytm, copy the <strong>12-digit numeric UTR</strong> from your receipt and paste it below.
+                </p>
                 <input
                   type="text"
-                  placeholder="e.g. 12-digit UTR from GPay / PhonePe"
+                  maxLength={12}
+                  placeholder="e.g. 425512345678 (12 digits)"
                   value={paytmUtr}
-                  onChange={(e) => setPaytmUtr(e.target.value.trim())}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#002970]/30"
+                  onChange={(e) => {
+                    const onlyNums = e.target.value.replace(/\D/g, "");
+                    setPaytmUtr(onlyNums);
+                  }}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono text-slate-900 tracking-wider focus:outline-none focus:ring-2 focus:ring-[#002970]/30"
                 />
+                <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1 font-mono">
+                  <span>Digits: {paytmUtr.length}/12</span>
+                  {paytmUtr.length === 12 ? (
+                    <span className="text-emerald-600 font-bold">✓ Complete 12-digit UTR</span>
+                  ) : (
+                    <span>Enter exactly 12 digits</span>
+                  )}
+                </div>
               </div>
 
               <Button
                 onClick={handleVerifyPaytmPayment}
                 isLoading={isVerifyingPaytm}
+                disabled={paytmUtr.length !== 12 || isVerifyingPaytm}
                 variant="primary"
                 size="md"
-                className="w-full justify-center gap-2 cursor-pointer min-h-[44px]"
+                className="w-full justify-center gap-2 cursor-pointer min-h-[46px] disabled:opacity-50"
               >
                 <Check className="w-4 h-4" />
-                <span>I Have Paid — Generate Delegate Pass</span>
+                <span>Submit UTR &amp; Register for Event</span>
               </Button>
 
-              <p className="text-[10px] text-center text-slate-400">
-                Official accreditation pass with QR security codes will be issued immediately upon confirmation.
-              </p>
+              <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 text-[11px] text-amber-900 flex items-start gap-2">
+                <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Anti-Fraud Protection:</strong> Passes are issued in <strong>Pending Verification</strong> status. The Treasurer matches your 12-digit UTR with the Paytm account before gate entry is activated.
+                </span>
+              </div>
             </div>
           </div>
         </Modal>

@@ -42,7 +42,8 @@ import {
   XCircle,
   Banknote,
   RefreshCw,
-  RotateCcw
+  RotateCcw,
+  Copy
 } from "lucide-react";
 import { RegistrationRecord, EventItem, CustomQuestion } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -66,6 +67,7 @@ import {
   subscribeToRegistrationsFromFirestore, 
   deleteRegistrationFromFirestore,
   updateRegistrationRefundInFirestore,
+  updateRegistrationPaymentStatus,
   subscribeToSiteContent,
   isTestPassRecord,
   isHubRecord
@@ -113,6 +115,10 @@ export default function AdminRegistrationsPage() {
   const [refundingId, setRefundingId] = useState<string | null>(null);
   const [bulkRefunding, setBulkRefunding] = useState(false);
   const [bulkRefundProgress, setBulkRefundProgress] = useState({ current: 0, total: 0 });
+
+  // UPI UTR Approval State
+  const [copiedUtr, setCopiedUtr] = useState<string | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
   // Payment Gateway & UPI Settings State
   const [isPaymentConfigOpen, setIsPaymentConfigOpen] = useState(false);
@@ -519,11 +525,14 @@ export default function AdminRegistrationsPage() {
         r.participantName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         r.registrationId.toLowerCase().includes(searchQuery.toLowerCase()) ||
         r.eventName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (r.paymentId && r.paymentId.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (r.btId && r.btId.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (r.department && r.department.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchesStatus =
-        statusFilter === "All" || r.status === statusFilter;
+        statusFilter === "All" ||
+        r.status === statusFilter ||
+        (statusFilter === "PENDING" && (r.paymentStatus === "PENDING" || r.status === "PENDING"));
 
       return matchesSearch && matchesStatus;
     });
@@ -535,6 +544,7 @@ export default function AdminRegistrationsPage() {
     const checkedIn = eventRegistrations.filter((r) => r.status === "CHECKED_IN").length;
     const revenue = eventRegistrations.reduce((sum, r) => sum + (r.amountPaid || 0), 0);
     const paidCount = eventRegistrations.filter((r) => r.paymentStatus === "PAID").length;
+    const pendingPaymentCount = eventRegistrations.filter((r) => r.paymentStatus === "PENDING").length;
     const teamCount = eventRegistrations.filter((r) => r.teamType === "Team").length;
     const soloCount = total - teamCount;
 
@@ -572,6 +582,7 @@ export default function AdminRegistrationsPage() {
       checkedInPct: total > 0 ? Math.round((checkedIn / total) * 100) : 0,
       revenue,
       paidCount,
+      pendingPaymentCount,
       freeCount: total - paidCount,
       teamCount,
       soloCount,
@@ -945,6 +956,105 @@ export default function AdminRegistrationsPage() {
       alert(`Refund request failed: ${err.message || "Network error"}`);
     } finally {
       setRefundingId(null);
+    }
+  };
+
+  const handleApprovePayment = async (record: RegistrationRecord) => {
+    const regId = record.registrationId || record.id;
+    if (!regId) return;
+
+    if (!confirm(`Approve Paytm UPI payment (UTR: ${record.paymentId}) of ₹${record.amountPaid || 0} for ${record.participantName}?\n\nThis will mark the pass as PAID and unlock admission gate clearance.`)) {
+      return;
+    }
+
+    setActionLoadingId(record.id);
+    try {
+      const ok = await updateRegistrationPaymentStatus(regId, "PAID", "SRC Admin / Treasurer");
+      if (ok) {
+        setRegistrations((prev) =>
+          prev.map((r) =>
+            r.id === record.id || r.registrationId === regId
+              ? { ...r, paymentStatus: "PAID", paidAt: new Date().toISOString() }
+              : r
+          )
+        );
+        if (selectedRecord && (selectedRecord.id === record.id || selectedRecord.registrationId === regId)) {
+          setSelectedRecord((prev) =>
+            prev ? { ...prev, paymentStatus: "PAID", paidAt: new Date().toISOString() } : null
+          );
+        }
+        setCheckInNotice(`Payment Approved! Pass is now active for ${record.participantName}.`);
+        setTimeout(() => setCheckInNotice(null), 4000);
+      } else {
+        alert("Could not update payment status in database. Please check connection.");
+      }
+    } catch (err) {
+      console.error("Failed to approve payment:", err);
+      alert("Error approving payment. Please try again.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleRejectPayment = async (record: RegistrationRecord) => {
+    const regId = record.registrationId || record.id;
+    if (!regId) return;
+
+    const reason = prompt(
+      `Reject payment for ${record.participantName} (UTR: ${record.paymentId})?\nEnter cancellation reason for the student:`,
+      "Payment UTR not received or invalid in Paytm statement"
+    );
+    if (reason === null) return; // User pressed Cancel
+
+    setActionLoadingId(record.id);
+    try {
+      // Mark paymentStatus as FAILED and status as CANCELLED
+      await updateRegistrationPaymentStatus(regId, "FAILED", "SRC Admin / Treasurer");
+      if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+        const docRef = doc(db, "student_registrations", regId);
+        await updateDoc(docRef, {
+          status: "CANCELLED",
+          cancellationReason: reason || "Payment UTR rejected by Treasurer",
+          cancelledBy: "SRC Admin / Treasurer",
+          cancelledAt: new Date().toISOString(),
+        });
+      }
+
+      setRegistrations((prev) =>
+        prev.map((r) =>
+          r.id === record.id || r.registrationId === regId
+            ? {
+                ...r,
+                paymentStatus: "FAILED",
+                status: "CANCELLED" as any,
+                cancellationReason: reason || "Payment UTR rejected by Treasurer",
+                cancelledBy: "SRC Admin / Treasurer",
+                cancelledAt: new Date().toISOString(),
+              }
+            : r
+        )
+      );
+      if (selectedRecord && (selectedRecord.id === record.id || selectedRecord.registrationId === regId)) {
+        setSelectedRecord((prev) =>
+          prev
+            ? {
+                ...prev,
+                paymentStatus: "FAILED",
+                status: "CANCELLED" as any,
+                cancellationReason: reason || "Payment UTR rejected by Treasurer",
+                cancelledBy: "SRC Admin / Treasurer",
+                cancelledAt: new Date().toISOString(),
+              }
+            : null
+        );
+      }
+      setCheckInNotice(`Payment rejected and pass cancelled for ${record.participantName}.`);
+      setTimeout(() => setCheckInNotice(null), 4000);
+    } catch (err) {
+      console.error("Failed to reject payment:", err);
+      alert("Error updating database. Please try again.");
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
@@ -2089,13 +2199,52 @@ export default function AdminRegistrationsPage() {
                         {currentIndividual.status}
                       </Badge>
                       <Badge
-                        variant={currentIndividual.paymentStatus === "PAID" ? "navy" : "slate"}
+                        variant={currentIndividual.paymentStatus === "PAID" ? "navy" : currentIndividual.paymentStatus === "PENDING" ? "warning" : "slate"}
                         size="md"
                       >
-                        {currentIndividual.paymentStatus === "PAID" ? `PAID • ₹${currentIndividual.amountPaid}` : "FREE PASS"}
+                        {currentIndividual.paymentStatus === "PAID" 
+                          ? `PAID • ₹${currentIndividual.amountPaid}` 
+                          : currentIndividual.paymentStatus === "PENDING"
+                          ? `PENDING REVIEW • ₹${currentIndividual.amountPaid}`
+                          : "FREE PASS"}
                       </Badge>
                     </div>
                   </div>
+
+                  {/* Pending Payment Action Banner in Individual View */}
+                  {currentIndividual.paymentStatus === "PENDING" && currentIndividual.status !== "CANCELLED" && (
+                    <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
+                          <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                          <span>Paytm UPI Payment Verification Required</span>
+                        </div>
+                        <p className="text-[11px] text-amber-800">
+                          Student submitted 12-digit UTR: <span className="font-mono font-bold text-slate-900 bg-amber-100/80 px-1.5 py-0.5 rounded">{currentIndividual.paymentId}</span> for ₹{currentIndividual.amountPaid}. Confirm in your Paytm app.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleApprovePayment(currentIndividual)}
+                          disabled={actionLoadingId === currentIndividual.id}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Approve Pass</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRejectPayment(currentIndividual)}
+                          disabled={actionLoadingId === currentIndividual.id}
+                          className="px-3 py-1.5 rounded-xl bg-white hover:bg-rose-50 disabled:opacity-50 text-rose-700 border border-rose-200 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          <span>Reject</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Top Credentials & QR Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -2232,6 +2381,33 @@ export default function AdminRegistrationsPage() {
       {activeTab === "table" && (
         <div className="space-y-6 animate-in fade-in duration-200">
           
+          {/* Pending Payment Verification Callout Banner */}
+          {metrics.pendingPaymentCount > 0 && (
+            <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-amber-500/10 via-amber-50 to-orange-50 border-2 border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <Clock className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-extrabold text-amber-950 uppercase tracking-wider flex items-center gap-2">
+                    <span>{metrics.pendingPaymentCount} Student Payment{metrics.pendingPaymentCount > 1 ? "s" : ""} Awaiting Verification</span>
+                    <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[10px] font-mono font-bold">Action Needed</span>
+                  </h4>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    Students submitted 12-digit UTRs via Paytm UPI. Check transactions in your Paytm for Business app and click &quot;Approve&quot; to activate passes.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStatusFilter("PENDING")}
+                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0 flex items-center gap-1.5"
+              >
+                <span>Show Pending ({metrics.pendingPaymentCount})</span>
+              </button>
+            </div>
+          )}
+
           {/* Search & Status Filters */}
           <div className="p-4 sm:p-6 rounded-3xl bg-white border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
             <div className="relative w-full sm:max-w-md">
@@ -2240,7 +2416,7 @@ export default function AdminRegistrationsPage() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by participant name, BT ID, Reg ID..."
+                placeholder="Search by participant name, BT ID, Reg ID, 12-digit UTR..."
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs focus:outline-none focus:border-[#17458F]"
               />
             </div>
@@ -2335,6 +2511,11 @@ export default function AdminRegistrationsPage() {
                                 <CreditCard className="w-3 h-3" />
                                 <span>PAID • ₹{r.amountPaid}</span>
                               </span>
+                              {r.paymentId && r.paymentId !== "N/A" && (
+                                <p className="text-[10px] font-mono text-slate-500 truncate max-w-[140px]" title={r.paymentId}>
+                                  UTR: {r.paymentId}
+                                </p>
+                              )}
                               {r.refundStatus === "PROCESSED" && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-blue-50 text-blue-700 border border-blue-200 block w-fit">
                                   <CheckCircle2 className="w-2.5 h-2.5" />
@@ -2354,6 +2535,37 @@ export default function AdminRegistrationsPage() {
                                 </span>
                               )}
                             </div>
+                          ) : r.paymentStatus === "PENDING" ? (
+                            <div className="space-y-1.5">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+                                <Clock className="w-3 h-3 text-amber-600 shrink-0" />
+                                <span>PENDING • ₹{r.amountPaid}</span>
+                              </span>
+                              {r.paymentId && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] font-mono font-bold text-slate-700 bg-amber-50/60 px-1.5 py-0.5 rounded border border-amber-200/80">
+                                    UTR: {r.paymentId}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigator.clipboard.writeText(r.paymentId || "");
+                                      setCopiedUtr(r.paymentId || "");
+                                      setTimeout(() => setCopiedUtr(null), 2000);
+                                    }}
+                                    className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                                    title="Copy UTR to Clipboard"
+                                  >
+                                    {copiedUtr === r.paymentId ? (
+                                      <Check className="w-3 h-3 text-emerald-600" />
+                                    ) : (
+                                      <Copy className="w-3 h-3" />
+                                    )}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
                               <span>FREE PASS</span>
@@ -2369,7 +2581,31 @@ export default function AdminRegistrationsPage() {
                           </Badge>
                         </td>
                         <td className="py-4 px-6 text-right flex items-center justify-end gap-2">
-                          {r.status !== "CHECKED_IN" && r.status !== "CANCELLED" && (
+                          {/* 1-Tap Approval for PENDING payment */}
+                          {r.paymentStatus === "PENDING" && r.status !== "CANCELLED" && (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => handleApprovePayment(r)}
+                                disabled={actionLoadingId === r.id}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[11px] font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1"
+                                title="Verify UTR in Paytm App and Approve Pass"
+                              >
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Approve</span>
+                              </button>
+                              <button
+                                onClick={() => handleRejectPayment(r)}
+                                disabled={actionLoadingId === r.id}
+                                className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 disabled:opacity-50 text-rose-700 text-[11px] font-bold border border-rose-200 transition-colors cursor-pointer flex items-center gap-1"
+                                title="Reject Invalid UTR"
+                              >
+                                <XCircle className="w-3 h-3" />
+                                <span>Reject</span>
+                              </button>
+                            </div>
+                          )}
+
+                          {r.status !== "CHECKED_IN" && r.status !== "CANCELLED" && r.paymentStatus !== "PENDING" && (
                             <button
                               onClick={() => handleGateCheckIn(r)}
                               className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-bold border border-emerald-200 transition-colors cursor-pointer flex items-center gap-1"
@@ -2479,22 +2715,46 @@ export default function AdminRegistrationsPage() {
               <div className="p-3.5 rounded-xl bg-slate-50 space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-slate-500 uppercase text-[10px] font-bold">Finance / Gateway</span>
-                  {selectedRecord.refundStatus === "PROCESSED" && (
+                  {selectedRecord.paymentStatus === "PENDING" ? (
+                    <Badge variant="warning" size="sm">Pending Review</Badge>
+                  ) : selectedRecord.refundStatus === "PROCESSED" ? (
                     <Badge variant="success" size="sm">Refunded</Badge>
-                  )}
-                  {selectedRecord.refundStatus === "INITIATED" && (
+                  ) : selectedRecord.refundStatus === "INITIATED" ? (
                     <Badge variant="warning" size="sm">Refund Pending</Badge>
-                  )}
-                  {selectedRecord.refundStatus === "FAILED" && (
+                  ) : selectedRecord.refundStatus === "FAILED" ? (
                     <Badge variant="rose" size="sm">Refund Failed</Badge>
-                  )}
+                  ) : null}
                 </div>
                 <p className="font-bold text-slate-900 text-sm">
-                  {selectedRecord.paymentStatus === "PAID" ? `₹${selectedRecord.amountPaid || 0}` : "Free Pass"}
+                  {selectedRecord.paymentStatus === "PAID" 
+                    ? `₹${selectedRecord.amountPaid || 0}` 
+                    : selectedRecord.paymentStatus === "PENDING"
+                    ? `₹${selectedRecord.amountPaid || 0} (Pending)`
+                    : "Free Pass"}
                 </p>
-                <p className="text-[10px] font-mono text-slate-500 truncate" title={selectedRecord.paymentId || "Free"}>
-                  ID: {selectedRecord.paymentId || "N/A (Free)"}
-                </p>
+                <div className="flex items-center justify-between gap-1">
+                  <p className="text-[10px] font-mono text-slate-600 truncate" title={selectedRecord.paymentId || "Free"}>
+                    UTR: <span className="font-bold text-slate-900">{selectedRecord.paymentId || "N/A (Free)"}</span>
+                  </p>
+                  {selectedRecord.paymentId && selectedRecord.paymentId !== "N/A" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(selectedRecord.paymentId || "");
+                        setCopiedUtr(selectedRecord.paymentId || "");
+                        setTimeout(() => setCopiedUtr(null), 2000);
+                      }}
+                      className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors inline-flex items-center gap-1 text-[10px]"
+                      title="Copy UTR"
+                    >
+                      {copiedUtr === selectedRecord.paymentId ? (
+                        <Check className="w-3 h-3 text-emerald-600" />
+                      ) : (
+                        <Copy className="w-3 h-3" />
+                      )}
+                    </button>
+                  )}
+                </div>
                 {selectedRecord.refundId && (
                   <p className="text-[10px] font-mono text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 truncate" title={selectedRecord.refundId}>
                     Refund ID: {selectedRecord.refundId}
@@ -2507,6 +2767,41 @@ export default function AdminRegistrationsPage() {
                 )}
               </div>
             </div>
+
+            {/* UPI UTR Verification Required Callout inside Modal */}
+            {selectedRecord.paymentStatus === "PENDING" && selectedRecord.status !== "CANCELLED" && (
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 space-y-3">
+                <div className="flex items-start gap-2.5">
+                  <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-bold text-amber-900">UTR Verification Required</h4>
+                    <p className="text-[11px] text-amber-800 leading-relaxed">
+                      Student submitted 12-digit UTR: <span className="font-mono font-bold text-slate-900 bg-amber-100/90 px-1.5 py-0.5 rounded">{selectedRecord.paymentId}</span> for ₹{selectedRecord.amountPaid}. Please verify against your Paytm for Business statement.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleApprovePayment(selectedRecord)}
+                    disabled={actionLoadingId === selectedRecord.id}
+                    className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Approve Payment &amp; Activate Pass</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRejectPayment(selectedRecord)}
+                    disabled={actionLoadingId === selectedRecord.id}
+                    className="py-2 px-3 rounded-xl bg-white hover:bg-rose-50 border border-rose-200 disabled:opacity-50 text-rose-700 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                    <span>Reject</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Cancellation reason callout if cancelled */}
             {selectedRecord.status === "CANCELLED" && (

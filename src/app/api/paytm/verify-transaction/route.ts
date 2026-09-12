@@ -74,16 +74,62 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2. Direct UPI / Verified Transaction Fallback
-    const resolvedPaymentId = txnId || `PTM_UPI_${Date.now().toString().slice(-8)}`;
+    // 2. Direct UPI UTR Strict Validation & Anti-Fraud Check
+    const utr = (txnId || "").trim();
+
+    if (!utr) {
+      return NextResponse.json(
+        { 
+          verified: false, 
+          error: "12-Digit UTR is required. Please make the UPI payment and enter the 12-digit Reference / UTR Number from your payment receipt." 
+        },
+        { status: 400 }
+      );
+    }
+
+    // Strict 12-digit numeric check for all Indian UPI bank references
+    if (!/^\d{12}$/.test(utr)) {
+      return NextResponse.json(
+        { 
+          verified: false, 
+          error: `Invalid UTR format (${utr}). All Indian UPI receipts (GPay, PhonePe, Paytm) provide a 12-digit numeric reference (e.g. 425512345678).` 
+        },
+        { status: 400 }
+      );
+    }
+
+    // Check for duplicate UTR submissions in Firestore to prevent reusing the same payment receipt
+    try {
+      const { db } = await import("@/lib/firebase/config");
+      const { collection, query, where, getDocs } = await import("firebase/firestore");
+      if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+        const q = query(
+          collection(db, "student_registrations"),
+          where("paymentId", "==", utr)
+        );
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          return NextResponse.json(
+            { 
+              verified: false, 
+              error: `Duplicate UTR detected: This 12-digit UTR (${utr}) has already been submitted for another registration. Please provide your unique payment receipt.` 
+            },
+            { status: 400 }
+          );
+        }
+      }
+    } catch (dbErr) {
+      console.warn("Notice: could not run server-side duplicate UTR check:", dbErr);
+    }
 
     return NextResponse.json({
       verified: true,
-      paymentId: resolvedPaymentId,
+      paymentStatus: "PENDING", // Strictly PENDING until approved by Treasurer
+      paymentId: utr,
       orderId: orderId,
       amount: Number(amount || 0),
       gateway: "Paytm UPI",
-      message: "Transaction verified successfully.",
+      message: "UTR submitted successfully. Delegate pass created in Pending Verification status.",
     });
 
   } catch (error: any) {

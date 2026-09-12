@@ -14,7 +14,8 @@ import {
   Check,
   RefreshCw,
   Share2,
-  ExternalLink
+  ExternalLink,
+  Clock
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -38,6 +39,8 @@ export interface TicketPassProps {
   parentEventName?: string;
   subEventBadge?: string;
   status?: string;
+  paymentStatus?: string;
+  paymentId?: string;
   mode?: "registration" | "dashboard";
   onClose?: () => void;
 }
@@ -57,6 +60,8 @@ export function TicketPass({
   parentEventName,
   subEventBadge,
   status = "CONFIRMED",
+  paymentStatus,
+  paymentId,
   mode = "registration",
   onClose,
 }: TicketPassProps) {
@@ -97,17 +102,31 @@ export function TicketPass({
     <div className={cn("w-full max-w-3xl min-w-0 mx-auto", mode === "dashboard" ? "space-y-4 sm:space-y-0" : "space-y-6 sm:space-y-8")}>
       {/* Top Banner - only on registration completion page */}
       {mode !== "dashboard" && (
-        <div className="text-center space-y-3">
-          <div className="inline-flex items-center justify-center p-3 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600 mb-2">
-            <CheckCircle2 className="w-10 h-10" />
+        paymentStatus === "PENDING" ? (
+          <div className="text-center space-y-3">
+            <div className="inline-flex items-center justify-center p-3 rounded-full bg-amber-50 border border-amber-300 text-amber-600 mb-2 animate-pulse">
+              <Clock className="w-10 h-10" />
+            </div>
+            <h2 className="font-extrabold text-3xl sm:text-5xl text-[#0F172A] tracking-tight font-heading">
+              PAYMENT UNDER REVIEW
+            </h2>
+            <p className="text-base sm:text-lg text-slate-600 max-w-xl mx-auto font-medium font-sans">
+              Your registration for <strong className="text-[#E78023]">{eventName}</strong> has been received. Treasurer is verifying UTR <strong className="font-mono text-slate-900">{paymentId}</strong>.
+            </p>
           </div>
-          <h2 className="font-extrabold text-3xl sm:text-5xl text-[#0F172A] tracking-tight font-heading">
-            YOU&apos;RE IN.
-          </h2>
-          <p className="text-base sm:text-lg text-slate-600 max-w-xl mx-auto font-medium font-sans">
-            Your official registration for <strong className="text-[#E78023]">{eventName}</strong> has been confirmed.
-          </p>
-        </div>
+        ) : (
+          <div className="text-center space-y-3">
+            <div className="inline-flex items-center justify-center p-3 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600 mb-2">
+              <CheckCircle2 className="w-10 h-10" />
+            </div>
+            <h2 className="font-extrabold text-3xl sm:text-5xl text-[#0F172A] tracking-tight font-heading">
+              YOU&apos;RE IN.
+            </h2>
+            <p className="text-base sm:text-lg text-slate-600 max-w-xl mx-auto font-medium font-sans">
+              Your official registration for <strong className="text-[#E78023]">{eventName}</strong> has been confirmed.
+            </p>
+          </div>
+        )
       )}
 
       {/* Mobile-Only Horizontal Swipe Indicator */}
@@ -227,11 +246,11 @@ export function TicketPass({
                     {teamType === "Team" ? teamName || "Team Entry" : "Individual Entry"}
                   </p>
                   <Badge 
-                    variant={status === "CHECKED_IN" ? "success" : status === "CANCELLED" ? "rose" : "orange"} 
+                    variant={status === "CHECKED_IN" ? "success" : status === "CANCELLED" ? "rose" : paymentStatus === "PENDING" ? "warning" : "orange"} 
                     size="sm" 
                     className="mt-1"
                   >
-                    {status || "CONFIRMED"}
+                    {paymentStatus === "PENDING" ? "PENDING REVIEW" : (status || "CONFIRMED")}
                   </Badge>
                 </div>
               </div>
@@ -271,8 +290,17 @@ export function TicketPass({
                   {ticketCode}
                 </span>
                 <p className="text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1 leading-normal">
-                  <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                  <span>Scan for Gate Check-In</span>
+                  {paymentStatus === "PENDING" ? (
+                    <>
+                      <Clock className="w-3 h-3 text-amber-600" />
+                      <span className="text-amber-700 font-bold">Awaiting Verification</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                      <span>Scan for Gate Check-In</span>
+                    </>
+                  )}
                 </p>
               </div>
             </div>
