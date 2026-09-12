@@ -36,7 +36,10 @@ import {
   Copy,
   ExternalLink,
   XCircle,
-  Clock
+  Clock,
+  Lock,
+  ChevronRight,
+  X
 } from "lucide-react";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { CancelRegistrationModal } from "@/components/registration/CancelRegistrationModal";
@@ -2155,220 +2158,340 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         />
       )}
 
-      {/* Modal: Paytm for Business & Direct UPI Checkout */}
+      {/* Modal: Razorpay-Styled Secure UPI & Paytm Checkout */}
       {paytmCheckoutData && (
         <Modal
           isOpen={Boolean(paytmCheckoutData)}
           onClose={() => {
             if (!isVerifyingPaytm) setPaytmCheckoutData(null);
           }}
-          title="Secure UPI & Paytm Checkout"
-          subtitle={`Delegate Registration Fee for ${event.name}`}
-          maxWidth="md"
+          showCloseButton={false}
+          contentClassName="p-0 overflow-hidden"
+          maxWidth="2xl"
         >
-          <div className="space-y-5 text-center">
-            {/* Amount Banner */}
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-[#002970]/20 flex items-center justify-between">
-              <div className="text-left">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                  Total Payable
-                </span>
-                <span className="font-heading font-extrabold text-2xl text-[#002970]">
-                  ₹{paytmCheckoutData.formattedAmount}
-                </span>
-              </div>
-              <div className="text-right">
-                <Badge variant="navy" size="sm">
-                  LOCKED AMOUNT
-                </Badge>
-                <span className="text-[10px] text-slate-500 block mt-0.5">
-                  0% Gateway Fee
-                </span>
-              </div>
-            </div>
+          <div className="flex flex-col w-full bg-slate-50/60 font-sans text-left">
+            {/* 1. Razorpay Signature Navy Header Bar */}
+            <div className="bg-gradient-to-r from-[#0C2340] via-[#0E2C52] to-[#123868] text-white p-5 sm:p-6 relative select-none">
+              {/* Subtle ambient lighting */}
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-400/10 via-transparent to-transparent pointer-events-none" />
 
-            {/* Choose Your UPI App (Mobile-First 1-Tap App Grid) */}
-            <div className="space-y-2.5 text-left">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                  Tap to Pay with your UPI App
-                </span>
-                <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
-                  Pre-Locked ₹{paytmCheckoutData.formattedAmount}
-                </span>
-              </div>
-
-              {/* Grid of Dedicated UPI Apps */}
-              <div className="grid grid-cols-3 gap-2">
-                {/* Google Pay */}
-                <a
-                  href={paytmCheckoutData.gpayLink || paytmCheckoutData.upiLink}
-                  className="flex flex-col items-center justify-center p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 shadow-sm active:scale-95 transition-all text-center min-h-[64px] no-underline"
-                >
-                  <span className="text-sm font-extrabold text-slate-800 flex items-center gap-0.5 tracking-tight">
-                    <span className="text-[#4285F4]">G</span>
-                    <span className="text-[#EA4335]">P</span>
-                    <span className="text-[#FBBC05]">a</span>
-                    <span className="text-[#34A853]">y</span>
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-medium mt-0.5">Google Pay</span>
-                </a>
-
-                {/* PhonePe */}
-                <a
-                  href={paytmCheckoutData.phonepeLink || paytmCheckoutData.upiLink}
-                  className="flex flex-col items-center justify-center p-3 rounded-xl border border-[#5f259f]/20 bg-[#5f259f]/5 hover:bg-[#5f259f]/10 hover:border-[#5f259f]/40 shadow-sm active:scale-95 transition-all text-center min-h-[64px] no-underline"
-                >
-                  <span className="text-sm font-extrabold text-[#5f259f] tracking-tight">PhonePe</span>
-                  <span className="text-[10px] text-[#5f259f]/80 font-medium mt-0.5">Instant App</span>
-                </a>
-
-                {/* Paytm */}
-                <a
-                  href={paytmCheckoutData.paytmLink || paytmCheckoutData.upiLink}
-                  className="flex flex-col items-center justify-center p-3 rounded-xl border border-[#00b9f5]/30 bg-[#00b9f5]/5 hover:bg-[#00b9f5]/10 hover:border-[#00b9f5]/50 shadow-sm active:scale-95 transition-all text-center min-h-[64px] no-underline"
-                >
-                  <span className="text-sm font-extrabold text-[#002970] tracking-tight">Paytm</span>
-                  <span className="text-[10px] text-[#00b9f5] font-bold mt-0.5">Fast UPI</span>
-                </a>
-              </div>
-
-              {/* Any / Other UPI App (WhatsApp, Cred, BHIM, Bank Apps) */}
-              <a
-                href={paytmCheckoutData.upiLink}
-                className="w-full py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-98 min-h-[42px] no-underline"
-              >
-                <CreditCard className="w-3.5 h-3.5 text-slate-600" />
-                <span>Other UPI Apps (WhatsApp, Cred, BHIM, Bank Apps)</span>
-              </a>
-            </div>
-
-            {/* Dynamic QR Code Section (Prominent on desktop/laptop, compact/toggleable on mobile) */}
-            <div className="pt-1">
-              <div className="hidden sm:block p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center shadow-sm">
-                <div className="p-3 bg-white rounded-xl inline-block border border-slate-200">
-                  <ScannableQRCode value={paytmCheckoutData.upiLink} size={160} />
+              <div className="flex items-start justify-between gap-4 relative z-10">
+                {/* Merchant Brand & Purpose Info */}
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-11 h-11 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-md flex items-center justify-center shrink-0 shadow-inner">
+                    <ShieldCheck className="w-6 h-6 text-emerald-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-heading font-black text-sm tracking-wide text-white uppercase truncate">
+                        SRC JDCOEM
+                      </span>
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-[9px] font-bold text-emerald-300 shrink-0">
+                        <Check className="w-2.5 h-2.5" /> Verified
+                      </span>
+                    </div>
+                    <p className="text-xs text-blue-200/80 font-medium truncate mt-0.5">
+                      {event.name} • Delegate Pass
+                    </p>
+                  </div>
                 </div>
-                <p className="text-[11px] font-medium text-slate-500 mt-2">
-                  Scan QR with any UPI App on your phone
+
+                {/* Amount to Pay & Razorpay-style Close Button */}
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="text-right">
+                    <span className="text-[10px] font-bold text-blue-200/70 tracking-widest uppercase block">
+                      Amount to Pay
+                    </span>
+                    <span className="font-heading font-black text-2xl sm:text-3xl text-white tracking-tight">
+                      ₹{paytmCheckoutData.formattedAmount}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      if (!isVerifyingPaytm) setPaytmCheckoutData(null);
+                    }}
+                    aria-label="Close checkout"
+                    className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all cursor-pointer min-w-[36px] min-h-[36px] flex items-center justify-center active:scale-95 shrink-0"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Sub-bar: Razorpay Trust & Security Details */}
+              <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-[11px] text-blue-200/80 font-medium">
+                <div className="flex items-center gap-1.5">
+                  <Lock className="w-3 h-3 text-emerald-400 shrink-0" />
+                  <span>256-Bit SSL Encrypted • Zero Surcharge</span>
+                </div>
+                <span className="hidden sm:inline-block text-[10px] text-blue-200/60 font-mono">
+                  ID: {paytmCheckoutData.orderId}
+                </span>
+              </div>
+            </div>
+
+            {/* 2. Main Razorpay Body */}
+            <div className="p-5 sm:p-6 space-y-4">
+              {/* Responsive 2-Column Desktop Grid / 1-Column Mobile Stack */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 items-start">
+                
+                {/* Left Section: 1-Tap UPI Apps (7 cols on PC) */}
+                <div className="sm:col-span-7 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                      Pay via UPI App
+                    </span>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                      1-Tap Instant
+                    </span>
+                  </div>
+
+                  {/* UPI Apps List */}
+                  <div className="space-y-2">
+                    {/* Google Pay */}
+                    <a
+                      href={paytmCheckoutData.gpayLink || paytmCheckoutData.upiLink}
+                      className="group flex items-center justify-between p-3 sm:p-3.5 rounded-xl border border-slate-200 bg-white hover:border-[#4285F4] hover:shadow-md hover:shadow-blue-500/5 transition-all no-underline active:scale-[0.99]"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-lg bg-slate-50 border border-slate-200/60 flex items-center justify-center font-bold text-xs shrink-0">
+                          <span className="text-[#4285F4]">G</span>
+                          <span className="text-[#EA4335]">P</span>
+                          <span className="text-[#FBBC05]">a</span>
+                          <span className="text-[#34A853]">y</span>
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-sm font-bold text-slate-800 group-hover:text-[#4285F4] transition-colors block">
+                            Google Pay
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-medium block truncate">
+                            Fast UPI direct transfer
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 text-xs font-semibold text-slate-400 group-hover:text-[#4285F4] transition-colors shrink-0">
+                        <span className="hidden sm:inline text-[11px]">Pay</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </div>
+                    </a>
+
+                    {/* PhonePe */}
+                    <a
+                      href={paytmCheckoutData.phonepeLink || paytmCheckoutData.upiLink}
+                      className="group flex items-center justify-between p-3 sm:p-3.5 rounded-xl border border-slate-200 bg-white hover:border-[#5f259f] hover:shadow-md hover:shadow-purple-500/5 transition-all no-underline active:scale-[0.99]"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-lg bg-[#5f259f]/10 border border-[#5f259f]/20 flex items-center justify-center font-black text-xs text-[#5f259f] shrink-0">
+                          पे
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-sm font-bold text-slate-800 group-hover:text-[#5f259f] transition-colors block">
+                            PhonePe
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-medium block truncate">
+                            Instant UPI payment
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 text-xs font-semibold text-slate-400 group-hover:text-[#5f259f] transition-colors shrink-0">
+                        <span className="hidden sm:inline text-[11px]">Pay</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </div>
+                    </a>
+
+                    {/* Paytm */}
+                    <a
+                      href={paytmCheckoutData.paytmLink || paytmCheckoutData.upiLink}
+                      className="group flex items-center justify-between p-3 sm:p-3.5 rounded-xl border border-slate-200 bg-white hover:border-[#002970] hover:shadow-md hover:shadow-blue-900/5 transition-all no-underline active:scale-[0.99]"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-lg bg-[#00b9f5]/10 border border-[#00b9f5]/25 flex items-center justify-center font-black text-xs text-[#002970] shrink-0">
+                          PTM
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-sm font-bold text-slate-800 group-hover:text-[#002970] transition-colors block">
+                            Paytm UPI
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-medium block truncate">
+                            Instant wallet &amp; bank pay
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 text-xs font-semibold text-slate-400 group-hover:text-[#002970] transition-colors shrink-0">
+                        <span className="hidden sm:inline text-[11px]">Pay</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </div>
+                    </a>
+
+                    {/* Other UPI Apps (CRED, BHIM, WhatsApp, Bank Apps) */}
+                    <a
+                      href={paytmCheckoutData.upiLink}
+                      className="group flex items-center justify-between p-3 sm:p-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300 hover:shadow-sm transition-all no-underline active:scale-[0.99]"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-lg bg-slate-200/80 border border-slate-300/60 flex items-center justify-center text-slate-600 shrink-0">
+                          <CreditCard className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-xs font-bold text-slate-700 block">
+                            Other UPI Apps
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-medium block truncate">
+                            BHIM, CRED, WhatsApp, Banking Apps
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-700 transition-colors shrink-0" />
+                    </a>
+                  </div>
+                </div>
+
+                {/* Right Section: Scannable QR Code (5 cols on PC) */}
+                <div className="sm:col-span-5 text-center flex flex-col items-center justify-between h-full space-y-3">
+                  {/* Desktop QR Card (Always visible on laptop/desktop) */}
+                  <div className="hidden sm:flex flex-col items-center justify-center w-full p-4 rounded-2xl bg-white border border-slate-200 shadow-sm relative overflow-hidden group">
+                    <div className="w-full flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">
+                      <span>Or Scan QR</span>
+                      <span className="text-blue-600 font-semibold lowercase">any upi app</span>
+                    </div>
+
+                    {/* QR Code Container */}
+                    <div className="relative p-2.5 bg-white rounded-xl border-2 border-slate-100 shadow-inner inline-block">
+                      <ScannableQRCode value={paytmCheckoutData.upiLink} size={150} />
+                    </div>
+
+                    <p className="text-[11px] text-slate-500 font-medium mt-3 leading-snug">
+                      Point phone camera or scan with GPay, PhonePe, Paytm
+                    </p>
+                  </div>
+
+                  {/* Mobile QR Toggle Button (Clean collapsible for phones) */}
+                  <div className="sm:hidden w-full">
+                    {!showQrOnMobile ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowQrOnMobile(true)}
+                        className="w-full py-2.5 px-3 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-xs font-bold text-[#0C2340] flex items-center justify-center gap-2 transition-all shadow-xs min-h-[44px]"
+                      >
+                        <QrCode className="w-4 h-4 text-[#17458F]" />
+                        <span>Paying from another phone? Show QR Code</span>
+                      </button>
+                    ) : (
+                      <div className="p-4 rounded-2xl bg-white border border-slate-200 text-center shadow-sm space-y-2 w-full">
+                        <div className="p-2 bg-white rounded-xl inline-block border border-slate-100 shadow-inner">
+                          <ScannableQRCode value={paytmCheckoutData.upiLink} size={140} />
+                        </div>
+                        <p className="text-[11px] text-slate-500 font-medium">
+                          Scan with any UPI app on your other phone
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setShowQrOnMobile(false)}
+                          className="text-xs text-slate-500 hover:text-slate-800 font-semibold underline underline-offset-4 py-1"
+                        >
+                          Hide QR Code
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+
+              {/* 3. Live Auto-Approval Radar Banner (Razorpay Style) */}
+              <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200 text-left space-y-2 relative overflow-hidden shadow-xs">
+                {/* Razorpay signature scanning accent shimmer */}
+                <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-300 via-emerald-500 to-emerald-300 animate-pulse" />
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-600"></span>
+                    </span>
+                    <span className="text-xs font-black text-emerald-950 uppercase tracking-wider">
+                      Auto-Approval Radar Active
+                    </span>
+                  </div>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-emerald-700 bg-white/90 border border-emerald-200 px-2 py-0.5 rounded-md">
+                    <Clock className="w-3 h-3 text-emerald-600 shrink-0" />
+                    Listening live
+                  </span>
+                </div>
+
+                <p className="text-xs text-emerald-900 leading-relaxed font-medium">
+                  Complete the payment in your UPI app. This screen will <strong>automatically generate your official delegate pass</strong> the instant your transaction succeeds!
                 </p>
               </div>
 
-              {/* Mobile QR Toggle */}
-              <div className="sm:hidden text-center">
-                {!showQrOnMobile ? (
+              {/* 4. Razorpay-Style Emergency Fallback (Collapsible) */}
+              <div className="pt-1 text-center">
+                {!showManualUtr ? (
                   <button
                     type="button"
-                    onClick={() => setShowQrOnMobile(true)}
-                    className="text-xs text-[#002970] font-bold hover:underline py-1.5 inline-flex items-center gap-1.5 min-h-[36px]"
+                    onClick={() => setShowManualUtr(true)}
+                    className="text-[11px] text-slate-400 hover:text-slate-700 font-medium underline underline-offset-4 py-1.5 transition-colors cursor-pointer inline-flex items-center gap-1"
                   >
-                    <QrCode className="w-3.5 h-3.5 text-[#002970]" />
-                    <span>Paying from another phone? Show QR Code</span>
+                    <span>Having trouble? Paid but pass didn&apos;t activate? Enter UTR manually &rarr;</span>
                   </button>
                 ) : (
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 inline-block mx-auto text-center">
-                    <div className="p-2 bg-white rounded-lg inline-block border border-slate-200">
-                      <ScannableQRCode value={paytmCheckoutData.upiLink} size={140} />
+                  <div className="p-4 rounded-2xl bg-white border border-slate-200 text-left space-y-3 animate-in fade-in duration-200 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                        12-Digit UPI Reference (UTR)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowManualUtr(false)}
+                        className="text-[11px] text-slate-400 hover:text-slate-600 font-medium cursor-pointer"
+                      >
+                        Hide
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowQrOnMobile(false)}
-                      className="block mx-auto text-[11px] text-slate-500 hover:text-slate-700 font-semibold mt-1 py-1"
+                    <p className="text-[11px] text-slate-500">
+                      Copy the 12-digit numeric reference from your Google Pay, PhonePe, or Paytm receipt and paste below.
+                    </p>
+                    <input
+                      type="text"
+                      maxLength={12}
+                      placeholder="e.g. 425512345678 (12 digits)"
+                      value={paytmUtr}
+                      onChange={(e) => {
+                        const onlyNums = e.target.value.replace(/\D/g, "");
+                        setPaytmUtr(onlyNums);
+                      }}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono text-slate-900 tracking-wider focus:outline-none focus:ring-2 focus:ring-[#0C2340]/30"
+                    />
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                      <span>Digits: {paytmUtr.length}/12</span>
+                      {paytmUtr.length === 12 ? (
+                        <span className="text-emerald-600 font-bold">✓ Ready to submit</span>
+                      ) : (
+                        <span>Enter exactly 12 digits</span>
+                      )}
+                    </div>
+
+                    <Button
+                      onClick={handleVerifyPaytmPayment}
+                      isLoading={isVerifyingPaytm}
+                      disabled={paytmUtr.length !== 12 || isVerifyingPaytm}
+                      variant="primary"
+                      size="md"
+                      className="w-full justify-center gap-2 cursor-pointer min-h-[44px] disabled:opacity-50"
                     >
-                      Hide QR Code
-                    </button>
+                      <Check className="w-4 h-4" />
+                      <span>Verify UTR &amp; Issue Pass</span>
+                    </Button>
                   </div>
                 )}
               </div>
-            </div>
 
-            {/* Live Auto-Approval Radar Banner */}
-            <div className="p-4 rounded-2xl bg-emerald-50/90 border border-emerald-300 text-left space-y-2.5 shadow-sm">
-              <div className="flex items-center gap-2.5">
-                <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-600"></span>
-                </span>
-                <span className="text-xs font-black text-emerald-950 uppercase tracking-wider">
-                  Auto-Approval Radar Active
-                </span>
+              {/* 5. Razorpay Trust Footer */}
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[11px] text-slate-400 font-medium">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Secured by 256-Bit SSL Encryption • Official Student Council Portal</span>
               </div>
-              <p className="text-xs text-emerald-900 leading-relaxed font-medium">
-                Pay using Google Pay, PhonePe, Paytm, or scan the QR code. Once payment completes, your registration pass will <strong>automatically generate on this screen</strong> within seconds!
-              </p>
-              <div className="flex items-center gap-1.5 text-[10px] text-emerald-700 font-mono">
-                <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span>Waiting for payment signal • Listening live...</span>
-              </div>
-            </div>
-
-            {/* Manual Fallback (If phone was off or notification delayed) */}
-            <div className="pt-2 text-center">
-              {!showManualUtr ? (
-                <button
-                  type="button"
-                  onClick={() => setShowManualUtr(true)}
-                  className="text-[11px] text-slate-500 hover:text-slate-800 font-semibold underline underline-offset-4 py-1.5 transition-colors cursor-pointer inline-flex items-center gap-1"
-                >
-                  <span>Paid but pass didn&apos;t auto-activate? Enter 12-digit UTR manually &rarr;</span>
-                </button>
-              ) : (
-                <div className="pt-3 border-t border-slate-200 text-left space-y-3 animate-in fade-in duration-200">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                      12-Digit UPI Reference / UTR Number
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowManualUtr(false)}
-                      className="text-[11px] text-slate-400 hover:text-slate-600 font-medium cursor-pointer"
-                    >
-                      Hide manual entry
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-slate-500">
-                    If auto-detection was delayed, copy the 12-digit UTR from your UPI payment receipt and paste below.
-                  </p>
-                  <input
-                    type="text"
-                    maxLength={12}
-                    placeholder="e.g. 425512345678 (12 digits)"
-                    value={paytmUtr}
-                    onChange={(e) => {
-                      const onlyNums = e.target.value.replace(/\D/g, "");
-                      setPaytmUtr(onlyNums);
-                    }}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono text-slate-900 tracking-wider focus:outline-none focus:ring-2 focus:ring-[#002970]/30"
-                  />
-                  <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1 font-mono">
-                    <span>Digits: {paytmUtr.length}/12</span>
-                    {paytmUtr.length === 12 ? (
-                      <span className="text-emerald-600 font-bold">✓ Complete 12-digit UTR</span>
-                    ) : (
-                      <span>Enter exactly 12 digits</span>
-                    )}
-                  </div>
-
-                  <Button
-                    onClick={handleVerifyPaytmPayment}
-                    isLoading={isVerifyingPaytm}
-                    disabled={paytmUtr.length !== 12 || isVerifyingPaytm}
-                    variant="primary"
-                    size="md"
-                    className="w-full justify-center gap-2 cursor-pointer min-h-[46px] disabled:opacity-50"
-                  >
-                    <Check className="w-4 h-4" />
-                    <span>Submit UTR &amp; Register for Event</span>
-                  </Button>
-
-                  <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 text-[11px] text-amber-900 flex items-start gap-2">
-                    <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                    <span>
-                      <strong>Manual Fallback:</strong> If submitted manually, the pass will be issued in <strong>Pending Verification</strong> status and cross-verified against the ledger before gate clearance.
-                    </span>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </Modal>
