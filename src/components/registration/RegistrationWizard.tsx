@@ -39,6 +39,7 @@ import {
   Clock,
   Lock,
   ChevronRight,
+  Smartphone,
   X
 } from "lucide-react";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
@@ -2166,43 +2167,43 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             if (!isVerifyingPaytm) setPaytmCheckoutData(null);
           }}
           showCloseButton={false}
-          contentClassName="p-0 overflow-hidden"
+          contentClassName="p-0 overflow-y-auto overscroll-contain"
           maxWidth="2xl"
         >
-          <div className="flex flex-col w-full bg-slate-50/60 font-sans text-left">
-            {/* 1. Razorpay Signature Navy Header Bar */}
-            <div className="bg-gradient-to-r from-[#0C2340] via-[#0E2C52] to-[#123868] text-white p-5 sm:p-6 relative select-none">
+          <div className="flex flex-col w-full bg-slate-50/60 font-sans text-left min-h-full">
+            {/* 1. Razorpay Signature Navy Header Bar (Sticky at top) */}
+            <div className="sticky top-0 z-30 bg-gradient-to-r from-[#0C2340] via-[#0E2C52] to-[#123868] text-white p-4 sm:p-6 shadow-md select-none">
               {/* Subtle ambient lighting */}
               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-400/10 via-transparent to-transparent pointer-events-none" />
 
               <div className="flex items-start justify-between gap-4 relative z-10">
                 {/* Merchant Brand & Purpose Info */}
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-11 h-11 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-md flex items-center justify-center shrink-0 shadow-inner">
-                    <ShieldCheck className="w-6 h-6 text-emerald-400" />
+                  <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-md flex items-center justify-center shrink-0 shadow-inner">
+                    <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400" />
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-heading font-black text-sm tracking-wide text-white uppercase truncate">
+                      <span className="font-heading font-black text-xs sm:text-sm tracking-wide text-white uppercase truncate">
                         SRC JDCOEM
                       </span>
                       <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-[9px] font-bold text-emerald-300 shrink-0">
                         <Check className="w-2.5 h-2.5" /> Verified
                       </span>
                     </div>
-                    <p className="text-xs text-blue-200/80 font-medium truncate mt-0.5">
+                    <p className="text-[11px] sm:text-xs text-blue-200/80 font-medium truncate mt-0.5">
                       {event.name} • Delegate Pass
                     </p>
                   </div>
                 </div>
 
                 {/* Amount to Pay & Razorpay-style Close Button */}
-                <div className="flex items-center gap-3 shrink-0">
+                <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
                   <div className="text-right">
-                    <span className="text-[10px] font-bold text-blue-200/70 tracking-widest uppercase block">
+                    <span className="text-[9px] sm:text-[10px] font-bold text-blue-200/70 tracking-widest uppercase block">
                       Amount to Pay
                     </span>
-                    <span className="font-heading font-black text-2xl sm:text-3xl text-white tracking-tight">
+                    <span className="font-heading font-black text-xl sm:text-3xl text-white tracking-tight">
                       ₹{paytmCheckoutData.formattedAmount}
                     </span>
                   </div>
@@ -2220,7 +2221,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               </div>
 
               {/* Sub-bar: Razorpay Trust & Security Details */}
-              <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-[11px] text-blue-200/80 font-medium">
+              <div className="mt-3 sm:mt-4 pt-2.5 sm:pt-3 border-t border-white/10 flex items-center justify-between text-[10px] sm:text-[11px] text-blue-200/80 font-medium">
                 <div className="flex items-center gap-1.5">
                   <Lock className="w-3 h-3 text-emerald-400 shrink-0" />
                   <span>256-Bit SSL Encrypted • Zero Surcharge</span>
@@ -2232,12 +2233,41 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             </div>
 
             {/* 2. Main Razorpay Body */}
-            <div className="p-5 sm:p-6 space-y-4">
-              {/* Responsive 2-Column Desktop Grid / 1-Column Mobile Stack */}
+            <div className="p-4 sm:p-6 space-y-4 flex-1">
+              
+              {/* Mobile Mode Switcher: [UPI Apps] | [Scan QR Code] */}
+              <div className="sm:hidden grid grid-cols-2 gap-1 p-1 bg-slate-200/80 rounded-xl mb-1">
+                <button
+                  type="button"
+                  onClick={() => setShowQrOnMobile(false)}
+                  className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    !showQrOnMobile 
+                      ? "bg-white text-[#0C2340] shadow-xs" 
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <Smartphone className="w-3.5 h-3.5 text-[#4285F4]" />
+                  <span>UPI Apps</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowQrOnMobile(true)}
+                  className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    showQrOnMobile 
+                      ? "bg-white text-[#0C2340] shadow-xs" 
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <QrCode className="w-3.5 h-3.5 text-[#17458F]" />
+                  <span>Scan QR Code</span>
+                </button>
+              </div>
+
+              {/* Grid: 2 columns on PC, Tab-switched on mobile */}
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 items-start">
                 
-                {/* Left Section: 1-Tap UPI Apps (7 cols on PC) */}
-                <div className="sm:col-span-7 space-y-2.5">
+                {/* UPI Apps List (Always shown on desktop; shown on mobile when !showQrOnMobile) */}
+                <div className={`sm:col-span-7 space-y-2.5 ${showQrOnMobile ? "hidden sm:block" : "block"}`}>
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                       Pay via UPI App
@@ -2324,7 +2354,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                       </div>
                     </a>
 
-                    {/* Other UPI Apps (CRED, BHIM, WhatsApp, Bank Apps) */}
+                    {/* Other UPI Apps */}
                     <a
                       href={paytmCheckoutData.upiLink}
                       className="group flex items-center justify-between p-3 sm:p-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300 hover:shadow-sm transition-all no-underline active:scale-[0.99]"
@@ -2347,12 +2377,11 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                   </div>
                 </div>
 
-                {/* Right Section: Scannable QR Code (5 cols on PC) */}
-                <div className="sm:col-span-5 text-center flex flex-col items-center justify-between h-full space-y-3">
-                  {/* Desktop QR Card (Always visible on laptop/desktop) */}
-                  <div className="hidden sm:flex flex-col items-center justify-center w-full p-4 rounded-2xl bg-white border border-slate-200 shadow-sm relative overflow-hidden group">
+                {/* Scannable QR Code Section (Always shown on desktop; shown on mobile when showQrOnMobile) */}
+                <div className={`sm:col-span-5 text-center flex flex-col items-center justify-center w-full ${!showQrOnMobile ? "hidden sm:flex" : "flex"}`}>
+                  <div className="flex flex-col items-center justify-center w-full p-4 rounded-2xl bg-white border border-slate-200 shadow-sm relative overflow-hidden group">
                     <div className="w-full flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">
-                      <span>Or Scan QR</span>
+                      <span>Scan &amp; Pay</span>
                       <span className="text-blue-600 font-semibold lowercase">any upi app</span>
                     </div>
 
@@ -2364,36 +2393,6 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                     <p className="text-[11px] text-slate-500 font-medium mt-3 leading-snug">
                       Point phone camera or scan with GPay, PhonePe, Paytm
                     </p>
-                  </div>
-
-                  {/* Mobile QR Toggle Button (Clean collapsible for phones) */}
-                  <div className="sm:hidden w-full">
-                    {!showQrOnMobile ? (
-                      <button
-                        type="button"
-                        onClick={() => setShowQrOnMobile(true)}
-                        className="w-full py-2.5 px-3 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-xs font-bold text-[#0C2340] flex items-center justify-center gap-2 transition-all shadow-xs min-h-[44px]"
-                      >
-                        <QrCode className="w-4 h-4 text-[#17458F]" />
-                        <span>Paying from another phone? Show QR Code</span>
-                      </button>
-                    ) : (
-                      <div className="p-4 rounded-2xl bg-white border border-slate-200 text-center shadow-sm space-y-2 w-full">
-                        <div className="p-2 bg-white rounded-xl inline-block border border-slate-100 shadow-inner">
-                          <ScannableQRCode value={paytmCheckoutData.upiLink} size={140} />
-                        </div>
-                        <p className="text-[11px] text-slate-500 font-medium">
-                          Scan with any UPI app on your other phone
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setShowQrOnMobile(false)}
-                          className="text-xs text-slate-500 hover:text-slate-800 font-semibold underline underline-offset-4 py-1"
-                        >
-                          Hide QR Code
-                        </button>
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -2461,7 +2460,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                         const onlyNums = e.target.value.replace(/\D/g, "");
                         setPaytmUtr(onlyNums);
                       }}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono text-slate-900 tracking-wider focus:outline-none focus:ring-2 focus:ring-[#0C2340]/30"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-base font-mono text-slate-900 tracking-wider focus:outline-none focus:ring-2 focus:ring-[#0C2340]/30"
                     />
                     <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
                       <span>Digits: {paytmUtr.length}/12</span>
@@ -2488,8 +2487,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               </div>
 
               {/* 5. Razorpay Trust Footer */}
-              <div className="pt-2 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[11px] text-slate-400 font-medium">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <div className="pt-2 pb-2 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[11px] text-slate-400 font-medium">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Secured by 256-Bit SSL Encryption • Official Student Council Portal</span>
               </div>
             </div>
