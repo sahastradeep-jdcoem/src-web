@@ -1116,7 +1116,7 @@ export function EventFormModal({
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
-                      <span>Registration Fee (Razorpay Gateway)</span>
+                      <span>Registration Fee (Paytm / UPI Gateway)</span>
                     </label>
                     <span
                       className={cn(
@@ -1233,7 +1233,7 @@ export function EventFormModal({
                       </div>
 
                       <p className="text-[10px] text-slate-500 font-medium">
-                        Integrated with Razorpay Gateway. Registrations will securely charge this amount via UPI (GPay/PhonePe), Cards, or NetBanking before issuing delegate passes.
+                        Integrated with Paytm for Business and UPI Gateway. Registrations will securely collect this amount via UPI (GPay/PhonePe/Paytm) before issuing delegate passes.
                       </p>
                     </div>
                   )}

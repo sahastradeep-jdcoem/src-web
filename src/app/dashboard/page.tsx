@@ -836,7 +836,7 @@ export default function StudentDashboardPage() {
                             {reg.refundStatus === "PROCESSED" && (
                               <div className="flex items-center gap-1.5 text-blue-700 bg-blue-50/80 px-2.5 py-1 rounded-xl border border-blue-200/80 font-mono text-[11px] font-bold mt-1">
                                 <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                                <span>Refund of ₹{reg.refundAmount || reg.amountPaid} processed via Razorpay{reg.refundId ? ` (${reg.refundId})` : ""}</span>
+                                <span>Refund of ₹{reg.refundAmount || reg.amountPaid} processed{reg.refundId ? ` (${reg.refundId})` : ""}</span>
                               </div>
                             )}
                           </div>
@@ -1313,7 +1313,7 @@ export default function StudentDashboardPage() {
                   {selectedTicket.refundStatus === "PROCESSED" && (
                     <div className="flex items-center gap-1.5 text-blue-700 bg-blue-50 px-2.5 py-1 rounded-xl border border-blue-200 font-mono text-[11px] font-bold mt-1.5">
                       <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                      <span>Refund of ₹{selectedTicket.refundAmount || selectedTicket.amountPaid} processed via Razorpay{selectedTicket.refundId ? ` (${selectedTicket.refundId})` : ""}</span>
+                      <span>Refund of ₹{selectedTicket.refundAmount || selectedTicket.amountPaid} processed{selectedTicket.refundId ? ` (${selectedTicket.refundId})` : ""}</span>
                     </div>
                   )}
                 </div>

@@ -70,6 +70,12 @@ import {
   isTestPassRecord,
   isHubRecord
 } from "@/lib/firebase/firestore";
+import { PaymentConfigModal } from "@/components/admin/registrations/PaymentConfigModal";
+import { 
+  getStoredPaymentConfig, 
+  subscribeToPaymentConfig, 
+  PaymentConfig 
+} from "@/lib/paymentConfigStore";
 
 type ActiveTab = "summary" | "question" | "individual" | "table";
 
@@ -107,6 +113,16 @@ export default function AdminRegistrationsPage() {
   const [refundingId, setRefundingId] = useState<string | null>(null);
   const [bulkRefunding, setBulkRefunding] = useState(false);
   const [bulkRefundProgress, setBulkRefundProgress] = useState({ current: 0, total: 0 });
+
+  // Payment Gateway & UPI Settings State
+  const [isPaymentConfigOpen, setIsPaymentConfigOpen] = useState(false);
+  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(getStoredPaymentConfig());
+
+  useEffect(() => {
+    setPaymentConfig(getStoredPaymentConfig());
+    const unsub = subscribeToPaymentConfig((cfg) => setPaymentConfig(cfg));
+    return unsub;
+  }, []);
 
   // Load and sync events, tenures & departments from local store & Firestore
   useEffect(() => {
@@ -860,17 +876,17 @@ export default function AdminRegistrationsPage() {
 
   const handleIndividualRefund = async (record: RegistrationRecord) => {
     if (!record.paymentId || record.paymentId === "N/A" || record.paymentId.includes("Free")) {
-      alert("No valid Razorpay payment ID found for this registration.");
+      alert("No valid payment ID found for this registration.");
       return;
     }
 
     const refundAmount = record.amountPaid || 0;
-    const confirmMsg = `Initiate Razorpay refund of ₹${refundAmount} for ${record.participantName} (${record.registrationId})?`;
+    const confirmMsg = `Initiate Paytm refund of ₹${refundAmount} for ${record.participantName} (${record.registrationId})?`;
     if (!confirm(confirmMsg)) return;
 
     setRefundingId(record.id);
     try {
-      const res = await fetch("/api/razorpay/refund", {
+      const res = await fetch("/api/paytm/refund", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -940,7 +956,7 @@ export default function AdminRegistrationsPage() {
     }
 
     const totalPayout = eligible.reduce((sum, r) => sum + (r.amountPaid || 0), 0);
-    const confirmMsg = `Are you sure you want to refund all ${eligible.length} paid delegate passes for "${currentSelectedEventObj?.name || selectedEventSlug}"?\n\nTotal refund amount: ₹${totalPayout.toLocaleString("en-IN")}\n\nThis will initiate direct refunds via Razorpay to delegates' original payment methods.`;
+    const confirmMsg = `Are you sure you want to refund all ${eligible.length} paid delegate passes for "${currentSelectedEventObj?.name || selectedEventSlug}"?\n\nTotal refund amount: ₹${totalPayout.toLocaleString("en-IN")}\n\nThis will initiate direct refunds via Paytm for Business to delegates' original payment methods.`;
     if (!confirm(confirmMsg)) return;
 
     setBulkRefunding(true);
@@ -954,7 +970,7 @@ export default function AdminRegistrationsPage() {
       setBulkRefundProgress({ current: i + 1, total: eligible.length });
 
       try {
-        const res = await fetch("/api/razorpay/refund", {
+        const res = await fetch("/api/paytm/refund", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1390,8 +1406,20 @@ export default function AdminRegistrationsPage() {
 
         </div>
 
-        {/* Right Corner: Export Excel Button (Enabled only after selecting filter) */}
-        <div className="pt-1 md:pt-0 flex items-end">
+        {/* Right Corner: Gateway Settings + Export Excel */}
+        <div className="pt-1 md:pt-0 flex flex-wrap items-end gap-2">
+          <button
+            onClick={() => setIsPaymentConfigOpen(true)}
+            className="h-9 px-3 sm:px-3.5 rounded-xl text-xs font-semibold tracking-normal transition-all duration-200 inline-flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-[#002970] border border-[#002970]/30 shadow-xs active:scale-[0.98] cursor-pointer"
+            title="Configure Paytm for Business and active Treasurer UPI"
+          >
+            <CreditCard className="w-3.5 h-3.5 text-[#002970]" />
+            <span>Paytm Gateway</span>
+            <span className="px-1.5 py-0.5 rounded bg-blue-100 text-[#002970] font-mono text-[10px] font-bold">
+              {paymentConfig.upiId || "8237981028@paytm"}
+            </span>
+          </button>
+
           <button
             onClick={handleExportExcel}
             disabled={isExportDisabled}
@@ -1563,7 +1591,7 @@ export default function AdminRegistrationsPage() {
 
             <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">
-                Revenue (Razorpay)
+                Revenue (Paytm / UPI)
               </span>
               <div className="flex items-baseline justify-between">
                 <span className="font-heading font-extrabold text-2xl text-[#E78023]">
@@ -1589,7 +1617,7 @@ export default function AdminRegistrationsPage() {
             {(metrics.refundedCount > 0 || (currentSelectedEventObj && (currentSelectedEventObj.isCancelled || currentSelectedEventObj.status === "Cancelled"))) && (
               <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">
-                  Refunds (Razorpay)
+                  Refunds (Paytm / UPI)
                 </span>
                 <div className="flex items-baseline justify-between">
                   <span className="font-heading font-extrabold text-2xl text-blue-600">
@@ -2357,7 +2385,7 @@ export default function AdminRegistrationsPage() {
                               onClick={() => handleIndividualRefund(r)}
                               disabled={refundingId === r.id}
                               className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#17458F] text-[11px] font-bold border border-blue-200 transition-colors cursor-pointer flex items-center gap-1 disabled:opacity-50"
-                              title={`Initiate Razorpay Refund of ₹${r.amountPaid}`}
+                              title={`Initiate Refund of ₹${r.amountPaid} via Paytm`}
                             >
                               {refundingId === r.id ? (
                                 <RefreshCw className="w-3 h-3 animate-spin" />
@@ -2519,12 +2547,12 @@ export default function AdminRegistrationsPage() {
                       {refundingId === selectedRecord.id ? (
                         <>
                           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Processing Razorpay Refund...</span>
+                          <span>Processing Refund...</span>
                         </>
                       ) : (
                         <>
                           <Banknote className="w-3.5 h-3.5" />
-                          <span>Issue Razorpay Refund of ₹{selectedRecord.amountPaid}</span>
+                          <span>Issue Refund of ₹{selectedRecord.amountPaid} via Paytm</span>
                         </>
                       )}
                     </button>
@@ -2590,6 +2618,12 @@ export default function AdminRegistrationsPage() {
           </div>
         </Modal>
       )}
+
+      {/* Payment Gateway & Treasurer UPI Settings Modal */}
+      <PaymentConfigModal
+        isOpen={isPaymentConfigOpen}
+        onClose={() => setIsPaymentConfigOpen(false)}
+      />
 
     </div>
   );

@@ -6,6 +6,7 @@ import { EventItem } from "@/types";
 import { TicketPass } from "@/components/registration/TicketPass";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { Modal } from "@/components/ui/Modal";
 import { saveRegistrationToFirestore, checkExistingStudentRegistration, StudentRegistrationRecord } from "@/lib/firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
 import { 
@@ -29,8 +30,12 @@ import {
   Building2,
   Search,
   CreditCard,
+  QrCode,
+  Copy,
+  ExternalLink,
   XCircle
 } from "lucide-react";
+import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { CancelRegistrationModal } from "@/components/registration/CancelRegistrationModal";
 import confetti from "canvas-confetti";
 import { 
@@ -48,18 +53,7 @@ import {
   isExternalUser
 } from "@/lib/usersStore";
 
-function loadRazorpayScript(): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (typeof window === "undefined") return resolve(false);
-    if ((window as any).Razorpay) return resolve(true);
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-}
+import { getStoredPaymentConfig } from "@/lib/paymentConfigStore";
 
 interface RegistrationWizardProps {
   event: EventItem;
@@ -152,6 +146,17 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   const [isVerifyingTeammate, setIsVerifyingTeammate] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [paytmCheckoutData, setPaytmCheckoutData] = useState<{
+    orderId: string;
+    amount: number;
+    formattedAmount: string;
+    upiLink: string;
+    payeeName: string;
+    upiId: string;
+  } | null>(null);
+  const [paytmUtr, setPaytmUtr] = useState("");
+  const [isVerifyingPaytm, setIsVerifyingPaytm] = useState(false);
+  const [isCopiedUpi, setIsCopiedUpi] = useState(false);
   const [customAnswers, setCustomAnswers] = useState<Record<string, any>>({});
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
   const [existingRegistration, setExistingRegistration] = useState<StudentRegistrationRecord | null>(null);
@@ -654,9 +659,9 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       return;
     }
 
-    // 2. Paid Event Razorpay Gateway Flow
+    // 2. Paid Event Paytm for Business Gateway Flow
     try {
-      const orderRes = await fetch("/api/razorpay/create-order", {
+      const orderRes = await fetch("/api/paytm/initiate-transaction", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -674,83 +679,26 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       });
 
       if (!orderRes.ok) {
-        throw new Error("Could not initialize gateway order.");
+        const errJson = await orderRes.json().catch(() => ({}));
+        throw new Error(errJson.error || "Could not initialize payment gateway order.");
       }
 
       const orderData = await orderRes.json();
-      const scriptLoaded = await loadRazorpayScript();
-
-      if (
-        scriptLoaded && 
-        typeof window !== "undefined" && 
-        (window as any).Razorpay && 
-        !orderData.isMockMode && 
-        orderData.keyId && 
-        !orderData.keyId.includes("placeholder")
-      ) {
-        // Open official Razorpay Checkout Popup
-        const options = {
-          key: orderData.keyId,
-          amount: orderData.amount,
-          currency: orderData.currency || "INR",
-          name: "SRC JDCOEM Sahastradeep",
-          description: `${event.name} — Registration Fee`,
-          image: "/assets/SRC%20Logo.png",
-          order_id: orderData.orderId,
-          prefill: {
-            name: formData.fullName,
-            email: formData.email,
-            contact: formData.phone,
-          },
-          theme: {
-            color: "#17458F",
-          },
-          handler: async function (response: any) {
-            try {
-              const verifyRes = await fetch("/api/razorpay/verify-payment", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  razorpay_order_id: response.razorpay_order_id,
-                  razorpay_payment_id: response.razorpay_payment_id,
-                  razorpay_signature: response.razorpay_signature,
-                }),
-              });
-              const verifyData = await verifyRes.json();
-              if (verifyData.verified) {
-                await completeRegistration({
-                  paymentStatus: "PAID",
-                  paymentId: response.razorpay_payment_id,
-                  orderId: response.razorpay_order_id,
-                  amountPaid: totalPayableAmount,
-                });
-              } else {
-                alert("Payment verification failed. Please contact event coordinators.");
-                setIsSubmitting(false);
-              }
-            } catch (err) {
-              alert("Payment verification error. Please reach out to student desk.");
-              setIsSubmitting(false);
-            }
-          },
-          modal: {
-            ondismiss: function () {
-              setIsSubmitting(false);
-            },
-          },
-        };
-
-        const rzp = new (window as any).Razorpay(options);
-        rzp.open();
-      } else {
-        alert(
-          orderData.notice ||
-          "Payment gateway is not configured on this server yet. Please add Razorpay API keys to proceed."
-        );
-        setIsSubmitting(false);
+      if (!orderData.success) {
+        throw new Error(orderData.error || "Failed to generate payment payload.");
       }
+
+      setPaytmCheckoutData({
+        orderId: orderData.orderId,
+        amount: orderData.amount,
+        formattedAmount: orderData.formattedAmount,
+        upiLink: orderData.upiLink,
+        payeeName: orderData.payeeName,
+        upiId: orderData.upiId,
+      });
+      setIsSubmitting(false);
     } catch (err: any) {
-      console.error("Razorpay processing error:", err);
+      console.error("Payment initialization error:", err);
       alert(
         err?.message ||
         "Failed to initiate payment gateway. Please check your connection or contact the coordinator."
@@ -758,6 +706,41 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       setIsSubmitting(false);
     }
   };
+
+  const handleVerifyPaytmPayment = async () => {
+    if (!paytmCheckoutData) return;
+    setIsVerifyingPaytm(true);
+    try {
+      const verifyRes = await fetch("/api/paytm/verify-transaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: paytmCheckoutData.orderId,
+          txnId: paytmUtr.trim() || `PTM_UPI_${Date.now().toString().slice(-8)}`,
+          amount: paytmCheckoutData.amount,
+        }),
+      });
+
+      const verifyData = await verifyRes.json();
+      if (verifyData.verified) {
+        await completeRegistration({
+          paymentStatus: "PAID",
+          paymentId: verifyData.paymentId,
+          orderId: paytmCheckoutData.orderId,
+          amountPaid: totalPayableAmount,
+        });
+        setPaytmCheckoutData(null);
+      } else {
+        alert(verifyData.error || "Payment verification failed. Please check your transaction details.");
+      }
+    } catch (err: any) {
+      console.error("Payment verification error:", err);
+      alert("Error verifying payment. Please ensure your transaction completed successfully.");
+    } finally {
+      setIsVerifyingPaytm(false);
+    }
+  };
+
 
   if (event.status === "Completed" || event.status?.toLowerCase() === "completed") {
     return (
@@ -1969,6 +1952,109 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             setExistingRegistration(null);
           }}
         />
+      )}
+
+      {/* Modal: Paytm for Business & Direct UPI Checkout */}
+      {paytmCheckoutData && (
+        <Modal
+          isOpen={Boolean(paytmCheckoutData)}
+          onClose={() => {
+            if (!isVerifyingPaytm) setPaytmCheckoutData(null);
+          }}
+          title="Secure UPI & Paytm Checkout"
+          subtitle={`Delegate Registration Fee for ${event.name}`}
+          maxWidth="md"
+        >
+          <div className="space-y-5 text-center">
+            {/* Amount Banner */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-[#002970]/20 flex items-center justify-between">
+              <div className="text-left">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                  Total Payable
+                </span>
+                <span className="font-heading font-extrabold text-2xl text-[#002970]">
+                  ₹{paytmCheckoutData.formattedAmount}
+                </span>
+              </div>
+              <div className="text-right">
+                <Badge variant="navy" size="sm">
+                  LOCKED AMOUNT
+                </Badge>
+                <span className="text-[10px] text-slate-500 block mt-0.5">
+                  0% Gateway Fee
+                </span>
+              </div>
+            </div>
+
+            {/* Dynamic QR Code for Desktop / Laptop */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 inline-block mx-auto shadow-sm">
+              <div className="p-3 bg-white rounded-xl inline-block border border-slate-200">
+                <ScannableQRCode value={paytmCheckoutData.upiLink} size={170} />
+              </div>
+              <p className="text-[11px] font-medium text-slate-500 mt-2">
+                Scan with Google Pay, PhonePe, or Paytm
+              </p>
+            </div>
+
+            {/* Mobile 1-Tap Payment Action */}
+            <div className="space-y-2">
+              <a
+                href={paytmCheckoutData.upiLink}
+                className="w-full py-3 px-4 rounded-xl bg-[#002970] hover:bg-[#001f54] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-sm transition-all min-h-[44px]"
+              >
+                <CreditCard className="w-4 h-4 text-[#00b9f5]" />
+                <span>Pay ₹{paytmCheckoutData.formattedAmount} via UPI App</span>
+              </a>
+
+              {/* Copy UPI ID */}
+              <div className="flex items-center justify-center gap-2 text-xs text-slate-600 pt-1">
+                <span>UPI: <strong className="font-mono text-slate-900">{paytmCheckoutData.upiId}</strong></span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(paytmCheckoutData.upiId);
+                    setIsCopiedUpi(true);
+                    setTimeout(() => setIsCopiedUpi(false), 2000);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 text-[10px] font-bold transition-all min-h-[28px]"
+                >
+                  {isCopiedUpi ? "Copied!" : "Copy ID"}
+                </button>
+              </div>
+            </div>
+
+            {/* Verification and Pass Generation */}
+            <div className="pt-4 border-t border-slate-200 text-left space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  UPI Reference / UTR Number (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 12-digit UTR from GPay / PhonePe"
+                  value={paytmUtr}
+                  onChange={(e) => setPaytmUtr(e.target.value.trim())}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#002970]/30"
+                />
+              </div>
+
+              <Button
+                onClick={handleVerifyPaytmPayment}
+                isLoading={isVerifyingPaytm}
+                variant="primary"
+                size="md"
+                className="w-full justify-center gap-2 cursor-pointer min-h-[44px]"
+              >
+                <Check className="w-4 h-4" />
+                <span>I Have Paid — Generate Delegate Pass</span>
+              </Button>
+
+              <p className="text-[10px] text-center text-slate-400">
+                Official accreditation pass with QR security codes will be issued immediately upon confirmation.
+              </p>
+            </div>
+          </div>
+        </Modal>
       )}
 
     </div>

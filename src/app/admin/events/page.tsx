@@ -813,7 +813,7 @@ export default function AdminEventsPage() {
                   Cancelling this event will officially mark it as <strong>Cancelled</strong>. All active student and participant registration passes will be automatically converted to <strong>CANCELLED</strong>.
                 </p>
                 <p className="text-amber-800 text-[11px] font-semibold mt-1">
-                  For paid events, you can initiate Razorpay refunds for all registered delegates from the Registrations Console.
+                  For paid events, you can initiate refunds for all registered delegates from the Registrations Console.
                 </p>
               </div>
             </div>

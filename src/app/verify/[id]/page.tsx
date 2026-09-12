@@ -259,7 +259,7 @@ export default function PassVerificationPage() {
               {record.refundStatus === "PROCESSED" && (
                 <div className="pt-2 border-t border-rose-200 text-[11px] text-blue-700 font-mono font-semibold flex items-center gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-blue-600" />
-                  <span>Refund of ₹{record.refundAmount || record.amountPaid} processed via Razorpay{record.refundId ? ` (${record.refundId})` : ""}</span>
+                  <span>Refund of ₹{record.refundAmount || record.amountPaid} processed{record.refundId ? ` (${record.refundId})` : ""}</span>
                 </div>
               )}
             </div>

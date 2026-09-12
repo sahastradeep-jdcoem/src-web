@@ -49,8 +49,8 @@ export interface StudentRegistrationRecord {
   }>;
   status: "CONFIRMED" | "WAITLISTED" | "CHECKED_IN" | "CANCELLED";
   paymentStatus?: "FREE" | "PAID" | "PENDING";
-  paymentId?: string; // Razorpay Payment ID e.g. pay_xxxxxxxx
-  orderId?: string; // Razorpay Order ID e.g. order_xxxxxxxx
+  paymentId?: string; // Gateway Payment / Transaction ID
+  orderId?: string; // Gateway Order ID
   amountPaid?: number; // In INR (e.g. 150)
   currency?: string; // e.g. "INR"
   paidAt?: string;

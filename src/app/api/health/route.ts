@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 
 export async function GET() {
   const isFirebaseConfigured = Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
-  const isRazorpayConfigured = Boolean(
-    process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET
+  const isPaytmConfigured = Boolean(
+    (process.env.PAYTM_MID || process.env.NEXT_PUBLIC_PAYTM_MID) && process.env.PAYTM_MERCHANT_KEY
   );
 
   return NextResponse.json(
@@ -14,7 +14,7 @@ export async function GET() {
       environment: process.env.NODE_ENV,
       integrations: {
         firebase: isFirebaseConfigured ? "configured" : "fallback_mode",
-        razorpay: isRazorpayConfigured ? "configured" : "sandbox_mode",
+        paytm: isPaytmConfigured ? "configured" : "upi_direct_mode",
       },
       version: "1.0.0-prod",
     },

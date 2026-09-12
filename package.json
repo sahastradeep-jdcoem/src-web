@@ -19,7 +19,6 @@
     "next": "^15.1.7",
     "qrcode": "^1.5.4",
     "qrcode.react": "^4.2.0",
-    "razorpay": "^2.9.8",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.0.1",
