@@ -3,8 +3,9 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage
 import { db, storage } from "./config";
 import { ClubItem } from "@/types";
 import { mockClubs } from "@/data/clubs";
-import { cleanUndefined } from "./firestore";
+import { cleanUndefined, saveSiteContentToFirestore } from "./firestore";
 import { compressImage } from "@/lib/imageCompression";
+import { hydrateClubAvatars, deduplicateClubAvatarsForCloud } from "@/lib/councilStore";
 
 const SITE_CONTENT_COLLECTION = "site_content";
 const CLUBS_DOC_ID = "clubs";
@@ -20,10 +21,11 @@ export async function getClubs(): Promise<ClubItem[]> {
       const snapshot = await getDoc(docRef);
       if (snapshot.exists() && Array.isArray(snapshot.data()?.payload) && snapshot.data().payload.length > 0) {
         const data = snapshot.data().payload as ClubItem[];
+        const hydrated = hydrateClubAvatars(data);
         if (typeof window !== "undefined") {
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
         }
-        return data;
+        return hydrated;
       }
     }
   } catch (error) {
@@ -36,12 +38,12 @@ export async function getClubs(): Promise<ClubItem[]> {
       const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return hydrateClubAvatars(parsed);
       }
     } catch {}
   }
 
-  return mockClubs;
+  return hydrateClubAvatars(mockClubs);
 }
 
 /**
@@ -58,22 +60,20 @@ export async function getClubById(idOrSlug: string): Promise<ClubItem | null> {
 }
 
 /**
- * Save all clubs to Firestore atomically
+ * Save all clubs to Firestore atomically with cloud deduplication
  */
 export async function saveClubsToFirestore(clubs: ClubItem[]): Promise<void> {
-  const sanitized = cleanUndefined(clubs);
+  const hydrated = hydrateClubAvatars(clubs);
+  const cloudPayload = deduplicateClubAvatarsForCloud(cleanUndefined(hydrated));
   
   // 1. Update local cache & dispatch UI update event immediately
   if (typeof window !== "undefined") {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sanitized));
-    window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: sanitized }));
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cloudPayload));
+    window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: hydrated }));
   }
 
   // 2. Persist to Cloud Firestore as authoritative source of truth
-  if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-    const docRef = doc(db, SITE_CONTENT_COLLECTION, CLUBS_DOC_ID);
-    await setDoc(docRef, { payload: sanitized, updatedAt: serverTimestamp() }, { merge: true });
-  }
+  await saveSiteContentToFirestore(CLUBS_DOC_ID, cloudPayload);
 }
 
 /**
@@ -182,11 +182,12 @@ export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => v
       (snapshot) => {
         if (snapshot.exists() && Array.isArray(snapshot.data()?.payload)) {
           const remoteClubs = snapshot.data().payload as ClubItem[];
+          const hydrated = hydrateClubAvatars(remoteClubs);
           if (typeof window !== "undefined") {
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(remoteClubs));
-            window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: remoteClubs }));
+            window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: hydrated }));
           }
-          callback(remoteClubs);
+          callback(hydrated);
         }
       },
       (error) => {

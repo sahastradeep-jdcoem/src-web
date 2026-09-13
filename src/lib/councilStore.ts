@@ -118,25 +118,70 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
     return av;
   };
 
+  // Cross-club avatar catalog (keyed by normalized student name and ID)
+  // Ensures leaders who serve in multiple clubs have their portrait cross-hydrated seamlessly
+  const knownAvatars = new Map<string, string>();
+  for (const c of clubs) {
+    const allPersons = [
+      ...(Array.isArray(c?.leaders) ? c.leaders : []),
+      c?.lead,
+      c?.coLead,
+      ...(Array.isArray(c?.coLeads) ? c.coLeads : []),
+    ];
+    for (const p of allPersons) {
+      if (!p) continue;
+      const av = sanitizeAvatar(p.avatar);
+      if (av) {
+        if (p.name) {
+          const normName = p.name.toLowerCase().trim();
+          if (normName && !knownAvatars.has(normName)) {
+            knownAvatars.set(normName, av);
+          }
+        }
+        if (p.id) {
+          const normId = p.id.toLowerCase().trim();
+          if (normId && !knownAvatars.has(normId)) {
+            knownAvatars.set(normId, av);
+          }
+        }
+      }
+    }
+  }
+
   return clubs.map((c) => {
     const rawLeaders = Array.isArray(c.leaders) ? [...c.leaders] : [];
     // Filter out any dummy / placeholder leaders
     const leaders = rawLeaders.filter((l) => l && l.name && !isPlaceholderLeaderName(l.name));
 
+    const resolveAvatar = (person?: any): string => {
+      if (!person) return "";
+      const direct = sanitizeAvatar(person.avatar);
+      if (direct) return direct;
+      if (person.name) {
+        const normName = person.name.toLowerCase().trim();
+        if (knownAvatars.has(normName)) return knownAvatars.get(normName)!;
+      }
+      if (person.id) {
+        const normId = person.id.toLowerCase().trim();
+        if (knownAvatars.has(normId)) return knownAvatars.get(normId)!;
+      }
+      return "";
+    };
+
     // Find primary lead & coLead avatars from leaders
     const leadLeader = leaders.find(
-      (l) => (l.roleType === "lead" || (l.role && !l.role.toLowerCase().includes("co-head"))) && l.avatar && !l.avatar.includes("images.unsplash.com")
+      (l) => (l.roleType === "lead" || (l.role && !l.role.toLowerCase().includes("co-head"))) && resolveAvatar(l)
     ) || leaders.find((l) => (l.roleType === "lead" || (l.role && !l.role.toLowerCase().includes("co-head")))) || leaders[0];
 
     const coLeadLeader = leaders.find(
-      (l) => (l.roleType === "coLead" || (l.role && l.role.toLowerCase().includes("co-head"))) && l.avatar && !l.avatar.includes("images.unsplash.com")
+      (l) => (l.roleType === "coLead" || (l.role && l.role.toLowerCase().includes("co-head"))) && resolveAvatar(l)
     ) || leaders.find((l) => (l.roleType === "coLead" || (l.role && l.role.toLowerCase().includes("co-head"))));
 
     const rawLead = c.lead && !isPlaceholderLeaderName(c.lead.name) ? c.lead : undefined;
     const rawCoLead = c.coLead && !isPlaceholderLeaderName(c.coLead.name) ? c.coLead : undefined;
 
-    const leadAvatar = sanitizeAvatar(leadLeader?.avatar) || sanitizeAvatar(rawLead?.avatar);
-    const coLeadAvatar = sanitizeAvatar(coLeadLeader?.avatar) || sanitizeAvatar(rawCoLead?.avatar);
+    const leadAvatar = resolveAvatar(leadLeader) || resolveAvatar(rawLead);
+    const coLeadAvatar = resolveAvatar(coLeadLeader) || resolveAvatar(rawCoLead);
 
     let lead: any = undefined;
     if (leadLeader) {
@@ -150,7 +195,7 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
     } else if (rawLead) {
       lead = {
         ...rawLead,
-        avatar: sanitizeAvatar(rawLead.avatar) || leadAvatar,
+        avatar: resolveAvatar(rawLead) || leadAvatar,
       };
     }
 
@@ -166,7 +211,7 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
     } else if (rawCoLead) {
       coLead = {
         ...rawCoLead,
-        avatar: sanitizeAvatar(rawCoLead.avatar) || coLeadAvatar,
+        avatar: resolveAvatar(rawCoLead) || coLeadAvatar,
       };
     }
 
@@ -179,7 +224,7 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
           const matchingLeader = leaders.find(
             (l) => (l.id && l.id === cl.id) || (l.name && cl.name && l.name.toLowerCase().trim() === cl.name.toLowerCase().trim())
           );
-          const avatar = sanitizeAvatar(matchingLeader?.avatar) || sanitizeAvatar(cl.avatar) || coLeadAvatar;
+          const avatar = resolveAvatar(matchingLeader) || resolveAvatar(cl) || coLeadAvatar;
           return {
             ...cl,
             avatar,
@@ -192,7 +237,7 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
     let finalLeaders = leaders.map((l, i) => {
       const isCoLead = l.roleType === "coLead" || (l.role && l.role.toLowerCase().includes("co-head"));
       const fallback = isCoLead ? coLeadAvatar : leadAvatar;
-      const safeAvatar = sanitizeAvatar(l.avatar) || fallback || "";
+      const safeAvatar = resolveAvatar(l) || fallback || "";
       const roleType = l.roleType || (isCoLead ? "coLead" : "lead");
       const defaultId = `${c.id || c.slug}-${roleType === "coLead" ? "colead" : "lead"}-${i}`;
       return {
@@ -219,8 +264,12 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
       slug = "robotics";
     }
 
+    // Hydrate heroImage: fallback to headerImage or cardImage if empty
+    const heroImage = (c as any).heroImage || c.headerImage || c.cardImage || "";
+
     return {
       ...c,
+      heroImage,
       slug,
       lead: lead || undefined,
       coLead: coLead || undefined,
@@ -231,16 +280,50 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
 }
 
 /**
- * Strips duplicate base64 strings from `lead.avatar`, `coLead.avatar`, and `coLeads[i].avatar`
- * prior to uploading to Firestore. The single source of truth remains `leaders[i].avatar`.
- * This reduces `site_content/clubs` document size by ~518 KB (~50%), keeping it well under 1MB.
+ * Strips duplicate base64 strings from `lead.avatar`, `coLead.avatar`, `coLeads[i].avatar`,
+ * and identical `heroImage` / duplicate cross-club leader avatars prior to uploading to Firestore.
+ * The single source of truth remains `leaders[i].avatar`.
+ * This drops `site_content/clubs` document size by over 550KB (~55%), keeping it safely under 500KB.
  */
 export function deduplicateClubAvatarsForCloud(clubs: ClubItem[]): ClubItem[] {
   if (!Array.isArray(clubs)) return [];
+  const seenLeaderAvatars = new Set<string>();
+
   return clubs.map((c) => {
     // 1. Ensure leaders has the avatars first
     const hydrated = hydrateClubAvatars([c])[0];
-    const leaders = hydrated.leaders || [];
+    const rawLeaders = hydrated.leaders || [];
+
+    // Deduplicate heroImage if it duplicates headerImage or cardImage
+    let heroImage = (c as any).heroImage;
+    if (heroImage && typeof heroImage === "string") {
+      const headerPrefix = c.headerImage ? c.headerImage.slice(0, 100) : "";
+      const cardPrefix = c.cardImage ? c.cardImage.slice(0, 100) : "";
+      if (
+        heroImage === c.headerImage ||
+        heroImage === c.cardImage ||
+        (headerPrefix && heroImage.startsWith(headerPrefix)) ||
+        (cardPrefix && heroImage.startsWith(cardPrefix))
+      ) {
+        heroImage = "";
+      }
+    }
+
+    // Deduplicate cross-club leader avatars if the exact same base64 is already present in another club
+    const leaders = rawLeaders.map((l) => {
+      if (!l.avatar || !l.avatar.startsWith("data:image/")) {
+        return l;
+      }
+      const avatarSig = `${l.avatar.slice(0, 80)}_${l.avatar.length}`;
+      if (seenLeaderAvatars.has(avatarSig)) {
+        return {
+          ...l,
+          avatar: "", // Stripped for cloud payload; cross-hydrated by hydrateClubAvatars
+        };
+      }
+      seenLeaderAvatars.add(avatarSig);
+      return l;
+    });
 
     // 2. Strip duplicate base64 from lead (preserved in leaders)
     const lead = hydrated.lead ? {
@@ -268,6 +351,7 @@ export function deduplicateClubAvatarsForCloud(clubs: ClubItem[]): ClubItem[] {
 
     return {
       ...c,
+      heroImage,
       lead,
       coLead,
       coLeads,

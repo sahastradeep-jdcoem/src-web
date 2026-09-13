@@ -829,11 +829,13 @@ export async function updateRegistrationPaymentStatus(
 
 const SITE_CONTENT_COLLECTION = "site_content";
 
-function stripOversizedBase64<T>(obj: T, maxLen = 100000, parentKey = ""): T {
+function stripOversizedBase64<T>(obj: T, maxLen = 100000, parentKey = "", isEmergency = false): T {
   if (obj === null || obj === undefined) return obj;
   if (typeof obj === "string") {
     // Preserve avatars up to 350,000 bytes (Directive #4) so profile pictures are never wiped by background compaction
-    const effectiveMax = (parentKey === "avatar" || parentKey === "photoUrl" || parentKey === "profileImage") ? 350000 : maxLen;
+    // Unless in deep emergency quota guard (isEmergency = true) where document would fail Firestore completely
+    const isAvatarKey = parentKey === "avatar" || parentKey === "photoUrl" || parentKey === "profileImage";
+    const effectiveMax = isAvatarKey ? (isEmergency ? Math.min(maxLen * 2, 75000) : 350000) : maxLen;
     if (obj.startsWith("data:image/") && obj.length > effectiveMax) {
       return "" as unknown as T;
     }
@@ -841,11 +843,11 @@ function stripOversizedBase64<T>(obj: T, maxLen = 100000, parentKey = ""): T {
   }
   if (typeof obj !== "object") return obj;
   if (Array.isArray(obj)) {
-    return obj.map((item) => stripOversizedBase64(item, maxLen, parentKey)) as unknown as T;
+    return obj.map((item) => stripOversizedBase64(item, maxLen, parentKey, isEmergency)) as unknown as T;
   }
   const result: any = {};
   for (const key of Object.keys(obj as any)) {
-    result[key] = stripOversizedBase64((obj as any)[key], maxLen, key);
+    result[key] = stripOversizedBase64((obj as any)[key], maxLen, key, isEmergency);
   }
   return result as T;
 }
@@ -860,12 +862,52 @@ export async function saveSiteContentToFirestore<T>(docId: string, data: T): Pro
 
       // Emergency Firestore 1MB quota guard (1,048,576 bytes)
       try {
-        const jsonStr = JSON.stringify(sanitized);
-        if (jsonStr.length > 900000) {
-          console.warn(`[Firestore] Document [${docId}] is near 1MB quota (${jsonStr.length} bytes). Compacting oversized base64 images...`);
-          sanitized = stripOversizedBase64(sanitized, 100000);
+        let jsonStr = JSON.stringify(sanitized);
+        if (jsonStr.length > 880000) {
+          console.warn(`[Firestore] Document [${docId}] is near 1MB quota (${jsonStr.length} bytes). Applying proactive emergency compaction...`);
+
+          // 1. If clubs document, run deep deduplication
+          if (docId === "clubs" && Array.isArray(sanitized)) {
+            sanitized = (sanitized as any[]).map((club: any) => {
+              const header = club.headerImage || "";
+              let hero = club.heroImage || "";
+              if (hero && (hero === header || (header && hero.slice(0, 100) === header.slice(0, 100)))) {
+                hero = "";
+              }
+              // Strip lead/coLead avatars if leaders exists
+              const lead = club.lead ? { ...club.lead, avatar: "" } : club.lead;
+              const coLead = club.coLead ? { ...club.coLead, avatar: "" } : club.coLead;
+              const coLeads = Array.isArray(club.coLeads)
+                ? club.coLeads.map((cl: any) => ({ ...cl, avatar: "" }))
+                : club.coLeads;
+              return {
+                ...club,
+                heroImage: hero,
+                lead,
+                coLead,
+                coLeads,
+              };
+            }) as any;
+            jsonStr = JSON.stringify(sanitized);
+          }
+
+          // 2. Compact non-avatar presentation images (banners, posters, cards)
+          if (jsonStr.length > 900000) {
+            sanitized = stripOversizedBase64(sanitized, 45000);
+            jsonStr = JSON.stringify(sanitized);
+          }
+          if (jsonStr.length > 950000) {
+            sanitized = stripOversizedBase64(sanitized, 25000);
+            jsonStr = JSON.stringify(sanitized);
+          }
+          if (jsonStr.length > 980000) {
+            // Absolute emergency fallback to prevent fatal quota rejection
+            sanitized = stripOversizedBase64(sanitized, 15000, "", true);
+          }
         }
-      } catch {}
+      } catch (guardErr) {
+        console.warn(`[Firestore] Quota guard check error for [${docId}]:`, guardErr);
+      }
 
       const docRef = doc(db, SITE_CONTENT_COLLECTION, docId);
       await setDoc(docRef, { payload: sanitized, updatedAt: serverTimestamp() }, { merge: true });

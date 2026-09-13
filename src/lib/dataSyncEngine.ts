@@ -89,14 +89,14 @@ export async function compactClubDataset<T extends {
   // Memoize avatar compaction by data URL so duplicate references to the same avatar only compress once
   const avatarCache = new Map<string, Promise<string>>();
   const compactAvatar = (avatar?: string): Promise<string> => {
-    if (!avatar || !avatar.startsWith("data:image/") || avatar.length <= 60000) {
+    if (!avatar || !avatar.startsWith("data:image/") || avatar.length <= 22000) {
       return Promise.resolve(avatar || "");
     }
     if (avatarCache.has(avatar)) {
       return avatarCache.get(avatar)!;
     }
-    // 650px height (520x650) at 0.82 quality produces crisp Retina portrait at ~22-28KB
-    const p = compactBase64Image(avatar, 650, 0.82);
+    // 520px height (416x520) at 0.78 quality produces crisp Retina portraits for club cards at ~16-19KB
+    const p = compactBase64Image(avatar, 520, 0.78);
     avatarCache.set(avatar, p);
     return p;
   };
@@ -108,25 +108,29 @@ export async function compactClubDataset<T extends {
       let header = c.headerImage;
       let hero = (c as any).heroImage;
 
-      if (logo && logo.startsWith("data:image/") && logo.length > 35000) {
-        logo = await compactBase64Image(logo, 300, 0.80);
+      if (logo && logo.startsWith("data:image/") && logo.length > 15000) {
+        logo = await compactBase64Image(logo, 200, 0.75);
       }
-      if (card && card.startsWith("data:image/") && card.length > 50000) {
-        card = await compactBase64Image(card, 600, 0.75);
+      if (card && card.startsWith("data:image/") && card.length > 25000) {
+        card = await compactBase64Image(card, 480, 0.72);
       }
-      if (header && header.startsWith("data:image/") && header.length > 60000) {
-        header = await compactBase64Image(header, 800, 0.75);
+      if (header && header.startsWith("data:image/") && header.length > 28000) {
+        header = await compactBase64Image(header, 720, 0.72);
       }
-      if (hero && hero.startsWith("data:image/") && hero.length > 60000) {
-        hero = await compactBase64Image(hero, 800, 0.75);
+      if (hero && hero.startsWith("data:image/")) {
+        if (header && (hero === header || hero.slice(0, 100) === header.slice(0, 100))) {
+          hero = ""; // Deduplicate duplicate hero image
+        } else if (hero.length > 28000) {
+          hero = await compactBase64Image(hero, 720, 0.72);
+        }
       }
 
       let galleryImages = c.galleryImages;
       if (Array.isArray(galleryImages)) {
         galleryImages = await Promise.all(
           galleryImages.map(async (g) => {
-            if (g && g.startsWith("data:image/") && g.length > 40000) {
-              return await compactBase64Image(g, 600, 0.65);
+            if (g && g.startsWith("data:image/") && g.length > 25000) {
+              return await compactBase64Image(g, 480, 0.65);
             }
             return g;
           })
