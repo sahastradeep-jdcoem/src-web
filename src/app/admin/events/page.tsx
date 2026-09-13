@@ -706,7 +706,7 @@ export default function AdminEventsPage() {
         </div>
       </div>
 
-      {/* Events Table Roster */}
+      {/* Events Card Grid View */}
       {filteredEvents.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center space-y-4 shadow-2xs">
           <div className="mx-auto h-12 w-12 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400">
@@ -749,240 +749,219 @@ export default function AdminEventsPage() {
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-2xs">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead className="bg-slate-50/90 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                <tr>
-                  <th className="py-3 px-5">Event & Venue</th>
-                  <th className="py-3 px-5">Host & Collaborators</th>
-                  <th className="py-3 px-4">Category</th>
-                  <th className="py-3 px-5">Date & Time</th>
-                  <th className="py-3 px-4">Audience</th>
-                  <th className="py-3 px-4">Status & Pricing</th>
-                  <th className="py-3 px-5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
-                {filteredEvents.map((evt) => {
-                  const isCancelled = evt.isCancelled || evt.status === "Cancelled";
-                  const isWalkIn = Boolean(evt.noRegistrationRequired);
-                  const isPaid = !isWalkIn && (evt.isPaid || (evt.feeAmount && evt.feeAmount > 0));
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredEvents.map((evt) => {
+            const isCancelled = evt.isCancelled || evt.status === "Cancelled";
+            const isWalkIn = Boolean(evt.noRegistrationRequired);
+            const isPaid = !isWalkIn && (evt.isPaid || (evt.feeAmount && evt.feeAmount > 0));
+            const eventImage = evt.poster || evt.cardImage || evt.posterImage || evt.headerImage || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop";
 
-                  return (
-                    <tr key={evt.id || evt.slug} className="hover:bg-slate-50/80 transition-colors">
-                      {/* Event Name & Venue (NO PHOTO) */}
-                      <td className="py-3.5 px-5">
-                        <div className="space-y-0.5">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="font-bold text-slate-900 text-sm leading-snug">
-                              {evt.name}
-                            </span>
-                            {evt.isParentFest && (
-                              <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.2 rounded-full bg-blue-50 text-[#17458F] border border-blue-200">
-                                Umbrella Fest
-                              </span>
-                            )}
-                            {evt.parentEventName && (
-                              <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.2 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-                                Part of {evt.parentEventName}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1 text-[11px] text-slate-400 font-sans">
-                            <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span className="truncate max-w-[240px]">{evt.venue}</span>
-                          </div>
-                        </div>
-                      </td>
+            return (
+              <div
+                key={evt.id || evt.slug}
+                className="group bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between"
+              >
+                {/* Visual Banner Header with Event Storage Image */}
+                <div className="relative h-48 w-full bg-slate-900 overflow-hidden">
+                  <img
+                    src={eventImage}
+                    alt={evt.name}
+                    loading="lazy"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90 group-hover:opacity-100"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop";
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent pointer-events-none" />
 
-                      {/* Organized By */}
-                      <td className="py-3.5 px-5">
-                        <div className="space-y-0.5">
-                          <div className="flex items-center gap-1.5 font-bold text-slate-800 text-xs">
-                            <Building2 className="w-3.5 h-3.5 text-[#17458F] shrink-0" />
-                            <span className="truncate max-w-[170px]">{evt.organizer || "SRC Sahastradeep"}</span>
-                          </div>
-                          {evt.collaboratingClubs && evt.collaboratingClubs.length > 0 && (
-                            <div className="flex flex-wrap gap-1 items-center">
-                              <span className="text-[9px] text-slate-400 font-medium">with</span>
-                              {evt.collaboratingClubs.map((collab) => (
-                                <span
-                                  key={collab.slug || collab.name}
-                                  className="text-[9px] font-semibold bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded border border-slate-200"
-                                >
-                                  {collab.name}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </td>
+                  {/* Overlaid Badges */}
+                  <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
+                    <span className="px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider border border-white/20">
+                      {evt.category}
+                    </span>
+                    
+                    <button
+                      type="button"
+                      onClick={() => handleToggleAudience(evt)}
+                      className={cn(
+                        "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-md border transition-all cursor-pointer shadow-sm inline-flex items-center gap-1",
+                        evt.targetAudience === "jdcoem_only"
+                          ? "bg-amber-500/90 text-white border-amber-300 hover:bg-amber-600"
+                          : "bg-[#17458F]/90 text-white border-blue-300 hover:bg-[#123670]"
+                      )}
+                      title="Click to toggle JDCOEM Only vs Open to All"
+                    >
+                      {evt.targetAudience === "jdcoem_only" ? (
+                        <>
+                          <GraduationCap className="w-3 h-3" />
+                          <span>JDCOEM Only</span>
+                        </>
+                      ) : (
+                        <>
+                          <Globe className="w-3 h-3" />
+                          <span>Open to All</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
 
-                      {/* Category */}
-                      <td className="py-3.5 px-4">
-                        <span className={cn(
-                          "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap",
-                          evt.category === "Technical" ? "bg-blue-50 text-blue-700 border-blue-200" :
-                          evt.category === "Cultural" ? "bg-purple-50 text-purple-700 border-purple-200" :
-                          evt.category === "Sports" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                          evt.category === "Workshops" ? "bg-amber-50 text-amber-800 border-amber-200" :
-                          evt.category === "Competitions" ? "bg-rose-50 text-rose-700 border-rose-200" :
-                          evt.category === "Fest" ? "bg-indigo-50 text-indigo-700 border-indigo-200" :
-                          "bg-slate-100 text-slate-700 border-slate-200"
-                        )}>
-                          {evt.category}
+                  {/* Bottom Title on Image */}
+                  <div className="absolute bottom-3 left-3 right-3 text-white">
+                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                      {evt.isParentFest && (
+                        <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#E78023] text-white shadow-2xs">
+                          Umbrella Fest
                         </span>
-                      </td>
+                      )}
+                      {evt.parentEventName && (
+                        <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400/90 text-slate-900">
+                          Part of {evt.parentEventName}
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="font-heading font-bold text-base line-clamp-1 leading-snug drop-shadow-sm">
+                      {evt.name}
+                    </h3>
+                  </div>
+                </div>
 
-                      {/* Scheduled Date */}
-                      <td className="py-3.5 px-5 text-slate-600 font-sans">
-                        <div className="flex items-center gap-1.5 font-semibold text-slate-800 text-xs whitespace-nowrap">
-                          <CalendarIcon className="w-3.5 h-3.5 text-[#E78023] shrink-0" />
-                          <span>{evt.date}</span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          {evt.time && (
-                            <div className="flex items-center gap-1 text-[11px] text-slate-500 whitespace-nowrap">
-                              <Clock className="w-3 h-3 text-slate-400" />
-                              <span>{evt.time}</span>
-                            </div>
-                          )}
-                          {evt.isMultiDay && (
-                            <span className="text-[9px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200 whitespace-nowrap">
-                              Multi-Day
-                            </span>
-                          )}
-                        </div>
-                      </td>
+                {/* Card Body */}
+                <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs text-slate-600">
+                      <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                        <Users className="w-3.5 h-3.5 text-[#17458F] shrink-0" />
+                        <span className="truncate max-w-[170px]">{evt.organizer || "SRC Sahastradeep"}</span>
+                      </div>
+                      {evt.collaboratingClubs && evt.collaboratingClubs.length > 0 && (
+                        <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                          +{evt.collaboratingClubs.length} co-host{evt.collaboratingClubs.length > 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
 
-                      {/* Audience / Eligibility (Clean SVG Icon, No Emojis) */}
-                      <td className="py-3.5 px-4">
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-700 pt-1">
+                      <div className="flex items-center gap-1.5">
+                        <CalendarIcon className="w-3.5 h-3.5 text-[#E78023]" />
+                        <span>{evt.date}</span>
+                      </div>
+                      {evt.time && (
+                        <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          <span>{evt.time}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="truncate">{evt.venue}</span>
+                    </div>
+                  </div>
+
+                  {/* Status & Fee Bar */}
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <div>
+                      {isWalkIn ? (
+                        <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1">
+                          <Ticket className="w-3 h-3 text-emerald-600" />
+                          <span>Walk-in Entry</span>
+                        </span>
+                      ) : (
+                        <Badge
+                          variant={
+                            isCancelled
+                              ? "rose"
+                              : evt.status === "Registration Open"
+                              ? "orange"
+                              : "slate"
+                          }
+                          size="sm"
+                        >
+                          {isCancelled ? "Cancelled" : evt.status}
+                        </Badge>
+                      )}
+                    </div>
+
+                    <span
+                      className={cn(
+                        "px-2.5 py-0.5 rounded-full text-[10px] font-bold border",
+                        isPaid
+                          ? "bg-blue-50 text-[#17458F] border-[#17458F]/30"
+                          : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      )}
+                    >
+                      {isPaid ? (evt.entryFee || `₹${evt.feeAmount || 0} / person`) : "Free Entry"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Card Action Footer */}
+                <div className="px-4 py-3 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-1">
+                    {!isWalkIn && (
+                      <Link
+                        href={`/admin/registrations?event=${encodeURIComponent(evt.name)}`}
+                        className="h-8 px-2.5 rounded-lg bg-white hover:bg-blue-50 text-[#17458F] border border-slate-200 hover:border-blue-200 text-xs font-semibold transition-all inline-flex items-center gap-1.5 shadow-2xs"
+                        title="View Registrations & Responses"
+                      >
+                        <Users className="w-3.5 h-3.5" />
+                        <span>Passes</span>
+                      </Link>
+                    )}
+                    <Link
+                      href={`/events/${evt.slug}`}
+                      target="_blank"
+                      className="h-8 w-8 rounded-lg bg-white hover:bg-slate-100 text-slate-600 hover:text-[#17458F] border border-slate-200 transition-all inline-flex items-center justify-center shadow-2xs"
+                      title="View Public Page"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    {!isCancelled && (
+                      <>
+                        <button
+                          onClick={() => handleStartEdit(evt)}
+                          className="h-8 w-8 rounded-lg bg-white hover:bg-slate-100 text-slate-700 hover:text-[#17458F] border border-slate-200 transition-all inline-flex items-center justify-center cursor-pointer shadow-2xs"
+                          title="Edit Event"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDuplicate(evt)}
+                          className="h-8 w-8 rounded-lg bg-white hover:bg-slate-100 text-slate-700 hover:text-[#17458F] border border-slate-200 transition-all inline-flex items-center justify-center cursor-pointer shadow-2xs"
+                          title="Duplicate Event"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
                         <button
                           type="button"
-                          onClick={() => handleToggleAudience(evt)}
-                          className={cn(
-                            "whitespace-nowrap px-3 py-1 rounded-full text-xs font-semibold tracking-normal transition-all cursor-pointer border shadow-2xs inline-flex items-center gap-1.5",
-                            evt.targetAudience === "jdcoem_only"
-                              ? "bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100"
-                              : "bg-sky-50 text-sky-800 border-sky-200/80 hover:bg-sky-100"
-                          )}
-                          title="Click to toggle between JDCOEM Only and Open to All"
+                          onClick={() => {
+                            setEventToCancel(evt);
+                            setCancellationNotice("");
+                          }}
+                          className="h-8 w-8 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 transition-all inline-flex items-center justify-center cursor-pointer shadow-2xs"
+                          title="Cancel Event"
                         >
-                          {evt.targetAudience === "jdcoem_only" ? (
-                            <>
-                              <GraduationCap className="w-3.5 h-3.5 text-amber-600" />
-                              <span>JDCOEM Only</span>
-                            </>
-                          ) : (
-                            <>
-                              <Globe className="w-3.5 h-3.5 text-sky-600" />
-                              <span>Open to All</span>
-                            </>
-                          )}
+                          <Ban className="w-3.5 h-3.5" />
                         </button>
-                      </td>
-
-                      {/* Status & Pricing (Clean Badges, No Emojis) */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex flex-col gap-1 items-start">
-                          {isWalkIn ? (
-                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1 whitespace-nowrap">
-                              <Ticket className="w-3 h-3 text-emerald-600" />
-                              <span>Walk-in Entry</span>
-                            </span>
-                          ) : (
-                            <Badge
-                              variant={
-                                isCancelled
-                                  ? "rose"
-                                  : evt.status === "Registration Open"
-                                  ? "orange"
-                                  : "slate"
-                              }
-                              size="sm"
-                            >
-                              {isCancelled ? "Cancelled" : evt.status}
-                            </Badge>
-                          )}
-                          <span
-                            className={cn(
-                              "px-2 py-0.2 rounded-full text-[9px] font-bold border whitespace-nowrap",
-                              isPaid
-                                ? "bg-blue-50 text-[#17458F] border-[#17458F]/30"
-                                : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            )}
-                          >
-                            {isPaid ? (evt.entryFee || `₹${evt.feeAmount || 0} / person`) : "Free Entry"}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="py-3.5 px-5 text-right">
-                        <div className="inline-flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200/70 shadow-2xs">
-                          {!isWalkIn && (
-                            <Link
-                              href={`/admin/registrations?event=${encodeURIComponent(evt.name)}`}
-                              className="p-1.5 rounded-lg text-[#17458F] hover:bg-blue-50 transition-colors"
-                              title="View Delegate Registrations"
-                            >
-                              <Users className="w-3.5 h-3.5" />
-                            </Link>
-                          )}
-                          <Link
-                            href={`/events/${evt.slug}`}
-                            target="_blank"
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 transition-colors"
-                            title="Open Public Event Page"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </Link>
-                          {!isCancelled && (
-                            <>
-                              <button
-                                onClick={() => handleStartEdit(evt)}
-                                className="p-1.5 rounded-lg text-slate-600 hover:text-[#17458F] hover:bg-slate-200/60 transition-colors cursor-pointer"
-                                title="Edit Event Details"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDuplicate(evt)}
-                                className="p-1.5 rounded-lg text-slate-600 hover:text-[#17458F] hover:bg-slate-200/60 transition-colors cursor-pointer"
-                                title="Duplicate Event Record"
-                              >
-                                <Copy className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEventToCancel(evt);
-                                  setCancellationNotice("");
-                                }}
-                                className="p-1.5 rounded-lg text-amber-600 hover:text-amber-800 hover:bg-amber-100/60 transition-colors cursor-pointer"
-                                title="Cancel Event & Bulk Cancel Passes"
-                              >
-                                <Ban className="w-3.5 h-3.5" />
-                              </button>
-                            </>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setEventToDelete(evt)}
-                            className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-100/60 transition-colors cursor-pointer"
-                            title="Delete Event Record"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setEventToDelete(evt)}
+                      className="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-all inline-flex items-center justify-center cursor-pointer shadow-2xs"
+                      title="Delete Event"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
