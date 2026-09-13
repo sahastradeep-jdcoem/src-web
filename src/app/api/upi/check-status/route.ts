@@ -36,6 +36,45 @@ export async function GET(req: NextRequest) {
                 paidAt: data.paidAt,
               });
             }
+
+            // Self-healing: If session is WAITING, check if an unclaimed payment with matching amount arrived
+            if (data?.status === "WAITING" && data?.amount) {
+              const sessionAmt = Number(data.amount);
+              const paymentsSnap = await getDocs(
+                query(collection(db, "verified_upi_payments"), where("status", "==", "UNCLAIMED"))
+              );
+              const match = paymentsSnap.docs.find((pDoc) => {
+                const pAmt = Number(pDoc.data().amount || 0);
+                return Math.abs(pAmt - sessionAmt) < 0.005;
+              });
+
+              if (match) {
+                const pData = match.data();
+                const now = new Date().toISOString();
+                const { setDoc } = await import("firebase/firestore");
+                await setDoc(sessionRef, {
+                  status: "COMPLETED",
+                  utr: pData.utr,
+                  receivedAmount: pData.amount,
+                  paidAt: pData.receivedAt || now,
+                }, { merge: true });
+
+                await setDoc(match.ref, {
+                  status: "MATCHED",
+                  matchedOrderId: orderId,
+                  matchedStudentName: data.participantName || "Student",
+                  matchedAt: now,
+                }, { merge: true });
+
+                return NextResponse.json({
+                  status: "PAID",
+                  orderId,
+                  utr: pData.utr,
+                  amount: pData.amount,
+                  paidAt: pData.receivedAt || now,
+                });
+              }
+            }
           }
         } catch {}
       }

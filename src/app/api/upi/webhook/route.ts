@@ -295,6 +295,17 @@ export async function POST(req: NextRequest) {
             matchedStudentName: "MacroDroid Phone Connected",
             receivedAt: now,
           }, { merge: true });
+
+          const logId = `SIG-${Date.now()}`;
+          await setDoc(doc(db, "upi_webhook_logs", logId), {
+            id: logId,
+            receivedAt: now,
+            combinedText: (combinedText || trimmedText || "").slice(0, 500),
+            extractedUtr: null,
+            extractedAmount: 0,
+            status: "PING",
+            note: "Connectivity ping or no amount/UTR detected",
+          }, { merge: true });
         } catch (pingErr) {
           console.warn("Notice: ping save to verified_upi_payments notice:", pingErr);
         }
@@ -414,19 +425,15 @@ export async function POST(req: NextRequest) {
               }
             }
             if (bestMatch) {
-              const createdMs = new Date(bestMatch.data.createdAt || 0).getTime();
-              // Check if session was created within the last 30 minutes
-              if (Date.now() - createdMs < 30 * 60 * 1000) {
-                matchedOrderId = bestMatch.id;
-                matchedStudentName = bestMatch.data.participantName || bestMatch.data.leaderName || bestMatch.data.email || "Student";
-                await updateDoc(bestMatch.ref, {
-                  status: "COMPLETED",
-                  utr,
-                  receivedAmount: amount,
-                  paidAt: now,
-                  rawNotification: combinedText,
-                });
-              }
+              matchedOrderId = bestMatch.id;
+              matchedStudentName = bestMatch.data.participantName || bestMatch.data.leaderName || bestMatch.data.email || "Student";
+              await setDoc(doc(db, "active_checkout_sessions", bestMatch.id), {
+                status: "COMPLETED",
+                utr,
+                receivedAmount: amount,
+                paidAt: now,
+                rawNotification: combinedText,
+              }, { merge: true });
             }
           }
         } catch (autoErr) {
