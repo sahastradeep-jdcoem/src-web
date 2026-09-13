@@ -53,6 +53,27 @@ export function sanitizeEventItem(event: EventItem): EventItem {
           )
         )
       : [],
+    schedule: Array.isArray(event.schedule)
+      ? event.schedule
+          .filter((item) => item && typeof item === "object" && Boolean(item.title?.trim() || item.time?.trim()))
+          .map((item) => ({
+            time: (item.time || "").trim(),
+            title: (item.title || "").trim(),
+            venue: (item.venue || "").trim(),
+            description: (item.description || "").trim(),
+          }))
+      : [],
+    prizes: Array.isArray(event.prizes)
+      ? event.prizes
+          .filter((p) => p && typeof p === "object" && Boolean(p.position?.trim() || p.amount?.trim()))
+          .map((p) => ({
+            position: (p.position || "").trim(),
+            amount: (p.amount || "").trim(),
+            perks: Array.isArray(p.perks)
+              ? Array.from(new Set(p.perks.map((k) => (typeof k === "string" ? k.trim() : "")).filter(Boolean)))
+              : [],
+          }))
+      : [],
   };
 }
 

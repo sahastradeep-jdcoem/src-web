@@ -175,8 +175,8 @@ export default function AdminEventsPage() {
       about: formData.about || formData.description,
       whatToExpect: cleanWhatToExpect.length > 0 ? cleanWhatToExpect : ["High-impact collegiate showcase"],
       rules: cleanRules.length > 0 ? cleanRules : ["College ID mandatory"],
-      schedule: [],
-      prizes: [],
+      schedule: formData.schedule || [],
+      prizes: formData.prizes || [],
       teamType: formData.teamType,
       minTeamSize: formData.teamType !== "Individual" ? formData.minTeamSize : undefined,
       maxTeamSize: formData.teamType !== "Individual" ? formData.maxTeamSize : undefined,
@@ -281,6 +281,8 @@ export default function AdminEventsPage() {
       subEventBadge: editingEvent.subEventBadge || "",
       targetAudience: (editingEvent.targetAudience || (editingEvent.isInterCollege === false ? "jdcoem_only" : "inter_college")) as TargetAudience,
       isInterCollege: editingEvent.targetAudience ? editingEvent.targetAudience === "inter_college" : editingEvent.isInterCollege !== false,
+      schedule: editingEvent.schedule ? JSON.parse(JSON.stringify(editingEvent.schedule)) : [],
+      prizes: editingEvent.prizes ? JSON.parse(JSON.stringify(editingEvent.prizes)) : [],
     };
   }, [editingEvent]);
 
@@ -338,6 +340,8 @@ export default function AdminEventsPage() {
       about: formData.about || formData.description,
       whatToExpect: cleanWhatToExpect,
       rules: cleanRules,
+      schedule: formData.schedule || [],
+      prizes: formData.prizes || [],
       teamType: formData.teamType,
       minTeamSize: formData.teamType !== "Individual" ? formData.minTeamSize : undefined,
       maxTeamSize: formData.teamType !== "Individual" ? formData.maxTeamSize : undefined,
