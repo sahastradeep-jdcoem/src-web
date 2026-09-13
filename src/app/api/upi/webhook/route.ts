@@ -146,8 +146,20 @@ export async function POST(req: NextRequest) {
     const queryAmount = req.nextUrl.searchParams.get("amount") || "";
     const queryUtr = req.nextUrl.searchParams.get("utr") || "";
 
+    // Header parameters as fallbacks (in case user configured them under Header Params tab)
+    const headerText = req.headers.get("notificationtext") || 
+                       req.headers.get("notificationtext{notification}") || 
+                       req.headers.get("x-notification-text") || 
+                       "";
+    const headerTitle = req.headers.get("title") || "";
+
+    // Auto-strip any accidental {notification} tokens if user had them typed in MacroDroid
+    const cleanedRawText = (rawText || "")
+      .replace(/\{notification\}/gi, "")
+      .trim();
+
     // Parse body safely regardless of Content-Type or malformed formatting
-    const trimmedText = rawText.trim();
+    const trimmedText = cleanedRawText || rawText.trim();
     if (trimmedText.startsWith("{")) {
       // 1. Try standard JSON parsing
       try {
@@ -195,8 +207,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Combine all potential text fields from MacroDroid / Tasker / Forwarder / URL
-    const title = String(rawBody.title || rawBody.heading || rawBody.subject || "");
+    // Combine all potential text fields from MacroDroid / Tasker / Forwarder / Headers / URL
+    const title = String(rawBody.title || rawBody.heading || rawBody.subject || headerTitle || "");
     const text = String(
       rawBody.notificationText || 
       rawBody.text || 
@@ -204,6 +216,7 @@ export async function POST(req: NextRequest) {
       rawBody.body || 
       rawBody.content || 
       rawBody.notification_text ||
+      headerText ||
       queryText ||
       ""
     );
