@@ -1206,7 +1206,7 @@ export function EventFormModal({
                           <input
                             type="number"
                             min={0}
-                            step={10}
+                            step={1}
                             value={form.feeAmount}
                             onChange={(e) => setForm({ ...form, feeAmount: Math.max(0, parseInt(e.target.value) || 0) })}
                             placeholder="e.g. 150"
@@ -1222,7 +1222,7 @@ export function EventFormModal({
                             <input
                               type="number"
                               min={0}
-                              step={10}
+                              step={1}
                               value={form.teamFeeAmount}
                               onChange={(e) => setForm({ ...form, teamFeeAmount: Math.max(0, parseInt(e.target.value) || 0) })}
                               placeholder="e.g. 300"
