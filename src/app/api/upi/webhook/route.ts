@@ -238,41 +238,62 @@ export async function POST(req: NextRequest) {
           );
           const waitingSnap = await getDocs(waitingSessionsQuery);
           if (!waitingSnap.empty) {
-            const candidates = waitingSnap.docs
-              .map((d) => ({ ref: d.ref, id: d.id, data: d.data() }))
+            const allWaiting = waitingSnap.docs.map((d) => ({ ref: d.ref, id: d.id, data: d.data() }));
+
+            // Comparator function for multi-tier disambiguation
+            const sortCandidates = (a: any, b: any) => {
+              const textLower = combinedText.toLowerCase();
+
+              // Priority 1: Participant Name matching in notification text
+              const nameA = String(a.data.participantName || a.data.leaderName || "").toLowerCase().trim();
+              const nameB = String(b.data.participantName || b.data.leaderName || "").toLowerCase().trim();
+              const aMatchesName = Boolean(nameA && nameA.split(/\s+/).some(part => part.length >= 3 && textLower.includes(part)));
+              const bMatchesName = Boolean(nameB && nameB.split(/\s+/).some(part => part.length >= 3 && textLower.includes(part)));
+
+              if (aMatchesName && !bMatchesName) return -1;
+              if (!aMatchesName && bMatchesName) return 1;
+
+              // Priority 2: Phone number matching in notification text
+              const phoneA = String(a.data.phone || "").replace(/\D/g, "").slice(-6);
+              const phoneB = String(b.data.phone || "").replace(/\D/g, "").slice(-6);
+              const aMatchesPhone = Boolean(phoneA && phoneA.length >= 6 && textLower.includes(phoneA));
+              const bMatchesPhone = Boolean(phoneB && phoneB.length >= 6 && textLower.includes(phoneB));
+
+              if (aMatchesPhone && !bMatchesPhone) return -1;
+              if (!aMatchesPhone && bMatchesPhone) return 1;
+
+              // Priority 3: Timestamp recency (newest waiting session first)
+              const tA = new Date(a.data.createdAt || 0).getTime();
+              const tB = new Date(b.data.createdAt || 0).getTime();
+              return tB - tA;
+            };
+
+            // 1. EXACT MICRO-PAISA MATCH (< 0.005) - Mathematical 1:1 Identity
+            const exactPaisaCandidates = allWaiting
               .filter((d) => {
                 const expectedAmt = Number(d.data.amount) || 0;
-                return Math.abs(expectedAmt - Number(amount)) < 0.5;
+                return Math.abs(expectedAmt - Number(amount)) < 0.005;
               })
-              .sort((a, b) => {
-                const textLower = combinedText.toLowerCase();
+              .sort(sortCandidates);
 
-                // Priority 1: Participant Name matching in notification text
-                const nameA = String(a.data.participantName || a.data.leaderName || "").toLowerCase().trim();
-                const nameB = String(b.data.participantName || b.data.leaderName || "").toLowerCase().trim();
-                const aMatchesName = Boolean(nameA && nameA.split(/\s+/).some(part => part.length >= 3 && textLower.includes(part)));
-                const bMatchesName = Boolean(nameB && nameB.split(/\s+/).some(part => part.length >= 3 && textLower.includes(part)));
+            let bestMatch: any = null;
 
-                if (aMatchesName && !bMatchesName) return -1;
-                if (!aMatchesName && bMatchesName) return 1;
+            if (exactPaisaCandidates.length > 0) {
+              bestMatch = exactPaisaCandidates[0];
+            } else {
+              // 2. FALLBACK LOOSE MATCH (< 0.99) - in case a student rounded off manually
+              const looseCandidates = allWaiting
+                .filter((d) => {
+                  const expectedAmt = Number(d.data.amount) || 0;
+                  return Math.abs(expectedAmt - Number(amount)) < 0.99;
+                })
+                .sort(sortCandidates);
 
-                // Priority 2: Phone number matching in notification text
-                const phoneA = String(a.data.phone || "").replace(/\D/g, "").slice(-6);
-                const phoneB = String(b.data.phone || "").replace(/\D/g, "").slice(-6);
-                const aMatchesPhone = Boolean(phoneA && phoneA.length >= 6 && textLower.includes(phoneA));
-                const bMatchesPhone = Boolean(phoneB && phoneB.length >= 6 && textLower.includes(phoneB));
-
-                if (aMatchesPhone && !bMatchesPhone) return -1;
-                if (!aMatchesPhone && bMatchesPhone) return 1;
-
-                // Priority 3: Timestamp recency (newest waiting session first)
-                const tA = new Date(a.data.createdAt || 0).getTime();
-                const tB = new Date(b.data.createdAt || 0).getTime();
-                return tB - tA;
-              });
-
-            if (candidates.length > 0) {
-              const bestMatch = candidates[0];
+              if (looseCandidates.length > 0) {
+                bestMatch = looseCandidates[0];
+              }
+            }
+            if (bestMatch) {
               const createdMs = new Date(bestMatch.data.createdAt || 0).getTime();
               // Check if session was created within the last 30 minutes
               if (Date.now() - createdMs < 30 * 60 * 1000) {

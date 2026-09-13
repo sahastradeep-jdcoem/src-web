@@ -161,6 +161,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   const [paytmCheckoutData, setPaytmCheckoutData] = useState<{
     orderId: string;
     amount: number;
+    baseAmount?: number;
+    microPaisaOffset?: number;
     formattedAmount: string;
     upiLink: string;
     gpayLink?: string;
@@ -815,6 +817,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       setPaytmCheckoutData({
         orderId: orderData.orderId,
         amount: orderData.amount,
+        baseAmount: orderData.baseAmount || orderData.amount,
+        microPaisaOffset: orderData.microPaisaOffset || 0,
         formattedAmount: orderData.formattedAmount,
         upiLink: orderData.upiLink,
         gpayLink: orderData.gpayLink,
@@ -830,6 +834,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           await setDoc(doc(db, "active_checkout_sessions", orderData.orderId), {
             orderId: orderData.orderId,
             amount: Number(orderData.amount),
+            baseAmount: Number(orderData.baseAmount || orderData.amount),
+            microPaisaOffset: orderData.microPaisaOffset || 0,
             eventId: event.id,
             eventName: event.name,
             participantName: formData.fullName || user?.displayName || user?.name || "Student",

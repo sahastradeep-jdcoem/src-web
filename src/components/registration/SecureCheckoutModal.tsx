@@ -21,6 +21,8 @@ import { EventItem } from "@/types";
 export interface PaytmCheckoutData {
   orderId: string;
   amount: number;
+  baseAmount?: number;
+  microPaisaOffset?: number;
   formattedAmount: string;
   upiLink: string;
   gpayLink?: string;
@@ -131,13 +133,18 @@ export function SecureCheckoutModal({
           {/* Amount Overview Banner */}
           <div className="mt-3 pt-2.5 border-t border-white/15 flex items-center justify-between">
             <div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-[10px] text-blue-100/80 uppercase tracking-wider font-semibold">
                   Total Amount
                 </span>
                 <span className="text-[10px] text-emerald-300 font-bold bg-emerald-400/15 border border-emerald-300/25 px-1.5 py-0.2 rounded">
                   Zero Fee
                 </span>
+                {paytmCheckoutData.microPaisaOffset ? (
+                  <span className="text-[10px] text-amber-200 font-bold bg-amber-400/20 border border-amber-300/30 px-1.5 py-0.2 rounded">
+                    +{paytmCheckoutData.microPaisaOffset}p Instant-Verify
+                  </span>
+                ) : null}
               </div>
               <div className="flex items-baseline gap-1.5 mt-0.5">
                 <span className="font-heading font-black text-2xl text-white tracking-tight">
@@ -409,13 +416,18 @@ export function SecureCheckoutModal({
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                 Price Summary
               </span>
-              <div className="flex items-baseline gap-1.5">
+              <div className="flex items-baseline gap-1.5 flex-wrap">
                 <span className="font-heading font-black text-2xl text-slate-900 tracking-tight">
                   ₹{paytmCheckoutData.formattedAmount}
                 </span>
                 <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
                   +0 Fee
                 </span>
+                {paytmCheckoutData.microPaisaOffset ? (
+                  <span className="text-[10px] font-bold text-amber-800 bg-amber-100/70 border border-amber-200 px-1.5 py-0.5 rounded">
+                    +{paytmCheckoutData.microPaisaOffset}p Instant-Verify
+                  </span>
+                ) : null}
               </div>
               <p className="text-[11px] text-slate-500 font-medium truncate pt-0.5">
                 {event.name} • Delegate Pass

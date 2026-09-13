@@ -133,8 +133,8 @@ export async function POST(req: NextRequest) {
         if (paymentSnap.exists()) {
           const paymentData = paymentSnap.data();
           const expectedAmount = Number(amount || 0);
-          // If amount is valid or matches expected fee
-          if (!expectedAmount || (paymentData.amount && paymentData.amount >= expectedAmount)) {
+          // If amount is valid or matches expected fee (allowing for micro-paisa offset tolerance of <= ₹1.00)
+          if (!expectedAmount || (paymentData.amount && Math.abs(Number(paymentData.amount) - expectedAmount) <= 1.0) || (paymentData.amount && paymentData.amount >= expectedAmount)) {
             autoVerifiedViaWebhook = true;
             await updateDoc(paymentDocRef, {
               status: "MATCHED",
