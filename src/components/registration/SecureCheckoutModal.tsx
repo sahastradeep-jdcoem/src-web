@@ -6,7 +6,6 @@ import {
   ShieldCheck, 
   Lock, 
   ChevronRight, 
-  Smartphone, 
   QrCode, 
   Check, 
   CreditCard, 
@@ -37,7 +36,7 @@ export interface PaytmCheckoutData {
   upiId: string;
 }
 
-interface RazorpayCheckoutModalProps {
+interface SecureCheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
   paytmCheckoutData: PaytmCheckoutData;
@@ -58,7 +57,7 @@ interface RazorpayCheckoutModalProps {
 
 type PaymentMethodTab = "upi" | "cards" | "netbanking" | "wallet";
 
-export function RazorpayCheckoutModal({
+export function SecureCheckoutModal({
   isOpen,
   onClose,
   paytmCheckoutData,
@@ -70,7 +69,7 @@ export function RazorpayCheckoutModal({
   handleVerifyPaytmPayment,
   showManualUtr,
   setShowManualUtr,
-}: RazorpayCheckoutModalProps) {
+}: SecureCheckoutModalProps) {
   const [activeTab, setActiveTab] = useState<PaymentMethodTab>("upi");
   const [mobileSubView, setMobileSubView] = useState<"methods" | "qr">("methods");
   const [showPriceBreakdown, setShowPriceBreakdown] = useState(false);
@@ -89,11 +88,10 @@ export function RazorpayCheckoutModal({
       {/* 
         ========================================================================
         MOBILE VIEWPORT (sm:hidden)
-        Directly matches Razorpay Mobile Gateway UI (media_1789249159617.png)
         ========================================================================
       */}
       <div className="sm:hidden flex flex-col w-full bg-slate-50 min-h-[90vh] font-sans text-left pb-24 relative">
-        {/* Mobile Header: Razorpay Royal Blue Bar */}
+        {/* Mobile Header: Royal Blue Bar */}
         <div className="sticky top-0 z-40 bg-[#2065D6] text-white p-4 shadow-md select-none">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -121,7 +119,7 @@ export function RazorpayCheckoutModal({
                 </div>
                 <div className="flex items-center gap-1 text-[10px] text-emerald-300 font-semibold mt-0.5">
                   <ShieldCheck className="w-3 h-3 text-emerald-400 shrink-0" />
-                  <span>Razorpay Trusted Business</span>
+                  <span>Council Verified Portal</span>
                   <Info className="w-2.5 h-2.5 text-emerald-200/80" />
                 </div>
               </div>
@@ -152,7 +150,7 @@ export function RazorpayCheckoutModal({
             <div className="text-right">
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/15 border border-white/20 text-[10px] font-semibold text-blue-100">
                 <Lock className="w-2.5 h-2.5 text-emerald-300" />
-                Secured by Razorpay
+                Secured by 256-Bit SSL
               </span>
             </div>
           </div>
@@ -375,7 +373,7 @@ export function RazorpayCheckoutModal({
           </div>
         </div>
 
-        {/* Razorpay Signature Mobile Sticky Bottom Bar */}
+        {/* Signature Mobile Sticky Bottom Bar */}
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-200 p-3.5 px-4 flex items-center justify-between gap-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
           <div>
             <span className="text-sm font-heading font-black text-slate-900 block">
@@ -445,12 +443,11 @@ export function RazorpayCheckoutModal({
       {/* 
         ========================================================================
         DESKTOP / PC VIEWPORT (hidden sm:flex)
-        Directly matches Razorpay Desktop Gateway UI (media_1789249174776.png)
         ========================================================================
       */}
       <div className="hidden sm:flex flex-row w-full bg-white font-sans text-left min-h-[580px] max-h-[90vh] relative overflow-hidden select-none">
         
-        {/* LEFT SIDEBAR: Vibrant Razorpay Blue Panel (w-76) */}
+        {/* LEFT SIDEBAR: Vibrant Blue Panel (w-80) */}
         <div className="w-80 bg-gradient-to-b from-[#2B64E2] via-[#245BD6] to-[#1B4EC2] text-white p-6 flex flex-col justify-between relative shrink-0 shadow-lg">
           
           {/* Top Merchant Identity */}
@@ -465,7 +462,7 @@ export function RazorpayCheckoutModal({
                 </div>
                 <div className="flex items-center gap-1 text-[11px] text-emerald-300 font-semibold mt-0.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
-                  <span>Razorpay Trusted Business</span>
+                  <span>Council Verified Portal</span>
                   <Info className="w-3 h-3 text-white/60" />
                 </div>
               </div>
@@ -501,7 +498,7 @@ export function RazorpayCheckoutModal({
             </div>
           </div>
 
-          {/* Bottom Isometric Graphic & Razorpay Trust Signature */}
+          {/* Bottom Isometric Graphic & Trust Signature */}
           <div className="space-y-4 pt-4">
             {/* Custom 3D Isometric Pedestal Illustration */}
             <div className="w-full flex items-end justify-center opacity-85 pointer-events-none">
@@ -533,11 +530,11 @@ export function RazorpayCheckoutModal({
               </svg>
             </div>
 
-            {/* Official Razorpay Security Seal */}
+            {/* Official Security Seal */}
             <div className="pt-2 border-t border-white/15 flex items-center justify-between text-[11px] text-blue-100 font-medium">
               <div className="flex items-center gap-1.5">
                 <Lock className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
-                <span>Secured by <strong>Razorpay</strong></span>
+                <span>Secured by <strong>256-Bit SSL</strong></span>
               </div>
               <span className="text-[10px] text-white/50 font-mono">
                 {paytmCheckoutData.orderId.slice(-8)}

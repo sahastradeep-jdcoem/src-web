@@ -43,7 +43,7 @@ import {
 } from "lucide-react";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { CancelRegistrationModal } from "@/components/registration/CancelRegistrationModal";
-import { RazorpayCheckoutModal } from "@/components/registration/RazorpayCheckoutModal";
+import { SecureCheckoutModal } from "@/components/registration/SecureCheckoutModal";
 import confetti from "canvas-confetti";
 import { 
   getStoredDepartments, 
@@ -2158,9 +2158,9 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         />
       )}
 
-      {/* Modal: Authentic Razorpay Standard Checkout (Mobile & PC Dedicated) */}
+      {/* Modal: Secure UPI & Instant Checkout (Mobile & PC Dedicated) */}
       {paytmCheckoutData && (
-        <RazorpayCheckoutModal
+        <SecureCheckoutModal
           isOpen={Boolean(paytmCheckoutData)}
           onClose={() => {
             if (!isVerifyingPaytm) setPaytmCheckoutData(null);
