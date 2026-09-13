@@ -182,10 +182,12 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [generatedTicket, setGeneratedTicket] = useState<{
+    id?: string;
     registrationId: string;
     ticketCode: string;
     paymentStatus?: string;
     paymentId?: string;
+    orderId?: string;
   } | null>(null);
 
   // Realtime synchronization of Payment Gateway and Treasurer UPI settings
@@ -213,17 +215,27 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       return;
     }
 
-    // 1. Listen to Firestore doc
+    const primaryDocId = generatedTicket.registrationId;
+    const currentTicketUtr = generatedTicket.paymentId || "";
+    const currentTicketOrderId = generatedTicket.orderId || "";
+
+    const handlePassPaid = () => {
+      setGeneratedTicket((prev) => prev ? { ...prev, paymentStatus: "PAID" } : null);
+      try {
+        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+      } catch {}
+    };
+
+    // 1. Listen to Firestore registrations doc
     let unsubFirestore: (() => void) | null = null;
     try {
-      if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-        const docRef = doc(db, "student_registrations", generatedTicket.registrationId);
+      if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY && primaryDocId) {
+        const docRef = doc(db, "registrations", primaryDocId);
         unsubFirestore = onSnapshot(docRef, (snap) => {
           if (snap.exists()) {
             const data = snap.data();
             if (data?.paymentStatus === "PAID") {
-              setGeneratedTicket((prev) => prev ? { ...prev, paymentStatus: "PAID" } : null);
-              confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+              handlePassPaid();
             }
           }
         });
@@ -232,22 +244,40 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       console.warn("Realtime pass subscription error:", e);
     }
 
-    // 2. Also listen for custom event across tabs
+    // 2. HTTP Polling every 3 seconds to check-status API
+    const pollInterval = setInterval(async () => {
+      try {
+        const params = new URLSearchParams();
+        if (primaryDocId) params.set("regId", primaryDocId);
+        if (currentTicketOrderId) params.set("orderId", currentTicketOrderId);
+        if (currentTicketUtr) params.set("utr", currentTicketUtr);
+
+        const res = await fetch(`/api/upi/check-status?${params.toString()}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.status === "PAID") {
+            handlePassPaid();
+          }
+        }
+      } catch {}
+    }, 3000);
+
+    // 3. Listen for custom event across tabs
     const handleUpdate = (e: any) => {
       const list = e.detail || [];
-      const item = list.find((r: any) => r.id === generatedTicket.registrationId || r.registrationId === generatedTicket.registrationId);
+      const item = list.find((r: any) => r.id === primaryDocId || r.registrationId === generatedTicket.registrationId || r.id === generatedTicket.registrationId);
       if (item && item.paymentStatus === "PAID") {
-        setGeneratedTicket((prev) => prev ? { ...prev, paymentStatus: "PAID" } : null);
-        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+        handlePassPaid();
       }
     };
     window.addEventListener("src_registrations_updated", handleUpdate);
 
     return () => {
       if (unsubFirestore) unsubFirestore();
+      clearInterval(pollInterval);
       window.removeEventListener("src_registrations_updated", handleUpdate);
     };
-  }, [generatedTicket?.registrationId, generatedTicket?.paymentStatus]);
+  }, [generatedTicket?.id, generatedTicket?.registrationId, generatedTicket?.paymentStatus]);
 
   // Check if current user is already registered for this event
   useEffect(() => {

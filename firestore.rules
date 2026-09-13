@@ -46,9 +46,20 @@ service cloud.firestore {
 
     // Event registrations & pass records
     match /registrations/{regId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if true;
-      allow update, delete: if isAdmin();
+      allow update: if true;
+      allow delete: if isAdmin();
+    }
+
+    // Active checkout sessions for live UPI QR verification
+    match /active_checkout_sessions/{orderId} {
+      allow read, write: if true;
+    }
+
+    // Verified incoming UPI payments ledger (from phone webhook / MacroDroid)
+    match /verified_upi_payments/{utr} {
+      allow read, write: if true;
     }
 
     // Contact form submissions

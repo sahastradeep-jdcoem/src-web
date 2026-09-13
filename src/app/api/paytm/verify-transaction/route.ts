@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
       const { collection, query, where, getDocs } = await import("firebase/firestore");
       if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
         const q = query(
-          collection(db, "student_registrations"),
+          collection(db, "registrations"),
           where("paymentId", "==", utr)
         );
         const snap = await getDocs(q);

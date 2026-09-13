@@ -435,14 +435,15 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                 <li>Tap <strong>Add Macro</strong>.</li>
                 <li><strong>Trigger (+)</strong>: Select <strong>Device Events</strong> → <strong>Notification</strong> → <strong>Notification Received</strong> → Select <strong>Paytm for Business</strong>.</li>
                 <li><strong>Action (+)</strong>: Select <strong>Connectivity</strong> → <strong>HTTP Request</strong>:
-                  <ul className="list-disc pl-4 pt-1 space-y-0.5 text-slate-600 font-mono text-[10px]">
+                  <ul className="list-disc pl-4 pt-1 space-y-1 text-slate-600 font-mono text-[10px]">
                     <li>Method: <strong>POST</strong></li>
-                    <li>URL: <span className="text-slate-900 bg-white px-1 py-0.5 rounded border">{webhookUrl}</span></li>
-                    <li>Header: <span className="text-slate-900 bg-white px-1 py-0.5 rounded border">Authorization: Bearer {webhookSecret}</span></li>
-                    <li>Body (JSON): <span className="text-slate-900 bg-white px-1 py-0.5 rounded border">&#123;&quot;notificationText&quot;: &quot;[notif_text]&quot;, &quot;title&quot;: &quot;[notif_title]&quot;&#125;</span></li>
+                    <li>URL: <span className="text-slate-900 bg-white px-1 py-0.5 rounded border break-all select-all font-bold">{webhookUrl}?secret={webhookSecret}</span></li>
+                    <li>Content type: <strong>application/json</strong></li>
+                    <li>Body: <span className="text-slate-900 bg-white px-1 py-0.5 rounded border select-all">&#123;&quot;notificationText&quot;: &quot;[notif_text]&quot;, &quot;title&quot;: &quot;[notif_title]&quot;&#125;</span></li>
+                    <li className="text-[9px] text-emerald-700 font-sans">✓ Secret key is included in the URL above. No manual headers required!</li>
                   </ul>
                 </li>
-                <li>Save macro. You&apos;re done! The website will now auto-approve passes in real time.</li>
+                <li>Save and enable the macro. You&apos;re done! Whenever Paytm receives funds on your phone, the delegate pass will auto-confirm on the student&apos;s screen with zero manual delay.</li>
               </ol>
             </div>
 
