@@ -641,8 +641,13 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
         }
         if (!isLocalValid && isRemoteValid) {
           // Do NOT resurrect stock Unsplash model photos onto real student positions (Directive #4)
+          // Exception: Canonical members who legitimately have this avatar (e.g. Munesh Warkar) must NEVER have their photo stripped!
           const isRemoteUnsplash = remoteVal.includes("images.unsplash.com");
-          if (isRemoteUnsplash && (remoteItem as any)?.name && !isGenericPlaceholder((remoteItem as any).name)) {
+          const isCanonicalPhoto = (remoteItem as any)?.name && (
+            (remoteItem as any).name.toLowerCase().includes("munesh") ||
+            (remoteItem as any).name.toLowerCase().includes("warkar")
+          );
+          if (isRemoteUnsplash && !isCanonicalPhoto && (remoteItem as any)?.name && !isGenericPlaceholder((remoteItem as any).name)) {
             result[k] = "";
           } else {
             result[k] = remoteVal;

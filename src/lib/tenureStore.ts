@@ -14,7 +14,7 @@ import {
   stripCategoryAndLevel,
   hydrateClubAvatars
 } from "./councilStore";
-import { getStoredEvents, saveStoredEvents } from "./eventsStore";
+import { getStoredEvents, saveStoredEvents, isDeletedMockEvent } from "./eventsStore";
 import { 
   getSiteContentFromFirestore, 
   saveSiteContentToFirestore,
@@ -225,7 +225,7 @@ export const initialDefaultTenures: CouncilTenure[] = [
     hostingCommittee: hostingCommitteeMembers,
     foundingMembers: foundingMembers,
     clubs: mockClubs,
-    events: mockEvents,
+    events: [],
     archiveNotes: "The 1st & Founding Tenure of Sahastradeep, uniting all 12 collegiate societies at JDCOEM under one central autonomous student council constitution.",
     createdAt: "2025-09-24T00:00:00Z"
   },
@@ -363,15 +363,46 @@ export function getStoredTenures(): CouncilTenure[] {
       ? t.isDraft
       : (t.status === "draft" || (!t.startDate && t.id !== "tenure-2025-26" && !t.label.includes("2025")));
 
+    let resolvedCouncil = stripCategoryAndLevel(
+      draftCouncil.length > 0 ? draftCouncil : (t.adminCouncil && t.adminCouncil.length > 0 ? t.adminCouncil : (isFirstTenure ? adminCouncilMembers : []))
+    );
+    if (isFirstTenure) {
+      resolvedCouncil = resolvedCouncil.map((m) => {
+        if (!m.avatar || m.avatar.trim() === "") {
+          const canon = adminCouncilMembers.find((c) => 
+            c.name && m.name && c.name.toLowerCase().trim() === m.name.toLowerCase().trim()
+          );
+          if (canon && canon.avatar) return { ...m, avatar: canon.avatar };
+        }
+        return m;
+      });
+    }
+
+    let resolvedFounders = stripCategoryAndLevel(isFirstTenure ? (t.foundingMembers || activeFounders) : []);
+    if (isFirstTenure) {
+      resolvedFounders = resolvedFounders.map((m) => {
+        if (!m.avatar || m.avatar.trim() === "") {
+          const canon = foundingMembers.find((c) => 
+            c.name && m.name && c.name.toLowerCase().trim() === m.name.toLowerCase().trim()
+          );
+          if (canon && canon.avatar) return { ...m, avatar: canon.avatar };
+        }
+        return m;
+      });
+    }
+
+    const cleanEvents = Array.isArray(t.events) ? t.events.filter((e) => !isDeletedMockEvent(e)) : [];
+
     return {
       ...t,
       isDraft,
       status: isDraft ? ("draft" as const) : ("archived" as const),
       tenureNumber: tenureNum,
-      adminCouncil: stripCategoryAndLevel(draftCouncil.length > 0 ? draftCouncil : (t.adminCouncil && t.adminCouncil.length > 0 ? t.adminCouncil : [])),
+      adminCouncil: resolvedCouncil,
       hostingCommittee: stripCategoryAndLevel(draftHosting.length > 0 ? draftHosting : (t.hostingCommittee && t.hostingCommittee.length > 0 ? t.hostingCommittee : [])),
-      foundingMembers: stripCategoryAndLevel(isFirstTenure ? (t.foundingMembers || activeFounders) : []),
+      foundingMembers: resolvedFounders,
       clubs: hydrateClubAvatars(resolvedClubs),
+      events: cleanEvents,
     };
   });
 }
@@ -446,7 +477,7 @@ export function compactTenureForStorage(tenure: CouncilTenure): CouncilTenure {
 
   const stripEventHeavy = (events?: EventItem[]): EventItem[] => {
     if (!Array.isArray(events)) return [];
-    return events.map((e) => ({
+    return events.filter((e) => !isDeletedMockEvent(e)).map((e) => ({
       ...e,
       poster: (e.poster && e.poster.startsWith("data:image/") && e.poster.length > 35000) ? "" : e.poster,
       posterImage: (e.posterImage && e.posterImage.startsWith("data:image/") && e.posterImage.length > 35000) ? "" : e.posterImage,
@@ -475,7 +506,15 @@ export async function saveStoredTenures(tenures: CouncilTenure[]): Promise<void>
       localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(sanitized));
     } catch (lsErr) {
       console.warn("Direct localStorage write notice for tenures, auto-compacting...", lsErr);
-      const minimalist = sanitized.map((t: any) => ({ ...t, clubs: [], events: [], adminCouncil: [], hostingCommittee: [], foundingMembers: [] }));
+      // Strip heavy presentation media from clubs and events, but NEVER wipe adminCouncil, hosting, or founders!
+      const minimalist = sanitized.map((t: any) => ({
+        ...t,
+        clubs: [],
+        events: [],
+        adminCouncil: t.adminCouncil || [],
+        hostingCommittee: t.hostingCommittee || [],
+        foundingMembers: t.foundingMembers || []
+      }));
       try {
         localStorage.setItem(TENURES_STORAGE_KEY, JSON.stringify(minimalist));
       } catch {}
@@ -649,9 +688,6 @@ export async function switchActiveTenure(targetTenureId: string, tenureBeginDate
   if (Array.isArray(targetClubs) && targetClubs.length > 0) {
     await saveStoredClubs(targetClubs);
   }
-  if (targetTenure.events && Array.isArray(targetTenure.events)) {
-    await saveStoredEvents(targetTenure.events);
-  }
 
   window.dispatchEvent(new CustomEvent("src_tenure_changed", { detail: targetTenure }));
   window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: updatedTenures }));
@@ -771,21 +807,49 @@ export async function undoActiveTenure(targetTenureId?: string): Promise<{
   });
 
   // 3. Restore previous tenure's snapshot into live active stores
-  if (Array.isArray(previousTenure.adminCouncil) && previousTenure.adminCouncil.length > 0) {
-    await saveStoredCouncilMembers(previousTenure.adminCouncil);
+  const isFirstTenure = previousTenure.id === "tenure-2025-26" || previousTenure.label.includes("2025");
+  let councilToRestore = (Array.isArray(previousTenure.adminCouncil) && previousTenure.adminCouncil.length > 0)
+    ? previousTenure.adminCouncil
+    : (isFirstTenure ? adminCouncilMembers : []);
+
+  // Guarantee every member has their authentic avatar re-hydrated from canonicalCouncil
+  councilToRestore = councilToRestore.map((m) => {
+    if (!m.avatar || m.avatar.trim() === "") {
+      const canon = adminCouncilMembers.find((c) => 
+        c.name && m.name && c.name.toLowerCase().trim() === m.name.toLowerCase().trim()
+      );
+      if (canon && canon.avatar) return { ...m, avatar: canon.avatar };
+    }
+    return m;
+  });
+  if (councilToRestore.length > 0) {
+    await saveStoredCouncilMembers(councilToRestore);
   }
+
   if (Array.isArray(previousTenure.hostingCommittee) && previousTenure.hostingCommittee.length > 0) {
     await saveStoredHostingCommittee(previousTenure.hostingCommittee);
   }
-  if (Array.isArray(previousTenure.foundingMembers) && previousTenure.foundingMembers.length > 0) {
-    await saveStoredFoundingMembers(previousTenure.foundingMembers);
+
+  let foundersToRestore = (Array.isArray(previousTenure.foundingMembers) && previousTenure.foundingMembers.length > 0)
+    ? previousTenure.foundingMembers
+    : (isFirstTenure ? foundingMembers : []);
+  foundersToRestore = foundersToRestore.map((m) => {
+    if (!m.avatar || m.avatar.trim() === "") {
+      const canon = foundingMembers.find((c) => 
+        c.name && m.name && c.name.toLowerCase().trim() === m.name.toLowerCase().trim()
+      );
+      if (canon && canon.avatar) return { ...m, avatar: canon.avatar };
+    }
+    return m;
+  });
+  if (foundersToRestore.length > 0) {
+    await saveStoredFoundingMembers(foundersToRestore);
   }
+
   if (Array.isArray(previousTenure.clubs) && previousTenure.clubs.length > 0) {
     await saveStoredClubs(previousTenure.clubs);
   }
-  if (Array.isArray(previousTenure.events)) {
-    await saveStoredEvents(previousTenure.events);
-  }
+  // NOTE: Never overwrite live events store with an old snapshot during undo. Events are independent.
 
   // 4. Save updated tenures to storage and Firestore
   await saveStoredTenures(updatedTenures);

@@ -211,9 +211,41 @@ export function sortEventsByDate<T extends Partial<EventItem>>(events: T[], refe
   return [...upcoming, ...past];
 }
 
+const DELETED_EVENT_PATTERNS = [
+  "codeindia",
+  "code-india",
+  "cod",
+  "hack engineering",
+  "hack-engineering",
+  "hackathon",
+  "dhurandhar",
+  "rooh rhymes",
+  "rooh-rhymes",
+  "roohrhymes"
+];
+
+/**
+ * Identifies deleted mock/test events that must never be resurrected or displayed
+ */
+export function isDeletedMockEvent(event?: Partial<EventItem> | null): boolean {
+  if (!event || typeof event !== "object") return false;
+  const name = (event.name || "").trim().toLowerCase();
+  const slug = (event.slug || "").trim().toLowerCase();
+  const id = (event.id || "").trim().toLowerCase();
+
+  return DELETED_EVENT_PATTERNS.some((pattern) => 
+    name === pattern || 
+    slug === pattern || 
+    id === `evt-${pattern}` ||
+    id === pattern ||
+    (pattern.length > 3 && id.includes(pattern))
+  );
+}
+
 export function sanitizeEventsList(events: EventItem[]): EventItem[] {
   if (!Array.isArray(events)) return [];
-  const sanitized = events.map(sanitizeEventItem);
+  const filtered = events.filter((e) => !isDeletedMockEvent(e));
+  const sanitized = filtered.map(sanitizeEventItem);
   return sortEventsByDate(sanitized);
 }
 
@@ -226,7 +258,18 @@ export function getStoredEvents(): EventItem[] {
     const stored = localStorage.getItem(EVENTS_STORAGE_KEY);
     if (stored !== null) {
       const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed)) return sanitizeEventsList(parsed);
+      if (Array.isArray(parsed)) {
+        const sanitized = sanitizeEventsList(parsed);
+        // If resurrecting/deleted mock events were found in storage, purge them immediately
+        if (sanitized.length !== parsed.length) {
+          try {
+            localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(sanitized));
+          } catch {}
+          saveSiteContentToFirestore("events", sanitized).catch(() => {});
+          window.dispatchEvent(new CustomEvent("src_events_updated", { detail: sanitized }));
+        }
+        return sanitized;
+      }
     }
   } catch (e) {
     console.warn("Could not read events from storage", e);
@@ -296,7 +339,12 @@ export async function syncEventsFromFirestore(): Promise<EventItem[]> {
     }
     if (remote !== null && Array.isArray(remote)) {
       const current = getStoredEvents();
-      const merged = sanitizeEventsList(reconcileArrayDatasets(current, remote));
+      const rawMerged = reconcileArrayDatasets(current, remote);
+      const merged = sanitizeEventsList(rawMerged);
+      // If remote had deleted mock events, purge them from Firestore too!
+      if (merged.length !== rawMerged.length) {
+        saveSiteContentToFirestore("events", cleanUndefined(merged)).catch(() => {});
+      }
       if (typeof window !== "undefined") {
         try {
           localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(merged));
@@ -319,7 +367,11 @@ export function subscribeToEvents(callback: (events: EventItem[]) => void): () =
     if (remote !== null && Array.isArray(remote)) {
       if (hasPendingWritesFor("events") || isLocalWriteRecent("events", 3000)) return;
       const current = getStoredEvents();
-      const merged = sanitizeEventsList(reconcileArrayDatasets(current, remote));
+      const rawMerged = reconcileArrayDatasets(current, remote);
+      const merged = sanitizeEventsList(rawMerged);
+      if (merged.length !== rawMerged.length) {
+        saveSiteContentToFirestore("events", cleanUndefined(merged)).catch(() => {});
+      }
       if (typeof window !== "undefined") {
         try {
           localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(merged));
