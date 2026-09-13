@@ -206,7 +206,7 @@ export interface RegistrationRecord {
   createdAt?: string | Date | { seconds: number; nanoseconds?: number };
   paidAt?: string;
   status: "CONFIRMED" | "PENDING" | "COMPLETED" | "CHECKED_IN" | "CANCELLED";
-  paymentStatus?: "FREE" | "PAID" | "PENDING" | "FAILED";
+  paymentStatus?: "FREE" | "PAID" | "PENDING" | "FAILED" | "REFUNDED";
   paymentId?: string;
   orderId?: string;
   amountPaid?: number;
@@ -229,6 +229,9 @@ export interface RegistrationRecord {
   refundStatus?: "INITIATED" | "PROCESSED" | "FAILED";
   refundAmount?: number;
   refundedAt?: string;
+  eventId?: string;
+  verifiedBy?: string;
+  verifiedAt?: string;
 }
 
 export interface GalleryPhoto {

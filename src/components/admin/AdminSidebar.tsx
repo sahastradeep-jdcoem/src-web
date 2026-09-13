@@ -19,7 +19,8 @@ import {
   Sliders,
   Building2,
   UserCheck,
-  Vote
+  Vote,
+  CreditCard
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +31,7 @@ const ADMIN_NAV = [
   { name: "Events & Fests", href: "/admin/events", icon: Calendar },
   { name: "Engagement Hub", href: "/admin/listings", icon: Vote },
   { name: "Registrations", href: "/admin/registrations", icon: FileText },
+  { name: "Payments", href: "/admin/payments", icon: CreditCard },
   { name: "Departments", href: "/admin/departments", icon: Building2 },
   { name: "Clubs", href: "/admin/clubs", icon: Sparkles },
   { name: "Team Members", href: "/admin/team", icon: Users },
