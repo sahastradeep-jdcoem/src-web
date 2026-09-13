@@ -268,10 +268,14 @@ export default function AdminEventsPage() {
       noRegistrationRequired: Boolean(editingEvent.noRegistrationRequired),
       registrationStartDate: parsedStartDate,
       registrationDeadline: parsedDeadline,
-      isPaid: Boolean(editingEvent.isPaid || (editingEvent.feeAmount && editingEvent.feeAmount > 0)),
-      feeAmount: editingEvent.feeAmount || 100,
+      isPaid: editingEvent.noRegistrationRequired
+        ? false
+        : (editingEvent.isPaid !== undefined
+            ? Boolean(editingEvent.isPaid)
+            : Boolean(editingEvent.feeAmount && editingEvent.feeAmount > 0)),
+      feeAmount: typeof editingEvent.feeAmount === "number" ? editingEvent.feeAmount : 100,
       feePricingModel: editingEvent.feePricingModel || "per_person",
-      teamFeeAmount: editingEvent.teamFeeAmount || 300,
+      teamFeeAmount: typeof editingEvent.teamFeeAmount === "number" ? editingEvent.teamFeeAmount : 300,
       customQuestions: editingEvent.customQuestions ? JSON.parse(JSON.stringify(editingEvent.customQuestions)) : [],
       isParentFest: Boolean(editingEvent.isParentFest),
       parentEventId: editingEvent.parentEventId || "",
@@ -310,54 +314,58 @@ export default function AdminEventsPage() {
     const defaultFallback = "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop";
     const primaryPoster = formData.posterImage || formData.cardImage || formData.headerImage || formData.poster || editingEvent.poster || defaultFallback;
 
-    const updated = eventsList.map((item) =>
-      item.id === editingEvent.id
-        ? {
-            ...item,
-            name: formData.name,
-            category: formData.category as any,
-            date: formData.date,
-            rawDate: formData.rawDate || undefined,
-            rawEndDate: formData.isMultiDay ? (formData.rawEndDate || formData.rawDate) : undefined,
-            endDate: formData.isMultiDay ? (formData.endDate || undefined) : undefined,
-            isMultiDay: Boolean(formData.isMultiDay),
-            time: formData.time || item.time || "10:00 AM IST",
-            venue: formData.venue,
-            organizer: formData.organizer,
-            organizerClubSlug: formData.organizerClubSlug || item.organizerClubSlug,
-            collaboratingClubs: formData.collaboratingClubs && formData.collaboratingClubs.length > 0 ? formData.collaboratingClubs : undefined,
-            coOrganizers: formData.collaboratingClubs && formData.collaboratingClubs.length > 0 ? formData.collaboratingClubs.map((c) => c.name) : undefined,
-            status: isNoReg && formData.status === "Registration Open" ? "Upcoming" : formData.status,
-            poster: primaryPoster,
-            cardImage: formData.cardImage || primaryPoster,
-            posterImage: formData.posterImage || primaryPoster,
-            headerImage: formData.headerImage || formData.cardImage || primaryPoster,
-            description: formData.description,
-            about: formData.about || formData.description,
-            whatToExpect: cleanWhatToExpect,
-            rules: cleanRules,
-            teamType: formData.teamType,
-            minTeamSize: formData.teamType !== "Individual" ? formData.minTeamSize : undefined,
-            maxTeamSize: formData.teamType !== "Individual" ? formData.maxTeamSize : undefined,
-            noRegistrationRequired: isNoReg,
-            registrationStartDate: isNoReg ? undefined : formData.registrationStartDate,
-            registrationDeadline: regDeadlineFormatted || (isNoReg ? "Not Required" : item.registrationDeadline),
-            entryFee: entryFeeText,
-            isPaid: isNoReg ? false : formData.isPaid,
-            feeAmount: isNoReg ? 0 : (formData.isPaid ? Number(formData.feeAmount) || 0 : 0),
-            teamFeeAmount: !isNoReg && formData.isPaid && formData.feePricingModel === "per_team" ? Number(formData.teamFeeAmount) || 0 : undefined,
-            feePricingModel: isNoReg ? undefined : (formData.isPaid ? formData.feePricingModel : undefined),
-            customQuestions: formData.customQuestions && formData.customQuestions.length > 0 ? formData.customQuestions : undefined,
-            isParentFest: formData.isParentFest,
-            parentEventId: formData.parentEventId || undefined,
-            parentEventSlug: formData.parentEventSlug || undefined,
-            parentEventName: formData.parentEventName || undefined,
-            subEventBadge: formData.subEventBadge || undefined,
-            targetAudience: formData.targetAudience || "inter_college",
-            isInterCollege: formData.targetAudience === "inter_college",
-          }
-        : item
-    );
+    const targetMatch = (item: EventItem) =>
+      item.id === editingEvent.id || (Boolean(editingEvent.slug) && item.slug === editingEvent.slug);
+
+    const editedItem: EventItem = {
+      ...editingEvent,
+      name: formData.name,
+      category: formData.category as any,
+      date: formData.date,
+      rawDate: formData.rawDate || undefined,
+      rawEndDate: formData.isMultiDay ? (formData.rawEndDate || formData.rawDate) : undefined,
+      endDate: formData.isMultiDay ? (formData.endDate || undefined) : undefined,
+      isMultiDay: Boolean(formData.isMultiDay),
+      time: formData.time || editingEvent.time || "10:00 AM IST",
+      venue: formData.venue,
+      organizer: formData.organizer,
+      organizerClubSlug: formData.organizerClubSlug || editingEvent.organizerClubSlug,
+      collaboratingClubs: formData.collaboratingClubs && formData.collaboratingClubs.length > 0 ? formData.collaboratingClubs : undefined,
+      coOrganizers: formData.collaboratingClubs && formData.collaboratingClubs.length > 0 ? formData.collaboratingClubs.map((c) => c.name) : undefined,
+      status: isNoReg && formData.status === "Registration Open" ? "Upcoming" : formData.status,
+      poster: primaryPoster,
+      cardImage: formData.cardImage || primaryPoster,
+      posterImage: formData.posterImage || primaryPoster,
+      headerImage: formData.headerImage || formData.cardImage || primaryPoster,
+      description: formData.description,
+      about: formData.about || formData.description,
+      whatToExpect: cleanWhatToExpect,
+      rules: cleanRules,
+      teamType: formData.teamType,
+      minTeamSize: formData.teamType !== "Individual" ? formData.minTeamSize : undefined,
+      maxTeamSize: formData.teamType !== "Individual" ? formData.maxTeamSize : undefined,
+      noRegistrationRequired: isNoReg,
+      registrationStartDate: isNoReg ? undefined : formData.registrationStartDate,
+      registrationDeadline: regDeadlineFormatted || (isNoReg ? "Not Required" : editingEvent.registrationDeadline),
+      entryFee: entryFeeText,
+      isPaid: isNoReg ? false : Boolean(formData.isPaid),
+      feeAmount: isNoReg ? 0 : (formData.isPaid ? Number(formData.feeAmount) || 0 : 0),
+      teamFeeAmount: !isNoReg && formData.isPaid && formData.feePricingModel === "per_team" ? Number(formData.teamFeeAmount) || 0 : undefined,
+      feePricingModel: isNoReg ? undefined : (formData.isPaid ? formData.feePricingModel : undefined),
+      customQuestions: formData.customQuestions && formData.customQuestions.length > 0 ? formData.customQuestions : undefined,
+      isParentFest: formData.isParentFest,
+      parentEventId: formData.parentEventId || undefined,
+      parentEventSlug: formData.parentEventSlug || undefined,
+      parentEventName: formData.parentEventName || undefined,
+      subEventBadge: formData.subEventBadge || undefined,
+      targetAudience: formData.targetAudience || "inter_college",
+      isInterCollege: formData.targetAudience === "inter_college",
+    };
+
+    const hasItem = eventsList.some(targetMatch);
+    const updated = hasItem
+      ? eventsList.map((item) => (targetMatch(item) ? { ...item, ...editedItem } : item))
+      : [editedItem, ...eventsList];
 
     setEventsList(updated);
     try {
@@ -660,18 +668,31 @@ export default function AdminEventsPage() {
                           🚶 Open Walk-in
                         </span>
                       ) : (
-                        <Badge
-                          variant={
-                            evt.isCancelled || evt.status === "Cancelled"
-                              ? "rose"
-                              : evt.status === "Registration Open"
-                              ? "orange"
-                              : "slate"
-                          }
-                          size="sm"
-                        >
-                          {evt.isCancelled || evt.status === "Cancelled" ? "Cancelled" : evt.status}
-                        </Badge>
+                        <div className="flex flex-col gap-1 items-start">
+                          <Badge
+                            variant={
+                              evt.isCancelled || evt.status === "Cancelled"
+                                ? "rose"
+                                : evt.status === "Registration Open"
+                                ? "orange"
+                                : "slate"
+                            }
+                            size="sm"
+                          >
+                            {evt.isCancelled || evt.status === "Cancelled" ? "Cancelled" : evt.status}
+                          </Badge>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                              evt.isPaid || (evt.feeAmount && evt.feeAmount > 0)
+                                ? "bg-blue-50 text-[#17458F] border-[#17458F]/30"
+                                : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            }`}
+                          >
+                            {evt.isPaid || (evt.feeAmount && evt.feeAmount > 0)
+                              ? (evt.entryFee || `₹${evt.feeAmount || 0} / person`)
+                              : "Free Entry"}
+                          </span>
+                        </div>
                       )}
                     </td>
                     <td className="py-4 px-6 text-right">

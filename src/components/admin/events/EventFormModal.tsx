@@ -411,7 +411,7 @@ export function EventFormModal({
       }
       maxWidth="4xl"
     >
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} noValidate className="space-y-6">
         
         {/* Sticky Tactile Section Navigation Bar - solid bg to eliminate GPU compositing lag */}
         <div className="sticky -top-5 sm:-top-7 z-20 bg-white pt-1 pb-3 border-b border-slate-200/80 -mx-5 sm:-mx-7 px-5 sm:px-7 space-y-2">
@@ -1134,7 +1134,7 @@ export function EventFormModal({
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
-                      onClick={() => setForm({ ...form, isPaid: false })}
+                      onClick={() => setForm({ ...form, isPaid: false, feeAmount: 0, teamFeeAmount: 0 })}
                       className={cn(
                         "py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer flex items-center justify-center gap-1.5",
                         !form.isPaid
@@ -1147,7 +1147,7 @@ export function EventFormModal({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setForm({ ...form, isPaid: true })}
+                      onClick={() => setForm({ ...form, isPaid: true, feeAmount: form.feeAmount > 0 ? form.feeAmount : 100 })}
                       className={cn(
                         "py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer flex items-center justify-center gap-1.5",
                         form.isPaid
@@ -1207,8 +1207,12 @@ export function EventFormModal({
                             type="number"
                             min={0}
                             step={1}
-                            value={form.feeAmount}
-                            onChange={(e) => setForm({ ...form, feeAmount: Math.max(0, parseInt(e.target.value) || 0) })}
+                            value={form.feeAmount === 0 ? "" : form.feeAmount}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const parsed = val === "" ? 0 : parseInt(val, 10);
+                              setForm({ ...form, feeAmount: isNaN(parsed) ? 0 : Math.max(0, parsed) });
+                            }}
                             placeholder="e.g. 150"
                             className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
                           />
@@ -1223,8 +1227,12 @@ export function EventFormModal({
                               type="number"
                               min={0}
                               step={1}
-                              value={form.teamFeeAmount}
-                              onChange={(e) => setForm({ ...form, teamFeeAmount: Math.max(0, parseInt(e.target.value) || 0) })}
+                              value={form.teamFeeAmount === 0 ? "" : form.teamFeeAmount}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const parsed = val === "" ? 0 : parseInt(val, 10);
+                                setForm({ ...form, teamFeeAmount: isNaN(parsed) ? 0 : Math.max(0, parsed) });
+                              }}
                               placeholder="e.g. 300"
                               className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
                             />

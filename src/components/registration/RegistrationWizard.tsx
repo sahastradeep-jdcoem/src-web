@@ -590,11 +590,14 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   };
 
   // Dynamic Fee Calculation
-  const isPaidEvent = Boolean(
-    event.isPaid || 
-    (event.feeAmount && event.feeAmount > 0) || 
-    (event.teamFeeAmount && event.teamFeeAmount > 0)
-  );
+  const isPaidEvent = event.noRegistrationRequired
+    ? false
+    : event.isPaid !== undefined
+    ? Boolean(event.isPaid)
+    : Boolean(
+        (event.feeAmount && event.feeAmount > 0) || 
+        (event.teamFeeAmount && event.teamFeeAmount > 0)
+      );
 
   let totalPayableAmount = 0;
   if (isPaidEvent) {
@@ -602,10 +605,11 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       if (event.feePricingModel === "per_team" && event.teamFeeAmount) {
         totalPayableAmount = Number(event.teamFeeAmount);
       } else {
-        totalPayableAmount = (Number(event.feeAmount) || 100) * teamMembers.length;
+        const perMember = typeof event.feeAmount === "number" ? event.feeAmount : 100;
+        totalPayableAmount = perMember * teamMembers.length;
       }
     } else {
-      totalPayableAmount = Number(event.feeAmount) || 100;
+      totalPayableAmount = typeof event.feeAmount === "number" ? event.feeAmount : 100;
     }
   }
 
