@@ -11,7 +11,6 @@ import {
   Clock, 
   ArrowLeft, 
   Info, 
-  ChevronDown,
   Smartphone
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
@@ -65,7 +64,6 @@ export function SecureCheckoutModal({
   setShowManualUtr,
 }: SecureCheckoutModalProps) {
   const [mobileSubView, setMobileSubView] = useState<"methods" | "qr">("methods");
-  const [showPriceBreakdown, setShowPriceBreakdown] = useState(false);
 
   // Fallback student phone
   const studentPhone = formData.phone || "9876543210";
@@ -81,18 +79,19 @@ export function SecureCheckoutModal({
       {/* 
         ========================================================================
         MOBILE VIEWPORT (sm:hidden)
+        Centered, floating card architecture with zero cutoff
         ========================================================================
       */}
-      <div className="sm:hidden flex flex-col w-full bg-slate-50 min-h-[90vh] font-sans text-left pb-24 relative">
+      <div className="sm:hidden flex flex-col w-full max-w-[420px] mx-auto bg-slate-50 font-sans text-left relative overflow-hidden">
         {/* Mobile Header: Royal Blue Bar */}
-        <div className="sticky top-0 z-40 bg-[#2065D6] text-white p-4 shadow-md select-none">
+        <div className="sticky top-0 z-40 bg-gradient-to-r from-[#1A56DB] via-[#2065D6] to-[#2563EB] text-white p-4 shadow-sm select-none">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
               {mobileSubView === "qr" ? (
                 <button
                   type="button"
                   onClick={() => setMobileSubView("methods")}
-                  className="p-1 -ml-1 text-white/90 hover:text-white rounded-lg active:scale-95 transition-all"
+                  className="p-1 -ml-1 text-white/90 hover:text-white rounded-lg active:scale-95 transition-all cursor-pointer"
                   aria-label="Back to methods"
                 >
                   <ArrowLeft className="w-5 h-5" />
@@ -113,7 +112,6 @@ export function SecureCheckoutModal({
                 <div className="flex items-center gap-1 text-[10px] text-emerald-300 font-semibold mt-0.5">
                   <ShieldCheck className="w-3 h-3 text-emerald-400 shrink-0" />
                   <span>Council Verified Portal</span>
-                  <Info className="w-2.5 h-2.5 text-emerald-200/80" />
                 </div>
               </div>
             </div>
@@ -131,19 +129,29 @@ export function SecureCheckoutModal({
           </div>
 
           {/* Amount Overview Banner */}
-          <div className="mt-3 pt-3 border-t border-white/15 flex items-center justify-between">
+          <div className="mt-3 pt-2.5 border-t border-white/15 flex items-center justify-between">
             <div>
-              <span className="text-[10px] text-blue-100/75 uppercase tracking-wider font-semibold block">
-                Total Amount
-              </span>
-              <span className="font-heading font-black text-2xl text-white tracking-tight">
-                ₹{paytmCheckoutData.formattedAmount}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-blue-100/80 uppercase tracking-wider font-semibold">
+                  Total Amount
+                </span>
+                <span className="text-[10px] text-emerald-300 font-bold bg-emerald-400/15 border border-emerald-300/25 px-1.5 py-0.2 rounded">
+                  Zero Fee
+                </span>
+              </div>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="font-heading font-black text-2xl text-white tracking-tight">
+                  ₹{paytmCheckoutData.formattedAmount}
+                </span>
+                <span className="text-[11px] text-blue-100/70 font-medium truncate max-w-[140px]">
+                  • {event.name}
+                </span>
+              </div>
             </div>
             <div className="text-right">
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/15 border border-white/20 text-[10px] font-semibold text-blue-100">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/15 border border-white/20 text-[10px] font-semibold text-blue-100 backdrop-blur-xs">
                 <Lock className="w-2.5 h-2.5 text-emerald-300" />
-                Secured by 256-Bit SSL
+                256-Bit SSL
               </span>
             </div>
           </div>
@@ -365,72 +373,6 @@ export function SecureCheckoutModal({
             )}
           </div>
         </div>
-
-        {/* Signature Mobile Sticky Bottom Bar */}
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-200 p-3.5 px-4 flex items-center justify-between gap-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
-          <div>
-            <span className="text-sm font-heading font-black text-slate-900 block">
-              ₹{paytmCheckoutData.formattedAmount}
-            </span>
-            <button
-              type="button"
-              onClick={() => setShowPriceBreakdown(!showPriceBreakdown)}
-              className="text-[11px] font-bold text-blue-600 hover:underline flex items-center gap-0.5 cursor-pointer"
-            >
-              <span>View Details</span>
-              <ChevronDown className="w-3 h-3" />
-            </button>
-          </div>
-
-          <a
-            href={paytmCheckoutData.gpayLink || paytmCheckoutData.phonepeLink || paytmCheckoutData.upiLink}
-            className="flex-1 max-w-[200px] h-11 rounded-xl bg-[#2065D6] hover:bg-[#1b55b8] text-white font-heading font-bold text-sm flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/20 active:scale-[0.98] transition-all no-underline text-center"
-          >
-            <span>Pay Now</span>
-            <ChevronRight className="w-4 h-4" />
-          </a>
-        </div>
-
-        {/* Mobile Price Breakdown Modal Drawer */}
-        {showPriceBreakdown && (
-          <div className="fixed inset-0 z-60 bg-slate-900/60 backdrop-blur-xs flex items-end">
-            <div className="w-full bg-white rounded-t-3xl p-5 space-y-4 animate-in slide-in-from-bottom duration-200 shadow-2xl">
-              <div className="flex items-center justify-between">
-                <h4 className="font-heading font-black text-sm text-slate-900 uppercase tracking-wide">
-                  Price Breakdown
-                </h4>
-                <button
-                  type="button"
-                  onClick={() => setShowPriceBreakdown(false)}
-                  className="p-1 rounded-full bg-slate-100 text-slate-500 hover:text-slate-800"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="space-y-2 text-xs divide-y divide-slate-100">
-                <div className="flex items-center justify-between pt-1">
-                  <span className="text-slate-500">Event Registration ({event.name})</span>
-                  <span className="font-bold text-slate-800">₹{paytmCheckoutData.formattedAmount}</span>
-                </div>
-                <div className="flex items-center justify-between pt-2">
-                  <span className="text-slate-500">Convenience Fee</span>
-                  <span className="font-bold text-emerald-600">FREE (₹0)</span>
-                </div>
-                <div className="flex items-center justify-between pt-2 text-sm font-bold text-slate-900">
-                  <span>Total Amount</span>
-                  <span>₹{paytmCheckoutData.formattedAmount}</span>
-                </div>
-              </div>
-              <Button
-                onClick={() => setShowPriceBreakdown(false)}
-                variant="primary"
-                className="w-full bg-[#2065D6]"
-              >
-                Done
-              </Button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* 
