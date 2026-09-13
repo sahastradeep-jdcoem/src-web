@@ -46,6 +46,7 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
   const [isTestingWebhook, setIsTestingWebhook] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [recentSignals, setRecentSignals] = useState<any[]>([]);
+  const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [isLoadingSignals, setIsLoadingSignals] = useState(false);
 
   useEffect(() => {
@@ -69,6 +70,9 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
       const data = await res.json();
       if (data?.recentPayments) {
         setRecentSignals(data.recentPayments);
+      }
+      if (data?.recentLogs) {
+        setRecentLogs(data.recentLogs);
       }
     } catch (e) {
       console.warn("Failed to fetch recent webhook signals", e);
@@ -430,28 +434,50 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                 <Smartphone className="w-3.5 h-3.5 text-[#E78023]" />
                 <span>Quick 3-Minute Android Setup (MacroDroid)</span>
               </h5>
-              <ol className="list-decimal pl-4 space-y-1.5 text-[11px] leading-relaxed">
-                <li>Install <strong>MacroDroid</strong> (Free from Play Store) on the phone that has your Paytm for Business account.</li>
-                <li>Tap <strong>Add Macro</strong>.</li>
-                <li><strong>Trigger (+)</strong>: Select <strong>Device Events</strong> → <strong>Notification</strong> → <strong>Notification Received</strong> → Select <strong>Paytm for Business</strong>.</li>
-                <li><strong>Action (+)</strong>: Select <strong>Connectivity</strong> → <strong>HTTP Request</strong>:
+              <ol className="list-decimal pl-4 space-y-2 text-[11px] leading-relaxed">
+                <li>
+                  <strong>Grant Android Notification Access</strong>:
+                  <span className="block text-amber-900 font-medium text-[10.5px]">
+                    Go to phone <em>Settings → Apps → Special App Access → Notification Access → MacroDroid → Turn ON (Allow)</em>. Without this permission, Android prevents MacroDroid from reading payment notifications!
+                  </span>
+                </li>
+                <li>
+                  <strong>Disable Battery Optimization</strong>:
+                  <span className="block text-slate-600 text-[10.5px]">
+                    Set MacroDroid battery usage to <strong>Unrestricted / No Restrictions</strong> and enable <strong>Autostart</strong> so your phone doesn&apos;t put it to sleep.
+                  </span>
+                </li>
+                <li>Tap <strong>Add Macro</strong> in MacroDroid.</li>
+                <li>
+                  <strong>Trigger (+)</strong>: Select <strong>Device Events</strong> → <strong>Notification</strong> → <strong>Notification Received</strong>:
+                  <span className="block text-blue-900 font-semibold text-[10.5px]">
+                    Select <strong>Any Application</strong> (or multi-select <em>Paytm, Paytm for Business, PhonePe, and Messages/SMS</em>). This ensures bank SMS or soundbox alerts also trigger instantly!
+                  </span>
+                </li>
+                <li>
+                  <strong>Action (+)</strong>: Select <strong>Connectivity</strong> → <strong>HTTP Request</strong>:
                   <ul className="list-disc pl-4 pt-1 space-y-1 text-slate-600 font-mono text-[10px]">
                     <li>Method: <strong>POST</strong></li>
                     <li>URL: <span className="text-slate-900 bg-white px-1 py-0.5 rounded border break-all select-all font-bold">{webhookUrl}?secret={webhookSecret}</span></li>
                     <li>Content type: <strong>application/json</strong></li>
                     <li>Body: <span className="text-slate-900 bg-white px-1 py-0.5 rounded border select-all">&#123;&quot;notificationText&quot;: &quot;[notif_text]&quot;, &quot;title&quot;: &quot;[notif_title]&quot;&#125;</span></li>
-                    <li className="text-[9px] text-emerald-700 font-sans">✓ Secret key is included in the URL above. No manual headers required!</li>
+                    <li className="text-[9px] text-emerald-700 font-sans">✓ Secret key is in the URL. 0 extra headers needed!</li>
                   </ul>
                 </li>
-                <li>Save and enable the macro. You&apos;re done! Whenever Paytm receives funds on your phone, the delegate pass will auto-confirm on the student&apos;s screen with zero manual delay.</li>
+                <li>
+                  <strong>Instant Test</strong>:
+                  <span className="block text-slate-700 text-[10.5px]">
+                    Inside the macro, tap the <strong>3 vertical dots</strong> next to <em>HTTP Request</em> → tap <strong>Test Actions</strong>. Then click &quot;Refresh&quot; below to verify the phone ping reached the server!
+                  </span>
+                </li>
               </ol>
             </div>
 
-            {/* Recent Signals */}
+            {/* Recent Verified Signals */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  Recent Cloud Verified Signals
+                  Recent Cloud Verified Payments
                 </span>
                 <button
                   type="button"
@@ -465,7 +491,7 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
 
               {recentSignals.length === 0 ? (
                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-400">
-                  No webhook signals recorded yet. Click &quot;Send Test Signal&quot; above to verify.
+                  No verified payments recorded yet.
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white">
@@ -473,7 +499,7 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                     <div key={i} className="p-3 text-xs flex items-center justify-between">
                       <div className="space-y-0.5">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-slate-900">UTR: {sig.utr}</span>
+                          <span className="font-mono font-bold text-slate-900">Ref: {sig.utr}</span>
                           <Badge variant={sig.status === "MATCHED" ? "success" : "slate"} size="sm">
                             {sig.status}
                           </Badge>
@@ -485,6 +511,49 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                       <span className="font-bold text-emerald-700 text-sm">
                         ₹{sig.amount || 0}
                       </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Live Phone Activity / Raw Pings Log */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  Live Phone Activity / Raw Pings Log ({recentLogs.length})
+                </span>
+              </div>
+
+              {recentLogs.length === 0 ? (
+                <div className="p-4 rounded-xl bg-amber-50/50 border border-amber-200/60 text-center text-xs text-amber-800 space-y-1">
+                  <p className="font-bold">No pings received from MacroDroid yet</p>
+                  <p className="text-[11px] text-amber-700">
+                    To test connection right now: In MacroDroid, tap the 3 dots next to <em>HTTP Request</em> → tap <strong>Test Actions</strong>, then tap Refresh.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white max-h-48 overflow-y-auto">
+                  {recentLogs.map((log, i) => (
+                    <div key={i} className="p-2.5 text-xs flex items-center justify-between gap-3">
+                      <div className="space-y-0.5 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <Badge variant={log.status === "MATCHED" ? "success" : log.status === "PING" ? "navy" : "warning"} size="sm">
+                            {log.status}
+                          </Badge>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {log.receivedAt ? new Date(log.receivedAt).toLocaleTimeString() : ""}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-700 font-mono truncate max-w-md">
+                          {log.combinedText || log.rawBody || "(empty payload)"}
+                        </p>
+                      </div>
+                      {log.extractedAmount ? (
+                        <span className="font-bold text-emerald-700 text-xs shrink-0">
+                          ₹{log.extractedAmount}
+                        </span>
+                      ) : null}
                     </div>
                   ))}
                 </div>

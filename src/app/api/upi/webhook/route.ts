@@ -163,19 +163,38 @@ export async function POST(req: NextRequest) {
       amount = extractAmountFromText(combinedText) || 0;
     }
 
-    if (!utr || !/^\d{12}$/.test(utr)) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: "Could not extract a valid 12-digit UTR from the notification payload.",
-          receivedText: combinedText.slice(0, 200),
-          hint: "Ensure notification contains an Indian bank UPI Reference (UTR) number."
-        },
-        { status: 400 }
-      );
+    const now = new Date().toISOString();
+
+    // If neither amount nor UTR can be detected: handle as connectivity test/ping
+    if ((!utr || !/^\d{12}$/.test(utr)) && (!amount || amount <= 0)) {
+      if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+        try {
+          const logId = `PING-${Date.now()}`;
+          await setDoc(doc(db, "upi_webhook_logs", logId), {
+            id: logId,
+            receivedAt: now,
+            combinedText: combinedText.slice(0, 500) || "[Empty / Ping Payload]",
+            status: "PING",
+            rawBody: typeof rawBody === "object" ? JSON.stringify(rawBody).slice(0, 500) : String(rawBody).slice(0, 500),
+          });
+        } catch {}
+      }
+
+      return NextResponse.json({
+        success: true,
+        isPing: true,
+        message: "Connectivity test ping received successfully from MacroDroid!",
+        receivedText: combinedText || "(empty body)",
+        hint: "Ready to receive live payment notifications.",
+      });
     }
 
-    const now = new Date().toISOString();
+    // If UTR is missing from the notification banner (common in Paytm for Business push notifications),
+    // but amount is valid: generate an automated reference ID for the session
+    const isSyntheticUtr = !utr || !/^\d{12}$/.test(utr);
+    if (isSyntheticUtr) {
+      utr = `AUTO-PTM-${Date.now().toString().slice(-8)}${Math.floor(10 + Math.random() * 90)}`;
+    }
 
     // 3. Save to verified_upi_payments ledger & match active sessions / registrations
     let matchedRegistrationId: string | null = null;
@@ -183,7 +202,7 @@ export async function POST(req: NextRequest) {
     let matchedStudentName: string | null = null;
 
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-      const paymentDocRef = doc(db, "verified_upi_payments", utr);
+      const paymentDocRef = doc(db, "verified_upi_payments", utr!);
 
       // 3A. Match active checkout session (for zero-touch hands-free auto-approval on the student's checkout screen)
       const orderIdRegex = combinedText.match(/SRC-PTM-\d+-\d+/i);
@@ -258,14 +277,15 @@ export async function POST(req: NextRequest) {
         let matchingDoc: any = null;
 
         // Query by paymentId (UTR)
-        const regQuery = query(
-          collection(db, "registrations"),
-          where("paymentId", "==", utr)
-        );
-        let regSnap = await getDocs(regQuery);
-
-        if (!regSnap.empty) {
-          matchingDoc = regSnap.docs[0];
+        if (!isSyntheticUtr) {
+          const regQuery = query(
+            collection(db, "registrations"),
+            where("paymentId", "==", utr)
+          );
+          let regSnap = await getDocs(regQuery);
+          if (!regSnap.empty) {
+            matchingDoc = regSnap.docs[0];
+          }
         }
 
         // Fallback: Query by matchedOrderId
@@ -281,7 +301,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Fallback: Query by customAnswers.upiUtr
-        if (!matchingDoc) {
+        if (!matchingDoc && !isSyntheticUtr) {
           const customRegQuery = query(
             collection(db, "registrations"),
             where("customAnswers.upiUtr", "==", utr)
@@ -317,6 +337,7 @@ export async function POST(req: NextRequest) {
           amount,
           rawNotification: combinedText,
           status: isMatched ? "MATCHED" : "UNCLAIMED",
+          isSyntheticUtr,
           matchedRegistrationId: matchedRegistrationId || null,
           matchedOrderId: matchedOrderId || null,
           matchedStudentName: matchedStudentName || null,
@@ -325,6 +346,24 @@ export async function POST(req: NextRequest) {
         }, { merge: true });
       } catch (ledgerErr) {
         console.warn("Notice: verified_upi_payments ledger write warning:", ledgerErr);
+      }
+
+      // 3D. Save diagnostic audit entry in upi_webhook_logs
+      try {
+        const logId = `SIG-${Date.now()}`;
+        await setDoc(doc(db, "upi_webhook_logs", logId), {
+          id: logId,
+          receivedAt: now,
+          combinedText: combinedText.slice(0, 500),
+          extractedUtr: utr,
+          extractedAmount: amount,
+          matchedOrderId: matchedOrderId || null,
+          matchedRegistrationId: matchedRegistrationId || null,
+          matchedStudentName: matchedStudentName || null,
+          status: isMatched ? "MATCHED" : "UNCLAIMED",
+        });
+      } catch (auditErr) {
+        console.warn("Notice: upi_webhook_logs audit warning:", auditErr);
       }
     }
 
@@ -366,7 +405,7 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // If authorized, fetch last 5 received payments
+  // If authorized, fetch last 5 received payments and last 10 webhook activity logs
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       const snap = await getDocs(collection(db, "verified_upi_payments"));
@@ -375,10 +414,21 @@ export async function GET(req: NextRequest) {
         .sort((a: any, b: any) => (b.receivedAt || "").localeCompare(a.receivedAt || ""))
         .slice(0, 5);
 
+      let recentLogs: any[] = [];
+      try {
+        const logSnap = await getDocs(collection(db, "upi_webhook_logs"));
+        recentLogs = logSnap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .sort((a: any, b: any) => (b.receivedAt || "").localeCompare(a.receivedAt || ""))
+          .slice(0, 10);
+      } catch {}
+
       return NextResponse.json({
         status: "ONLINE",
         totalRecorded: snap.size,
+        totalLogs: recentLogs.length,
         recentPayments: list,
+        recentLogs,
       });
     }
   } catch (e) {
