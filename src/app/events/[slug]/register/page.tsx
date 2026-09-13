@@ -350,7 +350,7 @@ export default function EventRegisterPage() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {subEvents.map((sub) => {
-                    const topPrize = sub.prizes && sub.prizes[0] ? sub.prizes[0].amount : null;
+                    const topPrize = sub.hasPrizes !== false && sub.prizes && sub.prizes[0] ? sub.prizes[0].amount : null;
                     const subIsJdcoemOnly = sub.targetAudience === "jdcoem_only" || sub.isInterCollege === false;
                     const subIsRestricted = subIsJdcoemOnly && isExternal;
 

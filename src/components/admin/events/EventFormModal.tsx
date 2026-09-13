@@ -64,6 +64,8 @@ export interface EventFormData {
   about: string;
   whatToExpect: string[];
   rules: string[];
+  hasSchedule?: boolean;
+  hasPrizes?: boolean;
   schedule: EventScheduleItem[];
   prizes: EventPrize[];
   teamType: "Individual" | "Team" | "Both";
@@ -234,6 +236,14 @@ export function EventFormModal({
   const initialIsMulti = initialData?.isMultiDay || (Boolean(initialData?.rawEndDate) && initialData?.rawEndDate !== initialData?.rawDate) || false;
   const initialRawEndDate = initialData?.rawEndDate || initialData?.rawDate || defaultRawDate;
 
+  const initialHasSchedule = initialData?.hasSchedule !== undefined
+    ? Boolean(initialData.hasSchedule)
+    : Boolean(initialData?.schedule && initialData.schedule.length > 0);
+
+  const initialHasPrizes = initialData?.hasPrizes !== undefined
+    ? Boolean(initialData.hasPrizes)
+    : Boolean(initialData?.prizes && initialData.prizes.length > 0);
+
   const [form, setForm] = useState<EventFormData>({
     name: initialData?.name || "",
     category: initialData?.category || "Technical",
@@ -256,6 +266,8 @@ export function EventFormModal({
     about: initialData?.about || "",
     whatToExpect: initialData?.whatToExpect && initialData.whatToExpect.length > 0 ? initialData.whatToExpect : [""],
     rules: initialData?.rules && initialData.rules.length > 0 ? initialData.rules : [""],
+    hasSchedule: initialHasSchedule,
+    hasPrizes: initialHasPrizes,
     schedule: initialData?.schedule && Array.isArray(initialData.schedule) ? JSON.parse(JSON.stringify(initialData.schedule)) : [],
     prizes: initialData?.prizes && Array.isArray(initialData.prizes) ? JSON.parse(JSON.stringify(initialData.prizes)) : [],
     teamType: initialData?.teamType || "Both",
@@ -293,6 +305,20 @@ export function EventFormModal({
         collaboratingClubs: initialData.collaboratingClubs || [],
         whatToExpect: initialData.whatToExpect && initialData.whatToExpect.length > 0 ? initialData.whatToExpect : [""],
         rules: initialData.rules && initialData.rules.length > 0 ? initialData.rules : [""],
+        hasSchedule: initialData.hasSchedule !== undefined
+          ? Boolean(initialData.hasSchedule)
+          : initialData.schedule && initialData.schedule.length > 0
+          ? true
+          : prev.hasSchedule !== undefined
+          ? prev.hasSchedule
+          : false,
+        hasPrizes: initialData.hasPrizes !== undefined
+          ? Boolean(initialData.hasPrizes)
+          : initialData.prizes && initialData.prizes.length > 0
+          ? true
+          : prev.hasPrizes !== undefined
+          ? prev.hasPrizes
+          : false,
         schedule: initialData.schedule && Array.isArray(initialData.schedule) ? JSON.parse(JSON.stringify(initialData.schedule)) : prev.schedule || [],
         prizes: initialData.prizes && Array.isArray(initialData.prizes) ? JSON.parse(JSON.stringify(initialData.prizes)) : prev.prizes || [],
         customQuestions: initialData.customQuestions || [],
@@ -382,6 +408,7 @@ export function EventFormModal({
   const handleAddScheduleSlot = () => {
     setForm((prev) => ({
       ...prev,
+      hasSchedule: true,
       schedule: [
         ...(prev.schedule || []),
         { time: "", title: "", venue: "", description: "" },
@@ -431,6 +458,7 @@ export function EventFormModal({
   const handleLoadSchedulePreset = () => {
     setForm((prev) => ({
       ...prev,
+      hasSchedule: true,
       schedule: [
         {
           time: "10:00 AM - 11:00 AM",
@@ -462,6 +490,7 @@ export function EventFormModal({
   const handleAddPrizeTier = () => {
     setForm((prev) => ({
       ...prev,
+      hasPrizes: true,
       prizes: [
         ...(prev.prizes || []),
         { position: "", amount: "", perks: [] },
@@ -515,6 +544,7 @@ export function EventFormModal({
   const handleLoadPrizePreset = () => {
     setForm((prev) => ({
       ...prev,
+      hasPrizes: true,
       prizes: [
         {
           position: "1st Place - Champion",
@@ -584,7 +614,13 @@ export function EventFormModal({
     try {
       setIsSubmitting(true);
       setFormError(null);
-      await onSubmit(form);
+      await onSubmit({
+        ...form,
+        hasSchedule: Boolean(form.hasSchedule),
+        hasPrizes: Boolean(form.hasPrizes),
+        schedule: form.hasSchedule ? (form.schedule || []) : [],
+        prizes: form.hasPrizes ? (form.prizes || []) : [],
+      });
     } catch (err: any) {
       setFormError(err?.message || "Failed to save event to cloud database. Please verify connection and try again.");
     } finally {
@@ -597,12 +633,16 @@ export function EventFormModal({
       case "details":
         return form.category;
       case "schedule": {
-        const sCount = form.schedule?.length || 0;
-        const pCount = form.prizes?.length || 0;
+        if (!form.hasSchedule && !form.hasPrizes) return "Excluded";
+        const sCount = form.hasSchedule ? (form.schedule?.length || 0) : 0;
+        const pCount = form.hasPrizes ? (form.prizes?.length || 0) : 0;
         if (sCount > 0 && pCount > 0) return `${sCount} slots • ${pCount} prizes`;
         if (sCount > 0) return `${sCount} slots`;
         if (pCount > 0) return `${pCount} prizes`;
-        return null;
+        if (form.hasSchedule && form.hasPrizes) return "Active";
+        if (form.hasSchedule) return "Timeline";
+        if (form.hasPrizes) return "Prizes";
+        return "Excluded";
       }
       case "registration":
         return form.noRegistrationRequired ? "Open Walk-in" : form.isPaid ? `₹${form.feeAmount}` : "Free";
@@ -1198,17 +1238,39 @@ export function EventFormModal({
                   </h3>
                 </div>
                 <p className="text-xs text-slate-500">
-                  Manage chronological event timeline slots and competitive podium cash prizes, trophies, and laurels.
+                  Configure optional timeline slots and podium cash prizes. You can disable either section if not required for this event.
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-blue-200/80 text-[11px] font-bold text-[#17458F] shadow-2xs">
-                  <Clock className="w-3 h-3 text-[#17458F]" />
-                  <span>{form.schedule.length} {form.schedule.length === 1 ? "Slot" : "Slots"}</span>
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold shadow-2xs transition-colors",
+                    form.hasSchedule
+                      ? "bg-white border-blue-200/80 text-[#17458F]"
+                      : "bg-slate-100 border-slate-200 text-slate-500"
+                  )}
+                >
+                  <Clock className="w-3 h-3" />
+                  <span>
+                    {form.hasSchedule
+                      ? `${form.schedule.length} ${form.schedule.length === 1 ? "Slot" : "Slots"}`
+                      : "Itinerary Omitted"}
+                  </span>
                 </span>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-amber-200/80 text-[11px] font-bold text-amber-700 shadow-2xs">
-                  <Trophy className="w-3 h-3 text-amber-600" />
-                  <span>{form.prizes.length} {form.prizes.length === 1 ? "Prize" : "Prizes"}</span>
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold shadow-2xs transition-colors",
+                    form.hasPrizes
+                      ? "bg-white border-amber-200/80 text-amber-700"
+                      : "bg-slate-100 border-slate-200 text-slate-500"
+                  )}
+                >
+                  <Trophy className="w-3 h-3" />
+                  <span>
+                    {form.hasPrizes
+                      ? `${form.prizes.length} ${form.prizes.length === 1 ? "Prize" : "Prizes"}`
+                      : "Prizes Omitted"}
+                  </span>
                 </span>
               </div>
             </div>
@@ -1227,180 +1289,288 @@ export function EventFormModal({
                     Defines rounds, keynote sessions, lunch breaks, and judging timings for the public event page.
                   </p>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {form.schedule.length === 0 && (
-                    <button
-                      type="button"
-                      onClick={handleLoadSchedulePreset}
-                      className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-[#17458F] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
-                      <span>Load 3-Slot Preset</span>
-                    </button>
+                <span
+                  className={cn(
+                    "text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border shrink-0 w-fit",
+                    form.hasSchedule
+                      ? "bg-blue-50 text-[#17458F] border-blue-200"
+                      : "bg-slate-100 text-slate-600 border-slate-200"
                   )}
-                  {form.schedule.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleClearSchedule}
-                      className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-colors cursor-pointer"
-                    >
-                      Clear All Slots
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleAddScheduleSlot}
-                    className="px-3.5 py-1.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Slot</span>
-                  </button>
-                </div>
+                >
+                  {form.hasSchedule ? "Itinerary Active" : "Itinerary Omitted"}
+                </span>
               </div>
 
-              {form.schedule.length === 0 ? (
-                <div className="p-8 rounded-2xl border-2 border-dashed border-slate-200 text-center space-y-3 bg-slate-50/50">
-                  <div className="mx-auto w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400">
-                    <CalendarClock className="w-5 h-5" />
+              {/* 2-Option Card Switch: Schedule Inclusion */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, hasSchedule: true }))}
+                  className={cn(
+                    "p-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-start gap-3",
+                    form.hasSchedule
+                      ? "bg-white border-[#17458F] shadow-sm ring-2 ring-[#17458F]/20"
+                      : "bg-white/60 border-slate-200 hover:bg-white text-slate-600"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 mt-0.5",
+                      form.hasSchedule ? "border-[#17458F] bg-[#17458F] text-white" : "border-slate-300"
+                    )}
+                  >
+                    {form.hasSchedule && <Check className="w-3 h-3 stroke-[3]" />}
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-bold text-slate-700">No schedule slots configured</p>
-                    <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-                      Events without a schedule will automatically omit the timeline section on their public landing page.
-                    </p>
+                  <div>
+                    <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                      <span>Include Schedule &amp; Itinerary</span>
+                      <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-md bg-blue-50 text-[#17458F] uppercase border border-blue-100">
+                        Active
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-normal mt-0.5 leading-snug">
+                      Publish round timings, keynote sessions, arrival reporting, and judging agenda.
+                    </div>
                   </div>
-                  <div className="flex items-center justify-center gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={handleAddScheduleSlot}
-                      className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-xs font-semibold text-[#17458F] hover:bg-slate-50 transition-colors cursor-pointer"
-                    >
-                      + Add Single Slot
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleLoadSchedulePreset}
-                      className="px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-xs font-semibold text-[#17458F] hover:bg-blue-100/70 transition-colors cursor-pointer flex items-center gap-1.5"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
-                      <span>Load Standard 3-Slot Preset</span>
-                    </button>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, hasSchedule: false }))}
+                  className={cn(
+                    "p-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-start gap-3",
+                    !form.hasSchedule
+                      ? "bg-white border-amber-500 shadow-sm ring-2 ring-amber-500/20"
+                      : "bg-white/60 border-slate-200 hover:bg-white text-slate-600"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 mt-0.5",
+                      !form.hasSchedule ? "border-amber-600 bg-amber-600 text-white" : "border-slate-300"
+                    )}
+                  >
+                    {!form.hasSchedule && <Check className="w-3 h-3 stroke-[3]" />}
                   </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                      <span>No Schedule Needed</span>
+                      <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-md bg-amber-50 text-amber-800 uppercase border border-amber-200">
+                        Omitted
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-normal mt-0.5 leading-snug">
+                      Omit itinerary section completely. Ideal for single-session lectures, informal meetups, or exhibitions.
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              {!form.hasSchedule ? (
+                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-600 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-slate-200/70 flex items-center justify-center text-slate-500 shrink-0">
+                      <Clock className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-slate-800">
+                        Schedule &amp; Itinerary is Disabled for this Event
+                      </h5>
+                      <p className="text-[11px] text-slate-500">
+                        No timeline section will be shown to delegates on the public event page.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setForm((prev) => ({ ...prev, hasSchedule: true }))}
+                    className="px-3.5 py-1.5 rounded-xl bg-white border border-slate-300 hover:border-[#17458F] text-xs font-bold text-[#17458F] hover:bg-blue-50/50 transition-colors shrink-0 cursor-pointer shadow-2xs"
+                  >
+                    Enable Schedule Builder
+                  </button>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {form.schedule.map((slot, sIdx) => (
-                    <div
-                      key={sIdx}
-                      className="p-4 sm:p-5 rounded-2xl border border-slate-200 bg-white hover:border-slate-300 transition-all space-y-4 shadow-2xs"
-                    >
-                      {/* Slot Card Header */}
-                      <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                        <div className="flex items-center gap-2.5">
-                          <span className="px-2 py-0.5 rounded-md bg-blue-50 border border-blue-100 text-[#17458F] text-[10px] font-extrabold uppercase tracking-wide">
-                            Slot #{sIdx + 1}
-                          </span>
-                          <span className="text-xs font-bold text-slate-800 line-clamp-1">
-                            {slot.title.trim() || slot.time.trim() || "Untitled Timeline Slot"}
-                          </span>
-                        </div>
+                <div className="space-y-4 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
+                    <span className="text-xs font-bold text-slate-700">
+                      Configured Timeline Slots ({form.schedule.length})
+                    </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {form.schedule.length === 0 && (
+                        <button
+                          type="button"
+                          onClick={handleLoadSchedulePreset}
+                          className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-[#17458F] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
+                          <span>Load 3-Slot Preset</span>
+                        </button>
+                      )}
+                      {form.schedule.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleClearSchedule}
+                          className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-colors cursor-pointer"
+                        >
+                          Clear All Slots
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleAddScheduleSlot}
+                        className="px-3.5 py-1.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Slot</span>
+                      </button>
+                    </div>
+                  </div>
 
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => handleMoveScheduleSlot(sIdx, "up")}
-                            disabled={sIdx === 0}
-                            title="Move Up"
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
-                          >
-                            <ArrowUp className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleMoveScheduleSlot(sIdx, "down")}
-                            disabled={sIdx === form.schedule.length - 1}
-                            title="Move Down"
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
-                          >
-                            <ArrowDown className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDuplicateScheduleSlot(sIdx)}
-                            title="Duplicate Slot"
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-[#17458F] hover:bg-blue-50 cursor-pointer transition-colors"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveScheduleSlot(sIdx)}
-                            title="Delete Slot"
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                  {form.schedule.length === 0 ? (
+                    <div className="p-8 rounded-2xl border-2 border-dashed border-slate-200 text-center space-y-3 bg-slate-50/50">
+                      <div className="mx-auto w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400">
+                        <CalendarClock className="w-5 h-5" />
                       </div>
-
-                      {/* Slot Inputs Grid */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                        <div className="space-y-1">
-                          <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-[#17458F]" />
-                            <span>Time / Timing</span>
-                          </label>
-                          <input
-                            type="text"
-                            value={slot.time}
-                            onChange={(e) => handleUpdateScheduleSlot(sIdx, "time", e.target.value)}
-                            placeholder="e.g., 10:00 AM - 11:30 AM or Day 1, 02:00 PM"
-                            className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                            Session / Milestone Title
-                          </label>
-                          <input
-                            type="text"
-                            value={slot.title}
-                            onChange={(e) => handleUpdateScheduleSlot(sIdx, "title", e.target.value)}
-                            placeholder="e.g., Reporting & Briefing or Round 1: Elimination"
-                            className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
-                            <MapPin className="w-3 h-3 text-[#E78023]" />
-                            <span>Venue / Location (Optional)</span>
-                          </label>
-                          <input
-                            type="text"
-                            value={slot.venue}
-                            onChange={(e) => handleUpdateScheduleSlot(sIdx, "venue", e.target.value)}
-                            placeholder="e.g., Auditorium / Seminar Hall 2"
-                            className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                            Description / Notes (Optional)
-                          </label>
-                          <input
-                            type="text"
-                            value={slot.description}
-                            onChange={(e) => handleUpdateScheduleSlot(sIdx, "description", e.target.value)}
-                            placeholder="e.g., Mandatory attendance. Bring college ID."
-                            className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
-                          />
-                        </div>
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-slate-700">No schedule slots configured</p>
+                        <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                          Click below to add specific timeline slots or populate the standard 3-slot template.
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={handleAddScheduleSlot}
+                          className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-xs font-semibold text-[#17458F] hover:bg-slate-50 transition-colors cursor-pointer"
+                        >
+                          + Add Single Slot
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleLoadSchedulePreset}
+                          className="px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-xs font-semibold text-[#17458F] hover:bg-blue-100/70 transition-colors cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
+                          <span>Load Standard 3-Slot Preset</span>
+                        </button>
                       </div>
                     </div>
-                  ))}
+                  ) : (
+                    <div className="space-y-3">
+                      {form.schedule.map((slot, sIdx) => (
+                        <div
+                          key={sIdx}
+                          className="p-4 sm:p-5 rounded-2xl border border-slate-200 bg-white hover:border-slate-300 transition-all space-y-4 shadow-2xs"
+                        >
+                          {/* Slot Card Header */}
+                          <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                            <div className="flex items-center gap-2.5">
+                              <span className="px-2 py-0.5 rounded-md bg-blue-50 border border-blue-100 text-[#17458F] text-[10px] font-extrabold uppercase tracking-wide">
+                                Slot #{sIdx + 1}
+                              </span>
+                              <span className="text-xs font-bold text-slate-800 line-clamp-1">
+                                {slot.title.trim() || slot.time.trim() || "Untitled Timeline Slot"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleMoveScheduleSlot(sIdx, "up")}
+                                disabled={sIdx === 0}
+                                title="Move Up"
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
+                              >
+                                <ArrowUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMoveScheduleSlot(sIdx, "down")}
+                                disabled={sIdx === form.schedule.length - 1}
+                                title="Move Down"
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
+                              >
+                                <ArrowDown className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDuplicateScheduleSlot(sIdx)}
+                                title="Duplicate Slot"
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-[#17458F] hover:bg-blue-50 cursor-pointer transition-colors"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveScheduleSlot(sIdx)}
+                                title="Delete Slot"
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Slot Inputs Grid */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                            <div className="space-y-1">
+                              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-[#17458F]" />
+                                <span>Time / Timing</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={slot.time}
+                                onChange={(e) => handleUpdateScheduleSlot(sIdx, "time", e.target.value)}
+                                placeholder="e.g., 10:00 AM - 11:30 AM or Day 1, 02:00 PM"
+                                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                                Session / Milestone Title
+                              </label>
+                              <input
+                                type="text"
+                                value={slot.title}
+                                onChange={(e) => handleUpdateScheduleSlot(sIdx, "title", e.target.value)}
+                                placeholder="e.g., Reporting & Briefing or Round 1: Elimination"
+                                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
+                                <MapPin className="w-3 h-3 text-[#E78023]" />
+                                <span>Venue / Location (Optional)</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={slot.venue}
+                                onChange={(e) => handleUpdateScheduleSlot(sIdx, "venue", e.target.value)}
+                                placeholder="e.g., Auditorium / Seminar Hall 2"
+                                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                                Description / Notes (Optional)
+                              </label>
+                              <input
+                                type="text"
+                                value={slot.description}
+                                onChange={(e) => handleUpdateScheduleSlot(sIdx, "description", e.target.value)}
+                                placeholder="e.g., Mandatory attendance. Bring college ID."
+                                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1419,237 +1589,345 @@ export function EventFormModal({
                     Display competitive podium grants, champion trophies, merit certificates, and perks on the event landing page.
                   </p>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {form.prizes.length === 0 && (
-                    <button
-                      type="button"
-                      onClick={handleLoadPrizePreset}
-                      className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-amber-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Load Top-3 Podium Preset</span>
-                    </button>
+                <span
+                  className={cn(
+                    "text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border shrink-0 w-fit",
+                    form.hasPrizes
+                      ? "bg-amber-50 text-amber-800 border-amber-200"
+                      : "bg-slate-100 text-slate-600 border-slate-200"
                   )}
-                  {form.prizes.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleClearPrizes}
-                      className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-colors cursor-pointer"
-                    >
-                      Clear All Prizes
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleAddPrizeTier}
-                    className="px-3.5 py-1.5 rounded-xl bg-[#E78023] hover:bg-[#cf6f1b] text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Prize Tier</span>
-                  </button>
-                </div>
+                >
+                  {form.hasPrizes ? "Prizes Active" : "Prizes Omitted"}
+                </span>
               </div>
 
-              {form.prizes.length === 0 ? (
-                <div className="p-8 rounded-2xl border-2 border-dashed border-slate-200 text-center space-y-3 bg-slate-50/50">
-                  <div className="mx-auto w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-500">
-                    <Trophy className="w-5 h-5" />
+              {/* 2-Option Card Switch: Prizes Inclusion */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, hasPrizes: true }))}
+                  className={cn(
+                    "p-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-start gap-3",
+                    form.hasPrizes
+                      ? "bg-white border-[#E78023] shadow-sm ring-2 ring-[#E78023]/20"
+                      : "bg-white/60 border-slate-200 hover:bg-white text-slate-600"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 mt-0.5",
+                      form.hasPrizes ? "border-[#E78023] bg-[#E78023] text-white" : "border-slate-300"
+                    )}
+                  >
+                    {form.hasPrizes && <Check className="w-3 h-3 stroke-[3]" />}
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-bold text-slate-700">No prizes or recognition configured</p>
-                    <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-                      Workshops, orientations, or non-competitive events will automatically hide the prize showcase section on their public landing page.
-                    </p>
+                  <div>
+                    <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                      <span>Include Prizes &amp; Recognition</span>
+                      <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-md bg-amber-50 text-amber-800 uppercase border border-amber-200">
+                        Active
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-normal mt-0.5 leading-snug">
+                      Display podium ranks, cash prize grants, champion trophies, and winner perks.
+                    </div>
                   </div>
-                  <div className="flex items-center justify-center gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={handleAddPrizeTier}
-                      className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-xs font-semibold text-amber-700 hover:bg-slate-50 transition-colors cursor-pointer"
-                    >
-                      + Add Single Prize Tier
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleLoadPrizePreset}
-                      className="px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-xs font-semibold text-amber-800 hover:bg-amber-100/70 transition-colors cursor-pointer flex items-center gap-1.5"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Load Top-3 Podium (1st, 2nd, 3rd)</span>
-                    </button>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, hasPrizes: false }))}
+                  className={cn(
+                    "p-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-start gap-3",
+                    !form.hasPrizes
+                      ? "bg-white border-amber-500 shadow-sm ring-2 ring-amber-500/20"
+                      : "bg-white/60 border-slate-200 hover:bg-white text-slate-600"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 mt-0.5",
+                      !form.hasPrizes ? "border-amber-600 bg-amber-600 text-white" : "border-slate-300"
+                    )}
+                  >
+                    {!form.hasPrizes && <Check className="w-3 h-3 stroke-[3]" />}
                   </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                      <span>No Prizes Awarded</span>
+                      <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-md bg-slate-100 text-slate-700 uppercase border border-slate-200">
+                        Omitted
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-normal mt-0.5 leading-snug">
+                      Omit prize podium. Ideal for non-competitive workshops, orientation fests, webinars, and guest lectures.
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              {!form.hasPrizes ? (
+                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-600 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-slate-200/70 flex items-center justify-center text-slate-500 shrink-0">
+                      <Trophy className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-slate-800">
+                        Prizes &amp; Recognition are Disabled for this Event
+                      </h5>
+                      <p className="text-[11px] text-slate-500">
+                        No prize podium or rewards showcase will be displayed on the public event page.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setForm((prev) => ({ ...prev, hasPrizes: true }))}
+                    className="px-3.5 py-1.5 rounded-xl bg-white border border-slate-300 hover:border-[#E78023] text-xs font-bold text-[#E78023] hover:bg-amber-50/50 transition-colors shrink-0 cursor-pointer shadow-2xs"
+                  >
+                    Enable Prize Builder
+                  </button>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {form.prizes.map((prize, pIdx) => {
-                    const isFirst = pIdx === 0;
-                    const isSecond = pIdx === 1;
-                    const isThird = pIdx === 2;
-
-                    return (
-                      <div
-                        key={pIdx}
-                        className={cn(
-                          "p-4 sm:p-5 rounded-2xl border transition-all space-y-4 shadow-2xs",
-                          isFirst
-                            ? "bg-white border-amber-300 ring-1 ring-amber-200"
-                            : "bg-white border-slate-200 hover:border-slate-300"
-                        )}
+                <div className="space-y-4 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
+                    <span className="text-xs font-bold text-slate-700">
+                      Configured Podium Tiers ({form.prizes.length})
+                    </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {form.prizes.length === 0 && (
+                        <button
+                          type="button"
+                          onClick={handleLoadPrizePreset}
+                          className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-amber-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                          <span>Load Top-3 Podium Preset</span>
+                        </button>
+                      )}
+                      {form.prizes.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleClearPrizes}
+                          className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-colors cursor-pointer"
+                        >
+                          Clear All Prizes
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleAddPrizeTier}
+                        className="px-3.5 py-1.5 rounded-xl bg-[#E78023] hover:bg-[#cf6f1b] text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
                       >
-                        {/* Prize Card Header */}
-                        <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                          <div className="flex items-center gap-2.5">
-                            <span
-                              className={cn(
-                                "px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wide flex items-center gap-1",
-                                isFirst
-                                  ? "bg-amber-100 text-amber-900 border border-amber-200"
-                                  : isSecond
-                                  ? "bg-slate-100 text-slate-800 border border-slate-200"
-                                  : isThird
-                                  ? "bg-amber-50 text-amber-800 border border-amber-200"
-                                  : "bg-blue-50 text-blue-900 border border-blue-200"
-                              )}
-                            >
-                              {isFirst ? (
-                                <Trophy className="w-3 h-3 text-amber-600" />
-                              ) : isSecond ? (
-                                <Medal className="w-3 h-3 text-slate-500" />
-                              ) : (
-                                <Award className="w-3 h-3 text-amber-700" />
-                              )}
-                              <span>
-                                {isFirst ? "Champion / 1st" : isSecond ? "Runner Up / 2nd" : isThird ? "2nd Runner Up / 3rd" : `Tier #${pIdx + 1}`}
-                              </span>
-                            </span>
-                            <span className="text-xs font-bold text-slate-800 line-clamp-1">
-                              {prize.position.trim() || prize.amount.trim() || "Untitled Prize Tier"}
-                            </span>
-                          </div>
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Prize Tier</span>
+                      </button>
+                    </div>
+                  </div>
 
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleMovePrizeTier(pIdx, "up")}
-                              disabled={pIdx === 0}
-                              title="Move Up"
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
-                            >
-                              <ArrowUp className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleMovePrizeTier(pIdx, "down")}
-                              disabled={pIdx === form.prizes.length - 1}
-                              title="Move Down"
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
-                            >
-                              <ArrowDown className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDuplicatePrizeTier(pIdx)}
-                              title="Duplicate Prize"
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-amber-700 hover:bg-amber-50 cursor-pointer transition-colors"
-                            >
-                              <Copy className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleRemovePrizeTier(pIdx)}
-                              title="Delete Prize Tier"
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer transition-colors"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Prize Position & Amount Inputs */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                              Position / Rank Title
-                            </label>
-                            <input
-                              type="text"
-                              value={prize.position}
-                              onChange={(e) => handleUpdatePrizeTier(pIdx, "position", e.target.value)}
-                              placeholder="e.g., 1st Place - Champion or Best Innovation"
-                              className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#E78023] focus:ring-2 focus:ring-[#E78023]/20"
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
-                              <Trophy className="w-3 h-3 text-[#E78023]" />
-                              <span>Cash Reward / Grant / Trophy</span>
-                            </label>
-                            <input
-                              type="text"
-                              value={prize.amount}
-                              onChange={(e) => handleUpdatePrizeTier(pIdx, "amount", e.target.value)}
-                              placeholder="e.g., ₹10,000 or ₹5,000 + Trophy"
-                              className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-bold text-[#E78023] focus:outline-none focus:border-[#E78023] focus:ring-2 focus:ring-[#E78023]/20"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Perks & Recognition Badges List */}
-                        <div className="space-y-2 pt-2 border-t border-slate-100">
-                          <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center justify-between">
-                            <span>Included Perks &amp; Laurels</span>
-                            <span className="text-[10px] text-slate-400 font-normal">Press Enter to add perk</span>
-                          </label>
-
-                          {prize.perks && prize.perks.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 pb-1">
-                              {prize.perks.map((perk, perkIdx) => (
-                                <span
-                                  key={perkIdx}
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-800 text-xs font-medium"
-                                >
-                                  <CheckCircle2 className="w-3 h-3 text-[#E78023] shrink-0" />
-                                  <span>{perk}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemovePerk(pIdx, perkIdx)}
-                                    className="p-0.5 rounded hover:bg-slate-200 text-slate-400 hover:text-rose-600 cursor-pointer transition-colors"
-                                  >
-                                    <X className="w-3 h-3" />
-                                  </button>
-                                </span>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Perk input */}
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={perkDrafts[pIdx] || ""}
-                              onChange={(e) => setPerkDrafts({ ...perkDrafts, [pIdx]: e.target.value })}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  handleAddPerk(pIdx);
-                                }
-                              }}
-                              placeholder="Add a perk (e.g., Official Winner Trophy, Internship Fast-Track, Merit Certificate)..."
-                              className="flex-1 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#E78023] focus:ring-2 focus:ring-[#E78023]/20"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleAddPerk(pIdx)}
-                              className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer shrink-0 border border-slate-200"
-                            >
-                              + Add Perk
-                            </button>
-                          </div>
-                        </div>
+                  {form.prizes.length === 0 ? (
+                    <div className="p-8 rounded-2xl border-2 border-dashed border-slate-200 text-center space-y-3 bg-slate-50/50">
+                      <div className="mx-auto w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-500">
+                        <Trophy className="w-5 h-5" />
                       </div>
-                    );
-                  })}
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-slate-700">No prizes or recognition configured</p>
+                        <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                          Click below to add specific prize tiers or populate the standard podium ranks.
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={handleAddPrizeTier}
+                          className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-xs font-semibold text-amber-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                        >
+                          + Add Single Prize Tier
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleLoadPrizePreset}
+                          className="px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-xs font-semibold text-amber-800 hover:bg-amber-100/70 transition-colors cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Load Top-3 Podium (1st, 2nd, 3rd)</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {form.prizes.map((prize, pIdx) => {
+                        const isFirst = pIdx === 0;
+                        const isSecond = pIdx === 1;
+                        const isThird = pIdx === 2;
+
+                        return (
+                          <div
+                            key={pIdx}
+                            className={cn(
+                              "p-4 sm:p-5 rounded-2xl border transition-all space-y-4 shadow-2xs",
+                              isFirst
+                                ? "bg-white border-amber-300 ring-1 ring-amber-200"
+                                : "bg-white border-slate-200 hover:border-slate-300"
+                            )}
+                          >
+                            {/* Prize Card Header */}
+                            <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                              <div className="flex items-center gap-2.5">
+                                <span
+                                  className={cn(
+                                    "px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wide flex items-center gap-1",
+                                    isFirst
+                                      ? "bg-amber-100 text-amber-900 border border-amber-200"
+                                      : isSecond
+                                      ? "bg-slate-100 text-slate-800 border border-slate-200"
+                                      : isThird
+                                      ? "bg-amber-50 text-amber-800 border border-amber-200"
+                                      : "bg-blue-50 text-blue-900 border border-blue-200"
+                                  )}
+                                >
+                                  {isFirst ? (
+                                    <Trophy className="w-3 h-3 text-amber-600" />
+                                  ) : isSecond ? (
+                                    <Medal className="w-3 h-3 text-slate-500" />
+                                  ) : (
+                                    <Award className="w-3 h-3 text-amber-700" />
+                                  )}
+                                  <span>
+                                    {isFirst ? "Champion / 1st" : isSecond ? "Runner Up / 2nd" : isThird ? "2nd Runner Up / 3rd" : `Tier #${pIdx + 1}`}
+                                  </span>
+                                </span>
+                                <span className="text-xs font-bold text-slate-800 line-clamp-1">
+                                  {prize.position.trim() || prize.amount.trim() || "Untitled Prize Tier"}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleMovePrizeTier(pIdx, "up")}
+                                  disabled={pIdx === 0}
+                                  title="Move Up"
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
+                                >
+                                  <ArrowUp className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMovePrizeTier(pIdx, "down")}
+                                  disabled={pIdx === form.prizes.length - 1}
+                                  title="Move Down"
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
+                                >
+                                  <ArrowDown className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDuplicatePrizeTier(pIdx)}
+                                  title="Duplicate Prize"
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-amber-700 hover:bg-amber-50 cursor-pointer transition-colors"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemovePrizeTier(pIdx)}
+                                  title="Delete Prize Tier"
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer transition-colors"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Prize Position & Amount Inputs */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                              <div className="space-y-1">
+                                <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                                  Position / Rank Title
+                                </label>
+                                <input
+                                  type="text"
+                                  value={prize.position}
+                                  onChange={(e) => handleUpdatePrizeTier(pIdx, "position", e.target.value)}
+                                  placeholder="e.g., 1st Place - Champion or Best Innovation"
+                                  className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#E78023] focus:ring-2 focus:ring-[#E78023]/20"
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
+                                  <Trophy className="w-3 h-3 text-[#E78023]" />
+                                  <span>Cash Reward / Grant / Trophy</span>
+                                </label>
+                                <input
+                                  type="text"
+                                  value={prize.amount}
+                                  onChange={(e) => handleUpdatePrizeTier(pIdx, "amount", e.target.value)}
+                                  placeholder="e.g., ₹10,000 or ₹5,000 + Trophy"
+                                  className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-bold text-[#E78023] focus:outline-none focus:border-[#E78023] focus:ring-2 focus:ring-[#E78023]/20"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Perks & Recognition Badges List */}
+                            <div className="space-y-2 pt-2 border-t border-slate-100">
+                              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center justify-between">
+                                <span>Included Perks &amp; Laurels</span>
+                                <span className="text-[10px] text-slate-400 font-normal">Press Enter to add perk</span>
+                              </label>
+
+                              {prize.perks && prize.perks.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 pb-1">
+                                  {prize.perks.map((perk, perkIdx) => (
+                                    <span
+                                      key={perkIdx}
+                                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-800 text-xs font-medium"
+                                    >
+                                      <CheckCircle2 className="w-3 h-3 text-[#E78023] shrink-0" />
+                                      <span>{perk}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemovePerk(pIdx, perkIdx)}
+                                        className="p-0.5 rounded hover:bg-slate-200 text-slate-400 hover:text-rose-600 cursor-pointer transition-colors"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Perk input */}
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={perkDrafts[pIdx] || ""}
+                                  onChange={(e) => setPerkDrafts({ ...perkDrafts, [pIdx]: e.target.value })}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      handleAddPerk(pIdx);
+                                    }
+                                  }}
+                                  placeholder="Add a perk (e.g., Official Winner Trophy, Internship Fast-Track, Merit Certificate)..."
+                                  className="flex-1 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#E78023] focus:ring-2 focus:ring-[#E78023]/20"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddPerk(pIdx)}
+                                  className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer shrink-0 border border-slate-200"
+                                >
+                                  + Add Perk
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

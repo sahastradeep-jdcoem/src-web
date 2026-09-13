@@ -74,6 +74,8 @@ export interface EventItem {
   about: string;
   whatToExpect: string[];
   rules: string[];
+  hasSchedule?: boolean;
+  hasPrizes?: boolean;
   schedule: EventScheduleItem[];
   prizes: EventPrize[];
   teamType: "Individual" | "Team" | "Both";

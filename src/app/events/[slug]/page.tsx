@@ -396,7 +396,7 @@ export default function EventDetailPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   {subEvents.map((sub) => {
-                    const topPrize = sub.prizes && sub.prizes[0] ? sub.prizes[0].amount : null;
+                    const topPrize = sub.hasPrizes !== false && sub.prizes && sub.prizes[0] ? sub.prizes[0].amount : null;
                     return (
                       <div
                         key={sub.id}
@@ -514,7 +514,7 @@ export default function EventDetailPage() {
             })()}
 
             {/* SCHEDULE TIMELINE */}
-            {event.schedule && event.schedule.length > 0 && (
+            {event.hasSchedule !== false && event.schedule && event.schedule.length > 0 && (
               <section className="space-y-6">
                 <div className="space-y-1">
                   <span className="text-xs font-bold uppercase tracking-wider text-[#E78023]">
@@ -529,7 +529,7 @@ export default function EventDetailPage() {
             )}
 
             {/* PRIZES & RECOGNITION */}
-            {event.prizes && event.prizes.length > 0 && (
+            {event.hasPrizes !== false && event.prizes && event.prizes.length > 0 && (
               <section className="space-y-6">
                 <div className="space-y-1">
                   <span className="text-xs font-bold uppercase tracking-wider text-[#E78023] flex items-center gap-1.5">

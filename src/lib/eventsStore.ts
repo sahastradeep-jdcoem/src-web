@@ -53,7 +53,11 @@ export function sanitizeEventItem(event: EventItem): EventItem {
           )
         )
       : [],
-    schedule: Array.isArray(event.schedule)
+    hasSchedule: event.hasSchedule !== undefined ? Boolean(event.hasSchedule) : Boolean(event.schedule && event.schedule.length > 0),
+    hasPrizes: event.hasPrizes !== undefined ? Boolean(event.hasPrizes) : Boolean(event.prizes && event.prizes.length > 0),
+    schedule: event.hasSchedule === false
+      ? []
+      : Array.isArray(event.schedule)
       ? event.schedule
           .filter((item) => item && typeof item === "object" && Boolean(item.title?.trim() || item.time?.trim()))
           .map((item) => ({
@@ -63,7 +67,9 @@ export function sanitizeEventItem(event: EventItem): EventItem {
             description: (item.description || "").trim(),
           }))
       : [],
-    prizes: Array.isArray(event.prizes)
+    prizes: event.hasPrizes === false
+      ? []
+      : Array.isArray(event.prizes)
       ? event.prizes
           .filter((p) => p && typeof p === "object" && Boolean(p.position?.trim() || p.amount?.trim()))
           .map((p) => ({
