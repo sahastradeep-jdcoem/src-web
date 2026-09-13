@@ -13,20 +13,6 @@ export const mockClubs: ClubItem[] = [
     memberCount: 64,
     established: "2024",
     heroImage: "https://images.unsplash.com/photo-1547153760-18fc86324498?q=80&w=1600&auto=format&fit=crop",
-    lead: {
-      name: "Club Head Placeholder",
-      role: "Club Head",
-      department: "Computer Science & Engineering",
-      year: "4th Year",
-      avatar: ""
-    },
-    coLead: {
-      name: "Club Co-Head Placeholder",
-      role: "Club Co-Head",
-      department: "Artificial Intelligence & Data Science",
-      year: "3rd Year",
-      avatar: ""
-    },
     upcomingEvents: ["Natyam Choreo Night", "Street Cypher Workshop"],
     pastHighlights: [
       "Secured 1st Place at Central University Dance Fest 2025",
@@ -51,20 +37,6 @@ export const mockClubs: ClubItem[] = [
     memberCount: 58,
     established: "2024",
     heroImage: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=1600&auto=format&fit=crop",
-    lead: {
-      name: "Club Head Placeholder",
-      role: "Club Head",
-      department: "Information Technology",
-      year: "4th Year",
-      avatar: ""
-    },
-    coLead: {
-      name: "Club Co-Head Placeholder",
-      role: "Club Co-Head",
-      department: "Electronics & Telecommunication",
-      year: "3rd Year",
-      avatar: ""
-    },
     upcomingEvents: ["Battle of the Bands", "Acoustic Sunset Unplugged"],
     pastHighlights: [
       "Composed the official Sahastradeep SRC Anthem 2025",
@@ -89,13 +61,6 @@ export const mockClubs: ClubItem[] = [
     memberCount: 42,
     established: "2024",
     heroImage: "https://images.unsplash.com/photo-1460723237483-7a6dc9d0b212?q=80&w=1600&auto=format&fit=crop",
-    lead: {
-      name: "Club Head Placeholder",
-      role: "Club Head",
-      department: "Mechanical Engineering",
-      year: "4th Year",
-      avatar: ""
-    },
     upcomingEvents: ["Nukkad Natak Street Fest", "Annual Stage Play"],
     pastHighlights: [
       "Awarded Best Social Theme at State Theatrics Meet 2025",
@@ -119,13 +84,6 @@ export const mockClubs: ClubItem[] = [
     memberCount: 95,
     established: "2024",
     heroImage: "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=1600&auto=format&fit=crop",
-    lead: {
-      name: "Club Head Placeholder",
-      role: "Club Head",
-      department: "Computer Science & Engineering",
-      year: "3rd Year",
-      avatar: ""
-    },
     upcomingEvents: ["Valorant Campus Cup", "FIFA & BGMI Mega Championship"],
     pastHighlights: [
       "Organized 128-team BGMI Inter-College Invitational",
@@ -149,20 +107,6 @@ export const mockClubs: ClubItem[] = [
     memberCount: 120,
     established: "2024",
     heroImage: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=1600&auto=format&fit=crop",
-    lead: {
-      name: "Club Head Placeholder",
-      role: "Club Head",
-      department: "Computer Science & Engineering",
-      year: "4th Year",
-      avatar: ""
-    },
-    coLead: {
-      name: "Club Co-Head Placeholder",
-      role: "Club Co-Head",
-      department: "Data Science",
-      year: "3rd Year",
-      avatar: ""
-    },
     upcomingEvents: ["CodeStorm 24H Hackathon", "LeetCode Speed Sprint"],
     pastHighlights: [
       "Trained 300+ students in Data Structures & System Design",
@@ -186,13 +130,6 @@ export const mockClubs: ClubItem[] = [
     memberCount: 72,
     established: "2024",
     heroImage: "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?q=80&w=1600&auto=format&fit=crop",
-    lead: {
-      name: "Club Head Placeholder",
-      role: "Club Head",
-      department: "Mechanical / Mechatronics",
-      year: "4th Year",
-      avatar: ""
-    },
     upcomingEvents: ["Robo Rage 2026", "Drone Pilot & FPV Workshop"],
     pastHighlights: [
       "Constructed a 30kg combat-ready spinner bot 'Vajra'",
@@ -216,13 +153,6 @@ export const mockClubs: ClubItem[] = [
     memberCount: 48,
     established: "2024",
     heroImage: "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?q=80&w=1600&auto=format&fit=crop",
-    lead: {
-      name: "Club Head Placeholder",
-      role: "Club Head",
-      department: "Artificial Intelligence & Machine Learning",
-      year: "3rd Year",
-      avatar: ""
-    },
     upcomingEvents: ["Golden Lens Short Film Fest", "Campus Lens Photo Exhibition"],
     pastHighlights: [
       "Official media coverage for Prarambh and Foundation Day",
@@ -246,13 +176,6 @@ export const mockClubs: ClubItem[] = [
     memberCount: 52,
     established: "2024",
     heroImage: "https://images.unsplash.com/photo-1558655146-d09347e92766?q=80&w=1600&auto=format&fit=crop",
-    lead: {
-      name: "Club Head Placeholder",
-      role: "Club Head",
-      department: "Computer Science & Engineering",
-      year: "3rd Year",
-      avatar: ""
-    },
     upcomingEvents: ["Design Sprint Bootcamp", "Creative Brand Slam"],
     pastHighlights: [
       "Crafted full visual identity for Prarambh foundation fest",
@@ -276,13 +199,6 @@ export const mockClubs: ClubItem[] = [
     memberCount: 44,
     established: "2024",
     heroImage: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=1600&auto=format&fit=crop",
-    lead: {
-      name: "Club Head Placeholder",
-      role: "Club Head",
-      department: "Management Studies (MBA)",
-      year: "2nd Year",
-      avatar: ""
-    },
     upcomingEvents: ["Venture Pitch Summit", "JDCOEM Founders Round-table"],
     pastHighlights: [
       "Organized Startup Conclave with 12 angel investors",
@@ -306,13 +222,6 @@ export const mockClubs: ClubItem[] = [
     memberCount: 88,
     established: "2024",
     heroImage: "https://images.unsplash.com/photo-1517649763962-0c623266ddc0?q=80&w=1600&auto=format&fit=crop",
-    lead: {
-      name: "Club Head Placeholder",
-      role: "Club Head",
-      department: "Civil Engineering",
-      year: "4th Year",
-      avatar: ""
-    },
     upcomingEvents: ["Clash of Departments (COD)", "Marathon for Green Nagpur"],
     pastHighlights: [
       "Organized Annual JDCOEM Sports Carnival with 1,200+ participants",
@@ -336,13 +245,6 @@ export const mockClubs: ClubItem[] = [
     memberCount: 75,
     established: "2024",
     heroImage: "https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=1600&auto=format&fit=crop",
-    lead: {
-      name: "Club Head Placeholder",
-      role: "Club Head",
-      department: "Electrical Engineering",
-      year: "4th Year",
-      avatar: ""
-    },
     coLead: {
       name: "Sanskruti Tidke",
       role: "Event Club Co-Head",
@@ -352,6 +254,19 @@ export const mockClubs: ClubItem[] = [
       email: "sanskrutitidke@jdcoem.ac.in",
       avatar: ""
     },
+    leaders: [
+      {
+        id: "club-event-colead-0",
+        name: "Sanskruti Tidke",
+        role: "Event Club Co-Head",
+        roleType: "coLead",
+        department: "CSE(Data Science)",
+        year: "3rd Year",
+        btId: "BT240115DS",
+        email: "sanskrutitidke@jdcoem.ac.in",
+        avatar: ""
+      }
+    ],
     upcomingEvents: ["Prarambh Production Ops", "Council Anniversary Assembly"],
     pastHighlights: [
       "Managed seamless logistics for campus gatherings at Prarambh",
@@ -375,13 +290,6 @@ export const mockClubs: ClubItem[] = [
     memberCount: 50,
     established: "2024",
     heroImage: "https://images.unsplash.com/photo-1557804506-669a67965ba0?q=80&w=1600&auto=format&fit=crop",
-    lead: {
-      name: "Club Head Placeholder",
-      role: "Club Head",
-      department: "Management Studies",
-      year: "2nd Year",
-      avatar: ""
-    },
     upcomingEvents: ["Prarambh Digital Campaign", "Campus Media Conclave"],
     pastHighlights: [
       "Reached 100K+ impressions across Instagram and LinkedIn during Prarambh",

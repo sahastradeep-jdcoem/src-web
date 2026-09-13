@@ -25,6 +25,21 @@ import {
   isLocalWriteRecent
 } from "./dataSyncEngine";
 
+export function isPlaceholderLeaderName(name?: string): boolean {
+  if (!name || typeof name !== "string") return true;
+  const n = name.trim().toLowerCase();
+  if (n.length === 0) return true;
+  return (
+    n.includes("placeholder") ||
+    n === "tba" ||
+    n === "tbd" ||
+    n === "club head" ||
+    n === "club co-head" ||
+    n === "name" ||
+    n === "name placeholder"
+  );
+}
+
 export function getClubLeaders(club: ClubItem): ClubLeader[] {
   if (!club) return [];
 
@@ -36,8 +51,8 @@ export function getClubLeaders(club: ClubItem): ClubLeader[] {
   };
 
   if (Array.isArray(club.leaders) && club.leaders.length > 0) {
-    return club.leaders
-      .filter((l) => l && l.name && l.name.trim().length > 0)
+    const validLeaders = club.leaders
+      .filter((l) => l && l.name && !isPlaceholderLeaderName(l.name))
       .map((l, i) => {
         const isCoLead = l.roleType === "coLead" || (l.role && l.role.toLowerCase().includes("co-head"));
         const fallbackAvatar = isCoLead ? (club.coLead?.avatar || "") : (club.lead?.avatar || "");
@@ -51,10 +66,13 @@ export function getClubLeaders(club: ClubItem): ClubLeader[] {
           avatar: sanitizeAvatar(rawAvatar),
         };
       });
+    if (validLeaders.length > 0) {
+      return validLeaders;
+    }
   }
 
   const list: ClubLeader[] = [];
-  if (club.lead && club.lead.name && club.lead.name.trim().length > 0) {
+  if (club.lead && club.lead.name && !isPlaceholderLeaderName(club.lead.name)) {
     list.push({
       ...club.lead,
       id: club.lead.id || `${club.id || club.slug}-lead-0`,
@@ -65,7 +83,7 @@ export function getClubLeaders(club: ClubItem): ClubLeader[] {
 
   if (Array.isArray(club.coLeads) && club.coLeads.length > 0) {
     club.coLeads.forEach((cl, i) => {
-      if (cl && cl.name && cl.name.trim().length > 0) {
+      if (cl && cl.name && !isPlaceholderLeaderName(cl.name)) {
         list.push({
           ...cl,
           id: cl.id || `${club.id || club.slug}-colead-${i}`,
@@ -74,7 +92,7 @@ export function getClubLeaders(club: ClubItem): ClubLeader[] {
         });
       }
     });
-  } else if (club.coLead && club.coLead.name && club.coLead.name.trim().length > 0) {
+  } else if (club.coLead && club.coLead.name && !isPlaceholderLeaderName(club.coLead.name)) {
     list.push({
       ...club.coLead,
       id: club.coLead.id || `${club.id || club.slug}-colead-0`,
@@ -101,7 +119,9 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
   };
 
   return clubs.map((c) => {
-    const leaders = Array.isArray(c.leaders) ? [...c.leaders] : [];
+    const rawLeaders = Array.isArray(c.leaders) ? [...c.leaders] : [];
+    // Filter out any dummy / placeholder leaders
+    const leaders = rawLeaders.filter((l) => l && l.name && !isPlaceholderLeaderName(l.name));
 
     // Find primary lead & coLead avatars from leaders
     const leadLeader = leaders.find(
@@ -112,43 +132,50 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
       (l) => (l.roleType === "coLead" || (l.role && l.role.toLowerCase().includes("co-head"))) && l.avatar && !l.avatar.includes("images.unsplash.com")
     ) || leaders.find((l) => (l.roleType === "coLead" || (l.role && l.role.toLowerCase().includes("co-head"))));
 
-    const leadAvatar = sanitizeAvatar(leadLeader?.avatar) || sanitizeAvatar(c.lead?.avatar);
-    const coLeadAvatar = sanitizeAvatar(coLeadLeader?.avatar) || sanitizeAvatar(c.coLead?.avatar);
+    const rawLead = c.lead && !isPlaceholderLeaderName(c.lead.name) ? c.lead : undefined;
+    const rawCoLead = c.coLead && !isPlaceholderLeaderName(c.coLead.name) ? c.coLead : undefined;
 
-    let lead = c.lead;
+    const leadAvatar = sanitizeAvatar(leadLeader?.avatar) || sanitizeAvatar(rawLead?.avatar);
+    const coLeadAvatar = sanitizeAvatar(coLeadLeader?.avatar) || sanitizeAvatar(rawCoLead?.avatar);
+
+    let lead: any = undefined;
     if (leadLeader) {
       lead = {
         ...leadLeader,
         roleType: "lead" as const,
         avatar: leadAvatar,
-        ...(c.lead && c.lead.name?.trim() ? c.lead : {}),
-        name: (c.lead && c.lead.name?.trim()) ? c.lead.name.trim() : (leadLeader.name || ""),
+        ...(rawLead && rawLead.name?.trim() ? rawLead : {}),
+        name: (rawLead && rawLead.name?.trim()) ? rawLead.name.trim() : (leadLeader.name || ""),
       };
-    } else if (c.lead) {
+    } else if (rawLead) {
       lead = {
-        ...c.lead,
-        avatar: sanitizeAvatar(c.lead.avatar) || leadAvatar,
+        ...rawLead,
+        avatar: sanitizeAvatar(rawLead.avatar) || leadAvatar,
       };
     }
 
-    let coLead = c.coLead;
+    let coLead: any = undefined;
     if (coLeadLeader) {
       coLead = {
         ...coLeadLeader,
         roleType: "coLead" as const,
         avatar: coLeadAvatar,
-        ...(c.coLead && c.coLead.name?.trim() ? c.coLead : {}),
-        name: (c.coLead && c.coLead.name?.trim()) ? c.coLead.name.trim() : (coLeadLeader.name || ""),
+        ...(rawCoLead && rawCoLead.name?.trim() ? rawCoLead : {}),
+        name: (rawCoLead && rawCoLead.name?.trim()) ? rawCoLead.name.trim() : (coLeadLeader.name || ""),
       };
-    } else if (c.coLead) {
+    } else if (rawCoLead) {
       coLead = {
-        ...c.coLead,
-        avatar: sanitizeAvatar(c.coLead.avatar) || coLeadAvatar,
+        ...rawCoLead,
+        avatar: sanitizeAvatar(rawCoLead.avatar) || coLeadAvatar,
       };
     }
 
-    const coLeads = Array.isArray(c.coLeads) && c.coLeads.length > 0
-      ? c.coLeads.map((cl, i) => {
+    const rawCoLeads = Array.isArray(c.coLeads)
+      ? c.coLeads.filter((cl) => cl && !isPlaceholderLeaderName(cl.name))
+      : [];
+
+    const coLeads = rawCoLeads.length > 0
+      ? rawCoLeads.map((cl, i) => {
           const matchingLeader = leaders.find(
             (l) => (l.id && l.id === cl.id) || (l.name && cl.name && l.name.toLowerCase().trim() === cl.name.toLowerCase().trim())
           );
@@ -195,8 +222,8 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
     return {
       ...c,
       slug,
-      lead,
-      coLead,
+      lead: lead || undefined,
+      coLead: coLead || undefined,
       coLeads,
       leaders: finalLeaders,
     };
@@ -511,21 +538,6 @@ export function getStoredCouncilMembers(): TeamMember[] {
       if (Array.isArray(parsed)) {
         let { repaired, members } = repairCouncilSwapIfNeeded(stripCategoryAndLevel(parsed));
         members = deduplicateTeamMembers(members);
-        // Auto-heal missing canonical officers from initialAdminCouncil (e.g. Nadeem Khan #11, Shruti Khadse #12, Vrutant Bingewar #13)
-        if (members.length < initialAdminCouncil.length) {
-          let healed = false;
-          for (const canon of initialAdminCouncil) {
-            if (!members.some((m) => matchCouncilAndFounder(m, canon))) {
-              members.push(canon);
-              healed = true;
-            }
-          }
-          if (healed) {
-            members = deduplicateTeamMembers(members);
-            members.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
-            repaired = true;
-          }
-        }
         // Auto-heal empty or wiped avatars from initialAdminCouncil (canonicalCouncil.json)
         let avatarHealed = false;
         members = members.map((m) => {
@@ -632,20 +644,6 @@ export async function syncCouncilMembersFromFirestore(): Promise<TeamMember[]> {
       if (repaired) {
         merged = deduplicateTeamMembers(members);
       }
-      // Auto-heal missing canonical members if remote snapshot was missing them
-      if (merged.length < initialAdminCouncil.length) {
-        let healed = false;
-        for (const canon of initialAdminCouncil) {
-          if (!merged.some((m) => matchCouncilAndFounder(m, canon))) {
-            merged.push(canon);
-            healed = true;
-          }
-        }
-        if (healed) {
-          merged = deduplicateTeamMembers(merged);
-          merged.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
-        }
-      }
 
       // Auto-heal empty or wiped avatars from initialAdminCouncil
       let avatarHealed = false;
@@ -687,7 +685,7 @@ export function getStoredHostingCommittee(): TeamMember[] {
     const stored = localStorage.getItem("src_hosting_committee");
     if (stored) {
       const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > 0) return stripCategoryAndLevel(parsed);
+      if (Array.isArray(parsed)) return stripCategoryAndLevel(parsed);
     }
   } catch (e) {
     console.warn("Could not read hosting committee from storage", e);
@@ -849,19 +847,6 @@ export function subscribeToCouncilMembers(callback: (members: TeamMember[]) => v
       if (repaired) {
         merged = deduplicateTeamMembers(members);
       }
-      if (merged.length < initialAdminCouncil.length) {
-        let healed = false;
-        for (const canon of initialAdminCouncil) {
-          if (!merged.some((m) => matchCouncilAndFounder(m, canon))) {
-            merged.push(canon);
-            healed = true;
-          }
-        }
-        if (healed) {
-          merged = deduplicateTeamMembers(merged);
-          merged.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
-        }
-      }
 
       // Auto-heal empty or wiped avatars from initialAdminCouncil
       let avatarHealed = false;
@@ -960,7 +945,7 @@ export function getStoredClubs(): ClubItem[] {
     const stored = localStorage.getItem("src_clubs_roster");
     if (stored) {
       const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         clubs = parsed;
       }
     }
@@ -1253,21 +1238,6 @@ export function getStoredFoundingMembers(): TeamMember[] {
       if (Array.isArray(parsed)) {
         let { repaired, members } = repairCouncilSwapIfNeeded(stripCategoryAndLevel(parsed), true);
         members = deduplicateTeamMembers(members);
-        // Auto-heal missing canonical pioneers from initialFoundingMembers (13 canonical positions)
-        if (members.length < initialFoundingMembers.length) {
-          let healed = false;
-          for (const canon of initialFoundingMembers) {
-            if (!members.some((m) => matchCouncilAndFounder(m, canon))) {
-              members.push(canon);
-              healed = true;
-            }
-          }
-          if (healed) {
-            members = deduplicateTeamMembers(members);
-            members.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
-            repaired = true;
-          }
-        }
         // Auto-heal empty or wiped avatars from initialFoundingMembers
         let avatarHealed = false;
         members = members.map((m) => {
@@ -1378,19 +1348,6 @@ export async function syncFoundingMembersFromFirestore(): Promise<TeamMember[]> 
         merged = syncCouncilAdminsToFounding(currentCouncil, true);
         return merged;
       }
-      if (merged.length < initialFoundingMembers.length) {
-        let healed = false;
-        for (const canon of initialFoundingMembers) {
-          if (!merged.some((m) => matchCouncilAndFounder(m, canon))) {
-            merged.push(canon);
-            healed = true;
-          }
-        }
-        if (healed) {
-          merged = deduplicateTeamMembers(merged);
-          merged.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
-        }
-      }
 
       // Auto-heal empty or wiped avatars from initialFoundingMembers
       let avatarHealed = false;
@@ -1438,22 +1395,6 @@ export function subscribeToFoundingMembers(callback: (members: TeamMember[]) => 
           callback(merged);
           return;
         }
-        if (merged.length < initialFoundingMembers.length) {
-          let healed = false;
-          for (const canon of initialFoundingMembers) {
-            if (!merged.some((m) => matchCouncilAndFounder(m, canon))) {
-              merged.push(canon);
-              healed = true;
-            }
-          }
-          if (healed) {
-            merged = deduplicateTeamMembers(merged);
-            merged.sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
-            saveStoredFoundingMembers(merged, true);
-            callback(merged);
-            return;
-          }
-        }
         if (typeof window !== "undefined") {
           try {
             localStorage.setItem("src_founding_members", JSON.stringify(merged));
@@ -1484,7 +1425,7 @@ export function getStoredInstitutionalPillars(): InstitutionalPillar[] {
     const stored = localStorage.getItem("src_pillars_of_strength");
     if (stored) {
       const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > 0) return stripPillarRole(parsed);
+      if (Array.isArray(parsed)) return stripPillarRole(parsed);
     }
   } catch (e) {
     console.warn("Could not read pillars from storage", e);

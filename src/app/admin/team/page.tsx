@@ -491,15 +491,15 @@ export default function AdminTeamPage() {
         const isCoLead = leader.roleType === "coLead" || (leader.role && leader.role.toLowerCase().includes("co-head"));
         const cleanName = (leader.name || "").trim().toLowerCase();
         const cleanBt = (leader.btId || "").trim().toUpperCase();
-        const isPlaceholder = !cleanName || cleanName.includes("placeholder") || cleanName === "tba" || cleanName === "club head" || cleanName === "club co-head";
+        const isPlaceholder = !cleanName || cleanName.includes("placeholder") || cleanName === "tba" || cleanName === "club head" || cleanName === "club co-head" || cleanName === "name" || cleanName === "name placeholder";
+
+        if (isPlaceholder) return;
 
         const groupKey = cleanBt 
           ? `bt-${cleanBt}` 
-          : (isPlaceholder
-              ? `club-${club.id}-${isCoLead ? "coLead" : "lead"}-${leaderIndex}`
-              : (leader.id && !leader.id.includes("-leader-") && !leader.id.startsWith("lead-") 
-                  ? `id-${leader.id}` 
-                  : (cleanName ? `name-${cleanName}` : `club-${club.id}-${leaderIndex}`)));
+          : (leader.id && !leader.id.includes("-leader-") && !leader.id.startsWith("lead-") 
+              ? `id-${leader.id}` 
+              : (cleanName ? `name-${cleanName}` : `club-${club.id}-${leaderIndex}`));
 
         const existing = leaderMap.get(groupKey);
         const clubInfo = { id: club.id, name: club.name, slug: club.slug };
@@ -976,19 +976,13 @@ export default function AdminTeamPage() {
 
           if (existingIdx !== -1) {
             const newLeaders = currentLeaders.filter((_, idx) => idx !== existingIdx);
-            const primaryLead = newLeaders.find((l) => l.roleType === "lead") || newLeaders[0] || {
-              name: "",
-              role: `${club.name} Head`,
-              department: "",
-              year: "",
-              avatar: ""
-            };
+            const primaryLead = newLeaders.find((l) => l.roleType === "lead") || newLeaders[0] || undefined;
             const coLeadsList = newLeaders.filter((l) => l.roleType === "coLead");
 
             return {
               ...club,
               leaders: newLeaders,
-              lead: primaryLead,
+              lead: primaryLead || undefined,
               coLead: coLeadsList[0] || undefined,
               coLeads: coLeadsList
             };
@@ -1076,19 +1070,13 @@ export default function AdminTeamPage() {
               if (delName && l.name && l.name.trim().toLowerCase() === delName) return false;
               return true;
             });
-            const primaryLead = currentLeaders.find((l) => l.roleType === "lead") || currentLeaders[0] || {
-              name: "",
-              role: `${club.name} Head`,
-              department: "",
-              year: "",
-              avatar: ""
-            };
+            const primaryLead = currentLeaders.find((l) => l.roleType === "lead") || currentLeaders[0] || undefined;
             const coLeadsList = currentLeaders.filter((l) => l.roleType === "coLead");
 
             return {
               ...club,
               leaders: currentLeaders,
-              lead: primaryLead,
+              lead: primaryLead || undefined,
               coLead: coLeadsList[0] || undefined,
               coLeads: coLeadsList
             };

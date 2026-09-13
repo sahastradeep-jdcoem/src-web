@@ -624,7 +624,7 @@ export default function AdminClubsPage() {
                     <div className="flex items-center justify-between">
                       <span className="text-slate-500 font-medium">Club Head{heads.length > 1 ? "s" : ""}:</span>
                       <span className="font-bold text-slate-900 truncate max-w-[170px]" title={heads.map(h => h.role ? `${h.name} (${h.role})` : h.name).join(", ")}>
-                        {heads.map(h => h.name).filter(Boolean).join(", ") || club.lead.name || "TBA"}
+                        {heads.map(h => h.name).filter(Boolean).join(", ") || club.lead?.name || "TBA"}
                       </span>
                     </div>
                     {heads.some(h => (h.clubNames && h.clubNames.length > 1) || (h.clubIds && h.clubIds.length > 1)) && (
@@ -637,9 +637,9 @@ export default function AdminClubsPage() {
                     )}
                     <div className="flex items-center justify-between">
                       <span className="text-slate-500 font-medium">Department:</span>
-                      <span className="text-[#E78023] font-semibold truncate max-w-[140px]" title={club.lead.department}>
-                        <span className="xl:hidden">{getDepartmentShortName(club.lead.department)}</span>
-                        <span className="hidden xl:inline">{club.lead.department}</span>
+                      <span className="text-[#E78023] font-semibold truncate max-w-[140px]" title={heads[0]?.department || club.lead?.department || "General"}>
+                        <span className="xl:hidden">{getDepartmentShortName(heads[0]?.department || club.lead?.department || "General")}</span>
+                        <span className="hidden xl:inline">{heads[0]?.department || club.lead?.department || "General"}</span>
                       </span>
                     </div>
                     {coHeads.length > 0 && (

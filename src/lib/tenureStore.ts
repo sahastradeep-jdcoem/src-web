@@ -429,10 +429,10 @@ export function compactTenureForStorage(tenure: CouncilTenure): CouncilTenure {
     if (!Array.isArray(clubs)) return [];
     const hydrated = hydrateClubAvatars(clubs);
     return hydrated.map((c) => {
-      const cleanLead: ClubLeader = {
+      const cleanLead: ClubLeader | undefined = c.lead ? {
         ...c.lead,
         avatar: (c.lead?.avatar && c.lead.avatar.startsWith("data:image/") && c.lead.avatar.length > MAX_SAFE_BASE64_LENGTH) ? "" : (c.lead?.avatar || ""),
-      };
+      } : undefined;
 
       const cleanCoLead: ClubLeader | undefined = c.coLead ? {
         ...c.coLead,
@@ -452,7 +452,7 @@ export function compactTenureForStorage(tenure: CouncilTenure): CouncilTenure {
       // Deduplication: If leaders array contains the avatars, strip duplicate base64 from cleanLead/cleanCoLead
       const hasLeaderAvatars = cleanLeaders && cleanLeaders.some((l) => l.avatar && l.avatar.startsWith("data:image/"));
       if (hasLeaderAvatars) {
-        if (cleanLead.avatar && cleanLead.avatar.startsWith("data:image/")) cleanLead.avatar = "";
+        if (cleanLead && cleanLead.avatar && cleanLead.avatar.startsWith("data:image/")) cleanLead.avatar = "";
         if (cleanCoLead && cleanCoLead.avatar && cleanCoLead.avatar.startsWith("data:image/")) cleanCoLead.avatar = "";
         if (cleanCoLeads) {
           cleanCoLeads.forEach((cl) => {

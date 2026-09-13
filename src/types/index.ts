@@ -142,7 +142,7 @@ export interface ClubItem {
   headerImage?: string; // Ultra-wide cinematic banner (21:9) for club detail page header
   cardImage?: string; // Landscape card thumbnail (16:9) for club directory grid
   logoImage?: string; // Square (1:1) club emblem / insignia logo
-  lead: ClubLeader;
+  lead?: ClubLeader;
   coLead?: ClubLeader;
   coLeads?: ClubLeader[];
   leaders?: ClubLeader[];

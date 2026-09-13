@@ -102,16 +102,12 @@ export function ClubCard({ club }: ClubCardProps) {
         {/* Lead snippet */}
         {(() => {
           const leaders = getClubLeaders(club);
-          const primaryLead = leaders.find((l) => l.roleType === "lead") || leaders[0] || club.lead || {
-            name: "Club Head",
-            role: "Club Head",
-            avatar: "",
-          };
+          const primaryLead = leaders.find((l) => l.roleType === "lead") || leaders[0] || (club.lead?.name ? club.lead : undefined);
           return (
             <div className="pt-3.5 border-t border-slate-100 flex items-center justify-between font-sans">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="relative h-7 w-7 rounded-full overflow-hidden border border-slate-200 shrink-0 bg-slate-100 flex items-center justify-center">
-                  {primaryLead.avatar ? (
+                  {primaryLead?.avatar ? (
                     <Image
                       src={primaryLead.avatar}
                       alt={primaryLead.name || club.name}
@@ -121,13 +117,13 @@ export function ClubCard({ club }: ClubCardProps) {
                     />
                   ) : (
                     <span className="text-[10px] font-bold text-slate-600">
-                      {(primaryLead.name || "CH").slice(0, 2).toUpperCase()}
+                      {(primaryLead?.name || club.name).slice(0, 2).toUpperCase()}
                     </span>
                   )}
                 </div>
                 <div className="text-xs min-w-0">
-                  <p className="text-slate-800 font-semibold leading-tight truncate">{primaryLead.name || "Club Head"}</p>
-                  <p className="text-slate-500 text-[10px] font-medium truncate">{primaryLead.role || "Club Head"}</p>
+                  <p className="text-slate-800 font-semibold leading-tight truncate">{primaryLead?.name || "Student Society"}</p>
+                  <p className="text-slate-500 text-[10px] font-medium truncate">{primaryLead?.role || `${club.category} Club`}</p>
                 </div>
               </div>
 

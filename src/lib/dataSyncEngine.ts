@@ -685,15 +685,30 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
         const isLocalPlaceholder = isGenericPlaceholder(localObj.name);
         const isRemotePlaceholder = isGenericPlaceholder(remoteObj.name);
 
+        if (isRemotePlaceholder && isLocalPlaceholder) {
+          result[k] = undefined;
+          continue;
+        }
+
         let mergedObj: any;
         if (isRemotePlaceholder && !isLocalPlaceholder) {
           // Local has actual student leader, remote is a generic placeholder -> local takes precedence!
           mergedObj = { ...remoteObj, ...localObj };
         } else if (isLocalPlaceholder && !isRemotePlaceholder) {
+          // If local was cleared/deleted and local write is recent or pending, do not resurrect!
+          if (isLocalWriteRecent("clubs", 30000) || hasPendingWritesFor("clubs")) {
+            result[k] = undefined;
+            continue;
+          }
           // Remote has actual student leader, local is a placeholder -> remote takes precedence
           mergedObj = { ...localObj, ...remoteObj };
         } else {
           mergedObj = { ...localObj, ...remoteObj };
+        }
+
+        if (!mergedObj || isGenericPlaceholder(mergedObj.name)) {
+          result[k] = undefined;
+          continue;
         }
 
         const isLocalAvatarValid = localObj.avatar && typeof localObj.avatar === "string" && localObj.avatar.trim() !== "" && !localObj.avatar.includes("images.unsplash.com");
