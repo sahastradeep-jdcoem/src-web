@@ -26,7 +26,9 @@ import {
   Layers,
   Globe,
   GraduationCap,
-  Ban
+  Ban,
+  LayoutGrid,
+  List
 } from "lucide-react";
 import { EventItem, ClubItem, CustomQuestion, TargetAudience } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -54,6 +56,10 @@ export default function AdminEventsPage() {
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
   const [clubsList, setClubsList] = useState<ClubItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
+  const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedAudience, setSelectedAudience] = useState<string>("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCreateListingPickerOpen, setIsCreateListingPickerOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
@@ -122,14 +128,52 @@ export default function AdminEventsPage() {
   }, []);
 
   const filteredEvents = useMemo(() => {
-    const q = searchQuery.toLowerCase();
-    const filtered = eventsList.filter((e) =>
-      e.name.toLowerCase().includes(q) ||
-      e.category.toLowerCase().includes(q) ||
-      (e.organizer && e.organizer.toLowerCase().includes(q))
-    );
+    const q = searchQuery.trim().toLowerCase();
+    const filtered = eventsList.filter((e) => {
+      // Search matching
+      const matchesSearch = !q || (
+        e.name.toLowerCase().includes(q) ||
+        e.category.toLowerCase().includes(q) ||
+        (e.organizer && e.organizer.toLowerCase().includes(q)) ||
+        (e.venue && e.venue.toLowerCase().includes(q))
+      );
+      if (!matchesSearch) return false;
+
+      // Status matching
+      if (selectedStatus === "open") {
+        if (e.isCancelled || e.status !== "Registration Open" || e.noRegistrationRequired) return false;
+      } else if (selectedStatus === "walkin") {
+        if (!e.noRegistrationRequired) return false;
+      } else if (selectedStatus === "upcoming") {
+        if (e.isCancelled || e.status !== "Upcoming") return false;
+      } else if (selectedStatus === "completed") {
+        if (e.status !== "Completed") return false;
+      } else if (selectedStatus === "cancelled") {
+        if (!e.isCancelled && e.status !== "Cancelled") return false;
+      }
+
+      // Category matching
+      if (selectedCategory !== "all") {
+        if (selectedCategory === "Flagship") {
+          if (!e.isParentFest) return false;
+        } else if (e.category.toLowerCase() !== selectedCategory.toLowerCase()) {
+          return false;
+        }
+      }
+
+      // Audience matching
+      if (selectedAudience === "inter_college") {
+        const isInter = e.targetAudience === "inter_college" || (e.isInterCollege !== false && e.targetAudience !== "jdcoem_only");
+        if (!isInter) return false;
+      } else if (selectedAudience === "jdcoem_only") {
+        const isJdcoem = e.targetAudience === "jdcoem_only" || e.isInterCollege === false;
+        if (!isJdcoem) return false;
+      }
+
+      return true;
+    });
     return sortEventsByDate(filtered);
-  }, [eventsList, searchQuery]);
+  }, [eventsList, searchQuery, selectedStatus, selectedCategory, selectedAudience]);
 
   const handleCreateSubmit = async (formData: EventFormData) => {
     const cleanWhatToExpect = Array.from(new Set(formData.whatToExpect.map((s) => s.trim()).filter(Boolean)));
@@ -478,7 +522,7 @@ export default function AdminEventsPage() {
     <div className="space-y-8 max-w-7xl mx-auto text-[#0F172A]">
       
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200/80">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200/80">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
             <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#0F172A] uppercase tracking-tight">
@@ -490,11 +534,11 @@ export default function AdminEventsPage() {
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </span>
               <span className="font-bold text-[#17458F] tabular-nums text-xs">{eventsList.length}</span>
-              <span className="text-slate-500 font-medium text-xs">Published</span>
+              <span className="text-slate-500 font-medium text-xs">Total Records</span>
             </div>
           </div>
           <p className="text-xs text-slate-500 font-medium">
-            Create, edit, and organize flagship fests, hackathons, and chartered club events.
+            Publish, curate, and monitor campus flagships, hackathons, and chartered club assemblies with live cloud synchronization.
           </p>
         </div>
 
@@ -503,6 +547,7 @@ export default function AdminEventsPage() {
             onClick={handleManualSync}
             disabled={isSyncing}
             className="h-9 px-3 sm:px-3.5 rounded-xl border border-slate-200/90 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 hover:text-[#17458F] text-xs font-medium tracking-normal transition-all duration-200 shadow-2xs active:scale-[0.98] cursor-pointer inline-flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+            title="Force immediate synchronization with Firebase Cloud Firestore"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-[#17458F] transition-transform duration-500 ${isSyncing ? "animate-spin" : ""}`} />
             <span>{isSyncing ? "Syncing..." : "Sync Live Cloud"}</span>
@@ -510,19 +555,29 @@ export default function AdminEventsPage() {
 
           <Button
             onClick={() => setIsCreateListingPickerOpen(true)}
+            variant="outline"
+            size="sm"
+            className="gap-1.5 cursor-pointer shadow-2xs border-slate-200 hover:border-slate-300 text-slate-700 hover:text-[#17458F] h-9"
+          >
+            <Layers className="w-4 h-4 text-slate-500" />
+            <span>Create Listing</span>
+          </Button>
+
+          <Button
+            onClick={() => setIsCreateOpen(true)}
             variant="primary"
             size="sm"
-            className="gap-1.5 cursor-pointer shadow-xs bg-[#17458F] hover:bg-[#123670]"
+            className="gap-1.5 cursor-pointer shadow-xs bg-[#17458F] hover:bg-[#123670] h-9 font-semibold text-white px-3.5"
           >
             <Plus className="w-4 h-4" />
-            <span>+ Create Listing</span>
+            <span>New Event</span>
           </Button>
 
           <Link
             href="/events"
             target="_blank"
-            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
-            title="Preview Live Events Hub"
+            className="h-9 w-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors inline-flex items-center justify-center shadow-2xs"
+            title="Preview Live Events Hub in New Tab"
           >
             <Eye className="w-4 h-4" />
           </Link>
@@ -530,243 +585,727 @@ export default function AdminEventsPage() {
       </div>
 
       {notice && (
-        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2 shadow-xs animate-in fade-in duration-300">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>{notice}</span>
+        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-semibold flex items-center justify-between gap-2 shadow-xs animate-in fade-in duration-300">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{notice}</span>
+          </div>
+          <button 
+            onClick={() => setNotice(null)} 
+            className="text-emerald-700 hover:text-emerald-900 p-1 rounded-lg hover:bg-emerald-100/60"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
-      {/* Events Table View */}
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+      {/* Executive Metric Pulse Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-2">
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total Events</span>
+            <div className="h-7 w-7 rounded-lg bg-blue-50 text-[#17458F] flex items-center justify-center">
+              <CalendarIcon className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="font-heading font-extrabold text-2xl text-slate-900 tabular-nums">
+              {eventsList.length}
+            </span>
+            <span className="text-[11px] text-slate-400 font-medium">listings</span>
+          </div>
+          <p className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
+            <Sparkles className="w-3 h-3 text-amber-500" />
+            <span>{eventsList.filter((e) => e.isParentFest).length} flagship / umbrella fests</span>
+          </p>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-2">
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Active Registrations</span>
+            <div className="h-7 w-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <Users className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="font-heading font-extrabold text-2xl text-slate-900 tabular-nums">
+              {eventsList.filter((e) => !e.isCancelled && e.status === "Registration Open" && !e.noRegistrationRequired).length}
+            </span>
+            <span className="text-[11px] text-emerald-600 font-bold">open now</span>
+          </div>
+          <p className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
+            <span>{eventsList.filter((e) => e.noRegistrationRequired).length} walk-in entry formats</span>
+          </p>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-2">
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Commercial & Paid</span>
+            <div className="h-7 w-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <Sparkles className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="font-heading font-extrabold text-2xl text-slate-900 tabular-nums">
+              {eventsList.filter((e) => !e.noRegistrationRequired && (e.isPaid || (e.feeAmount && e.feeAmount > 0))).length}
+            </span>
+            <span className="text-[11px] text-slate-400 font-medium">ticketed</span>
+          </div>
+          <p className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
+            <span>{eventsList.filter((e) => !e.isPaid || e.noRegistrationRequired).length} free / complimentary events</span>
+          </p>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-2">
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Inter-College Scope</span>
+            <div className="h-7 w-7 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center">
+              <Globe className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="font-heading font-extrabold text-2xl text-slate-900 tabular-nums">
+              {eventsList.filter((e) => e.targetAudience === "inter_college" || (e.isInterCollege !== false && e.targetAudience !== "jdcoem_only")).length}
+            </span>
+            <span className="text-[11px] text-sky-700 font-bold">open to all</span>
+          </div>
+          <p className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
+            <span>{eventsList.filter((e) => e.targetAudience === "jdcoem_only" || e.isInterCollege === false).length} JDCOEM-exclusive</span>
+          </p>
+        </div>
+      </div>
+
+      {/* Filter Toolbar & View Switcher */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs space-y-3.5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          {/* Search bar */}
+          <div className="relative flex-1 max-w-lg">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by event name, club, or category..."
-              className="w-full pl-10 pr-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
+              placeholder="Search by event title, organizer club, venue, or category..."
+              className="w-full pl-10 pr-9 py-2 rounded-xl bg-slate-50/70 border border-slate-200 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-[#17458F] focus:ring-1 focus:ring-[#17458F] transition-all"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-200/60 transition-colors"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
-          <span className="text-xs text-slate-500 font-medium">
-            Showing {filteredEvents.length} of {eventsList.length} events
-          </span>
+
+          <div className="flex items-center gap-2.5 flex-wrap justify-between lg:justify-end">
+            {/* Category quick dropdown filter */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider hidden sm:inline">Category:</span>
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="h-8 px-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none focus:border-[#17458F] transition-colors cursor-pointer"
+              >
+                <option value="all">All Categories</option>
+                <option value="Technical">Technical</option>
+                <option value="Cultural">Cultural</option>
+                <option value="Sports">Sports</option>
+                <option value="Workshops">Workshops</option>
+                <option value="Literary">Literary</option>
+                <option value="Social">Social</option>
+                <option value="Flagship">Flagship Umbrella</option>
+              </select>
+            </div>
+
+            {/* Audience filter */}
+            <div className="flex items-center gap-1.5">
+              <select
+                value={selectedAudience}
+                onChange={(e) => setSelectedAudience(e.target.value)}
+                className="h-8 px-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none focus:border-[#17458F] transition-colors cursor-pointer"
+              >
+                <option value="all">All Audiences</option>
+                <option value="inter_college">🌐 Inter-College</option>
+                <option value="jdcoem_only">🎓 JDCOEM Only</option>
+              </select>
+            </div>
+
+            {/* View switcher */}
+            <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200/60">
+              <button
+                type="button"
+                onClick={() => setViewMode("table")}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  viewMode === "table"
+                    ? "bg-white text-[#17458F] shadow-2xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+                title="Table Roster View"
+              >
+                <List className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Roster</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("grid")}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  viewMode === "grid"
+                    ? "bg-white text-[#17458F] shadow-2xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+                title="Studio Cards Grid View"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Cards</span>
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
-          {filteredEvents.length === 0 ? (
-            <div className="p-12 text-center space-y-4">
-              <div className="mx-auto h-14 w-14 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400">
-                <Inbox className="w-7 h-7" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="font-heading font-bold text-base text-slate-800">
-                  No Events in Directory
-                </h3>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  {eventsList.length === 0
-                    ? "All events have been deleted. You can create a new event organized by SRC or any chartered club."
-                    : "No events matched your search query."}
-                </p>
-              </div>
-              <div className="flex items-center justify-center gap-3 pt-2">
-                <Button
-                  onClick={() => setIsCreateOpen(true)}
-                  variant="primary"
-                  size="sm"
-                  className="gap-1.5"
+        {/* Status Tab Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 border-t border-slate-100 no-scrollbar">
+          {[
+            { id: "all", label: "All Events", count: eventsList.length },
+            { 
+              id: "open", 
+              label: "Registration Open", 
+              count: eventsList.filter((e) => !e.isCancelled && e.status === "Registration Open" && !e.noRegistrationRequired).length 
+            },
+            { 
+              id: "walkin", 
+              label: "Open Walk-in", 
+              count: eventsList.filter((e) => e.noRegistrationRequired).length 
+            },
+            { 
+              id: "upcoming", 
+              label: "Upcoming", 
+              count: eventsList.filter((e) => !e.isCancelled && e.status === "Upcoming").length 
+            },
+            { 
+              id: "completed", 
+              label: "Completed", 
+              count: eventsList.filter((e) => e.status === "Completed").length 
+            },
+            { 
+              id: "cancelled", 
+              label: "Cancelled", 
+              count: eventsList.filter((e) => e.isCancelled || e.status === "Cancelled").length 
+            },
+          ].map((tab) => {
+            const isActive = selectedStatus === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setSelectedStatus(tab.id)}
+                className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer inline-flex items-center gap-1.5 ${
+                  isActive
+                    ? "bg-[#17458F] text-white shadow-2xs"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold tabular-nums ${
+                    isActive ? "bg-white/20 text-white" : "bg-slate-200/90 text-slate-700"
+                  }`}
                 >
-                  <Plus className="w-4 h-4" />
-                  <span>Create New Event</span>
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <table className="w-full text-left text-xs border-collapse">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                <tr>
-                  <th className="py-3.5 px-6">Event Name</th>
-                  <th className="py-3.5 px-6">Organized By</th>
-                  <th className="py-3.5 px-6">Category</th>
-                  <th className="py-3.5 px-6">Scheduled Date</th>
-                  <th className="py-3.5 px-6">Audience</th>
-                  <th className="py-3.5 px-6">Status</th>
-                  <th className="py-3.5 px-6 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
-                {filteredEvents.map((evt) => (
-                  <tr key={evt.id || evt.slug} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-4 px-6">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="font-bold text-slate-900 block text-sm">{evt.name}</span>
-                        {evt.isParentFest && (
-                          <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 text-[#17458F] border border-indigo-200">
-                            Umbrella Event
-                          </span>
-                        )}
-                        {evt.parentEventName && (
-                          <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-                            Part of {evt.parentEventName}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[11px] text-slate-400 font-sans">{evt.venue}</span>
-                    </td>
-                    <td className="py-4 px-6">
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+
+          <div className="ml-auto pl-2 text-[11px] text-slate-400 font-medium whitespace-nowrap">
+            Showing <strong className="text-slate-700">{filteredEvents.length}</strong> of {eventsList.length}
+          </div>
+        </div>
+      </div>
+
+      {/* Events View (Table or Grid) */}
+      {filteredEvents.length === 0 ? (
+        <div className="bg-white rounded-3xl border border-slate-200/80 p-12 text-center space-y-4 shadow-xs">
+          <div className="mx-auto h-14 w-14 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400">
+            <Inbox className="w-7 h-7" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="font-heading font-bold text-base text-slate-800">
+              No Events Found
+            </h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              {eventsList.length === 0
+                ? "No events are currently scheduled. Use the button below to publish your first campus event."
+                : "No events match your current filter and search criteria."}
+            </p>
+          </div>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            {eventsList.length > 0 && (
+              <Button
+                onClick={() => {
+                  setSearchQuery("");
+                  setSelectedStatus("all");
+                  setSelectedCategory("all");
+                  setSelectedAudience("all");
+                }}
+                variant="outline"
+                size="sm"
+              >
+                Reset Filters
+              </Button>
+            )}
+            <Button
+              onClick={() => setIsCreateOpen(true)}
+              variant="primary"
+              size="sm"
+              className="gap-1.5 bg-[#17458F]"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create New Event</span>
+            </Button>
+          </div>
+        </div>
+      ) : viewMode === "grid" ? (
+        /* Studio Cards Grid View */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredEvents.map((evt) => {
+            const isCancelled = evt.isCancelled || evt.status === "Cancelled";
+            const isWalkIn = Boolean(evt.noRegistrationRequired);
+            const isPaid = !isWalkIn && (evt.isPaid || (evt.feeAmount && evt.feeAmount > 0));
+
+            return (
+              <div
+                key={evt.id || evt.slug}
+                className="group bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between"
+              >
+                {/* Visual Banner Header */}
+                <div className="relative h-44 w-full bg-slate-900 overflow-hidden">
+                  <img
+                    src={evt.poster || evt.cardImage || evt.headerImage || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop"}
+                    alt={evt.name}
+                    loading="lazy"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90 group-hover:opacity-100"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop";
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
+
+                  {/* Overlaid Badges */}
+                  <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
+                    <span className="px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider border border-white/20">
+                      {evt.category}
+                    </span>
+                    
+                    <button
+                      type="button"
+                      onClick={() => handleToggleAudience(evt)}
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-md border transition-all cursor-pointer shadow-sm ${
+                        evt.targetAudience === "jdcoem_only"
+                          ? "bg-amber-500/90 text-white border-amber-300 hover:bg-amber-600"
+                          : "bg-[#17458F]/90 text-white border-blue-300 hover:bg-[#123670]"
+                      }`}
+                      title="Click to toggle JDCOEM Only vs Inter-College"
+                    >
+                      {evt.targetAudience === "jdcoem_only" ? "🎓 JDCOEM Only" : "🌐 Open to All"}
+                    </button>
+                  </div>
+
+                  {/* Bottom Title on Image */}
+                  <div className="absolute bottom-3 left-3 right-3 text-white">
+                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                      {evt.isParentFest && (
+                        <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#E78023] text-white shadow-2xs">
+                          Umbrella Fest
+                        </span>
+                      )}
+                      {evt.parentEventName && (
+                        <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400/90 text-slate-900">
+                          Part of {evt.parentEventName}
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="font-heading font-bold text-base line-clamp-1 leading-snug drop-shadow-sm">
+                      {evt.name}
+                    </h3>
+                  </div>
+                </div>
+
+                {/* Card Body */}
+                <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs text-slate-600">
                       <div className="flex items-center gap-1.5 font-bold text-slate-800">
                         <Users className="w-3.5 h-3.5 text-[#17458F] shrink-0" />
-                        <span className="truncate max-w-xs">{evt.organizer || "SRC Sahastradeep"}</span>
+                        <span className="truncate max-w-[170px]">{evt.organizer || "SRC Sahastradeep"}</span>
                       </div>
                       {evt.collaboratingClubs && evt.collaboratingClubs.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          <span className="text-[9px] text-slate-400 font-medium">with</span>
-                          {evt.collaboratingClubs.map((collab) => (
-                            <span
-                              key={collab.slug || collab.name}
-                              className="text-[9px] font-semibold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200"
-                            >
-                              {collab.name}
-                            </span>
-                          ))}
-                        </div>
+                        <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                          +{evt.collaboratingClubs.length} co-host{evt.collaboratingClubs.length > 1 ? "s" : ""}
+                        </span>
                       )}
-                    </td>
-                    <td className="py-4 px-6">
-                      <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold uppercase tracking-wider">
-                        {evt.category}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6 text-slate-600 font-sans">
-                      <div className="flex items-center gap-1.5 font-semibold text-slate-700">
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-700 pt-1">
+                      <div className="flex items-center gap-1.5">
                         <CalendarIcon className="w-3.5 h-3.5 text-[#E78023]" />
                         <span>{evt.date}</span>
                       </div>
                       {evt.time && (
-                        <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
+                        <div className="flex items-center gap-1 text-[11px] text-slate-500">
                           <Clock className="w-3 h-3 text-slate-400" />
                           <span>{evt.time}</span>
                         </div>
                       )}
-                      {evt.isMultiDay && (
-                        <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 mt-1 inline-block">
-                          Multi-Day
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-4 px-6">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleAudience(evt)}
-                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer border ${
-                          evt.targetAudience === "jdcoem_only"
-                            ? "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
-                            : "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"
-                        }`}
-                        title="Click to toggle between JDCOEM Only and Inter-College"
-                      >
-                        {evt.targetAudience === "jdcoem_only" ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
-                      </button>
-                    </td>
-                    <td className="py-4 px-6">
-                      {evt.noRegistrationRequired ? (
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="truncate">{evt.venue}</span>
+                    </div>
+                  </div>
+
+                  {/* Status & Fee Bar */}
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <div>
+                      {isWalkIn ? (
                         <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1">
-                          🚶 Open Walk-in
+                          🚶 Walk-in Entry
                         </span>
                       ) : (
+                        <Badge
+                          variant={
+                            isCancelled
+                              ? "rose"
+                              : evt.status === "Registration Open"
+                              ? "orange"
+                              : "slate"
+                          }
+                          size="sm"
+                        >
+                          {isCancelled ? "Cancelled" : evt.status}
+                        </Badge>
+                      )}
+                    </div>
+
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                        isPaid
+                          ? "bg-blue-50 text-[#17458F] border-[#17458F]/30"
+                          : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      }`}
+                    >
+                      {isPaid ? (evt.entryFee || `₹${evt.feeAmount || 0} / person`) : "Free Entry"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Card Action Footer */}
+                <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-1">
+                    {!isWalkIn && (
+                      <Link
+                        href={`/admin/registrations?event=${encodeURIComponent(evt.name)}`}
+                        className="h-8 px-2.5 rounded-lg bg-white hover:bg-blue-50 text-[#17458F] border border-slate-200 hover:border-blue-200 text-xs font-semibold transition-all inline-flex items-center gap-1.5 shadow-2xs"
+                        title="View Registrations & Responses"
+                      >
+                        <Users className="w-3.5 h-3.5" />
+                        <span>Passes</span>
+                      </Link>
+                    )}
+                    <Link
+                      href={`/events/${evt.slug}`}
+                      target="_blank"
+                      className="h-8 w-8 rounded-lg bg-white hover:bg-slate-100 text-slate-600 hover:text-[#17458F] border border-slate-200 transition-all inline-flex items-center justify-center shadow-2xs"
+                      title="View Public Page"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    {!isCancelled && (
+                      <>
+                        <button
+                          onClick={() => handleStartEdit(evt)}
+                          className="h-8 w-8 rounded-lg bg-white hover:bg-slate-100 text-slate-700 hover:text-[#17458F] border border-slate-200 transition-all inline-flex items-center justify-center cursor-pointer shadow-2xs"
+                          title="Edit Event"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDuplicate(evt)}
+                          className="h-8 w-8 rounded-lg bg-white hover:bg-slate-100 text-slate-700 hover:text-[#17458F] border border-slate-200 transition-all inline-flex items-center justify-center cursor-pointer shadow-2xs"
+                          title="Duplicate Event"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEventToCancel(evt);
+                            setCancellationNotice("");
+                          }}
+                          className="h-8 w-8 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 transition-all inline-flex items-center justify-center cursor-pointer shadow-2xs"
+                          title="Cancel Event"
+                        >
+                          <Ban className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setEventToDelete(evt)}
+                      className="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-all inline-flex items-center justify-center cursor-pointer shadow-2xs"
+                      title="Delete Event"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* Enhanced Table Roster View */
+        <div className="bg-white rounded-3xl border border-slate-200/80 overflow-hidden shadow-xs">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="bg-slate-50/90 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                <tr>
+                  <th className="py-3.5 px-5">Event & Venue</th>
+                  <th className="py-3.5 px-5">Host & Collaborators</th>
+                  <th className="py-3.5 px-4">Category</th>
+                  <th className="py-3.5 px-5">Date & Time</th>
+                  <th className="py-3.5 px-4">Audience</th>
+                  <th className="py-3.5 px-4">Status & Pricing</th>
+                  <th className="py-3.5 px-5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
+                {filteredEvents.map((evt) => {
+                  const isCancelled = evt.isCancelled || evt.status === "Cancelled";
+                  const isWalkIn = Boolean(evt.noRegistrationRequired);
+                  const isPaid = !isWalkIn && (evt.isPaid || (evt.feeAmount && evt.feeAmount > 0));
+                  const posterUrl = evt.poster || evt.cardImage || evt.posterImage || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop";
+
+                  return (
+                    <tr key={evt.id || evt.slug} className="hover:bg-slate-50/70 transition-colors">
+                      {/* Event Name & Poster */}
+                      <td className="py-3.5 px-5">
+                        <div className="flex items-center gap-3">
+                          <div className="h-11 w-11 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0 shadow-2xs">
+                            <img
+                              src={posterUrl}
+                              alt={evt.name}
+                              loading="lazy"
+                              className="h-full w-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop";
+                              }}
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                              <span className="font-bold text-slate-900 text-sm hover:text-[#17458F] transition-colors leading-tight">
+                                {evt.name}
+                              </span>
+                              {evt.isParentFest && (
+                                <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.2 rounded-full bg-[#E78023]/10 text-[#E78023] border border-[#E78023]/30">
+                                  Umbrella Fest
+                                </span>
+                              )}
+                              {evt.parentEventName && (
+                                <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.2 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                                  Part of {evt.parentEventName}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 text-[11px] text-slate-400 font-sans">
+                              <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                              <span className="truncate max-w-[220px]">{evt.venue}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Organized By */}
+                      <td className="py-3.5 px-5">
+                        <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                          <Users className="w-3.5 h-3.5 text-[#17458F] shrink-0" />
+                          <span className="truncate max-w-[160px]">{evt.organizer || "SRC Sahastradeep"}</span>
+                        </div>
+                        {evt.collaboratingClubs && evt.collaboratingClubs.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            <span className="text-[9px] text-slate-400 font-medium">with</span>
+                            {evt.collaboratingClubs.map((collab) => (
+                              <span
+                                key={collab.slug || collab.name}
+                                className="text-[9px] font-semibold bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded border border-slate-200"
+                              >
+                                {collab.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Category */}
+                      <td className="py-3.5 px-4">
+                        <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold uppercase tracking-wider border border-slate-200/80 whitespace-nowrap">
+                          {evt.category}
+                        </span>
+                      </td>
+
+                      {/* Scheduled Date */}
+                      <td className="py-3.5 px-5 text-slate-600 font-sans">
+                        <div className="flex items-center gap-1.5 font-semibold text-slate-800 whitespace-nowrap">
+                          <CalendarIcon className="w-3.5 h-3.5 text-[#E78023] shrink-0" />
+                          <span>{evt.date}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          {evt.time && (
+                            <div className="flex items-center gap-1 text-[11px] text-slate-500 whitespace-nowrap">
+                              <Clock className="w-3 h-3 text-slate-400" />
+                              <span>{evt.time}</span>
+                            </div>
+                          )}
+                          {evt.isMultiDay && (
+                            <span className="text-[9px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200 whitespace-nowrap">
+                              Multi-Day
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Audience / Eligibility */}
+                      <td className="py-3.5 px-4">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleAudience(evt)}
+                          className={`whitespace-nowrap px-3 py-1 rounded-full text-xs font-semibold tracking-normal transition-all cursor-pointer border shadow-2xs inline-flex items-center gap-1.5 ${
+                            evt.targetAudience === "jdcoem_only"
+                              ? "bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100"
+                              : "bg-sky-50 text-sky-800 border-sky-200/80 hover:bg-sky-100"
+                          }`}
+                          title="Click to toggle between JDCOEM Only and Inter-College"
+                        >
+                          {evt.targetAudience === "jdcoem_only" ? (
+                            <>
+                              <GraduationCap className="w-3.5 h-3.5 text-amber-600" />
+                              <span>JDCOEM Only</span>
+                            </>
+                          ) : (
+                            <>
+                              <Globe className="w-3.5 h-3.5 text-sky-600" />
+                              <span>Open to All</span>
+                            </>
+                          )}
+                        </button>
+                      </td>
+
+                      {/* Status & Pricing */}
+                      <td className="py-3.5 px-4">
                         <div className="flex flex-col gap-1 items-start">
-                          <Badge
-                            variant={
-                              evt.isCancelled || evt.status === "Cancelled"
-                                ? "rose"
-                                : evt.status === "Registration Open"
-                                ? "orange"
-                                : "slate"
-                            }
-                            size="sm"
-                          >
-                            {evt.isCancelled || evt.status === "Cancelled" ? "Cancelled" : evt.status}
-                          </Badge>
+                          {isWalkIn ? (
+                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1 whitespace-nowrap">
+                              🚶 Walk-in Entry
+                            </span>
+                          ) : (
+                            <Badge
+                              variant={
+                                isCancelled
+                                  ? "rose"
+                                  : evt.status === "Registration Open"
+                                  ? "orange"
+                                  : "slate"
+                              }
+                              size="sm"
+                            >
+                              {isCancelled ? "Cancelled" : evt.status}
+                            </Badge>
+                          )}
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
-                              evt.isPaid || (evt.feeAmount && evt.feeAmount > 0)
+                            className={`px-2 py-0.2 rounded-full text-[9px] font-bold border whitespace-nowrap ${
+                              isPaid
                                 ? "bg-blue-50 text-[#17458F] border-[#17458F]/30"
                                 : "bg-emerald-50 text-emerald-700 border-emerald-200"
                             }`}
                           >
-                            {evt.isPaid || (evt.feeAmount && evt.feeAmount > 0)
-                              ? (evt.entryFee || `₹${evt.feeAmount || 0} / person`)
-                              : "Free Entry"}
+                            {isPaid ? (evt.entryFee || `₹${evt.feeAmount || 0} / person`) : "Free Entry"}
                           </span>
                         </div>
-                      )}
-                    </td>
-                    <td className="py-4 px-6 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {!evt.noRegistrationRequired && (
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-3.5 px-5 text-right">
+                        <div className="inline-flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200/70 shadow-2xs">
+                          {!isWalkIn && (
+                            <Link
+                              href={`/admin/registrations?event=${encodeURIComponent(evt.name)}`}
+                              className="p-1.5 rounded-lg text-[#17458F] hover:bg-blue-50 hover:text-[#123670] transition-colors"
+                              title="View Delegate Registrations"
+                            >
+                              <Users className="w-3.5 h-3.5" />
+                            </Link>
+                          )}
                           <Link
-                            href={`/admin/registrations?event=${encodeURIComponent(evt.name)}`}
-                            className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#17458F] transition-colors"
-                            title="View Registrations & Responses"
+                            href={`/events/${evt.slug}`}
+                            target="_blank"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 transition-colors"
+                            title="Open Public Event Page"
                           >
-                            <Users className="w-3.5 h-3.5" />
+                            <Eye className="w-3.5 h-3.5" />
                           </Link>
-                        )}
-                        <Link
-                          href={`/events/${evt.slug}`}
-                          target="_blank"
-                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-[#17458F] transition-colors"
-                          title="View Public Page"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </Link>
-                        {!evt.isCancelled && evt.status !== "Cancelled" && (
-                          <>
-                            <button
-                              onClick={() => handleStartEdit(evt)}
-                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-[#17458F] transition-colors cursor-pointer"
-                              title="Edit Event"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleDuplicate(evt)}
-                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-[#17458F] transition-colors cursor-pointer"
-                              title="Duplicate Event"
-                            >
-                              <Copy className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEventToCancel(evt);
-                                setCancellationNotice("");
-                              }}
-                              className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 transition-colors cursor-pointer"
-                              title="Cancel Event (Bulk-cancels delegate registrations)"
-                            >
-                              <Ban className="w-3.5 h-3.5" />
-                            </button>
-                          </>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => setEventToDelete(evt)}
-                          className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors cursor-pointer"
-                          title="Delete Event"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {!isCancelled && (
+                            <>
+                              <button
+                                onClick={() => handleStartEdit(evt)}
+                                className="p-1.5 rounded-lg text-slate-600 hover:text-[#17458F] hover:bg-slate-200/60 transition-colors cursor-pointer"
+                                title="Edit Event Details"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDuplicate(evt)}
+                                className="p-1.5 rounded-lg text-slate-600 hover:text-[#17458F] hover:bg-slate-200/60 transition-colors cursor-pointer"
+                                title="Duplicate Event Record"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEventToCancel(evt);
+                                  setCancellationNotice("");
+                                }}
+                                className="p-1.5 rounded-lg text-amber-600 hover:text-amber-800 hover:bg-amber-100/60 transition-colors cursor-pointer"
+                                title="Cancel Event & Bulk Cancel Passes"
+                              >
+                                <Ban className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setEventToDelete(evt)}
+                            className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-100/60 transition-colors cursor-pointer"
+                            title="Delete Event Record"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Modal: In-App Delete Confirmation */}
       {eventToDelete && (
