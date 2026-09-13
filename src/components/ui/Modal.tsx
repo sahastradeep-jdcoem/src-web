@@ -196,7 +196,7 @@ export function Modal({
 
   return (
     <div 
-      className="fixed inset-0 z-[9999] flex justify-center items-center overflow-y-auto overflow-x-hidden overscroll-contain select-none modal-overlay-container"
+      className="fixed inset-0 z-[9999] flex justify-center items-center overflow-y-auto overflow-x-hidden overscroll-contain select-none modal-overlay-container p-3 sm:p-5"
       role="dialog"
       aria-modal="true"
       aria-labelledby={title ? "modal-headline-title" : undefined}
@@ -212,7 +212,7 @@ export function Modal({
       <div
         ref={modalRef}
         className={cn(
-          "relative w-full max-w-full min-w-0 bg-white border border-slate-200 rounded-3xl shadow-2xl z-10 my-auto flex flex-col max-h-[92vh] sm:max-h-[90vh] overflow-hidden text-slate-800 overscroll-contain select-text shrink-0 modal-dialog-card",
+          "relative w-full max-w-full min-w-0 bg-white border border-slate-200 rounded-3xl shadow-2xl z-10 my-auto flex flex-col max-h-[92vh] sm:max-h-[86vh] overflow-hidden text-slate-800 overscroll-contain select-text shrink-0 modal-dialog-card",
           maxWidthClasses[maxWidth]
         )}
       >
