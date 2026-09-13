@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mockEvents } from "@/data/events";
 import { PaymentConfig } from "@/lib/paymentConfigStore";
 import { getSiteContentFromFirestore } from "@/lib/firebase/firestore";
+import { EventItem } from "@/types";
 
 export async function POST(req: NextRequest) {
   try {
@@ -31,9 +31,17 @@ export async function POST(req: NextRequest) {
 
     // Server-side price validation to prevent client-side fee tampering
     if (eventId) {
-      const canonicalEvent = mockEvents.find(
-        (e) => e.id === eventId || e.slug === eventId
-      );
+      let canonicalEvent: EventItem | undefined;
+      try {
+        const remoteEvents = await getSiteContentFromFirestore<EventItem[]>("events");
+        if (Array.isArray(remoteEvents)) {
+          canonicalEvent = remoteEvents.find(
+            (e) => e.id === eventId || e.slug === eventId
+          );
+        }
+      } catch (fsErr) {
+        console.warn("Could not fetch events from Firestore for fee check:", fsErr);
+      }
       if (canonicalEvent && canonicalEvent.isPaid) {
         let expectedFee = canonicalEvent.feeAmount || 0;
         if (teamType === "Team" && canonicalEvent.feePricingModel === "per_team" && canonicalEvent.teamFeeAmount) {

@@ -1,7 +1,6 @@
 import React from "react";
 import { notFound } from "next/navigation";
 import { mockClubs } from "@/data/clubs";
-import { mockEvents } from "@/data/events";
 import ClubDetailView from "@/components/clubs/ClubDetailView";
 
 interface ClubPageProps {
@@ -22,10 +21,5 @@ export default async function ClubDetailPage({ params }: ClubPageProps) {
     notFound();
   }
 
-  // Find related events organized by this club or hosted in collaboration with this club
-  const clubEvents = mockEvents.filter(
-    (e) => e.organizerClubSlug === club.slug || e.collaboratingClubs?.some((c) => c.slug === club.slug)
-  );
-
-  return <ClubDetailView initialClub={club} clubEvents={clubEvents} />;
+  return <ClubDetailView initialClub={club} clubEvents={[]} />;
 }

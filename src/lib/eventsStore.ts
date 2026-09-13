@@ -1,5 +1,4 @@
 import { EventItem } from "@/types";
-import { mockEvents as initialEvents } from "@/data/events";
 import { 
   saveSiteContentToFirestore, 
   getSiteContentFromFirestore, 
@@ -211,81 +210,30 @@ export function sortEventsByDate<T extends Partial<EventItem>>(events: T[], refe
   return [...upcoming, ...past];
 }
 
-const DELETED_EVENT_PATTERNS = [
-  "prarambh",
-  "evt-prarambh",
-  "codeindia",
-  "code-india",
-  "cod",
-  "hack engineering",
-  "hack-engineering",
-  "hackathon",
-  "dhurandhar",
-  "rooh rhymes",
-  "rooh-rhymes",
-  "roohrhymes"
-];
-
-/**
- * Identifies deleted mock/test events that must never be resurrected or displayed
- */
-export function isDeletedMockEvent(event?: Partial<EventItem> | null): boolean {
-  if (!event || typeof event !== "object") return false;
-  const name = (event.name || "").trim().toLowerCase();
-  const slug = (event.slug || "").trim().toLowerCase();
-  const id = (event.id || "").trim().toLowerCase();
-
-  return DELETED_EVENT_PATTERNS.some((pattern) => 
-    name === pattern || 
-    slug === pattern || 
-    id === `evt-${pattern}` ||
-    id === pattern ||
-    (pattern.length > 3 && id.includes(pattern))
-  );
-}
-
 export function sanitizeEventsList(events: EventItem[]): EventItem[] {
   if (!Array.isArray(events)) return [];
-  const filtered = events.filter((e) => !isDeletedMockEvent(e));
-  const sanitized = filtered.map(sanitizeEventItem);
+  const valid = events.filter((e) => e && typeof e === "object" && Boolean(e.id || e.slug || e.name));
+  const sanitized = valid.map(sanitizeEventItem);
   return sortEventsByDate(sanitized);
 }
 
 /**
- * Retrieve current events list from local storage or defaults
+ * Retrieve current events list from local storage
  */
 export function getStoredEvents(): EventItem[] {
-  if (typeof window === "undefined") return initialEvents;
+  if (typeof window === "undefined") return [];
   try {
     const stored = localStorage.getItem(EVENTS_STORAGE_KEY);
     if (stored !== null) {
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed)) {
-        const sanitized = sanitizeEventsList(parsed);
-        // If storage was emptied due to mock event purging, or is empty, fallback to authentic initialEvents!
-        if (sanitized.length === 0 && initialEvents.length > 0) {
-          try {
-            localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(initialEvents));
-          } catch {}
-          saveSiteContentToFirestore("events", initialEvents).catch(() => {});
-          return initialEvents;
-        }
-
-        // If resurrecting/deleted mock events were found in storage, purge them immediately
-        if (sanitized.length !== parsed.length) {
-          try {
-            localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(sanitized));
-          } catch {}
-          saveSiteContentToFirestore("events", sanitized).catch(() => {});
-          window.dispatchEvent(new CustomEvent("src_events_updated", { detail: sanitized }));
-        }
-        return sanitized;
+        return sanitizeEventsList(parsed);
       }
     }
   } catch (e) {
     console.warn("Could not read events from storage", e);
   }
-  return initialEvents;
+  return [];
 }
 
 /**
@@ -312,7 +260,7 @@ export async function saveStoredEvents(events: EventItem[]): Promise<void> {
       console.warn("Firestore direct write for events failed, enqueuing:", err);
       cloudWriteError = err;
     }
-    enqueueCloudWrite("events", sanitized, `Events Roster (${events.length} Events)`);
+    enqueueCloudWrite("events", sanitized, `Events Roster (${sanitized.length} Events)`);
     
     compactEventDataset(sanitized).then((compacted) => {
       const cleanCompacted = cleanUndefined(compacted);
@@ -349,15 +297,10 @@ export async function syncEventsFromFirestore(): Promise<EventItem[]> {
       return getStoredEvents();
     }
     if (remote !== null && Array.isArray(remote)) {
+      // Remote Firestore state is strictly authoritative for items & deletions (Directive #9)
       const current = getStoredEvents();
-      // If remote is empty (e.g. wiped by the undo bug or deleted mock purge), restore authentic current events!
-      const effectiveRemote = remote.length === 0 && current.length > 0 ? current : remote;
-      const rawMerged = reconcileArrayDatasets(current, effectiveRemote);
+      const rawMerged = reconcileArrayDatasets(current, remote);
       const merged = sanitizeEventsList(rawMerged);
-      // If remote had deleted mock events or was completely empty, sync clean array back
-      if (merged.length !== rawMerged.length || (remote.length === 0 && merged.length > 0)) {
-        saveSiteContentToFirestore("events", cleanUndefined(merged)).catch(() => {});
-      }
       if (typeof window !== "undefined") {
         try {
           localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(merged));
@@ -379,13 +322,10 @@ export function subscribeToEvents(callback: (events: EventItem[]) => void): () =
   return subscribeToSiteContent<EventItem[]>("events", (remote) => {
     if (remote !== null && Array.isArray(remote)) {
       if (hasPendingWritesFor("events") || isLocalWriteRecent("events", 3000)) return;
+      // Remote Firestore state is strictly authoritative (Directive #9)
       const current = getStoredEvents();
-      const effectiveRemote = remote.length === 0 && current.length > 0 ? current : remote;
-      const rawMerged = reconcileArrayDatasets(current, effectiveRemote);
+      const rawMerged = reconcileArrayDatasets(current, remote);
       const merged = sanitizeEventsList(rawMerged);
-      if (merged.length !== rawMerged.length || (remote.length === 0 && merged.length > 0)) {
-        saveSiteContentToFirestore("events", cleanUndefined(merged)).catch(() => {});
-      }
       if (typeof window !== "undefined") {
         try {
           localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(merged));

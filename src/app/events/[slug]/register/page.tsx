@@ -18,7 +18,6 @@ import {
   LogIn,
   CheckCircle2
 } from "lucide-react";
-import { mockEvents } from "@/data/events";
 import { getStoredEvents, syncEventsFromFirestore } from "@/lib/eventsStore";
 import { EventItem } from "@/types";
 import { RegistrationWizard } from "@/components/registration/RegistrationWizard";
@@ -67,25 +66,23 @@ export default function EventRegisterPage() {
   useEffect(() => {
     if (!slug) return;
 
-    // 1. Check local stored events + fallback mock events
+    // 1. Check local stored events
     const stored = getStoredEvents();
-    const combined = [...stored, ...mockEvents];
-    const match = findEvent(combined, slug);
+    const match = findEvent(stored, slug);
 
     if (match) {
       setEvent(match);
-      setSubEvents(findSubEvents(combined, match));
+      setSubEvents(findSubEvents(stored, match));
       setIsLoading(false);
     }
 
     // 2. Fetch latest from Firestore in case event was just created
     syncEventsFromFirestore().then((remote) => {
       if (remote) {
-        const pool = [...remote, ...mockEvents];
-        const remoteMatch = findEvent(pool, slug);
+        const remoteMatch = findEvent(remote, slug);
         if (remoteMatch) {
           setEvent(remoteMatch);
-          setSubEvents(findSubEvents(pool, remoteMatch));
+          setSubEvents(findSubEvents(remote, remoteMatch));
         }
       }
       setIsLoading(false);

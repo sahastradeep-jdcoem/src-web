@@ -1,6 +1,5 @@
 import { TeamMember, EventItem, ClubItem, ClubLeader } from "@/types";
 import { adminCouncilMembers, hostingCommitteeMembers, foundingMembers } from "@/data/team";
-import { mockEvents } from "@/data/events";
 import { mockClubs } from "@/data/clubs";
 import { 
   getStoredCouncilMembers, 
@@ -14,7 +13,7 @@ import {
   stripCategoryAndLevel,
   hydrateClubAvatars
 } from "./councilStore";
-import { getStoredEvents, saveStoredEvents, isDeletedMockEvent } from "./eventsStore";
+import { getStoredEvents, saveStoredEvents } from "./eventsStore";
 import { 
   getSiteContentFromFirestore, 
   saveSiteContentToFirestore,
@@ -225,7 +224,7 @@ export const initialDefaultTenures: CouncilTenure[] = [
     hostingCommittee: hostingCommitteeMembers,
     foundingMembers: foundingMembers,
     clubs: mockClubs,
-    events: mockEvents,
+    events: [],
     archiveNotes: "The 1st & Founding Tenure of Sahastradeep, uniting all 12 collegiate societies at JDCOEM under one central autonomous student council constitution.",
     createdAt: "2025-09-24T00:00:00Z"
   },
@@ -391,10 +390,7 @@ export function getStoredTenures(): CouncilTenure[] {
       });
     }
 
-    const rawEvents = Array.isArray(t.events) ? t.events.filter((e) => !isDeletedMockEvent(e)) : [];
-    const cleanEvents = (rawEvents.length === 0 && (t.id === "tenure-2025-26" || t.label.includes("2025")))
-      ? mockEvents
-      : rawEvents;
+    const cleanEvents = Array.isArray(t.events) ? t.events : [];
 
     return {
       ...t,
@@ -480,7 +476,7 @@ export function compactTenureForStorage(tenure: CouncilTenure): CouncilTenure {
 
   const stripEventHeavy = (events?: EventItem[]): EventItem[] => {
     if (!Array.isArray(events)) return [];
-    return events.filter((e) => !isDeletedMockEvent(e)).map((e) => ({
+    return events.map((e) => ({
       ...e,
       poster: (e.poster && e.poster.startsWith("data:image/") && e.poster.length > 35000) ? "" : e.poster,
       posterImage: (e.posterImage && e.posterImage.startsWith("data:image/") && e.posterImage.length > 35000) ? "" : e.posterImage,

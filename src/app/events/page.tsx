@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { Search, Calendar, Sparkles } from "lucide-react";
-import { mockEvents } from "@/data/events";
 import { EventCard } from "@/components/events/EventCard";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";

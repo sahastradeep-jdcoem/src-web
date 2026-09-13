@@ -75,11 +75,8 @@ export default function AdminEventsPage() {
     setEventsList(stored);
     setClubsList(getStoredClubs());
     syncEventsFromFirestore().then((res) => {
-      if (res && res.length > 0) {
+      if (Array.isArray(res)) {
         setEventsList(res);
-      } else if (stored.length > 0) {
-        // If Firestore had no record or was empty, push the current authentic local state
-        saveStoredEvents(stored);
       }
     });
   };
@@ -87,7 +84,7 @@ export default function AdminEventsPage() {
   const handleManualSync = async () => {
     setIsSyncing(true);
     try {
-      saveStoredEvents(eventsList);
+      await saveStoredEvents(eventsList);
       const synced = await syncEventsFromFirestore();
       setEventsList(synced);
       showNotice(`Successfully synced ${synced.length} events with live cloud database.`);
@@ -102,7 +99,7 @@ export default function AdminEventsPage() {
     loadData();
 
     const unsubscribe = subscribeToEvents((remoteEvents) => {
-      if (remoteEvents && remoteEvents.length > 0) {
+      if (Array.isArray(remoteEvents)) {
         setEventsList(remoteEvents);
       }
     });
@@ -404,7 +401,7 @@ export default function AdminEventsPage() {
         (e) => e.id !== deletedId && e.slug !== deletedSlug
       );
       setEventsList(updated);
-      saveStoredEvents(updated);
+      await saveStoredEvents(updated);
       
       // Cascade-delete registrations & passes for this deleted event
       await deleteRegistrationsForEvent(deletedId, deletedSlug, deletedName);

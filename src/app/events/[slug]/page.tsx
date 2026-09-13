@@ -23,7 +23,6 @@ import {
   GraduationCap,
   Globe
 } from "lucide-react";
-import { mockEvents } from "@/data/events";
 import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, sanitizeEventItem } from "@/lib/eventsStore";
 import { EventItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -75,27 +74,25 @@ export default function EventDetailPage() {
   useEffect(() => {
     if (!slug) return;
 
-    // 1. Check local stored events + fallback mock events
+    // 1. Check local stored events
     const stored = getStoredEvents();
-    const combined = [...stored, ...mockEvents];
-    const match = findEvent(combined, slug);
+    const match = findEvent(stored, slug);
 
     if (match) {
       const cleanMatch = sanitizeEventItem(match);
       setEvent(cleanMatch);
-      setSubEvents(findSubEvents(combined, cleanMatch));
+      setSubEvents(findSubEvents(stored, cleanMatch));
       setIsLoading(false);
     }
 
     // 2. Fetch latest from Firestore in case event was just created on another device
     syncEventsFromFirestore().then((remote) => {
       if (remote) {
-        const remoteCombined = [...remote, ...mockEvents];
-        const remoteMatch = findEvent(remoteCombined, slug);
+        const remoteMatch = findEvent(remote, slug);
         if (remoteMatch) {
           const cleanRemoteMatch = sanitizeEventItem(remoteMatch);
           setEvent(cleanRemoteMatch);
-          setSubEvents(findSubEvents(remoteCombined, cleanRemoteMatch));
+          setSubEvents(findSubEvents(remote, cleanRemoteMatch));
         }
       }
       setIsLoading(false);
@@ -103,12 +100,11 @@ export default function EventDetailPage() {
 
     const unsub = subscribeToEvents((remoteEvents) => {
       if (remoteEvents) {
-        const streamCombined = [...remoteEvents, ...mockEvents];
-        const streamMatch = findEvent(streamCombined, slug);
+        const streamMatch = findEvent(remoteEvents, slug);
         if (streamMatch) {
           const cleanStreamMatch = sanitizeEventItem(streamMatch);
           setEvent(cleanStreamMatch);
-          setSubEvents(findSubEvents(streamCombined, cleanStreamMatch));
+          setSubEvents(findSubEvents(remoteEvents, cleanStreamMatch));
         }
       }
     });

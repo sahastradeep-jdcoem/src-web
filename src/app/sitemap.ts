@@ -1,8 +1,9 @@
 import { MetadataRoute } from "next";
 import { mockClubs } from "@/data/clubs";
-import { mockEvents } from "@/data/events";
+import { getSiteContentFromFirestore } from "@/lib/firebase/firestore";
+import { EventItem } from "@/types";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://srcjdcoem.in";
   const now = new Date();
 
@@ -78,8 +79,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }));
 
-  // Dynamic event routes
-  const eventRoutes: MetadataRoute.Sitemap = mockEvents.map((evt) => ({
+  // Dynamic live event routes
+  let dynamicEvents: EventItem[] = [];
+  try {
+    const fsEvents = await getSiteContentFromFirestore<EventItem[]>("events");
+    if (Array.isArray(fsEvents)) {
+      dynamicEvents = fsEvents.filter(
+        (e) => e.isLive !== false && e.status !== "draft" && !e.isCancelled && e.status !== "Cancelled"
+      );
+    }
+  } catch {}
+
+  const eventRoutes: MetadataRoute.Sitemap = dynamicEvents.map((evt) => ({
     url: `${baseUrl}/events/${evt.slug}`,
     lastModified: now,
     changeFrequency: "daily",
