@@ -67,6 +67,17 @@ export default function ClubDetailPage() {
     };
   }, [slug]);
 
+  // Synchronize canonical URL if accessed via legacy or alternate alias (e.g. /clubs/agentic-ai -> /clubs/robotics)
+  useEffect(() => {
+    if (club?.slug && slug && typeof window !== "undefined") {
+      const currentParam = slug.toLowerCase().trim();
+      const canonical = club.slug.toLowerCase().trim();
+      if (currentParam !== canonical && (currentParam === "agentic-ai" || currentParam === "robotics-club" || currentParam.includes("robotics"))) {
+        window.history.replaceState(null, "", `/clubs/${canonical}`);
+      }
+    }
+  }, [club, slug]);
+
   if (isLoading && !club) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-6 space-y-4 font-sans">

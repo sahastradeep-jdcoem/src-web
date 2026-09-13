@@ -181,8 +181,20 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
       if (coLead && coLead.name) finalLeaders.push({ ...coLead, roleType: "coLead", id: `${c.id || c.slug}-colead-0` });
     }
 
+    // Auto-heal Robotics Club slug if legacy agentic-ai was stored
+    let slug = c.slug;
+    const isRobotics =
+      c.id === "club-1788779206223" ||
+      c.id === "club-robotics" ||
+      c.name?.toLowerCase().trim() === "robotics club" ||
+      c.name?.toLowerCase().trim() === "robotics";
+    if (isRobotics && slug === "agentic-ai") {
+      slug = "robotics";
+    }
+
     return {
       ...c,
+      slug,
       lead,
       coLead,
       coLeads,

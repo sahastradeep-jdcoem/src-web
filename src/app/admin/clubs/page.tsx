@@ -257,10 +257,12 @@ export default function AdminClubsPage() {
       return;
     }
 
-    // Auto generate clean slug from name if new
-    const cleanSlug = isCreatingNew
-      ? club.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
-      : club.slug;
+    // Normalize clean slug from user input or club name
+    const rawSlug = (club.slug && club.slug.trim().length > 0) ? club.slug : club.name;
+    const cleanSlug = rawSlug
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
 
     const defaultHero = club.headerImage || club.cardImage || club.heroImage || "https://images.unsplash.com/photo-1547153760-18fc86324498?q=80&w=1600&auto=format&fit=crop";
 
