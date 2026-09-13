@@ -19,16 +19,27 @@ const DEFAULT_SECRET = "SRC_UPI_2026_GATEWAY";
 function extractUtrFromText(text: string): string | null {
   if (!text) return null;
 
-  // Pattern 1: Explicit labels like "UPI Ref: 425612345678", "UTR: 425612345678", "Ref No: 425612345678", "Ref no. 425612345678", "Txn ID: 425612345678"
-  const labeledMatch = text.match(/(?:upi\s*(?:ref|reference|txn)?(?:\s*no\.?)?[:\-\s]*|utr[:\-\s]*|ref[:\-\s]*|txn\s*(?:id)?[:\-\s]*)(\d{12})/i);
+  // Pattern 1: Explicit labels like "UPI Ref: 425612345678", "UTR: 425612345678", "Ref No: 425612345678", "Ref no. 425612345678", "Txn ID: 425612345678", "rrn: 425612345678"
+  const labeledMatch = text.match(/(?:upi\s*(?:ref|reference|txn)?(?:\s*no\.?)?[:\-\s]*|utr[:\-\s]*|ref[:\-\s]*|txn\s*(?:id)?[:\-\s]*|rrn[:\-\s]*)(\d{12})/i);
   if (labeledMatch && labeledMatch[1]) {
     return labeledMatch[1];
   }
 
-  // Pattern 2: Standalone 12-digit number (all Indian UPI transaction IDs are exactly 12 digits)
-  const standaloneMatch = text.match(/\b(\d{12})\b/);
-  if (standaloneMatch && standaloneMatch[1]) {
-    return standaloneMatch[1];
+  // Pattern 2: Key-value / JSON like "utr": "425612345678" or utr=425612345678
+  const kvMatch = text.match(/(?:utr|reference|ref_no)[\s"':=]+(\d{12})/i);
+  if (kvMatch && kvMatch[1]) {
+    return kvMatch[1];
+  }
+
+  // Pattern 3: Standalone 12-digit number (UPI UTRs are 12 digits; skip 12-digit numbers that look like Indian phone numbers with +91)
+  const standaloneMatches = text.matchAll(/\b(\d{12})\b/g);
+  for (const m of standaloneMatches) {
+    const candidate = m[1];
+    // Exclude numbers starting with 91 followed by 6, 7, 8, or 9 (Indian mobile numbers prefixed with 91)
+    if (/^91[6-9]\d{9}$/.test(candidate)) {
+      continue;
+    }
+    return candidate;
   }
 
   return null;
@@ -40,22 +51,38 @@ function extractUtrFromText(text: string): string | null {
 function extractAmountFromText(text: string): number | null {
   if (!text) return null;
 
-  // Pattern 1: "Received ₹150.00" or "Received Rs. 150" or "credited with INR 150"
-  const receivedMatch = text.match(/(?:received|credited)\s+(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  // Clean HTML entities or zero-width unicode
+  const clean = text
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&#8377;/g, "₹")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "");
+
+  // Pattern 0: Explicit JSON / URL / Form key e.g. "amount": 1.02 or amount=1.02 or amt: 1.02
+  const explicitKeyMatch = clean.match(/(?:amount|amt|total)[\s"':=]+([\d,]+(?:\.\d{1,2})?)/i);
+  if (explicitKeyMatch && explicitKeyMatch[1]) {
+    const val = parseFloat(explicitKeyMatch[1].replace(/,/g, ""));
+    if (!isNaN(val) && val > 0) return val;
+  }
+
+  // Pattern 1: "Received ₹150.00" or "Received Rs. 150" or "credited with INR 150" or "Payment of ₹1.02" or "paid ₹1.02"
+  const receivedMatch = clean.match(/(?:received|credited|payment\s+of|paid|accepted)\s+(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)/i);
   if (receivedMatch && receivedMatch[1]) {
-    return parseFloat(receivedMatch[1].replace(/,/g, ""));
+    const val = parseFloat(receivedMatch[1].replace(/,/g, ""));
+    if (!isNaN(val) && val > 0) return val;
   }
 
-  // Pattern 2: "₹150.00" or "Rs 150" or "₹ 10"
-  const currencyMatch = text.match(/(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)/i);
+  // Pattern 2: "₹150.00" or "Rs 150" or "₹ 10" or "₹ 1.02" or "INR 1.02"
+  const currencyMatch = clean.match(/(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)/i);
   if (currencyMatch && currencyMatch[1]) {
-    return parseFloat(currencyMatch[1].replace(/,/g, ""));
+    const val = parseFloat(currencyMatch[1].replace(/,/g, ""));
+    if (!isNaN(val) && val > 0) return val;
   }
 
-  // Pattern 3: "10 rupees" or "10 rs" or "10.00 received"
-  const rupeesMatch = text.match(/([\d,]+(?:\.\d{1,2})?)\s*(?:rs\.?|rupees|inr|₹|received|credited)/i);
+  // Pattern 3: "10 rupees" or "10 rs" or "10.00 received" or "1.02 received"
+  const rupeesMatch = clean.match(/([\d,]+(?:\.\d{1,2})?)\s*(?:rs\.?|rupees|inr|₹|received|credited|paid)/i);
   if (rupeesMatch && rupeesMatch[1]) {
-    return parseFloat(rupeesMatch[1].replace(/,/g, ""));
+    const val = parseFloat(rupeesMatch[1].replace(/,/g, ""));
+    if (!isNaN(val) && val > 0) return val;
   }
 
   return null;
@@ -102,29 +129,62 @@ function isAuthorized(req: NextRequest, body: any): boolean {
 export async function POST(req: NextRequest) {
   try {
     let rawBody: any = {};
-    const contentType = (req.headers.get("content-type") || "").toLowerCase();
+    let rawText = "";
 
-    if (contentType.includes("application/json")) {
-      rawBody = await req.json().catch(() => ({}));
-    } else if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
+    try {
+      rawText = await req.text();
+    } catch {
+      rawText = "";
+    }
+
+    // Query parameters as immediate fallbacks
+    const queryText = req.nextUrl.searchParams.get("text") || 
+                      req.nextUrl.searchParams.get("notificationText") || 
+                      req.nextUrl.searchParams.get("body") || 
+                      req.nextUrl.searchParams.get("msg") || 
+                      "";
+    const queryAmount = req.nextUrl.searchParams.get("amount") || "";
+    const queryUtr = req.nextUrl.searchParams.get("utr") || "";
+
+    // Parse body safely regardless of Content-Type or malformed formatting
+    const trimmedText = rawText.trim();
+    if (trimmedText.startsWith("{")) {
+      // 1. Try standard JSON parsing
       try {
-        const formData = await req.formData();
-        rawBody = Object.fromEntries(formData.entries());
+        rawBody = JSON.parse(trimmedText);
       } catch {
-        rawBody = {};
-      }
-    } else {
-      // Could be raw JSON without content-type header, or plain text
-      try {
-        const textData = await req.text();
+        // Fallback: fix unescaped newlines/tabs inside string literals commonly generated by MacroDroid
         try {
-          rawBody = JSON.parse(textData);
+          const sanitized = trimmedText
+            .replace(/[\r\n]+/g, " ")
+            .replace(/\t/g, " ");
+          rawBody = JSON.parse(sanitized);
         } catch {
-          rawBody = { notificationText: textData };
+          // Still failed? Extract known fields via regex directly
+          const notifMatch = trimmedText.match(/"(?:notificationText|text|message|body|content|notification_text)"\s*:\s*"([\s\S]*?)"(?:\s*,|\s*})/i);
+          const titleMatch = trimmedText.match(/"(?:title|heading|subject)"\s*:\s*"([\s\S]*?)"(?:\s*,|\s*})/i);
+          const amtMatch = trimmedText.match(/"(?:amount|amt)"\s*:\s*"?([\d.]+)"?/i);
+          const utrMatch = trimmedText.match(/"(?:utr|ref)"\s*:\s*"?(\d{12})"?/i);
+
+          rawBody = {
+            notificationText: notifMatch ? notifMatch[1] : trimmedText,
+            title: titleMatch ? titleMatch[1] : "",
+            amount: amtMatch ? amtMatch[1] : undefined,
+            utr: utrMatch ? utrMatch[1] : undefined,
+          };
         }
-      } catch {
-        rawBody = {};
       }
+    } else if (trimmedText.includes("=") && !trimmedText.startsWith("<")) {
+      // 2. URL-encoded form data (e.g. notificationText=...&title=...)
+      try {
+        const params = new URLSearchParams(trimmedText);
+        rawBody = Object.fromEntries(params.entries());
+      } catch {
+        rawBody = { notificationText: trimmedText };
+      }
+    } else if (trimmedText.length > 0) {
+      // 3. Plain raw text from phone (e.g. "[notif_title] [notif_text]")
+      rawBody = { notificationText: trimmedText };
     }
 
     // Authentication check
@@ -135,7 +195,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Combine all potential text fields from MacroDroid / Tasker / Forwarder
+    // Combine all potential text fields from MacroDroid / Tasker / Forwarder / URL
     const title = String(rawBody.title || rawBody.heading || rawBody.subject || "");
     const text = String(
       rawBody.notificationText || 
@@ -144,14 +204,15 @@ export async function POST(req: NextRequest) {
       rawBody.body || 
       rawBody.content || 
       rawBody.notification_text ||
+      queryText ||
       ""
     );
-    const combinedText = `${title} ${text}`.trim();
+    const combinedText = `${title} ${text || trimmedText}`.trim();
 
     // 1. Resolve UTR (either passed explicitly or extracted from text)
-    let utr = rawBody.utr ? String(rawBody.utr).trim() : null;
+    let utr = rawBody.utr ? String(rawBody.utr).trim() : (queryUtr || null);
     if (!utr || !/^\d{12}$/.test(utr)) {
-      utr = extractUtrFromText(combinedText);
+      utr = extractUtrFromText(combinedText) || extractUtrFromText(trimmedText);
     }
 
     // 2. Resolve Amount (either passed explicitly or extracted from text)
@@ -159,8 +220,11 @@ export async function POST(req: NextRequest) {
     if (!amount && rawBody.amount) {
       amount = parseFloat(String(rawBody.amount).replace(/,/g, ""));
     }
+    if (!amount && queryAmount) {
+      amount = parseFloat(queryAmount.replace(/,/g, ""));
+    }
     if (!amount || isNaN(amount)) {
-      amount = extractAmountFromText(combinedText) || 0;
+      amount = extractAmountFromText(combinedText) || extractAmountFromText(trimmedText) || 0;
     }
 
     const now = new Date().toISOString();
@@ -173,7 +237,7 @@ export async function POST(req: NextRequest) {
           await setDoc(doc(db, "verified_upi_payments", pingId), {
             utr: pingId,
             amount: 0,
-            rawNotification: combinedText || "MacroDroid Phone Test Ping",
+            rawNotification: combinedText || trimmedText || "MacroDroid Phone Test Ping",
             status: "PING",
             matchedStudentName: "MacroDroid Phone Connected",
             receivedAt: now,
@@ -187,7 +251,7 @@ export async function POST(req: NextRequest) {
         success: true,
         isPing: true,
         message: "Connectivity test ping received successfully from MacroDroid!",
-        receivedText: combinedText || "(empty body)",
+        receivedText: combinedText || trimmedText || "(empty body)",
         hint: "Ready to receive live payment notifications.",
       });
     }
@@ -448,6 +512,16 @@ export async function GET(req: NextRequest) {
       service: "SRC JDCOEM Automated UPI Webhook Engine",
       note: "Provide valid ?secret= token to view recent verification signals.",
     });
+  }
+
+  // If query parameters include payment parameters (e.g. MacroDroid configured with GET)
+  const hasPaymentParams = req.nextUrl.searchParams.has("amount") || 
+                           req.nextUrl.searchParams.has("text") || 
+                           req.nextUrl.searchParams.has("notificationText") || 
+                           req.nextUrl.searchParams.has("body") || 
+                           req.nextUrl.searchParams.has("utr");
+  if (hasPaymentParams) {
+    return POST(req);
   }
 
   // If authorized, fetch last 5 received payments and last 10 webhook activity logs
