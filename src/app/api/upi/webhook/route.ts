@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
             status: "PING",
             matchedStudentName: "MacroDroid Phone Connected",
             receivedAt: now,
-          });
+          }, { merge: true });
         } catch (pingErr) {
           console.warn("Notice: ping save to verified_upi_payments notice:", pingErr);
         }
