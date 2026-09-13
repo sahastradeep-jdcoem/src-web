@@ -89,14 +89,14 @@ export async function compactClubDataset<T extends {
   // Memoize avatar compaction by data URL so duplicate references to the same avatar only compress once
   const avatarCache = new Map<string, Promise<string>>();
   const compactAvatar = (avatar?: string): Promise<string> => {
-    if (!avatar || !avatar.startsWith("data:image/") || avatar.length <= 18000) {
+    if (!avatar || !avatar.startsWith("data:image/") || avatar.length <= 60000) {
       return Promise.resolve(avatar || "");
     }
     if (avatarCache.has(avatar)) {
       return avatarCache.get(avatar)!;
     }
-    // 400px width at 0.78 quality produces crisp 4:5 Retina portrait at ~10-14KB
-    const p = compactBase64Image(avatar, 400, 0.78);
+    // 650px height (520x650) at 0.82 quality produces crisp Retina portrait at ~22-28KB
+    const p = compactBase64Image(avatar, 650, 0.82);
     avatarCache.set(avatar, p);
     return p;
   };
@@ -106,15 +106,19 @@ export async function compactClubDataset<T extends {
       let logo = c.logoImage;
       let card = c.cardImage;
       let header = c.headerImage;
+      let hero = (c as any).heroImage;
 
-      if (logo && logo.startsWith("data:image/") && logo.length > 20000) {
-        logo = await compactBase64Image(logo, 160, 0.70);
+      if (logo && logo.startsWith("data:image/") && logo.length > 35000) {
+        logo = await compactBase64Image(logo, 300, 0.80);
       }
-      if (card && card.startsWith("data:image/") && card.length > 40000) {
-        card = await compactBase64Image(card, 500, 0.65);
+      if (card && card.startsWith("data:image/") && card.length > 50000) {
+        card = await compactBase64Image(card, 600, 0.75);
       }
-      if (header && header.startsWith("data:image/") && header.length > 50000) {
-        header = await compactBase64Image(header, 700, 0.65);
+      if (header && header.startsWith("data:image/") && header.length > 60000) {
+        header = await compactBase64Image(header, 800, 0.75);
+      }
+      if (hero && hero.startsWith("data:image/") && hero.length > 60000) {
+        hero = await compactBase64Image(hero, 800, 0.75);
       }
 
       let galleryImages = c.galleryImages;
@@ -168,6 +172,7 @@ export async function compactClubDataset<T extends {
         logoImage: logo,
         cardImage: card,
         headerImage: header,
+        heroImage: hero,
         galleryImages,
         lead,
         coLead,
@@ -228,8 +233,10 @@ export async function compactCouncilDataset<T extends { avatar?: string }>(
   const processed = await Promise.all(
     members.map(async (m) => {
       let av = m.avatar;
-      if (av && av.startsWith("data:image/") && av.length > 20000) {
-        av = await compactBase64Image(av, 400, 0.78);
+      // High-density Retina WebP avatars (~30-50KB, length <= 75000) are already optimized.
+      // Only compact if truly oversized (> 80000 bytes) down to crisp 640x800 at quality 0.84.
+      if (av && av.startsWith("data:image/") && av.length > 80000) {
+        av = await compactBase64Image(av, 800, 0.84);
       }
       return {
         ...m,
@@ -250,8 +257,9 @@ export async function compactPillarsDataset<T extends { avatar?: string }>(
   const processed = await Promise.all(
     pillars.map(async (p) => {
       let av = p.avatar;
-      if (av && av.startsWith("data:image/") && av.length > 20000) {
-        av = await compactBase64Image(av, 480, 0.80);
+      // Only compact if truly oversized (> 80000 bytes) down to crisp 640x800 at quality 0.85.
+      if (av && av.startsWith("data:image/") && av.length > 80000) {
+        av = await compactBase64Image(av, 800, 0.85);
       }
       return {
         ...p,

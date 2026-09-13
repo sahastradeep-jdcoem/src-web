@@ -58,37 +58,37 @@ export interface ImageProfile {
 // ─── Profile Definitions ─────────────────────────────────────────────────────
 
 /**
- * At 320×400, an avatar rendered at 80×100 on a 2x Retina screen delivers
- * 4.0x pixel density, looking razor-sharp with zero blur while using only ~9KB.
+ * At 640×800 (4:5) or 600×600 (1:1), an avatar rendered on desktop and mobile Retina displays
+ * delivers > 2.2x pixel density with crystal-clear facial details at ~30–45KB WebP.
  */
 const AVATAR_PROFILE: ImageProfile = {
   label: "Portrait Photo",
-  maxWidth: 320,
-  maxHeight: 400,
-  quality: 0.72,
+  maxWidth: 640,
+  maxHeight: 800,
+  quality: 0.84,
   format: "image/webp",
   preserveTransparency: false,
   defaultAspectRatio: "4:5",
   allowedAspectRatios: ["4:5", "3:4", "1:1", "free"],
   lockAspectRatio: false,
   circularMask: false,
-  targetSizeHint: "~8–11 KB",
-  maxInlineBytes: 30_000,
+  targetSizeHint: "~30–45 KB (High-Density Retina WebP)",
+  maxInlineBytes: 75_000,
 };
 
 const LOGO_PROFILE: ImageProfile = {
   label: "Club Logo / Insignia",
-  maxWidth: 240,
-  maxHeight: 240,
-  quality: 0.76,
+  maxWidth: 400,
+  maxHeight: 400,
+  quality: 0.85,
   format: "image/webp",
   preserveTransparency: true,
   defaultAspectRatio: "1:1",
   allowedAspectRatios: ["1:1", "free"],
   lockAspectRatio: false,
   circularMask: true,
-  targetSizeHint: "~5–8 KB",
-  maxInlineBytes: 20_000,
+  targetSizeHint: "~12–20 KB",
+  maxInlineBytes: 45_000,
 };
 
 const EVENT_POSTER_PROFILE: ImageProfile = {

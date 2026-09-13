@@ -439,9 +439,9 @@ export function ImageCropperModal({
       // Legacy fallback for direct ImageCropperModal usage without UIS
       let baseDimension = 1200;
       if (selectedRatio === "1:1") {
-        baseDimension = 480;
+        baseDimension = 600;
       } else if (selectedRatio === "4:5" || selectedRatio === "3:4") {
-        baseDimension = 560;
+        baseDimension = 800;
       } else if (selectedRatio === "21:9") {
         baseDimension = 1600;
       } else {
@@ -530,7 +530,7 @@ export function ImageCropperModal({
         // Legacy fallback
         const isTransparentPng = (imageSrc.includes("image/png") || imageSrc.includes(".png")) && selectedRatio === "free";
         exportType = isTransparentPng ? "image/png" : "image/webp";
-        exportQuality = 0.82;
+        exportQuality = 0.85;
       }
 
       const croppedDataUrl = canvas.toDataURL(exportType, exportQuality);

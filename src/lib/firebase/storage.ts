@@ -80,9 +80,9 @@ export async function uploadImageToStorage(
       const isAvatar = storagePath.includes("avatars") || storagePath.includes("pillars") || storagePath.includes("leads") || storagePath.includes("members");
       const isPng = fileOrDataUrl.type === "image/png" || fileOrDataUrl.type === "image/svg+xml";
       const compressed = await compressImage(fileOrDataUrl, {
-        maxWidth: isAvatar ? 480 : 1200,
-        maxHeight: isAvatar ? 600 : 800,
-        quality: isAvatar ? 0.82 : 0.80,
+        maxWidth: isAvatar ? 640 : 1200,
+        maxHeight: isAvatar ? 800 : 800,
+        quality: isAvatar ? 0.84 : 0.82,
         outputFormat: isPng ? "image/png" : "image/webp",
       });
       return compressed.dataUrl;

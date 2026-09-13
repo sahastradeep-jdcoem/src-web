@@ -37,6 +37,7 @@ export function CouncilMemberCard({ member, categoryLabel = "ADMIN" }: CouncilMe
               alt={member.role}
               fill
               unoptimized={true}
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
               className="object-cover object-top transition-transform duration-500 group-hover:scale-[1.02]"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />

@@ -115,9 +115,9 @@ export function ImageUploadDropzone({
       const isAvatar = storagePath.includes("avatars") || storagePath.includes("pillars") || storagePath.includes("leads") || aspectRatio === "1:1" || aspectRatio === "4:5" || aspectRatio === "3:4";
 
       const immediateOptimized = await compressImage(file, {
-        maxWidth: isAvatar ? (aspectRatio === "1:1" ? 480 : 450) : 1200,
-        maxHeight: isAvatar ? (aspectRatio === "1:1" ? 480 : 560) : 800,
-        quality: 0.82,
+        maxWidth: isAvatar ? (aspectRatio === "1:1" ? 600 : 640) : 1200,
+        maxHeight: isAvatar ? (aspectRatio === "1:1" ? 600 : 800) : 800,
+        quality: 0.84,
         outputFormat: isPngOrSvg ? "image/png" : "image/webp",
       });
 
