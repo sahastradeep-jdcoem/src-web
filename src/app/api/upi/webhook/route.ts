@@ -85,6 +85,13 @@ function extractAmountFromText(text: string): number | null {
     if (!isNaN(val) && val > 0) return val;
   }
 
+  // Pattern 4: "amount of INR 1.02 has been CREDITED" (standard Indian bank alert)
+  const bankAlertMatch = clean.match(/(?:amount\s+of\s+)?(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)\s+(?:has\s+been\s+)?(?:credited|received)/i);
+  if (bankAlertMatch && bankAlertMatch[1]) {
+    const val = parseFloat(bankAlertMatch[1].replace(/,/g, ""));
+    if (!isNaN(val) && val > 0) return val;
+  }
+
   return null;
 }
 
@@ -147,11 +154,14 @@ export async function POST(req: NextRequest) {
     const queryUtr = req.nextUrl.searchParams.get("utr") || "";
 
     // Header parameters as fallbacks (in case user configured them under Header Params tab)
-    const headerText = req.headers.get("notificationtext") || 
-                       req.headers.get("notificationtext{notification}") || 
-                       req.headers.get("x-notification-text") || 
-                       "";
-    const headerTitle = req.headers.get("title") || "";
+    let headerText = "";
+    let headerTitle = "";
+    try {
+      headerText = req.headers.get("notificationtext") || req.headers.get("x-notification-text") || "";
+      headerTitle = req.headers.get("title") || "";
+    } catch {
+      // Ignore header access errors
+    }
 
     // Auto-strip any accidental {notification} tokens if user had them typed in MacroDroid
     const cleanedRawText = (rawText || "")
