@@ -26,6 +26,8 @@ import {
   switchActiveTenure, 
   createAndActivateNewTenure, 
   syncTenuresFromFirestore,
+  canUndoTenure,
+  undoActiveTenure,
   CouncilTenure 
 } from "@/lib/tenureStore";
 import { Badge } from "@/components/ui/Badge";
@@ -91,6 +93,13 @@ export default function AdminTenuresPage() {
   const [tenureBeginDate, setTenureBeginDate] = useState(new Date().toISOString().split("T")[0]);
   const [isActivating, setIsActivating] = useState(false);
 
+  // Undo Tenure state
+  const [isUndoModalOpen, setIsUndoModalOpen] = useState(false);
+  const [undoingTenure, setUndoingTenure] = useState<CouncilTenure | null>(null);
+  const [isUndoing, setIsUndoing] = useState(false);
+  const [justActivatedTenureId, setJustActivatedTenureId] = useState<string | null>(null);
+  const [undoFeedback, setUndoFeedback] = useState<string | null>(null);
+
   const handleOpenActivate = (tenure: CouncilTenure) => {
     setActivatingTenure(tenure);
     setTenureBeginDate(new Date().toISOString().split("T")[0]);
@@ -101,12 +110,14 @@ export default function AdminTenuresPage() {
     if (!activatingTenure) return;
     setIsActivating(true);
     try {
+      const activatedId = activatingTenure.id;
       await switchActiveTenure(activatingTenure.id, tenureBeginDate);
       refresh();
       setIsActivateModalOpen(false);
       setActivatingTenure(null);
+      setJustActivatedTenureId(activatedId);
       setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 3000);
+      setTimeout(() => setIsSaved(false), 4000);
     } catch (err) {
       console.error("Failed to activate tenure:", err);
       alert("Failed to activate tenure. Please try again.");
@@ -114,6 +125,43 @@ export default function AdminTenuresPage() {
       setIsActivating(false);
     }
   };
+
+  const handleOpenUndo = (tenure: CouncilTenure) => {
+    setUndoingTenure(tenure);
+    setIsUndoModalOpen(true);
+  };
+
+  const handleConfirmUndo = async () => {
+    if (!undoingTenure) return;
+    setIsUndoing(true);
+    try {
+      const targetLabel = undoingTenure.label;
+      const res = await undoActiveTenure(undoingTenure.id);
+      if (res.success) {
+        setIsUndoModalOpen(false);
+        setJustActivatedTenureId(null);
+        setUndoingTenure(null);
+        refresh();
+        const revertedName = res.revertedToTenure?.label || "Previous Tenure";
+        setUndoFeedback(`Tenure ${targetLabel} has been returned to draft mode. Tenure ${revertedName} is now live.`);
+        setTimeout(() => setUndoFeedback(null), 6000);
+      } else {
+        alert(res.error || "Failed to undo tenure.");
+      }
+    } catch (err) {
+      console.error("Failed to undo tenure:", err);
+      alert("Failed to undo tenure. Please try again.");
+    } finally {
+      setIsUndoing(false);
+    }
+  };
+
+  const justActivatedTenure = justActivatedTenureId ? tenures.find((t) => t.id === justActivatedTenureId) : null;
+  const previousTenureCandidate = undoingTenure
+    ? (undoingTenure.previousTenureId 
+        ? tenures.find((t) => t.id === undoingTenure.previousTenureId)
+        : (tenures.find((t) => t.id !== undoingTenure.id && t.status === "archived") || tenures.find((t) => t.id === "tenure-2025-26")))
+    : null;
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto text-[#0F172A]">
@@ -157,6 +205,57 @@ export default function AdminTenuresPage() {
         </div>
       </div>
 
+      {undoFeedback && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 flex items-center justify-between gap-3 shadow-xs animate-in fade-in duration-300">
+          <div className="flex items-center gap-2">
+            <RotateCcw className="w-4 h-4 text-[#E78023] shrink-0" />
+            <span className="font-bold text-xs">{undoFeedback}</span>
+          </div>
+          <button 
+            type="button"
+            onClick={() => setUndoFeedback(null)}
+            className="text-xs text-amber-800 hover:text-amber-950 font-bold px-2 py-1 rounded-lg hover:bg-amber-100/50 cursor-pointer"
+          >
+            &times;
+          </button>
+        </div>
+      )}
+
+      {justActivatedTenure && justActivatedTenure.isCurrent && (
+        <div className="p-4 sm:p-5 rounded-3xl bg-linear-to-r from-emerald-50 to-teal-50/70 border border-emerald-200 text-emerald-950 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="p-2 rounded-2xl bg-emerald-500 text-white shrink-0 shadow-xs">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <div className="space-y-0.5">
+              <p className="text-xs font-heading font-extrabold text-emerald-950 uppercase tracking-tight">
+                Tenure {justActivatedTenure.label} ({justActivatedTenure.academicYear}) is now Live across the platform!
+              </p>
+              <p className="text-[11px] text-emerald-800">
+                The public website, archive, and team pages are now displaying this leadership council.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => handleOpenUndo(justActivatedTenure)}
+              className="px-3.5 py-2 rounded-xl bg-white hover:bg-amber-50 text-amber-900 border border-amber-300 text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-[#E78023]" />
+              <span>Undo Tenure (Return to Draft)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setJustActivatedTenureId(null)}
+              className="px-3 py-2 rounded-xl text-xs font-semibold text-emerald-800 hover:text-emerald-950 hover:bg-emerald-100/50 cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {isSaved && (
         <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between shadow-xs animate-in fade-in duration-300">
           <div className="flex items-center gap-2">
@@ -191,12 +290,24 @@ export default function AdminTenuresPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="px-5 py-3 rounded-2xl bg-white text-[#17458F] hover:bg-slate-50 font-bold text-xs uppercase tracking-wider transition-all shadow-sm shrink-0 cursor-pointer"
-        >
-          Change Active Tenure &rarr;
-        </button>
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {canUndoTenure(currentTenure, tenures) && (
+            <button
+              type="button"
+              onClick={() => handleOpenUndo(currentTenure)}
+              className="px-4 py-3 rounded-2xl bg-[#E78023] hover:bg-[#D26E17] text-white font-bold text-xs uppercase tracking-wider transition-all shadow-sm shrink-0 cursor-pointer flex items-center gap-1.5"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>Undo Tenure to Draft</span>
+            </button>
+          )}
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="px-5 py-3 rounded-2xl bg-white text-[#17458F] hover:bg-slate-50 font-bold text-xs uppercase tracking-wider transition-all shadow-sm shrink-0 cursor-pointer"
+          >
+            Change Active Tenure &rarr;
+          </button>
+        </div>
       </div>
 
       {/* Main Grid: Tenures List vs Selected Tenure Inspection */}
@@ -256,7 +367,23 @@ export default function AdminTenuresPage() {
                     <span>{t.adminCouncil?.length || 0} Admins</span>
                     <span>{t.events?.length || 0} Events</span>
                     {t.isCurrent ? (
-                      <span className="font-bold text-emerald-600">Currently Serving</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-emerald-600">Currently Serving</span>
+                        {canUndoTenure(t, tenures) && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenUndo(t);
+                            }}
+                            className="px-2 py-0.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-950 font-bold text-[9px] transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                            title="Undo activation and return this tenure to draft mode"
+                          >
+                            <RotateCcw className="w-2.5 h-2.5 text-[#E78023]" />
+                            <span>Undo</span>
+                          </button>
+                        )}
+                      </div>
                     ) : t.isDraft ? (
                       <span className="font-bold text-amber-700">Draft • Hidden from Site</span>
                     ) : (
@@ -303,7 +430,7 @@ export default function AdminTenuresPage() {
                   </p>
                 </div>
 
-                {!selectedTenure.isCurrent && (
+                {!selectedTenure.isCurrent ? (
                   <button
                     onClick={() => handleOpenActivate(selectedTenure)}
                     className="px-4 py-2 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
@@ -311,8 +438,39 @@ export default function AdminTenuresPage() {
                     <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                     <span>Activate Tenure {selectedTenure.label} Live</span>
                   </button>
-                )}
+                ) : canUndoTenure(selectedTenure, tenures) ? (
+                  <button
+                    onClick={() => handleOpenUndo(selectedTenure)}
+                    className="px-4 py-2.5 rounded-xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
+                    title="Undo activation and return this tenure to draft mode"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Undo Tenure (Return to Draft)</span>
+                  </button>
+                ) : null}
               </div>
+
+              {selectedTenure.isCurrent && canUndoTenure(selectedTenure, tenures) && (
+                <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200 text-amber-950 text-xs leading-relaxed flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-2.5">
+                    <RotateCcw className="w-4 h-4 text-[#E78023] shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-amber-950 block">Tenure Activated from Draft</span>
+                      <p className="text-[11px] text-amber-800">
+                        This session is serving actively on the live site. You can undo this activation anytime to revert it to draft mode and restore the previous council session.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenUndo(selectedTenure)}
+                    className="px-3 py-1.5 rounded-xl bg-white hover:bg-amber-100 border border-amber-300 text-amber-950 text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1 shrink-0 self-start sm:self-center"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-[#E78023]" />
+                    <span>Undo Activation</span>
+                  </button>
+                </div>
+              )}
 
               {selectedTenure.isDraft && (
                 <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs leading-relaxed space-y-1">
@@ -486,6 +644,71 @@ export default function AdminTenuresPage() {
                 </>
               ) : (
                 <span>Confirm &amp; Launch Live Now &rarr;</span>
+              )}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Undo Tenure Modal */}
+      <Modal
+        isOpen={isUndoModalOpen}
+        onClose={() => !isUndoing && setIsUndoModalOpen(false)}
+        title={`Undo Tenure ${undoingTenure?.label} Activation`}
+      >
+        <div className="space-y-5 text-xs text-[#0F172A]">
+          <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 space-y-2.5">
+            <div className="flex items-center gap-2 font-bold text-sm text-[#E78023]">
+              <RotateCcw className="w-4 h-4" />
+              <span>Return Tenure to Draft Mode</span>
+            </div>
+            <p className="leading-relaxed">
+              Are you sure you want to undo the activation of <strong>Tenure {undoingTenure?.label}</strong> ({undoingTenure?.academicYear})?
+            </p>
+            <div className="space-y-2 pt-1 text-[11px] text-amber-950 font-medium">
+              <div className="flex items-start gap-1.5">
+                <span className="text-[#E78023] font-bold shrink-0">•</span>
+                <span><strong>Tenure {undoingTenure?.label}</strong> will immediately return to <strong>Draft mode</strong> and will be completely hidden from the public website (including <code>/team</code>, <code>/archive</code>, and live event feeds).</span>
+              </div>
+              <div className="flex items-start gap-1.5">
+                <span className="text-[#E78023] font-bold shrink-0">•</span>
+                <span><strong>Tenure {previousTenureCandidate?.label || "Previous Session"}</strong> will be restored as the <strong>live active council tenure</strong>.</span>
+              </div>
+              <div className="flex items-start gap-1.5">
+                <span className="text-[#E78023] font-bold shrink-0">•</span>
+                <span><strong>Zero data loss:</strong> All appointed positions, committee rosters, and modifications you made will remain safely preserved in the draft workspace for future release.</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isUndoing}
+              onClick={() => setIsUndoModalOpen(false)}
+            >
+              Keep Live
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={handleConfirmUndo}
+              disabled={isUndoing}
+              className="bg-[#E78023] hover:bg-[#D26E17] text-white border-none cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
+            >
+              {isUndoing ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Reverting to Draft...</span>
+                </>
+              ) : (
+                <>
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Yes, Revert to Draft Mode</span>
+                </>
               )}
             </Button>
           </div>

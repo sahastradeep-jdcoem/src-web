@@ -41,6 +41,8 @@ export interface CouncilTenure {
   status?: "active" | "archived" | "draft";
   startDate?: string; // Date when tenure begins / began (ISO string or YYYY-MM-DD)
   endDate?: string;   // Date when tenure ended / was archived (ISO string or YYYY-MM-DD)
+  previousTenureId?: string; // ID of tenure active prior to activation (enables Undo)
+  activatedFromDraft?: boolean; // True if this tenure was activated from draft mode
   adminCouncil: TeamMember[];
   hostingCommittee: TeamMember[];
   foundingMembers?: TeamMember[];
@@ -574,7 +576,7 @@ export function updateTenureRoster(
  * 2. Activates target tenure, recording begin date and removing draft status
  * 3. Restores target tenure's pre-configured team, clubs & events into active stores
  */
-export function switchActiveTenure(targetTenureId: string, tenureBeginDate?: string): void {
+export async function switchActiveTenure(targetTenureId: string, tenureBeginDate?: string): Promise<void> {
   if (typeof window === "undefined") return;
   const tenures = getStoredTenures();
   
@@ -582,6 +584,11 @@ export function switchActiveTenure(targetTenureId: string, tenureBeginDate?: str
     ? new Date(tenureBeginDate).toISOString() 
     : new Date().toISOString();
   const endIso = new Date().toISOString();
+
+  // Find currently active tenure to know its ID and preserve for Undo capability
+  const currentlyActive = tenures.find((t) => t.isCurrent);
+  const targetOriginal = tenures.find((t) => t.id === targetTenureId);
+  const wasDraft = targetOriginal ? (targetOriginal.isDraft || targetOriginal.status === "draft") : false;
 
   // 1. Snapshot current active data into currently active tenure record and mark as archived
   const currentActiveTeam = getStoredCouncilMembers();
@@ -616,34 +623,183 @@ export function switchActiveTenure(targetTenureId: string, tenureBeginDate?: str
   targetTenure.isDraft = false;
   targetTenure.status = "active";
   targetTenure.startDate = beginIso;
+  if (wasDraft && currentlyActive) {
+    targetTenure.previousTenureId = currentlyActive.id;
+    targetTenure.activatedFromDraft = true;
+  }
 
-  saveStoredTenures(updatedTenures);
+  await saveStoredTenures(updatedTenures);
 
   // 3. Load target tenure's pre-configured team, clubs and events into current active memory
   const draftCouncil = getStoredDraftCouncil(targetTenureId);
   const targetCouncil = draftCouncil.length > 0 ? draftCouncil : (targetTenure.adminCouncil || []);
   if (Array.isArray(targetCouncil) && targetCouncil.length > 0) {
-    saveStoredCouncilMembers(targetCouncil);
+    await saveStoredCouncilMembers(targetCouncil);
   }
   const draftHosting = getStoredDraftHosting(targetTenureId);
   const targetHosting = draftHosting.length > 0 ? draftHosting : (targetTenure.hostingCommittee || []);
   if (Array.isArray(targetHosting) && targetHosting.length > 0) {
-    saveStoredHostingCommittee(targetHosting);
+    await saveStoredHostingCommittee(targetHosting);
   }
   if (targetTenure.foundingMembers && Array.isArray(targetTenure.foundingMembers) && targetTenure.foundingMembers.length > 0) {
-    saveStoredFoundingMembers(targetTenure.foundingMembers);
+    await saveStoredFoundingMembers(targetTenure.foundingMembers);
   }
   const draftClubs = getStoredDraftClubs(targetTenureId);
   const targetClubs = draftClubs.length > 0 ? draftClubs : (targetTenure.clubs || []);
   if (Array.isArray(targetClubs) && targetClubs.length > 0) {
-    saveStoredClubs(targetClubs);
+    await saveStoredClubs(targetClubs);
   }
   if (targetTenure.events && Array.isArray(targetTenure.events)) {
-    saveStoredEvents(targetTenure.events);
+    await saveStoredEvents(targetTenure.events);
   }
 
   window.dispatchEvent(new CustomEvent("src_tenure_changed", { detail: targetTenure }));
   window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: updatedTenures }));
+}
+
+/**
+ * Determines whether a tenure can be undone / reverted back into draft mode.
+ * A tenure can be undone if:
+ * 1. It is currently active.
+ * 2. It was activated from draft (or has a previous tenure to revert to).
+ * 3. It is not the root founding tenure without prior tenure.
+ */
+export function canUndoTenure(tenure?: CouncilTenure | null, allTenures?: CouncilTenure[]): boolean {
+  if (!tenure || !tenure.isCurrent) return false;
+  const list = allTenures && allTenures.length > 0 ? allTenures : getStoredTenures();
+  // If explicitly flagged as activated from draft or has previousTenureId
+  if (tenure.activatedFromDraft || tenure.previousTenureId) return true;
+  // Any active tenure other than the founding 2025-26 session can be undone back to draft
+  if (tenure.id !== "tenure-2025-26" && !tenure.label.includes("2025")) {
+    return list.some((t) => t.id !== tenure.id);
+  }
+  return false;
+}
+
+/**
+ * Undo Tenure Activation:
+ * Reverts the currently activated tenure back to DRAFT mode and restores the previous tenure to ACTIVE status.
+ * 1. Stashes any updates made during active time back into draft stores so no work is lost.
+ * 2. Sets target tenure to isCurrent: false, isDraft: true, status: "draft".
+ * 3. Restores previous tenure to isCurrent: true, isDraft: false, status: "active", endDate: undefined.
+ * 4. Loads previous tenure's snapshot into active council, hosting, founders, clubs, and events stores.
+ * 5. Dual writes to localStorage and direct Firestore with atomic queue backup, dispatching sync events.
+ */
+export async function undoActiveTenure(targetTenureId?: string): Promise<{ 
+  success: boolean; 
+  revertedToTenure?: CouncilTenure; 
+  error?: string 
+}> {
+  if (typeof window === "undefined") return { success: false, error: "Window is undefined" };
+  const tenures = getStoredTenures();
+
+  // Find the active tenure to undo
+  const activeTenure = targetTenureId 
+    ? tenures.find((t) => t.id === targetTenureId)
+    : tenures.find((t) => t.isCurrent);
+
+  if (!activeTenure || !activeTenure.isCurrent) {
+    return { success: false, error: "No currently active tenure found to undo." };
+  }
+
+  // Find the previous tenure to restore
+  let previousTenure: CouncilTenure | undefined;
+  if (activeTenure.previousTenureId) {
+    previousTenure = tenures.find((t) => t.id === activeTenure.previousTenureId);
+  }
+  if (!previousTenure) {
+    // Fallback: find the most recent archived tenure, or tenure-2025-26
+    previousTenure = tenures.find((t) => t.id !== activeTenure.id && t.status === "archived")
+      || tenures.find((t) => t.id === "tenure-2025-26")
+      || tenures.find((t) => t.id !== activeTenure.id && !t.isDraft);
+  }
+
+  if (!previousTenure) {
+    return { success: false, error: "No previous tenure record found to restore." };
+  }
+
+  // 1. Snapshot current active data into draft stores for the tenure being undone
+  const currentActiveTeam = getStoredCouncilMembers();
+  const currentActiveHosting = getStoredHostingCommittee();
+  const currentActiveClubs = getStoredClubs();
+  const currentActiveEvents = getStoredEvents();
+
+  // Save to dedicated draft store for the undone tenure so all edits remain safely preserved
+  try {
+    await saveStoredDraftCouncil(activeTenure.id, currentActiveTeam);
+  } catch (e) {
+    console.warn("Could not stash draft council during undo", e);
+  }
+  try {
+    await saveStoredDraftHosting(activeTenure.id, currentActiveHosting);
+  } catch (e) {
+    console.warn("Could not stash draft hosting during undo", e);
+  }
+  try {
+    await saveStoredDraftClubs(activeTenure.id, currentActiveClubs);
+  } catch (e) {
+    console.warn("Could not stash draft clubs during undo", e);
+  }
+
+  // 2. Update tenures array
+  const updatedTenures = tenures.map((tenure) => {
+    if (tenure.id === activeTenure.id) {
+      return {
+        ...tenure,
+        isCurrent: false,
+        isDraft: true,
+        status: "draft" as const,
+        startDate: undefined,
+        activatedFromDraft: false,
+        previousTenureId: undefined,
+        adminCouncil: currentActiveTeam,
+        hostingCommittee: currentActiveHosting,
+        clubs: currentActiveClubs,
+        events: currentActiveEvents,
+      };
+    }
+    if (tenure.id === previousTenure!.id) {
+      return {
+        ...tenure,
+        isCurrent: true,
+        isDraft: false,
+        status: "active" as const,
+        endDate: undefined,
+      };
+    }
+    return tenure;
+  });
+
+  // 3. Restore previous tenure's snapshot into live active stores
+  if (Array.isArray(previousTenure.adminCouncil) && previousTenure.adminCouncil.length > 0) {
+    await saveStoredCouncilMembers(previousTenure.adminCouncil);
+  }
+  if (Array.isArray(previousTenure.hostingCommittee) && previousTenure.hostingCommittee.length > 0) {
+    await saveStoredHostingCommittee(previousTenure.hostingCommittee);
+  }
+  if (Array.isArray(previousTenure.foundingMembers) && previousTenure.foundingMembers.length > 0) {
+    await saveStoredFoundingMembers(previousTenure.foundingMembers);
+  }
+  if (Array.isArray(previousTenure.clubs) && previousTenure.clubs.length > 0) {
+    await saveStoredClubs(previousTenure.clubs);
+  }
+  if (Array.isArray(previousTenure.events)) {
+    await saveStoredEvents(previousTenure.events);
+  }
+
+  // 4. Save updated tenures to storage and Firestore
+  await saveStoredTenures(updatedTenures);
+
+  // 5. Broadcast updates
+  window.dispatchEvent(new CustomEvent("src_tenure_changed", { detail: previousTenure }));
+  window.dispatchEvent(new CustomEvent("src_tenures_updated", { detail: updatedTenures }));
+  window.dispatchEvent(new CustomEvent("src_council_team_updated"));
+  window.dispatchEvent(new CustomEvent("src_hosting_updated"));
+  window.dispatchEvent(new CustomEvent("src_founding_members_updated"));
+  window.dispatchEvent(new CustomEvent("src_clubs_updated"));
+  window.dispatchEvent(new CustomEvent("src_events_updated"));
+
+  return { success: true, revertedToTenure: previousTenure };
 }
 
 /**

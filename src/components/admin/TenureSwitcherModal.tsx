@@ -18,6 +18,8 @@ import {
   getStoredTenures, 
   getCurrentTenure, 
   createNewDraftTenure,
+  canUndoTenure,
+  undoActiveTenure,
   CouncilTenure 
 } from "@/lib/tenureStore";
 import Link from "next/link";
@@ -38,9 +40,32 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
   const [newAcademicYear, setNewAcademicYear] = useState("2026 - 2027");
   const [startWithTemplate, setStartWithTemplate] = useState(true);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [isUndoing, setIsUndoing] = useState(false);
 
   const refresh = () => {
     setTenures(getStoredTenures());
+  };
+
+  const handleUndoTenure = async (t: CouncilTenure) => {
+    if (!confirm(`Are you sure you want to undo Tenure ${t.label} activation? It will return to draft mode and the previous tenure will be restored as live active.`)) {
+      return;
+    }
+    setIsUndoing(true);
+    try {
+      const res = await undoActiveTenure(t.id);
+      if (res.success) {
+        refresh();
+        const prevLabel = res.revertedToTenure?.label || "previous tenure";
+        setFeedback(`Tenure ${t.label} returned to draft mode. Tenure ${prevLabel} is now live.`);
+      } else {
+        alert(res.error || "Failed to undo tenure.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Failed to undo tenure.");
+    } finally {
+      setIsUndoing(false);
+    }
   };
 
   useEffect(() => {
@@ -159,10 +184,24 @@ export function TenureSwitcherModal({ isOpen, onClose }: TenureSwitcherModalProp
 
                   <div className="flex items-center gap-2">
                     {t.isCurrent ? (
-                      <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>Serving Now</span>
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Serving Now</span>
+                        </span>
+                        {canUndoTenure(t, tenures) && (
+                          <button
+                            type="button"
+                            onClick={() => handleUndoTenure(t)}
+                            disabled={isUndoing}
+                            className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                            title="Undo activation and return this tenure to draft mode"
+                          >
+                            <RotateCcw className="w-3 h-3 text-[#E78023]" />
+                            <span>Undo</span>
+                          </button>
+                        )}
+                      </div>
                     ) : (
                       <Link
                         href={`/admin/team?tenure=${t.id}`}
