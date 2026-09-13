@@ -657,7 +657,6 @@ export const jammingSessionEvent: EventItem = {
 };
 
 export const authenticEvents: EventItem[] = [
-  defaultPrarambhEvent,
   bollywoodDayEvent,
   codeAlphaEvent,
   testingEvent,
