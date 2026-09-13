@@ -368,12 +368,304 @@ export const workshopEvent: EventItem = {
   }
 };
 
+export const test2Event: EventItem = {
+  id: "evt-test2",
+  slug: "test2",
+  name: "Test2",
+  tagline: "Phase 2 Software Reliability & Integration Trials",
+  category: "Technical",
+  date: "21 September 2026",
+  rawDate: "2026-09-21",
+  time: "03:00 PM - 05:00 PM",
+  venue: "Lab 2, Central Computing Center, JDCOEM",
+  organizer: "SRC JDCOEM",
+  organizerClubSlug: "coding",
+  status: "Registration Open",
+  isLive: true,
+  isFeatured: false,
+  poster: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?q=80&w=1600&auto=format&fit=crop",
+  cardImage: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?q=80&w=1600&auto=format&fit=crop",
+  description: "Secondary verification trials and software integration testing for platform reliability and real-time stress assessment.",
+  about: "Test2 is the follow-up QA and testing arena designed to benchmark performance under concurrent loads, test edge cases in web security, and audit database endpoints.",
+  whatToExpect: [
+    "Load Testing & API Benchmarking",
+    "Regression and Endpoint Verification",
+    "Real-Time Assertions & Defect Triage",
+    "Technical Commendations"
+  ],
+  rules: [
+    "Participants must use standard testing sandboxes provided by SRC.",
+    "Logs must include timestamped error traces.",
+    "Individual entries only."
+  ],
+  schedule: [
+    {
+      time: "03:00 PM",
+      title: "Test Scope & Briefing",
+      description: "Distribution of API endpoints and performance parameters.",
+      venue: "Lab 2"
+    },
+    {
+      time: "03:30 PM",
+      title: "Load Stress & Integration Sprints",
+      description: "Execution of test suites and logging findings.",
+      venue: "Lab 2"
+    },
+    {
+      time: "04:45 PM",
+      title: "Wrap-up & Review",
+      description: "Review of QA logs and validation reports.",
+      venue: "Lab 2"
+    }
+  ],
+  prizes: [
+    {
+      position: "Verified Tester",
+      amount: "Accreditation Certificate",
+      perks: ["QA Specialist Badge", "SRC Tech Accreditation"]
+    }
+  ],
+  teamType: "Individual",
+  minTeamSize: 1,
+  maxTeamSize: 1,
+  entryFee: "Free for JDCOEM Students",
+  coordinatorContact: {
+    name: "Harsh Shende",
+    role: "QA Lead",
+    phone: "8237981028"
+  }
+};
+
+export const codeAndCraftEvent: EventItem = {
+  id: "evt-code-and-craft",
+  slug: "code-and-craft",
+  name: "Code & Craft",
+  tagline: "Where Engineering Architecture Meets Aesthetic Design",
+  category: "Technical",
+  date: "23 September 2026",
+  rawDate: "2026-09-23",
+  time: "10:00 AM - 04:30 PM",
+  venue: "Makerspace & Creative Studio, JDCOEM",
+  organizer: "Coding Club & Creative Club",
+  organizerClubSlug: "coding",
+  status: "Registration Open",
+  isLive: true,
+  isFeatured: true,
+  isInterCollege: true,
+  targetAudience: "inter_college",
+  poster: "https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?q=80&w=1600&auto=format&fit=crop",
+  cardImage: "https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?q=80&w=1600&auto=format&fit=crop",
+  description: "An interdisciplinary sprint uniting software engineers with visual designers to build, design, and pitch complete digital products.",
+  about: "Code & Craft celebrates the synergy between rigorous backend code and intuitive, beautiful user interface design. Teams receive real-world problem statements and must deliver both a working prototype and cohesive visual identity.",
+  whatToExpect: [
+    "Full-Stack Web/App Development Sprint",
+    "UI/UX Design, Design Tokens & Wireframing",
+    "Product Pitch & Live Demonstration",
+    "Trophies and Official Council Citations"
+  ],
+  rules: [
+    "Teams can consist of 1 to 4 members.",
+    "All code and visual designs must be produced during the competition window.",
+    "Open-source libraries and component systems are permitted with attribution."
+  ],
+  schedule: [
+    {
+      time: "10:00 AM",
+      title: "Problem Statement Release & Kickoff",
+      description: "Briefing on design criteria, API access, and judging rubric.",
+      venue: "Makerspace"
+    },
+    {
+      time: "10:30 AM",
+      title: "Sprint Session: Code & UI Design",
+      description: "Rapid prototyping, wireframing, and code implementation.",
+      venue: "Computing Complex"
+    },
+    {
+      time: "03:30 PM",
+      title: "Product Showcase & Pitch Finale",
+      description: "Live 3-minute demos to jury of faculty and industry mentors.",
+      venue: "Seminar Hall 1"
+    }
+  ],
+  prizes: [
+    {
+      position: "1st Place Winner",
+      amount: "Championship Trophy & Citations",
+      perks: ["Code & Craft Winner Shield", "Gold Certificates of Excellence"]
+    },
+    {
+      position: "Best UI/UX Design",
+      amount: "Design Excellence Award",
+      perks: ["Creative Trophy", "Design Merit Badge"]
+    }
+  ],
+  teamType: "Both",
+  minTeamSize: 1,
+  maxTeamSize: 4,
+  entryFee: "Free for JDCOEM Students",
+  coordinatorContact: {
+    name: "SRC Coding & Creative Desk",
+    role: "Lead Coordinators",
+    phone: "8237981028"
+  }
+};
+
+export const speechArenaEvent: EventItem = {
+  id: "evt-speech-arena",
+  slug: "speech-arena",
+  name: "Speech Arena",
+  tagline: "The Ultimate Stage for Voice, Oratory & Parliamentary Debate",
+  category: "Competitions",
+  date: "24 September 2026",
+  rawDate: "2026-09-24",
+  time: "11:00 AM - 03:30 PM",
+  venue: "Central Amphitheatre / Seminar Hall 1, JDCOEM",
+  organizer: "SRC JDCOEM",
+  organizerClubSlug: "publicity",
+  status: "Registration Open",
+  isLive: true,
+  isFeatured: false,
+  isInterCollege: true,
+  targetAudience: "inter_college",
+  poster: "https://images.unsplash.com/photo-1475721027785-f74eccf877e2?q=80&w=1600&auto=format&fit=crop",
+  cardImage: "https://images.unsplash.com/photo-1475721027785-f74eccf877e2?q=80&w=1600&auto=format&fit=crop",
+  description: "Step up to the podium and battle in extempore speaking, parliamentary debate, and persuasive oratory before an esteemed panel of judges.",
+  about: "Speech Arena is JDCOEM's flagship oratory and collegiate debating platform. Test your rhetorical eloquence, critical reasoning, and impromptu speaking prowess across multi-format debate rounds.",
+  whatToExpect: [
+    "Impromptu & Extempore Speaking Showdown",
+    "Oxford-Style Parliamentary Debate Face-Off",
+    "Cross-Examination & Audience Rebuttal",
+    "Best Speaker and Best Orator Trophies"
+  ],
+  rules: [
+    "Topics will be drawn 5 minutes prior to the speaking slot.",
+    "Parliamentary decency and collegiate decorum must be upheld at all times.",
+    "Time limits: 3 minutes speech + 1 minute rebuttal."
+  ],
+  schedule: [
+    {
+      time: "11:00 AM",
+      title: "Opening & Topic Draw",
+      description: "Briefing on rules and round 1 topic draws.",
+      venue: "Seminar Hall 1"
+    },
+    {
+      time: "11:30 AM",
+      title: "Round 1: Extempore Oratory",
+      description: "Solo presentations across contemporary social and tech themes.",
+      venue: "Seminar Hall 1"
+    },
+    {
+      time: "02:00 PM",
+      title: "Round 2: The Parliamentary Debate",
+      description: "Top 8 finalists face off in head-to-head Oxford debates.",
+      venue: "Main Amphitheatre"
+    }
+  ],
+  prizes: [
+    {
+      position: "Best Orator (Winner)",
+      amount: "Winner Trophy & Accreditations",
+      perks: ["Golden Microphone Trophy", "Official Merit Citation"]
+    },
+    {
+      position: "Best Rebuttal / Runner Up",
+      amount: "Silver Trophy",
+      perks: ["Debater of the Year Medal", "Accreditation Certificate"]
+    }
+  ],
+  teamType: "Individual",
+  minTeamSize: 1,
+  maxTeamSize: 1,
+  entryFee: "Free for JDCOEM Students",
+  coordinatorContact: {
+    name: "SRC Oratory Secretariat",
+    role: "Debate Lead",
+    phone: "8237981028"
+  }
+};
+
+export const jammingSessionEvent: EventItem = {
+  id: "evt-jamming-session",
+  slug: "jamming-session",
+  name: "Jamming session",
+  tagline: "Sunset Acoustic Chords, Open Mic & Live Campus Melodies",
+  category: "Cultural",
+  date: "25 September 2026",
+  rawDate: "2026-09-25",
+  time: "05:00 PM - 08:30 PM",
+  venue: "Central Amphitheatre, JDCOEM Campus",
+  organizer: "Music Club (SRC JDCOEM)",
+  organizerClubSlug: "music",
+  status: "Registration Open",
+  isLive: true,
+  isFeatured: true,
+  isInterCollege: true,
+  targetAudience: "inter_college",
+  poster: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=1600&auto=format&fit=crop",
+  cardImage: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=1600&auto=format&fit=crop",
+  description: "An electric sunset open mic and acoustic jamming session bringing together campus vocalists, guitarists, beatboxers, and indie bands under the evening sky.",
+  about: "Jamming Session is a pure musical evening open to all acoustic musicians, vocalists, and music enthusiasts. Bring your instrument, take the open mic, or relax on the amphitheatre lawn with friends.",
+  whatToExpect: [
+    "Acoustic & Semi-Unplugged Stage Performances",
+    "Open Mic Slots for Solo Singers and Rappers",
+    "Beatboxing Showdowns and Drum Circles",
+    "Collaborative Campus Band Medleys"
+  ],
+  rules: [
+    "Acoustic and semi-plugged instruments welcome (PA system provided).",
+    "Open mic slots must be pre-registered or checked in 15 minutes before showtime.",
+    "Song choices should adhere to collegiate performance standards."
+  ],
+  schedule: [
+    {
+      time: "05:00 PM",
+      title: "Sunset Acoustic Opening",
+      description: "Opening unplugged set by Music Club ensemble.",
+      venue: "Central Amphitheatre"
+    },
+    {
+      time: "06:00 PM",
+      title: "Open Mic & Student Spotlight",
+      description: "Registered student vocalists and instrumentalists.",
+      venue: "Central Amphitheatre"
+    },
+    {
+      time: "07:30 PM",
+      title: "Grand Collaborative Jam",
+      description: "All-in musical jam and headline encore.",
+      venue: "Central Amphitheatre"
+    }
+  ],
+  prizes: [
+    {
+      position: "Spotlight Performer of the Night",
+      amount: "Musical Honor & Shield",
+      perks: ["Acoustic Excellence Shield", "Featured SRC Studio Recording Opportunity"]
+    }
+  ],
+  teamType: "Both",
+  minTeamSize: 1,
+  maxTeamSize: 6,
+  entryFee: "Free for JDCOEM Students",
+  coordinatorContact: {
+    name: "Music Club Head",
+    role: "Music Lead",
+    phone: "8237981028"
+  }
+};
+
 export const authenticEvents: EventItem[] = [
   defaultPrarambhEvent,
   bollywoodDayEvent,
   codeAlphaEvent,
   testingEvent,
-  workshopEvent
+  test2Event,
+  workshopEvent,
+  codeAndCraftEvent,
+  speechArenaEvent,
+  jammingSessionEvent
 ];
 
 export const mockEvents: EventItem[] = authenticEvents;
