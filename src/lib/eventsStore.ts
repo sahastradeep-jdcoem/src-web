@@ -260,6 +260,13 @@ export function getStoredEvents(): EventItem[] {
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed)) {
         const sanitized = sanitizeEventsList(parsed);
+        // If storage was emptied due to mock event purging, or is empty, fallback to authentic initialEvents!
+        if (sanitized.length === 0 && initialEvents.length > 0) {
+          try {
+            localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(initialEvents));
+          } catch {}
+          return initialEvents;
+        }
         // If resurrecting/deleted mock events were found in storage, purge them immediately
         if (sanitized.length !== parsed.length) {
           try {
@@ -339,10 +346,12 @@ export async function syncEventsFromFirestore(): Promise<EventItem[]> {
     }
     if (remote !== null && Array.isArray(remote)) {
       const current = getStoredEvents();
-      const rawMerged = reconcileArrayDatasets(current, remote);
+      // If remote is empty (e.g. wiped by the undo bug or deleted mock purge), restore authentic current events!
+      const effectiveRemote = remote.length === 0 && current.length > 0 ? current : remote;
+      const rawMerged = reconcileArrayDatasets(current, effectiveRemote);
       const merged = sanitizeEventsList(rawMerged);
-      // If remote had deleted mock events, purge them from Firestore too!
-      if (merged.length !== rawMerged.length) {
+      // If remote was empty or had deleted mock events, sync authentic events back to cloud
+      if (merged.length !== rawMerged.length || (remote.length === 0 && merged.length > 0)) {
         saveSiteContentToFirestore("events", cleanUndefined(merged)).catch(() => {});
       }
       if (typeof window !== "undefined") {
@@ -367,9 +376,10 @@ export function subscribeToEvents(callback: (events: EventItem[]) => void): () =
     if (remote !== null && Array.isArray(remote)) {
       if (hasPendingWritesFor("events") || isLocalWriteRecent("events", 3000)) return;
       const current = getStoredEvents();
-      const rawMerged = reconcileArrayDatasets(current, remote);
+      const effectiveRemote = remote.length === 0 && current.length > 0 ? current : remote;
+      const rawMerged = reconcileArrayDatasets(current, effectiveRemote);
       const merged = sanitizeEventsList(rawMerged);
-      if (merged.length !== rawMerged.length) {
+      if (merged.length !== rawMerged.length || (remote.length === 0 && merged.length > 0)) {
         saveSiteContentToFirestore("events", cleanUndefined(merged)).catch(() => {});
       }
       if (typeof window !== "undefined") {

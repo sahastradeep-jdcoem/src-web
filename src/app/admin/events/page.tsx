@@ -75,10 +75,10 @@ export default function AdminEventsPage() {
     setEventsList(stored);
     setClubsList(getStoredClubs());
     syncEventsFromFirestore().then((res) => {
-      if (res) {
+      if (res && res.length > 0) {
         setEventsList(res);
-      } else {
-        // If Firestore had no record, push the current local state
+      } else if (stored.length > 0) {
+        // If Firestore had no record or was empty, push the current authentic local state
         saveStoredEvents(stored);
       }
     });

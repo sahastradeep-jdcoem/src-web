@@ -225,7 +225,7 @@ export const initialDefaultTenures: CouncilTenure[] = [
     hostingCommittee: hostingCommitteeMembers,
     foundingMembers: foundingMembers,
     clubs: mockClubs,
-    events: [],
+    events: mockEvents,
     archiveNotes: "The 1st & Founding Tenure of Sahastradeep, uniting all 12 collegiate societies at JDCOEM under one central autonomous student council constitution.",
     createdAt: "2025-09-24T00:00:00Z"
   },
@@ -391,7 +391,10 @@ export function getStoredTenures(): CouncilTenure[] {
       });
     }
 
-    const cleanEvents = Array.isArray(t.events) ? t.events.filter((e) => !isDeletedMockEvent(e)) : [];
+    const rawEvents = Array.isArray(t.events) ? t.events.filter((e) => !isDeletedMockEvent(e)) : [];
+    const cleanEvents = (rawEvents.length === 0 && (t.id === "tenure-2025-26" || t.label.includes("2025")))
+      ? mockEvents
+      : rawEvents;
 
     return {
       ...t,
