@@ -715,9 +715,14 @@ export async function updateRegistrationRefundInFirestore(
     refundStatus: "INITIATED" | "PROCESSED" | "FAILED";
     refundAmount: number;
     refundedAt: string;
+    cancellationReason?: string;
+    cancelledBy?: string;
   }
 ): Promise<boolean> {
   if (!registrationId) return false;
+
+  const cancellationReason = refundDetails.cancellationReason || `Refund processed (ID: ${refundDetails.refundId})`;
+  const cancelledBy = refundDetails.cancelledBy || "SRC Admin / Treasurer";
 
   // 1. Update in Firestore
   try {
@@ -728,6 +733,11 @@ export async function updateRegistrationRefundInFirestore(
         refundStatus: refundDetails.refundStatus,
         refundAmount: refundDetails.refundAmount,
         refundedAt: refundDetails.refundedAt,
+        status: "CANCELLED",
+        paymentStatus: "REFUNDED",
+        cancellationReason,
+        cancelledAt: refundDetails.refundedAt,
+        cancelledBy,
       });
     }
   } catch (error) {
@@ -746,6 +756,11 @@ export async function updateRegistrationRefundInFirestore(
               refundStatus: refundDetails.refundStatus,
               refundAmount: refundDetails.refundAmount,
               refundedAt: refundDetails.refundedAt,
+              status: "CANCELLED",
+              paymentStatus: "REFUNDED",
+              cancellationReason,
+              cancelledAt: refundDetails.refundedAt,
+              cancelledBy,
             }
           : r
       );

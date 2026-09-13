@@ -424,35 +424,45 @@ export default function AdminPaymentsPage() {
   // Approve Payment Action
   const handleApproveConfirm = async () => {
     if (!approveTargetRecord) return;
-    const regId = approveTargetRecord.registrationId || approveTargetRecord.id;
+    const docId = approveTargetRecord.id;
+    const regTicketId = approveTargetRecord.registrationId || approveTargetRecord.id;
     const finalUtr = approveUtrInput.trim() || approveTargetRecord.paymentId || `MANUAL-${Date.now().toString().slice(-6)}`;
 
     setIsApproving(true);
     try {
-      await updateRegistrationPaymentStatus(regId, "PAID", "SRC Admin / Treasurer");
+      const nowIso = new Date().toISOString();
+      await updateRegistrationPaymentStatus(docId, "PAID", "SRC Admin / Treasurer");
+      if (regTicketId !== docId) {
+        await updateRegistrationPaymentStatus(regTicketId, "PAID", "SRC Admin / Treasurer");
+      }
+
       if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-        const docRef = doc(db, "student_registrations", regId);
-        await updateDoc(docRef, {
-          paymentStatus: "PAID",
-          status: "CONFIRMED",
-          paymentId: finalUtr,
-          paidAt: new Date().toISOString(),
-          verifiedBy: "SRC Admin / Treasurer",
-          verifiedAt: new Date().toISOString(),
-        });
+        try {
+          const docRef = doc(db, "registrations", docId);
+          await updateDoc(docRef, {
+            paymentStatus: "PAID",
+            status: "CONFIRMED",
+            paymentId: finalUtr,
+            paidAt: nowIso,
+            verifiedBy: "SRC Admin / Treasurer",
+            verifiedAt: nowIso,
+          });
+        } catch (e) {
+          console.warn("Direct doc update warning:", e);
+        }
       }
 
       setRegistrations((prev) =>
         prev.map((r) =>
-          r.id === approveTargetRecord.id || r.registrationId === regId
+          r.id === docId || r.registrationId === regTicketId
             ? {
                 ...r,
                 paymentStatus: "PAID",
                 status: "CONFIRMED",
                 paymentId: finalUtr,
-                paidAt: new Date().toISOString(),
+                paidAt: nowIso,
                 verifiedBy: "SRC Admin / Treasurer",
-                verifiedAt: new Date().toISOString(),
+                verifiedAt: nowIso,
               }
             : r
         )
@@ -472,7 +482,8 @@ export default function AdminPaymentsPage() {
   // Refund Payment Action
   const handleRefundConfirm = async () => {
     if (!refundTargetRecord) return;
-    const regId = refundTargetRecord.registrationId || refundTargetRecord.id;
+    const regDocId = refundTargetRecord.id;
+    const regTicketId = refundTargetRecord.registrationId || refundTargetRecord.id;
     const amountNum = parseFloat(refundAmountInput) || (refundTargetRecord.amountPaid ?? 0);
 
     if (amountNum <= 0) {
@@ -489,7 +500,7 @@ export default function AdminPaymentsPage() {
           paymentId: refundTargetRecord.paymentId,
           orderId: refundTargetRecord.orderId,
           amount: amountNum,
-          registrationId: regId,
+          registrationId: regTicketId,
           reason: refundReasonInput || "Refund issued via SRC Admin Payments Studio",
         }),
       });
@@ -497,28 +508,38 @@ export default function AdminPaymentsPage() {
       const data = await res.json();
       if (res.ok && data.success) {
         const nowIso = new Date().toISOString();
-        await updateRegistrationRefundInFirestore(regId, {
+        const reasonStr = `Refunded: ${refundReasonInput || "Event cancellation / Delegate refund"} (Refund ID: ${data.refundId})`;
+
+        await updateRegistrationRefundInFirestore(regDocId, {
           refundId: data.refundId,
           refundStatus: "PROCESSED",
           refundAmount: amountNum,
           refundedAt: nowIso,
+          cancellationReason: reasonStr,
+          cancelledBy: "SRC Admin / Treasurer",
         });
 
-        // Invalidate pass in Firestore
-        if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-          const docRef = doc(db, "student_registrations", regId);
-          await updateDoc(docRef, {
-            status: "CANCELLED",
-            paymentStatus: "REFUNDED",
-            cancellationReason: `Refunded: ${refundReasonInput} (Refund ID: ${data.refundId})`,
-            cancelledAt: nowIso,
-            cancelledBy: "SRC Admin / Treasurer",
-          });
+        // If regTicketId !== regDocId, also attempt updating document with regTicketId
+        if (regTicketId !== regDocId && db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+          try {
+            const docRef = doc(db, "registrations", regTicketId);
+            await updateDoc(docRef, {
+              status: "CANCELLED",
+              paymentStatus: "REFUNDED",
+              refundId: data.refundId,
+              refundStatus: "PROCESSED",
+              refundAmount: amountNum,
+              refundedAt: nowIso,
+              cancellationReason: reasonStr,
+              cancelledAt: nowIso,
+              cancelledBy: "SRC Admin / Treasurer",
+            });
+          } catch {}
         }
 
         setRegistrations((prev) =>
           prev.map((r) =>
-            r.id === refundTargetRecord.id || r.registrationId === regId
+            r.id === regDocId || r.registrationId === regTicketId
               ? {
                   ...r,
                   status: "CANCELLED",
@@ -527,8 +548,9 @@ export default function AdminPaymentsPage() {
                   refundStatus: "PROCESSED",
                   refundAmount: amountNum,
                   refundedAt: nowIso,
-                  cancellationReason: `Refunded: ${refundReasonInput} (Refund ID: ${data.refundId})`,
+                  cancellationReason: reasonStr,
                   cancelledAt: nowIso,
+                  cancelledBy: "SRC Admin / Treasurer",
                 }
               : r
           )
@@ -551,25 +573,49 @@ export default function AdminPaymentsPage() {
   // Cancel Transaction Action
   const handleCancelConfirm = async () => {
     if (!cancelTargetRecord) return;
-    const regId = cancelTargetRecord.registrationId || cancelTargetRecord.id;
+    const docId = cancelTargetRecord.id;
+    const regTicketId = cancelTargetRecord.registrationId || cancelTargetRecord.id;
 
     setIsCancelling(true);
     try {
       const nowIso = new Date().toISOString();
       if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-        const docRef = doc(db, "student_registrations", regId);
-        await updateDoc(docRef, {
-          status: "CANCELLED",
-          paymentStatus: "FAILED",
-          cancellationReason: cancelReasonInput || "Cancelled by SRC Admin",
-          cancelledAt: nowIso,
-          cancelledBy: "SRC Admin / Treasurer",
-        });
+        try {
+          const docRef = doc(db, "registrations", docId);
+          await updateDoc(docRef, {
+            status: "CANCELLED",
+            paymentStatus: "FAILED",
+            cancellationReason: cancelReasonInput || "Cancelled by SRC Admin",
+            cancelledAt: nowIso,
+            cancelledBy: "SRC Admin / Treasurer",
+          });
+        } catch (e) {
+          console.warn("Direct cancel doc update warning:", e);
+        }
       }
+
+      // Also update local storage and dispatch event
+      try {
+        const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+        const updated = local.map((r: any) =>
+          r.id === docId || r.registrationId === regTicketId
+            ? {
+                ...r,
+                status: "CANCELLED",
+                paymentStatus: "FAILED",
+                cancellationReason: cancelReasonInput || "Cancelled by SRC Admin",
+                cancelledAt: nowIso,
+                cancelledBy: "SRC Admin / Treasurer",
+              }
+            : r
+        );
+        localStorage.setItem("src_local_registrations", JSON.stringify(updated));
+        window.dispatchEvent(new CustomEvent("src_registrations_updated", { detail: updated }));
+      } catch {}
 
       setRegistrations((prev) =>
         prev.map((r) =>
-          r.id === cancelTargetRecord.id || r.registrationId === regId
+          r.id === docId || r.registrationId === regTicketId
             ? {
                 ...r,
                 status: "CANCELLED",
