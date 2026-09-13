@@ -886,6 +886,60 @@ export function subscribeToCouncilMembers(callback: (members: TeamMember[]) => v
   });
 }
 
+export function findClub(allClubs: ClubItem[], targetSlugOrId: string): ClubItem | null {
+  if (!targetSlugOrId || !Array.isArray(allClubs)) return null;
+  const cleanTarget = targetSlugOrId.toLowerCase().trim();
+
+  // 1. Direct slug match
+  const bySlug = allClubs.find((c) => c?.slug?.toLowerCase().trim() === cleanTarget);
+  if (bySlug) return bySlug;
+
+  // 2. Direct ID match
+  const byId = allClubs.find((c) => c?.id?.toLowerCase().trim() === cleanTarget);
+  if (byId) return byId;
+
+  // 3. Name slugified match (e.g. "robotics-club" -> "Robotics Club")
+  const bySlugifiedName = allClubs.find((c) => {
+    const slugified = c?.name?.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    return slugified === cleanTarget;
+  });
+  if (bySlugifiedName) return bySlugifiedName;
+
+  // 4. Stripped name match (e.g. "robotics" -> "Robotics Club")
+  const byStrippedName = allClubs.find((c) => {
+    const stripped = c?.name?.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").replace(/-club$/, "");
+    return stripped === cleanTarget;
+  });
+  if (byStrippedName) return byStrippedName;
+
+  // 5. Cross-alias for Robotics / Agentic AI
+  if (
+    cleanTarget === "robotics" ||
+    cleanTarget === "agentic-ai" ||
+    cleanTarget === "robotics-club" ||
+    cleanTarget === "agentic-ai-club"
+  ) {
+    const roboticsClub = allClubs.find(
+      (c) =>
+        c?.slug?.toLowerCase() === "agentic-ai" ||
+        c?.slug?.toLowerCase() === "robotics" ||
+        c?.id?.toLowerCase() === "club-robotics" ||
+        c?.id === "club-1788779206223" ||
+        c?.name?.toLowerCase().includes("robotics")
+    );
+    if (roboticsClub) return roboticsClub;
+  }
+
+  // 6. Generic partial contains matching
+  const byFuzzy = allClubs.find((c) => {
+    const n = c?.name?.toLowerCase() || "";
+    return n.includes(cleanTarget) || cleanTarget.includes(n.replace(/\s+club$/, ""));
+  });
+  if (byFuzzy) return byFuzzy;
+
+  return null;
+}
+
 // Clubs Roster Store
 export function getStoredClubs(): ClubItem[] {
   if (typeof window === "undefined") return hydrateClubAvatars(initialClubs);

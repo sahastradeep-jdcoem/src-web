@@ -14,7 +14,7 @@ import {
   Compass, 
   Image as ImageIcon 
 } from "lucide-react";
-import { getStoredClubs, syncClubsFromFirestore, subscribeToClubs, getClubLeaders } from "@/lib/councilStore";
+import { getStoredClubs, syncClubsFromFirestore, subscribeToClubs, getClubLeaders, findClub } from "@/lib/councilStore";
 import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
 import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { ClubItem, EventItem } from "@/types";
@@ -32,7 +32,10 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
 
   useEffect(() => {
     const applyClub = (list: ClubItem[]) => {
-      const found = list.find((c) => c.slug === initialClub.slug || c.id === initialClub.id);
+      const found =
+        findClub(list, initialClub.slug) ||
+        findClub(list, initialClub.id) ||
+        list.find((c) => c.slug === initialClub.slug || c.id === initialClub.id);
       if (found) {
         setClub((prev) => {
           if (prev?.logoImage && !found.logoImage) {
@@ -70,7 +73,17 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
   useEffect(() => {
     const applyEvents = (list: EventItem[]) => {
       const filtered = list.filter(
-        (e) => e.organizerClubSlug === club.slug || e.collaboratingClubs?.some((c) => c.slug === club.slug)
+        (e) =>
+          e.organizerClubSlug === club.slug ||
+          (club.slug === "agentic-ai" && (e.organizerClubSlug === "robotics" || e.organizerClubSlug === "club-robotics")) ||
+          (club.slug === "robotics" && (e.organizerClubSlug === "agentic-ai" || e.organizerClubSlug === "club-1788779206223")) ||
+          e.organizerClubSlug === club.id ||
+          e.collaboratingClubs?.some(
+            (c) =>
+              c.slug === club.slug ||
+              (club.slug === "agentic-ai" && c.slug === "robotics") ||
+              (club.slug === "robotics" && c.slug === "agentic-ai")
+          )
       );
       setEvents(filtered);
     };
