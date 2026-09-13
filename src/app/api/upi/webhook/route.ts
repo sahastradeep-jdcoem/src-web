@@ -19,20 +19,30 @@ const DEFAULT_SECRET = "SRC_UPI_2026_GATEWAY";
 function extractUtrFromText(text: string): string | null {
   if (!text) return null;
 
+  // URL-decode if needed (in case payload arrived form-encoded)
+  let decoded = text;
+  try {
+    if (text.includes("%")) {
+      decoded = decodeURIComponent(text.replace(/\+/g, " "));
+    }
+  } catch {
+    decoded = text;
+  }
+
   // Pattern 1: Explicit labels like "UPI Ref: 425612345678", "UTR: 425612345678", "Ref No: 425612345678", "Ref no. 425612345678", "Txn ID: 425612345678", "rrn: 425612345678"
-  const labeledMatch = text.match(/(?:upi\s*(?:ref|reference|txn)?(?:\s*no\.?)?[:\-\s]*|utr[:\-\s]*|ref[:\-\s]*|txn\s*(?:id)?[:\-\s]*|rrn[:\-\s]*)(\d{12})/i);
+  const labeledMatch = decoded.match(/(?:upi\s*(?:ref|reference|txn)?(?:\s*no\.?)?[:\-\s]*|utr[:\-\s]*|ref[:\-\s]*|txn\s*(?:id)?[:\-\s]*|rrn[:\-\s]*)(\d{12})/i);
   if (labeledMatch && labeledMatch[1]) {
     return labeledMatch[1];
   }
 
   // Pattern 2: Key-value / JSON like "utr": "425612345678" or utr=425612345678
-  const kvMatch = text.match(/(?:utr|reference|ref_no)[\s"':=]+(\d{12})/i);
+  const kvMatch = decoded.match(/(?:utr|reference|ref_no)[\s"':=]+(\d{12})/i);
   if (kvMatch && kvMatch[1]) {
     return kvMatch[1];
   }
 
   // Pattern 3: Standalone 12-digit number (UPI UTRs are 12 digits; skip 12-digit numbers that look like Indian phone numbers with +91)
-  const standaloneMatches = text.matchAll(/\b(\d{12})\b/g);
+  const standaloneMatches = decoded.matchAll(/\b(\d{12})\b/g);
   for (const m of standaloneMatches) {
     const candidate = m[1];
     // Exclude numbers starting with 91 followed by 6, 7, 8, or 9 (Indian mobile numbers prefixed with 91)
@@ -51,8 +61,18 @@ function extractUtrFromText(text: string): string | null {
 function extractAmountFromText(text: string): number | null {
   if (!text) return null;
 
+  // URL-decode if needed (in case payload arrived form-encoded)
+  let decoded = text;
+  try {
+    if (text.includes("%")) {
+      decoded = decodeURIComponent(text.replace(/\+/g, " "));
+    }
+  } catch {
+    decoded = text;
+  }
+
   // Clean HTML entities or zero-width unicode
-  const clean = text
+  const clean = decoded
     .replace(/&nbsp;/gi, " ")
     .replace(/&#8377;/g, "₹")
     .replace(/[\u200B-\u200D\uFEFF]/g, "");
@@ -163,13 +183,23 @@ export async function POST(req: NextRequest) {
       // Ignore header access errors
     }
 
+    // Auto-decode URL-encoding if MacroDroid sent the body form-urlencoded (e.g. %7B%22notificationText...)
+    let decodedRawText = rawText;
+    try {
+      if (rawText.includes("%")) {
+        decodedRawText = decodeURIComponent(rawText.replace(/\+/g, " "));
+      }
+    } catch {
+      decodedRawText = rawText;
+    }
+
     // Auto-strip any accidental {notification} tokens if user had them typed in MacroDroid
-    const cleanedRawText = (rawText || "")
+    const cleanedRawText = (decodedRawText || rawText || "")
       .replace(/\{notification\}/gi, "")
       .trim();
 
     // Parse body safely regardless of Content-Type or malformed formatting
-    const trimmedText = cleanedRawText || rawText.trim();
+    const trimmedText = cleanedRawText || decodedRawText.trim() || rawText.trim();
     if (trimmedText.startsWith("{")) {
       // 1. Try standard JSON parsing
       try {
