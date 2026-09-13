@@ -245,6 +245,27 @@ export async function POST(req: NextRequest) {
                 return Math.abs(expectedAmt - Number(amount)) < 0.5;
               })
               .sort((a, b) => {
+                const textLower = combinedText.toLowerCase();
+
+                // Priority 1: Participant Name matching in notification text
+                const nameA = String(a.data.participantName || a.data.leaderName || "").toLowerCase().trim();
+                const nameB = String(b.data.participantName || b.data.leaderName || "").toLowerCase().trim();
+                const aMatchesName = Boolean(nameA && nameA.split(/\s+/).some(part => part.length >= 3 && textLower.includes(part)));
+                const bMatchesName = Boolean(nameB && nameB.split(/\s+/).some(part => part.length >= 3 && textLower.includes(part)));
+
+                if (aMatchesName && !bMatchesName) return -1;
+                if (!aMatchesName && bMatchesName) return 1;
+
+                // Priority 2: Phone number matching in notification text
+                const phoneA = String(a.data.phone || "").replace(/\D/g, "").slice(-6);
+                const phoneB = String(b.data.phone || "").replace(/\D/g, "").slice(-6);
+                const aMatchesPhone = Boolean(phoneA && phoneA.length >= 6 && textLower.includes(phoneA));
+                const bMatchesPhone = Boolean(phoneB && phoneB.length >= 6 && textLower.includes(phoneB));
+
+                if (aMatchesPhone && !bMatchesPhone) return -1;
+                if (!aMatchesPhone && bMatchesPhone) return 1;
+
+                // Priority 3: Timestamp recency (newest waiting session first)
                 const tA = new Date(a.data.createdAt || 0).getTime();
                 const tB = new Date(b.data.createdAt || 0).getTime();
                 return tB - tA;
