@@ -365,30 +365,7 @@ export function getStoredTenures(): CouncilTenure[] {
     let resolvedCouncil = stripCategoryAndLevel(
       draftCouncil.length > 0 ? draftCouncil : (t.adminCouncil && t.adminCouncil.length > 0 ? t.adminCouncil : (isFirstTenure ? adminCouncilMembers : []))
     );
-    if (isFirstTenure) {
-      resolvedCouncil = resolvedCouncil.map((m) => {
-        if (!m.avatar || m.avatar.trim() === "") {
-          const canon = adminCouncilMembers.find((c) => 
-            c.name && m.name && c.name.toLowerCase().trim() === m.name.toLowerCase().trim()
-          );
-          if (canon && canon.avatar) return { ...m, avatar: canon.avatar };
-        }
-        return m;
-      });
-    }
-
     let resolvedFounders = stripCategoryAndLevel(isFirstTenure ? (t.foundingMembers || activeFounders) : []);
-    if (isFirstTenure) {
-      resolvedFounders = resolvedFounders.map((m) => {
-        if (!m.avatar || m.avatar.trim() === "") {
-          const canon = foundingMembers.find((c) => 
-            c.name && m.name && c.name.toLowerCase().trim() === m.name.toLowerCase().trim()
-          );
-          if (canon && canon.avatar) return { ...m, avatar: canon.avatar };
-        }
-        return m;
-      });
-    }
 
     const cleanEvents = Array.isArray(t.events) ? t.events : [];
 
@@ -811,16 +788,6 @@ export async function undoActiveTenure(targetTenureId?: string): Promise<{
     ? previousTenure.adminCouncil
     : (isFirstTenure ? adminCouncilMembers : []);
 
-  // Guarantee every member has their authentic avatar re-hydrated from canonicalCouncil
-  councilToRestore = councilToRestore.map((m) => {
-    if (!m.avatar || m.avatar.trim() === "") {
-      const canon = adminCouncilMembers.find((c) => 
-        c.name && m.name && c.name.toLowerCase().trim() === m.name.toLowerCase().trim()
-      );
-      if (canon && canon.avatar) return { ...m, avatar: canon.avatar };
-    }
-    return m;
-  });
   if (councilToRestore.length > 0) {
     await saveStoredCouncilMembers(councilToRestore);
   }
@@ -832,15 +799,6 @@ export async function undoActiveTenure(targetTenureId?: string): Promise<{
   let foundersToRestore = (Array.isArray(previousTenure.foundingMembers) && previousTenure.foundingMembers.length > 0)
     ? previousTenure.foundingMembers
     : (isFirstTenure ? foundingMembers : []);
-  foundersToRestore = foundersToRestore.map((m) => {
-    if (!m.avatar || m.avatar.trim() === "") {
-      const canon = foundingMembers.find((c) => 
-        c.name && m.name && c.name.toLowerCase().trim() === m.name.toLowerCase().trim()
-      );
-      if (canon && canon.avatar) return { ...m, avatar: canon.avatar };
-    }
-    return m;
-  });
   if (foundersToRestore.length > 0) {
     await saveStoredFoundingMembers(foundersToRestore);
   }

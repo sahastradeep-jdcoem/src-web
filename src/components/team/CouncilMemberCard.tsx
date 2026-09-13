@@ -5,7 +5,6 @@ import { Mail, Linkedin, ArrowRight } from "lucide-react";
 import { TeamMember } from "@/types";
 import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { isHardcodedBio } from "@/lib/councilStore";
-import { adminCouncilMembers } from "@/data/team";
 
 interface CouncilMemberCardProps {
   member: TeamMember;
@@ -19,11 +18,7 @@ export function CouncilMemberCard({ member, categoryLabel = "ADMIN" }: CouncilMe
   const hasEmail = Boolean(cleanEmail && cleanEmail !== "undefined" && cleanEmail !== "null");
   const hasLinkedin = Boolean(cleanLinkedin && cleanLinkedin !== "undefined" && cleanLinkedin !== "null");
 
-  // Multi-tier avatar resolution: member.avatar -> canonical fallback -> placeholder
-  const canonicalMatch = adminCouncilMembers.find((c) =>
-    c.name && member.name && c.name.toLowerCase().trim() === member.name.toLowerCase().trim()
-  );
-  const effectiveAvatar = member.avatar || canonicalMatch?.avatar || "";
+  const effectiveAvatar = member.avatar?.trim() || "";
 
   return (
     <div className="group rounded-2xl bg-white border border-slate-200 hover:border-[#17458F]/30 hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col justify-between shadow-xs font-sans">

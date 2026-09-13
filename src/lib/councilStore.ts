@@ -538,25 +538,10 @@ export function getStoredCouncilMembers(): TeamMember[] {
       if (Array.isArray(parsed)) {
         let { repaired, members } = repairCouncilSwapIfNeeded(stripCategoryAndLevel(parsed));
         members = deduplicateTeamMembers(members);
-        // Auto-heal empty or wiped avatars from initialAdminCouncil (canonicalCouncil.json)
-        let avatarHealed = false;
-        members = members.map((m) => {
-          if (!m.avatar || m.avatar.trim() === "") {
-            const canon = initialAdminCouncil.find((c) => matchCouncilAndFounder(m, c));
-            if (canon && canon.avatar && canon.avatar.trim() !== "") {
-              avatarHealed = true;
-              return { ...m, avatar: canon.avatar };
-            }
-          }
-          return m;
-        });
-        if ((repaired || avatarHealed) && typeof window !== "undefined") {
+        if (repaired && typeof window !== "undefined") {
           try {
             localStorage.setItem("src_council_team", JSON.stringify(members));
           } catch {}
-          if (avatarHealed) {
-            saveSiteContentToFirestore("council_team", cleanUndefined(members)).catch(() => {});
-          }
         }
         return deduplicateTeamMembers(members);
       }
@@ -570,17 +555,7 @@ export function getStoredCouncilMembers(): TeamMember[] {
 export async function saveStoredCouncilMembers(members: TeamMember[], autoSyncToFounding = true): Promise<void> {
   if (typeof window === "undefined") return;
   try {
-    // Guarantee canonical avatars are never stripped to empty strings
-    const healed = members.map((m) => {
-      if (!m.avatar || m.avatar.trim() === "") {
-        const canon = initialAdminCouncil.find((c) => matchCouncilAndFounder(m, c));
-        if (canon && canon.avatar && canon.avatar.trim() !== "") {
-          return { ...m, avatar: canon.avatar };
-        }
-      }
-      return m;
-    });
-    const sanitized = cleanUndefined(deduplicateTeamMembers(stripCategoryAndLevel(healed)));
+    const sanitized = cleanUndefined(deduplicateTeamMembers(stripCategoryAndLevel(members)));
     markLocalWrite("council_team");
     try {
       localStorage.setItem("src_council_team", JSON.stringify(sanitized));
@@ -645,21 +620,6 @@ export async function syncCouncilMembersFromFirestore(): Promise<TeamMember[]> {
         merged = deduplicateTeamMembers(members);
       }
 
-      // Auto-heal empty or wiped avatars from initialAdminCouncil
-      let avatarHealed = false;
-      merged = merged.map((m) => {
-        if (!m.avatar || m.avatar.trim() === "") {
-          const canon = initialAdminCouncil.find((c) => matchCouncilAndFounder(m, c));
-          if (canon && canon.avatar && canon.avatar.trim() !== "") {
-            avatarHealed = true;
-            return { ...m, avatar: canon.avatar };
-          }
-        }
-        return m;
-      });
-      if (avatarHealed) {
-        saveSiteContentToFirestore("council_team", cleanUndefined(merged)).catch(() => {});
-      }
       if (typeof window !== "undefined") {
         try {
           localStorage.setItem("src_council_team", JSON.stringify(merged));
@@ -848,23 +808,7 @@ export function subscribeToCouncilMembers(callback: (members: TeamMember[]) => v
         merged = deduplicateTeamMembers(members);
       }
 
-      // Auto-heal empty or wiped avatars from initialAdminCouncil
-      let avatarHealed = false;
-      merged = merged.map((m) => {
-        if (!m.avatar || m.avatar.trim() === "") {
-          const canon = initialAdminCouncil.find((c) => matchCouncilAndFounder(m, c));
-          if (canon && canon.avatar && canon.avatar.trim() !== "") {
-            avatarHealed = true;
-            return { ...m, avatar: canon.avatar };
-          }
-        }
-        return m;
-      });
-      if (avatarHealed) {
-        saveStoredCouncilMembers(merged, true);
-        callback(merged);
-        return;
-      }
+
       if (repaired) {
         saveStoredCouncilMembers(merged, true);
       } else if (typeof window !== "undefined") {
@@ -1110,7 +1054,7 @@ export function syncCouncilAdminsToFounding(councilList?: TeamMember[], persist 
       id: founderId,
       role: foundingRole,
       designation: foundingRole,
-      avatar: (admin.avatar && admin.avatar.length > 10) ? admin.avatar : (existing?.avatar || ""),
+      avatar: admin.avatar !== undefined ? admin.avatar : (existing?.avatar || ""),
       email: admin.email || existing?.email || "",
       linkedin: admin.linkedin || existing?.linkedin || "",
       bio: admin.bio || existing?.bio || "",
@@ -1155,7 +1099,7 @@ export function syncFoundingToCouncilAdmins(foundingList?: TeamMember[], persist
       id: adminId,
       role: adminRole,
       designation: adminRole,
-      avatar: (founder.avatar && founder.avatar.length > 10) ? founder.avatar : (existing?.avatar || ""),
+      avatar: founder.avatar !== undefined ? founder.avatar : (existing?.avatar || ""),
       email: founder.email || existing?.email || "",
       linkedin: founder.linkedin || existing?.linkedin || "",
       bio: founder.bio || existing?.bio || "",
@@ -1200,7 +1144,7 @@ export function reconcileCouncilAndFoundingSync(): TeamMember[] {
           needsSync = true;
           break;
         }
-        if (c.avatar && c.avatar !== f.avatar) {
+        if ((c.avatar || "") !== (f.avatar || "")) {
           needsSync = true;
           break;
         }
@@ -1238,25 +1182,10 @@ export function getStoredFoundingMembers(): TeamMember[] {
       if (Array.isArray(parsed)) {
         let { repaired, members } = repairCouncilSwapIfNeeded(stripCategoryAndLevel(parsed), true);
         members = deduplicateTeamMembers(members);
-        // Auto-heal empty or wiped avatars from initialFoundingMembers
-        let avatarHealed = false;
-        members = members.map((m) => {
-          if (!m.avatar || m.avatar.trim() === "") {
-            const canon = initialFoundingMembers.find((c) => matchCouncilAndFounder(m, c));
-            if (canon && canon.avatar && canon.avatar.trim() !== "") {
-              avatarHealed = true;
-              return { ...m, avatar: canon.avatar };
-            }
-          }
-          return m;
-        });
-        if ((repaired || avatarHealed) && typeof window !== "undefined") {
+        if (repaired && typeof window !== "undefined") {
           try {
             localStorage.setItem("src_founding_members", JSON.stringify(members));
           } catch {}
-          if (avatarHealed) {
-            saveSiteContentToFirestore("founding_members", cleanUndefined(members)).catch(() => {});
-          }
         }
         return deduplicateTeamMembers(members);
       }
@@ -1270,17 +1199,7 @@ export function getStoredFoundingMembers(): TeamMember[] {
 export async function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCouncil = true): Promise<void> {
   if (typeof window === "undefined") return;
   try {
-    // Guarantee canonical avatars are never stripped to empty strings
-    const healed = members.map((m) => {
-      if (!m.avatar || m.avatar.trim() === "") {
-        const canon = initialFoundingMembers.find((c) => matchCouncilAndFounder(m, c));
-        if (canon && canon.avatar && canon.avatar.trim() !== "") {
-          return { ...m, avatar: canon.avatar };
-        }
-      }
-      return m;
-    });
-    const sanitized = cleanUndefined(deduplicateTeamMembers(stripCategoryAndLevel(healed)));
+    const sanitized = cleanUndefined(deduplicateTeamMembers(stripCategoryAndLevel(members)));
     markLocalWrite("founding_members");
     try {
       localStorage.setItem("src_founding_members", JSON.stringify(sanitized));
@@ -1349,21 +1268,6 @@ export async function syncFoundingMembersFromFirestore(): Promise<TeamMember[]> 
         return merged;
       }
 
-      // Auto-heal empty or wiped avatars from initialFoundingMembers
-      let avatarHealed = false;
-      merged = merged.map((m) => {
-        if (!m.avatar || m.avatar.trim() === "") {
-          const canon = initialFoundingMembers.find((c) => matchCouncilAndFounder(m, c));
-          if (canon && canon.avatar && canon.avatar.trim() !== "") {
-            avatarHealed = true;
-            return { ...m, avatar: canon.avatar };
-          }
-        }
-        return m;
-      });
-      if (avatarHealed) {
-        saveSiteContentToFirestore("founding_members", cleanUndefined(merged)).catch(() => {});
-      }
 
       if (typeof window !== "undefined") {
         try {

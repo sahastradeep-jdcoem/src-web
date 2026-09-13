@@ -794,7 +794,7 @@ export default function AdminTeamPage() {
             name: m.name,
             designation: m.designation || (m as any).level || p.designation,
             department: m.department,
-            avatar: m.avatar || p.avatar,
+            avatar: m.avatar !== undefined ? m.avatar : p.avatar,
             quote: m.bio || p.quote,
             email: m.email,
             linkedin: m.linkedin,
