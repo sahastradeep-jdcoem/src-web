@@ -27,8 +27,7 @@ import {
   Globe,
   GraduationCap,
   Ban,
-  LayoutGrid,
-  List
+  Ticket
 } from "lucide-react";
 import { EventItem, ClubItem, CustomQuestion, TargetAudience } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -56,7 +55,6 @@ export default function AdminEventsPage() {
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
   const [clubsList, setClubsList] = useState<ClubItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedAudience, setSelectedAudience] = useState<string>("all");
@@ -522,34 +520,30 @@ export default function AdminEventsPage() {
     <div className="space-y-8 max-w-7xl mx-auto text-[#0F172A]">
       
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200/80">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-200/80">
         <div className="space-y-1">
-          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
-            <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#0F172A] uppercase tracking-tight">
-              EVENT DIRECTORY STUDIO
+          <div className="flex items-center gap-2.5">
+            <h1 className="font-heading font-extrabold text-2xl text-[#0F172A] tracking-tight">
+              Event Directory Studio
             </h1>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-50 border border-slate-200 shadow-2xs">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span className="font-bold text-[#17458F] tabular-nums text-xs">{eventsList.length}</span>
-              <span className="text-slate-500 font-medium text-xs">Total Records</span>
-            </div>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-[#17458F] border border-blue-100">
+              <span className="h-1.5 w-1.5 rounded-full bg-blue-600"></span>
+              <span className="tabular-nums font-bold">{eventsList.length}</span> Events
+            </span>
           </div>
           <p className="text-xs text-slate-500 font-medium">
-            Publish, curate, and monitor campus flagships, hackathons, and chartered club assemblies with live cloud synchronization.
+            Manage registrations, schedules, audience access, and live listings across the portal.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={handleManualSync}
             disabled={isSyncing}
-            className="h-9 px-3 sm:px-3.5 rounded-xl border border-slate-200/90 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 hover:text-[#17458F] text-xs font-medium tracking-normal transition-all duration-200 shadow-2xs active:scale-[0.98] cursor-pointer inline-flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="h-9 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold inline-flex items-center gap-2 transition-all shadow-2xs disabled:opacity-60 cursor-pointer"
             title="Force immediate synchronization with Firebase Cloud Firestore"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-[#17458F] transition-transform duration-500 ${isSyncing ? "animate-spin" : ""}`} />
+            <RefreshCw className={`w-3.5 h-3.5 text-[#17458F] ${isSyncing ? "animate-spin" : ""}`} />
             <span>{isSyncing ? "Syncing..." : "Sync Live Cloud"}</span>
           </button>
 
@@ -557,9 +551,9 @@ export default function AdminEventsPage() {
             onClick={() => setIsCreateListingPickerOpen(true)}
             variant="outline"
             size="sm"
-            className="gap-1.5 cursor-pointer shadow-2xs border-slate-200 hover:border-slate-300 text-slate-700 hover:text-[#17458F] h-9"
+            className="h-9 gap-1.5 text-xs font-semibold border-slate-200 hover:border-slate-300 text-slate-700 hover:text-[#17458F] shadow-2xs cursor-pointer"
           >
-            <Layers className="w-4 h-4 text-slate-500" />
+            <Layers className="w-3.5 h-3.5 text-slate-500" />
             <span>Create Listing</span>
           </Button>
 
@@ -567,25 +561,25 @@ export default function AdminEventsPage() {
             onClick={() => setIsCreateOpen(true)}
             variant="primary"
             size="sm"
-            className="gap-1.5 cursor-pointer shadow-xs bg-[#17458F] hover:bg-[#123670] h-9 font-semibold text-white px-3.5"
+            className="h-9 gap-1.5 text-xs font-semibold bg-[#17458F] hover:bg-[#123670] text-white shadow-xs px-3.5 cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3.5 h-3.5" />
             <span>New Event</span>
           </Button>
 
           <Link
             href="/events"
             target="_blank"
-            className="h-9 w-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors inline-flex items-center justify-center shadow-2xs"
+            className="h-9 w-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 hover:text-[#17458F] inline-flex items-center justify-center transition-colors shadow-2xs"
             title="Preview Live Events Hub in New Tab"
           >
-            <Eye className="w-4 h-4" />
+            <Eye className="w-3.5 h-3.5" />
           </Link>
         </div>
       </div>
 
       {notice && (
-        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-semibold flex items-center justify-between gap-2 shadow-xs animate-in fade-in duration-300">
+        <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-semibold flex items-center justify-between gap-2 shadow-xs animate-in fade-in duration-300">
           <div className="flex items-center gap-2.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>{notice}</span>
@@ -599,100 +593,24 @@ export default function AdminEventsPage() {
         </div>
       )}
 
-      {/* Executive Metric Pulse Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total Events</span>
-            <div className="h-7 w-7 rounded-lg bg-blue-50 text-[#17458F] flex items-center justify-center">
-              <CalendarIcon className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="font-heading font-extrabold text-2xl text-slate-900 tabular-nums">
-              {eventsList.length}
-            </span>
-            <span className="text-[11px] text-slate-400 font-medium">listings</span>
-          </div>
-          <p className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
-            <Sparkles className="w-3 h-3 text-amber-500" />
-            <span>{eventsList.filter((e) => e.isParentFest).length} flagship / umbrella fests</span>
-          </p>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Active Registrations</span>
-            <div className="h-7 w-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <Users className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="font-heading font-extrabold text-2xl text-slate-900 tabular-nums">
-              {eventsList.filter((e) => !e.isCancelled && e.status === "Registration Open" && !e.noRegistrationRequired).length}
-            </span>
-            <span className="text-[11px] text-emerald-600 font-bold">open now</span>
-          </div>
-          <p className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
-            <span>{eventsList.filter((e) => e.noRegistrationRequired).length} walk-in entry formats</span>
-          </p>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Commercial & Paid</span>
-            <div className="h-7 w-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <Sparkles className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="font-heading font-extrabold text-2xl text-slate-900 tabular-nums">
-              {eventsList.filter((e) => !e.noRegistrationRequired && (e.isPaid || (e.feeAmount && e.feeAmount > 0))).length}
-            </span>
-            <span className="text-[11px] text-slate-400 font-medium">ticketed</span>
-          </div>
-          <p className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
-            <span>{eventsList.filter((e) => !e.isPaid || e.noRegistrationRequired).length} free / complimentary events</span>
-          </p>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Inter-College Scope</span>
-            <div className="h-7 w-7 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center">
-              <Globe className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="font-heading font-extrabold text-2xl text-slate-900 tabular-nums">
-              {eventsList.filter((e) => e.targetAudience === "inter_college" || (e.isInterCollege !== false && e.targetAudience !== "jdcoem_only")).length}
-            </span>
-            <span className="text-[11px] text-sky-700 font-bold">open to all</span>
-          </div>
-          <p className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
-            <span>{eventsList.filter((e) => e.targetAudience === "jdcoem_only" || e.isInterCollege === false).length} JDCOEM-exclusive</span>
-          </p>
-        </div>
-      </div>
-
-      {/* Filter Toolbar & View Switcher */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs space-y-3.5">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          {/* Search bar */}
-          <div className="relative flex-1 max-w-lg">
+      {/* Filter & Search Toolbar */}
+      <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          {/* Search Box */}
+          <div className="relative flex-1">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by event title, organizer club, venue, or category..."
-              className="w-full pl-10 pr-9 py-2 rounded-xl bg-slate-50/70 border border-slate-200 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-[#17458F] focus:ring-1 focus:ring-[#17458F] transition-all"
+              placeholder="Search events by title, host club, venue, or category..."
+              className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-50/70 border border-slate-200 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-[#17458F] focus:ring-1 focus:ring-[#17458F] transition-all"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-200/60 transition-colors"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-md transition-colors"
                 title="Clear search"
               >
                 <X className="w-3.5 h-3.5" />
@@ -700,73 +618,37 @@ export default function AdminEventsPage() {
             )}
           </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap justify-between lg:justify-end">
-            {/* Category quick dropdown filter */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider hidden sm:inline">Category:</span>
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="h-8 px-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none focus:border-[#17458F] transition-colors cursor-pointer"
-              >
-                <option value="all">All Categories</option>
-                <option value="Technical">Technical</option>
-                <option value="Cultural">Cultural</option>
-                <option value="Sports">Sports</option>
-                <option value="Workshops">Workshops</option>
-                <option value="Literary">Literary</option>
-                <option value="Social">Social</option>
-                <option value="Flagship">Flagship Umbrella</option>
-              </select>
-            </div>
+          {/* Dropdown Filters */}
+          <div className="flex items-center gap-2.5">
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="h-8 px-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none focus:border-[#17458F] transition-colors cursor-pointer"
+            >
+              <option value="all">All Categories</option>
+              <option value="Technical">Technical</option>
+              <option value="Cultural">Cultural</option>
+              <option value="Sports">Sports</option>
+              <option value="Competitions">Competitions</option>
+              <option value="Workshops">Workshops</option>
+              <option value="Fest">Fest</option>
+              <option value="Flagship">Flagship Umbrella</option>
+            </select>
 
-            {/* Audience filter */}
-            <div className="flex items-center gap-1.5">
-              <select
-                value={selectedAudience}
-                onChange={(e) => setSelectedAudience(e.target.value)}
-                className="h-8 px-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none focus:border-[#17458F] transition-colors cursor-pointer"
-              >
-                <option value="all">All Audiences</option>
-                <option value="inter_college">🌐 Inter-College</option>
-                <option value="jdcoem_only">🎓 JDCOEM Only</option>
-              </select>
-            </div>
-
-            {/* View switcher */}
-            <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200/60">
-              <button
-                type="button"
-                onClick={() => setViewMode("table")}
-                className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  viewMode === "table"
-                    ? "bg-white text-[#17458F] shadow-2xs"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-                title="Table Roster View"
-              >
-                <List className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Roster</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("grid")}
-                className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  viewMode === "grid"
-                    ? "bg-white text-[#17458F] shadow-2xs"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-                title="Studio Cards Grid View"
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Cards</span>
-              </button>
-            </div>
+            <select
+              value={selectedAudience}
+              onChange={(e) => setSelectedAudience(e.target.value)}
+              className="h-8 px-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none focus:border-[#17458F] transition-colors cursor-pointer"
+            >
+              <option value="all">All Audiences</option>
+              <option value="inter_college">Open to All (Inter-College)</option>
+              <option value="jdcoem_only">JDCOEM Only</option>
+            </select>
           </div>
         </div>
 
-        {/* Status Tab Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 border-t border-slate-100 no-scrollbar">
+        {/* Status Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 pt-1 border-t border-slate-100 no-scrollbar">
           {[
             { id: "all", label: "All Events", count: eventsList.length },
             { 
@@ -803,7 +685,7 @@ export default function AdminEventsPage() {
                 className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer inline-flex items-center gap-1.5 ${
                   isActive
                     ? "bg-[#17458F] text-white shadow-2xs"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900"
                 }`}
               >
                 <span>{tab.label}</span>
@@ -818,17 +700,17 @@ export default function AdminEventsPage() {
             );
           })}
 
-          <div className="ml-auto pl-2 text-[11px] text-slate-400 font-medium whitespace-nowrap">
+          <div className="ml-auto pl-2 text-[11px] text-slate-400 font-medium whitespace-nowrap hidden sm:block">
             Showing <strong className="text-slate-700">{filteredEvents.length}</strong> of {eventsList.length}
           </div>
         </div>
       </div>
 
-      {/* Events View (Table or Grid) */}
+      {/* Events Table Roster */}
       {filteredEvents.length === 0 ? (
-        <div className="bg-white rounded-3xl border border-slate-200/80 p-12 text-center space-y-4 shadow-xs">
-          <div className="mx-auto h-14 w-14 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400">
-            <Inbox className="w-7 h-7" />
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center space-y-4 shadow-2xs">
+          <div className="mx-auto h-12 w-12 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400">
+            <Inbox className="w-6 h-6" />
           </div>
           <div className="space-y-1">
             <h3 className="font-heading font-bold text-base text-slate-800">
@@ -866,222 +748,19 @@ export default function AdminEventsPage() {
             </Button>
           </div>
         </div>
-      ) : viewMode === "grid" ? (
-        /* Studio Cards Grid View */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredEvents.map((evt) => {
-            const isCancelled = evt.isCancelled || evt.status === "Cancelled";
-            const isWalkIn = Boolean(evt.noRegistrationRequired);
-            const isPaid = !isWalkIn && (evt.isPaid || (evt.feeAmount && evt.feeAmount > 0));
-
-            return (
-              <div
-                key={evt.id || evt.slug}
-                className="group bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between"
-              >
-                {/* Visual Banner Header */}
-                <div className="relative h-44 w-full bg-slate-900 overflow-hidden">
-                  <img
-                    src={evt.poster || evt.cardImage || evt.headerImage || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop"}
-                    alt={evt.name}
-                    loading="lazy"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90 group-hover:opacity-100"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop";
-                    }}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
-
-                  {/* Overlaid Badges */}
-                  <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
-                    <span className="px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider border border-white/20">
-                      {evt.category}
-                    </span>
-                    
-                    <button
-                      type="button"
-                      onClick={() => handleToggleAudience(evt)}
-                      className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-md border transition-all cursor-pointer shadow-sm ${
-                        evt.targetAudience === "jdcoem_only"
-                          ? "bg-amber-500/90 text-white border-amber-300 hover:bg-amber-600"
-                          : "bg-[#17458F]/90 text-white border-blue-300 hover:bg-[#123670]"
-                      }`}
-                      title="Click to toggle JDCOEM Only vs Inter-College"
-                    >
-                      {evt.targetAudience === "jdcoem_only" ? "🎓 JDCOEM Only" : "🌐 Open to All"}
-                    </button>
-                  </div>
-
-                  {/* Bottom Title on Image */}
-                  <div className="absolute bottom-3 left-3 right-3 text-white">
-                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                      {evt.isParentFest && (
-                        <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#E78023] text-white shadow-2xs">
-                          Umbrella Fest
-                        </span>
-                      )}
-                      {evt.parentEventName && (
-                        <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-400/90 text-slate-900">
-                          Part of {evt.parentEventName}
-                        </span>
-                      )}
-                    </div>
-                    <h3 className="font-heading font-bold text-base line-clamp-1 leading-snug drop-shadow-sm">
-                      {evt.name}
-                    </h3>
-                  </div>
-                </div>
-
-                {/* Card Body */}
-                <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs text-slate-600">
-                      <div className="flex items-center gap-1.5 font-bold text-slate-800">
-                        <Users className="w-3.5 h-3.5 text-[#17458F] shrink-0" />
-                        <span className="truncate max-w-[170px]">{evt.organizer || "SRC Sahastradeep"}</span>
-                      </div>
-                      {evt.collaboratingClubs && evt.collaboratingClubs.length > 0 && (
-                        <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
-                          +{evt.collaboratingClubs.length} co-host{evt.collaboratingClubs.length > 1 ? "s" : ""}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs font-semibold text-slate-700 pt-1">
-                      <div className="flex items-center gap-1.5">
-                        <CalendarIcon className="w-3.5 h-3.5 text-[#E78023]" />
-                        <span>{evt.date}</span>
-                      </div>
-                      {evt.time && (
-                        <div className="flex items-center gap-1 text-[11px] text-slate-500">
-                          <Clock className="w-3 h-3 text-slate-400" />
-                          <span>{evt.time}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span className="truncate">{evt.venue}</span>
-                    </div>
-                  </div>
-
-                  {/* Status & Fee Bar */}
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                    <div>
-                      {isWalkIn ? (
-                        <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1">
-                          🚶 Walk-in Entry
-                        </span>
-                      ) : (
-                        <Badge
-                          variant={
-                            isCancelled
-                              ? "rose"
-                              : evt.status === "Registration Open"
-                              ? "orange"
-                              : "slate"
-                          }
-                          size="sm"
-                        >
-                          {isCancelled ? "Cancelled" : evt.status}
-                        </Badge>
-                      )}
-                    </div>
-
-                    <span
-                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                        isPaid
-                          ? "bg-blue-50 text-[#17458F] border-[#17458F]/30"
-                          : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      }`}
-                    >
-                      {isPaid ? (evt.entryFee || `₹${evt.feeAmount || 0} / person`) : "Free Entry"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Card Action Footer */}
-                <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-1.5">
-                  <div className="flex items-center gap-1">
-                    {!isWalkIn && (
-                      <Link
-                        href={`/admin/registrations?event=${encodeURIComponent(evt.name)}`}
-                        className="h-8 px-2.5 rounded-lg bg-white hover:bg-blue-50 text-[#17458F] border border-slate-200 hover:border-blue-200 text-xs font-semibold transition-all inline-flex items-center gap-1.5 shadow-2xs"
-                        title="View Registrations & Responses"
-                      >
-                        <Users className="w-3.5 h-3.5" />
-                        <span>Passes</span>
-                      </Link>
-                    )}
-                    <Link
-                      href={`/events/${evt.slug}`}
-                      target="_blank"
-                      className="h-8 w-8 rounded-lg bg-white hover:bg-slate-100 text-slate-600 hover:text-[#17458F] border border-slate-200 transition-all inline-flex items-center justify-center shadow-2xs"
-                      title="View Public Page"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                    </Link>
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    {!isCancelled && (
-                      <>
-                        <button
-                          onClick={() => handleStartEdit(evt)}
-                          className="h-8 w-8 rounded-lg bg-white hover:bg-slate-100 text-slate-700 hover:text-[#17458F] border border-slate-200 transition-all inline-flex items-center justify-center cursor-pointer shadow-2xs"
-                          title="Edit Event"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDuplicate(evt)}
-                          className="h-8 w-8 rounded-lg bg-white hover:bg-slate-100 text-slate-700 hover:text-[#17458F] border border-slate-200 transition-all inline-flex items-center justify-center cursor-pointer shadow-2xs"
-                          title="Duplicate Event"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEventToCancel(evt);
-                            setCancellationNotice("");
-                          }}
-                          className="h-8 w-8 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 transition-all inline-flex items-center justify-center cursor-pointer shadow-2xs"
-                          title="Cancel Event"
-                        >
-                          <Ban className="w-3.5 h-3.5" />
-                        </button>
-                      </>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setEventToDelete(evt)}
-                      className="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-all inline-flex items-center justify-center cursor-pointer shadow-2xs"
-                      title="Delete Event"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
       ) : (
-        /* Enhanced Table Roster View */
-        <div className="bg-white rounded-3xl border border-slate-200/80 overflow-hidden shadow-xs">
+        <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-2xs">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead className="bg-slate-50/90 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
                 <tr>
-                  <th className="py-3.5 px-5">Event & Venue</th>
-                  <th className="py-3.5 px-5">Host & Collaborators</th>
-                  <th className="py-3.5 px-4">Category</th>
-                  <th className="py-3.5 px-5">Date & Time</th>
-                  <th className="py-3.5 px-4">Audience</th>
-                  <th className="py-3.5 px-4">Status & Pricing</th>
-                  <th className="py-3.5 px-5 text-right">Actions</th>
+                  <th className="py-3 px-5">Event & Venue</th>
+                  <th className="py-3 px-5">Host & Collaborators</th>
+                  <th className="py-3 px-4">Category</th>
+                  <th className="py-3 px-5">Date & Time</th>
+                  <th className="py-3 px-4">Audience</th>
+                  <th className="py-3 px-4">Status & Pricing</th>
+                  <th className="py-3 px-5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
@@ -1089,83 +768,80 @@ export default function AdminEventsPage() {
                   const isCancelled = evt.isCancelled || evt.status === "Cancelled";
                   const isWalkIn = Boolean(evt.noRegistrationRequired);
                   const isPaid = !isWalkIn && (evt.isPaid || (evt.feeAmount && evt.feeAmount > 0));
-                  const posterUrl = evt.poster || evt.cardImage || evt.posterImage || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop";
 
                   return (
-                    <tr key={evt.id || evt.slug} className="hover:bg-slate-50/70 transition-colors">
-                      {/* Event Name & Poster */}
+                    <tr key={evt.id || evt.slug} className="hover:bg-slate-50/80 transition-colors">
+                      {/* Event Name & Venue (NO PHOTO) */}
                       <td className="py-3.5 px-5">
-                        <div className="flex items-center gap-3">
-                          <div className="h-11 w-11 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0 shadow-2xs">
-                            <img
-                              src={posterUrl}
-                              alt={evt.name}
-                              loading="lazy"
-                              className="h-full w-full object-cover"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop";
-                              }}
-                            />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
-                              <span className="font-bold text-slate-900 text-sm hover:text-[#17458F] transition-colors leading-tight">
-                                {evt.name}
+                        <div className="space-y-0.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-bold text-slate-900 text-sm leading-snug">
+                              {evt.name}
+                            </span>
+                            {evt.isParentFest && (
+                              <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.2 rounded-full bg-blue-50 text-[#17458F] border border-blue-200">
+                                Umbrella Fest
                               </span>
-                              {evt.isParentFest && (
-                                <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.2 rounded-full bg-[#E78023]/10 text-[#E78023] border border-[#E78023]/30">
-                                  Umbrella Fest
-                                </span>
-                              )}
-                              {evt.parentEventName && (
-                                <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.2 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-                                  Part of {evt.parentEventName}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1 text-[11px] text-slate-400 font-sans">
-                              <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                              <span className="truncate max-w-[220px]">{evt.venue}</span>
-                            </div>
+                            )}
+                            {evt.parentEventName && (
+                              <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.2 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                                Part of {evt.parentEventName}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 text-[11px] text-slate-400 font-sans">
+                            <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span className="truncate max-w-[240px]">{evt.venue}</span>
                           </div>
                         </div>
                       </td>
 
                       {/* Organized By */}
                       <td className="py-3.5 px-5">
-                        <div className="flex items-center gap-1.5 font-bold text-slate-800">
-                          <Users className="w-3.5 h-3.5 text-[#17458F] shrink-0" />
-                          <span className="truncate max-w-[160px]">{evt.organizer || "SRC Sahastradeep"}</span>
-                        </div>
-                        {evt.collaboratingClubs && evt.collaboratingClubs.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            <span className="text-[9px] text-slate-400 font-medium">with</span>
-                            {evt.collaboratingClubs.map((collab) => (
-                              <span
-                                key={collab.slug || collab.name}
-                                className="text-[9px] font-semibold bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded border border-slate-200"
-                              >
-                                {collab.name}
-                              </span>
-                            ))}
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1.5 font-bold text-slate-800 text-xs">
+                            <Building2 className="w-3.5 h-3.5 text-[#17458F] shrink-0" />
+                            <span className="truncate max-w-[170px]">{evt.organizer || "SRC Sahastradeep"}</span>
                           </div>
-                        )}
+                          {evt.collaboratingClubs && evt.collaboratingClubs.length > 0 && (
+                            <div className="flex flex-wrap gap-1 items-center">
+                              <span className="text-[9px] text-slate-400 font-medium">with</span>
+                              {evt.collaboratingClubs.map((collab) => (
+                                <span
+                                  key={collab.slug || collab.name}
+                                  className="text-[9px] font-semibold bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded border border-slate-200"
+                                >
+                                  {collab.name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </td>
 
                       {/* Category */}
                       <td className="py-3.5 px-4">
-                        <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold uppercase tracking-wider border border-slate-200/80 whitespace-nowrap">
+                        <span className={cn(
+                          "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap",
+                          evt.category === "Technical" ? "bg-blue-50 text-blue-700 border-blue-200" :
+                          evt.category === "Cultural" ? "bg-purple-50 text-purple-700 border-purple-200" :
+                          evt.category === "Sports" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                          evt.category === "Workshops" ? "bg-amber-50 text-amber-800 border-amber-200" :
+                          evt.category === "Competitions" ? "bg-rose-50 text-rose-700 border-rose-200" :
+                          evt.category === "Fest" ? "bg-indigo-50 text-indigo-700 border-indigo-200" :
+                          "bg-slate-100 text-slate-700 border-slate-200"
+                        )}>
                           {evt.category}
                         </span>
                       </td>
 
                       {/* Scheduled Date */}
                       <td className="py-3.5 px-5 text-slate-600 font-sans">
-                        <div className="flex items-center gap-1.5 font-semibold text-slate-800 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5 font-semibold text-slate-800 text-xs whitespace-nowrap">
                           <CalendarIcon className="w-3.5 h-3.5 text-[#E78023] shrink-0" />
                           <span>{evt.date}</span>
                         </div>
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex items-center gap-2 mt-0.5">
                           {evt.time && (
                             <div className="flex items-center gap-1 text-[11px] text-slate-500 whitespace-nowrap">
                               <Clock className="w-3 h-3 text-slate-400" />
@@ -1180,17 +856,18 @@ export default function AdminEventsPage() {
                         </div>
                       </td>
 
-                      {/* Audience / Eligibility */}
+                      {/* Audience / Eligibility (Clean SVG Icon, No Emojis) */}
                       <td className="py-3.5 px-4">
                         <button
                           type="button"
                           onClick={() => handleToggleAudience(evt)}
-                          className={`whitespace-nowrap px-3 py-1 rounded-full text-xs font-semibold tracking-normal transition-all cursor-pointer border shadow-2xs inline-flex items-center gap-1.5 ${
+                          className={cn(
+                            "whitespace-nowrap px-3 py-1 rounded-full text-xs font-semibold tracking-normal transition-all cursor-pointer border shadow-2xs inline-flex items-center gap-1.5",
                             evt.targetAudience === "jdcoem_only"
                               ? "bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100"
                               : "bg-sky-50 text-sky-800 border-sky-200/80 hover:bg-sky-100"
-                          }`}
-                          title="Click to toggle between JDCOEM Only and Inter-College"
+                          )}
+                          title="Click to toggle between JDCOEM Only and Open to All"
                         >
                           {evt.targetAudience === "jdcoem_only" ? (
                             <>
@@ -1206,12 +883,13 @@ export default function AdminEventsPage() {
                         </button>
                       </td>
 
-                      {/* Status & Pricing */}
+                      {/* Status & Pricing (Clean Badges, No Emojis) */}
                       <td className="py-3.5 px-4">
                         <div className="flex flex-col gap-1 items-start">
                           {isWalkIn ? (
                             <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1 whitespace-nowrap">
-                              🚶 Walk-in Entry
+                              <Ticket className="w-3 h-3 text-emerald-600" />
+                              <span>Walk-in Entry</span>
                             </span>
                           ) : (
                             <Badge
@@ -1228,11 +906,12 @@ export default function AdminEventsPage() {
                             </Badge>
                           )}
                           <span
-                            className={`px-2 py-0.2 rounded-full text-[9px] font-bold border whitespace-nowrap ${
+                            className={cn(
+                              "px-2 py-0.2 rounded-full text-[9px] font-bold border whitespace-nowrap",
                               isPaid
                                 ? "bg-blue-50 text-[#17458F] border-[#17458F]/30"
                                 : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            }`}
+                            )}
                           >
                             {isPaid ? (evt.entryFee || `₹${evt.feeAmount || 0} / person`) : "Free Entry"}
                           </span>
@@ -1245,7 +924,7 @@ export default function AdminEventsPage() {
                           {!isWalkIn && (
                             <Link
                               href={`/admin/registrations?event=${encodeURIComponent(evt.name)}`}
-                              className="p-1.5 rounded-lg text-[#17458F] hover:bg-blue-50 hover:text-[#123670] transition-colors"
+                              className="p-1.5 rounded-lg text-[#17458F] hover:bg-blue-50 transition-colors"
                               title="View Delegate Registrations"
                             >
                               <Users className="w-3.5 h-3.5" />
