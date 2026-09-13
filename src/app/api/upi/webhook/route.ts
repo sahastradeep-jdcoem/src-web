@@ -169,15 +169,18 @@ export async function POST(req: NextRequest) {
     if ((!utr || !/^\d{12}$/.test(utr)) && (!amount || amount <= 0)) {
       if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
         try {
-          const logId = `PING-${Date.now()}`;
-          await setDoc(doc(db, "upi_webhook_logs", logId), {
-            id: logId,
-            receivedAt: now,
-            combinedText: combinedText.slice(0, 500) || "[Empty / Ping Payload]",
+          const pingId = `PING-${Date.now().toString().slice(-6)}`;
+          await setDoc(doc(db, "verified_upi_payments", pingId), {
+            utr: pingId,
+            amount: 0,
+            rawNotification: combinedText || "MacroDroid Phone Test Ping",
             status: "PING",
-            rawBody: typeof rawBody === "object" ? JSON.stringify(rawBody).slice(0, 500) : String(rawBody).slice(0, 500),
+            matchedStudentName: "MacroDroid Phone Connected",
+            receivedAt: now,
           });
-        } catch {}
+        } catch (pingErr) {
+          console.warn("Notice: ping save to verified_upi_payments notice:", pingErr);
+        }
       }
 
       return NextResponse.json({

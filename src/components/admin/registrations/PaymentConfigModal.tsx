@@ -473,11 +473,11 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
               </ol>
             </div>
 
-            {/* Recent Verified Signals */}
+            {/* Recent Verified Signals & Phone Pings */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  Recent Cloud Verified Payments
+                  Live Phone Signals &amp; Verified Payments ({recentSignals.length})
                 </span>
                 <button
                   type="button"
@@ -491,69 +491,26 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
 
               {recentSignals.length === 0 ? (
                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-400">
-                  No verified payments recorded yet.
+                  No signals recorded yet. Tap &quot;Test Action&quot; in MacroDroid or click &quot;Send Test Signal&quot; above to verify.
                 </div>
               ) : (
-                <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white">
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white max-h-56 overflow-y-auto">
                   {recentSignals.map((sig, i) => (
                     <div key={i} className="p-3 text-xs flex items-center justify-between">
                       <div className="space-y-0.5">
                         <div className="flex items-center gap-2">
                           <span className="font-mono font-bold text-slate-900">Ref: {sig.utr}</span>
-                          <Badge variant={sig.status === "MATCHED" ? "success" : "slate"} size="sm">
+                          <Badge variant={sig.status === "MATCHED" ? "success" : sig.status === "PING" ? "navy" : "warning"} size="sm">
                             {sig.status}
                           </Badge>
                         </div>
                         <p className="text-[10px] text-slate-500 font-mono">
-                          {sig.receivedAt ? new Date(sig.receivedAt).toLocaleTimeString() : ""} • {sig.matchedStudentName ? `Matched: ${sig.matchedStudentName}` : "Unclaimed"}
+                          {sig.receivedAt ? new Date(sig.receivedAt).toLocaleTimeString() : ""} • {sig.matchedStudentName ? sig.matchedStudentName : sig.rawNotification || "Received"}
                         </p>
                       </div>
-                      <span className="font-bold text-emerald-700 text-sm">
-                        ₹{sig.amount || 0}
+                      <span className={`font-bold text-sm ${sig.status === "PING" ? "text-slate-400 text-xs" : "text-emerald-700"}`}>
+                        {sig.status === "PING" ? "Ping Verified" : `₹${sig.amount || 0}`}
                       </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Live Phone Activity / Raw Pings Log */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  Live Phone Activity / Raw Pings Log ({recentLogs.length})
-                </span>
-              </div>
-
-              {recentLogs.length === 0 ? (
-                <div className="p-4 rounded-xl bg-amber-50/50 border border-amber-200/60 text-center text-xs text-amber-800 space-y-1">
-                  <p className="font-bold">No pings received from MacroDroid yet</p>
-                  <p className="text-[11px] text-amber-700">
-                    To test connection right now: In MacroDroid, tap the 3 dots next to <em>HTTP Request</em> → tap <strong>Test Actions</strong>, then tap Refresh.
-                  </p>
-                </div>
-              ) : (
-                <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white max-h-48 overflow-y-auto">
-                  {recentLogs.map((log, i) => (
-                    <div key={i} className="p-2.5 text-xs flex items-center justify-between gap-3">
-                      <div className="space-y-0.5 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <Badge variant={log.status === "MATCHED" ? "success" : log.status === "PING" ? "navy" : "warning"} size="sm">
-                            {log.status}
-                          </Badge>
-                          <span className="text-[10px] text-slate-400 font-mono">
-                            {log.receivedAt ? new Date(log.receivedAt).toLocaleTimeString() : ""}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-700 font-mono truncate max-w-md">
-                          {log.combinedText || log.rawBody || "(empty payload)"}
-                        </p>
-                      </div>
-                      {log.extractedAmount ? (
-                        <span className="font-bold text-emerald-700 text-xs shrink-0">
-                          ₹{log.extractedAmount}
-                        </span>
-                      ) : null}
                     </div>
                   ))}
                 </div>
