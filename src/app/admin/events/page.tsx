@@ -240,6 +240,15 @@ export default function AdminEventsPage() {
       subEventBadge: formData.subEventBadge || undefined,
       targetAudience: formData.targetAudience || "inter_college",
       isInterCollege: formData.targetAudience === "inter_college",
+      coordinatorContact:
+        formData.coordinatorContact &&
+        (Boolean(formData.coordinatorContact.name?.trim()) || Boolean(formData.coordinatorContact.phone?.trim()))
+          ? {
+              name: (formData.coordinatorContact.name || "").trim(),
+              role: (formData.coordinatorContact.role || "").trim(),
+              phone: (formData.coordinatorContact.phone || "").trim(),
+            }
+          : undefined,
     };
 
     const updated = [created, ...eventsList];
@@ -329,6 +338,13 @@ export default function AdminEventsPage() {
       hasPrizes: editingEvent.hasPrizes !== undefined ? editingEvent.hasPrizes : Boolean(editingEvent.prizes && editingEvent.prizes.length > 0),
       schedule: editingEvent.schedule ? JSON.parse(JSON.stringify(editingEvent.schedule)) : [],
       prizes: editingEvent.prizes ? JSON.parse(JSON.stringify(editingEvent.prizes)) : [],
+      coordinatorContact: editingEvent.coordinatorContact
+        ? {
+            name: editingEvent.coordinatorContact.name || "",
+            role: editingEvent.coordinatorContact.role || "",
+            phone: editingEvent.coordinatorContact.phone || "",
+          }
+        : undefined,
     };
   }, [editingEvent]);
 
@@ -409,6 +425,15 @@ export default function AdminEventsPage() {
       subEventBadge: formData.subEventBadge || undefined,
       targetAudience: formData.targetAudience || "inter_college",
       isInterCollege: formData.targetAudience === "inter_college",
+      coordinatorContact:
+        formData.coordinatorContact &&
+        (Boolean(formData.coordinatorContact.name?.trim()) || Boolean(formData.coordinatorContact.phone?.trim()))
+          ? {
+              name: (formData.coordinatorContact.name || "").trim(),
+              role: (formData.coordinatorContact.role || "").trim(),
+              phone: (formData.coordinatorContact.phone || "").trim(),
+            }
+          : undefined,
     };
 
     const hasItem = eventsList.some(targetMatch);

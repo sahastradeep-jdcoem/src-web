@@ -763,16 +763,28 @@ export default function EventDetailPage() {
                 )}
 
                 {/* Coordinator Contact */}
-                {event.coordinatorContact && (
-                  <div className="pt-4 border-t border-slate-100 text-xs space-y-1">
-                    <span className="text-slate-500 uppercase font-bold text-[10px]">
+                {event.coordinatorContact && (event.coordinatorContact.name?.trim() || event.coordinatorContact.phone?.trim()) && (
+                  <div className="pt-4 border-t border-slate-100 text-xs space-y-1.5">
+                    <span className="text-slate-400 uppercase font-extrabold text-[10px] tracking-wider block">
                       Festival Secretariat
                     </span>
-                    <p className="font-semibold text-slate-800">{event.coordinatorContact.name} ({event.coordinatorContact.role})</p>
-                    <p className="text-[#E78023] font-bold flex items-center gap-1.5">
-                      <Phone className="w-3 h-3" />
-                      <span>{event.coordinatorContact.phone}</span>
-                    </p>
+                    {event.coordinatorContact.name?.trim() && (
+                      <p className="font-semibold text-slate-800 leading-snug">
+                        {event.coordinatorContact.name.trim()}
+                        {event.coordinatorContact.role?.trim() && (
+                          <span className="text-slate-500 font-normal"> ({event.coordinatorContact.role.trim()})</span>
+                        )}
+                      </p>
+                    )}
+                    {event.coordinatorContact.phone?.trim() && (
+                      <a
+                        href={`tel:${event.coordinatorContact.phone.trim().replace(/\s+/g, "")}`}
+                        className="text-[#E78023] hover:text-[#c46816] font-bold flex items-center gap-1.5 transition-colors group w-fit"
+                      >
+                        <Phone className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
+                        <span className="hover:underline">{event.coordinatorContact.phone.trim()}</span>
+                      </a>
+                    )}
                   </div>
                 )}
               </div>
@@ -882,16 +894,28 @@ export default function EventDetailPage() {
                 )}
 
                 {/* Coordinator Contact */}
-                {event.coordinatorContact && (
-                  <div className="pt-4 border-t border-slate-100 text-xs space-y-1">
-                    <span className="text-slate-500 uppercase font-bold text-[10px]">
+                {event.coordinatorContact && (event.coordinatorContact.name?.trim() || event.coordinatorContact.phone?.trim()) && (
+                  <div className="pt-4 border-t border-slate-100 text-xs space-y-1.5">
+                    <span className="text-slate-400 uppercase font-extrabold text-[10px] tracking-wider block">
                       Event Helpdesk
                     </span>
-                    <p className="font-semibold text-slate-800">{event.coordinatorContact.name} ({event.coordinatorContact.role})</p>
-                    <p className="text-[#E78023] font-bold flex items-center gap-1.5">
-                      <Phone className="w-3 h-3" />
-                      <span>{event.coordinatorContact.phone}</span>
-                    </p>
+                    {event.coordinatorContact.name?.trim() && (
+                      <p className="font-semibold text-slate-800 leading-snug">
+                        {event.coordinatorContact.name.trim()}
+                        {event.coordinatorContact.role?.trim() && (
+                          <span className="text-slate-500 font-normal"> ({event.coordinatorContact.role.trim()})</span>
+                        )}
+                      </p>
+                    )}
+                    {event.coordinatorContact.phone?.trim() && (
+                      <a
+                        href={`tel:${event.coordinatorContact.phone.trim().replace(/\s+/g, "")}`}
+                        className="text-[#E78023] hover:text-[#c46816] font-bold flex items-center gap-1.5 transition-colors group w-fit"
+                      >
+                        <Phone className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
+                        <span className="hover:underline">{event.coordinatorContact.phone.trim()}</span>
+                      </a>
+                    )}
                   </div>
                 )}
               </div>

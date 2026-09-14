@@ -35,6 +35,15 @@ export function sanitizeEventItem(event: EventItem): EventItem {
     endDate: event.endDate || undefined,
     isMultiDay: Boolean(event.isMultiDay),
     noRegistrationRequired: Boolean(event.noRegistrationRequired),
+    coordinatorContact:
+      event.coordinatorContact &&
+      (Boolean(event.coordinatorContact.name?.trim()) || Boolean(event.coordinatorContact.phone?.trim()))
+        ? {
+            name: (event.coordinatorContact.name || "").trim(),
+            role: (event.coordinatorContact.role || "").trim(),
+            phone: (event.coordinatorContact.phone || "").trim(),
+          }
+        : undefined,
     whatToExpect: Array.isArray(event.whatToExpect)
       ? Array.from(
           new Set(

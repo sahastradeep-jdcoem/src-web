@@ -32,6 +32,7 @@ import {
   ArrowUp,
   ArrowDown,
   Copy,
+  Phone,
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -68,6 +69,11 @@ export interface EventFormData {
   hasPrizes?: boolean;
   schedule: EventScheduleItem[];
   prizes: EventPrize[];
+  coordinatorContact?: {
+    name?: string;
+    role?: string;
+    phone?: string;
+  };
   teamType: "Individual" | "Team" | "Both";
   minTeamSize: number;
   maxTeamSize: number;
@@ -270,6 +276,11 @@ export function EventFormModal({
     hasPrizes: initialHasPrizes,
     schedule: initialData?.schedule && Array.isArray(initialData.schedule) ? JSON.parse(JSON.stringify(initialData.schedule)) : [],
     prizes: initialData?.prizes && Array.isArray(initialData.prizes) ? JSON.parse(JSON.stringify(initialData.prizes)) : [],
+    coordinatorContact: {
+      name: initialData?.coordinatorContact?.name || "",
+      role: initialData?.coordinatorContact?.role || "",
+      phone: initialData?.coordinatorContact?.phone || "",
+    },
     teamType: initialData?.teamType || "Both",
     minTeamSize: initialData?.minTeamSize || 2,
     maxTeamSize: initialData?.maxTeamSize || 4,
@@ -303,6 +314,11 @@ export function EventFormModal({
         time: initialData.time || prev.time || "10:00 AM IST",
         noRegistrationRequired: Boolean(initialData.noRegistrationRequired),
         collaboratingClubs: initialData.collaboratingClubs || [],
+        coordinatorContact: {
+          name: initialData.coordinatorContact?.name || "",
+          role: initialData.coordinatorContact?.role || "",
+          phone: initialData.coordinatorContact?.phone || "",
+        },
         whatToExpect: initialData.whatToExpect && initialData.whatToExpect.length > 0 ? initialData.whatToExpect : [""],
         rules: initialData.rules && initialData.rules.length > 0 ? initialData.rules : [""],
         hasSchedule: initialData.hasSchedule !== undefined
@@ -620,8 +636,19 @@ export function EventFormModal({
     try {
       setIsSubmitting(true);
       setFormError(null);
+      const cleanCoordinator =
+        form.coordinatorContact &&
+        (Boolean(form.coordinatorContact.name?.trim()) || Boolean(form.coordinatorContact.phone?.trim()))
+          ? {
+              name: (form.coordinatorContact.name || "").trim(),
+              role: (form.coordinatorContact.role || "").trim(),
+              phone: (form.coordinatorContact.phone || "").trim(),
+            }
+          : undefined;
+
       await onSubmit({
         ...form,
+        coordinatorContact: cleanCoordinator,
         hasSchedule: Boolean(form.hasSchedule),
         hasPrizes: Boolean(form.hasPrizes),
         schedule: form.hasSchedule ? (form.schedule || []) : [],
@@ -2246,6 +2273,171 @@ export function EventFormModal({
                 </div>
               </>
             )}
+
+            {/* SUB-SECTION: EVENT HELPDESK & COORDINATOR CONTACT */}
+            <div className="space-y-4 pt-4 border-t border-slate-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-[#E78023]" />
+                    <h4 className="font-heading font-bold text-sm text-slate-900 uppercase">
+                      Event Helpdesk &amp; Coordinator Contact
+                    </h4>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Direct support contact displayed on the public event registration card. Leave empty to omit helpdesk completely.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {(form.coordinatorContact?.name || form.coordinatorContact?.phone) && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm((prev) => ({
+                          ...prev,
+                          coordinatorContact: { name: "", role: "", phone: "" },
+                        }))
+                      }
+                      className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1 rounded-lg border border-transparent hover:border-rose-200 transition-colors font-medium cursor-pointer"
+                    >
+                      Clear / Leave Empty
+                    </button>
+                  )}
+                  <span
+                    className={cn(
+                      "text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border shrink-0",
+                      form.coordinatorContact?.name || form.coordinatorContact?.phone
+                        ? "bg-amber-50 text-amber-800 border-amber-200"
+                        : "bg-slate-100 text-slate-500 border-slate-200"
+                    )}
+                  >
+                    {form.coordinatorContact?.name || form.coordinatorContact?.phone
+                      ? "Helpdesk Active"
+                      : "Helpdesk Omitted"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                {/* Coordinator Name / Desk */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                    Coordinator / Desk Name
+                  </label>
+                  <input
+                    type="text"
+                    value={form.coordinatorContact?.name || ""}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        coordinatorContact: {
+                          ...(prev.coordinatorContact || { role: "", phone: "" }),
+                          name: e.target.value,
+                        },
+                      }))
+                    }
+                    placeholder="e.g., SRC Coding & Creative Desk"
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
+                  />
+                </div>
+
+                {/* Designation / Role */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                    Role / Designation (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={form.coordinatorContact?.role || ""}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        coordinatorContact: {
+                          ...(prev.coordinatorContact || { name: "", phone: "" }),
+                          role: e.target.value,
+                        },
+                      }))
+                    }
+                    placeholder="e.g., Lead Coordinators"
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
+                  />
+                </div>
+
+                {/* Phone Number */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
+                    <Phone className="w-3 h-3 text-[#E78023]" />
+                    <span>Contact Phone / WhatsApp</span>
+                  </label>
+                  <input
+                    type="tel"
+                    value={form.coordinatorContact?.phone || ""}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        coordinatorContact: {
+                          ...(prev.coordinatorContact || { name: "", role: "" }),
+                          phone: e.target.value,
+                        },
+                      }))
+                    }
+                    placeholder="e.g., 8237981028 or +91 9876543210"
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
+                  />
+                </div>
+              </div>
+
+              {/* Quick Presets */}
+              <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                <span className="text-[10px] text-slate-400 font-medium">Quick presets:</span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setForm((prev) => ({
+                      ...prev,
+                      coordinatorContact: {
+                        name: `${form.organizer || "SRC"} Helpdesk`,
+                        role: "Lead Coordinators",
+                        phone: prev.coordinatorContact?.phone || "8237981028",
+                      },
+                    }))
+                  }
+                  className="text-[10px] px-2.5 py-1 rounded-md bg-slate-100 hover:bg-amber-50 hover:text-amber-800 text-slate-600 transition-colors border border-slate-200/60 cursor-pointer"
+                >
+                  + {form.organizer || "SRC"} Helpdesk
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setForm((prev) => ({
+                      ...prev,
+                      coordinatorContact: {
+                        name: "SRC Central Secretariat",
+                        role: "Student Council",
+                        phone: prev.coordinatorContact?.phone || "8237981028",
+                      },
+                    }))
+                  }
+                  className="text-[10px] px-2.5 py-1 rounded-md bg-slate-100 hover:bg-amber-50 hover:text-amber-800 text-slate-600 transition-colors border border-slate-200/60 cursor-pointer"
+                >
+                  + SRC Central Secretariat
+                </button>
+                {(form.coordinatorContact?.name || form.coordinatorContact?.phone) && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        coordinatorContact: { name: "", role: "", phone: "" },
+                      }))
+                    }
+                    className="text-[10px] px-2.5 py-1 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700 transition-colors border border-rose-200 cursor-pointer"
+                  >
+                    ✕ Leave Empty (No Helpdesk)
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         )}
 

@@ -90,9 +90,9 @@ export interface EventItem {
   teamFeeAmount?: number; // Optional flat fee for entire team in INR
   feePricingModel?: "per_person" | "per_team";
   coordinatorContact?: {
-    name: string;
-    role: string;
-    phone: string;
+    name?: string;
+    role?: string;
+    phone?: string;
   };
   customQuestions?: CustomQuestion[];
   isParentFest?: boolean;
