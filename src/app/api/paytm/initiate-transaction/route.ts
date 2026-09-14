@@ -143,14 +143,16 @@ export async function POST(req: NextRequest) {
     const sanitizedPayee = encodeURIComponent(payeeName);
     const note = encodeURIComponent(`${orderId} ${eventName || "SRC Event"}`.slice(0, 50));
     
-    // Core parameters for locked payment: pa (VPA), pn (Payee Name), am (Amount), cu (Currency), tn (Transaction Note), tr (Tracking Ref)
-    const baseUpiParams = `pa=${encodeURIComponent(upiId)}&pn=${sanitizedPayee}&am=${formattedAmount}&cu=INR&tn=${note}&tr=${orderId}`;
+    // Core parameters for locked payment: pa (VPA), pn (Payee Name), am (Amount), cu (Currency), tn (Transaction Note)
+    // Note: Do not include 'tr' without digital merchant certificate because Google Pay & PhonePe flag unsigned 'tr' as invalid merchant signatures
+    const baseUpiParams = `pa=${encodeURIComponent(upiId)}&pn=${sanitizedPayee}&am=${formattedAmount}&cu=INR&tn=${note}`;
 
     const upiLink = `upi://pay?${baseUpiParams}`;
-    const gpayLink = `tez://upi/pay?${baseUpiParams}`;
-    const phonepeLink = `phonepe://pay?${baseUpiParams}`;
-    const paytmLink = `paytmmp://pay?${baseUpiParams}`;
-    const bhimLink = `bhim://pay?${baseUpiParams}`;
+    // Package-targeted Android intents that open directly in each respective app from mobile Chrome
+    const gpayLink = `intent://pay?${baseUpiParams}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`;
+    const phonepeLink = `intent://pay?${baseUpiParams}#Intent;scheme=upi;package=com.phonepe.app;end`;
+    const paytmLink = `intent://pay?${baseUpiParams}#Intent;scheme=upi;package=net.one97.paytm;end`;
+    const bhimLink = `intent://pay?${baseUpiParams}#Intent;scheme=upi;package=in.org.npci.upiapp;end`;
 
     let txnToken = "";
     let isPaytmSdkConfigured = false;
