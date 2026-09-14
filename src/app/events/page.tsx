@@ -42,7 +42,15 @@ export default function EventsPage() {
 
   const filteredEvents = useMemo(() => {
     const filtered = eventsList
-      .filter(e => e.isLive !== false && e.status !== 'draft' && !e.isCancelled && e.status !== 'Cancelled')
+      .filter(
+        (e) =>
+          e.isLive !== false &&
+          e.status !== "draft" &&
+          !e.isCancelled &&
+          e.status !== "Cancelled" &&
+          !e.parentEventId &&
+          !e.parentEventSlug
+      )
       .filter((event) => {
         const matchesSearch =
           event.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -56,7 +64,14 @@ export default function EventsPage() {
     return sortEventsByDate(filtered);
   }, [eventsList, searchQuery]);
 
-  const featuredEvent = eventsList.find((e) => e.isFeatured && !e.isCancelled && e.status !== 'Cancelled');
+  const featuredEvent = eventsList.find(
+    (e) =>
+      e.isFeatured &&
+      !e.isCancelled &&
+      e.status !== "Cancelled" &&
+      !e.parentEventId &&
+      !e.parentEventSlug
+  );
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] py-12 px-4 sm:px-6 lg:px-8 space-y-12 text-[#0F172A]">

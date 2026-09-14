@@ -1002,7 +1002,7 @@ export function EventFormModal({
                     >
                       <option value="">None (Standalone Event)</option>
                       {eventsList
-                        .filter((ev) => ev.id !== editingEventId && (ev.isParentFest || !ev.parentEventId))
+                        .filter((ev) => ev.id !== editingEventId && Boolean(ev.isParentFest))
                         .map((ev) => (
                           <option key={ev.id} value={ev.id}>
                             {ev.name} ({ev.category})

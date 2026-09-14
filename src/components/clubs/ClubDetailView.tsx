@@ -74,7 +74,9 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
     const applyEvents = (list: EventItem[]) => {
       const filtered = list.filter(
         (e) =>
-          e.organizerClubSlug === club.slug ||
+          !e.parentEventId &&
+          !e.parentEventSlug &&
+          (e.organizerClubSlug === club.slug ||
           (club.slug === "agentic-ai" && (e.organizerClubSlug === "robotics" || e.organizerClubSlug === "club-robotics")) ||
           (club.slug === "robotics" && (e.organizerClubSlug === "agentic-ai" || e.organizerClubSlug === "club-1788779206223")) ||
           e.organizerClubSlug === club.id ||
@@ -83,7 +85,7 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
               c.slug === club.slug ||
               (club.slug === "agentic-ai" && c.slug === "robotics") ||
               (club.slug === "robotics" && c.slug === "agentic-ai")
-          )
+          ))
       );
       setEvents(filtered);
     };

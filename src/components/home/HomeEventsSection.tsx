@@ -53,10 +53,18 @@ export default function HomeEventsSection() {
   }, []);
 
   const liveEvents = sortEventsByDate(
-    eventsList.filter(e => e.isLive !== false && e.status !== 'draft' && !e.isCancelled && e.status !== 'Cancelled')
+    eventsList.filter(
+      (e) =>
+        e.isLive !== false &&
+        e.status !== "draft" &&
+        !e.isCancelled &&
+        e.status !== "Cancelled" &&
+        !e.parentEventId &&
+        !e.parentEventSlug
+    )
   );
-  const featuredEvent = liveEvents.find(e => e.isFeatured) || liveEvents[0];
-  const otherEvents = liveEvents.filter(e => (e.id || e.slug) !== (featuredEvent?.id || featuredEvent?.slug));
+  const featuredEvent = liveEvents.find((e) => e.isFeatured) || liveEvents[0];
+  const otherEvents = liveEvents.filter((e) => (e.id || e.slug) !== (featuredEvent?.id || featuredEvent?.slug));
 
   if (liveEvents.length === 0) {
     if (isSyncing) {
