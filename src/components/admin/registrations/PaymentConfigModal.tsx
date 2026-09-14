@@ -432,9 +432,9 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
             <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-200/80 space-y-2.5 text-xs text-slate-700">
               <h5 className="font-bold text-[#17458F] uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                 <Smartphone className="w-3.5 h-3.5 text-[#E78023]" />
-                <span>Quick 3-Minute Android Setup (MacroDroid)</span>
+                <span>Verified Android Phone Setup (MacroDroid)</span>
               </h5>
-              <ol className="list-decimal pl-4 space-y-2 text-[11px] leading-relaxed">
+              <ol className="list-decimal pl-4 space-y-2.5 text-[11px] leading-relaxed">
                 <li>
                   <strong>Grant Android Notification Access</strong>:
                   <span className="block text-amber-900 font-medium text-[10.5px]">
@@ -442,32 +442,61 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                   </span>
                 </li>
                 <li>
-                  <strong>Disable Battery Optimization</strong>:
+                  <strong>Disable Battery Optimization &amp; Enable Autostart</strong>:
                   <span className="block text-slate-600 text-[10.5px]">
-                    Set MacroDroid battery usage to <strong>Unrestricted / No Restrictions</strong> and enable <strong>Autostart</strong> so your phone doesn&apos;t put it to sleep.
+                    Set MacroDroid battery usage to <strong>Unrestricted / No Restrictions</strong> and enable <strong>Autostart</strong> so Android never kills the background listener.
                   </span>
                 </li>
-                <li>Tap <strong>Add Macro</strong> in MacroDroid.</li>
+                <li>Tap <strong>Add Macro</strong> in MacroDroid (name it e.g. <em>SRC Payment Webhook</em>).</li>
                 <li>
                   <strong>Trigger (+)</strong>: Select <strong>Device Events</strong> → <strong>Notification</strong> → <strong>Notification Received</strong>:
                   <span className="block text-blue-900 font-semibold text-[10.5px]">
-                    Select <strong>Any Application</strong> (or multi-select <em>Paytm, Paytm for Business, PhonePe, and Messages/SMS</em>). This ensures bank SMS or soundbox alerts also trigger instantly!
+                    Select <strong>Any Application</strong> (or multi-select <em>Paytm, Paytm for Business, PhonePe, and Messages/SMS</em>). This captures Paytm soundbox alerts, app notifications, and direct bank SMS!
                   </span>
                 </li>
                 <li>
                   <strong>Action (+)</strong>: Select <strong>Connectivity</strong> → <strong>HTTP Request</strong>:
-                  <ul className="list-disc pl-4 pt-1 space-y-1 text-slate-600 font-mono text-[10px]">
-                    <li>Method: <strong>POST</strong></li>
-                    <li>URL: <span className="text-slate-900 bg-white px-1 py-0.5 rounded border break-all select-all font-bold">{webhookUrl}?secret={webhookSecret}</span></li>
-                    <li>Content type: <strong>application/json</strong></li>
-                    <li>Body: <span className="text-slate-900 bg-white px-1 py-0.5 rounded border select-all">&#123;&quot;notificationText&quot;: &quot;[notif_text]&quot;, &quot;title&quot;: &quot;[notif_title]&quot;&#125;</span></li>
-                    <li className="text-[9px] text-emerald-700 font-sans">✓ Secret key is in the URL. 0 extra headers needed!</li>
+                  <ul className="list-disc pl-4 pt-1 space-y-1.5 text-slate-600 text-[10.5px]">
+                    <li>
+                      <span className="font-semibold text-slate-800">Method:</span> <strong className="font-mono text-slate-900">POST</strong>
+                    </li>
+                    <li>
+                      <span className="font-semibold text-slate-800">Server URL:</span>
+                      <div className="mt-0.5">
+                        <span className="text-slate-900 bg-white px-2 py-1 rounded border border-slate-200 break-all select-all font-mono text-[10px] font-bold block">
+                          {webhookUrl}?secret={webhookSecret}
+                        </span>
+                      </div>
+                    </li>
+                    <li>
+                      <span className="font-semibold text-slate-800">Content Body Tab:</span>
+                      <div className="mt-0.5 space-y-1">
+                        <div>
+                          • Content type: <strong className="font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">text/plain</strong>
+                        </div>
+                        <div>
+                          • Select radio button: <strong className="font-semibold text-slate-800">Text</strong>
+                        </div>
+                        <div>
+                          • Text box (paste exactly with spaces):
+                          <span className="text-slate-900 bg-white px-2 py-1 rounded border border-slate-200 select-all font-mono text-[11px] font-bold block mt-0.5">
+                            &#123;not_title&#125; &#123;not_text_big&#125; &#123;notification&#125;
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 font-sans">
+                          <em>(Tip: Tap the blue <strong>[...]</strong> button to insert Notification Title, Notification Big Text, and Notification Text separated by a space).</em>
+                        </p>
+                      </div>
+                    </li>
+                    <li>
+                      <span className="font-semibold text-slate-800">Header Params Tab:</span> Leave <strong>completely empty</strong> (the secret key is already in the URL).
+                    </li>
                   </ul>
                 </li>
                 <li>
-                  <strong>Instant Test</strong>:
+                  <strong>Save &amp; Test Action</strong>:
                   <span className="block text-slate-700 text-[10.5px]">
-                    Inside the macro, tap the <strong>3 vertical dots</strong> next to <em>HTTP Request</em> → tap <strong>Test Actions</strong>. Then click &quot;Refresh&quot; below to verify the phone ping reached the server!
+                    Tap the <strong>✓</strong> to save the action and the macro. Inside the macro, tap the <strong>3 vertical dots</strong> next to <em>HTTP Request</em> → tap <strong>Test Actions</strong>. Click &quot;Refresh&quot; below to verify the phone ping appears in the live log!
                   </span>
                 </li>
               </ol>
