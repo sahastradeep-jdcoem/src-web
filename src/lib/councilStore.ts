@@ -40,6 +40,77 @@ export function isPlaceholderLeaderName(name?: string): boolean {
   );
 }
 
+export interface ClubLeadersDocument {
+  clubId: string;
+  clubSlug: string;
+  clubName: string;
+  lead?: ClubLeader;
+  coLead?: ClubLeader;
+  coLeads?: ClubLeader[];
+  leaders?: ClubLeader[];
+  updatedAt?: number;
+}
+
+/**
+ * Normalizes club slug / ID into the dedicated Firestore document ID.
+ * Each of the 12 clubs gets its own 1MB document (e.g. `club_leaders_coding`, `club_leaders_robotics`).
+ */
+export function getClubLeadersDocId(slugOrId: string): string {
+  let clean = (slugOrId || "").toLowerCase().trim();
+  clean = clean.replace(/^club-/, "");
+  if (clean === "agentic-ai") clean = "robotics";
+  return `club_leaders_${clean}`;
+}
+
+/**
+ * Directly persists a club's Head, Co-Head, and Leaders into its dedicated 1MB Firestore document.
+ * 12 Clubs = 12 Isolated Documents, providing massive headroom for high-res Retina portraits.
+ */
+export async function saveClubLeadersDocument(
+  slugOrId: string,
+  payload: Partial<ClubLeadersDocument>
+): Promise<void> {
+  const docId = getClubLeadersDocId(slugOrId);
+  const sanitized = cleanUndefined({
+    ...payload,
+    updatedAt: Date.now(),
+  });
+  markLocalWrite(docId);
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(`src_${docId}`, JSON.stringify(sanitized));
+    } catch {}
+  }
+  try {
+    await saveSiteContentToFirestore(docId, sanitized);
+  } catch (err) {
+    console.warn(`Firestore direct write for club leaders [${docId}] failed, enqueuing:`, err);
+  }
+  enqueueCloudWrite(docId, sanitized, `Club Leaders (${payload.clubName || slugOrId})`);
+}
+
+/**
+ * Fetches the dedicated 1MB leaders document for a specific club from Firestore.
+ */
+export async function getClubLeadersDocument(slugOrId: string): Promise<ClubLeadersDocument | null> {
+  const docId = getClubLeadersDocId(slugOrId);
+  try {
+    const remote = await getSiteContentFromFirestore<ClubLeadersDocument>(docId);
+    if (remote && (remote.lead || remote.coLead || (Array.isArray(remote.leaders) && remote.leaders.length > 0))) {
+      return remote;
+    }
+  } catch (err) {
+    console.warn(`Could not fetch [${docId}] from Firestore:`, err);
+  }
+  if (typeof window !== "undefined") {
+    try {
+      const cached = localStorage.getItem(`src_${docId}`);
+      if (cached) return JSON.parse(cached);
+    } catch {}
+  }
+  return null;
+}
+
 export function getClubLeaders(club: ClubItem): ClubLeader[] {
   if (!club) return [];
 
@@ -843,10 +914,12 @@ export function saveStoredSpokespersons(members: TeamMember[]): void {
     try { localStorage.setItem("src_spokespersons", JSON.stringify(sanitized)); } catch {}
     window.dispatchEvent(new CustomEvent("src_spokespersons_updated", { detail: sanitized }));
     window.dispatchEvent(new CustomEvent("src_users_updated"));
-    saveSiteContentToFirestore("spokespersons", sanitized).catch((err) => {
-      console.warn("Firestore direct write for spokespersons failed, enqueuing:", err);
+    // Spokespersons & Hosting Committee unified in 1 cloud document: hosting_committee
+    saveSiteContentToFirestore("hosting_committee", sanitized).catch((err) => {
+      console.warn("Firestore direct write for hosting_committee failed, enqueuing:", err);
     });
-    enqueueCloudWrite("spokespersons", sanitized, `Spokespersons (${members.length} Members)`);
+    saveSiteContentToFirestore("spokespersons", sanitized).catch(() => {});
+    enqueueCloudWrite("hosting_committee", sanitized, `Spokespersons/Hosting (${members.length} Members)`);
   } catch (e) {
     console.error("Could not save spokespersons to storage", e);
   }
@@ -989,27 +1062,46 @@ export async function saveStoredClubs(clubs: ClubItem[]): Promise<void> {
     // 1. Fully synchronize avatars across all representations in memory
     const syncedClubs = hydrateClubAvatars(clubs);
 
+    // 2. 12 Documents Architecture: Save each club's Head, Co-Head & Leaders into its dedicated 1MB Firestore document
+    const leaderPartitionPromises = syncedClubs.map(async (c) => {
+      const slug = c.slug || c.id;
+      if (!slug) return;
+      const leaders = getClubLeaders(c);
+      await saveClubLeadersDocument(slug, {
+        clubId: c.id,
+        clubSlug: c.slug,
+        clubName: c.name,
+        lead: c.lead,
+        coLead: c.coLead,
+        coLeads: c.coLeads,
+        leaders,
+      });
+    });
+    await Promise.allSettled(leaderPartitionPromises);
+
+    // 3. Compact presentation media for the master catalog
     const compacted = await compactClubDataset(syncedClubs);
     const sanitized = cleanUndefined(compacted);
-    // 2. Prepare deduplicated payload for Firestore & LocalStorage (strips 4x duplicate base64 from lead/coLead)
-    // Single source of truth is leaders[i].avatar, dropping document from 1.15MB down to ~510KB!
-    const cloudPayload = deduplicateClubAvatarsForCloud(sanitized);
+
+    // 4. For the master site_content/clubs document, strip heavy base64 leader avatars.
+    // The canonical high-res avatars live in the 12 dedicated club_leaders_{slug} documents!
+    // This reduces the master clubs document from ~1MB down to ~80-120KB!
+    const strippedMasterPayload = sanitized.map((c) => ({
+      ...c,
+      lead: c.lead ? { ...c.lead, avatar: "" } : c.lead,
+      coLead: c.coLead ? { ...c.coLead, avatar: "" } : c.coLead,
+      coLeads: Array.isArray(c.coLeads) ? c.coLeads.map((cl) => ({ ...cl, avatar: "" })) : c.coLeads,
+      leaders: Array.isArray(c.leaders) ? c.leaders.map((l) => ({ ...l, avatar: "" })) : c.leaders,
+    }));
 
     markLocalWrite("clubs");
     try {
-      // Store deduplicated cloudPayload (511KB) instead of sanitized (1.15MB) to prevent 5MB quota errors
-      localStorage.setItem("src_clubs_roster", JSON.stringify(cloudPayload));
+      // LocalStorage stores the fully hydrated syncedClubs for immediate 0ms reads across tabs
+      localStorage.setItem("src_clubs_roster", JSON.stringify(syncedClubs));
     } catch (lsErr) {
       console.warn("Direct localStorage write notice for clubs, applying fallback:", lsErr);
       try {
-        // Strip heavy presentation banners if quota is reached, but NEVER strip member/leader avatars (Directive #4)
-        const stripped = cloudPayload.map((c: any) => ({
-          ...c,
-          cardImage: c.cardImage?.startsWith("data:") && c.cardImage.length > 50000 ? "" : c.cardImage,
-          headerImage: c.headerImage?.startsWith("data:") && c.headerImage.length > 50000 ? "" : c.headerImage,
-          leaders: Array.isArray(c.leaders) ? c.leaders.map((l: any) => ({ ...l, avatar: l.avatar || "" })) : c.leaders,
-        }));
-        localStorage.setItem("src_clubs_roster", JSON.stringify(stripped));
+        localStorage.setItem("src_clubs_roster", JSON.stringify(strippedMasterPayload));
       } catch (err2) {
         console.error("Critical: Failed to save clubs to localStorage even after fallback", err2);
       }
@@ -1018,15 +1110,15 @@ export async function saveStoredClubs(clubs: ClubItem[]): Promise<void> {
     window.dispatchEvent(new CustomEvent("src_tenures_updated"));
     window.dispatchEvent(new CustomEvent("src_users_updated"));
 
-    // Direct cloud write & queue backup immediately (Directive #3)
+    // 5. Direct cloud write & queue backup for the master catalog document
     let cloudWriteError: any = null;
     try {
-      await saveSiteContentToFirestore("clubs", cloudPayload);
+      await saveSiteContentToFirestore("clubs", strippedMasterPayload);
     } catch (err) {
       console.warn("Firestore direct write for clubs failed, enqueuing:", err);
       cloudWriteError = err;
     }
-    enqueueCloudWrite("clubs", cloudPayload, `Clubs Directory (${clubs.length} Clubs)`);
+    enqueueCloudWrite("clubs", strippedMasterPayload, `Clubs Directory (${clubs.length} Clubs)`);
 
     if (cloudWriteError) {
       const errMsg = cloudWriteError?.message || String(cloudWriteError);
@@ -1056,11 +1148,61 @@ export async function syncClubsFromFirestore(): Promise<ClubItem[]> {
     if (remote !== null && Array.isArray(remote) && remote.length > 0) {
       const current = getStoredClubs();
       const merged = reconcileArrayDatasets(current, remote);
-      const hydrated = hydrateClubAvatars(merged);
+
+      // In parallel, fetch the dedicated 12 club_leaders_{slug} documents
+      const leaderDocsResults = await Promise.allSettled(
+        merged.map(async (c) => {
+          const slug = c.slug || c.id;
+          if (!slug) return null;
+          return await getClubLeadersDocument(slug);
+        })
+      );
+
+      const fullyHydrated = merged.map((club, idx) => {
+        const leaderDocResult = leaderDocsResults[idx];
+        const leaderDoc = leaderDocResult && leaderDocResult.status === "fulfilled" ? leaderDocResult.value : null;
+
+        if (leaderDoc && (leaderDoc.lead || leaderDoc.coLead || (Array.isArray(leaderDoc.leaders) && leaderDoc.leaders.length > 0))) {
+          const leaders = Array.isArray(leaderDoc.leaders) && leaderDoc.leaders.length > 0
+            ? leaderDoc.leaders
+            : (club.leaders || []);
+          const lead = leaderDoc.lead || club.lead;
+          const coLead = leaderDoc.coLead || club.coLead;
+          const coLeads = Array.isArray(leaderDoc.coLeads) && leaderDoc.coLeads.length > 0
+            ? leaderDoc.coLeads
+            : (club.coLeads || []);
+
+          return {
+            ...club,
+            lead,
+            coLead,
+            coLeads,
+            leaders,
+          };
+        }
+
+        // Auto-migration check: If this club does NOT have a dedicated cloud document yet,
+        // but has leaders from the previous monolithic document or local cache, migrate it now!
+        const existingLeaders = getClubLeaders(club);
+        if (existingLeaders.length > 0 && (club.slug || club.id)) {
+          saveClubLeadersDocument(club.slug || club.id, {
+            clubId: club.id,
+            clubSlug: club.slug,
+            clubName: club.name,
+            lead: club.lead,
+            coLead: club.coLead,
+            coLeads: club.coLeads,
+            leaders: existingLeaders,
+          }).catch((err) => console.warn(`Auto-migration failed for ${club.slug}:`, err));
+        }
+
+        return club;
+      });
+
+      const hydrated = hydrateClubAvatars(fullyHydrated);
       if (typeof window !== "undefined") {
         try {
-          const compactForStorage = deduplicateClubAvatarsForCloud(hydrated);
-          localStorage.setItem("src_clubs_roster", JSON.stringify(compactForStorage));
+          localStorage.setItem("src_clubs_roster", JSON.stringify(hydrated));
         } catch (lsErr) {
           console.warn("localStorage quota exceeded for clubs roster:", lsErr);
         }
@@ -1081,11 +1223,46 @@ export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => v
       if (hasPendingWritesFor("clubs") || isLocalWriteRecent("clubs", 5000)) return;
       const current = getStoredClubs();
       const merged = reconcileArrayDatasets(current, remote);
-      const hydrated = hydrateClubAvatars(merged);
+
+      // Reconcile with local / dedicated club leader documents
+      const fullyHydrated = merged.map((club) => {
+        const slug = club.slug || club.id;
+        if (typeof window !== "undefined" && slug) {
+          const docId = getClubLeadersDocId(slug);
+          const cached = localStorage.getItem(`src_${docId}`);
+          if (cached) {
+            try {
+              const parsed: ClubLeadersDocument = JSON.parse(cached);
+              if (parsed.lead || parsed.coLead || (Array.isArray(parsed.leaders) && parsed.leaders.length > 0)) {
+                return {
+                  ...club,
+                  lead: parsed.lead || club.lead,
+                  coLead: parsed.coLead || club.coLead,
+                  coLeads: parsed.coLeads || club.coLeads,
+                  leaders: (Array.isArray(parsed.leaders) && parsed.leaders.length > 0) ? parsed.leaders : club.leaders,
+                };
+              }
+            } catch {}
+          }
+        }
+        // Fallback to in-memory current
+        const currentClub = current.find((c) => c.id === club.id || c.slug === club.slug);
+        if (currentClub && (currentClub.lead?.avatar || currentClub.leaders?.some((l) => l.avatar))) {
+          return {
+            ...club,
+            lead: currentClub.lead || club.lead,
+            coLead: currentClub.coLead || club.coLead,
+            coLeads: currentClub.coLeads || club.coLeads,
+            leaders: currentClub.leaders || club.leaders,
+          };
+        }
+        return club;
+      });
+
+      const hydrated = hydrateClubAvatars(fullyHydrated);
       if (typeof window !== "undefined") {
         try {
-          const compactForStorage = deduplicateClubAvatarsForCloud(hydrated);
-          localStorage.setItem("src_clubs_roster", JSON.stringify(compactForStorage));
+          localStorage.setItem("src_clubs_roster", JSON.stringify(hydrated));
         } catch (lsErr) {
           console.warn("localStorage quota exceeded for clubs roster in subscription:", lsErr);
         }

@@ -1468,7 +1468,7 @@ export default function AdminTeamPage() {
                     setIsSaved(false);
                     isSavingRef.current = false;
                   }, 3000);
-                  alert("✅ All club leader photos have been compacted, deduplicated, and synced to Cloud Firestore.");
+                  alert("✅ All 12 club leadership documents (1MB dedicated cloud document per club) have been synced to Cloud Firestore.");
                 } catch (err: any) {
                   isSavingRef.current = false;
                   alert(`⚠️ Sync Failed: ${err?.message || err}`);
@@ -1477,10 +1477,10 @@ export default function AdminTeamPage() {
                 }
               }}
               className="px-4 py-3 rounded-2xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#17458F] text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 shadow-xs disabled:opacity-50"
-              title="Deduplicate and sync all club leadership photos to Cloud Firestore"
+              title="Sync all 12 club leadership documents (1MB per club) to Cloud Firestore"
             >
               <RefreshCw className={`w-4 h-4 text-[#17458F] ${isSyncingClubs ? "animate-spin" : ""}`} />
-              <span>{isSyncingClubs ? "Syncing..." : "Sync All Photos to Cloud"}</span>
+              <span>{isSyncingClubs ? "Syncing..." : "Sync All 12 Club Documents"}</span>
             </button>
           )}
         </div>

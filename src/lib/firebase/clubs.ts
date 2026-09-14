@@ -5,7 +5,7 @@ import { ClubItem } from "@/types";
 import { mockClubs } from "@/data/clubs";
 import { cleanUndefined, saveSiteContentToFirestore } from "./firestore";
 import { compressImage } from "@/lib/imageCompression";
-import { hydrateClubAvatars, deduplicateClubAvatarsForCloud } from "@/lib/councilStore";
+import { hydrateClubAvatars, deduplicateClubAvatarsForCloud, saveStoredClubs } from "@/lib/councilStore";
 
 const SITE_CONTENT_COLLECTION = "site_content";
 const CLUBS_DOC_ID = "clubs";
@@ -60,20 +60,10 @@ export async function getClubById(idOrSlug: string): Promise<ClubItem | null> {
 }
 
 /**
- * Save all clubs to Firestore atomically with cloud deduplication
+ * Save all clubs to Firestore atomically with 12-document partitioned leadership architecture
  */
 export async function saveClubsToFirestore(clubs: ClubItem[]): Promise<void> {
-  const hydrated = hydrateClubAvatars(clubs);
-  const cloudPayload = deduplicateClubAvatarsForCloud(cleanUndefined(hydrated));
-  
-  // 1. Update local cache & dispatch UI update event immediately
-  if (typeof window !== "undefined") {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cloudPayload));
-    window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: hydrated }));
-  }
-
-  // 2. Persist to Cloud Firestore as authoritative source of truth
-  await saveSiteContentToFirestore(CLUBS_DOC_ID, cloudPayload);
+  await saveStoredClubs(clubs);
 }
 
 /**

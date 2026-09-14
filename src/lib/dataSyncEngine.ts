@@ -89,14 +89,15 @@ export async function compactClubDataset<T extends {
   // Memoize avatar compaction by data URL so duplicate references to the same avatar only compress once
   const avatarCache = new Map<string, Promise<string>>();
   const compactAvatar = (avatar?: string): Promise<string> => {
-    if (!avatar || !avatar.startsWith("data:image/") || avatar.length <= 22000) {
+    // With dedicated 1MB documents per club (12 clubs = 12 documents), avatars under 150KB do not need heavy compression
+    if (!avatar || !avatar.startsWith("data:image/") || avatar.length <= 150000) {
       return Promise.resolve(avatar || "");
     }
     if (avatarCache.has(avatar)) {
       return avatarCache.get(avatar)!;
     }
-    // 520px height (416x520) at 0.78 quality produces crisp Retina portraits for club cards at ~16-19KB
-    const p = compactBase64Image(avatar, 520, 0.78);
+    // 650px height (520x650) at 0.84 quality produces super crisp Retina portraits at ~35-50KB
+    const p = compactBase64Image(avatar, 650, 0.84);
     avatarCache.set(avatar, p);
     return p;
   };
