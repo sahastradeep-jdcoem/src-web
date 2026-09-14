@@ -572,6 +572,13 @@ export function EventFormModal({
   const handleAddPerk = (prizeIndex: number) => {
     const raw = (perkDrafts[prizeIndex] || "").trim();
     if (!raw) return;
+    handleDirectAddPerk(prizeIndex, raw);
+    setPerkDrafts((prev) => ({ ...prev, [prizeIndex]: "" }));
+  };
+
+  const handleDirectAddPerk = (prizeIndex: number, perk: string) => {
+    const raw = perk.trim();
+    if (!raw) return;
     setForm((prev) => {
       const list = [...(prev.prizes || [])];
       const target = list[prizeIndex];
@@ -584,7 +591,6 @@ export function EventFormModal({
       };
       return { ...prev, prizes: list };
     });
-    setPerkDrafts((prev) => ({ ...prev, [prizeIndex]: "" }));
   };
 
   const handleRemovePerk = (prizeIndex: number, perkIndex: number) => {
@@ -1921,6 +1927,27 @@ export function EventFormModal({
                                 >
                                   + Add Perk
                                 </button>
+                              </div>
+
+                              {/* Quick Suggestions */}
+                              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                <span className="text-[10px] text-slate-400 font-medium">Quick perks:</span>
+                                {[
+                                  "Winner Trophy & Shield",
+                                  "Certificate of Excellence",
+                                  "Direct Interview Fast-Track",
+                                  "Exclusive Swag Hamper",
+                                  "Letter of Recommendation",
+                                ].map((suggestion) => (
+                                  <button
+                                    key={suggestion}
+                                    type="button"
+                                    onClick={() => handleDirectAddPerk(pIdx, suggestion)}
+                                    className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 hover:bg-amber-50 hover:text-amber-800 text-slate-600 transition-colors border border-slate-200/60 cursor-pointer"
+                                  >
+                                    + {suggestion}
+                                  </button>
+                                ))}
                               </div>
                             </div>
                           </div>

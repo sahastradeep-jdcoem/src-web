@@ -540,9 +540,22 @@ export default function EventDetailPage() {
                     PRIZES &amp; RECOGNITION
                   </h2>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <div
+                  className={cn(
+                    "grid gap-6 items-stretch",
+                    event.prizes.length === 1 && "grid-cols-1 max-w-lg",
+                    event.prizes.length === 2 && "grid-cols-1 sm:grid-cols-2",
+                    event.prizes.length === 3 && "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
+                    event.prizes.length >= 4 && "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+                  )}
+                >
                   {event.prizes.map((prize, idx) => (
-                    <PrizeCard key={idx} prize={prize} index={idx} />
+                    <PrizeCard
+                      key={idx}
+                      prize={prize}
+                      index={idx}
+                      totalCount={event.prizes.length}
+                    />
                   ))}
                 </div>
               </section>
