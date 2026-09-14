@@ -7,8 +7,7 @@ import {
   Eye, 
   Save, 
   Loader2,
-  AlertCircle,
-  RotateCcw
+  AlertCircle
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -54,7 +53,25 @@ export function ClubFormModal({
       try {
         setIsSubmitting(true);
         setFormError(null);
-        await onSave(formClub);
+
+        // Automatically resolve public slug in the background
+        let slug = (formClub.slug || "").trim();
+        if (!slug || slug.startsWith("club-")) {
+          slug = (formClub.name || "")
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-|-$/g, "");
+        }
+        if (!slug) {
+          slug = `club-${Date.now().toString(36)}`;
+        }
+
+        const clubToSave: ClubItem = {
+          ...formClub,
+          slug,
+        };
+
+        await onSave(clubToSave);
       } catch (err: any) {
         setFormError(err?.message || "Failed to save club to cloud database. Please verify connection and try again.");
       } finally {
@@ -142,8 +159,11 @@ export function ClubFormModal({
                     const val = e.target.value;
                     setFormClub((prev) => {
                       if (!prev) return null;
-                      if (isCreatingNew) {
-                        const autoSlug = val.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").replace(/-club$/, "");
+                      if (isCreatingNew || !prev.slug || prev.slug.startsWith("club-")) {
+                        const autoSlug = val
+                          .toLowerCase()
+                          .replace(/[^a-z0-9]+/g, "-")
+                          .replace(/^-|-$/g, "");
                         return { ...prev, name: val, slug: autoSlug };
                       }
                       return { ...prev, name: val };
@@ -151,52 +171,6 @@ export function ClubFormModal({
                   }}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F] shadow-xs"
                 />
-              </div>
-
-              {/* Public URL Slug */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="font-bold text-slate-800 text-xs">
-                    Public URL Slug <span className="text-rose-500">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (formClub?.name) {
-                        const autoSlug = formClub.name
-                          .toLowerCase()
-                          .replace(/[^a-z0-9]+/g, "-")
-                          .replace(/^-|-$/g, "")
-                          .replace(/-club$/, "");
-                        setFormClub((prev) => (prev ? { ...prev, slug: autoSlug } : null));
-                      }
-                    }}
-                    className="text-[11px] font-semibold text-[#17458F] hover:text-[#E78023] flex items-center gap-1 cursor-pointer transition-colors"
-                    title="Generate slug from club name"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    <span>Sync from name</span>
-                  </button>
-                </div>
-                <div className="flex items-center rounded-xl bg-white border border-slate-200 focus-within:border-[#17458F] overflow-hidden shadow-xs">
-                  <span className="px-3 py-2 bg-slate-50 border-r border-slate-200 text-slate-500 font-mono text-[11px] select-none shrink-0">
-                    srcjdcoem.in/clubs/
-                  </span>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. robotics, dance, coding..."
-                    value={formClub.slug || ""}
-                    onChange={(e) => {
-                      const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "");
-                      setFormClub((prev) => (prev ? { ...prev, slug: val } : null));
-                    }}
-                    className="w-full px-3 py-2 text-xs font-mono font-bold text-[#17458F] focus:outline-none"
-                  />
-                </div>
-                <p className="text-[10px] text-slate-500 font-medium">
-                  The link address used to visit this club on the website (e.g. srcjdcoem.in/clubs/{formClub.slug || "slug"}).
-                </p>
               </div>
 
               <div className="space-y-2">
