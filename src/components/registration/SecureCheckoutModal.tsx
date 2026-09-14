@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   X, 
   ShieldCheck, 
@@ -11,7 +11,9 @@ import {
   Clock, 
   ArrowLeft, 
   Info, 
-  Smartphone
+  Smartphone,
+  RefreshCw,
+  AlertTriangle
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -31,6 +33,7 @@ export interface PaytmCheckoutData {
   bhimLink?: string;
   payeeName: string;
   upiId: string;
+  expiresAt?: string;
 }
 
 interface SecureCheckoutModalProps {
@@ -50,6 +53,8 @@ interface SecureCheckoutModalProps {
   handleVerifyPaytmPayment: () => void;
   showManualUtr: boolean;
   setShowManualUtr: (show: boolean) => void;
+  onRegenerateQR?: () => void | Promise<void>;
+  isRegeneratingQR?: boolean;
 }
 
 export function SecureCheckoutModal({
@@ -64,11 +69,45 @@ export function SecureCheckoutModal({
   handleVerifyPaytmPayment,
   showManualUtr,
   setShowManualUtr,
+  onRegenerateQR,
+  isRegeneratingQR = false,
 }: SecureCheckoutModalProps) {
   const [mobileSubView, setMobileSubView] = useState<"methods" | "qr">("methods");
 
   // Fallback student phone
   const studentPhone = formData.phone || "9876543210";
+
+  // Calculate remaining seconds from expiresAt (default 300s = 5 mins)
+  const calculateSecondsRemaining = () => {
+    if (!paytmCheckoutData?.expiresAt) return 300;
+    const expiry = new Date(paytmCheckoutData.expiresAt).getTime();
+    return Math.max(0, Math.floor((expiry - Date.now()) / 1000));
+  };
+
+  const [secondsRemaining, setSecondsRemaining] = useState<number>(calculateSecondsRemaining);
+
+  useEffect(() => {
+    setSecondsRemaining(calculateSecondsRemaining());
+    const interval = setInterval(() => {
+      setSecondsRemaining((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [paytmCheckoutData?.orderId, paytmCheckoutData?.expiresAt]);
+
+  const formatTimer = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const isExpired = secondsRemaining <= 0;
 
   return (
     <Modal
@@ -121,10 +160,11 @@ export function SecureCheckoutModal({
             {/* Close Button */}
             <button
               onClick={() => {
-                if (!isVerifyingPaytm) onClose();
+                if (!isVerifyingPaytm && !isRegeneratingQR) onClose();
               }}
               aria-label="Close checkout"
-              className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white/90 transition-all cursor-pointer flex items-center justify-center shrink-0 active:scale-95"
+              disabled={isVerifyingPaytm || isRegeneratingQR}
+              className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white/90 transition-all cursor-pointer flex items-center justify-center shrink-0 active:scale-95 disabled:opacity-50"
             >
               <X className="w-4 h-4" />
             </button>
@@ -168,24 +208,71 @@ export function SecureCheckoutModal({
         <div className="p-4 space-y-4 flex-1">
           {mobileSubView === "qr" ? (
             /* Subview: QR Code View on Mobile */
-            <div className="p-5 rounded-2xl bg-white border border-slate-200 text-center shadow-sm space-y-3 animate-in fade-in duration-150">
+            <div className="p-5 rounded-2xl bg-white border border-slate-200 text-center shadow-sm space-y-3.5 animate-in fade-in duration-150">
               <div className="flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-wider">
                 <span>Scan &amp; Pay</span>
-                <span className="text-blue-600 font-semibold lowercase">any upi app</span>
+                {isExpired ? (
+                  <span className="text-rose-600 font-bold uppercase tracking-wider">Expired</span>
+                ) : (
+                  <span className="text-blue-600 font-semibold lowercase">any upi app</span>
+                )}
               </div>
 
-              <div className="p-3 bg-white rounded-2xl inline-block border-2 border-slate-100 shadow-inner">
-                <ScannableQRCode value={paytmCheckoutData.upiLink} size={180} />
-              </div>
+              {!isExpired ? (
+                <>
+                  <div className="p-3 bg-white rounded-2xl inline-block border-2 border-slate-100 shadow-inner">
+                    <ScannableQRCode value={paytmCheckoutData.upiLink} size={180} />
+                  </div>
 
-              <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                Scan with <strong>Google Pay, PhonePe, Paytm</strong>, or any UPI app on your other phone
-              </p>
+                  {/* 5-minute live countdown badge */}
+                  <div>
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-mono font-bold border transition-colors ${
+                      secondsRemaining < 60
+                        ? "bg-rose-50 border-rose-200 text-rose-700 animate-pulse"
+                        : "bg-amber-50 border-amber-200 text-amber-900"
+                    }`}>
+                      <Clock className={`w-3.5 h-3.5 ${secondsRemaining < 60 ? "text-rose-600" : "text-amber-600"}`} />
+                      <span>QR expires in <strong>{formatTimer(secondsRemaining)}</strong></span>
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                    Scan with <strong>Google Pay, PhonePe, Paytm</strong>, or any UPI app on your other phone
+                  </p>
+                </>
+              ) : (
+                /* Expired QR State on Mobile */
+                <div className="py-6 px-4 rounded-xl bg-slate-50 border-2 border-dashed border-slate-200 space-y-3">
+                  <div className="w-12 h-12 mx-auto rounded-full bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600">
+                    <Clock className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-heading font-black text-sm text-slate-800">
+                      Payment QR Code Expired
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                      For your payment security, QR codes are valid for 5 minutes only. This QR has expired and will no longer accept payments.
+                    </p>
+                  </div>
+                  {onRegenerateQR && (
+                    <Button
+                      onClick={onRegenerateQR}
+                      isLoading={isRegeneratingQR}
+                      variant="primary"
+                      size="md"
+                      className="w-full justify-center gap-2 cursor-pointer min-h-[44px] bg-[#2065D6] hover:bg-[#1b55b8] font-bold"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      <span>Generate New QR Code</span>
+                    </Button>
+                  )}
+                </div>
+              )}
 
               <button
                 type="button"
                 onClick={() => setMobileSubView("methods")}
-                className="text-xs text-blue-600 font-bold hover:underline py-1"
+                className="text-xs text-blue-600 font-bold hover:underline py-1 block mx-auto cursor-pointer"
               >
                 &larr; Return to UPI Apps
               </button>
@@ -193,14 +280,51 @@ export function SecureCheckoutModal({
           ) : (
             /* Main Mobile Method View: UPI & Options */
             <>
+              {/* Expired Session Notice for 1-Tap if expired */}
+              {isExpired && (
+                <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-left space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-rose-800 flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                      Payment Window Expired (5m Limit)
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-rose-700 font-medium">
+                    This checkout session has timed out. Please refresh to start a fresh 5-minute payment session.
+                  </p>
+                  {onRegenerateQR && (
+                    <Button
+                      onClick={onRegenerateQR}
+                      isLoading={isRegeneratingQR}
+                      variant="primary"
+                      size="sm"
+                      className="w-full justify-center gap-1.5 cursor-pointer bg-rose-600 hover:bg-rose-700 text-white min-h-[40px] text-xs font-bold"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Refresh Payment Session</span>
+                    </Button>
+                  )}
+                </div>
+              )}
+
               {/* Method Section Heading */}
               <div className="flex items-center justify-between pt-1">
                 <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
                   Pay via UPI App
                 </span>
-                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                  1-Tap Instant
-                </span>
+                {!isExpired ? (
+                  <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                    secondsRemaining < 60
+                      ? "bg-rose-50 border-rose-200 text-rose-700"
+                      : "bg-amber-50 border-amber-200 text-amber-800"
+                  }`}>
+                    ⏱ {formatTimer(secondsRemaining)}
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
+                    Expired
+                  </span>
+                )}
               </div>
 
               {/* UPI 1-Tap App Launcher Cards */}
@@ -507,10 +631,11 @@ export function SecureCheckoutModal({
             </div>
             <button
               onClick={() => {
-                if (!isVerifyingPaytm) onClose();
+                if (!isVerifyingPaytm && !isRegeneratingQR) onClose();
               }}
               aria-label="Close checkout"
-              className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-800 transition-colors cursor-pointer"
+              disabled={isVerifyingPaytm || isRegeneratingQR}
+              className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-800 transition-colors cursor-pointer disabled:opacity-50"
             >
               <X className="w-4 h-4" />
             </button>
@@ -518,31 +643,70 @@ export function SecureCheckoutModal({
 
           {/* QR Workspace Content */}
           <div className="flex-1 p-5 overflow-y-auto space-y-3.5">
-            {/* Centered Large Scannable QR Code Card */}
-            <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs text-center flex flex-col items-center justify-center space-y-2.5">
-              <div className="p-2 bg-white rounded-xl border border-slate-100 shadow-inner inline-block">
-                <ScannableQRCode value={paytmCheckoutData.upiLink} size={165} />
-              </div>
+            {!isExpired ? (
+              /* Centered Large Scannable QR Code Card */
+              <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs text-center flex flex-col items-center justify-center space-y-2.5">
+                {/* 5-minute live countdown pill */}
+                <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold border transition-colors ${
+                  secondsRemaining < 60
+                    ? "bg-rose-50 border-rose-200 text-rose-700 animate-pulse"
+                    : "bg-amber-50 border-amber-200 text-amber-900"
+                }`}>
+                  <Clock className={`w-3.5 h-3.5 ${secondsRemaining < 60 ? "text-rose-600" : "text-amber-600"}`} />
+                  <span>QR Code expires in <strong>{formatTimer(secondsRemaining)}</strong></span>
+                </div>
 
-              {/* Supported Apps Brand Strip */}
-              <div className="flex items-center justify-center gap-2 pt-1 text-[11px] text-slate-500 font-medium flex-wrap">
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-[10px]">
-                  <span className="text-[#4285F4]">G</span>
-                  <span className="text-[#EA4335]">P</span>
-                  <span className="text-[#FBBC05]">a</span>
-                  <span className="text-[#34A853]">y</span>
-                </span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 border border-purple-200 text-[#5f259f] font-bold text-[10px]">
-                  PhonePe
-                </span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-50 border border-sky-200 text-[#002970] font-bold text-[10px]">
-                  Paytm
-                </span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-600 font-medium text-[10px]">
-                  CRED / BHIM / Bank UPI
-                </span>
+                <div className="p-2 bg-white rounded-xl border border-slate-100 shadow-inner inline-block">
+                  <ScannableQRCode value={paytmCheckoutData.upiLink} size={165} />
+                </div>
+
+                {/* Supported Apps Brand Strip */}
+                <div className="flex items-center justify-center gap-2 pt-1 text-[11px] text-slate-500 font-medium flex-wrap">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-[10px]">
+                    <span className="text-[#4285F4]">G</span>
+                    <span className="text-[#EA4335]">P</span>
+                    <span className="text-[#FBBC05]">a</span>
+                    <span className="text-[#34A853]">y</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 border border-purple-200 text-[#5f259f] font-bold text-[10px]">
+                    PhonePe
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-50 border border-sky-200 text-[#002970] font-bold text-[10px]">
+                    Paytm
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-600 font-medium text-[10px]">
+                    CRED / BHIM / Bank UPI
+                  </span>
+                </div>
               </div>
-            </div>
+            ) : (
+              /* Expired Desktop Card */
+              <div className="p-6 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-300 text-center flex flex-col items-center justify-center space-y-3.5 animate-in fade-in duration-150">
+                <div className="w-12 h-12 rounded-full bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600">
+                  <Clock className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="font-heading font-black text-base text-slate-800">
+                    Payment QR Code Expired
+                  </h4>
+                  <p className="text-xs text-slate-500 max-w-sm mt-1 leading-relaxed">
+                    For your payment safety and accurate verification, QR codes expire after 5 minutes. This QR code will no longer accept payments.
+                  </p>
+                </div>
+                {onRegenerateQR && (
+                  <Button
+                    onClick={onRegenerateQR}
+                    isLoading={isRegeneratingQR}
+                    variant="primary"
+                    size="md"
+                    className="cursor-pointer bg-[#2B64E2] hover:bg-[#1E52C6] px-5 py-2.5 font-bold shadow-sm inline-flex items-center gap-2"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Generate New QR Code</span>
+                  </Button>
+                )}
+              </div>
+            )}
 
             {/* Auto-Approval Live Radar Strip */}
             <div className="px-3.5 py-2.5 rounded-xl bg-emerald-50/90 border border-emerald-200 text-left flex items-center justify-between gap-3 shadow-xs">

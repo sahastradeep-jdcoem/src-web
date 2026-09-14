@@ -37,8 +37,18 @@ export async function GET(req: NextRequest) {
               });
             }
 
+            if (data?.status === "EXPIRED") {
+              return NextResponse.json({ status: "EXPIRED", orderId });
+            }
+
             // Self-healing: If session is WAITING, check if an unclaimed payment with matching amount arrived
             if (data?.status === "WAITING" && data?.amount) {
+              const expiresAtMs = data.expiresAt ? new Date(data.expiresAt).getTime() : 0;
+              if (expiresAtMs > 0 && Date.now() > expiresAtMs) {
+                const { setDoc } = await import("firebase/firestore");
+                await setDoc(sessionRef, { status: "EXPIRED" }, { merge: true });
+                return NextResponse.json({ status: "EXPIRED", orderId });
+              }
               const sessionAmt = Number(data.amount);
               const paymentsSnap = await getDocs(
                 query(collection(db, "verified_upi_payments"), where("status", "==", "UNCLAIMED"))

@@ -204,6 +204,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
     // Register active checkout session in Firestore for zero-touch auto-detection
     try {
       const { db } = await import("@/lib/firebase/config");
@@ -221,7 +223,7 @@ export async function POST(req: NextRequest) {
           phone: phone || "",
           status: "WAITING",
           createdAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+          expiresAt,
         });
       }
     } catch (sessionErr) {
@@ -246,6 +248,7 @@ export async function POST(req: NextRequest) {
       txnToken,
       mid,
       isPaytmSdkConfigured,
+      expiresAt,
     });
 
   } catch (error: any) {

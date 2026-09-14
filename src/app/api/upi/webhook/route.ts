@@ -425,15 +425,32 @@ export async function POST(req: NextRequest) {
               }
             }
             if (bestMatch) {
-              matchedOrderId = bestMatch.id;
-              matchedStudentName = bestMatch.data.participantName || bestMatch.data.leaderName || bestMatch.data.email || "Student";
-              await setDoc(doc(db, "active_checkout_sessions", bestMatch.id), {
-                status: "COMPLETED",
-                utr,
-                receivedAmount: amount,
-                paidAt: now,
-                rawNotification: combinedText,
-              }, { merge: true });
+              const expiresAtMs = bestMatch.data.expiresAt 
+                ? new Date(bestMatch.data.expiresAt).getTime() 
+                : (bestMatch.data.createdAt ? new Date(bestMatch.data.createdAt).getTime() + 5 * 60 * 1000 : 0);
+
+              // 60-second grace period for in-flight bank network notification delay
+              const isSessionExpired = expiresAtMs > 0 && (Date.now() > expiresAtMs + 60 * 1000);
+
+              if (isSessionExpired) {
+                // Expired: Mark session as EXPIRED in Firestore and do not activate pass
+                await setDoc(doc(db, "active_checkout_sessions", bestMatch.id), {
+                  status: "EXPIRED",
+                  expiredAt: now,
+                  attemptedUtr: utr,
+                  attemptedAmount: amount,
+                }, { merge: true });
+              } else {
+                matchedOrderId = bestMatch.id;
+                matchedStudentName = bestMatch.data.participantName || bestMatch.data.leaderName || bestMatch.data.email || "Student";
+                await setDoc(doc(db, "active_checkout_sessions", bestMatch.id), {
+                  status: "COMPLETED",
+                  utr,
+                  receivedAmount: amount,
+                  paidAt: now,
+                  rawNotification: combinedText,
+                }, { merge: true });
+              }
             }
           }
         } catch (autoErr) {

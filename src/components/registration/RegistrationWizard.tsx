@@ -171,7 +171,9 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     bhimLink?: string;
     payeeName: string;
     upiId: string;
+    expiresAt?: string;
   } | null>(null);
+  const [isRegeneratingQR, setIsRegeneratingQR] = useState(false);
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(() => getStoredPaymentConfig());
   const [showManualUtr, setShowManualUtr] = useState(false);
   const [isAutoDetectingPayment, setIsAutoDetectingPayment] = useState(false);
@@ -827,6 +829,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         bhimLink: orderData.bhimLink,
         payeeName: orderData.payeeName || paymentConfig.payeeName,
         upiId: orderData.upiId || paymentConfig.upiId,
+        expiresAt: orderData.expiresAt,
       });
 
       if (db && orderData.orderId) {
@@ -843,6 +846,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             phone: formData.phone || user?.phone || "",
             status: "WAITING",
             createdAt: new Date().toISOString(),
+            expiresAt: orderData.expiresAt,
           }, { merge: true });
         } catch (e) {
           console.warn("Client active_checkout_sessions mirror notice:", e);
@@ -856,6 +860,87 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         "Failed to initiate payment gateway. Please check your connection or contact the coordinator."
       );
       setIsSubmitting(false);
+    }
+  };
+
+  const handleRegenerateQR = async () => {
+    if (isRegeneratingQR) return;
+    setIsRegeneratingQR(true);
+    try {
+      const orderRes = await fetch("/api/paytm/initiate-transaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: totalPayableAmount,
+          eventId: event.id,
+          eventName: event.name,
+          participantName: formData.fullName,
+          email: formData.email,
+          phone: formData.phone,
+          btId: formData.btId,
+          teamType: formData.teamType,
+          teamSize: formData.teamType === "Team" ? teamMembers.length : 1,
+          tenureId: "2025-26",
+          upiId: paymentConfig.upiId,
+          payeeName: paymentConfig.payeeName,
+          paytmMid: paymentConfig.paytmMid,
+        }),
+      });
+
+      if (!orderRes.ok) {
+        const errJson = await orderRes.json().catch(() => ({}));
+        throw new Error(errJson.error || "Could not regenerate payment QR code.");
+      }
+
+      const orderData = await orderRes.json();
+      if (!orderData.success) {
+        throw new Error(orderData.error || "Failed to generate payment payload.");
+      }
+
+      setShowManualUtr(false);
+      setPaytmUtr("");
+      autoDetectCompletedRef.current = false;
+      setPaytmCheckoutData({
+        orderId: orderData.orderId,
+        amount: orderData.amount,
+        baseAmount: orderData.baseAmount || orderData.amount,
+        microPaisaOffset: orderData.microPaisaOffset || 0,
+        formattedAmount: orderData.formattedAmount,
+        upiLink: orderData.upiLink,
+        gpayLink: orderData.gpayLink,
+        phonepeLink: orderData.phonepeLink,
+        paytmLink: orderData.paytmLink,
+        bhimLink: orderData.bhimLink,
+        payeeName: orderData.payeeName || paymentConfig.payeeName,
+        upiId: orderData.upiId || paymentConfig.upiId,
+        expiresAt: orderData.expiresAt,
+      });
+
+      if (db && orderData.orderId) {
+        try {
+          await setDoc(doc(db, "active_checkout_sessions", orderData.orderId), {
+            orderId: orderData.orderId,
+            amount: Number(orderData.amount),
+            baseAmount: Number(orderData.baseAmount || orderData.amount),
+            microPaisaOffset: orderData.microPaisaOffset || 0,
+            eventId: event.id,
+            eventName: event.name,
+            participantName: formData.fullName || user?.displayName || user?.name || "Student",
+            email: formData.email || user?.email || "",
+            phone: formData.phone || user?.phone || "",
+            status: "WAITING",
+            createdAt: new Date().toISOString(),
+            expiresAt: orderData.expiresAt,
+          }, { merge: true });
+        } catch (e) {
+          console.warn("Client active_checkout_sessions mirror notice:", e);
+        }
+      }
+    } catch (err: any) {
+      console.error("Payment QR regeneration error:", err);
+      alert(err?.message || "Failed to refresh payment QR code. Please check your connection.");
+    } finally {
+      setIsRegeneratingQR(false);
     }
   };
 
@@ -2203,7 +2288,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         <SecureCheckoutModal
           isOpen={Boolean(paytmCheckoutData)}
           onClose={() => {
-            if (!isVerifyingPaytm) setPaytmCheckoutData(null);
+            if (!isVerifyingPaytm && !isRegeneratingQR) setPaytmCheckoutData(null);
           }}
           paytmCheckoutData={paytmCheckoutData}
           event={event}
@@ -2214,6 +2299,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           handleVerifyPaytmPayment={handleVerifyPaytmPayment}
           showManualUtr={showManualUtr}
           setShowManualUtr={setShowManualUtr}
+          onRegenerateQR={handleRegenerateQR}
+          isRegeneratingQR={isRegeneratingQR}
         />
       )}
 
