@@ -92,6 +92,7 @@ export interface EventFormData {
   subEventBadge: string;
   targetAudience: TargetAudience;
   isInterCollege: boolean;
+  isFeatured?: boolean;
 }
 
 export function formatDateRangeToReadable(startIso: string, endIso: string): string {
@@ -299,6 +300,7 @@ export function EventFormModal({
     subEventBadge: initialData?.subEventBadge || "",
     targetAudience: initialData?.targetAudience || "inter_college",
     isInterCollege: initialData?.isInterCollege !== false,
+    isFeatured: Boolean(initialData?.isFeatured),
   });
 
   useEffect(() => {
@@ -338,6 +340,7 @@ export function EventFormModal({
         schedule: initialData.schedule && Array.isArray(initialData.schedule) ? JSON.parse(JSON.stringify(initialData.schedule)) : prev.schedule || [],
         prizes: initialData.prizes && Array.isArray(initialData.prizes) ? JSON.parse(JSON.stringify(initialData.prizes)) : prev.prizes || [],
         customQuestions: initialData.customQuestions || [],
+        isFeatured: Boolean(initialData.isFeatured),
       }));
     }
   }, [initialData]);
@@ -1025,6 +1028,30 @@ export function EventFormModal({
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Flagship Highlight Spotlight Toggle */}
+            <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-[#E78023]" />
+                    <span>Flagship Highlight Spotlight</span>
+                  </label>
+                  <p className="text-[11px] text-amber-800 font-medium">
+                    Feature this event as the prominent top hero banner highlight on the official events calendar.
+                  </p>
+                </div>
+                <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(form.isFeatured)}
+                    onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })}
+                    className="w-4 h-4 rounded text-[#17458F] focus:ring-[#17458F] border-slate-300"
+                  />
+                  <span className="text-xs font-bold text-amber-950">Feature as Flagship</span>
+                </label>
+              </div>
             </div>
 
             {/* Target Audience & Eligibility Toggle Switch */}

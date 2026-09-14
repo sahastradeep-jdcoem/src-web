@@ -436,7 +436,17 @@ export default function StudentDashboardPage() {
     };
   }, [user]);
 
-  const flagshipEvent = events.find(e => e.isFeatured || e.category === "Fest") || events[0] || null;
+  const flagshipEvent = events.find(
+    (e) =>
+      Boolean(e.isFeatured || e.isParentFest) &&
+      e.isLive !== false &&
+      e.status !== "draft" &&
+      !e.isCancelled &&
+      e.status !== "Cancelled" &&
+      e.status !== "Completed" &&
+      !e.parentEventId &&
+      !e.parentEventSlug
+  ) || null;
 
   const activeRegistrations = registrations.filter((r) => r.status !== "COMPLETED");
   const completedRegistrations = registrations.filter((r) => r.status === "COMPLETED");

@@ -1,7 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Calendar, Clock, MapPin, Users, Layers } from "lucide-react";
+import { Calendar, Clock, MapPin, Users, Layers, Sparkles } from "lucide-react";
 import { EventItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
@@ -43,11 +43,12 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
                 <Layers className="w-3 h-3" />
                 <span>Umbrella Event</span>
               </span>
-            ) : (
-              <span className="text-[10px] font-sans font-semibold uppercase tracking-wider px-3 py-1 rounded-full bg-[#E78023] text-white shadow-md">
-                Featured Fest
+            ) : event.isFeatured ? (
+              <span className="text-[10px] font-sans font-semibold uppercase tracking-wider px-3 py-1 rounded-full bg-[#E78023] text-white shadow-md flex items-center gap-1">
+                <Sparkles className="w-3 h-3" />
+                <span>Flagship Spotlight</span>
               </span>
-            )}
+            ) : null}
             <span className={cn(
               "text-[10px] font-sans font-bold uppercase tracking-wider px-2.5 py-1 rounded-full shadow-md flex items-center gap-1",
               event.targetAudience === "jdcoem_only" || event.isInterCollege === false

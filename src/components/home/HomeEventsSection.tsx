@@ -63,8 +63,10 @@ export default function HomeEventsSection() {
         !e.parentEventSlug
     )
   );
-  const featuredEvent = liveEvents.find((e) => e.isFeatured) || liveEvents[0];
-  const otherEvents = liveEvents.filter((e) => (e.id || e.slug) !== (featuredEvent?.id || featuredEvent?.slug));
+  const featuredEvent = liveEvents.find((e) => Boolean(e.isFeatured) && e.status !== "Completed") || null;
+  const otherEvents = featuredEvent
+    ? liveEvents.filter((e) => (e.id || e.slug) !== (featuredEvent.id || featuredEvent.slug))
+    : liveEvents;
 
   if (liveEvents.length === 0) {
     if (isSyncing) {

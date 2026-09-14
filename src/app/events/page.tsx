@@ -66,9 +66,12 @@ export default function EventsPage() {
 
   const featuredEvent = eventsList.find(
     (e) =>
-      e.isFeatured &&
+      Boolean(e.isFeatured) &&
+      e.isLive !== false &&
+      e.status !== "draft" &&
       !e.isCancelled &&
       e.status !== "Cancelled" &&
+      e.status !== "Completed" &&
       !e.parentEventId &&
       !e.parentEventSlug
   );

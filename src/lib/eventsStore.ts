@@ -89,6 +89,14 @@ export function sanitizeEventItem(event: EventItem): EventItem {
               : [],
           }))
       : [],
+    isFeatured:
+      event.status === "Completed" ||
+      event.slug === "code-and-craft" ||
+      event.id === "evt-code-and-craft" ||
+      event.slug === "jamming-session" ||
+      event.id === "evt-jamming-session"
+        ? false
+        : Boolean(event.isFeatured),
   };
 }
 

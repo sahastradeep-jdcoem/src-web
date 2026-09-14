@@ -246,6 +246,7 @@ export default function AdminEventsPage() {
       subEventBadge: isUmbrella ? undefined : (formData.subEventBadge || undefined),
       targetAudience: formData.targetAudience || "inter_college",
       isInterCollege: formData.targetAudience === "inter_college",
+      isFeatured: Boolean(formData.isFeatured),
       coordinatorContact:
         formData.coordinatorContact &&
         (Boolean(formData.coordinatorContact.name?.trim()) || Boolean(formData.coordinatorContact.phone?.trim()))
@@ -257,7 +258,9 @@ export default function AdminEventsPage() {
           : undefined,
     };
 
-    const updated = [created, ...eventsList];
+    const updated = created.isFeatured
+      ? [created, ...eventsList.map((e) => ({ ...e, isFeatured: false }))]
+      : [created, ...eventsList];
     setEventsList(updated);
     try {
       await saveStoredEvents(updated);
@@ -287,6 +290,31 @@ export default function AdminEventsPage() {
         nextAudience === "inter_college" ? "INTER-COLLEGE (OPEN TO ALL)" : "JDCOEM STUDENTS ONLY"
       }.`
     );
+  };
+
+  const handleToggleFeatured = async (evt: EventItem) => {
+    const nextFeatured = !evt.isFeatured;
+    const updated = eventsList.map((e) => {
+      if (e.id === evt.id || e.slug === evt.slug) {
+        return { ...e, isFeatured: nextFeatured };
+      }
+      if (nextFeatured) {
+        return { ...e, isFeatured: false };
+      }
+      return e;
+    });
+    setEventsList(updated);
+    try {
+      await saveStoredEvents(updated);
+      showNotice(
+        nextFeatured
+          ? `"${evt.name}" is now designated as the Flagship Spotlight event.`
+          : `Removed Flagship Spotlight designation from "${evt.name}".`
+      );
+    } catch (err: any) {
+      console.error("Cloud save failed for flagship toggle:", err);
+      showNotice("Failed to update flagship status in cloud.");
+    }
   };
 
   const editingInitialData: Partial<EventFormData> | undefined = useMemo(() => {
@@ -340,6 +368,7 @@ export default function AdminEventsPage() {
       subEventBadge: editingEvent.subEventBadge || "",
       targetAudience: (editingEvent.targetAudience || (editingEvent.isInterCollege === false ? "jdcoem_only" : "inter_college")) as TargetAudience,
       isInterCollege: editingEvent.targetAudience ? editingEvent.targetAudience === "inter_college" : editingEvent.isInterCollege !== false,
+      isFeatured: Boolean(editingEvent.isFeatured),
       hasSchedule: editingEvent.hasSchedule !== undefined ? editingEvent.hasSchedule : Boolean(editingEvent.schedule && editingEvent.schedule.length > 0),
       hasPrizes: editingEvent.hasPrizes !== undefined ? editingEvent.hasPrizes : Boolean(editingEvent.prizes && editingEvent.prizes.length > 0),
       schedule: editingEvent.schedule ? JSON.parse(JSON.stringify(editingEvent.schedule)) : [],
@@ -432,6 +461,7 @@ export default function AdminEventsPage() {
       subEventBadge: isUmbrella ? undefined : (formData.subEventBadge || undefined),
       targetAudience: formData.targetAudience || "inter_college",
       isInterCollege: formData.targetAudience === "inter_college",
+      isFeatured: Boolean(formData.isFeatured),
       coordinatorContact:
         formData.coordinatorContact &&
         (Boolean(formData.coordinatorContact.name?.trim()) || Boolean(formData.coordinatorContact.phone?.trim()))
@@ -445,8 +475,17 @@ export default function AdminEventsPage() {
 
     const hasItem = eventsList.some(targetMatch);
     const updated = hasItem
-      ? eventsList.map((item) => (targetMatch(item) ? { ...item, ...editedItem } : item))
-      : [editedItem, ...eventsList];
+      ? eventsList.map((item) => {
+          if (targetMatch(item)) return { ...item, ...editedItem };
+          if (editedItem.isFeatured) return { ...item, isFeatured: false };
+          return item;
+        })
+      : [
+          editedItem,
+          ...(editedItem.isFeatured
+            ? eventsList.map((e) => ({ ...e, isFeatured: false }))
+            : eventsList),
+        ];
 
     setEventsList(updated);
     try {
@@ -808,33 +847,58 @@ export default function AdminEventsPage() {
 
                   {/* Overlaid Badges */}
                   <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
-                    <span className="px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider border border-white/20">
-                      {evt.category}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider border border-white/20">
+                        {evt.category}
+                      </span>
+                      {evt.isFeatured && (
+                        <span className="px-2.5 py-1 rounded-full bg-amber-500/95 text-white text-[10px] font-extrabold uppercase tracking-wider border border-amber-300 shadow-2xs inline-flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 fill-white text-white" />
+                          <span>Flagship</span>
+                        </span>
+                      )}
+                    </div>
                     
-                    <button
-                      type="button"
-                      onClick={() => handleToggleAudience(evt)}
-                      className={cn(
-                        "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-md border transition-all cursor-pointer shadow-sm inline-flex items-center gap-1",
-                        evt.targetAudience === "jdcoem_only"
-                          ? "bg-amber-500/90 text-white border-amber-300 hover:bg-amber-600"
-                          : "bg-[#17458F]/90 text-white border-blue-300 hover:bg-[#123670]"
-                      )}
-                      title="Click to toggle JDCOEM Only vs Open to All"
-                    >
-                      {evt.targetAudience === "jdcoem_only" ? (
-                        <>
-                          <GraduationCap className="w-3 h-3" />
-                          <span>JDCOEM Only</span>
-                        </>
-                      ) : (
-                        <>
-                          <Globe className="w-3 h-3" />
-                          <span>Open to All</span>
-                        </>
-                      )}
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleFeatured(evt)}
+                        className={cn(
+                          "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-md border transition-all cursor-pointer shadow-sm inline-flex items-center gap-1",
+                          evt.isFeatured
+                            ? "bg-amber-400 text-slate-950 border-amber-300 hover:bg-amber-300 font-extrabold"
+                            : "bg-black/55 text-white/90 border-white/20 hover:bg-black/75"
+                        )}
+                        title={evt.isFeatured ? "Flagship Spotlight Active — Click to remove" : "Click to designate as Flagship Spotlight"}
+                      >
+                        <Sparkles className={cn("w-3 h-3", evt.isFeatured ? "text-amber-950 fill-amber-950" : "text-amber-400")} />
+                        <span>{evt.isFeatured ? "Flagship" : "Feature"}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleToggleAudience(evt)}
+                        className={cn(
+                          "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-md border transition-all cursor-pointer shadow-sm inline-flex items-center gap-1",
+                          evt.targetAudience === "jdcoem_only"
+                            ? "bg-amber-500/90 text-white border-amber-300 hover:bg-amber-600"
+                            : "bg-[#17458F]/90 text-white border-blue-300 hover:bg-[#123670]"
+                        )}
+                        title="Click to toggle JDCOEM Only vs Open to All"
+                      >
+                        {evt.targetAudience === "jdcoem_only" ? (
+                          <>
+                            <GraduationCap className="w-3 h-3" />
+                            <span>JDCOEM Only</span>
+                          </>
+                        ) : (
+                          <>
+                            <Globe className="w-3 h-3" />
+                            <span>Open to All</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Bottom Title on Image */}
