@@ -470,7 +470,7 @@ export async function processQueue(): Promise<boolean> {
         if (itemIdx >= 0) {
           latestQueue[itemIdx].retryCount = (latestQueue[itemIdx].retryCount || 0) + 1;
           const errMsg = err?.message || String(err);
-          const isSizeError = errMsg.includes("exceeds maximum allowed size") || errMsg.includes("too large");
+          const isSizeError = errMsg.includes("exceeds maximum allowed size") || errMsg.includes("too large") || errMsg.includes("exceeds the safe threshold");
           if (latestQueue[itemIdx].retryCount >= 3 || isSizeError) {
             console.error(`[SyncEngine] Dropping unrecoverable queue item for ${item.docId} after ${latestQueue[itemIdx].retryCount} attempts:`, errMsg);
             latestQueue.splice(itemIdx, 1);
