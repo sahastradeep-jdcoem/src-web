@@ -1868,8 +1868,7 @@ export default function AdminTeamPage() {
                 </span>
               </div>
               <p className="text-xs text-slate-600 max-w-3xl leading-relaxed">
-                Select any club below to view inducted members and bulk-enroll students by entering comma-separated BT IDs.
-                Names, departments, and academic years are automatically resolved from system records. Enrolled students are badged as <span className="font-semibold text-[#17458F]">&ldquo;Club Name Member&rdquo;</span> on their dashboard with zero photo storage overhead.
+                Select any club below to view inducted members and bulk-enroll students by entering comma-separated BT IDs. Names, departments, and academic years are automatically resolved from system records.
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
