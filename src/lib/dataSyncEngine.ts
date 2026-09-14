@@ -206,13 +206,19 @@ export async function compactEventDataset<T extends { poster?: string; cardImage
       if (poster && poster.startsWith("data:image/") && poster.length > 40000) {
         poster = await compactBase64Image(poster, 500, 0.70);
       }
-      if (card && card.startsWith("data:image/") && card.length > 40000) {
+      if (card && card === e.poster) {
+        card = poster;
+      } else if (card && card.startsWith("data:image/") && card.length > 40000) {
         card = await compactBase64Image(card, 500, 0.70);
       }
-      if (posterImg && posterImg.startsWith("data:image/") && posterImg.length > 40000) {
+      if (posterImg && (posterImg === e.poster || posterImg === e.cardImage)) {
+        posterImg = poster || card;
+      } else if (posterImg && posterImg.startsWith("data:image/") && posterImg.length > 40000) {
         posterImg = await compactBase64Image(posterImg, 500, 0.70);
       }
-      if (header && header.startsWith("data:image/") && header.length > 50000) {
+      if (header && (header === e.poster || header === e.cardImage || header === e.posterImage)) {
+        header = poster || card || posterImg;
+      } else if (header && header.startsWith("data:image/") && header.length > 50000) {
         header = await compactBase64Image(header, 700, 0.70);
       }
 

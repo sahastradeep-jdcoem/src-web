@@ -118,8 +118,12 @@ export default function AdminListingsPage() {
       setResponses(getStoredListingResponses());
     };
 
-    const handleEventsUpdate = () => {
-      setEventsList(getStoredEvents());
+    const handleEventsUpdate = (e?: any) => {
+      if (e?.detail && Array.isArray(e.detail)) {
+        setEventsList(e.detail);
+      } else {
+        setEventsList(getStoredEvents());
+      }
       setClubsList(getStoredClubs());
     };
 

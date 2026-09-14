@@ -95,8 +95,12 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
     const unsubEvents = subscribeToEvents((remote) => {
       applyEvents(remote);
     });
-    const handleEventsUpdate = () => {
-      applyEvents(getStoredEvents());
+    const handleEventsUpdate = (e?: any) => {
+      if (e?.detail && Array.isArray(e.detail)) {
+        applyEvents(e.detail);
+      } else {
+        applyEvents(getStoredEvents());
+      }
     };
     window.addEventListener("src_events_updated", handleEventsUpdate);
 

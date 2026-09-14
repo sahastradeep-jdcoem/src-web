@@ -253,23 +253,72 @@ export function sanitizeEventsList(events: EventItem[]): EventItem[] {
   return sortEventsByDate(sanitized);
 }
 
+let inMemoryEvents: EventItem[] | null = null;
+
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (e) => {
+    if (e.key === EVENTS_STORAGE_KEY && e.newValue) {
+      try {
+        const parsed = JSON.parse(e.newValue);
+        if (Array.isArray(parsed)) {
+          inMemoryEvents = sanitizeEventsList(parsed);
+        }
+      } catch {}
+    }
+  });
+
+  window.addEventListener("src_events_updated", (e: any) => {
+    if (e?.detail && Array.isArray(e.detail)) {
+      inMemoryEvents = e.detail;
+    }
+  });
+}
+
+function safeWriteEventsToLocalStorage(events: EventItem[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(events));
+  } catch (quotaErr) {
+    console.warn("localStorage quota exceeded for events, applying safe compaction:", quotaErr);
+    try {
+      // In localStorage, keep all metadata, IDs, details, but strip oversized base64 strings (>35KB)
+      // to guarantee all event records persist without hitting 5MB browser quota (Directive #2)
+      const lightweight = events.map((e) => ({
+        ...e,
+        poster: e.poster && e.poster.length > 35000 && e.poster.startsWith("data:") ? "" : e.poster,
+        cardImage: e.cardImage && e.cardImage.length > 35000 && e.cardImage.startsWith("data:") ? "" : e.cardImage,
+        posterImage: e.posterImage && e.posterImage.length > 35000 && e.posterImage.startsWith("data:") ? "" : e.posterImage,
+        headerImage: e.headerImage && e.headerImage.length > 35000 && e.headerImage.startsWith("data:") ? "" : e.headerImage,
+      }));
+      localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(lightweight));
+    } catch (secondErr) {
+      console.warn("Emergency localStorage save for events failed:", secondErr);
+    }
+  }
+}
+
 /**
- * Retrieve current events list from local storage
+ * Retrieve current events list from in-memory cache or local storage
  */
 export function getStoredEvents(): EventItem[] {
   if (typeof window === "undefined") return [];
+  if (inMemoryEvents !== null && inMemoryEvents.length > 0) {
+    return inMemoryEvents;
+  }
   try {
     const stored = localStorage.getItem(EVENTS_STORAGE_KEY);
     if (stored !== null) {
       const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed)) {
-        return sanitizeEventsList(parsed);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const sanitized = sanitizeEventsList(parsed);
+        inMemoryEvents = sanitized;
+        return sanitized;
       }
     }
   } catch (e) {
     console.warn("Could not read events from storage", e);
   }
-  return [];
+  return inMemoryEvents || [];
 }
 
 /**
@@ -279,12 +328,10 @@ export async function saveStoredEvents(events: EventItem[]): Promise<void> {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(sanitizeEventsList(events));
+    inMemoryEvents = sanitized;
     markLocalWrite("events");
-    try { 
-      localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(sanitized)); 
-    } catch (lsErr) { 
-      console.warn("localStorage quota exceeded for events:", lsErr); 
-    }
+
+    safeWriteEventsToLocalStorage(sanitized);
 
     window.dispatchEvent(new CustomEvent("src_events_updated", { detail: sanitized }));
 
@@ -300,9 +347,8 @@ export async function saveStoredEvents(events: EventItem[]): Promise<void> {
     
     compactEventDataset(sanitized).then((compacted) => {
       const cleanCompacted = cleanUndefined(compacted);
-      try {
-        localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(cleanCompacted));
-      } catch {}
+      inMemoryEvents = cleanCompacted;
+      safeWriteEventsToLocalStorage(cleanCompacted);
       saveSiteContentToFirestore("events", cleanCompacted).catch(() => {});
     }).catch(() => {});
 
@@ -337,10 +383,9 @@ export async function syncEventsFromFirestore(): Promise<EventItem[]> {
       const current = getStoredEvents();
       const rawMerged = reconcileArrayDatasets(current, remote);
       const merged = sanitizeEventsList(rawMerged);
+      inMemoryEvents = merged;
       if (typeof window !== "undefined") {
-        try {
-          localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(merged));
-        } catch {}
+        safeWriteEventsToLocalStorage(merged);
         window.dispatchEvent(new CustomEvent("src_events_updated", { detail: merged }));
       }
       return merged;
@@ -362,10 +407,9 @@ export function subscribeToEvents(callback: (events: EventItem[]) => void): () =
       const current = getStoredEvents();
       const rawMerged = reconcileArrayDatasets(current, remote);
       const merged = sanitizeEventsList(rawMerged);
+      inMemoryEvents = merged;
       if (typeof window !== "undefined") {
-        try {
-          localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(merged));
-        } catch {}
+        safeWriteEventsToLocalStorage(merged);
         window.dispatchEvent(new CustomEvent("src_events_updated", { detail: merged }));
       }
       callback(merged);

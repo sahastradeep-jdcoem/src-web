@@ -88,10 +88,11 @@ export default function AdminEventsPage() {
   const handleManualSync = async () => {
     setIsSyncing(true);
     try {
-      await saveStoredEvents(eventsList);
       const synced = await syncEventsFromFirestore();
-      setEventsList(synced);
-      showNotice(`Successfully synced ${synced.length} events with live cloud database.`);
+      if (Array.isArray(synced)) {
+        setEventsList(synced);
+        showNotice(`Successfully synced ${synced.length} events with live cloud database.`);
+      }
     } catch (e) {
       showNotice("Could not reach cloud database, displaying cached roster.");
     } finally {
@@ -108,8 +109,12 @@ export default function AdminEventsPage() {
       }
     });
 
-    const handleUpdate = () => {
-      setEventsList(getStoredEvents());
+    const handleUpdate = (e?: any) => {
+      if (e?.detail && Array.isArray(e.detail)) {
+        setEventsList(e.detail);
+      } else {
+        setEventsList(getStoredEvents());
+      }
       setClubsList(getStoredClubs());
     };
 
