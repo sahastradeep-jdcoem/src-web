@@ -16,7 +16,7 @@ export function getStoredGalleryPhotos(): GalleryPhoto[] {
     const stored = localStorage.getItem(GALLERY_STORAGE_KEY);
     if (stored !== null) {
       const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch (e) {
     console.warn("Could not read gallery photos from storage", e);
@@ -52,11 +52,12 @@ export async function saveStoredGalleryPhotos(photos: GalleryPhoto[]): Promise<v
 export async function syncGalleryFromFirestore(): Promise<GalleryPhoto[]> {
   try {
     const remote = await getSiteContentFromFirestore<GalleryPhoto[]>("gallery_photos");
-    if (remote !== null && Array.isArray(remote) && remote.length > 0) {
+    if (remote !== null && Array.isArray(remote)) {
+      // Remote Firestore state is strictly authoritative for items & deletions (Directive #9)
       const current = getStoredGalleryPhotos();
       const merged = reconcileArrayDatasets(current, remote);
       if (typeof window !== "undefined") {
-        localStorage.setItem(GALLERY_STORAGE_KEY, JSON.stringify(merged));
+        try { localStorage.setItem(GALLERY_STORAGE_KEY, JSON.stringify(merged)); } catch {}
         window.dispatchEvent(new CustomEvent("src_gallery_updated", { detail: merged }));
       }
       return merged;
@@ -69,12 +70,12 @@ export async function syncGalleryFromFirestore(): Promise<GalleryPhoto[]> {
 
 export function subscribeToGallery(callback: (photos: GalleryPhoto[]) => void): () => void {
   return subscribeToSiteContent<GalleryPhoto[]>("gallery_photos", (remote) => {
-    if (remote !== null && Array.isArray(remote) && remote.length > 0) {
+    if (remote !== null && Array.isArray(remote)) {
       if (hasPendingWritesFor("gallery_photos")) return;
       const current = getStoredGalleryPhotos();
       const merged = reconcileArrayDatasets(current, remote);
       if (typeof window !== "undefined") {
-        localStorage.setItem(GALLERY_STORAGE_KEY, JSON.stringify(merged));
+        try { localStorage.setItem(GALLERY_STORAGE_KEY, JSON.stringify(merged)); } catch {}
         window.dispatchEvent(new CustomEvent("src_gallery_updated", { detail: merged }));
       }
       callback(merged);

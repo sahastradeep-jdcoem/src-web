@@ -494,8 +494,14 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
   localList: T[],
   remoteList: T[]
 ): T[] {
-  if (!Array.isArray(remoteList) || remoteList.length === 0) {
-    return localList;
+  if (!Array.isArray(remoteList)) {
+    return Array.isArray(localList) ? localList : [];
+  }
+  if (remoteList.length === 0) {
+    // Cloud-Authoritative Dataset Invariant (Directive #9)
+    // Remote Firestore state is strictly authoritative. If remote is empty [],
+    // zero items remain and local items must not be resurrected.
+    return [];
   }
   if (!Array.isArray(localList) || localList.length === 0) {
     return remoteList;

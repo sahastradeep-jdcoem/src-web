@@ -72,11 +72,11 @@ export default function AdminGalleryPage() {
     setPhotos(getStoredGalleryPhotos());
 
     syncGalleryFromFirestore().then((res) => {
-      if (res) setPhotos(res);
+      if (Array.isArray(res)) setPhotos(res);
     });
 
     const unsub = subscribeToGallery((cloudPhotos) => {
-      if (cloudPhotos && cloudPhotos.length > 0) {
+      if (Array.isArray(cloudPhotos)) {
         setPhotos(cloudPhotos);
       }
     });
@@ -178,6 +178,17 @@ export default function AdminGalleryPage() {
     }
   };
 
+  const handleDeleteAllPhotos = async () => {
+    if (photos.length === 0) return;
+    if (confirm(`Are you sure you want to remove ALL ${photos.length} photographs from the gallery? This action cannot be undone.`)) {
+      try {
+        await saveList([]);
+      } catch (err: any) {
+        console.error("Failed to delete all photographs:", err);
+      }
+    }
+  };
+
   const filteredPhotos = useMemo(() => {
     return photos.filter((p) => {
       const matchesSearch = 
@@ -207,6 +218,17 @@ export default function AdminGalleryPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {photos.length > 0 && (
+            <button
+              onClick={handleDeleteAllPhotos}
+              className="px-4 py-2 rounded-xl bg-white hover:bg-rose-50 border border-rose-200 text-rose-600 hover:text-rose-700 text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+              title="Remove all photographs from gallery"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete All</span>
+            </button>
+          )}
+
           <button
             onClick={handleResetDefaults}
             className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
@@ -389,10 +411,29 @@ export default function AdminGalleryPage() {
       {filteredPhotos.length === 0 && (
         <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 text-slate-500 text-xs space-y-3">
           <ImageIcon className="w-8 h-8 text-slate-300 mx-auto" />
-          <p className="font-bold text-sm text-slate-700">No photographs matched your filter.</p>
-          <Button onClick={handleOpenAddModal} variant="outline" size="sm">
-            Add a photograph now
-          </Button>
+          <p className="font-bold text-sm text-slate-700">
+            {photos.length === 0 ? "No photographs in the gallery." : "No photographs matched your filter."}
+          </p>
+          <p className="text-slate-400 max-w-sm mx-auto">
+            {photos.length === 0
+              ? "All photographs have been removed. You can upload new photos or click 'Reset Defaults' to restore initial campus photos."
+              : "Try switching categories or clearing your search term."}
+          </p>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <Button onClick={handleOpenAddModal} variant="primary" size="sm">
+              <Plus className="w-3.5 h-3.5 mr-1" />
+              Add a photograph now
+            </Button>
+            {photos.length === 0 && (
+              <button
+                onClick={handleResetDefaults}
+                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Restore Defaults</span>
+              </button>
+            )}
+          </div>
         </div>
       )}
 

@@ -174,10 +174,12 @@ export default function GalleryPage() {
             </div>
             <div className="space-y-1">
               <h3 className="font-heading font-bold text-lg text-[#0F172A]">
-                No photographs in this collection
+                {photos.length === 0 ? "No photographs in visual archives" : "No photographs in this collection"}
               </h3>
               <p className="text-xs text-slate-500">
-                Try switching the category filter or clearing your search term.
+                {photos.length === 0
+                  ? "New campus photographs and visual archives will appear here."
+                  : "Try switching the category filter or clearing your search term."}
               </p>
             </div>
             {(selectedCategory !== "All" || searchQuery) && (
