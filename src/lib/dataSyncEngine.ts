@@ -1,6 +1,11 @@
 "use client";
 
-import { saveSiteContentToFirestore, getSiteContentFromFirestore, cleanUndefined } from "./firebase/firestore";
+import { 
+  saveSiteContentToFirestore, 
+  getSiteContentFromFirestore, 
+  cleanUndefined,
+  saveEventToFirestore 
+} from "./firebase/firestore";
 
 const QUEUE_STORAGE_KEY = "src_pending_cloud_sync_queue";
 const BACKUP_HISTORY_KEY = "src_rolling_snapshot_history";
@@ -456,7 +461,11 @@ export async function processQueue(): Promise<boolean> {
 
       const item = currentQueue[0];
       try {
-        await saveSiteContentToFirestore(item.docId, item.payload);
+        if (item.docId.startsWith("event_") || item.docId.startsWith("events/")) {
+          await saveEventToFirestore(item.payload);
+        } else {
+          await saveSiteContentToFirestore(item.docId, item.payload);
+        }
         // Atomically remove this processed item from the latest queue
         const latestQueue = getPendingQueue();
         const updatedQueue = latestQueue.filter((q) => q.id !== item.id && q.docId !== item.docId);

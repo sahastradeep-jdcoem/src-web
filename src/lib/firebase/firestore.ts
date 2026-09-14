@@ -15,6 +15,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./config";
 import { UserProfile } from "@/types/auth";
+import { EventItem } from "@/types";
 
 export interface StudentRegistrationRecord {
   id: string; // Accreditation Registration ID (e.g. SRC-PRA-8291)
@@ -907,6 +908,183 @@ export function subscribeToSiteContent<T>(docId: string, callback: (data: T) => 
     );
   } catch (e) {
     console.warn(`Firestore subscription setup notice [${docId}]`, e);
+    return () => {};
+  }
+}
+
+// -----------------------------------------------------------------------------
+// INDIVIDUAL EVENT DOCUMENT MANAGEMENT (1 Event = 1 Document Invariant)
+// -----------------------------------------------------------------------------
+export const EVENTS_COLLECTION = "events";
+
+export function getEventDocId(event: Partial<EventItem> | string): string {
+  if (typeof event === "string") {
+    return event.trim();
+  }
+  return (event.id || event.slug || "").trim() || `evt-${Date.now()}`;
+}
+
+/**
+ * Save an individual event directly to its own document in the events collection.
+ * Guarantees that each event has its own dedicated 1MB quota and never exceeds safe thresholds.
+ */
+export async function saveEventToFirestore(event: EventItem): Promise<void> {
+  try {
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      const docId = getEventDocId(event);
+      const sanitized = cleanUndefined({
+        ...event,
+        id: event.id || docId,
+        slug: event.slug || docId,
+      });
+
+      // Individual event document safety check (750 KB safe limit)
+      const jsonStr = JSON.stringify(sanitized);
+      const payloadSize = new Blob([jsonStr]).size;
+
+      if (payloadSize > FIRESTORE_DOC_SAFE_MAX_BYTES) {
+        const sizeKb = Math.round(payloadSize / 1024);
+        const maxKb = Math.round(FIRESTORE_DOC_SAFE_MAX_BYTES / 1024);
+        const errorMsg = `[Firestore] Event document [${docId}] payload (${sizeKb} KB) exceeds the safe threshold (${maxKb} KB). Write rejected to prevent truncation.`;
+        console.error(errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      // Write directly to events collection: 1 event = 1 document
+      const docRef = doc(db, EVENTS_COLLECTION, docId);
+      try {
+        await setDoc(docRef, { ...sanitized, updatedAt: serverTimestamp() }, { merge: true });
+      } catch (err: any) {
+        // Fallback: If remote security rules for top-level collection /events/{id} are not yet deployed,
+        // write to /site_content/event_{id} which is universally permitted by site_content/{docId}
+        if (err?.code === "permission-denied" || err?.message?.includes("Missing or insufficient permissions")) {
+          console.warn(`[Firestore] Direct write to events/${docId} permission denied; writing to fallback site_content/event_${docId}`);
+          const fallbackRef = doc(db, SITE_CONTENT_COLLECTION, `event_${docId}`);
+          await setDoc(fallbackRef, { payload: sanitized, updatedAt: serverTimestamp() }, { merge: true });
+          return;
+        }
+        throw err;
+      }
+    }
+  } catch (error: any) {
+    console.error(`Firestore saveEventToFirestore error [${event.id || event.slug}]:`, error?.code || "", error?.message || error);
+    throw error;
+  }
+}
+
+/**
+ * Delete an individual event document from Firestore
+ */
+export async function deleteEventFromFirestore(eventIdOrSlug: string): Promise<void> {
+  try {
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      const docId = getEventDocId(eventIdOrSlug);
+      const docRef = doc(db, EVENTS_COLLECTION, docId);
+      try {
+        await deleteDoc(docRef);
+      } catch (err: any) {
+        if (err?.code !== "permission-denied") {
+          console.warn(`Delete error on events/${docId}:`, err);
+        }
+      }
+      // Also clean up fallback document if it exists
+      try {
+        const fallbackRef = doc(db, SITE_CONTENT_COLLECTION, `event_${docId}`);
+        await deleteDoc(fallbackRef);
+      } catch {}
+    }
+  } catch (error) {
+    console.warn(`Firestore deleteEventFromFirestore error [${eventIdOrSlug}]:`, error);
+  }
+}
+
+/**
+ * Fetch all individual event documents from Firestore (1 event = 1 document)
+ * Automatically migrates legacy site_content/events if collection is empty.
+ */
+export async function getAllEventsFromFirestore(): Promise<EventItem[]> {
+  try {
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      const colRef = collection(db, EVENTS_COLLECTION);
+      const snapshot = await getDocs(colRef);
+      if (!snapshot.empty) {
+        return snapshot.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            ...data,
+          } as EventItem;
+        });
+      }
+
+      // If events collection is empty, check legacy master document as fallback / migration source
+      const legacyMaster = await getSiteContentFromFirestore<EventItem[]>("events");
+      if (Array.isArray(legacyMaster) && legacyMaster.length > 0) {
+        console.log(`[Firestore] Auto-migrating ${legacyMaster.length} legacy events into individual documents...`);
+        const migrationPromises = legacyMaster.map(async (item) => {
+          try {
+            await saveEventToFirestore(item);
+          } catch (mErr) {
+            console.warn(`Auto-migration failed for event ${item.id || item.slug}:`, mErr);
+          }
+        });
+        await Promise.allSettled(migrationPromises);
+        return legacyMaster;
+      }
+    }
+  } catch (error) {
+    console.warn("Could not fetch events from Firestore collection:", error);
+  }
+  return [];
+}
+
+/**
+ * Subscribe to real-time updates of the events collection
+ */
+export function subscribeToEventsFromFirestore(
+  callback: (events: EventItem[]) => void
+): () => void {
+  if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    return () => {};
+  }
+  try {
+    const colRef = collection(db, EVENTS_COLLECTION);
+    return onSnapshot(
+      colRef,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const events = snapshot.docs.map((d) => {
+            const data = d.data();
+            return {
+              id: d.id,
+              ...data,
+            } as EventItem;
+          });
+          callback(events);
+        } else {
+          // If the events collection is empty, check legacy master document as fallback
+          getSiteContentFromFirestore<EventItem[]>("events")
+            .then((legacy) => {
+              if (Array.isArray(legacy) && legacy.length > 0) {
+                callback(legacy);
+              } else {
+                callback([]);
+              }
+            })
+            .catch(() => callback([]));
+        }
+      },
+      (error) => {
+        console.warn("Firestore live events collection notice:", error);
+        if (error?.code === "permission-denied") {
+          return subscribeToSiteContent<EventItem[]>("events", (data) => {
+            if (Array.isArray(data)) callback(data);
+          });
+        }
+      }
+    );
+  } catch (e) {
+    console.warn("Firestore subscription error for events collection:", e);
     return () => {};
   }
 }

@@ -32,6 +32,12 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
 
+    // Individual event documents (1 event = 1 document)
+    match /events/{eventId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
     // Admin authorization records
     match /admins/{email} {
       allow read: if isAuthenticated();
