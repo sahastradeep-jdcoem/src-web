@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentConfig } from "@/lib/paymentConfigStore";
-import { getSiteContentFromFirestore } from "@/lib/firebase/firestore";
+import { getEventFromFirestore, getAllEventsFromFirestore, getSiteContentFromFirestore } from "@/lib/firebase/firestore";
 import { EventItem } from "@/types";
 
 export async function POST(req: NextRequest) {
@@ -29,18 +29,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Server-side price validation to prevent client-side fee tampering
+    // Server-side price validation to prevent client-side fee tampering (1 Event = 1 Document)
     if (eventId) {
-      let canonicalEvent: EventItem | undefined;
+      let canonicalEvent: EventItem | undefined | null;
       try {
-        const remoteEvents = await getSiteContentFromFirestore<EventItem[]>("events");
-        if (Array.isArray(remoteEvents)) {
-          canonicalEvent = remoteEvents.find(
-            (e) => e.id === eventId || e.slug === eventId
-          );
+        canonicalEvent = await getEventFromFirestore(eventId);
+        if (!canonicalEvent) {
+          const allEvents = await getAllEventsFromFirestore();
+          canonicalEvent = allEvents.find((e) => e.id === eventId || e.slug === eventId);
         }
       } catch (fsErr) {
-        console.warn("Could not fetch events from Firestore for fee check:", fsErr);
+        console.warn("Could not fetch event from Firestore for fee check:", fsErr);
       }
       if (canonicalEvent && canonicalEvent.isPaid) {
         let expectedFee = canonicalEvent.feeAmount || 0;

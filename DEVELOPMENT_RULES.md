@@ -187,3 +187,23 @@
    - **44x44px Minimum Touch Targets**: All buttons, triggers, hamburger icons, close buttons, and tab selectors must provide a minimum touch target area of `44x44px` with adequate adjacent spacing (minimum 8px gap).
    - **16px Input Font Size Rule**: All form inputs, textareas, and `<select>` controls must maintain at least `16px` font size on screens `<= 767px` to prevent iOS Safari from automatically zooming the viewport upon focus.
    - **Viewport-Safe Modals & Navigation Drawers**: All modals must enforce `max-h-[90vh]` or `max-h-[92vh]` with smooth `overflow-y-auto` scrolling. Mobile navigation drawers must feature backdrop tap-to-dismiss and body scroll locking while open.
+
+---
+
+## 9. Individual Document Architecture Invariant (1 Event = 1 Document)
+
+1. **Top-Level Document Isolation (Present & Future)**:
+   - Every event created in the system lives as an independent document at path `/events/{eventId}` inside Firestore.
+   - **Never consolidate or append events into a single monolithic document or array** as the primary data model.
+   - Document IDs are derived deterministically using `getEventDocId(event)` (`id` || `slug`).
+   - Benefits strictly enforced:
+     - **Full Quota Headroom**: Each event has its own dedicated 1MB Firestore limit, ensuring detailed descriptions, multiple high-res posters, schedules, prizes, and custom registration questions never exhaust document size limits.
+     - **Zero Cross-Event Contention**: Editing or saving Event A will never overwrite or conflict with concurrent edits to Event B.
+     - **Sub-300ms Delta Saves**: Admin saves only trigger network writes for documents that were actually modified or added (`saveEventToFirestore`), completely bypassing unchanged events.
+     - **Atomic Deletions**: Deleting an event deletes its dedicated document (`deleteEventFromFirestore`) without having to rewrite an entire catalog.
+
+2. **Access Patterns**:
+   - **Fetch All Events**: `getAllEventsFromFirestore()` queries `collection(db, "events")`.
+   - **Single Event Lookup**: `getEventFromFirestore(idOrSlug)` directly inspects `doc(db, "events", docId)` or queries by slug.
+   - **Real-Time Updates**: `subscribeToEventsFromFirestore(callback)` sets up an `onSnapshot` listener on `collection(db, "events")`.
+   - **Server-Side Routes** (e.g. payment initiation, sitemap): Always query individual documents or the `events` collection via `getAllEventsFromFirestore()` or `getEventFromFirestore()`.

@@ -1,6 +1,6 @@
 import { MetadataRoute } from "next";
 import { mockClubs } from "@/data/clubs";
-import { getSiteContentFromFirestore } from "@/lib/firebase/firestore";
+import { getAllEventsFromFirestore } from "@/lib/firebase/firestore";
 import { EventItem } from "@/types";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -79,10 +79,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }));
 
-  // Dynamic live event routes
+  // Dynamic live event routes (1 Event = 1 Document)
   let dynamicEvents: EventItem[] = [];
   try {
-    const fsEvents = await getSiteContentFromFirestore<EventItem[]>("events");
+    const fsEvents = await getAllEventsFromFirestore();
     if (Array.isArray(fsEvents)) {
       dynamicEvents = fsEvents.filter(
         (e) => e.isLive !== false && e.status !== "draft" && !e.isCancelled && e.status !== "Cancelled"

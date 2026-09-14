@@ -69,5 +69,8 @@ For detailed standards and implementation examples, refer to [DEVELOPMENT_RULES.
     - **Admin Console Desktop Exclusivity**: The Admin Console (`/admin/*`) is strictly for desktop workstations (enforced via a 'Desktop Required' barrier on phones). Never make mobile adaptations or changes to admin console pages.
     - **Standards**: Zero horizontal overflow (`overflow-x: hidden`), minimum 44x44px touch targets on buttons/triggers, viewport-safe scrollable modals, and 16px minimum font size on mobile inputs to prevent iOS Safari auto-zooming.
 
-
-
+13. **1 Event = 1 Document Invariant (Strict Document Isolation in Present & Future)**:
+    - In Firestore, every event must strictly and permanently reside as an independent, individual document inside the top-level `/events/{eventId}` collection.
+    - **Never consolidate or aggregate events into a single array document** as the primary datastore.
+    - Each event document maintains its own dedicated 1MB quota headroom, independent CRUD operations, sub-second delta writes, and zero cross-event write collisions.
+    - All queries, subscriptions (`subscribeToEventsFromFirestore`), single-item lookups (`getEventFromFirestore`), collection fetches (`getAllEventsFromFirestore`), and mutations (`saveEventToFirestore`, `deleteEventFromFirestore`) must target individual documents in `/events/{eventId}`.

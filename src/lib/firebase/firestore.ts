@@ -1039,6 +1039,49 @@ export async function getAllEventsFromFirestore(): Promise<EventItem[]> {
 }
 
 /**
+ * Fetch an individual event document directly from Firestore (1 Event = 1 Document)
+ */
+export async function getEventFromFirestore(eventIdOrSlug: string): Promise<EventItem | null> {
+  try {
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY && eventIdOrSlug) {
+      const docId = getEventDocId(eventIdOrSlug);
+
+      // 1. Direct document lookup in /events/{docId}
+      const docRef = doc(db, EVENTS_COLLECTION, docId);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        return {
+          id: snap.id,
+          ...snap.data(),
+        } as EventItem;
+      }
+
+      // 2. Lookup by slug in /events collection
+      const slugQuery = query(collection(db, EVENTS_COLLECTION), where("slug", "==", eventIdOrSlug));
+      const slugSnap = await getDocs(slugQuery);
+      if (!slugSnap.empty) {
+        const firstDoc = slugSnap.docs[0];
+        return {
+          id: firstDoc.id,
+          ...firstDoc.data(),
+        } as EventItem;
+      }
+
+      // 3. Check fallback /site_content/event_{docId}
+      const fallbackRef = doc(db, SITE_CONTENT_COLLECTION, `event_${docId}`);
+      const fallbackSnap = await getDoc(fallbackRef);
+      if (fallbackSnap.exists()) {
+        const data = fallbackSnap.data();
+        return (data?.payload || { id: fallbackSnap.id, ...data }) as EventItem;
+      }
+    }
+  } catch (error) {
+    console.warn(`Firestore getEventFromFirestore notice [${eventIdOrSlug}]:`, error);
+  }
+  return null;
+}
+
+/**
  * Subscribe to real-time updates of the events collection
  */
 export function subscribeToEventsFromFirestore(
