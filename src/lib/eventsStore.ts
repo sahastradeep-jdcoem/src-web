@@ -352,13 +352,6 @@ export async function saveStoredEvents(events: EventItem[]): Promise<void> {
       cloudWriteError = err;
     }
     enqueueCloudWrite("events", sanitized, `Events Roster (${sanitized.length} Events)`);
-    
-    compactEventDataset(sanitized).then((compacted) => {
-      const cleanCompacted = cleanUndefined(compacted);
-      inMemoryEvents = cleanCompacted;
-      safeWriteEventsToLocalStorage(cleanCompacted);
-      saveSiteContentToFirestore("events", cleanCompacted).catch(() => {});
-    }).catch(() => {});
 
     if (cloudWriteError) {
       const errMsg = cloudWriteError?.message || String(cloudWriteError);

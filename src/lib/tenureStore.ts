@@ -393,83 +393,57 @@ export function getPublicTenures(): CouncilTenure[] {
 }
 
 export function compactTenureForStorage(tenure: CouncilTenure): CouncilTenure {
-  const stripHeavy = (members?: TeamMember[]): TeamMember[] => {
-    if (!Array.isArray(members)) return [];
-    return members.map((m) => ({
-      ...m,
-      // Never strip compact base64 avatars (Directive #4)
-      avatar: (m.avatar && m.avatar.startsWith("data:image/") && m.avatar.length > MAX_SAFE_BASE64_LENGTH) ? "" : (m.avatar || ""),
-    }));
-  };
+  if (tenure.isCurrent) {
+    // For the current live tenure, strip redundant base64 data URLs from nested arrays.
+    // The canonical high-res media lives authoritatively in council_team, hosting_committee,
+    // clubs (with club_leaders_{slug}), and events!
+    // This keeps the council_tenures document ~40-60 KB instead of 2.5 MB!
+    const stripMemberDataUrls = (members?: TeamMember[]): TeamMember[] => {
+      if (!Array.isArray(members)) return [];
+      return members.map((m) => ({
+        ...m,
+        avatar: m.avatar && m.avatar.startsWith("data:") ? "" : m.avatar,
+      }));
+    };
 
-  const stripClubHeavy = (clubs?: ClubItem[]): ClubItem[] => {
-    if (!Array.isArray(clubs)) return [];
-    const hydrated = hydrateClubAvatars(clubs);
-    return hydrated.map((c) => {
-      const cleanLead: ClubLeader | undefined = c.lead ? {
-        ...c.lead,
-        avatar: (c.lead?.avatar && c.lead.avatar.startsWith("data:image/") && c.lead.avatar.length > MAX_SAFE_BASE64_LENGTH) ? "" : (c.lead?.avatar || ""),
-      } : undefined;
-
-      const cleanCoLead: ClubLeader | undefined = c.coLead ? {
-        ...c.coLead,
-        avatar: (c.coLead?.avatar && c.coLead.avatar.startsWith("data:image/") && c.coLead.avatar.length > MAX_SAFE_BASE64_LENGTH) ? "" : (c.coLead?.avatar || ""),
-      } : undefined;
-
-      const cleanCoLeads: ClubLeader[] | undefined = Array.isArray(c.coLeads) ? c.coLeads.map((cl) => ({
-        ...cl,
-        avatar: (cl?.avatar && cl.avatar.startsWith("data:image/") && cl.avatar.length > MAX_SAFE_BASE64_LENGTH) ? "" : (cl?.avatar || ""),
-      })) : undefined;
-
-      const cleanLeaders: ClubLeader[] | undefined = Array.isArray(c.leaders) ? c.leaders.map((l) => ({
-        ...l,
-        avatar: (l?.avatar && l.avatar.startsWith("data:image/") && l.avatar.length > MAX_SAFE_BASE64_LENGTH) ? "" : (l?.avatar || ""),
-      })) : undefined;
-
-      // Deduplication: If leaders array contains the avatars, strip duplicate base64 from cleanLead/cleanCoLead
-      const hasLeaderAvatars = cleanLeaders && cleanLeaders.some((l) => l.avatar && l.avatar.startsWith("data:image/"));
-      if (hasLeaderAvatars) {
-        if (cleanLead && cleanLead.avatar && cleanLead.avatar.startsWith("data:image/")) cleanLead.avatar = "";
-        if (cleanCoLead && cleanCoLead.avatar && cleanCoLead.avatar.startsWith("data:image/")) cleanCoLead.avatar = "";
-        if (cleanCoLeads) {
-          cleanCoLeads.forEach((cl) => {
-            if (cl.avatar && cl.avatar.startsWith("data:image/")) cl.avatar = "";
-          });
-        }
-      }
-
-      return {
+    const stripClubDataUrls = (clubs?: ClubItem[]): ClubItem[] => {
+      if (!Array.isArray(clubs)) return [];
+      return clubs.map((c) => ({
         ...c,
-        logoImage: (c.logoImage && c.logoImage.startsWith("data:image/") && c.logoImage.length > 25000) ? "" : c.logoImage,
-        cardImage: (c.cardImage && c.cardImage.startsWith("data:image/") && c.cardImage.length > 35000) ? "" : c.cardImage,
-        headerImage: (c.headerImage && c.headerImage.startsWith("data:image/") && c.headerImage.length > 35000) ? "" : c.headerImage,
-        lead: cleanLead,
-        coLead: cleanCoLead,
-        ...(cleanCoLeads ? { coLeads: cleanCoLeads } : {}),
-        ...(cleanLeaders ? { leaders: cleanLeaders } : {}),
-      };
-    });
-  };
+        logoImage: c.logoImage && c.logoImage.startsWith("data:") ? "" : c.logoImage,
+        cardImage: c.cardImage && c.cardImage.startsWith("data:") ? "" : c.cardImage,
+        headerImage: c.headerImage && c.headerImage.startsWith("data:") ? "" : c.headerImage,
+        lead: c.lead ? { ...c.lead, avatar: c.lead.avatar && c.lead.avatar.startsWith("data:") ? "" : c.lead.avatar } : undefined,
+        coLead: c.coLead ? { ...c.coLead, avatar: c.coLead.avatar && c.coLead.avatar.startsWith("data:") ? "" : c.coLead.avatar } : undefined,
+        coLeads: Array.isArray(c.coLeads) ? c.coLeads.map((cl) => ({ ...cl, avatar: cl.avatar && cl.avatar.startsWith("data:") ? "" : cl.avatar })) : undefined,
+        leaders: Array.isArray(c.leaders) ? c.leaders.map((l) => ({ ...l, avatar: l.avatar && l.avatar.startsWith("data:") ? "" : l.avatar })) : undefined,
+      }));
+    };
 
-  const stripEventHeavy = (events?: EventItem[]): EventItem[] => {
-    if (!Array.isArray(events)) return [];
-    return events.map((e) => ({
-      ...e,
-      poster: (e.poster && e.poster.startsWith("data:image/") && e.poster.length > 35000) ? "" : e.poster,
-      posterImage: (e.posterImage && e.posterImage.startsWith("data:image/") && e.posterImage.length > 35000) ? "" : e.posterImage,
-      cardImage: (e.cardImage && e.cardImage.startsWith("data:image/") && e.cardImage.length > 35000) ? "" : e.cardImage,
-      headerImage: (e.headerImage && e.headerImage.startsWith("data:image/") && e.headerImage.length > 35000) ? "" : e.headerImage,
-    }));
-  };
+    const stripEventDataUrls = (events?: EventItem[]): EventItem[] => {
+      if (!Array.isArray(events)) return [];
+      return events.map((e) => ({
+        ...e,
+        poster: e.poster && e.poster.startsWith("data:") ? "" : e.poster,
+        posterImage: e.posterImage && e.posterImage.startsWith("data:") ? "" : e.posterImage,
+        cardImage: e.cardImage && e.cardImage.startsWith("data:") ? "" : e.cardImage,
+        headerImage: e.headerImage && e.headerImage.startsWith("data:") ? "" : e.headerImage,
+      }));
+    };
 
-  return {
-    ...tenure,
-    adminCouncil: stripHeavy(tenure.adminCouncil),
-    hostingCommittee: stripHeavy(tenure.hostingCommittee),
-    foundingMembers: stripHeavy(tenure.foundingMembers),
-    clubs: stripClubHeavy(tenure.clubs),
-    events: stripEventHeavy(tenure.events),
-  };
+    return {
+      ...tenure,
+      adminCouncil: stripMemberDataUrls(tenure.adminCouncil),
+      hostingCommittee: stripMemberDataUrls(tenure.hostingCommittee),
+      foundingMembers: stripMemberDataUrls(tenure.foundingMembers),
+      clubs: stripClubDataUrls(tenure.clubs),
+      events: stripEventDataUrls(tenure.events),
+    };
+  }
+
+  // For archived past tenures or pre-configured draft sessions, preserve the actual images
+  // without destructive arbitrary length truncations!
+  return tenure;
 }
 
 export async function saveStoredTenures(tenures: CouncilTenure[]): Promise<void> {

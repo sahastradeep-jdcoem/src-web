@@ -71,8 +71,41 @@ export async function saveClubLeadersDocument(
   payload: Partial<ClubLeadersDocument>
 ): Promise<void> {
   const docId = getClubLeadersDocId(slugOrId);
+
+  // Normalization: Ensure leaders array holds canonical avatars, avoiding duplicate base64 in lead/coLead
+  const rawLeaders = Array.isArray(payload.leaders) ? [...payload.leaders] : [];
+  const leaderAvatars = new Set<string>();
+  rawLeaders.forEach((l) => {
+    if (l?.avatar && typeof l.avatar === "string") {
+      leaderAvatars.add(l.avatar.slice(0, 100));
+    }
+  });
+
+  const normalizedLead = payload.lead
+    ? {
+        ...payload.lead,
+        avatar:
+          payload.lead.avatar && leaderAvatars.has(payload.lead.avatar.slice(0, 100))
+            ? ""
+            : payload.lead.avatar || "",
+      }
+    : payload.lead;
+
+  const normalizedCoLead = payload.coLead
+    ? {
+        ...payload.coLead,
+        avatar:
+          payload.coLead.avatar && leaderAvatars.has(payload.coLead.avatar.slice(0, 100))
+            ? ""
+            : payload.coLead.avatar || "",
+      }
+    : payload.coLead;
+
   const sanitized = cleanUndefined({
     ...payload,
+    lead: normalizedLead,
+    coLead: normalizedCoLead,
+    leaders: rawLeaders,
     updatedAt: Date.now(),
   });
   markLocalWrite(docId);
@@ -732,14 +765,6 @@ export async function saveStoredCouncilMembers(members: TeamMember[], autoSyncTo
     }
     enqueueCloudWrite("council_team", sanitized, `Council Leadership (${members.length} Members)`);
 
-    compactCouncilDataset(sanitized).then((compacted) => {
-      const finalClean = cleanUndefined(compacted);
-      try {
-        localStorage.setItem("src_council_team", JSON.stringify(finalClean));
-      } catch {}
-      saveSiteContentToFirestore("council_team", finalClean).catch(() => {});
-    });
-
     if (autoSyncToFounding && Array.isArray(sanitized)) {
       syncCouncilAdminsToFounding(sanitized, true);
     }
@@ -828,14 +853,6 @@ export async function saveStoredHostingCommittee(members: TeamMember[]): Promise
       cloudWriteError = err;
     }
     enqueueCloudWrite("hosting_committee", sanitized, `Hosting Committee (${members.length} Members)`);
-
-    compactCouncilDataset(sanitized).then((compacted) => {
-      const finalClean = cleanUndefined(compacted);
-      try {
-        localStorage.setItem("src_hosting_committee", JSON.stringify(finalClean));
-      } catch {}
-      saveSiteContentToFirestore("hosting_committee", finalClean).catch(() => {});
-    });
 
     if (cloudWriteError) {
       const errMsg = cloudWriteError?.message || String(cloudWriteError);
@@ -1480,14 +1497,6 @@ export async function saveStoredFoundingMembers(members: TeamMember[], autoSyncT
       cloudWriteError = err;
     }
     enqueueCloudWrite("founding_members", sanitized, `Founding Members (${members.length} Members)`);
-
-    compactCouncilDataset(sanitized).then((compacted) => {
-      const finalClean = cleanUndefined(compacted);
-      try {
-        localStorage.setItem("src_founding_members", JSON.stringify(finalClean));
-      } catch {}
-      saveSiteContentToFirestore("founding_members", finalClean).catch(() => {});
-    });
 
     if (autoSyncToCouncil && Array.isArray(sanitized)) {
       syncFoundingToCouncilAdmins(sanitized, true);

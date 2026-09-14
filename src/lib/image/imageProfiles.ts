@@ -58,112 +58,119 @@ export interface ImageProfile {
 // ─── Profile Definitions ─────────────────────────────────────────────────────
 
 /**
- * At 640×800 (4:5) or 600×600 (1:1), an avatar rendered on desktop and mobile Retina displays
- * delivers > 2.2x pixel density with crystal-clear facial details at ~30–45KB WebP.
+ * At 640×800 (4:5) or 600×600 (1:1) at quality 0.86, portrait avatars deliver
+ * razor-sharp facial details, skin/hair textures, and crisp clothing definition on Retina screens.
  */
 const AVATAR_PROFILE: ImageProfile = {
   label: "Portrait Photo",
   maxWidth: 640,
   maxHeight: 800,
-  quality: 0.84,
+  quality: 0.86,
   format: "image/webp",
   preserveTransparency: false,
   defaultAspectRatio: "4:5",
   allowedAspectRatios: ["4:5", "3:4", "1:1", "free"],
   lockAspectRatio: false,
   circularMask: false,
-  targetSizeHint: "~30–45 KB (High-Density Retina WebP)",
-  maxInlineBytes: 75_000,
+  targetSizeHint: "High-Density Retina WebP",
+  maxInlineBytes: 150_000,
 };
 
+/**
+ * Club logos and insignias preserve sharp vector-like edges and alpha channel transparency.
+ */
 const LOGO_PROFILE: ImageProfile = {
   label: "Club Logo / Insignia",
-  maxWidth: 400,
-  maxHeight: 400,
-  quality: 0.85,
+  maxWidth: 512,
+  maxHeight: 512,
+  quality: 0.90,
   format: "image/webp",
   preserveTransparency: true,
   defaultAspectRatio: "1:1",
   allowedAspectRatios: ["1:1", "free"],
   lockAspectRatio: false,
   circularMask: true,
-  targetSizeHint: "~12–20 KB",
-  maxInlineBytes: 45_000,
+  targetSizeHint: "Crisp Alpha WebP/PNG",
+  maxInlineBytes: 120_000,
 };
 
+/**
+ * Event posters contain fine typography, dates, sponsor logos, and QR codes.
+ * Higher dimensions (960×1280) and 0.86 quality keep fine graphics and text perfectly legible.
+ */
 const EVENT_POSTER_PROFILE: ImageProfile = {
   label: "Event Poster",
-  maxWidth: 600,
-  maxHeight: 800,
-  quality: 0.74,
+  maxWidth: 960,
+  maxHeight: 1280,
+  quality: 0.86,
   format: "image/webp",
   preserveTransparency: false,
   defaultAspectRatio: "3:4",
   allowedAspectRatios: ["3:4", "4:5", "16:9", "1:1", "free"],
   lockAspectRatio: false,
   circularMask: false,
-  targetSizeHint: "~26–36 KB",
-  maxInlineBytes: 80_000,
+  targetSizeHint: "High-Legibility Event Poster",
+  maxInlineBytes: 250_000,
 };
 
 const CARD_COVER_PROFILE: ImageProfile = {
   label: "Card Cover Image",
-  maxWidth: 640,
-  maxHeight: 360,
-  quality: 0.72,
+  maxWidth: 800,
+  maxHeight: 450,
+  quality: 0.82,
   format: "image/webp",
   preserveTransparency: false,
   defaultAspectRatio: "16:9",
   allowedAspectRatios: ["16:9", "4:5", "3:4", "1:1", "21:9", "free"],
   lockAspectRatio: false,
   circularMask: false,
-  targetSizeHint: "~18–26 KB",
-  maxInlineBytes: 60_000,
+  targetSizeHint: "Crisp Card Cover",
+  maxInlineBytes: 180_000,
 };
 
 const BANNER_PROFILE: ImageProfile = {
   label: "Hero / Header Banner",
-  maxWidth: 960,
-  maxHeight: 410,
-  quality: 0.70,
+  maxWidth: 1280,
+  maxHeight: 548,
+  quality: 0.82,
   format: "image/webp",
   preserveTransparency: false,
   defaultAspectRatio: "21:9",
   allowedAspectRatios: ["21:9", "16:9", "free"],
   lockAspectRatio: false,
   circularMask: false,
-  targetSizeHint: "~24–35 KB",
-  maxInlineBytes: 80_000,
+  targetSizeHint: "Ultra-Wide Cinematic Banner",
+  maxInlineBytes: 250_000,
 };
 
 const GALLERY_PROFILE: ImageProfile = {
   label: "Gallery Photo",
-  maxWidth: 960,
-  maxHeight: 640,
-  quality: 0.74,
+  maxWidth: 1440,
+  maxHeight: 960,
+  quality: 0.86,
   format: "image/webp",
   preserveTransparency: false,
   defaultAspectRatio: "16:9",
   allowedAspectRatios: ["16:9", "4:5", "3:4", "1:1", "21:9", "free"],
   lockAspectRatio: false,
   circularMask: false,
-  targetSizeHint: "~30–42 KB",
-  maxInlineBytes: 100_000,
+  targetSizeHint: "High-Res Showcase Photography",
+  maxInlineBytes: 250_000,
 };
 
 const THUMBNAIL_PROFILE: ImageProfile = {
   label: "Thumbnail Icon",
-  maxWidth: 160,
-  maxHeight: 160,
-  quality: 0.70,
+  maxWidth: 200,
+  maxHeight: 200,
+  quality: 0.80,
   format: "image/webp",
   preserveTransparency: false,
   defaultAspectRatio: "1:1",
   allowedAspectRatios: ["1:1"],
   lockAspectRatio: true,
   circularMask: true,
-  targetSizeHint: "~3–5 KB",
-  maxInlineBytes: 12_000,
+  targetSizeHint: "Sharp Icon Thumbnail",
+  maxInlineBytes: 35_000,
 };
 
 // ─── Profile Registry ────────────────────────────────────────────────────────

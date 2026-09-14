@@ -829,84 +829,33 @@ export async function updateRegistrationPaymentStatus(
 
 const SITE_CONTENT_COLLECTION = "site_content";
 
-function stripOversizedBase64<T>(obj: T, maxLen = 100000, parentKey = "", isEmergency = false): T {
-  if (obj === null || obj === undefined) return obj;
-  if (typeof obj === "string") {
-    // Preserve avatars up to 350,000 bytes (Directive #4) so profile pictures are never wiped by background compaction
-    // Unless in deep emergency quota guard (isEmergency = true) where document would fail Firestore completely
-    const isAvatarKey = parentKey === "avatar" || parentKey === "photoUrl" || parentKey === "profileImage";
-    const effectiveMax = isAvatarKey ? (isEmergency ? Math.min(maxLen * 2, 75000) : 350000) : maxLen;
-    if (obj.startsWith("data:image/") && obj.length > effectiveMax) {
-      return "" as unknown as T;
-    }
-    return obj;
-  }
-  if (typeof obj !== "object") return obj;
-  if (Array.isArray(obj)) {
-    return obj.map((item) => stripOversizedBase64(item, maxLen, parentKey, isEmergency)) as unknown as T;
-  }
-  const result: any = {};
-  for (const key of Object.keys(obj as any)) {
-    result[key] = stripOversizedBase64((obj as any)[key], maxLen, key, isEmergency);
-  }
-  return result as T;
-}
+/**
+ * Conservative Firestore document size threshold (750 KB).
+ * Hard Firestore limit is 1,048,576 bytes (1 MB).
+ * Enforcing 750 KB leaves ample safety margin for metadata, indexing overhead,
+ * and eliminates silent data destruction / truncation.
+ */
+export const FIRESTORE_DOC_SAFE_MAX_BYTES = 750_000;
 
 /**
- * Save site content document (e.g. events, clubs, team, hero) to Firestore
+ * Save site content document (e.g. events, clubs, team, hero) to Firestore.
+ * Strictly guarantees that valid image data is never silently wiped or degraded.
  */
 export async function saveSiteContentToFirestore<T>(docId: string, data: T): Promise<void> {
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-      let sanitized = cleanUndefined(data);
+      const sanitized = cleanUndefined(data);
 
-      // Emergency Firestore 1MB quota guard (1,048,576 bytes)
-      try {
-        let jsonStr = JSON.stringify(sanitized);
-        if (jsonStr.length > 880000) {
-          console.warn(`[Firestore] Document [${docId}] is near 1MB quota (${jsonStr.length} bytes). Applying proactive emergency compaction...`);
+      // Conservative Firestore document size safety check
+      const jsonStr = JSON.stringify(sanitized);
+      const payloadSize = new Blob([jsonStr]).size;
 
-          // 1. If clubs document, run deep deduplication
-          if (docId === "clubs" && Array.isArray(sanitized)) {
-            sanitized = (sanitized as any[]).map((club: any) => {
-              const header = club.headerImage || "";
-              let hero = club.heroImage || "";
-              if (hero && (hero === header || (header && hero.slice(0, 100) === header.slice(0, 100)))) {
-                hero = "";
-              }
-              // Strip lead/coLead avatars if leaders exists
-              const lead = club.lead ? { ...club.lead, avatar: "" } : club.lead;
-              const coLead = club.coLead ? { ...club.coLead, avatar: "" } : club.coLead;
-              const coLeads = Array.isArray(club.coLeads)
-                ? club.coLeads.map((cl: any) => ({ ...cl, avatar: "" }))
-                : club.coLeads;
-              return {
-                ...club,
-                heroImage: hero,
-                lead,
-                coLead,
-                coLeads,
-              };
-            }) as any;
-            jsonStr = JSON.stringify(sanitized);
-          }
-
-          // 2. Compact non-avatar presentation images (banners, posters, cards)
-          if (jsonStr.length > 900000) {
-            sanitized = stripOversizedBase64(sanitized, 45000);
-            jsonStr = JSON.stringify(sanitized);
-          }
-          if (jsonStr.length > 950000) {
-            sanitized = stripOversizedBase64(sanitized, 25000);
-            jsonStr = JSON.stringify(sanitized);
-          }
-          if (jsonStr.length > 980000) {
-            // Absolute emergency fallback to prevent fatal quota rejection
-            sanitized = stripOversizedBase64(sanitized, 15000, "", true);
-          }
-        }
-      } catch (guardErr) {
-        console.warn(`[Firestore] Quota guard check error for [${docId}]:`, guardErr);
+      if (payloadSize > FIRESTORE_DOC_SAFE_MAX_BYTES) {
+        const sizeKb = Math.round(payloadSize / 1024);
+        const maxKb = Math.round(FIRESTORE_DOC_SAFE_MAX_BYTES / 1024);
+        const errorMsg = `[Firestore] Document [${docId}] payload (${sizeKb} KB) exceeds the safe threshold (${maxKb} KB). Write rejected to prevent data truncation. Structure datasets into partitioned documents or enable Cloud Storage mode.`;
+        console.error(errorMsg);
+        throw new Error(errorMsg);
       }
 
       const docRef = doc(db, SITE_CONTENT_COLLECTION, docId);

@@ -228,14 +228,20 @@ export default function LeadershipSpotlightSection() {
                 
                 {/* Photo with Blue Ring */}
                 <div className="relative shrink-0">
-                  <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl overflow-hidden ring-4 ring-[#17458F]/20 shadow-md relative bg-slate-100">
-                    <Image
-                      src={vicePresident.avatar || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=400&auto=format&fit=crop"}
-                      alt={vicePresident.name}
-                      fill
-                      unoptimized={true}
-                      className="object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
+                  <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl overflow-hidden ring-4 ring-[#17458F]/20 shadow-md relative bg-slate-100 flex items-center justify-center">
+                    {vicePresident.avatar ? (
+                      <Image
+                        src={vicePresident.avatar}
+                        alt={vicePresident.name}
+                        fill
+                        unoptimized={true}
+                        className="object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                    ) : (
+                      <span className="text-3xl sm:text-4xl font-bold text-slate-400">
+                        {(vicePresident.name || "VP").slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
                   </div>
                   <div className="absolute -bottom-2 -right-2 p-1.5 rounded-xl bg-[#17458F] text-white shadow-md">
                     <Award className="w-4 h-4 text-[#E78023]" />

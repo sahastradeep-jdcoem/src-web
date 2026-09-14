@@ -148,7 +148,7 @@ export async function compressImage(
         ctx.imageSmoothingQuality = "high";
         ctx.drawImage(sourceElement, 0, 0, width, height);
 
-        // Convert canvas to Blob in WebP format
+        // Convert canvas to Blob in requested format
         canvas.toBlob(
           (blob) => {
             if (!blob) {
@@ -157,7 +157,7 @@ export async function compressImage(
             }
 
             // Create compressed File instance
-            const extension = outputFormat === "image/webp" ? ".webp" : ".jpg";
+            const extension = outputFormat === "image/webp" ? ".webp" : outputFormat === "image/png" ? ".png" : ".jpg";
             const newFileName = file.name.replace(/\.[^/.]+$/, "") + extension;
             const compressedFile = new File([blob], newFileName, {
               type: outputFormat,

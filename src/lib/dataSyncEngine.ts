@@ -203,23 +203,25 @@ export async function compactEventDataset<T extends { poster?: string; cardImage
       let posterImg = e.posterImage;
       let header = e.headerImage;
 
-      if (poster && poster.startsWith("data:image/") && poster.length > 40000) {
-        poster = await compactBase64Image(poster, 500, 0.70);
+      // Only compact if truly oversized (> 300,000 bytes) down to crisp 960px at 0.86 quality
+      // This preserves fine text, QR codes, sponsor logos, and date typography.
+      if (poster && poster.startsWith("data:image/") && poster.length > 300000) {
+        poster = await compactBase64Image(poster, 960, 0.86);
       }
-      if (card && card === e.poster) {
+      if (card && (card === e.poster || card === poster)) {
         card = poster;
-      } else if (card && card.startsWith("data:image/") && card.length > 40000) {
-        card = await compactBase64Image(card, 500, 0.70);
+      } else if (card && card.startsWith("data:image/") && card.length > 250000) {
+        card = await compactBase64Image(card, 800, 0.82);
       }
-      if (posterImg && (posterImg === e.poster || posterImg === e.cardImage)) {
+      if (posterImg && (posterImg === e.poster || posterImg === e.cardImage || posterImg === poster || posterImg === card)) {
         posterImg = poster || card;
-      } else if (posterImg && posterImg.startsWith("data:image/") && posterImg.length > 40000) {
-        posterImg = await compactBase64Image(posterImg, 500, 0.70);
+      } else if (posterImg && posterImg.startsWith("data:image/") && posterImg.length > 300000) {
+        posterImg = await compactBase64Image(posterImg, 960, 0.86);
       }
-      if (header && (header === e.poster || header === e.cardImage || header === e.posterImage)) {
+      if (header && (header === e.poster || header === e.cardImage || header === e.posterImage || header === poster)) {
         header = poster || card || posterImg;
-      } else if (header && header.startsWith("data:image/") && header.length > 50000) {
-        header = await compactBase64Image(header, 700, 0.70);
+      } else if (header && header.startsWith("data:image/") && header.length > 300000) {
+        header = await compactBase64Image(header, 1280, 0.82);
       }
 
       return {
@@ -244,10 +246,10 @@ export async function compactCouncilDataset<T extends { avatar?: string }>(
   const processed = await Promise.all(
     members.map(async (m) => {
       let av = m.avatar;
-      // High-density Retina WebP avatars (~30-50KB, length <= 75000) are already optimized.
-      // Only compact if truly oversized (> 80000 bytes) down to crisp 640x800 at quality 0.84.
-      if (av && av.startsWith("data:image/") && av.length > 80000) {
-        av = await compactBase64Image(av, 800, 0.84);
+      // High-density Retina WebP avatars from UniversalImageUploader are already optimized.
+      // Only compact if truly raw / oversized (> 250,000 bytes) down to crisp 640x800 at quality 0.86.
+      if (av && av.startsWith("data:image/") && av.length > 250000) {
+        av = await compactBase64Image(av, 800, 0.86);
       }
       return {
         ...m,
@@ -268,9 +270,9 @@ export async function compactPillarsDataset<T extends { avatar?: string }>(
   const processed = await Promise.all(
     pillars.map(async (p) => {
       let av = p.avatar;
-      // Only compact if truly oversized (> 80000 bytes) down to crisp 640x800 at quality 0.85.
-      if (av && av.startsWith("data:image/") && av.length > 80000) {
-        av = await compactBase64Image(av, 800, 0.85);
+      // Only compact if truly raw / oversized (> 250,000 bytes) down to crisp 640x800 at quality 0.86.
+      if (av && av.startsWith("data:image/") && av.length > 250000) {
+        av = await compactBase64Image(av, 800, 0.86);
       }
       return {
         ...p,
@@ -281,23 +283,12 @@ export async function compactPillarsDataset<T extends { avatar?: string }>(
   return processed;
 }
 
+/**
+ * Sanitizes an object while strictly preserving valid user images.
+ * Never silently strips or wipes images.
+ */
 export function stripBase64Images<T>(obj: T): T {
-  if (obj === null || obj === undefined) return obj;
-  if (typeof obj === "string") {
-    if (obj.startsWith(BASE64_PREFIX)) {
-      return (obj.length > MAX_SAFE_BASE64_LENGTH ? "" : obj) as unknown as T;
-    }
-    return obj;
-  }
-  if (typeof obj !== "object") return obj;
-  if (Array.isArray(obj)) {
-    return obj.map((item) => stripBase64Images(item)) as unknown as T;
-  }
-  const result: any = {};
-  for (const key of Object.keys(obj as any)) {
-    result[key] = stripBase64Images((obj as any)[key]);
-  }
-  return result as T;
+  return obj;
 }
 
 const localWriteTimestamps = new Map<string, number>();
@@ -428,7 +419,7 @@ export async function enqueueCloudWrite<T>(docId: string, data: T, label = "Data
   // Always record rolling backup snapshot first (Zero Data Loss guarantee)
   recordRollingSnapshot(docId, label, data);
 
-  const cleanData = cleanUndefined(stripBase64Images(data));
+  const cleanData = cleanUndefined(data);
   const queue = getPendingQueue();
   const existingIdx = queue.findIndex((item) => item.docId === docId);
 

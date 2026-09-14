@@ -104,10 +104,11 @@ export function UniversalImageUploader({
   const displaySublabel = sublabel || `Auto-optimized ${profile.targetSizeHint} WebP`;
 
   // State
+  const initialUrlRef = useRef<string | undefined>(previewUrl);
   const [phase, setPhase] = useState<UploadPhase>(() => {
     if (!previewUrl) return "idle";
     if (previewUrl.startsWith("http")) return "persisted";
-    if (previewUrl.startsWith("data:")) return "ready_local";
+    if (previewUrl.startsWith("data:")) return "persisted"; // Existing persisted inline record
     return "idle";
   });
   const [preview, setPreview] = useState<string>(previewUrl || "");
@@ -139,15 +140,17 @@ export function UniversalImageUploader({
       lastCroppedDataUrlRef.current = null;
       setPhase("idle");
       setError(null);
+    } else if (previewUrl === initialUrlRef.current) {
+      // Unchanged from the originally passed persisted record
+      setPhase("persisted");
     } else if (previewUrl.startsWith("http")) {
       setPhase("persisted");
     } else if (previewUrl.startsWith("data:")) {
-      // An existing data URL means it's locally ready (Spark inline mode)
-      // On Spark, data URLs ARE the persisted form
-      if (isSparkMode()) {
-        setPhase("persisted");
-      } else {
+      // If the user modified or newly cropped it in this session, keep as ready_local
+      if (localDataUrlRef.current && previewUrl === localDataUrlRef.current) {
         setPhase("ready_local");
+      } else {
+        setPhase("persisted");
       }
     }
   }, [previewUrl]);
@@ -188,14 +191,8 @@ export function UniversalImageUploader({
         compressedSize: result.compressedSize,
       });
 
-      // On Spark, the data URL IS the persisted form — it gets written to Firestore
-      // when the parent form saves. So we can honestly say "ready" immediately.
-      if (isSparkMode()) {
-        setPhase("persisted");
-      } else {
-        setPhase("ready_local");
-      }
-
+      // Newly processed local image is READY for saving, but not yet persisted by the parent form
+      setPhase("ready_local");
       onUrlChange?.(result.dataUrl);
 
       // Background cloud upload attempt (Blaze mode only)
@@ -235,12 +232,8 @@ export function UniversalImageUploader({
         compressedSize: sizeBytes,
       }));
 
-      if (isSparkMode()) {
-        setPhase("persisted");
-      } else {
-        setPhase("ready_local");
-      }
-
+      // Newly cropped image is ready in memory; parent form must save to persist
+      setPhase("ready_local");
       onUrlChange?.(croppedDataUrl);
 
       if (!isSparkMode()) {
@@ -256,12 +249,13 @@ export function UniversalImageUploader({
       setRawImageToCrop(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
-  }, [onUrlChange, onUploadStateChange, originalFileName, purpose]);
+  }, [onUrlChange, onUploadStateChange, originalFileName]);
 
   // ─── Cloud Upload (Blaze Mode) ──────────────────────────────────────────
 
   const attemptCloudUpload = useCallback(async (dataUrl: string, fileName: string) => {
     setPhase("saving");
+    setError(null);
     try {
       const service = getImageStorageService();
       const cleanName = (fileName || "image")
@@ -280,16 +274,15 @@ export function UniversalImageUploader({
         setPhase("persisted");
         onUrlChange?.(result.url);
       } else {
-        // Spark adapter returned a data URL — that's fine, it's persisted inline
-        setPhase("persisted");
+        // In Spark mode, inline data URL is ready for form save
+        setPhase("ready_local");
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Cloud upload failed.";
-      console.warn("[UIS] Cloud upload failed, image is saved locally:", message);
-      // On cloud failure, the local data URL is still valid and will be saved
-      // to Firestore by the parent form. Mark as ready_local, not failed.
-      setPhase("ready_local");
-      setError(`Cloud upload failed: ${message}. Image will be saved inline.`);
+      console.error("[UIS] Cloud upload failed:", message);
+      // Explicit failure state with retry option
+      setPhase("failed");
+      setError(`Cloud upload failed: ${message}. Click Retry to upload again.`);
     }
   }, [purpose, storagePath, onUrlChange]);
 
@@ -303,10 +296,10 @@ export function UniversalImageUploader({
     if (targetDataUrl) {
       setError(null);
       if (isSparkMode()) {
-        // On Spark, the data URL IS the final form
+        // On Spark, the data URL is ready for form save
         setPreview(targetDataUrl);
         setManualUrl(targetDataUrl);
-        setPhase("persisted");
+        setPhase("ready_local");
         onUrlChange?.(targetDataUrl);
       } else {
         await attemptCloudUpload(targetDataUrl, originalFileName);
