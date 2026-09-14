@@ -110,7 +110,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
               <div className="flex items-start gap-2">
                 <Users className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
                 <span className="text-slate-500 leading-snug">
-                  Organized By: <strong className="text-[#17458F] font-semibold">{event.organizer}</strong>
+                  Organized By: <strong className="text-[#17458F] font-semibold">{event.organizer || "SRC Sahastradeep"}</strong>
                   {event.collaboratingClubs && event.collaboratingClubs.length > 0 && (
                     <span className="text-slate-500">
                       {" "}with{" "}
@@ -235,7 +235,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
           <div className="flex items-center gap-2 text-slate-500 text-[11px]">
             <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <span className="truncate">
-              {event.organizer}
+              Organized by <strong className="text-slate-700 font-semibold">{event.organizer || "SRC Sahastradeep"}</strong>
               {event.collaboratingClubs && event.collaboratingClubs.length > 0 && (
                 <span className="text-[#E78023] font-bold ml-1">
                   +{event.collaboratingClubs.length} co-host{event.collaboratingClubs.length > 1 ? "s" : ""}

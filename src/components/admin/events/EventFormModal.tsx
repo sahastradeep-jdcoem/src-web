@@ -261,7 +261,7 @@ export function EventFormModal({
     isMultiDay: initialIsMulti,
     time: initialData?.time || "10:00 AM IST",
     venue: initialData?.venue || "JDCOEM Campus",
-    organizer: initialData?.organizer || "SRC JDCOEM",
+    organizer: initialData?.organizer || "SRC Sahastradeep",
     organizerClubSlug: initialData?.organizerClubSlug || "src-council",
     collaboratingClubs: initialData?.collaboratingClubs || [],
     status: initialData?.status || "Registration Open",
@@ -341,6 +341,13 @@ export function EventFormModal({
         prizes: initialData.prizes && Array.isArray(initialData.prizes) ? JSON.parse(JSON.stringify(initialData.prizes)) : prev.prizes || [],
         customQuestions: initialData.customQuestions || [],
         isFeatured: Boolean(initialData.isFeatured),
+        organizer: initialData.organizer || "SRC Sahastradeep",
+        isPaid: initialData.noRegistrationRequired
+          ? false
+          : initialData.isPaid !== undefined
+          ? Boolean(initialData.isPaid)
+          : Boolean((initialData.feeAmount && initialData.feeAmount > 0) || (initialData as any).entryFee?.includes("₹")),
+        feeAmount: typeof initialData.feeAmount === "number" && initialData.feeAmount > 0 ? initialData.feeAmount : (initialData.isPaid ? 100 : 0),
       }));
     }
   }, [initialData]);
@@ -844,15 +851,17 @@ export function EventFormModal({
                 onChange={(e) => {
                   const val = e.target.value;
                   const matchedClub = clubsList.find((c) => c.name === val || `SRC ${c.name}` === val);
+                  const isCentral = val === "SRC Sahastradeep" || val === "SRC JDCOEM";
                   setForm({
                     ...form,
                     organizer: val,
-                    organizerClubSlug: matchedClub ? matchedClub.slug : (val === "SRC JDCOEM" ? "src-council" : "")
+                    organizerClubSlug: matchedClub ? matchedClub.slug : (isCentral ? "src-council" : "")
                   });
                 }}
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
               >
                 <optgroup label="Central Student Council">
+                  <option value="SRC Sahastradeep">SRC Sahastradeep</option>
                   <option value="SRC JDCOEM">SRC JDCOEM</option>
                 </optgroup>
                 <optgroup label="Chartered Student Clubs">
@@ -862,6 +871,14 @@ export function EventFormModal({
                     </option>
                   ))}
                 </optgroup>
+                {form.organizer && 
+                  form.organizer !== "SRC Sahastradeep" && 
+                  form.organizer !== "SRC JDCOEM" && 
+                  !clubsList.some((c) => c.name === form.organizer) && (
+                    <optgroup label="Custom / Other Host">
+                      <option value={form.organizer}>{form.organizer}</option>
+                    </optgroup>
+                )}
               </select>
               <p className="text-[10px] text-slate-400">
                 Select whether this is an institutional council flagship event or hosted by one of the 12 chartered student clubs.

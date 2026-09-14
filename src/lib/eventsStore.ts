@@ -15,7 +15,8 @@ import {
   hasPendingWritesFor, 
   markLocalWrite,
   getLastLocalWriteTime,
-  isLocalWriteRecent
+  isLocalWriteRecent,
+  compactEventDataset
 } from "./dataSyncEngine";
 
 const EVENTS_STORAGE_KEY = "src_events";
@@ -45,8 +46,40 @@ if (typeof window !== "undefined") {
  */
 export function sanitizeEventItem(event: EventItem): EventItem {
   if (!event || typeof event !== "object") return event;
+  const isNoReg = Boolean(event.noRegistrationRequired);
+  const isPaidVal = isNoReg
+    ? false
+    : event.isPaid !== undefined
+    ? Boolean(event.isPaid)
+    : Boolean((event.feeAmount && event.feeAmount > 0) || (event.entryFee && event.entryFee.includes("₹")));
+
+  const organizerVal = event.organizer?.trim() || "SRC Sahastradeep";
+
   return {
     ...event,
+    organizer: organizerVal,
+    organizerClubSlug: event.organizerClubSlug || (organizerVal === "SRC JDCOEM" || organizerVal === "SRC Sahastradeep" ? "src-council" : undefined),
+    isPaid: isPaidVal,
+    feeAmount: isNoReg
+      ? 0
+      : typeof event.feeAmount === "number" && event.feeAmount > 0
+      ? event.feeAmount
+      : event.entryFee && event.entryFee.match(/₹\s*(\d+)/)
+      ? parseInt(event.entryFee.match(/₹\s*(\d+)/)![1], 10)
+      : isPaidVal
+      ? 100
+      : 0,
+    teamFeeAmount: !isNoReg && isPaidVal && typeof event.teamFeeAmount === "number" ? event.teamFeeAmount : undefined,
+    feePricingModel: event.feePricingModel || "per_person",
+    entryFee: isNoReg
+      ? "Free Walk-in Entry"
+      : isPaidVal
+      ? (event.entryFee && !event.entryFee.toLowerCase().includes("free")
+          ? event.entryFee
+          : (event.feePricingModel === "per_team" && event.teamFeeAmount
+              ? `₹${event.teamFeeAmount} / team`
+              : `₹${event.feeAmount || 100} / person`))
+      : "Free Entry",
     collaboratingClubs: Array.isArray(event.collaboratingClubs)
       ? event.collaboratingClubs.filter((c) => c && c.name && c.slug)
       : undefined,
@@ -57,7 +90,7 @@ export function sanitizeEventItem(event: EventItem): EventItem {
     rawEndDate: event.rawEndDate || undefined,
     endDate: event.endDate || undefined,
     isMultiDay: Boolean(event.isMultiDay),
-    noRegistrationRequired: Boolean(event.noRegistrationRequired),
+    noRegistrationRequired: isNoReg,
     coordinatorContact:
       event.coordinatorContact &&
       (Boolean(event.coordinatorContact.name?.trim()) || Boolean(event.coordinatorContact.phone?.trim()))
@@ -376,8 +409,15 @@ export async function saveStoredEvent(event: EventItem): Promise<void> {
   } catch (err) {
     console.warn(`Firestore direct write failed for event [${docId}], enqueuing:`, err);
     cloudWriteError = err;
+    enqueueCloudWrite(`event_${docId}`, sanitized, `Event: ${sanitized.name}`);
   }
-  enqueueCloudWrite(`event_${docId}`, sanitized, `Event: ${sanitized.name}`);
+
+  // Background update master backup in site_content/events without blocking
+  compactEventDataset(sorted)
+    .then((compacted) => {
+      saveSiteContentToFirestore("events", cleanUndefined(compacted)).catch(() => {});
+    })
+    .catch(() => {});
 
   if (cloudWriteError) {
     const errMsg = cloudWriteError?.message || String(cloudWriteError);
@@ -407,8 +447,16 @@ export async function saveStoredEvents(events: EventItem[]): Promise<void> {
     const currentDocIds = new Set(sanitized.map((e) => getEventDocId(e)));
     const deletedEvents = previous.filter((p) => !currentDocIds.has(getEventDocId(p)));
 
-    // 1 Event = 1 Document: Parallel writes to isolated Firestore documents
-    const writePromises = sanitized.map(async (e) => {
+    // Detect changed vs unchanged events for ultra-fast delta writes (<300ms save time)
+    const previousMap = new Map(previous.map((p) => [getEventDocId(p), p]));
+    const changedEvents = sanitized.filter((curr) => {
+      const prev = previousMap.get(getEventDocId(curr));
+      if (!prev) return true; // new event
+      return JSON.stringify(curr) !== JSON.stringify(prev);
+    });
+
+    // 1 Event = 1 Document: Parallel writes ONLY to documents that actually changed or are new
+    const writePromises = changedEvents.map(async (e) => {
       const docId = getEventDocId(e);
       markLocalWrite(docId);
       try {
@@ -426,21 +474,15 @@ export async function saveStoredEvents(events: EventItem[]): Promise<void> {
       await deleteEventFromFirestore(docId);
     });
 
-    // Also update a lightweight catalog in site_content/events for backward compatibility
-    const lightweightCatalog = sanitized.map((e) => ({
-      id: e.id,
-      slug: e.slug,
-      name: e.name,
-      category: e.category,
-      status: e.status,
-      date: e.date,
-      time: e.time,
-      venue: e.venue,
-      isLive: e.isLive,
-      isFeatured: e.isFeatured,
-      cardImage: e.cardImage || "",
-    }));
-    saveSiteContentToFirestore("events", lightweightCatalog).catch(() => {});
+    // Update authoritative master backup in site_content/events WITHOUT STRIPPING ANY FIELDS (Zero Data Loss)
+    compactEventDataset(sanitized)
+      .then((compacted) => {
+        saveSiteContentToFirestore("events", cleanUndefined(compacted)).catch((err) => {
+          console.warn("Could not backup events to site_content:", err);
+          enqueueCloudWrite("site_content_events", cleanUndefined(compacted), "Events Master Catalog");
+        });
+      })
+      .catch(() => {});
 
     const writeResults = await Promise.allSettled(writePromises);
     await Promise.allSettled(deletePromises);
