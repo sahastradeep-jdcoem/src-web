@@ -489,6 +489,7 @@ export default function EventDetailPage() {
 
             {/* WHAT TO EXPECT */}
             {(() => {
+              if (event.isParentFest) return null;
               const displayExpect = Array.from(
                 new Set((event.whatToExpect || []).map((s) => (typeof s === "string" ? s.trim() : s)).filter(Boolean))
               );
@@ -514,7 +515,7 @@ export default function EventDetailPage() {
             })()}
 
             {/* SCHEDULE TIMELINE */}
-            {event.hasSchedule !== false && event.schedule && event.schedule.length > 0 && (
+            {event.hasSchedule !== false && !event.isParentFest && event.schedule && event.schedule.length > 0 && (
               <section className="space-y-6">
                 <div className="space-y-1">
                   <span className="text-xs font-bold uppercase tracking-wider text-[#E78023]">
@@ -529,7 +530,7 @@ export default function EventDetailPage() {
             )}
 
             {/* PRIZES & RECOGNITION */}
-            {event.hasPrizes !== false && event.prizes && event.prizes.length > 0 && (
+            {event.hasPrizes !== false && !event.isParentFest && event.prizes && event.prizes.length > 0 && (
               <section className="space-y-6">
                 <div className="space-y-1">
                   <span className="text-xs font-bold uppercase tracking-wider text-[#E78023] flex items-center gap-1.5">
@@ -571,7 +572,7 @@ export default function EventDetailPage() {
             )}
 
             {/* RULES & GUIDELINES ACCORDION */}
-            {ruleAccordionItems && ruleAccordionItems.length > 0 && (
+            {ruleAccordionItems && ruleAccordionItems.length > 0 && !event.isParentFest && (
               <section className="space-y-6">
                 <div className="space-y-1">
                   <span className="text-xs font-bold uppercase tracking-wider text-[#E78023]">
@@ -708,23 +709,6 @@ export default function EventDetailPage() {
                       This festival is reserved exclusively for JDCOEM students. Non-JDCOEM / external delegates cannot register.
                     </p>
                   </div>
-                ) : event.noRegistrationRequired ? (
-                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 space-y-2 text-center">
-                    <div className="flex items-center justify-center gap-1.5 font-bold text-xs uppercase tracking-wider text-emerald-800">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>No Registration Required</span>
-                    </div>
-                    <p className="text-xs text-emerald-900/90 font-medium leading-relaxed">
-                      This festival is open for walk-in attendance. Simply arrive on campus during event dates to attend!
-                    </p>
-                    <a
-                      href="#competitions"
-                      className="inline-flex items-center gap-1.5 text-xs font-bold text-[#17458F] hover:underline pt-1"
-                    >
-                      <span>View Schedule & Lineup</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </a>
-                  </div>
                 ) : subEvents.length > 0 ? (
                   <div className="space-y-2.5 pt-1">
                     {/* Primary High-Impact CTA: Choose Competition & Register */}
@@ -762,6 +746,23 @@ export default function EventDetailPage() {
                       <Layers className="w-3.5 h-3.5 text-[#17458F]" />
                       <span>Explore Lineup &amp; Prizes ({subEvents.length})</span>
                       <ArrowDown className="w-3.5 h-3.5 transition-transform group-hover:translate-y-0.5 text-[#E78023]" />
+                    </a>
+                  </div>
+                ) : event.noRegistrationRequired && !event.isParentFest ? (
+                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 space-y-2 text-center">
+                    <div className="flex items-center justify-center gap-1.5 font-bold text-xs uppercase tracking-wider text-emerald-800">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>No Registration Required</span>
+                    </div>
+                    <p className="text-xs text-emerald-900/90 font-medium leading-relaxed">
+                      This festival is open for walk-in attendance. Simply arrive on campus during event dates to attend!
+                    </p>
+                    <a
+                      href="#competitions"
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-[#17458F] hover:underline pt-1"
+                    >
+                      <span>View Schedule & Lineup</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
                     </a>
                   </div>
                 ) : (

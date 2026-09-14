@@ -620,9 +620,22 @@ export function EventFormModal({
     });
   };
 
-  const currentSectionIndex = SECTIONS.findIndex((s) => s.id === activeSection);
-  const prevSection = currentSectionIndex > 0 ? SECTIONS[currentSectionIndex - 1] : null;
-  const nextSection = currentSectionIndex < SECTIONS.length - 1 ? SECTIONS[currentSectionIndex + 1] : null;
+  const visibleSections = useMemo(() => {
+    if (form.isParentFest) {
+      return SECTIONS.filter((s) => s.id === "details" || s.id === "visuals");
+    }
+    return SECTIONS;
+  }, [form.isParentFest]);
+
+  useEffect(() => {
+    if (form.isParentFest && activeSection !== "details" && activeSection !== "visuals") {
+      setActiveSection("details");
+    }
+  }, [form.isParentFest, activeSection]);
+
+  const currentSectionIndex = Math.max(0, visibleSections.findIndex((s) => s.id === activeSection));
+  const prevSection = currentSectionIndex > 0 ? visibleSections[currentSectionIndex - 1] : null;
+  const nextSection = currentSectionIndex < visibleSections.length - 1 ? visibleSections[currentSectionIndex + 1] : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -646,14 +659,40 @@ export function EventFormModal({
             }
           : undefined;
 
-      await onSubmit({
-        ...form,
-        coordinatorContact: cleanCoordinator,
-        hasSchedule: Boolean(form.hasSchedule),
-        hasPrizes: Boolean(form.hasPrizes),
-        schedule: form.hasSchedule ? (form.schedule || []) : [],
-        prizes: form.hasPrizes ? (form.prizes || []) : [],
-      });
+      const payload: EventFormData = form.isParentFest
+        ? {
+            ...form,
+            coordinatorContact: cleanCoordinator,
+            hasSchedule: false,
+            hasPrizes: false,
+            schedule: [],
+            prizes: [],
+            noRegistrationRequired: true,
+            isPaid: false,
+            feeAmount: 0,
+            feePricingModel: "per_person",
+            teamFeeAmount: 0,
+            teamType: "Individual",
+            minTeamSize: 1,
+            maxTeamSize: 1,
+            rules: [],
+            whatToExpect: [],
+            customQuestions: [],
+            parentEventId: "",
+            parentEventSlug: "",
+            parentEventName: "",
+            subEventBadge: "",
+          }
+        : {
+            ...form,
+            coordinatorContact: cleanCoordinator,
+            hasSchedule: Boolean(form.hasSchedule),
+            hasPrizes: Boolean(form.hasPrizes),
+            schedule: form.hasSchedule ? (form.schedule || []) : [],
+            prizes: form.hasPrizes ? (form.prizes || []) : [],
+          };
+
+      await onSubmit(payload);
     } catch (err: any) {
       setFormError(err?.message || "Failed to save event to cloud database. Please verify connection and try again.");
     } finally {
@@ -709,7 +748,7 @@ export function EventFormModal({
         {/* Sticky Tactile Section Navigation Bar - solid bg to eliminate GPU compositing lag */}
         <div className="sticky -top-5 sm:-top-7 z-20 bg-white pt-1 pb-3 border-b border-slate-200/80 -mx-5 sm:-mx-7 px-5 sm:px-7 space-y-2">
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
-            {SECTIONS.map((section) => {
+            {visibleSections.map((section) => {
               const Icon = section.icon;
               const isActive = activeSection === section.id;
               const badge = getSectionBadge(section.id);
@@ -752,10 +791,10 @@ export function EventFormModal({
           <div className="flex items-center justify-between text-slate-500 text-[11px] pt-1">
             <span className="font-semibold text-slate-700 flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#E78023]" />
-              {SECTIONS[currentSectionIndex].description}
+              {visibleSections[currentSectionIndex]?.description}
             </span>
             <span className="font-mono text-[10px] text-slate-400">
-              Section {currentSectionIndex + 1} of {SECTIONS.length}
+              Section {currentSectionIndex + 1} of {visibleSections.length}
             </span>
           </div>
         </div>
@@ -907,14 +946,41 @@ export function EventFormModal({
                   <input
                     type="checkbox"
                     checked={form.isParentFest}
-                    onChange={(e) => setForm({ ...form, isParentFest: e.target.checked })}
+                    onChange={(e) => {
+                      const isChecked = e.target.checked;
+                      setForm((prev) => ({
+                        ...prev,
+                        isParentFest: isChecked,
+                        ...(isChecked
+                          ? {
+                              parentEventId: "",
+                              parentEventSlug: "",
+                              parentEventName: "",
+                              subEventBadge: "",
+                            }
+                          : {}),
+                      }));
+                      if (isChecked && activeSection !== "details" && activeSection !== "visuals") {
+                        setActiveSection("details");
+                      }
+                    }}
                     className="w-4 h-4 rounded text-[#17458F] focus:ring-[#17458F] border-slate-300"
                   />
                   <span className="text-xs font-bold text-amber-950">Is Umbrella Event</span>
                 </label>
               </div>
 
-              {!form.isParentFest && (
+              {form.isParentFest ? (
+                <div className="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200/90 text-amber-950 space-y-1.5 animate-in fade-in">
+                  <div className="flex items-center gap-2 font-bold text-xs text-amber-900">
+                    <Layers className="w-4 h-4 text-[#E78023]" />
+                    <span>Umbrella Festival Mode Active</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
+                    Schedule itineraries, prize distributions, entry fees, and squad participation rules are omitted here because they are configured individually on each sub-competition under this festival. Only festival details, secretariat support, and visual branding assets are required.
+                  </p>
+                </div>
+              ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-amber-200/60">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
@@ -1253,6 +1319,122 @@ export function EventFormModal({
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F] resize-none"
               />
             </div>
+
+            {/* Festival Secretariat & Support Helpdesk (Available directly on Umbrella Events) */}
+            {form.isParentFest && (
+              <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/40 border border-amber-200/80 space-y-4 animate-in fade-in">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-4 h-4 text-[#E78023]" />
+                      <h4 className="font-heading font-bold text-sm text-slate-900 uppercase">
+                        Festival Secretariat &amp; Inquiries
+                      </h4>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      Primary contact details displayed on the public festival sidebar for student queries. Leave empty to omit.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {(form.coordinatorContact?.name || form.coordinatorContact?.phone) && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setForm((prev) => ({
+                            ...prev,
+                            coordinatorContact: { name: "", role: "", phone: "" },
+                          }))
+                        }
+                        className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1 rounded-lg border border-transparent hover:border-rose-200 transition-colors font-medium cursor-pointer"
+                      >
+                        Clear / Leave Empty
+                      </button>
+                    )}
+                    <span
+                      className={cn(
+                        "text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border shrink-0",
+                        form.coordinatorContact?.name || form.coordinatorContact?.phone
+                          ? "bg-amber-50 text-amber-800 border-amber-200"
+                          : "bg-slate-100 text-slate-500 border-slate-200"
+                      )}
+                    >
+                      {form.coordinatorContact?.name || form.coordinatorContact?.phone
+                        ? "Secretariat Active"
+                        : "Secretariat Omitted"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                  {/* Coordinator Name / Desk */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                      Secretariat / Desk Name
+                    </label>
+                    <input
+                      type="text"
+                      value={form.coordinatorContact?.name || ""}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          coordinatorContact: {
+                            ...(prev.coordinatorContact || { role: "", phone: "" }),
+                            name: e.target.value,
+                          },
+                        }))
+                      }
+                      placeholder="e.g., SRC Secretariat Desk"
+                      className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
+                    />
+                  </div>
+
+                  {/* Designation / Role */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                      Role / Designation (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={form.coordinatorContact?.role || ""}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          coordinatorContact: {
+                            ...(prev.coordinatorContact || { name: "", phone: "" }),
+                            role: e.target.value,
+                          },
+                        }))
+                      }
+                      placeholder="e.g., Festival Convenor"
+                      className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
+                    />
+                  </div>
+
+                  {/* Phone Number */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
+                      <Phone className="w-3 h-3 text-[#E78023]" />
+                      <span>Contact Phone / WhatsApp</span>
+                    </label>
+                    <input
+                      type="tel"
+                      value={form.coordinatorContact?.phone || ""}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          coordinatorContact: {
+                            ...(prev.coordinatorContact || { name: "", role: "" }),
+                            phone: e.target.value,
+                          },
+                        }))
+                      }
+                      placeholder="e.g., +91 9876543210"
+                      className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

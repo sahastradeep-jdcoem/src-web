@@ -179,9 +179,10 @@ export default function AdminEventsPage() {
   }, [eventsList, searchQuery, selectedStatus, selectedCategory, selectedAudience]);
 
   const handleCreateSubmit = async (formData: EventFormData) => {
-    const cleanWhatToExpect = Array.from(new Set(formData.whatToExpect.map((s) => s.trim()).filter(Boolean)));
-    const cleanRules = Array.from(new Set(formData.rules.map((s) => s.trim()).filter(Boolean)));
-    const isNoReg = Boolean(formData.noRegistrationRequired);
+    const isUmbrella = Boolean(formData.isParentFest);
+    const cleanWhatToExpect = isUmbrella ? [] : Array.from(new Set(formData.whatToExpect.map((s) => s.trim()).filter(Boolean)));
+    const cleanRules = isUmbrella ? [] : Array.from(new Set(formData.rules.map((s) => s.trim()).filter(Boolean)));
+    const isNoReg = isUmbrella || Boolean(formData.noRegistrationRequired);
     const regDeadlineFormatted = isNoReg
       ? "Not Required"
       : formData.registrationDeadline
@@ -220,29 +221,29 @@ export default function AdminEventsPage() {
       headerImage: formData.headerImage || formData.cardImage || formData.poster,
       description: formData.description,
       about: formData.about || formData.description,
-      whatToExpect: cleanWhatToExpect.length > 0 ? cleanWhatToExpect : ["High-impact collegiate showcase"],
-      rules: cleanRules.length > 0 ? cleanRules : ["College ID mandatory"],
-      hasSchedule: Boolean(formData.hasSchedule),
-      hasPrizes: Boolean(formData.hasPrizes),
-      schedule: formData.hasSchedule ? (formData.schedule || []) : [],
-      prizes: formData.hasPrizes ? (formData.prizes || []) : [],
-      teamType: formData.teamType,
-      minTeamSize: formData.teamType !== "Individual" ? formData.minTeamSize : undefined,
-      maxTeamSize: formData.teamType !== "Individual" ? formData.maxTeamSize : undefined,
+      whatToExpect: isUmbrella ? [] : (cleanWhatToExpect.length > 0 ? cleanWhatToExpect : ["High-impact collegiate showcase"]),
+      rules: isUmbrella ? [] : (cleanRules.length > 0 ? cleanRules : ["College ID mandatory"]),
+      hasSchedule: isUmbrella ? false : Boolean(formData.hasSchedule),
+      hasPrizes: isUmbrella ? false : Boolean(formData.hasPrizes),
+      schedule: isUmbrella ? [] : (formData.hasSchedule ? (formData.schedule || []) : []),
+      prizes: isUmbrella ? [] : (formData.hasPrizes ? (formData.prizes || []) : []),
+      teamType: isUmbrella ? "Individual" : formData.teamType,
+      minTeamSize: !isUmbrella && formData.teamType !== "Individual" ? formData.minTeamSize : undefined,
+      maxTeamSize: !isUmbrella && formData.teamType !== "Individual" ? formData.maxTeamSize : undefined,
       noRegistrationRequired: isNoReg,
       registrationStartDate: isNoReg ? undefined : (formData.registrationStartDate || new Date().toISOString().split("T")[0]),
       registrationDeadline: regDeadlineFormatted,
-      entryFee: entryFeeText,
+      entryFee: isUmbrella ? "Free Entry" : entryFeeText,
       isPaid: isNoReg ? false : formData.isPaid,
       feeAmount: isNoReg ? 0 : (formData.isPaid ? Number(formData.feeAmount) || 0 : 0),
       teamFeeAmount: !isNoReg && formData.isPaid && formData.feePricingModel === "per_team" ? Number(formData.teamFeeAmount) || 0 : undefined,
       feePricingModel: isNoReg ? undefined : (formData.isPaid ? formData.feePricingModel : undefined),
-      customQuestions: formData.customQuestions && formData.customQuestions.length > 0 ? formData.customQuestions : undefined,
-      isParentFest: formData.isParentFest,
-      parentEventId: formData.parentEventId || undefined,
-      parentEventSlug: formData.parentEventSlug || undefined,
-      parentEventName: formData.parentEventName || undefined,
-      subEventBadge: formData.subEventBadge || undefined,
+      customQuestions: isUmbrella ? undefined : (formData.customQuestions && formData.customQuestions.length > 0 ? formData.customQuestions : undefined),
+      isParentFest: isUmbrella,
+      parentEventId: isUmbrella ? undefined : (formData.parentEventId || undefined),
+      parentEventSlug: isUmbrella ? undefined : (formData.parentEventSlug || undefined),
+      parentEventName: isUmbrella ? undefined : (formData.parentEventName || undefined),
+      subEventBadge: isUmbrella ? undefined : (formData.subEventBadge || undefined),
       targetAudience: formData.targetAudience || "inter_college",
       isInterCollege: formData.targetAudience === "inter_college",
       coordinatorContact:
@@ -360,9 +361,10 @@ export default function AdminEventsPage() {
   const handleEditSubmit = async (formData: EventFormData) => {
     if (!editingEvent) return;
 
-    const cleanWhatToExpect = Array.from(new Set(formData.whatToExpect.map((s) => s.trim()).filter(Boolean)));
-    const cleanRules = Array.from(new Set(formData.rules.map((s) => s.trim()).filter(Boolean)));
-    const isNoReg = Boolean(formData.noRegistrationRequired);
+    const isUmbrella = Boolean(formData.isParentFest);
+    const cleanWhatToExpect = isUmbrella ? [] : Array.from(new Set(formData.whatToExpect.map((s) => s.trim()).filter(Boolean)));
+    const cleanRules = isUmbrella ? [] : Array.from(new Set(formData.rules.map((s) => s.trim()).filter(Boolean)));
+    const isNoReg = isUmbrella || Boolean(formData.noRegistrationRequired);
     const regDeadlineFormatted = isNoReg
       ? "Not Required"
       : formData.registrationDeadline
@@ -405,29 +407,29 @@ export default function AdminEventsPage() {
       headerImage: formData.headerImage || formData.cardImage || primaryPoster,
       description: formData.description,
       about: formData.about || formData.description,
-      whatToExpect: cleanWhatToExpect,
-      rules: cleanRules,
-      hasSchedule: Boolean(formData.hasSchedule),
-      hasPrizes: Boolean(formData.hasPrizes),
-      schedule: formData.hasSchedule ? (formData.schedule || []) : [],
-      prizes: formData.hasPrizes ? (formData.prizes || []) : [],
-      teamType: formData.teamType,
-      minTeamSize: formData.teamType !== "Individual" ? formData.minTeamSize : undefined,
-      maxTeamSize: formData.teamType !== "Individual" ? formData.maxTeamSize : undefined,
+      whatToExpect: isUmbrella ? [] : cleanWhatToExpect,
+      rules: isUmbrella ? [] : cleanRules,
+      hasSchedule: isUmbrella ? false : Boolean(formData.hasSchedule),
+      hasPrizes: isUmbrella ? false : Boolean(formData.hasPrizes),
+      schedule: isUmbrella ? [] : (formData.hasSchedule ? (formData.schedule || []) : []),
+      prizes: isUmbrella ? [] : (formData.hasPrizes ? (formData.prizes || []) : []),
+      teamType: isUmbrella ? "Individual" : formData.teamType,
+      minTeamSize: !isUmbrella && formData.teamType !== "Individual" ? formData.minTeamSize : undefined,
+      maxTeamSize: !isUmbrella && formData.teamType !== "Individual" ? formData.maxTeamSize : undefined,
       noRegistrationRequired: isNoReg,
       registrationStartDate: isNoReg ? undefined : formData.registrationStartDate,
       registrationDeadline: regDeadlineFormatted || (isNoReg ? "Not Required" : editingEvent.registrationDeadline),
-      entryFee: entryFeeText,
+      entryFee: isUmbrella ? "Free Entry" : entryFeeText,
       isPaid: isNoReg ? false : Boolean(formData.isPaid),
       feeAmount: isNoReg ? 0 : (formData.isPaid ? Number(formData.feeAmount) || 0 : 0),
       teamFeeAmount: !isNoReg && formData.isPaid && formData.feePricingModel === "per_team" ? Number(formData.teamFeeAmount) || 0 : undefined,
       feePricingModel: isNoReg ? undefined : (formData.isPaid ? formData.feePricingModel : undefined),
-      customQuestions: formData.customQuestions && formData.customQuestions.length > 0 ? formData.customQuestions : undefined,
-      isParentFest: formData.isParentFest,
-      parentEventId: formData.parentEventId || undefined,
-      parentEventSlug: formData.parentEventSlug || undefined,
-      parentEventName: formData.parentEventName || undefined,
-      subEventBadge: formData.subEventBadge || undefined,
+      customQuestions: isUmbrella ? undefined : (formData.customQuestions && formData.customQuestions.length > 0 ? formData.customQuestions : undefined),
+      isParentFest: isUmbrella,
+      parentEventId: isUmbrella ? undefined : (formData.parentEventId || undefined),
+      parentEventSlug: isUmbrella ? undefined : (formData.parentEventSlug || undefined),
+      parentEventName: isUmbrella ? undefined : (formData.parentEventName || undefined),
+      subEventBadge: isUmbrella ? undefined : (formData.subEventBadge || undefined),
       targetAudience: formData.targetAudience || "inter_college",
       isInterCollege: formData.targetAudience === "inter_college",
       coordinatorContact:
