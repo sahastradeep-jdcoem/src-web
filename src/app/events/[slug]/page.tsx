@@ -542,21 +542,30 @@ export default function EventDetailPage() {
                 </div>
                 <div
                   className={cn(
-                    "grid gap-6 items-stretch",
-                    event.prizes.length === 1 && "grid-cols-1 max-w-lg",
-                    event.prizes.length === 2 && "grid-cols-1 sm:grid-cols-2",
-                    event.prizes.length === 3 && "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
-                    event.prizes.length >= 4 && "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+                    "grid gap-4 sm:gap-5 items-stretch",
+                    event.prizes.length === 1 && "grid-cols-1 max-w-md",
+                    event.prizes.length >= 2 && "grid-cols-1 sm:grid-cols-2"
                   )}
                 >
-                  {event.prizes.map((prize, idx) => (
-                    <PrizeCard
-                      key={idx}
-                      prize={prize}
-                      index={idx}
-                      totalCount={event.prizes.length}
-                    />
-                  ))}
+                  {event.prizes.map((prize, idx) => {
+                    const isSpanFull = event.prizes.length === 3 && idx === 2;
+                    return (
+                      <div
+                        key={idx}
+                        className={cn(
+                          "h-full",
+                          isSpanFull && "sm:col-span-2"
+                        )}
+                      >
+                        <PrizeCard
+                          prize={prize}
+                          index={idx}
+                          totalCount={event.prizes.length}
+                          isSpanFull={isSpanFull}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </section>
             )}
