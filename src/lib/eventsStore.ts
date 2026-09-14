@@ -53,12 +53,12 @@ export function sanitizeEventItem(event: EventItem): EventItem {
     ? Boolean(event.isPaid)
     : Boolean((event.feeAmount && event.feeAmount > 0) || (event.entryFee && event.entryFee.includes("₹")));
 
-  const organizerVal = event.organizer?.trim() || "SRC Sahastradeep";
+  const organizerVal = (event.organizer || "").trim();
 
   return {
     ...event,
     organizer: organizerVal,
-    organizerClubSlug: event.organizerClubSlug || (organizerVal === "SRC JDCOEM" || organizerVal === "SRC Sahastradeep" ? "src-council" : undefined),
+    organizerClubSlug: event.organizerClubSlug || (organizerVal === "SRC JDCOEM" || organizerVal === "SRC Sahastradeep" || organizerVal.toLowerCase().includes("council") ? "src-council" : undefined),
     isPaid: isPaidVal,
     feeAmount: isNoReg
       ? 0

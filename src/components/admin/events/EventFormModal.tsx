@@ -251,6 +251,14 @@ export function EventFormModal({
     ? Boolean(initialData.hasPrizes)
     : Boolean(initialData?.prizes && initialData.prizes.length > 0);
 
+  const [isCustomOrganizer, setIsCustomOrganizer] = useState(() => {
+    if (!initialData?.organizer) return false;
+    const org = initialData.organizer;
+    const isCentral = org === "SRC Sahastradeep" || org === "SRC JDCOEM" || org === "Student Representative Council (SRC)";
+    const isClub = clubsList.some((c) => c.name === org || `SRC ${c.name}` === org);
+    return !isCentral && !isClub;
+  });
+
   const [form, setForm] = useState<EventFormData>({
     name: initialData?.name || "",
     category: initialData?.category || "Technical",
@@ -261,8 +269,8 @@ export function EventFormModal({
     isMultiDay: initialIsMulti,
     time: initialData?.time || "10:00 AM IST",
     venue: initialData?.venue || "JDCOEM Campus",
-    organizer: initialData?.organizer || "SRC Sahastradeep",
-    organizerClubSlug: initialData?.organizerClubSlug || "src-council",
+    organizer: initialData?.organizer || "",
+    organizerClubSlug: initialData?.organizerClubSlug || "",
     collaboratingClubs: initialData?.collaboratingClubs || [],
     status: initialData?.status || "Registration Open",
     poster: initialData?.poster || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
@@ -305,6 +313,15 @@ export function EventFormModal({
 
   useEffect(() => {
     if (initialData) {
+      if (initialData.organizer) {
+        const org = initialData.organizer;
+        const isCentral = org === "SRC Sahastradeep" || org === "SRC JDCOEM" || org === "Student Representative Council (SRC)";
+        const isClub = clubsList.some((c) => c.name === org || `SRC ${c.name}` === org);
+        setIsCustomOrganizer(!isCentral && !isClub);
+      } else {
+        setIsCustomOrganizer(false);
+      }
+
       const isMulti = initialData.isMultiDay || (Boolean(initialData.rawEndDate) && initialData.rawEndDate !== initialData.rawDate) || false;
       const endVal = initialData.rawEndDate || initialData.rawDate || form.rawDate;
       setForm((prev) => ({
@@ -341,7 +358,8 @@ export function EventFormModal({
         prizes: initialData.prizes && Array.isArray(initialData.prizes) ? JSON.parse(JSON.stringify(initialData.prizes)) : prev.prizes || [],
         customQuestions: initialData.customQuestions || [],
         isFeatured: Boolean(initialData.isFeatured),
-        organizer: initialData.organizer || "SRC Sahastradeep",
+        organizer: initialData.organizer || "",
+        organizerClubSlug: initialData.organizerClubSlug || "",
         isPaid: initialData.noRegistrationRequired
           ? false
           : initialData.isPaid !== undefined
@@ -654,6 +672,11 @@ export function EventFormModal({
       setFormError("Please enter an Event Title.");
       return;
     }
+    if (!form.organizer || !form.organizer.trim() || form.organizer === "__custom__") {
+      setActiveSection("details");
+      setFormError("Please select or enter the organizing club, council, or department.");
+      return;
+    }
     if (isSubmitting) return;
 
     try {
@@ -847,22 +870,44 @@ export function EventFormModal({
                 <span>Organized By *</span>
               </label>
               <select
-                value={form.organizer}
+                value={
+                  isCustomOrganizer
+                    ? (form.organizer &&
+                       form.organizer !== "SRC Sahastradeep" &&
+                       form.organizer !== "SRC JDCOEM" &&
+                       form.organizer !== "Student Representative Council (SRC)" &&
+                       !clubsList.some((c) => c.name === form.organizer)
+                        ? form.organizer
+                        : "__custom__")
+                    : form.organizer
+                }
                 onChange={(e) => {
                   const val = e.target.value;
+                  if (val === "__custom__") {
+                    setIsCustomOrganizer(true);
+                    setForm((prev) => ({
+                      ...prev,
+                      organizer: "",
+                      organizerClubSlug: ""
+                    }));
+                    return;
+                  }
+                  setIsCustomOrganizer(false);
                   const matchedClub = clubsList.find((c) => c.name === val || `SRC ${c.name}` === val);
-                  const isCentral = val === "SRC Sahastradeep" || val === "SRC JDCOEM";
-                  setForm({
-                    ...form,
+                  const isCentral = val === "SRC Sahastradeep" || val === "SRC JDCOEM" || val === "Student Representative Council (SRC)";
+                  setForm((prev) => ({
+                    ...prev,
                     organizer: val,
                     organizerClubSlug: matchedClub ? matchedClub.slug : (isCentral ? "src-council" : "")
-                  });
+                  }));
                 }}
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
               >
+                <option value="">-- Select Organizing Body / Club --</option>
                 <optgroup label="Central Student Council">
                   <option value="SRC Sahastradeep">SRC Sahastradeep</option>
                   <option value="SRC JDCOEM">SRC JDCOEM</option>
+                  <option value="Student Representative Council (SRC)">Student Representative Council (SRC)</option>
                 </optgroup>
                 <optgroup label="Chartered Student Clubs">
                   {clubsList.map((c) => (
@@ -871,17 +916,45 @@ export function EventFormModal({
                     </option>
                   ))}
                 </optgroup>
-                {form.organizer && 
-                  form.organizer !== "SRC Sahastradeep" && 
-                  form.organizer !== "SRC JDCOEM" && 
+                {form.organizer &&
+                  form.organizer !== "SRC Sahastradeep" &&
+                  form.organizer !== "SRC JDCOEM" &&
+                  form.organizer !== "Student Representative Council (SRC)" &&
                   !clubsList.some((c) => c.name === form.organizer) && (
-                    <optgroup label="Custom / Other Host">
+                    <optgroup label="Current Custom Organizer">
                       <option value={form.organizer}>{form.organizer}</option>
                     </optgroup>
                 )}
+                <optgroup label="Custom / External Body">
+                  <option value="__custom__">+ Enter Custom Organizer Name...</option>
+                </optgroup>
               </select>
+
+              {isCustomOrganizer && (
+                <div className="pt-2">
+                  <input
+                    type="text"
+                    value={form.organizer === "__custom__" ? "" : form.organizer}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setForm((prev) => ({
+                        ...prev,
+                        organizer: val,
+                        organizerClubSlug: ""
+                      }));
+                    }}
+                    placeholder="Type organizer name (e.g. Department of CSE, Sports Committee, GDG...)"
+                    className="w-full px-4 py-2.5 rounded-xl bg-white border-2 border-[#17458F] text-slate-900 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#17458F]/20"
+                    autoFocus
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Type the specific organizing club, academic department, cell, or institutional body.
+                  </p>
+                </div>
+              )}
+
               <p className="text-[10px] text-slate-400">
-                Select whether this is an institutional council flagship event or hosted by one of the 12 chartered student clubs.
+                Select or specify the student club, council, or academic department responsible for hosting this event.
               </p>
             </div>
 

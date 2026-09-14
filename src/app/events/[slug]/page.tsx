@@ -305,28 +305,30 @@ export default function EventDetailPage() {
               <MapPin className="w-4 h-4 text-[#E78023] shrink-0" />
               <span>{event.venue || "JDCOEM Campus"}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-slate-300 shrink-0" />
-              <span>
-                Organized by: <strong className="text-white">{event.organizer || "SRC Sahastradeep"}</strong>
-                {event.collaboratingClubs && event.collaboratingClubs.length > 0 && (
-                  <span className="text-slate-300">
-                    {" "}in collaboration with{" "}
-                    {event.collaboratingClubs.map((club, idx) => (
-                      <React.Fragment key={club.slug || club.name}>
-                        <Link
-                          href={`/clubs/${club.slug}`}
-                          className="text-[#E78023] hover:underline font-bold"
-                        >
-                          {club.name}
-                        </Link>
-                        {idx < (event.collaboratingClubs?.length ?? 0) - 1 ? ", " : ""}
-                      </React.Fragment>
-                    ))}
-                  </span>
-                )}
-              </span>
-            </div>
+            {event.organizer && (
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-slate-300 shrink-0" />
+                <span>
+                  Organized by: <strong className="text-white">{event.organizer}</strong>
+                  {event.collaboratingClubs && event.collaboratingClubs.length > 0 && (
+                    <span className="text-slate-300">
+                      {" "}in collaboration with{" "}
+                      {event.collaboratingClubs.map((club, idx) => (
+                        <React.Fragment key={club.slug || club.name}>
+                          <Link
+                            href={`/clubs/${club.slug}`}
+                            className="text-[#E78023] hover:underline font-bold"
+                          >
+                            {club.name}
+                          </Link>
+                          {idx < (event.collaboratingClubs?.length ?? 0) - 1 ? ", " : ""}
+                        </React.Fragment>
+                      ))}
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </section>

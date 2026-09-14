@@ -210,8 +210,8 @@ export default function AdminEventsPage() {
       isMultiDay: Boolean(formData.isMultiDay),
       time: formData.time || "10:00 AM IST",
       venue: formData.venue,
-      organizer: formData.organizer || "SRC Sahastradeep",
-      organizerClubSlug: formData.organizerClubSlug || (formData.organizer === "SRC JDCOEM" || formData.organizer === "SRC Sahastradeep" ? "src-council" : undefined),
+      organizer: formData.organizer?.trim() || "",
+      organizerClubSlug: formData.organizerClubSlug || (formData.organizer === "SRC JDCOEM" || formData.organizer === "SRC Sahastradeep" || formData.organizer?.toLowerCase().includes("council") ? "src-council" : undefined),
       collaboratingClubs: formData.collaboratingClubs && formData.collaboratingClubs.length > 0 ? formData.collaboratingClubs : undefined,
       coOrganizers: formData.collaboratingClubs && formData.collaboratingClubs.length > 0 ? formData.collaboratingClubs.map((c) => c.name) : undefined,
       status: isNoReg && formData.status === "Registration Open" ? "Upcoming" : formData.status,
@@ -334,8 +334,8 @@ export default function AdminEventsPage() {
       isMultiDay: Boolean(editingEvent.isMultiDay || (editingEvent.rawEndDate && editingEvent.rawEndDate !== editingEvent.rawDate)),
       time: editingEvent.time || "10:00 AM IST",
       venue: editingEvent.venue,
-      organizer: editingEvent.organizer || "SRC Sahastradeep",
-      organizerClubSlug: editingEvent.organizerClubSlug || (editingEvent.organizer === "SRC JDCOEM" || editingEvent.organizer === "SRC Sahastradeep" ? "src-council" : ""),
+      organizer: editingEvent.organizer || "",
+      organizerClubSlug: editingEvent.organizerClubSlug || (editingEvent.organizer === "SRC JDCOEM" || editingEvent.organizer === "SRC Sahastradeep" || editingEvent.organizer?.toLowerCase().includes("council") ? "src-council" : ""),
       collaboratingClubs: editingEvent.collaboratingClubs ? JSON.parse(JSON.stringify(editingEvent.collaboratingClubs)) : [],
       status: editingEvent.status as any,
       poster: editingEvent.poster || "",
@@ -425,8 +425,8 @@ export default function AdminEventsPage() {
       isMultiDay: Boolean(formData.isMultiDay),
       time: formData.time || editingEvent.time || "10:00 AM IST",
       venue: formData.venue,
-      organizer: formData.organizer || editingEvent.organizer || "SRC Sahastradeep",
-      organizerClubSlug: formData.organizerClubSlug || editingEvent.organizerClubSlug || "src-council",
+      organizer: formData.organizer?.trim() || editingEvent.organizer || "",
+      organizerClubSlug: formData.organizerClubSlug || editingEvent.organizerClubSlug || (formData.organizer === "SRC JDCOEM" || formData.organizer === "SRC Sahastradeep" || formData.organizer?.toLowerCase().includes("council") ? "src-council" : ""),
       collaboratingClubs: formData.collaboratingClubs && formData.collaboratingClubs.length > 0 ? formData.collaboratingClubs : undefined,
       coOrganizers: formData.collaboratingClubs && formData.collaboratingClubs.length > 0 ? formData.collaboratingClubs.map((c) => c.name) : undefined,
       status: isNoReg && formData.status === "Registration Open" ? "Upcoming" : formData.status,
@@ -927,7 +927,7 @@ export default function AdminEventsPage() {
                     <div className="flex items-center justify-between text-xs text-slate-600">
                       <div className="flex items-center gap-1.5 font-bold text-slate-800">
                         <Users className="w-3.5 h-3.5 text-[#17458F] shrink-0" />
-                        <span className="truncate max-w-[170px]">{evt.organizer || "SRC Sahastradeep"}</span>
+                        <span className="truncate max-w-[170px]">{evt.organizer || <span className="text-slate-400 font-normal italic">Not specified</span>}</span>
                       </div>
                       {evt.collaboratingClubs && evt.collaboratingClubs.length > 0 && (
                         <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
