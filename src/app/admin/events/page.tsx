@@ -49,7 +49,11 @@ import {
   sortEventsByDate
 } from "@/lib/eventsStore";
 import { getStoredClubs } from "@/lib/councilStore";
-import { deleteRegistrationsForEvent, cancelEventRegistrations } from "@/lib/firebase/firestore";
+import { 
+  deleteRegistrationsForEvent, 
+  cancelEventRegistrations,
+  getEventFromFirestore 
+} from "@/lib/firebase/firestore";
 
 export default function AdminEventsPage() {
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
@@ -385,6 +389,20 @@ export default function AdminEventsPage() {
 
   const handleStartEdit = (evt: EventItem) => {
     setEditingEvent(evt);
+    if (evt.id || evt.slug) {
+      getEventFromFirestore(evt.id || evt.slug)
+        .then((fresh) => {
+          if (fresh) {
+            setEditingEvent((prev) => {
+              if (prev && (prev.id === evt.id || prev.slug === evt.slug)) {
+                return { ...prev, ...fresh };
+              }
+              return prev;
+            });
+          }
+        })
+        .catch(() => {});
+    }
   };
 
   const handleEditSubmit = async (formData: EventFormData) => {

@@ -774,17 +774,33 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
 
         if (isPrimitiveSubArray) {
           // Never recurse with reconcileArrayDatasets on primitive string arrays, as it causes unbounded multiplication!
-          // Take the authoritative array (remote if present, otherwise local) and deduplicate values.
-          const chosen = remoteArr.length > 0 ? remoteArr : localArr;
-          result[k] = Array.from(
-            new Set(
-              chosen.filter((item: any) => item !== undefined && item !== null && String(item).trim() !== "")
-            )
-          );
+          // Filter non-empty items
+          const cleanRemote = remoteArr.filter((item: any) => item !== undefined && item !== null && String(item).trim() !== "");
+          const cleanLocal = localArr.filter((item: any) => item !== undefined && item !== null && String(item).trim() !== "");
+
+          // Directive #4 (No Silent Data Stripping):
+          // If remote has empty array (e.g. from an incomplete remote snapshot or fallback catalog)
+          // but local has rich user-authored items (rules, whatToExpect), DO NOT WIPE LOCAL!
+          const chosen = cleanRemote.length > 0 ? cleanRemote : cleanLocal;
+          result[k] = Array.from(new Set(chosen));
           continue;
         }
 
         // 2. Object arrays
+        // Dedicated handling for event schedule & prizes (objects without unique ID fields)
+        if (k === "schedule" || k === "prizes") {
+          const validRemote = remoteArr.filter((item: any) => item && typeof item === "object");
+          const validLocal = localArr.filter((item: any) => item && typeof item === "object");
+          if (validRemote.length > 0) {
+            result[k] = validRemote;
+          } else if (validLocal.length > 0) {
+            result[k] = validLocal;
+          } else {
+            result[k] = [];
+          }
+          continue;
+        }
+
         // For draft tenure sessions (!isCurrent): local draft roster is active staged work
         const isDraftTenure = (remoteItem as any)?.isCurrent === false || (localItem as any)?.isCurrent === false;
         if (isDraftTenure && localArr.length > 0) {
@@ -845,9 +861,26 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
         continue;
       }
 
+      // Safeguard boolean flags against uninitialized/omitted remote downgrades
+      if ((k === "hasSchedule" || k === "hasPrizes" || k === "isPaid") && localVal === true && remoteVal === undefined) {
+        result[k] = true;
+        continue;
+      }
+
       // For standard text/number fields:
-      // Remote is strictly authoritative if the field is defined on remote (even if empty string "")
+      // Remote is authoritative if the field is defined on remote.
+      // Directive #4 (No Silent Data Stripping): If remote has empty string "" or undefined,
+      // but local has non-empty text (e.g. description, about, organizer, posterImage, headerImage),
+      // preserve local data if local write was recent, pending, or remote property was omitted!
       if (remoteVal !== undefined && remoteVal !== null) {
+        const isLocalNonEmptyString = typeof localVal === "string" && localVal.trim() !== "";
+        const isRemoteEmptyString = typeof remoteVal === "string" && remoteVal.trim() === "";
+        if (isLocalNonEmptyString && isRemoteEmptyString) {
+          if (isLocalWriteRecent("events", 60000) || hasPendingWritesFor("events") || !(k in (remoteItem as any))) {
+            result[k] = localVal;
+            continue;
+          }
+        }
         result[k] = remoteVal;
       } else if (localVal !== undefined && localVal !== null) {
         result[k] = localVal;

@@ -1017,18 +1017,9 @@ export async function getAllEventsFromFirestore(): Promise<EventItem[]> {
         });
       }
 
-      // If events collection is empty, check legacy master document as fallback / migration source
+      // If events collection is empty, check legacy master document as read-only fallback
       const legacyMaster = await getSiteContentFromFirestore<EventItem[]>("events");
       if (Array.isArray(legacyMaster) && legacyMaster.length > 0) {
-        console.log(`[Firestore] Auto-migrating ${legacyMaster.length} legacy events into individual documents...`);
-        const migrationPromises = legacyMaster.map(async (item) => {
-          try {
-            await saveEventToFirestore(item);
-          } catch (mErr) {
-            console.warn(`Auto-migration failed for event ${item.id || item.slug}:`, mErr);
-          }
-        });
-        await Promise.allSettled(migrationPromises);
         return legacyMaster;
       }
     }

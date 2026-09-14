@@ -118,9 +118,21 @@ export function sanitizeEventItem(event: EventItem): EventItem {
           )
         )
       : [],
-    hasSchedule: event.hasSchedule !== undefined ? Boolean(event.hasSchedule) : Boolean(event.schedule && event.schedule.length > 0),
-    hasPrizes: event.hasPrizes !== undefined ? Boolean(event.hasPrizes) : Boolean(event.prizes && event.prizes.length > 0),
-    schedule: event.hasSchedule === false
+    hasSchedule: event.isParentFest
+      ? false
+      : (Array.isArray(event.schedule) && event.schedule.some((item) => item && Boolean(item.title?.trim() || item.time?.trim())))
+      ? true
+      : event.hasSchedule !== undefined
+      ? Boolean(event.hasSchedule)
+      : false,
+    hasPrizes: event.isParentFest
+      ? false
+      : (Array.isArray(event.prizes) && event.prizes.some((p) => p && Boolean(p.position?.trim() || p.amount?.trim())))
+      ? true
+      : event.hasPrizes !== undefined
+      ? Boolean(event.hasPrizes)
+      : false,
+    schedule: event.isParentFest
       ? []
       : Array.isArray(event.schedule)
       ? event.schedule
@@ -132,7 +144,7 @@ export function sanitizeEventItem(event: EventItem): EventItem {
             description: (item.description || "").trim(),
           }))
       : [],
-    prizes: event.hasPrizes === false
+    prizes: event.isParentFest
       ? []
       : Array.isArray(event.prizes)
       ? event.prizes
