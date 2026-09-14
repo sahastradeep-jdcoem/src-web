@@ -83,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const desig = cleanBt ? resolveDesignationByBtId(cleanBt, parsed.displayName || parsed.name || parsed.email) : null;
           if (desig) {
             parsed.designationBadge = formatDesignationBadge(desig.designationBadge);
-            parsed.isCouncilOfficer = true;
+            parsed.isCouncilOfficer = desig.isCouncilOfficer;
           } else if (cleanBt) {
             parsed.designationBadge = undefined;
             parsed.isCouncilOfficer = false;
@@ -163,7 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           : (cleanBt ? undefined : (formatDesignationBadge(rawBadge) || undefined));
 
         const isOfficer = designationInfo 
-          ? true 
+          ? designationInfo.isCouncilOfficer 
           : (cleanBt ? false : Boolean(storedProfile?.isCouncilOfficer || localProfile?.isCouncilOfficer || registeredUser?.isCouncilOfficer));
 
         const baseObj = { ...registeredUser, ...localProfile, ...storedProfile };
@@ -249,6 +249,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const rawAuth = localStorage.getItem("src_auth_user");
         if (rawAuth) {
           const parsed = JSON.parse(rawAuth);
+          const cleanBt = parsed.btId ? parsed.btId.trim().toUpperCase() : "";
+          const desig = cleanBt ? resolveDesignationByBtId(cleanBt, parsed.displayName || parsed.name || parsed.email) : null;
+          if (desig) {
+            parsed.designationBadge = formatDesignationBadge(desig.designationBadge);
+            parsed.isCouncilOfficer = desig.isCouncilOfficer;
+          } else if (cleanBt) {
+            parsed.designationBadge = undefined;
+            parsed.isCouncilOfficer = false;
+          }
+
           setUser((prev) => {
             if (!prev) return prev;
             if (
@@ -267,9 +277,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     window.addEventListener("src_users_updated", handleUsersChange);
+    window.addEventListener("src_clubs_updated", handleUsersChange);
     window.addEventListener("storage", handleUsersChange);
     return () => {
       window.removeEventListener("src_users_updated", handleUsersChange);
+      window.removeEventListener("src_clubs_updated", handleUsersChange);
       window.removeEventListener("storage", handleUsersChange);
     };
   }, []);
@@ -335,7 +347,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           : (cleanBt ? undefined : (formatDesignationBadge(rawBadge) || undefined));
 
         const isOfficer = designationInfo 
-          ? true 
+          ? designationInfo.isCouncilOfficer 
           : (cleanBt ? false : Boolean(storedProfile?.isCouncilOfficer || localProfile?.isCouncilOfficer || registeredUser?.isCouncilOfficer));
 
         const baseObj = { ...registeredUser, ...localProfile, ...storedProfile };
@@ -479,7 +491,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       displayName: data.displayName || `${data.firstName || user.firstName || ""} ${data.lastName || user.lastName || ""}`.trim() || user.displayName,
       role: data.role || user.role || "STUDENT",
       designationBadge: designationInfo ? designationInfo.designationBadge : (formatDesignationBadge(data.designationBadge || user.designationBadge) || undefined),
-      isCouncilOfficer: designationInfo ? true : Boolean(data.isCouncilOfficer || user.isCouncilOfficer),
+      isCouncilOfficer: designationInfo ? designationInfo.isCouncilOfficer : Boolean(data.isCouncilOfficer || user.isCouncilOfficer),
       profileCompleted: true,
     };
 

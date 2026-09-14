@@ -1,4 +1,4 @@
-import { TeamMember, ClubItem, ClubLeader, InstitutionalPillar } from "@/types";
+import { TeamMember, ClubItem, ClubLeader, ClubMember, InstitutionalPillar } from "@/types";
 import { 
   adminCouncilMembers as initialAdminCouncil, 
   hostingCommitteeMembers as initialHosting, 
@@ -48,6 +48,7 @@ export interface ClubLeadersDocument {
   coLead?: ClubLeader;
   coLeads?: ClubLeader[];
   leaders?: ClubLeader[];
+  members?: ClubMember[];
   updatedAt?: number;
 }
 
@@ -101,11 +102,14 @@ export async function saveClubLeadersDocument(
       }
     : payload.coLead;
 
+  const rawMembers = Array.isArray(payload.members) ? payload.members : [];
+
   const sanitized = cleanUndefined({
     ...payload,
     lead: normalizedLead,
     coLead: normalizedCoLead,
     leaders: rawLeaders,
+    members: rawMembers,
     updatedAt: Date.now(),
   });
   markLocalWrite(docId);
@@ -129,7 +133,13 @@ export async function getClubLeadersDocument(slugOrId: string): Promise<ClubLead
   const docId = getClubLeadersDocId(slugOrId);
   try {
     const remote = await getSiteContentFromFirestore<ClubLeadersDocument>(docId);
-    if (remote && (remote.lead || remote.coLead || (Array.isArray(remote.leaders) && remote.leaders.length > 0))) {
+    if (
+      remote &&
+      (remote.lead ||
+        remote.coLead ||
+        (Array.isArray(remote.leaders) && remote.leaders.length > 0) ||
+        (Array.isArray(remote.members) && remote.members.length > 0))
+    ) {
       return remote;
     }
   } catch (err) {
@@ -1092,6 +1102,7 @@ export async function saveStoredClubs(clubs: ClubItem[]): Promise<void> {
         coLead: c.coLead,
         coLeads: c.coLeads,
         leaders,
+        members: Array.isArray(c.members) ? c.members : [],
       });
     });
     await Promise.allSettled(leaderPartitionPromises);
@@ -1109,6 +1120,7 @@ export async function saveStoredClubs(clubs: ClubItem[]): Promise<void> {
       coLead: c.coLead ? { ...c.coLead, avatar: "" } : c.coLead,
       coLeads: Array.isArray(c.coLeads) ? c.coLeads.map((cl) => ({ ...cl, avatar: "" })) : c.coLeads,
       leaders: Array.isArray(c.leaders) ? c.leaders.map((l) => ({ ...l, avatar: "" })) : c.leaders,
+      members: Array.isArray(c.members) ? c.members : [],
     }));
 
     markLocalWrite("clubs");
@@ -1179,7 +1191,13 @@ export async function syncClubsFromFirestore(): Promise<ClubItem[]> {
         const leaderDocResult = leaderDocsResults[idx];
         const leaderDoc = leaderDocResult && leaderDocResult.status === "fulfilled" ? leaderDocResult.value : null;
 
-        if (leaderDoc && (leaderDoc.lead || leaderDoc.coLead || (Array.isArray(leaderDoc.leaders) && leaderDoc.leaders.length > 0))) {
+        if (
+          leaderDoc &&
+          (leaderDoc.lead ||
+            leaderDoc.coLead ||
+            (Array.isArray(leaderDoc.leaders) && leaderDoc.leaders.length > 0) ||
+            (Array.isArray(leaderDoc.members) && leaderDoc.members.length > 0))
+        ) {
           const leaders = Array.isArray(leaderDoc.leaders) && leaderDoc.leaders.length > 0
             ? leaderDoc.leaders
             : (club.leaders || []);
@@ -1188,6 +1206,9 @@ export async function syncClubsFromFirestore(): Promise<ClubItem[]> {
           const coLeads = Array.isArray(leaderDoc.coLeads) && leaderDoc.coLeads.length > 0
             ? leaderDoc.coLeads
             : (club.coLeads || []);
+          const members = Array.isArray(leaderDoc.members) && leaderDoc.members.length > 0
+            ? leaderDoc.members
+            : (club.members || []);
 
           return {
             ...club,
@@ -1195,6 +1216,7 @@ export async function syncClubsFromFirestore(): Promise<ClubItem[]> {
             coLead,
             coLeads,
             leaders,
+            members,
           };
         }
 
@@ -1210,6 +1232,7 @@ export async function syncClubsFromFirestore(): Promise<ClubItem[]> {
             coLead: club.coLead,
             coLeads: club.coLeads,
             leaders: existingLeaders,
+            members: Array.isArray(club.members) ? club.members : [],
           }).catch((err) => console.warn(`Auto-migration failed for ${club.slug}:`, err));
         }
 
@@ -1250,13 +1273,19 @@ export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => v
           if (cached) {
             try {
               const parsed: ClubLeadersDocument = JSON.parse(cached);
-              if (parsed.lead || parsed.coLead || (Array.isArray(parsed.leaders) && parsed.leaders.length > 0)) {
+              if (
+                parsed.lead ||
+                parsed.coLead ||
+                (Array.isArray(parsed.leaders) && parsed.leaders.length > 0) ||
+                (Array.isArray(parsed.members) && parsed.members.length > 0)
+              ) {
                 return {
                   ...club,
                   lead: parsed.lead || club.lead,
                   coLead: parsed.coLead || club.coLead,
                   coLeads: parsed.coLeads || club.coLeads,
                   leaders: (Array.isArray(parsed.leaders) && parsed.leaders.length > 0) ? parsed.leaders : club.leaders,
+                  members: (Array.isArray(parsed.members) && parsed.members.length > 0) ? parsed.members : club.members,
                 };
               }
             } catch {}

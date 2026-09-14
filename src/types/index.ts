@@ -127,6 +127,15 @@ export interface ClubLeader {
   clubNames?: string[];
 }
 
+export interface ClubMember {
+  id?: string;
+  btId: string;
+  name?: string;
+  department?: string;
+  year?: string;
+  addedAt?: string;
+}
+
 export interface ClubItem {
   id: string;
   slug: string;
@@ -146,6 +155,7 @@ export interface ClubItem {
   coLead?: ClubLeader;
   coLeads?: ClubLeader[];
   leaders?: ClubLeader[];
+  members?: ClubMember[];
   upcomingEvents?: string[];
   pastHighlights: string[];
   galleryImages: string[];

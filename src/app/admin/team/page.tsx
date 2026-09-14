@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { 
   Users, 
+  UserPlus,
   Plus, 
   Search, 
   Edit3, 
@@ -78,14 +79,16 @@ import {
 } from "@/lib/tenureStore";
 import { getStoredDepartments, syncDepartmentsFromFirestore, getDepartmentShortName } from "@/lib/departmentsStore";
 import { adminCouncilMembers, hostingCommitteeMembers, foundingMembers as defaultFoundingMembers } from "@/data/team";
-import { TeamMember, ClubItem, ClubLeader, InstitutionalPillar } from "@/types";
+import { TeamMember, ClubItem, ClubLeader, ClubMember, InstitutionalPillar } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { PositionFormModal } from "@/components/admin/team/PositionFormModal";
+import { ClubMembersModal } from "@/components/admin/team/ClubMembersModal";
+import { reconcileAllUserDesignations } from "@/lib/usersStore";
 import { cn } from "@/lib/utils";
 
-type TeamCategoryTab = "council" | "hosting" | "founding" | "clubs" | "pillars";
+type TeamCategoryTab = "council" | "hosting" | "founding" | "clubs" | "pillars" | "members";
 
 export default function AdminTeamPage() {
   const [activeTab, setActiveTab] = useState<TeamCategoryTab>("council");
@@ -108,6 +111,10 @@ export default function AdminTeamPage() {
   const [pillarsList, setPillarsList] = useState<InstitutionalPillar[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   
+  // Club Members State
+  const [selectedClubForMembers, setSelectedClubForMembers] = useState<ClubItem | null>(null);
+  const [clubSearchQuery, setClubSearchQuery] = useState("");
+
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
@@ -570,6 +577,59 @@ export default function AdminTeamPage() {
     return Array.from(leaderMap.values());
   }, [clubsList]);
 
+  // Total club members count across all 12 clubs
+  const totalClubMembersCount = useMemo(() => {
+    return clubsList.reduce((acc, club) => acc + (club.members?.length || 0), 0);
+  }, [clubsList]);
+
+  // Filtered clubs for the Club Members directory tab
+  const filteredClubsForMembers = useMemo(() => {
+    const q = clubSearchQuery.toLowerCase().trim();
+    if (!q) return clubsList;
+    return clubsList.filter((c) => {
+      const leaders = getClubLeaders(c);
+      return (
+        c.name.toLowerCase().includes(q) ||
+        c.category.toLowerCase().includes(q) ||
+        c.tagline?.toLowerCase().includes(q) ||
+        leaders.some((l) => l.name?.toLowerCase().includes(q))
+      );
+    });
+  }, [clubsList, clubSearchQuery]);
+
+  // Save club members directly to cloud and local storage
+  const handleSaveClubMembers = async (clubIdOrSlug: string, updatedMembers: ClubMember[]) => {
+    isSavingRef.current = true;
+    const updatedClubs = clubsList.map((c) => {
+      if (c.id === clubIdOrSlug || c.slug === clubIdOrSlug) {
+        return {
+          ...c,
+          members: updatedMembers,
+          memberCount: Math.max(c.memberCount || 0, updatedMembers.length),
+        };
+      }
+      return c;
+    });
+
+    setClubsList(updatedClubs);
+    try {
+      await saveStoredClubs(updatedClubs);
+      await reconcileAllUserDesignations();
+
+      const refreshed = updatedClubs.find((c) => c.id === clubIdOrSlug || c.slug === clubIdOrSlug) || null;
+      setSelectedClubForMembers(refreshed);
+
+      setIsSaved(true);
+      setTimeout(() => {
+        setIsSaved(false);
+        isSavingRef.current = false;
+      }, 2500);
+    } catch (err) {
+      isSavingRef.current = false;
+      throw err;
+    }
+  };
+
   // Current active list depending on tab
   const currentMembers = activeTab === "council"
     ? councilMembers
@@ -580,7 +640,7 @@ export default function AdminTeamPage() {
     : clubLeadMembers;
 
   const saveCurrentList = async (updated: TeamMember[]) => {
-    if (activeTab === "clubs") return;
+    if (activeTab === "clubs" || activeTab === "members") return;
 
     isSavingRef.current = true;
 
@@ -730,6 +790,12 @@ export default function AdminTeamPage() {
   }, [currentMembers, searchQuery]);
 
   const handleOpenAddModal = () => {
+    if (activeTab === "members") {
+      if (clubsList.length > 0) {
+        setSelectedClubForMembers(clubsList[0]);
+      }
+      return;
+    }
     setIsCreatingNew(true);
     const randSuffix = Math.random().toString(36).substring(2, 7);
     if (activeTab === "clubs") {
@@ -1208,16 +1274,16 @@ export default function AdminTeamPage() {
               size="sm"
               className="gap-1.5"
             >
-              <Plus className="w-4 h-4" />
-              <span>{activeTab === "clubs" ? "Add Club Head / Co-Head" : "Add New Position / Officer"}</span>
+              {activeTab === "members" ? <UserPlus className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              <span>{activeTab === "clubs" ? "Add Club Head / Co-Head" : activeTab === "members" ? "Bulk Add Club Members" : "Add New Position / Officer"}</span>
             </Button>
           )}
 
           <Link
-            href={activeTab === "pillars" ? "/about" : "/team"}
+            href={activeTab === "pillars" ? "/about" : activeTab === "members" ? "/clubs" : "/team"}
             target="_blank"
             className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
-            title={`Preview Live ${activeTab === "pillars" ? "/about" : "/team"} Page in New Tab`}
+            title={`Preview Live ${activeTab === "pillars" ? "/about" : activeTab === "members" ? "/clubs" : "/team"} Page in New Tab`}
           >
             <Eye className="w-4 h-4" />
           </Link>
@@ -1414,10 +1480,22 @@ export default function AdminTeamPage() {
           <GraduationCap className="w-4 h-4 text-[#E78023]" />
           <span>4 Pillars of Strength ({pillarsList.length})</span>
         </button>
+
+        <button
+          onClick={() => setActiveTab("members")}
+          className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === "members"
+              ? "bg-[#17458F] text-white shadow-xs"
+              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+          }`}
+        >
+          <UserCheck className="w-4 h-4 text-[#E78023]" />
+          <span>Club Members ({totalClubMembersCount})</span>
+        </button>
       </div>
 
       {/* Search & Actions Bar (for Council, Hosting, Founding, Clubs) */}
-      {activeTab !== "pillars" && (
+      {activeTab !== "pillars" && activeTab !== "members" && (
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
@@ -1481,6 +1559,31 @@ export default function AdminTeamPage() {
             >
               <RefreshCw className={`w-4 h-4 text-[#17458F] ${isSyncingClubs ? "animate-spin" : ""}`} />
               <span>{isSyncingClubs ? "Syncing..." : "Sync All 12 Club Documents"}</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Search Bar (for Club Members tab) */}
+      {activeTab === "members" && (
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={clubSearchQuery}
+              onChange={(e) => setClubSearchQuery(e.target.value)}
+              placeholder="Search chartered clubs by name, category, or leadership..."
+              className="w-full pl-11 pr-4 py-3 rounded-2xl bg-white border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F] shadow-xs"
+            />
+          </div>
+          {clubSearchQuery && (
+            <button
+              type="button"
+              onClick={() => setClubSearchQuery("")}
+              className="px-4 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer shrink-0"
+            >
+              Clear Filter
             </button>
           )}
         </div>
@@ -1562,7 +1665,7 @@ export default function AdminTeamPage() {
       )}
 
       {/* Roster Grid (for Council, Hosting, Founding, Clubs) */}
-      {activeTab !== "pillars" && (
+      {activeTab !== "pillars" && activeTab !== "members" && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
         {filteredMembers.map((member) => {
           const actualIndex = currentMembers.findIndex((m) => m.id === member.id);
@@ -1736,7 +1839,7 @@ export default function AdminTeamPage() {
       </div>
       )}
 
-      {activeTab !== "pillars" && filteredMembers.length === 0 && (
+      {activeTab !== "pillars" && activeTab !== "members" && filteredMembers.length === 0 && (
         <div className="p-12 text-center rounded-3xl bg-white border border-slate-200 space-y-3">
           <Users className="w-8 h-8 text-[#E78023] mx-auto opacity-70" />
           <h4 className="font-bold text-base text-slate-800">No positions found</h4>
@@ -1749,6 +1852,140 @@ export default function AdminTeamPage() {
         </div>
       )}
 
+      {/* Club Members Management View */}
+      {activeTab === "members" && (
+        <div className="space-y-6">
+          {/* Informational Hero Banner */}
+          <div className="p-6 rounded-3xl bg-gradient-to-r from-[#17458F]/5 via-blue-50/50 to-[#E78023]/5 border border-[#17458F]/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded-xl bg-[#17458F] text-white">
+                  <Users className="w-5 h-5" />
+                </span>
+                <h3 className="text-lg font-bold text-slate-900">Chartered Club Members Directory</h3>
+                <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-[#17458F]/10 text-[#17458F]">
+                  {totalClubMembersCount} Active Members
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 max-w-3xl leading-relaxed">
+                Select any club below to view inducted members and bulk-enroll students by entering comma-separated BT IDs.
+                Names, departments, and academic years are automatically resolved from system records. Enrolled students are badged as <span className="font-semibold text-[#17458F]">&ldquo;Club Name Member&rdquo;</span> on their dashboard with zero photo storage overhead.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs text-slate-500 font-medium bg-white px-3 py-1.5 rounded-xl border border-slate-200">
+                12 Chartered Clubs
+              </span>
+            </div>
+          </div>
+
+          {/* 12 Clubs Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            {filteredClubsForMembers.map((club) => {
+              const leaders = getClubLeaders(club);
+              const membersCount = club.members?.length || 0;
+              return (
+                <div
+                  key={club.id || club.slug}
+                  className="p-5 rounded-3xl bg-white border border-slate-200 hover:border-[#17458F]/40 hover:shadow-md transition-all flex flex-col justify-between space-y-4 shadow-xs group"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#17458F]/10 to-[#E78023]/10 border border-slate-200 flex items-center justify-center shrink-0 text-[#17458F] font-black text-sm">
+                          {club.name.substring(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-sm text-slate-900 truncate group-hover:text-[#17458F] transition-colors" title={club.name}>
+                            {club.name}
+                          </h4>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[#E78023] block truncate">
+                            {club.category}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#17458F] border border-blue-100 shrink-0">
+                        {membersCount} {membersCount === 1 ? "member" : "members"}
+                      </span>
+                    </div>
+
+                    {club.tagline && (
+                      <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed italic">
+                        &ldquo;{club.tagline}&rdquo;
+                      </p>
+                    )}
+
+                    {/* Leadership peek */}
+                    <div className="pt-2 border-t border-slate-100 text-[11px] space-y-1">
+                      <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                        Club Leadership
+                      </div>
+                      {leaders.length > 0 ? (
+                        <div className="space-y-0.5">
+                          {leaders.slice(0, 2).map((leader, i) => (
+                            <div key={i} className="flex items-center justify-between text-slate-700">
+                              <span className="font-medium truncate max-w-[140px]">{leader.name}</span>
+                              <span className="text-[9px] font-bold text-slate-400 uppercase">
+                                {leader.roleType === "coLead" ? "Co-Head" : "Head"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 italic text-[11px]">No leaders assigned yet</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <Link
+                      href={`/clubs/${club.slug}`}
+                      target="_blank"
+                      className="p-2 rounded-xl text-slate-500 hover:text-[#17458F] hover:bg-slate-50 border border-transparent hover:border-slate-200 text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                      title="View Public Club Page"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span className="text-[11px]">Preview</span>
+                    </Link>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedClubForMembers(club)}
+                      className="px-3.5 py-2 rounded-xl bg-[#17458F] hover:bg-[#0E2F66] text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                      <span>Manage ({membersCount})</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {filteredClubsForMembers.length === 0 && (
+            <div className="p-12 text-center rounded-3xl bg-white border border-slate-200 space-y-3">
+              <Users className="w-8 h-8 text-[#17458F] mx-auto opacity-70" />
+              <h4 className="font-bold text-base text-slate-800">No clubs match &ldquo;{clubSearchQuery}&rdquo;</h4>
+              <p className="text-xs text-slate-500">
+                Clear your search filter to see all 12 chartered clubs.
+              </p>
+              <Button onClick={() => setClubSearchQuery("")} variant="outline" size="sm" className="mt-2">
+                Clear Filter
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Club Members Modal for Bulk BT ID Entry */}
+      <ClubMembersModal
+        isOpen={!!selectedClubForMembers}
+        onClose={() => setSelectedClubForMembers(null)}
+        club={selectedClubForMembers}
+        onSaveMembers={handleSaveClubMembers}
+      />
+
       {/* EDIT / CREATE MODAL */}
       <PositionFormModal
         isOpen={!!editingMember}
@@ -1758,7 +1995,7 @@ export default function AdminTeamPage() {
         }}
         initialMember={editingMember}
         isCreatingNew={isCreatingNew}
-        activeTab={activeTab}
+        activeTab={activeTab === "members" ? "clubs" : activeTab}
         clubsList={clubsList}
         departmentsList={departmentsList}
         currentMembersCount={currentMembers.length}

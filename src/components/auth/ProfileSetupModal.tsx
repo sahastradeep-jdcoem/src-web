@@ -265,7 +265,7 @@ export function ProfileSetupModal() {
           customBranch: "",
           profileCompleted: true,
           designationBadge: designationInfo ? designationInfo.designationBadge : undefined,
-          isCouncilOfficer: designationInfo ? true : false,
+          isCouncilOfficer: designationInfo ? designationInfo.isCouncilOfficer : false,
           role: user?.role === "COUNCIL_ADMIN" ? "COUNCIL_ADMIN" : "STUDENT",
         });
         closeProfileModal();

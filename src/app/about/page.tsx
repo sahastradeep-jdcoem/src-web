@@ -124,10 +124,10 @@ export default function AboutPage() {
                 <span>Council Structure</span>
               </span>
               <h2 className="font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase">
-                DUAL-TIER GOVERNANCE
+                FIVE-TIER GOVERNANCE
               </h2>
               <p className="text-sm text-slate-600 leading-relaxed">
-                Sahastradeep functions through an official four-tier hierarchy: <strong>Admins</strong> (overseeing institutional policies, event operations, technical systems, PR, finance, and protocol), <strong>Heads &amp; Co-Heads</strong> (managing domain activities across all 12 chartered clubs), and active student <strong>Members</strong>, supported by the specialized <strong>Hosting Committee</strong>.
+                Sahastradeep functions through an official five-tier hierarchy: <strong>Admins</strong> (overseeing institutional policies, event operations, technical systems, PR, finance, and protocol), <strong>Spokespersons</strong> (Hosting Committee and official student spokespersons), <strong>Heads</strong> and <strong>Co-Heads</strong> (managing domain operations across all 12 chartered clubs), and inducted student <strong>Members</strong>.
               </p>
             </div>
 

@@ -502,8 +502,12 @@ export default function StudentDashboardPage() {
                   : "STUDENT DELEGATE PORTAL"}
               </Badge>
               {user?.designationBadge ? (
-                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-sm shadow-amber-500/25">
-                  <Award className="w-3.5 h-3.5" />
+                <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1 rounded-full text-white shadow-sm ${
+                  user.isCouncilOfficer
+                    ? "bg-gradient-to-r from-amber-500 to-amber-600 shadow-amber-500/25"
+                    : "bg-gradient-to-r from-blue-600 to-indigo-600 shadow-blue-500/25"
+                }`}>
+                  {user.isCouncilOfficer ? <Award className="w-3.5 h-3.5" /> : <Users className="w-3.5 h-3.5" />}
                   <span>{formatDesignationBadge(user.designationBadge)}</span>
                 </span>
               ) : isFaculty ? (
@@ -994,8 +998,10 @@ export default function StudentDashboardPage() {
                         ? "FACULTY & STAFF PASS" 
                         : isExternal 
                         ? (user?.collegeName || "INTER-COLLEGIATE DELEGATE") 
-                        : user?.designationBadge 
+                        : user?.isCouncilOfficer 
                         ? "COUNCIL OFFICER" 
+                        : user?.designationBadge 
+                        ? `${user.designationBadge.toUpperCase()}` 
                         : "STUDENT DELEGATE"}
                     </h4>
                   </div>
@@ -1020,8 +1026,16 @@ export default function StudentDashboardPage() {
               </div>
 
               {user?.designationBadge && (
-                <div className="px-3 py-2 rounded-2xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-400/40 flex items-center gap-2 text-xs font-bold text-amber-300">
-                  <Award className="w-4 h-4 text-amber-400 shrink-0" />
+                <div className={`px-3 py-2 rounded-2xl border flex items-center gap-2 text-xs font-bold ${
+                  user.isCouncilOfficer
+                    ? "bg-gradient-to-r from-amber-500/20 to-orange-500/20 border-amber-400/40 text-amber-300"
+                    : "bg-gradient-to-r from-blue-500/20 to-indigo-500/20 border-blue-400/40 text-blue-200"
+                }`}>
+                  {user.isCouncilOfficer ? (
+                    <Award className="w-4 h-4 text-amber-400 shrink-0" />
+                  ) : (
+                    <Users className="w-4 h-4 text-blue-400 shrink-0" />
+                  )}
                   <span className="truncate">{formatDesignationBadge(user.designationBadge)}</span>
                 </div>
               )}

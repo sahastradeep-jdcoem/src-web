@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { 
   Users, 
+  UserCheck,
   Sparkles, 
   Calendar, 
   ArrowLeft, 
@@ -16,6 +17,7 @@ import {
 } from "lucide-react";
 import { getStoredClubs, syncClubsFromFirestore, subscribeToClubs, getClubLeaders, findClub } from "@/lib/councilStore";
 import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
+import { findStudentByBtId } from "@/lib/usersStore";
 import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { ClubItem, EventItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -158,7 +160,7 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
                 </span>
                 <span className="text-xs font-bold text-white px-3 py-1 rounded-full bg-white/20 backdrop-blur-xs flex items-center gap-1.5">
                   <Users className="w-3.5 h-3.5 text-[#E78023]" />
-                  <span>{club.memberCount} Active Members</span>
+                  <span>{Math.max(club.memberCount || 0, club.members?.length || 0)} Active Members</span>
                 </span>
               </div>
 
@@ -270,6 +272,68 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
             })}
           </div>
         </section>
+
+        {/* Club Members Section (Names only, zero photos) */}
+        {club.members && club.members.length > 0 && (
+          <section className="space-y-6">
+            <div className="border-b border-slate-200 pb-4 flex items-center justify-between">
+              <div>
+                <h3 className="font-extrabold text-2xl text-[#17458F] uppercase font-heading flex items-center gap-2">
+                  <UserCheck className="w-6 h-6 text-[#E78023]" />
+                  <span>CLUB MEMBERS</span>
+                </h3>
+                <p className="text-xs text-slate-500 font-medium pt-1">
+                  Official inducted student members contributing to {club.name} activities and workshops.
+                </p>
+              </div>
+              <span className="text-xs font-bold text-[#17458F] bg-blue-50 border border-blue-200 px-3 py-1 rounded-full">
+                {club.members.length} {club.members.length === 1 ? "Member" : "Members"}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {club.members.map((member, idx) => {
+                const studentInfo = findStudentByBtId(member.btId);
+                const displayName = member.name || studentInfo?.name || member.btId;
+                const displayDept = member.department || studentInfo?.department;
+                const displayYear = member.year || studentInfo?.year;
+
+                return (
+                  <div
+                    key={member.id || member.btId || idx}
+                    className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs hover:border-[#17458F]/30 hover:shadow-sm transition-all flex items-center gap-3"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-[#17458F] font-bold text-xs shrink-0 font-mono">
+                      #{idx + 1}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-bold text-sm text-[#0F172A] truncate" title={displayName}>
+                        {displayName}
+                      </h4>
+                      <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-slate-500 font-medium truncate">
+                        <span className="font-mono text-[10px] text-[#E78023] font-bold">
+                          {member.btId}
+                        </span>
+                        {displayDept && (
+                          <>
+                            <span>•</span>
+                            <span className="truncate">{getDepartmentShortName(displayDept)}</span>
+                          </>
+                        )}
+                        {displayYear && (
+                          <>
+                            <span>•</span>
+                            <span>{displayYear}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Club Events */}
         {events.length > 0 && (
