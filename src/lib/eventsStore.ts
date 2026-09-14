@@ -343,20 +343,19 @@ function safeWriteEventsToLocalStorage(events: EventItem[]): void {
   try {
     localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(events));
   } catch (quotaErr) {
-    console.warn("localStorage quota exceeded for events, applying safe compaction:", quotaErr);
+    console.warn("localStorage quota exceeded for events, reclaiming cache space:", quotaErr);
     try {
-      // In localStorage, keep all metadata, IDs, details, but strip oversized base64 strings (>35KB)
-      // to guarantee all event records persist without hitting 5MB browser quota (Directive #2)
-      const lightweight = events.map((e) => ({
-        ...e,
-        poster: e.poster && e.poster.length > 35000 && e.poster.startsWith("data:") ? "" : e.poster,
-        cardImage: e.cardImage && e.cardImage.length > 35000 && e.cardImage.startsWith("data:") ? "" : e.cardImage,
-        posterImage: e.posterImage && e.posterImage.length > 35000 && e.posterImage.startsWith("data:") ? "" : e.posterImage,
-        headerImage: e.headerImage && e.headerImage.length > 35000 && e.headerImage.startsWith("data:") ? "" : e.headerImage,
-      }));
-      localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(lightweight));
+      // Reclaim space by pruning stale/obsolete temporary and backup items from localStorage
+      const pruneKeys = ["src_events_backup", "src_events_draft", "src_temp_uploads", "src_debug_logs"];
+      pruneKeys.forEach((k) => {
+        try { localStorage.removeItem(k); } catch {}
+      });
+      // Attempt write again with full event fidelity
+      localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(events));
     } catch (secondErr) {
-      console.warn("Emergency localStorage save for events failed:", secondErr);
+      // Directive #4 (No Silent Data Stripping): NEVER overwrite images with empty strings ("").
+      // In-memory events and individual Firestore documents (/events/{id}) remain the authoritative source of truth.
+      console.warn("Could not save full events to localStorage; in-memory store remains fully hydrated with all images:", secondErr);
     }
   }
 }
