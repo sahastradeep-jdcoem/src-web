@@ -58,7 +58,7 @@ export function sanitizeEventItem(event: EventItem): EventItem {
   return {
     ...event,
     organizer: organizerVal,
-    organizerClubSlug: event.organizerClubSlug || (organizerVal === "SRC JDCOEM" || organizerVal === "SRC Sahastradeep" || organizerVal.toLowerCase().includes("council") ? "src-council" : undefined),
+    organizerClubSlug: event.organizerClubSlug || (organizerVal === "SRC JDCOEM" || organizerVal.toLowerCase().includes("council") ? "src-council" : undefined),
     isPaid: isPaidVal,
     feeAmount: isNoReg
       ? 0

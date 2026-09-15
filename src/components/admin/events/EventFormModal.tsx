@@ -254,7 +254,7 @@ export function EventFormModal({
   const [isCustomOrganizer, setIsCustomOrganizer] = useState(() => {
     if (!initialData?.organizer) return false;
     const org = initialData.organizer;
-    const isCentral = org === "SRC Sahastradeep" || org === "SRC JDCOEM" || org === "Student Representative Council (SRC)";
+    const isCentral = org === "SRC JDCOEM";
     const isClub = clubsList.some((c) => c.name === org || `SRC ${c.name}` === org);
     return !isCentral && !isClub;
   });
@@ -315,7 +315,7 @@ export function EventFormModal({
     if (initialData) {
       if (initialData.organizer) {
         const org = initialData.organizer;
-        const isCentral = org === "SRC Sahastradeep" || org === "SRC JDCOEM" || org === "Student Representative Council (SRC)";
+        const isCentral = org === "SRC JDCOEM";
         const isClub = clubsList.some((c) => c.name === org || `SRC ${c.name}` === org);
         setIsCustomOrganizer(!isCentral && !isClub);
       } else {
@@ -873,9 +873,7 @@ export function EventFormModal({
                 value={
                   isCustomOrganizer
                     ? (form.organizer &&
-                       form.organizer !== "SRC Sahastradeep" &&
                        form.organizer !== "SRC JDCOEM" &&
-                       form.organizer !== "Student Representative Council (SRC)" &&
                        !clubsList.some((c) => c.name === form.organizer)
                         ? form.organizer
                         : "__custom__")
@@ -894,7 +892,7 @@ export function EventFormModal({
                   }
                   setIsCustomOrganizer(false);
                   const matchedClub = clubsList.find((c) => c.name === val || `SRC ${c.name}` === val);
-                  const isCentral = val === "SRC Sahastradeep" || val === "SRC JDCOEM" || val === "Student Representative Council (SRC)";
+                  const isCentral = val === "SRC JDCOEM";
                   setForm((prev) => ({
                     ...prev,
                     organizer: val,
@@ -905,9 +903,7 @@ export function EventFormModal({
               >
                 <option value="">-- Select Organizing Body / Club --</option>
                 <optgroup label="Central Student Council">
-                  <option value="SRC Sahastradeep">SRC Sahastradeep</option>
                   <option value="SRC JDCOEM">SRC JDCOEM</option>
-                  <option value="Student Representative Council (SRC)">Student Representative Council (SRC)</option>
                 </optgroup>
                 <optgroup label="Chartered Student Clubs">
                   {clubsList.map((c) => (
@@ -917,9 +913,7 @@ export function EventFormModal({
                   ))}
                 </optgroup>
                 {form.organizer &&
-                  form.organizer !== "SRC Sahastradeep" &&
                   form.organizer !== "SRC JDCOEM" &&
-                  form.organizer !== "Student Representative Council (SRC)" &&
                   !clubsList.some((c) => c.name === form.organizer) && (
                     <optgroup label="Current Custom Organizer">
                       <option value={form.organizer}>{form.organizer}</option>

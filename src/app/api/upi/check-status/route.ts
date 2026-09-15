@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
               return NextResponse.json({ status: "EXPIRED", orderId });
             }
 
-            // Self-healing: If session is WAITING, check if an unclaimed payment with matching amount arrived
+            // Self-healing: If session is WAITING, check if an unclaimed payment with matching amount arrived DURING this session's lifetime
             if (data?.status === "WAITING" && data?.amount) {
               const expiresAtMs = data.expiresAt ? new Date(data.expiresAt).getTime() : 0;
               if (expiresAtMs > 0 && Date.now() > expiresAtMs) {
@@ -49,40 +49,70 @@ export async function GET(req: NextRequest) {
                 await setDoc(sessionRef, { status: "EXPIRED" }, { merge: true });
                 return NextResponse.json({ status: "EXPIRED", orderId });
               }
+
               const sessionAmt = Number(data.amount);
-              const paymentsSnap = await getDocs(
-                query(collection(db, "verified_upi_payments"), where("status", "==", "UNCLAIMED"))
-              );
-              const match = paymentsSnap.docs.find((pDoc) => {
-                const pAmt = Number(pDoc.data().amount || 0);
-                return Math.abs(pAmt - sessionAmt) < 0.005;
-              });
+              const sessionCreatedTime = data.createdAt ? new Date(data.createdAt).getTime() : 0;
 
-              if (match) {
-                const pData = match.data();
-                const now = new Date().toISOString();
-                const { setDoc } = await import("firebase/firestore");
-                await setDoc(sessionRef, {
-                  status: "COMPLETED",
-                  utr: pData.utr,
-                  receivedAmount: pData.amount,
-                  paidAt: pData.receivedAt || now,
-                }, { merge: true });
+              // Only check if we have a valid session creation timestamp
+              if (sessionCreatedTime > 0) {
+                const paymentsSnap = await getDocs(
+                  query(collection(db, "verified_upi_payments"), where("status", "==", "UNCLAIMED"))
+                );
 
-                await setDoc(match.ref, {
-                  status: "MATCHED",
-                  matchedOrderId: orderId,
-                  matchedStudentName: data.participantName || "Student",
-                  matchedAt: now,
-                }, { merge: true });
+                const match = paymentsSnap.docs.find((pDoc) => {
+                  const pData = pDoc.data();
+                  const pAmt = Number(pData.amount || 0);
 
-                return NextResponse.json({
-                  status: "PAID",
-                  orderId,
-                  utr: pData.utr,
-                  amount: pData.amount,
-                  paidAt: pData.receivedAt || now,
+                  // 1. Exact amount match (micro-paisa tolerance)
+                  if (Math.abs(pAmt - sessionAmt) >= 0.005) return false;
+
+                  // 2. Reject synthetic UTRs (spam/promotional notifications without real bank UTR)
+                  if (pData.isSyntheticUtr || !pData.utr || !/^\d{12}$/.test(pData.utr)) {
+                    return false;
+                  }
+
+                  // 3. Strict Time Window Invariant:
+                  // The payment MUST have been received AFTER this checkout session was created.
+                  // Pre-existing payments from earlier hours/days MUST NEVER be matched!
+                  const paymentTime = pData.receivedAt ? new Date(pData.receivedAt).getTime() : 0;
+                  if (!paymentTime || paymentTime < sessionCreatedTime - 30000) {
+                    return false;
+                  }
+
+                  // 4. Payment must have been received BEFORE session expiration + 60s grace
+                  if (expiresAtMs > 0 && paymentTime > expiresAtMs + 60000) {
+                    return false;
+                  }
+
+                  return true;
                 });
+
+                if (match) {
+                  const pData = match.data();
+                  const now = new Date().toISOString();
+                  const { setDoc } = await import("firebase/firestore");
+                  await setDoc(sessionRef, {
+                    status: "COMPLETED",
+                    utr: pData.utr,
+                    receivedAmount: pData.amount,
+                    paidAt: pData.receivedAt || now,
+                  }, { merge: true });
+
+                  await setDoc(match.ref, {
+                    status: "MATCHED",
+                    matchedOrderId: orderId,
+                    matchedStudentName: data.participantName || "Student",
+                    matchedAt: now,
+                  }, { merge: true });
+
+                  return NextResponse.json({
+                    status: "PAID",
+                    orderId,
+                    utr: pData.utr,
+                    amount: pData.amount,
+                    paidAt: pData.receivedAt || now,
+                  });
+                }
               }
             }
           }
