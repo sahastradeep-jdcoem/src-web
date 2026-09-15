@@ -90,9 +90,10 @@ export async function checkIsAdminInFirestore(email: string): Promise<boolean> {
 
   // Default fallback admin list
   const DEFAULT_ADMINS = [
+    "shendeha@jdcoem.ac.in",
+    "studentrepresentcouncil@jdcoem.ac.in",
     "admin@jdcoem.ac.in",
     "harshxfr@gmail.com",
-    "shendeha@jdcoem.ac.in",
     "src.president@jdcoem.ac.in",
     "src.mentor@jdcoem.ac.in",
     "src.gensec@jdcoem.ac.in",

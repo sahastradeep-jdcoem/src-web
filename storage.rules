@@ -10,12 +10,8 @@ service firebase.storage {
     function isAdmin() {
       return isAuthenticated() && (
         request.auth.token.email in [
-          'admin@jdcoem.ac.in',
-          'harshxfr@gmail.com',
           'shendeha@jdcoem.ac.in',
-          'src.president@jdcoem.ac.in',
-          'src.mentor@jdcoem.ac.in',
-          'src.gensec@jdcoem.ac.in'
+          'studentrepresentcouncil@jdcoem.ac.in'
         ] ||
         firestore.exists(/databases/(default)/documents/admins/$(request.auth.token.email))
       );
