@@ -159,98 +159,6 @@ export function UniversalImageUploader({
   const defaultRatio = aspectRatioOverride || profile.defaultAspectRatio;
   const allowedRatios = allowedAspectRatiosOverride || profile.allowedAspectRatios;
 
-  // ─── Process File (Direct Upload Without Cropper) ────────────────────────
-
-  const processFile = useCallback(async (file: File) => {
-    if (!file.type.startsWith("image/")) {
-      setError("Please select a valid image file (JPG, PNG, WebP, HEIC).");
-      return;
-    }
-
-    setError(null);
-    lastProcessedFileRef.current = file;
-    lastCroppedDataUrlRef.current = null;
-    setOriginalFileName(file.name);
-    setPhase("processing");
-    onUploadStateChange?.(true);
-
-    try {
-      const effectiveFormat = getEffectiveFormat(purpose, file.type);
-      const result = await compressImage(file, {
-        maxWidth: profile.maxWidth,
-        maxHeight: profile.maxHeight,
-        quality: profile.quality,
-        outputFormat: effectiveFormat,
-      });
-
-      localDataUrlRef.current = result.dataUrl;
-      setPreview(result.dataUrl);
-      setManualUrl(result.dataUrl);
-      setCompressionStats({
-        originalSize: result.originalSize,
-        compressedSize: result.compressedSize,
-      });
-
-      // Newly processed local image is READY for saving, but not yet persisted by the parent form
-      setPhase("ready_local");
-      onUrlChange?.(result.dataUrl);
-
-      // Background cloud upload attempt (Blaze mode only)
-      if (!isSparkMode()) {
-        attemptCloudUpload(result.dataUrl, file.name);
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to process image.";
-      console.error("[UIS] Image processing error:", message);
-      setPhase("failed");
-      setError(message);
-    } finally {
-      onUploadStateChange?.(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  }, [purpose, profile, onUrlChange, onUploadStateChange]);
-
-  // ─── Handle Crop Complete ────────────────────────────────────────────────
-
-  const handleCropComplete = useCallback(async (croppedDataUrl: string) => {
-    setPhase("processing");
-    onUploadStateChange?.(true);
-    setError(null);
-    lastCroppedDataUrlRef.current = croppedDataUrl;
-    // Clear raw file ref so retry never reverts to uncropped
-    lastProcessedFileRef.current = null;
-
-    try {
-      localDataUrlRef.current = croppedDataUrl;
-      setPreview(croppedDataUrl);
-      setManualUrl(croppedDataUrl);
-
-      // Measure the compressed size for stats display
-      const sizeBytes = new Blob([croppedDataUrl]).size;
-      setCompressionStats((prev) => ({
-        originalSize: prev?.originalSize || sizeBytes,
-        compressedSize: sizeBytes,
-      }));
-
-      // Newly cropped image is ready in memory; parent form must save to persist
-      setPhase("ready_local");
-      onUrlChange?.(croppedDataUrl);
-
-      if (!isSparkMode()) {
-        attemptCloudUpload(croppedDataUrl, originalFileName);
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to save cropped image.";
-      console.error("[UIS] Crop processing error:", message);
-      setPhase("failed");
-      setError(message);
-    } finally {
-      onUploadStateChange?.(false);
-      setRawImageToCrop(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  }, [onUrlChange, onUploadStateChange, originalFileName]);
-
   // ─── Cloud Upload (Blaze Mode) ──────────────────────────────────────────
 
   const attemptCloudUpload = useCallback(async (dataUrl: string, fileName: string) => {
@@ -285,6 +193,101 @@ export function UniversalImageUploader({
       setError(`Cloud upload failed: ${message}. Click Retry to upload again.`);
     }
   }, [purpose, storagePath, onUrlChange]);
+
+  // ─── Process File (Direct Upload Without Cropper) ────────────────────────
+
+  const processFile = useCallback(async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setError("Please select a valid image file (JPG, PNG, WebP, HEIC).");
+      return;
+    }
+
+    setError(null);
+    lastProcessedFileRef.current = file;
+    lastCroppedDataUrlRef.current = null;
+    setOriginalFileName(file.name);
+    setPhase("processing");
+    onUploadStateChange?.(true);
+
+    try {
+      const effectiveFormat = getEffectiveFormat(purpose, file.type);
+      const result = await compressImage(file, {
+        maxWidth: profile.maxWidth,
+        maxHeight: profile.maxHeight,
+        quality: profile.quality,
+        outputFormat: effectiveFormat,
+      });
+
+      localDataUrlRef.current = result.dataUrl;
+      setPreview(result.dataUrl);
+      setManualUrl(result.dataUrl);
+      setCompressionStats({
+        originalSize: result.originalSize,
+        compressedSize: result.compressedSize,
+      });
+
+      // Deliver the optimized data URL to the parent form immediately
+      setPhase("ready_local");
+      onUrlChange?.(result.dataUrl);
+
+      // On Blaze mode: await cloud upload before signaling completion
+      // so the save button stays disabled until image is cloud-persisted.
+      // On Spark mode: data URL IS the final image — signal complete now.
+      if (!isSparkMode()) {
+        await attemptCloudUpload(result.dataUrl, file.name);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to process image.";
+      console.error("[UIS] Image processing error:", message);
+      setPhase("failed");
+      setError(message);
+    } finally {
+      onUploadStateChange?.(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }, [purpose, profile, onUrlChange, onUploadStateChange, attemptCloudUpload]);
+
+  // ─── Handle Crop Complete ────────────────────────────────────────────────
+
+  const handleCropComplete = useCallback(async (croppedDataUrl: string) => {
+    setPhase("processing");
+    onUploadStateChange?.(true);
+    setError(null);
+    lastCroppedDataUrlRef.current = croppedDataUrl;
+    // Clear raw file ref so retry never reverts to uncropped
+    lastProcessedFileRef.current = null;
+
+    try {
+      localDataUrlRef.current = croppedDataUrl;
+      setPreview(croppedDataUrl);
+      setManualUrl(croppedDataUrl);
+
+      // Measure the compressed size for stats display
+      const sizeBytes = new Blob([croppedDataUrl]).size;
+      setCompressionStats((prev) => ({
+        originalSize: prev?.originalSize || sizeBytes,
+        compressedSize: sizeBytes,
+      }));
+
+      // Newly cropped image is ready in memory; parent form must save to persist
+      setPhase("ready_local");
+      onUrlChange?.(croppedDataUrl);
+
+      // On Blaze mode: await cloud upload before signaling completion
+      if (!isSparkMode()) {
+        await attemptCloudUpload(croppedDataUrl, originalFileName);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to save cropped image.";
+      console.error("[UIS] Crop processing error:", message);
+      setPhase("failed");
+      setError(message);
+    } finally {
+      onUploadStateChange?.(false);
+      setRawImageToCrop(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }, [onUrlChange, onUploadStateChange, originalFileName, attemptCloudUpload]);
 
   // ─── Retry Upload (Preserves Crop State!) ───────────────────────────────
 

@@ -678,6 +678,10 @@ export function EventFormModal({
       return;
     }
     if (isSubmitting) return;
+    if (pendingUploads > 0) {
+      setFormError("Please wait for all images to finish uploading before saving.");
+      return;
+    }
 
     try {
       setIsSubmitting(true);

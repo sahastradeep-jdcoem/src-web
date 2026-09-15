@@ -510,6 +510,18 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
     // Cloud-Authoritative Dataset Invariant (Directive #9)
     // Remote Firestore state is strictly authoritative. If remote is empty [],
     // zero items remain and local items must not be resurrected.
+    //
+    // EXCEPTION: If a local write is actively in-flight (within 15s window),
+    // an empty remote snapshot is a transient state (Firestore writes haven't
+    // propagated yet), NOT an intentional deletion. Preserve local data.
+    if (
+      Array.isArray(localList) && localList.length > 0 && (
+        isLocalWriteRecent("events", 15000) ||
+        hasPendingWritesFor("events")
+      )
+    ) {
+      return localList;
+    }
     return [];
   }
   if (!Array.isArray(localList) || localList.length === 0) {

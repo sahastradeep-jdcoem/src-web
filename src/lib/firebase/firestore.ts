@@ -955,14 +955,8 @@ export async function saveEventToFirestore(event: EventItem): Promise<void> {
       try {
         await setDoc(docRef, { ...sanitized, updatedAt: serverTimestamp() }, { merge: true });
       } catch (err: any) {
-        // Fallback: If remote security rules for top-level collection /events/{id} are not yet deployed,
-        // write to /site_content/event_{id} which is universally permitted by site_content/{docId}
-        if (err?.code === "permission-denied" || err?.message?.includes("Missing or insufficient permissions")) {
-          console.warn(`[Firestore] Direct write to events/${docId} permission denied; writing to fallback site_content/event_${docId}`);
-          const fallbackRef = doc(db, SITE_CONTENT_COLLECTION, `event_${docId}`);
-          await setDoc(fallbackRef, { payload: sanitized, updatedAt: serverTimestamp() }, { merge: true });
-          return;
-        }
+        // Re-throw all errors — caller handles retry via enqueueCloudWrite.
+        // No fallback to site_content — each event must live in /events/{docId}.
         throw err;
       }
     }
@@ -1017,11 +1011,8 @@ export async function getAllEventsFromFirestore(): Promise<EventItem[]> {
         });
       }
 
-      // If events collection is empty, check legacy master document as read-only fallback
-      const legacyMaster = await getSiteContentFromFirestore<EventItem[]>("events");
-      if (Array.isArray(legacyMaster) && legacyMaster.length > 0) {
-        return legacyMaster;
-      }
+      // Collection is genuinely empty — no legacy fallback to stale monolithic document
+      return [];
     }
   } catch (error) {
     console.warn("Could not fetch events from Firestore collection:", error);
@@ -1058,13 +1049,7 @@ export async function getEventFromFirestore(eventIdOrSlug: string): Promise<Even
         } as EventItem;
       }
 
-      // 3. Check fallback /site_content/event_{docId}
-      const fallbackRef = doc(db, SITE_CONTENT_COLLECTION, `event_${docId}`);
-      const fallbackSnap = await getDoc(fallbackRef);
-      if (fallbackSnap.exists()) {
-        const data = fallbackSnap.data();
-        return (data?.payload || { id: fallbackSnap.id, ...data }) as EventItem;
-      }
+      // No fallback to site_content — events only live in /events/{docId}
     }
   } catch (error) {
     console.warn(`Firestore getEventFromFirestore notice [${eventIdOrSlug}]:`, error);
@@ -1086,35 +1071,21 @@ export function subscribeToEventsFromFirestore(
     return onSnapshot(
       colRef,
       (snapshot) => {
-        if (!snapshot.empty) {
-          const events = snapshot.docs.map((d) => {
-            const data = d.data();
-            return {
-              id: d.id,
-              ...data,
-            } as EventItem;
-          });
-          callback(events);
-        } else {
-          // If the events collection is empty, check legacy master document as fallback
-          getSiteContentFromFirestore<EventItem[]>("events")
-            .then((legacy) => {
-              if (Array.isArray(legacy) && legacy.length > 0) {
-                callback(legacy);
-              } else {
-                callback([]);
-              }
-            })
-            .catch(() => callback([]));
-        }
+        // 1 Event = 1 Document: Always use the /events collection snapshot directly.
+        // NEVER fall back to stale monolithic site_content/events document.
+        const events = snapshot.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            ...data,
+          } as EventItem;
+        });
+        callback(events);
       },
       (error) => {
         console.warn("Firestore live events collection notice:", error);
-        if (error?.code === "permission-denied") {
-          return subscribeToSiteContent<EventItem[]>("events", (data) => {
-            if (Array.isArray(data)) callback(data);
-          });
-        }
+        // On permission error, do NOT fall back to site_content subscription.
+        // The /events/{eventId} rules are deployed and authoritative.
       }
     );
   } catch (e) {

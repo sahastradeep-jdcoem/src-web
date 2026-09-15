@@ -5,8 +5,6 @@ import {
   getAllEventsFromFirestore,
   subscribeToEventsFromFirestore,
   getEventDocId,
-  saveSiteContentToFirestore, 
-  getSiteContentFromFirestore, 
   cleanUndefined
 } from "./firebase/firestore";
 import { 
@@ -15,8 +13,7 @@ import {
   hasPendingWritesFor, 
   markLocalWrite,
   getLastLocalWriteTime,
-  isLocalWriteRecent,
-  compactEventDataset
+  isLocalWriteRecent
 } from "./dataSyncEngine";
 
 const EVENTS_STORAGE_KEY = "src_events";
@@ -29,17 +26,6 @@ export async function saveEventMediaDocument(): Promise<void> {}
 export async function getEventMediaDocument(): Promise<null> { return null; }
 export function hydrateEventMedia(events: EventItem[]): EventItem[] { return events; }
 
-// Clean any orphaned "testing" entries from the write queue immediately on module load
-if (typeof window !== "undefined") {
-  try {
-    const rawQueue = localStorage.getItem("src_cloud_write_queue");
-    if (rawQueue && rawQueue.includes("testing")) {
-      const queue = JSON.parse(rawQueue);
-      const cleaned = queue.filter((q: any) => !q.docId?.includes("testing") && !JSON.stringify(q.payload).includes('"testing"'));
-      localStorage.setItem("src_cloud_write_queue", JSON.stringify(cleaned));
-    }
-  } catch {}
-}
 
 /**
  * Sanitize an event item, deduplicating primitive arrays such as whatToExpect and rules
@@ -423,12 +409,7 @@ export async function saveStoredEvent(event: EventItem): Promise<void> {
     enqueueCloudWrite(`event_${docId}`, sanitized, `Event: ${sanitized.name}`);
   }
 
-  // Background update master backup in site_content/events without blocking
-  compactEventDataset(sorted)
-    .then((compacted) => {
-      saveSiteContentToFirestore("events", cleanUndefined(compacted)).catch(() => {});
-    })
-    .catch(() => {});
+  // 1 Event = 1 Document: No monolithic backup write to site_content/events
 
   if (cloudWriteError) {
     const errMsg = cloudWriteError?.message || String(cloudWriteError);
@@ -485,15 +466,11 @@ export async function saveStoredEvents(events: EventItem[]): Promise<void> {
       await deleteEventFromFirestore(docId);
     });
 
-    // Update authoritative master backup in site_content/events WITHOUT STRIPPING ANY FIELDS (Zero Data Loss)
-    compactEventDataset(sanitized)
-      .then((compacted) => {
-        saveSiteContentToFirestore("events", cleanUndefined(compacted)).catch((err) => {
-          console.warn("Could not backup events to site_content:", err);
-          enqueueCloudWrite("site_content_events", cleanUndefined(compacted), "Events Master Catalog");
-        });
-      })
-      .catch(() => {});
+    // 1 Event = 1 Document: NO monolithic backup write.
+    // Each event has its own /events/{id} document with independent 1MB quota.
+    // The legacy site_content/events monolithic document is NOT updated because:
+    // - It exceeds 750KB with image-heavy events and silently fails
+    // - It creates stale fallback data that real-time listeners use to wipe new events
 
     const writeResults = await Promise.allSettled(writePromises);
     await Promise.allSettled(deletePromises);
@@ -551,7 +528,7 @@ export async function syncEventsFromFirestore(): Promise<EventItem[]> {
 export function subscribeToEvents(callback: (events: EventItem[]) => void): () => void {
   return subscribeToEventsFromFirestore((remote) => {
     if (remote !== null && Array.isArray(remote)) {
-      if (hasPendingWritesFor("events") || isLocalWriteRecent("events", 3000)) return;
+      if (hasPendingWritesFor("events") || isLocalWriteRecent("events", 15000)) return;
       // Remote Firestore state is strictly authoritative (Directive #9)
       const current = getStoredEvents();
       const rawMerged = reconcileArrayDatasets(current, remote);
