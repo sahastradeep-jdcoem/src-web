@@ -82,11 +82,14 @@ const ADMINS_COLLECTION = "admins";
 const USERS_COLLECTION = "users";
 
 /**
- * Check if an email has Council Admin privileges via Firestore
+ * Check if an email or user UID has Council Admin privileges.
+ * Authorizes:
+ * 1. Hardcoded Council Administrators (shendeha@jdcoem.ac.in, studentrepresentcouncil@jdcoem.ac.in, etc.)
+ * 2. Active records in `/admins/{normalizedEmail}`
+ * 3. User records in `/users/{uid}` with role === "COUNCIL_ADMIN" (appointed from admin dashboard)
  */
-export async function checkIsAdminInFirestore(email: string): Promise<boolean> {
-  if (!email) return false;
-  const normalizedEmail = email.toLowerCase().trim();
+export async function checkIsAdminInFirestore(email?: string | null, uid?: string | null): Promise<boolean> {
+  const normalizedEmail = (email || "").toLowerCase().trim();
 
   // Default fallback admin list
   const DEFAULT_ADMINS = [
@@ -99,16 +102,28 @@ export async function checkIsAdminInFirestore(email: string): Promise<boolean> {
     "src.gensec@jdcoem.ac.in",
   ];
 
-  if (DEFAULT_ADMINS.includes(normalizedEmail)) {
+  if (normalizedEmail && DEFAULT_ADMINS.includes(normalizedEmail)) {
     return true;
   }
 
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-      const docRef = doc(db, ADMINS_COLLECTION, normalizedEmail);
-      const snapshot = await getDoc(docRef);
-      if (snapshot.exists() && snapshot.data()?.active !== false) {
-        return true;
+      // 1. Check `/admins/{normalizedEmail}`
+      if (normalizedEmail) {
+        const docRef = doc(db, ADMINS_COLLECTION, normalizedEmail);
+        const snapshot = await getDoc(docRef);
+        if (snapshot.exists() && snapshot.data()?.active !== false) {
+          return true;
+        }
+      }
+
+      // 2. Check `/users/{uid}` for role === "COUNCIL_ADMIN" (appointed from dashboard)
+      if (uid) {
+        const userDocRef = doc(db, USERS_COLLECTION, uid);
+        const userSnap = await getDoc(userDocRef);
+        if (userSnap.exists() && userSnap.data()?.role === "COUNCIL_ADMIN") {
+          return true;
+        }
       }
     }
   } catch (error) {
@@ -116,6 +131,60 @@ export async function checkIsAdminInFirestore(email: string): Promise<boolean> {
   }
 
   return false;
+}
+
+/**
+ * Add or activate an admin record in Firestore `/admins/{email}`
+ */
+export async function saveAdminRecordToFirestore(
+  email: string,
+  data?: { role?: string; uid?: string; appointedAt?: string; active?: boolean }
+): Promise<boolean> {
+  if (!email || !db) return false;
+  const normalizedEmail = email.toLowerCase().trim();
+  try {
+    const docRef = doc(db, ADMINS_COLLECTION, normalizedEmail);
+    await setDoc(
+      docRef,
+      {
+        email: normalizedEmail,
+        role: data?.role || "COUNCIL_ADMIN",
+        uid: data?.uid || "",
+        appointedAt: data?.appointedAt || new Date().toISOString(),
+        active: data?.active !== false,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+    return true;
+  } catch (err) {
+    console.error("Failed to save admin record to Firestore:", err);
+    return false;
+  }
+}
+
+/**
+ * Deactivate or remove an admin record in Firestore `/admins/{email}`
+ */
+export async function removeAdminRecordFromFirestore(email: string): Promise<boolean> {
+  if (!email || !db) return false;
+  const normalizedEmail = email.toLowerCase().trim();
+  try {
+    const docRef = doc(db, ADMINS_COLLECTION, normalizedEmail);
+    await setDoc(
+      docRef,
+      {
+        email: normalizedEmail,
+        active: false,
+        demotedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+    return true;
+  } catch (err) {
+    console.error("Failed to remove admin record from Firestore:", err);
+    return false;
+  }
 }
 
 /**

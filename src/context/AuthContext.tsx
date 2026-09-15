@@ -124,7 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        const isAdminUser = await checkIsAdminInFirestore(fbUser.email);
+        const isAdminUser = await checkIsAdminInFirestore(fbUser.email, fbUser.uid);
 
         let localProfile: Partial<UserProfile> = {};
         try {
@@ -152,7 +152,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const targetName = storedProfile?.displayName || storedProfile?.name || localProfile?.displayName || localProfile?.name || registeredUser?.name || fbUser.displayName || fbUser.email;
         const designationInfo = cleanBt ? resolveDesignationByBtId(cleanBt, targetName || undefined) : null;
 
-        const assignedRole = isAdminUser 
+        const isAppointedOrHardcodedAdmin = 
+          isAdminUser || 
+          storedProfile?.role === "COUNCIL_ADMIN" || 
+          localProfile?.role === "COUNCIL_ADMIN" || 
+          registeredUser?.role === "COUNCIL_ADMIN";
+
+        const assignedRole = isAppointedOrHardcodedAdmin 
           ? "COUNCIL_ADMIN" 
           : (storedProfile?.role || localProfile?.role || registeredUser?.role || "STUDENT");
 
@@ -308,7 +314,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           throw new Error("This account has been permanently deleted. Please contact administration or register with a new account.");
         }
 
-        const isAdminUser = await checkIsAdminInFirestore(fbUser.email || "");
+        const isAdminUser = await checkIsAdminInFirestore(fbUser.email || "", fbUser.uid);
 
         let localProfile: Partial<UserProfile> = {};
         try {
@@ -336,7 +342,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const targetName = storedProfile?.displayName || storedProfile?.name || localProfile?.displayName || localProfile?.name || registeredUser?.name || fbUser.displayName || fbUser.email;
         const designationInfo = cleanBt ? resolveDesignationByBtId(cleanBt, targetName || undefined) : null;
 
-        const assignedRole = isAdminUser 
+        const isAppointedOrHardcodedAdmin = 
+          isAdminUser || 
+          storedProfile?.role === "COUNCIL_ADMIN" || 
+          localProfile?.role === "COUNCIL_ADMIN" || 
+          registeredUser?.role === "COUNCIL_ADMIN";
+
+        const assignedRole = isAppointedOrHardcodedAdmin 
           ? "COUNCIL_ADMIN" 
           : (storedProfile?.role || localProfile?.role || registeredUser?.role || "STUDENT");
 

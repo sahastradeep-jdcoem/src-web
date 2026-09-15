@@ -13,7 +13,9 @@ service firebase.storage {
           'shendeha@jdcoem.ac.in',
           'studentrepresentcouncil@jdcoem.ac.in'
         ] ||
-        firestore.exists(/databases/(default)/documents/admins/$(request.auth.token.email))
+        firestore.exists(/databases/(default)/documents/admins/$(request.auth.token.email)) ||
+        (firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
+         firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'COUNCIL_ADMIN')
       );
     }
 

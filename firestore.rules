@@ -18,7 +18,10 @@ service cloud.firestore {
           'shendeha@jdcoem.ac.in',
           'studentrepresentcouncil@jdcoem.ac.in'
         ] ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.token.email))
+        (exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) &&
+         get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.active != false) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'COUNCIL_ADMIN')
       );
     }
 

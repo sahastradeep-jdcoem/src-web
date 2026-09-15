@@ -1,6 +1,11 @@
 import { AuthUser, UserProfile } from "@/types/auth";
 import { ClubLeader, ClubMember } from "@/types";
-import { getAllUsersFromFirestore, saveUserProfileToFirestore } from "./firebase/firestore";
+import { 
+  getAllUsersFromFirestore, 
+  saveUserProfileToFirestore,
+  saveAdminRecordToFirestore,
+  removeAdminRecordFromFirestore
+} from "./firebase/firestore";
 import { 
   getStoredCouncilMembers, 
   getStoredHostingCommittee, 
@@ -786,6 +791,21 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
 
     // Also persist to Firestore
     saveUserProfileToFirestore(record.uid, record);
+
+    if (record.email) {
+      if (record.role === "COUNCIL_ADMIN") {
+        saveAdminRecordToFirestore(record.email, {
+          role: "COUNCIL_ADMIN",
+          uid: record.uid,
+          active: true,
+          appointedAt: new Date().toISOString(),
+        }).catch((err) => console.warn("Failed to sync admin record to Firestore:", err));
+      } else if (existing?.role === "COUNCIL_ADMIN") {
+        removeAdminRecordFromFirestore(record.email).catch((err) =>
+          console.warn("Failed to remove admin record from Firestore:", err)
+        );
+      }
+    }
   } catch (e) {
     console.error("Could not save registered user", e);
   }
@@ -955,11 +975,27 @@ export async function lookupUserByBtId(btId: string): Promise<RegisteredUserReco
  */
 export function changeUserRole(uid: string, newRole: "STUDENT" | "COUNCIL_ADMIN"): RegisteredUserRecord[] {
   const current = getStoredUsers();
+  const targetUser = current.find((u) => u.uid === uid);
   const updated = current.map((u) => (u.uid === uid ? { ...u, role: newRole } : u));
   if (typeof window !== "undefined") {
     localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
     window.dispatchEvent(new CustomEvent("src_users_updated", { detail: updated }));
     saveUserProfileToFirestore(uid, { role: newRole });
+
+    if (targetUser?.email) {
+      if (newRole === "COUNCIL_ADMIN") {
+        saveAdminRecordToFirestore(targetUser.email, {
+          role: "COUNCIL_ADMIN",
+          uid,
+          active: true,
+          appointedAt: new Date().toISOString(),
+        }).catch((err) => console.warn("Failed to sync admin record to /admins:", err));
+      } else {
+        removeAdminRecordFromFirestore(targetUser.email).catch((err) =>
+          console.warn("Failed to remove admin record from /admins:", err)
+        );
+      }
+    }
   }
   return updated;
 }
