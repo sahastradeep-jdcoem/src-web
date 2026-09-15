@@ -661,24 +661,37 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
         const isRemoteValid = remoteVal && typeof remoteVal === "string" && remoteVal.trim() !== "";
 
         if (!isRemoteValid && isLocalValid) {
-          result[k] = localVal;
+          // Directive #9: Remote Firestore state is strictly authoritative for deletions.
+          // Never resurrect an image deleted by admin from localStorage unless THIS device
+          // has an active in-flight or recent local write.
+          const hasRecentWrite = (
+            isLocalWriteRecent("council_team", 30000) || 
+            isLocalWriteRecent("clubs", 30000) || 
+            isLocalWriteRecent("events", 30000) ||
+            hasPendingWritesFor("council_team") || 
+            hasPendingWritesFor("clubs") || 
+            hasPendingWritesFor("events")
+          );
+
+          if (hasRecentWrite) {
+            result[k] = localVal;
+          } else {
+            result[k] = "";
+          }
           continue;
         }
+
         if (!isLocalValid && isRemoteValid) {
           // Do NOT resurrect stock Unsplash model photos onto real student positions (Directive #4)
-          // Exception: Canonical members who legitimately have this avatar (e.g. Munesh Warkar) must NEVER have their photo stripped!
           const isRemoteUnsplash = remoteVal.includes("images.unsplash.com");
-          const isCanonicalPhoto = (remoteItem as any)?.name && (
-            (remoteItem as any).name.toLowerCase().includes("munesh") ||
-            (remoteItem as any).name.toLowerCase().includes("warkar")
-          );
-          if (isRemoteUnsplash && !isCanonicalPhoto && (remoteItem as any)?.name && !isGenericPlaceholder((remoteItem as any).name)) {
+          if (isRemoteUnsplash && (remoteItem as any)?.name && !isGenericPlaceholder((remoteItem as any).name)) {
             result[k] = "";
           } else {
             result[k] = remoteVal;
           }
           continue;
         }
+
         if (isLocalValid && isRemoteValid) {
           const isRemoteUnsplash = remoteVal.includes("images.unsplash.com");
           const isLocalCustom = !localVal.includes("images.unsplash.com");
@@ -689,7 +702,12 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
             continue;
           }
 
-          if (isLocalWriteRecent("clubs", 30000) || isLocalWriteRecent("council_team", 30000) || hasPendingWritesFor("clubs") || hasPendingWritesFor("council_team")) {
+          if (
+            isLocalWriteRecent("clubs", 30000) || 
+            isLocalWriteRecent("council_team", 30000) || 
+            hasPendingWritesFor("clubs") || 
+            hasPendingWritesFor("council_team")
+          ) {
             result[k] = localVal;
             continue;
           }
@@ -698,6 +716,7 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
           result[k] = remoteVal;
           continue;
         }
+
         result[k] = "";
         continue;
       }
@@ -740,7 +759,11 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
         const isRemoteAvatarValid = remoteObj.avatar && typeof remoteObj.avatar === "string" && remoteObj.avatar.trim() !== "" && !remoteObj.avatar.includes("images.unsplash.com");
 
         if (isLocalAvatarValid && !isRemoteAvatarValid) {
-          mergedObj.avatar = localObj.avatar;
+          if (isLocalWriteRecent("clubs", 30000) || hasPendingWritesFor("clubs")) {
+            mergedObj.avatar = localObj.avatar;
+          } else {
+            mergedObj.avatar = "";
+          }
         } else if (!isLocalAvatarValid && isRemoteAvatarValid) {
           mergedObj.avatar = remoteObj.avatar;
         } else if (isLocalAvatarValid && isRemoteAvatarValid) {

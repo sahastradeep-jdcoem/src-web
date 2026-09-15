@@ -720,6 +720,17 @@ export function repairCouncilSwapIfNeeded(members: TeamMember[], isFounding = fa
       repaired = true;
     }
 
+    // Ensure deleted avatar for Munesh Warkar in local cache is immediately cleared
+    if (copy.name && /munesh\s+warkar/i.test(copy.name) && copy.avatar) {
+      const canonicalMunesh = (initialAdminCouncil as TeamMember[]).find(
+        (a) => a.name && /munesh\s+warkar/i.test(a.name)
+      );
+      if (!canonicalMunesh?.avatar) {
+        copy.avatar = "";
+        repaired = true;
+      }
+    }
+
     return copy;
   });
 
