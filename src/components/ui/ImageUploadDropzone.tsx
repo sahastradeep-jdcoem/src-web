@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { UploadCloud, CheckCircle2, Sparkles, AlertCircle, RefreshCw, X, Link as LinkIcon, Image as ImageIcon, Crop, Move } from "lucide-react";
 import { compressImage, formatBytes, CompressionResult } from "@/lib/imageCompression";
-import { uploadImageToStorage } from "@/lib/firebase/storage";
+import { uploadImageToStorage, deleteImageFromStorage } from "@/lib/firebase/storage";
 import { ImageCropperModal, AspectRatioType } from "./ImageCropperModal";
 
 interface ImageUploadDropzoneProps {
@@ -55,6 +55,7 @@ export function ImageUploadDropzone({
   const localDataUrlRef = useRef<string | null>(null);
   const lastProcessedFileRef = useRef<File | null>(null);
   const lastCroppedDataUrlRef = useRef<string | null>(null);
+  const sessionUploadedCloudUrlsRef = useRef<string[]>([]);
 
   useEffect(() => {
     setPreview(previewUrl || "");
@@ -140,6 +141,13 @@ export function ImageUploadDropzone({
       uploadImageToStorage(immediateOptimized.dataUrl, finalStoragePath, { throwOnError: false })
         .then((cloudUrl) => {
           if (cloudUrl && cloudUrl.startsWith("http")) {
+            const toDelete = sessionUploadedCloudUrlsRef.current.filter((u) => u !== cloudUrl);
+            for (const oldUrl of toDelete) {
+              if (oldUrl && oldUrl.startsWith("http")) {
+                deleteImageFromStorage(oldUrl).catch(() => {});
+              }
+            }
+            sessionUploadedCloudUrlsRef.current = [cloudUrl];
             setPreview(cloudUrl);
             setManualUrl(cloudUrl);
             setUploadStatus("cloud_synced");
@@ -164,9 +172,34 @@ export function ImageUploadDropzone({
     }
   };
 
+  const shouldAutoCrop = isAvatar || lockAspectRatio;
+
+  const handleSelectForCropping = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setError("Please select a valid image file (JPG, PNG, WebP, SVG, HEIC).");
+      return;
+    }
+    setError(null);
+    setOriginalFileName(file.name);
+    lastProcessedFileRef.current = file;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      if (dataUrl) {
+        setRawImageToCrop(dataUrl);
+        setIsCropperOpen(true);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (!file) return;
+    if (shouldAutoCrop) {
+      handleSelectForCropping(file);
+    } else {
       processFileDirectly(file);
     }
   };
@@ -175,7 +208,10 @@ export function ImageUploadDropzone({
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
-    if (file) {
+    if (!file) return;
+    if (shouldAutoCrop) {
+      handleSelectForCropping(file);
+    } else {
       processFileDirectly(file);
     }
   };
@@ -209,6 +245,13 @@ export function ImageUploadDropzone({
       uploadImageToStorage(croppedDataUrl, finalStoragePath, { throwOnError: false })
         .then((cloudUrl) => {
           if (cloudUrl && cloudUrl.startsWith("http")) {
+            const toDelete = sessionUploadedCloudUrlsRef.current.filter((u) => u !== cloudUrl);
+            for (const oldUrl of toDelete) {
+              if (oldUrl && oldUrl.startsWith("http")) {
+                deleteImageFromStorage(oldUrl).catch(() => {});
+              }
+            }
+            sessionUploadedCloudUrlsRef.current = [cloudUrl];
             setPreview(cloudUrl);
             setManualUrl(cloudUrl);
             setUploadStatus("cloud_synced");
@@ -284,10 +327,19 @@ export function ImageUploadDropzone({
 
   const handleClear = (e: React.MouseEvent) => {
     e.stopPropagation();
+    for (const oldUrl of sessionUploadedCloudUrlsRef.current) {
+      if (oldUrl && oldUrl.startsWith("http")) {
+        deleteImageFromStorage(oldUrl).catch(() => {});
+      }
+    }
+    sessionUploadedCloudUrlsRef.current = [];
     localDataUrlRef.current = null;
+    lastCroppedDataUrlRef.current = null;
+    lastProcessedFileRef.current = null;
     setPreview("");
     setManualUrl("");
     setCompressionStats(null);
+    setUploadStatus("idle");
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -561,6 +613,9 @@ export function ImageUploadDropzone({
             onClose={() => {
               setIsCropperOpen(false);
               setRawImageToCrop(null);
+              if (!preview && lastProcessedFileRef.current) {
+                processFileDirectly(lastProcessedFileRef.current);
+              }
             }}
             imageSrc={rawImageToCrop}
             initialAspectRatio={aspectRatio === "auto" ? "16:9" : (aspectRatio as AspectRatioType)}

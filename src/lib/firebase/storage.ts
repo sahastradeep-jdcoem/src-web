@@ -1,4 +1,4 @@
-import { ref, uploadBytes, uploadString, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytes, uploadString, getDownloadURL, deleteObject } from "firebase/storage";
 import { storage } from "./config";
 import { compressImage } from "@/lib/imageCompression";
 
@@ -10,6 +10,56 @@ const UPLOAD_TIMEOUT_MS = 30000; // 30s reliable timeout for high-res Cloud Stor
 async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   const res = await fetch(dataUrl);
   return await res.blob();
+}
+
+/**
+ * Extract storage path from a Firebase Storage download URL
+ */
+export function extractStoragePathFromUrl(url: string): string | null {
+  if (!url || typeof url !== "string") return null;
+  if (!url.startsWith("http")) return url;
+  try {
+    const urlObj = new URL(url);
+    if (urlObj.hostname.includes("firebasestorage.googleapis.com")) {
+      const match = urlObj.pathname.match(/\/o\/(.+)$/);
+      if (match && match[1]) {
+        return decodeURIComponent(match[1]);
+      }
+    }
+  } catch {
+    // Ignore parse error
+  }
+  return null;
+}
+
+/**
+ * Delete an image from Firebase Cloud Storage by its download URL or relative path.
+ * Resolves safely without throwing if file does not exist.
+ */
+export async function deleteImageFromStorage(urlOrPath?: string | null): Promise<boolean> {
+  if (!storage || !urlOrPath || typeof urlOrPath !== "string") return false;
+  if (urlOrPath.startsWith("data:")) return false; // Inline Base64, nothing in cloud
+
+  try {
+    let storageRef;
+    if (urlOrPath.startsWith("http")) {
+      const extracted = extractStoragePathFromUrl(urlOrPath);
+      if (extracted) {
+        storageRef = ref(storage, extracted);
+      } else {
+        storageRef = ref(storage, urlOrPath);
+      }
+    } else {
+      storageRef = ref(storage, urlOrPath);
+    }
+    await deleteObject(storageRef);
+    return true;
+  } catch (error: any) {
+    if (error?.code !== "storage/object-not-found") {
+      console.warn("Storage deletion notice:", error?.message || error);
+    }
+    return false;
+  }
 }
 
 /**

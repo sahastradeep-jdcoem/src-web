@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { compressImage, formatBytes, type CompressionResult } from "@/lib/imageCompression";
 import { ImageCropperModal, type AspectRatioType } from "./ImageCropperModal";
+import { deleteImageFromStorage } from "@/lib/firebase/storage";
 import {
   type ImagePurpose,
   getImageProfile,
@@ -80,6 +81,8 @@ interface UniversalImageUploaderProps {
   aspectRatioOverride?: AspectRatioType;
   /** Override allowed aspect ratios (usually derived from purpose) */
   allowedAspectRatiosOverride?: AspectRatioType[];
+  /** Automatically open crop modal on file select (defaults to true for avatars or fixed-aspect images) */
+  autoCrop?: boolean;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -96,6 +99,7 @@ export function UniversalImageUploader({
   className = "",
   aspectRatioOverride,
   allowedAspectRatiosOverride,
+  autoCrop,
 }: UniversalImageUploaderProps) {
   const profile = getImageProfile(purpose);
 
@@ -129,6 +133,7 @@ export function UniversalImageUploader({
   const localDataUrlRef = useRef<string | null>(null);
   const lastCroppedDataUrlRef = useRef<string | null>(null);
   const lastProcessedFileRef = useRef<File | null>(null);
+  const sessionUploadedCloudUrlsRef = useRef<string[]>([]);
 
   // Sync external previewUrl changes
   useEffect(() => {
@@ -165,6 +170,7 @@ export function UniversalImageUploader({
     setPhase("saving");
     setError(null);
     try {
+      const previousUrls = [...sessionUploadedCloudUrlsRef.current];
       const service = getImageStorageService();
       const cleanName = (fileName || "image")
         .replace(/[^a-zA-Z0-9.-]/g, "_")
@@ -177,6 +183,15 @@ export function UniversalImageUploader({
       });
 
       if (result.url && result.url.startsWith("http")) {
+        // Automatically purge any superseded images uploaded earlier in this session
+        // (e.g. uncropped version before cropping, or previous photo if replaced)
+        const toDelete = previousUrls.filter((u) => u !== result.url);
+        for (const oldUrl of toDelete) {
+          if (oldUrl && oldUrl.startsWith("http")) {
+            deleteImageFromStorage(oldUrl).catch(() => {});
+          }
+        }
+        sessionUploadedCloudUrlsRef.current = [result.url];
         setPreview(result.url);
         setManualUrl(result.url);
         setPhase("persisted");
@@ -318,16 +333,48 @@ export function UniversalImageUploader({
 
   // ─── Event Handlers ────────────────────────────────────────────────────
 
+  const shouldAutoCrop = autoCrop ?? (purpose === "avatar" || profile.lockAspectRatio);
+
+  const handleSelectForCropping = useCallback((file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setError("Please select a valid image file (JPG, PNG, WebP, HEIC).");
+      return;
+    }
+    setError(null);
+    setOriginalFileName(file.name);
+    lastProcessedFileRef.current = file;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      if (dataUrl) {
+        setRawImageToCrop(dataUrl);
+        setIsCropperOpen(true);
+      }
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) processFile(file);
+    if (!file) return;
+    if (shouldAutoCrop) {
+      handleSelectForCropping(file);
+    } else {
+      processFile(file);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
-    if (file) processFile(file);
+    if (!file) return;
+    if (shouldAutoCrop) {
+      handleSelectForCropping(file);
+    } else {
+      processFile(file);
+    }
   };
 
   const openCropper = (e: React.MouseEvent) => {
@@ -341,6 +388,12 @@ export function UniversalImageUploader({
 
   const handleClear = (e: React.MouseEvent) => {
     e.stopPropagation();
+    for (const oldUrl of sessionUploadedCloudUrlsRef.current) {
+      if (oldUrl && oldUrl.startsWith("http")) {
+        deleteImageFromStorage(oldUrl).catch(() => {});
+      }
+    }
+    sessionUploadedCloudUrlsRef.current = [];
     localDataUrlRef.current = null;
     lastCroppedDataUrlRef.current = null;
     lastProcessedFileRef.current = null;
@@ -650,6 +703,9 @@ export function UniversalImageUploader({
           onClose={() => {
             setIsCropperOpen(false);
             setRawImageToCrop(null);
+            if (!preview && lastProcessedFileRef.current) {
+              processFile(lastProcessedFileRef.current);
+            }
           }}
           imageSrc={rawImageToCrop}
           initialAspectRatio={defaultRatio === "auto" ? "16:9" : (defaultRatio as AspectRatioType)}
