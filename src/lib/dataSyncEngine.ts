@@ -673,6 +673,14 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
         const isRemoteValid = remoteVal && typeof remoteVal === "string" && remoteVal.trim() !== "";
 
         if (!isRemoteValid && isLocalValid) {
+          // If this is a club item or leader item, remoteVal in site_content/clubs is intentionally stripped
+          // to keep the master catalog under 1MB. Local/dedicated documents hold the real avatars and MUST NOT be wiped!
+          const isClubContext = (remoteItem as any)?.clubId || (remoteItem as any)?.clubSlug || (localItem as any)?.clubId || (localItem as any)?.clubSlug || (remoteItem as any)?.memberCount !== undefined || (localItem as any)?.memberCount !== undefined;
+          if (isClubContext) {
+            result[k] = localVal;
+            continue;
+          }
+
           // Directive #9: Remote Firestore state is strictly authoritative for deletions.
           // Never resurrect an image deleted by admin from localStorage unless THIS device
           // has an active in-flight or recent local write.
@@ -771,11 +779,9 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
         const isRemoteAvatarValid = remoteObj.avatar && typeof remoteObj.avatar === "string" && remoteObj.avatar.trim() !== "" && !remoteObj.avatar.includes("images.unsplash.com");
 
         if (isLocalAvatarValid && !isRemoteAvatarValid) {
-          if (isLocalWriteRecent("clubs", 30000) || hasPendingWritesFor("clubs")) {
-            mergedObj.avatar = localObj.avatar;
-          } else {
-            mergedObj.avatar = "";
-          }
+          // For clubs, remoteObj.avatar in site_content/clubs is intentionally stripped to keep the master catalog under 1MB.
+          // The true avatar lives in the local/dedicated document, so preserve localObj.avatar!
+          mergedObj.avatar = localObj.avatar;
         } else if (!isLocalAvatarValid && isRemoteAvatarValid) {
           mergedObj.avatar = remoteObj.avatar;
         } else if (isLocalAvatarValid && isRemoteAvatarValid) {

@@ -299,33 +299,39 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
 
     let lead: any = undefined;
     if (leadLeader) {
+      const cleanRaw: any = rawLead && rawLead.name?.trim() ? { ...rawLead } : {};
+      delete cleanRaw.avatar; // Never allow stripped rawLead avatar to overwrite real avatar
+      const finalLeadAvatar = leadAvatar || resolveAvatar(leadLeader) || sanitizeAvatar(rawLead?.avatar) || "";
       lead = {
         ...leadLeader,
+        ...cleanRaw,
         roleType: "lead" as const,
-        avatar: leadAvatar,
-        ...(rawLead && rawLead.name?.trim() ? rawLead : {}),
+        avatar: finalLeadAvatar,
         name: (rawLead && rawLead.name?.trim()) ? rawLead.name.trim() : (leadLeader.name || ""),
       };
     } else if (rawLead) {
       lead = {
         ...rawLead,
-        avatar: resolveAvatar(rawLead) || leadAvatar,
+        avatar: resolveAvatar(rawLead) || leadAvatar || sanitizeAvatar(rawLead.avatar) || "",
       };
     }
 
     let coLead: any = undefined;
     if (coLeadLeader) {
+      const cleanRaw: any = rawCoLead && rawCoLead.name?.trim() ? { ...rawCoLead } : {};
+      delete cleanRaw.avatar; // Never allow stripped rawCoLead avatar to overwrite real avatar
+      const finalCoLeadAvatar = coLeadAvatar || resolveAvatar(coLeadLeader) || sanitizeAvatar(rawCoLead?.avatar) || "";
       coLead = {
         ...coLeadLeader,
+        ...cleanRaw,
         roleType: "coLead" as const,
-        avatar: coLeadAvatar,
-        ...(rawCoLead && rawCoLead.name?.trim() ? rawCoLead : {}),
+        avatar: finalCoLeadAvatar,
         name: (rawCoLead && rawCoLead.name?.trim()) ? rawCoLead.name.trim() : (coLeadLeader.name || ""),
       };
     } else if (rawCoLead) {
       coLead = {
         ...rawCoLead,
-        avatar: resolveAvatar(rawCoLead) || coLeadAvatar,
+        avatar: resolveAvatar(rawCoLead) || coLeadAvatar || sanitizeAvatar(rawCoLead.avatar) || "",
       };
     }
 
@@ -338,7 +344,7 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
           const matchingLeader = leaders.find(
             (l) => (l.id && l.id === cl.id) || (l.name && cl.name && l.name.toLowerCase().trim() === cl.name.toLowerCase().trim())
           );
-          const avatar = resolveAvatar(matchingLeader) || resolveAvatar(cl) || coLeadAvatar;
+          const avatar = resolveAvatar(matchingLeader) || resolveAvatar(cl) || coLeadAvatar || sanitizeAvatar(cl.avatar) || "";
           return {
             ...cl,
             avatar,
@@ -350,8 +356,8 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
     // Ensure leaders array is properly populated with canonical avatars and deterministic IDs
     let finalLeaders = leaders.map((l, i) => {
       const isCoLead = l.roleType === "coLead" || (l.role && l.role.toLowerCase().includes("co-head"));
-      const fallback = isCoLead ? coLeadAvatar : leadAvatar;
-      const safeAvatar = resolveAvatar(l) || fallback || "";
+      const fallback = isCoLead ? coLead?.avatar : lead?.avatar;
+      const safeAvatar = resolveAvatar(l) || sanitizeAvatar(l.avatar) || fallback || "";
       const roleType = l.roleType || (isCoLead ? "coLead" : "lead");
       const defaultId = `${c.id || c.slug}-${roleType === "coLead" ? "colead" : "lead"}-${i}`;
       return {
@@ -1209,6 +1215,15 @@ export async function syncClubsFromFirestore(): Promise<ClubItem[]> {
             (Array.isArray(leaderDoc.leaders) && leaderDoc.leaders.length > 0) ||
             (Array.isArray(leaderDoc.members) && leaderDoc.members.length > 0))
         ) {
+          // Cache dedicated leader document in localStorage for instant 0ms reads across tabs
+          const slug = club.slug || club.id;
+          if (typeof window !== "undefined" && slug) {
+            const docId = getClubLeadersDocId(slug);
+            try {
+              localStorage.setItem(`src_${docId}`, JSON.stringify(leaderDoc));
+            } catch {}
+          }
+
           const leaders = Array.isArray(leaderDoc.leaders) && leaderDoc.leaders.length > 0
             ? leaderDoc.leaders
             : (club.leaders || []);
@@ -1278,31 +1293,34 @@ export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => v
       // Reconcile with local / dedicated club leader documents
       const fullyHydrated = merged.map((club) => {
         const slug = club.slug || club.id;
+        let leaderDoc: ClubLeadersDocument | null = null;
         if (typeof window !== "undefined" && slug) {
           const docId = getClubLeadersDocId(slug);
           const cached = localStorage.getItem(`src_${docId}`);
           if (cached) {
             try {
-              const parsed: ClubLeadersDocument = JSON.parse(cached);
-              if (
-                parsed.lead ||
-                parsed.coLead ||
-                (Array.isArray(parsed.leaders) && parsed.leaders.length > 0) ||
-                (Array.isArray(parsed.members) && parsed.members.length > 0)
-              ) {
-                return {
-                  ...club,
-                  lead: parsed.lead || club.lead,
-                  coLead: parsed.coLead || club.coLead,
-                  coLeads: parsed.coLeads || club.coLeads,
-                  leaders: (Array.isArray(parsed.leaders) && parsed.leaders.length > 0) ? parsed.leaders : club.leaders,
-                  members: (Array.isArray(parsed.members) && parsed.members.length > 0) ? parsed.members : club.members,
-                };
-              }
+              leaderDoc = JSON.parse(cached);
             } catch {}
           }
         }
-        // Fallback to in-memory current
+        if (
+          leaderDoc &&
+          (leaderDoc.lead ||
+            leaderDoc.coLead ||
+            (Array.isArray(leaderDoc.leaders) && leaderDoc.leaders.length > 0) ||
+            (Array.isArray(leaderDoc.members) && leaderDoc.members.length > 0))
+        ) {
+          return {
+            ...club,
+            lead: leaderDoc.lead || club.lead,
+            coLead: leaderDoc.coLead || club.coLead,
+            coLeads: (Array.isArray(leaderDoc.coLeads) && leaderDoc.coLeads.length > 0) ? leaderDoc.coLeads : club.coLeads,
+            leaders: (Array.isArray(leaderDoc.leaders) && leaderDoc.leaders.length > 0) ? leaderDoc.leaders : club.leaders,
+            members: (Array.isArray(leaderDoc.members) && leaderDoc.members.length > 0) ? leaderDoc.members : club.members,
+          };
+        }
+
+        // Fallback to in-memory current to preserve existing leader avatars
         const currentClub = current.find((c) => c.id === club.id || c.slug === club.slug);
         if (currentClub && (currentClub.lead?.avatar || currentClub.leaders?.some((l) => l.avatar))) {
           return {
@@ -1313,6 +1331,19 @@ export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => v
             leaders: currentClub.leaders || club.leaders,
           };
         }
+
+        // Asynchronously fetch missing dedicated document so avatars load automatically
+        if (typeof window !== "undefined" && slug) {
+          getClubLeadersDocument(slug).then((doc) => {
+            if (doc && (doc.lead?.avatar || doc.leaders?.some((l) => l.avatar))) {
+              try {
+                localStorage.setItem(`src_${getClubLeadersDocId(slug)}`, JSON.stringify(doc));
+              } catch {}
+              syncClubsFromFirestore().catch(() => {});
+            }
+          }).catch(() => {});
+        }
+
         return club;
       });
 

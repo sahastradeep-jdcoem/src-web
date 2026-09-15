@@ -502,6 +502,28 @@ export default function AdminTeamPage() {
 
         if (isPlaceholder) return;
 
+        // Resolve avatar robustly: check leader.avatar, then check dedicated document cache in localStorage
+        let resolvedAvatar = leader.avatar || "";
+        if ((!resolvedAvatar || resolvedAvatar.trim() === "") && typeof window !== "undefined") {
+          const rawSlug = (club.slug || club.id || "").toLowerCase().trim().replace(/^club-/, "");
+          const docId = `club_leaders_${rawSlug === "agentic-ai" ? "robotics" : rawSlug}`;
+          const cached = localStorage.getItem(`src_${docId}`);
+          if (cached) {
+            try {
+              const parsed = JSON.parse(cached);
+              const foundInDoc = (parsed.leaders || []).find((l: any) => 
+                (l.name && leader.name && l.name.toLowerCase().trim() === leader.name.toLowerCase().trim()) ||
+                (l.btId && leader.btId && l.btId.trim().toUpperCase() === leader.btId.trim().toUpperCase()) ||
+                (l.id && leader.id && l.id === leader.id)
+              ) || (parsed.lead?.name?.toLowerCase().trim() === leader.name?.toLowerCase().trim() ? parsed.lead : null)
+                || (parsed.coLead?.name?.toLowerCase().trim() === leader.name?.toLowerCase().trim() ? parsed.coLead : null);
+              if (foundInDoc?.avatar) {
+                resolvedAvatar = foundInDoc.avatar;
+              }
+            } catch {}
+          }
+        }
+
         const groupKey = cleanBt 
           ? `bt-${cleanBt}` 
           : (leader.id && !leader.id.includes("-leader-") && !leader.id.startsWith("lead-") 
@@ -521,8 +543,8 @@ export default function AdminTeamPage() {
           if (leader.role && !["Club Head", "Club Co-Head"].includes(leader.role.trim())) {
             existing.role = leader.role;
           }
-          if (leader.avatar && !existing.avatar) {
-            existing.avatar = leader.avatar;
+          if (resolvedAvatar && !existing.avatar) {
+            existing.avatar = resolvedAvatar;
           }
         } else {
           const clubIds = leader.clubIds && Array.isArray(leader.clubIds) && leader.clubIds.length > 0
@@ -541,7 +563,7 @@ export default function AdminTeamPage() {
             role: leader.role || (isCoLead ? `${club.name} Co-Lead` : `${club.name} Head`),
             department: leader.department || "Computer Science & Engineering",
             year: leader.year || (isCoLead ? "3rd Year" : "4th Year"),
-            avatar: leader.avatar || "",
+            avatar: resolvedAvatar,
             bio: leader.bio || "",
             email: leader.email || "",
             linkedin: leader.linkedin || "",
