@@ -208,25 +208,25 @@ export async function compactEventDataset<T extends { poster?: string; cardImage
       let posterImg = e.posterImage;
       let header = e.headerImage;
 
-      // Only compact if truly oversized (> 300,000 bytes) down to crisp 960px at 0.86 quality
-      // This preserves fine text, QR codes, sponsor logos, and date typography.
-      if (poster && poster.startsWith("data:image/") && poster.length > 300000) {
-        poster = await compactBase64Image(poster, 960, 0.86);
+      // In the catalog document, compact thumbnails so 20+ events easily fit within the 750KB limit.
+      // The dedicated 1MB document for each individual event (site_content/event_{id}) stores full-resolution assets.
+      if (poster && poster.startsWith("data:image/") && poster.length > 35000) {
+        poster = await compactBase64Image(poster, 480, 0.75);
       }
       if (card && (card === e.poster || card === poster)) {
         card = poster;
-      } else if (card && card.startsWith("data:image/") && card.length > 250000) {
-        card = await compactBase64Image(card, 800, 0.82);
+      } else if (card && card.startsWith("data:image/") && card.length > 30000) {
+        card = await compactBase64Image(card, 480, 0.75);
       }
       if (posterImg && (posterImg === e.poster || posterImg === e.cardImage || posterImg === poster || posterImg === card)) {
         posterImg = poster || card;
-      } else if (posterImg && posterImg.startsWith("data:image/") && posterImg.length > 300000) {
-        posterImg = await compactBase64Image(posterImg, 960, 0.86);
+      } else if (posterImg && posterImg.startsWith("data:image/") && posterImg.length > 35000) {
+        posterImg = await compactBase64Image(posterImg, 480, 0.75);
       }
       if (header && (header === e.poster || header === e.cardImage || header === e.posterImage || header === poster)) {
         header = poster || card || posterImg;
-      } else if (header && header.startsWith("data:image/") && header.length > 300000) {
-        header = await compactBase64Image(header, 1280, 0.82);
+      } else if (header && header.startsWith("data:image/") && header.length > 40000) {
+        header = await compactBase64Image(header, 720, 0.70);
       }
 
       return {

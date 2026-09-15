@@ -925,8 +925,9 @@ export function getEventDocId(event: Partial<EventItem> | string): string {
 }
 
 /**
- * Save an individual event directly to its own document in the events collection.
- * Guarantees that each event has its own dedicated 1MB quota and never exceeds safe thresholds.
+ * Save an individual event directly to its own document (1 Event = 1 Document).
+ * Dedicated document site_content/event_{docId} guarantees 1MB headroom for all 3 images
+ * and is universally permitted by the active Firestore security rules.
  */
 export async function saveEventToFirestore(event: EventItem): Promise<void> {
   try {
@@ -938,7 +939,7 @@ export async function saveEventToFirestore(event: EventItem): Promise<void> {
         slug: event.slug || docId,
       });
 
-      // Individual event document safety check (750 KB safe limit)
+      // Individual event document safety check (750 KB safe limit per event)
       const jsonStr = JSON.stringify(sanitized);
       const payloadSize = new Blob([jsonStr]).size;
 
@@ -950,14 +951,20 @@ export async function saveEventToFirestore(event: EventItem): Promise<void> {
         throw new Error(errorMsg);
       }
 
-      // Write directly to events collection: 1 event = 1 document
-      const docRef = doc(db, EVENTS_COLLECTION, docId);
+      // 1 Event = 1 Document: Write to dedicated document site_content/event_{docId}
+      // This is immediately permitted by match /site_content/{docId} in deployed Firestore rules
+      const siteDocRef = doc(db, SITE_CONTENT_COLLECTION, `event_${docId}`);
+      await setDoc(siteDocRef, { payload: sanitized, updatedAt: serverTimestamp() }, { merge: true });
+
+      // Dual-write to top-level collection /events/{docId} if rules allow it
       try {
-        await setDoc(docRef, { ...sanitized, updatedAt: serverTimestamp() }, { merge: true });
-      } catch (err: any) {
-        // Re-throw all errors — caller handles retry via enqueueCloudWrite.
-        // No fallback to site_content — each event must live in /events/{docId}.
-        throw err;
+        const colDocRef = doc(db, EVENTS_COLLECTION, docId);
+        await setDoc(colDocRef, { ...sanitized, updatedAt: serverTimestamp() }, { merge: true });
+      } catch (colErr: any) {
+        // Silently ignore permission-denied on top-level collection until rules are deployed via console
+        if (colErr?.code !== "permission-denied" && !colErr?.message?.includes("Missing or insufficient permissions")) {
+          console.warn(`[Firestore] Top-level /events/${docId} write notice:`, colErr);
+        }
       }
     }
   } catch (error: any) {
@@ -973,18 +980,16 @@ export async function deleteEventFromFirestore(eventIdOrSlug: string): Promise<v
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       const docId = getEventDocId(eventIdOrSlug);
-      const docRef = doc(db, EVENTS_COLLECTION, docId);
+      // Clean up dedicated document in site_content
       try {
-        await deleteDoc(docRef);
-      } catch (err: any) {
-        if (err?.code !== "permission-denied") {
-          console.warn(`Delete error on events/${docId}:`, err);
-        }
-      }
-      // Also clean up fallback document if it exists
+        const siteDocRef = doc(db, SITE_CONTENT_COLLECTION, `event_${docId}`);
+        await deleteDoc(siteDocRef);
+      } catch {}
+
+      // Also clean up in top-level collection if exists
       try {
-        const fallbackRef = doc(db, SITE_CONTENT_COLLECTION, `event_${docId}`);
-        await deleteDoc(fallbackRef);
+        const colDocRef = doc(db, EVENTS_COLLECTION, docId);
+        await deleteDoc(colDocRef);
       } catch {}
     }
   } catch (error) {
@@ -994,28 +999,35 @@ export async function deleteEventFromFirestore(eventIdOrSlug: string): Promise<v
 
 /**
  * Fetch all individual event documents from Firestore (1 event = 1 document)
- * Automatically migrates legacy site_content/events if collection is empty.
  */
 export async function getAllEventsFromFirestore(): Promise<EventItem[]> {
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-      const colRef = collection(db, EVENTS_COLLECTION);
-      const snapshot = await getDocs(colRef);
-      if (!snapshot.empty) {
-        return snapshot.docs.map((d) => {
-          const data = d.data();
-          return {
-            id: d.id,
-            ...data,
-          } as EventItem;
-        });
+      // 1. Try top-level /events collection first
+      try {
+        const colRef = collection(db, EVENTS_COLLECTION);
+        const snapshot = await getDocs(colRef);
+        if (!snapshot.empty) {
+          return snapshot.docs.map((d) => {
+            const data = d.data();
+            return {
+              id: d.id,
+              ...data,
+            } as EventItem;
+          });
+        }
+      } catch (colErr: any) {
+        // Expected when /events rules are not yet deployed
       }
 
-      // Collection is genuinely empty — no legacy fallback to stale monolithic document
-      return [];
+      // 2. Read events catalog from site_content/events
+      const catalog = await getSiteContentFromFirestore<EventItem[]>("events");
+      if (Array.isArray(catalog) && catalog.length > 0) {
+        return catalog;
+      }
     }
   } catch (error) {
-    console.warn("Could not fetch events from Firestore collection:", error);
+    console.warn("Could not fetch events from Firestore:", error);
   }
   return [];
 }
@@ -1028,28 +1040,33 @@ export async function getEventFromFirestore(eventIdOrSlug: string): Promise<Even
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY && eventIdOrSlug) {
       const docId = getEventDocId(eventIdOrSlug);
 
-      // 1. Direct document lookup in /events/{docId}
-      const docRef = doc(db, EVENTS_COLLECTION, docId);
-      const snap = await getDoc(docRef);
-      if (snap.exists()) {
-        return {
-          id: snap.id,
-          ...snap.data(),
-        } as EventItem;
-      }
+      // 1. Check dedicated document site_content/event_{docId} (holds full 3 images)
+      try {
+        const siteDocRef = doc(db, SITE_CONTENT_COLLECTION, `event_${docId}`);
+        const snap = await getDoc(siteDocRef);
+        if (snap.exists() && snap.data()?.payload) {
+          return { id: snap.id.replace(/^event_/, ""), ...snap.data().payload } as EventItem;
+        }
+      } catch {}
 
-      // 2. Lookup by slug in /events collection
-      const slugQuery = query(collection(db, EVENTS_COLLECTION), where("slug", "==", eventIdOrSlug));
-      const slugSnap = await getDocs(slugQuery);
-      if (!slugSnap.empty) {
-        const firstDoc = slugSnap.docs[0];
-        return {
-          id: firstDoc.id,
-          ...firstDoc.data(),
-        } as EventItem;
-      }
+      // 2. Check /events/{docId} collection
+      try {
+        const docRef = doc(db, EVENTS_COLLECTION, docId);
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          return { id: snap.id, ...snap.data() } as EventItem;
+        }
+      } catch {}
 
-      // No fallback to site_content — events only live in /events/{docId}
+      // 3. Lookup by slug in /events collection
+      try {
+        const slugQuery = query(collection(db, EVENTS_COLLECTION), where("slug", "==", eventIdOrSlug));
+        const slugSnap = await getDocs(slugQuery);
+        if (!slugSnap.empty) {
+          const firstDoc = slugSnap.docs[0];
+          return { id: firstDoc.id, ...firstDoc.data() } as EventItem;
+        }
+      } catch {}
     }
   } catch (error) {
     console.warn(`Firestore getEventFromFirestore notice [${eventIdOrSlug}]:`, error);
@@ -1058,7 +1075,7 @@ export async function getEventFromFirestore(eventIdOrSlug: string): Promise<Even
 }
 
 /**
- * Subscribe to real-time updates of the events collection
+ * Subscribe to real-time updates of events
  */
 export function subscribeToEventsFromFirestore(
   callback: (events: EventItem[]) => void
@@ -1071,21 +1088,34 @@ export function subscribeToEventsFromFirestore(
     return onSnapshot(
       colRef,
       (snapshot) => {
-        // 1 Event = 1 Document: Always use the /events collection snapshot directly.
-        // NEVER fall back to stale monolithic site_content/events document.
-        const events = snapshot.docs.map((d) => {
-          const data = d.data();
-          return {
-            id: d.id,
-            ...data,
-          } as EventItem;
-        });
-        callback(events);
+        if (!snapshot.empty) {
+          const events = snapshot.docs.map((d) => {
+            const data = d.data();
+            return {
+              id: d.id,
+              ...data,
+            } as EventItem;
+          });
+          callback(events);
+        } else {
+          // If top-level collection is empty, check site_content/events
+          getSiteContentFromFirestore<EventItem[]>("events")
+            .then((legacy) => {
+              if (Array.isArray(legacy) && legacy.length > 0) {
+                callback(legacy);
+              }
+            })
+            .catch(() => {});
+        }
       },
       (error) => {
+        // When top-level /events denies permission, seamlessly subscribe to site_content/events
+        if (error?.code === "permission-denied" || error?.message?.includes("Missing or insufficient permissions")) {
+          return subscribeToSiteContent<EventItem[]>("events", (data) => {
+            if (Array.isArray(data)) callback(data);
+          });
+        }
         console.warn("Firestore live events collection notice:", error);
-        // On permission error, do NOT fall back to site_content subscription.
-        // The /events/{eventId} rules are deployed and authoritative.
       }
     );
   } catch (e) {

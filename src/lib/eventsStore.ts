@@ -5,6 +5,7 @@ import {
   getAllEventsFromFirestore,
   subscribeToEventsFromFirestore,
   getEventDocId,
+  saveSiteContentToFirestore,
   cleanUndefined
 } from "./firebase/firestore";
 import { 
@@ -13,7 +14,8 @@ import {
   hasPendingWritesFor, 
   markLocalWrite,
   getLastLocalWriteTime,
-  isLocalWriteRecent
+  isLocalWriteRecent,
+  compactEventDataset
 } from "./dataSyncEngine";
 
 const EVENTS_STORAGE_KEY = "src_events";
@@ -409,7 +411,12 @@ export async function saveStoredEvent(event: EventItem): Promise<void> {
     enqueueCloudWrite(`event_${docId}`, sanitized, `Event: ${sanitized.name}`);
   }
 
-  // 1 Event = 1 Document: No monolithic backup write to site_content/events
+  // Background update events catalog in site_content/events without blocking
+  compactEventDataset(sorted)
+    .then((compacted) => {
+      saveSiteContentToFirestore("events", cleanUndefined(compacted)).catch(() => {});
+    })
+    .catch(() => {});
 
   if (cloudWriteError) {
     const errMsg = cloudWriteError?.message || String(cloudWriteError);
@@ -466,11 +473,18 @@ export async function saveStoredEvents(events: EventItem[]): Promise<void> {
       await deleteEventFromFirestore(docId);
     });
 
-    // 1 Event = 1 Document: NO monolithic backup write.
-    // Each event has its own /events/{id} document with independent 1MB quota.
-    // The legacy site_content/events monolithic document is NOT updated because:
-    // - It exceeds 750KB with image-heavy events and silently fails
-    // - It creates stale fallback data that real-time listeners use to wipe new events
+    // Update the lightweight events catalog in site_content/events in parallel
+    // so all browser tabs and client devices discover the new/updated events immediately.
+    // Thumbnails are compacted so the catalog stays under 500KB even with 20+ events,
+    // while each event's dedicated document stores the full-resolution assets.
+    compactEventDataset(sanitized)
+      .then((compacted) => {
+        saveSiteContentToFirestore("events", cleanUndefined(compacted)).catch((err) => {
+          console.warn("Could not sync events catalog to site_content:", err);
+          enqueueCloudWrite("site_content_events", cleanUndefined(compacted), "Events Catalog");
+        });
+      })
+      .catch(() => {});
 
     const writeResults = await Promise.allSettled(writePromises);
     await Promise.allSettled(deletePromises);
