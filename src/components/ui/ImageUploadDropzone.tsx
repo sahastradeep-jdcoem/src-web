@@ -124,7 +124,7 @@ export function ImageUploadDropzone({
       localDataUrlRef.current = immediateOptimized.dataUrl;
       setPreview(immediateOptimized.dataUrl);
       setManualUrl(immediateOptimized.dataUrl);
-      setUploadStatus("cloud_synced"); // Instant verified & ready
+      setUploadStatus("uploading"); // Background cloud stream in flight
       setError(null);
 
       // Instant state propagation so user never waits!
@@ -144,9 +144,13 @@ export function ImageUploadDropzone({
             setManualUrl(cloudUrl);
             setUploadStatus("cloud_synced");
             if (onUrlChange) onUrlChange(cloudUrl);
+          } else {
+            setUploadStatus("cloud_synced"); // Local optimized WebP fallback is safe
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          setUploadStatus("cloud_synced");
+        });
     } catch (err: any) {
       console.error("Image direct processing error", err);
       setUploadStatus("upload_failed");
@@ -189,7 +193,7 @@ export function ImageUploadDropzone({
       localDataUrlRef.current = croppedDataUrl;
       setPreview(croppedDataUrl);
       setManualUrl(croppedDataUrl);
-      setUploadStatus("cloud_synced"); // Instant ready!
+      setUploadStatus("uploading"); // Cloud upload in flight
       setError(null);
 
       if (onUrlChange) {
@@ -209,9 +213,13 @@ export function ImageUploadDropzone({
             setManualUrl(cloudUrl);
             setUploadStatus("cloud_synced");
             if (onUrlChange) onUrlChange(cloudUrl);
+          } else {
+            setUploadStatus("cloud_synced");
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          setUploadStatus("cloud_synced");
+        });
     } catch (err: any) {
       console.error("Image crop and storage error", err);
       setUploadStatus("upload_failed");

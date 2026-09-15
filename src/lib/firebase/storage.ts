@@ -2,7 +2,7 @@ import { ref, uploadBytes, uploadString, getDownloadURL } from "firebase/storage
 import { storage } from "./config";
 import { compressImage } from "@/lib/imageCompression";
 
-const UPLOAD_TIMEOUT_MS = 6000; // 6s fast timeout for background cloud upload attempt
+const UPLOAD_TIMEOUT_MS = 30000; // 30s reliable timeout for high-res Cloud Storage uploads on Blaze plan
 
 /**
  * Convert a base64 Data URL to a native binary Blob for streaming upload
@@ -14,7 +14,7 @@ async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
 
 /**
  * Upload an image file or Base64 WebP string to Firebase Cloud Storage.
- * Uses binary streaming for ultra-fast, lightweight uploads.
+ * Uses binary streaming for ultra-fast, lightweight uploads with long-term CDN caching.
  * If Firebase Storage bucket is unreachable or unprovisioned, gracefully returns the
  * optimized WebP data URL for direct instant Firestore synchronization.
  */
@@ -41,8 +41,14 @@ export async function uploadImageToStorage(
     const storageRef = ref(storage, storagePath);
 
     const uploadTask = (async () => {
+      // 1-year immutable caching on Google Cloud CDN to minimize download egress costs
+      const metadata = {
+        cacheControl: "public, max-age=31536000, immutable",
+      };
+
       if (fileOrDataUrl instanceof File) {
         await uploadBytes(storageRef, fileOrDataUrl, {
+          ...metadata,
           contentType: fileOrDataUrl.type || "image/jpeg",
         });
       } else {
@@ -50,6 +56,7 @@ export async function uploadImageToStorage(
         const isPng = fileOrDataUrl.includes("image/png");
         const blob = await dataUrlToBlob(fileOrDataUrl);
         await uploadBytes(storageRef, blob, {
+          ...metadata,
           contentType: isPng ? "image/png" : "image/webp",
         });
       }
@@ -59,7 +66,7 @@ export async function uploadImageToStorage(
 
     const timeoutTask = new Promise<string>((_, reject) => {
       setTimeout(
-        () => reject(new Error("Storage upload timed out (6s).")),
+        () => reject(new Error("Storage upload timed out (30s).")),
         UPLOAD_TIMEOUT_MS
       );
     });

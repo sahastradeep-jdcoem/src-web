@@ -29,13 +29,13 @@ service cloud.firestore {
     // Public site content (events, clubs, council, hero, gallery, departments, tenures)
     match /site_content/{docId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if isAdmin();
     }
 
     // Individual event documents (1 event = 1 document)
     match /events/{eventId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if isAdmin();
     }
 
     // Admin authorization records
