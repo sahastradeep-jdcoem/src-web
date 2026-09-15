@@ -25,7 +25,11 @@ import {
   Check,
   RefreshCw,
   HardDrive,
-  Trash2
+  Trash2,
+  Cloud,
+  CloudUpload,
+  Zap,
+  CheckCircle
 } from "lucide-react";
 import { StorageCleanerModal } from "@/components/admin/StorageCleanerModal";
 import { Button } from "@/components/ui/Button";
@@ -48,6 +52,12 @@ import { getStoredDepartments, saveStoredDepartments } from "@/lib/departmentsSt
 import { getStoredGalleryPhotos, saveStoredGalleryPhotos } from "@/lib/galleryStore";
 import { getStoredHeroSettings, saveStoredHeroSettings } from "@/lib/heroStore";
 import { subscribeToUsersFromFirestore } from "@/lib/firebase/firestore";
+import { 
+  scanFirestoreImageStorage, 
+  migrateAllLegacyImages, 
+  MigrationScanReport, 
+  MigrationProgress 
+} from "@/lib/firebase/cloudStorageMigrator";
 import { toast } from "@/lib/toastStore";
 
 export default function AdminOverviewPage() {
@@ -59,6 +69,12 @@ export default function AdminOverviewPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isStorageModalOpen, setIsStorageModalOpen] = useState(false);
+
+  // Blaze Cloud Storage Migration State
+  const [scanReport, setScanReport] = useState<MigrationScanReport | null>(null);
+  const [isScanningImages, setIsScanningImages] = useState(false);
+  const [isMigratingImages, setIsMigratingImages] = useState(false);
+  const [migrationProgress, setMigrationProgress] = useState<MigrationProgress | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -198,6 +214,52 @@ export default function AdminOverviewPage() {
       }
     };
     reader.readAsText(file);
+  };
+
+  const handleScanImages = async () => {
+    setIsScanningImages(true);
+    try {
+      const report = await scanFirestoreImageStorage();
+      setScanReport(report);
+      toast.success(
+        `Storage audit complete: ${report.cloudImages} on Cloud Storage CDN, ${report.base64Images} legacy Base64.`
+      );
+    } catch (err: any) {
+      toast.error("Failed to scan Firestore image storage: " + (err?.message || err));
+    } finally {
+      setIsScanningImages(false);
+    }
+  };
+
+  const handleMigrateImages = async () => {
+    setIsMigratingImages(true);
+    setMigrationProgress({
+      phase: "scanning",
+      totalToMigrate: 0,
+      migratedCount: 0,
+      currentEntity: "Connecting to Firebase Cloud Storage...",
+      bytesSaved: 0,
+    });
+
+    try {
+      const res = await migrateAllLegacyImages((prog) => {
+        setMigrationProgress(prog);
+      });
+
+      if (res.success) {
+        toast.success(
+          `Successfully migrated ${res.migratedCount} images to Cloud Storage! Saved ${(res.bytesSaved / 1024).toFixed(0)} KB in Firestore.`
+        );
+        // Refresh scan report
+        handleScanImages();
+      } else {
+        toast.error("Migration finished with notice: " + (res.error || "Some items could not be migrated."));
+      }
+    } catch (err: any) {
+      toast.error("Migration failed: " + (err?.message || err));
+    } finally {
+      setIsMigratingImages(false);
+    }
   };
 
   const metrics = [
@@ -489,6 +551,94 @@ export default function AdminOverviewPage() {
             >
               <Trash2 className="w-4 h-4" />
               <span>Scan &amp; Purge Unused Files</span>
+            </Button>
+          </div>
+        </div>
+
+        {/* Firebase Blaze & Cloud Storage Architecture Panel */}
+        <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-6 flex flex-col justify-between lg:col-span-2">
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-100">
+                  <Cloud className="w-6 h-6 text-emerald-600" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-heading font-bold text-lg text-slate-900">
+                      Firebase Blaze Cloud Media Engine
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Blaze Plan Active
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Google Cloud Storage CDN (gs://src-jdcoem.firebasestorage.app) with 1-year immutable caching.
+                  </p>
+                </div>
+              </div>
+
+              {scanReport && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="px-3 py-1 rounded-xl bg-slate-100 text-slate-700 font-bold">
+                    {scanReport.cloudImages} Cloud Assets
+                  </span>
+                  <span className={`px-3 py-1 rounded-xl font-bold ${
+                    scanReport.base64Images > 0 ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
+                  }`}>
+                    {scanReport.base64Images} Legacy Base64 ({((scanReport.base64BytesApprox || 0) / 1024).toFixed(0)} KB)
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              With the Blaze upgrade, images stream directly to Google Cloud CDN instead of embedding heavy Base64 inside Firestore documents. 
+              Scan your Firestore database to audit asset distribution, or run the 1-click batch migrator to convert all legacy Base64 images into permanent Cloud Storage assets.
+            </p>
+
+            {migrationProgress && (
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-slate-700 flex items-center gap-2">
+                    {migrationProgress.phase === "migrating" && <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#17458F]" />}
+                    {migrationProgress.phase === "completed" && <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />}
+                    {migrationProgress.currentEntity}
+                  </span>
+                  <span className="text-slate-500 font-medium">
+                    Migrated: {migrationProgress.migratedCount}
+                  </span>
+                </div>
+                {migrationProgress.phase === "migrating" && (
+                  <div className="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
+                    <div className="h-full bg-[#17458F] animate-pulse w-3/4 rounded-full" />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <Button
+              onClick={handleScanImages}
+              disabled={isScanningImages || isMigratingImages}
+              variant="secondary"
+              size="sm"
+              className="gap-2 cursor-pointer"
+            >
+              {isScanningImages ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
+              <span>Scan Database Media</span>
+            </Button>
+
+            <Button
+              onClick={handleMigrateImages}
+              disabled={isMigratingImages || isScanningImages}
+              variant="primary"
+              size="sm"
+              className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm cursor-pointer"
+            >
+              {isMigratingImages ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudUpload className="w-4 h-4" />}
+              <span>Migrate All Images to Cloud Storage</span>
             </Button>
           </div>
         </div>

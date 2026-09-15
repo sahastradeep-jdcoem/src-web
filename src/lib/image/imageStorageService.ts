@@ -102,11 +102,11 @@ class SparkInlineStorageAdapter implements IImageStorageAdapter {
   }
 }
 
-// ─── Cloud Storage Adapter (Blaze-Ready) ─────────────────────────────────────
+// ─── Cloud Storage Adapter (Blaze-Native) ────────────────────────────────────
 
 /**
- * Streams binary blobs to Firebase Cloud Storage and returns the CDN download URL.
- * Only activated when NEXT_PUBLIC_STORAGE_MODE=cloud is set in the environment.
+ * Streams binary blobs to Firebase Cloud Storage and returns the permanent CDN download URL.
+ * Active by default on the Firebase Blaze plan with 1-year immutable Google CDN caching.
  */
 class CloudStorageAdapter implements IImageStorageAdapter {
   readonly mode: StorageMode = "cloud_storage";
@@ -115,7 +115,6 @@ class CloudStorageAdapter implements IImageStorageAdapter {
     dataUrl: string,
     options: ImageUploadOptions
   ): Promise<ImageUploadResult> {
-    // Dynamic import to avoid loading Firebase Storage SDK on Spark builds
     const { ref, uploadBytes, getDownloadURL } = await import("firebase/storage");
     const { storage } = await import("@/lib/firebase/config");
 
@@ -138,14 +137,17 @@ class CloudStorageAdapter implements IImageStorageAdapter {
 
     const storageRef = ref(storage, finalPath);
 
-    // Race against a 8-second timeout
+    // Reliable 30-second timeout for Blaze Cloud CDN delivery
     const uploadTask = (async () => {
-      await uploadBytes(storageRef, blob, { contentType });
+      await uploadBytes(storageRef, blob, {
+        contentType,
+        cacheControl: "public, max-age=31536000, immutable",
+      });
       return await getDownloadURL(storageRef);
     })();
 
     const timeoutTask = new Promise<string>((_, reject) => {
-      setTimeout(() => reject(new Error("[UIS/Cloud] Upload timed out (8s).")), 8000);
+      setTimeout(() => reject(new Error("[UIS/Cloud] Cloud Storage upload timed out (30s).")), 30000);
     });
 
     const cloudUrl = await Promise.race([uploadTask, timeoutTask]);
@@ -175,27 +177,62 @@ class CloudStorageAdapter implements IImageStorageAdapter {
   }
 }
 
+// ─── Direct Base64 to Cloud Storage Helper ───────────────────────────────────
+
+/**
+ * Directly converts a Base64 data URL to a binary Blob, streams it to Firebase Cloud Storage,
+ * and returns the permanent HTTPS Google Cloud CDN URL.
+ */
+export async function uploadBase64ToCloudStorage(
+  dataUrl: string,
+  storagePath: string
+): Promise<string> {
+  if (!dataUrl || !dataUrl.startsWith("data:image/")) {
+    return dataUrl;
+  }
+
+  const { ref, uploadBytes, getDownloadURL } = await import("firebase/storage");
+  const { storage } = await import("@/lib/firebase/config");
+
+  if (!storage) {
+    throw new Error("Firebase Cloud Storage is not initialized.");
+  }
+
+  const isPng = dataUrl.includes("image/png");
+  const contentType = isPng ? "image/png" : "image/webp";
+
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+
+  const storageRef = ref(storage, storagePath);
+  await uploadBytes(storageRef, blob, {
+    contentType,
+    cacheControl: "public, max-age=31536000, immutable",
+  });
+
+  return await getDownloadURL(storageRef);
+}
+
 // ─── Factory ─────────────────────────────────────────────────────────────────
 
 let _cachedAdapter: IImageStorageAdapter | null = null;
 
 /**
- * Returns the appropriate storage adapter based on environment configuration.
+ * Returns the appropriate storage adapter.
  *
- * - Default (Spark): Returns `SparkInlineStorageAdapter`
- * - When `NEXT_PUBLIC_STORAGE_MODE=cloud`: Returns `CloudStorageAdapter`
- *
- * The adapter is cached for the lifetime of the application.
+ * Defaults to `CloudStorageAdapter` on the Blaze plan whenever Cloud Storage is configured.
+ * Falls back to `SparkInlineStorageAdapter` only if explicitly forced or offline.
  */
 export function getImageStorageService(): IImageStorageAdapter {
   if (_cachedAdapter) return _cachedAdapter;
 
   const mode = process.env.NEXT_PUBLIC_STORAGE_MODE;
 
-  if (mode === "cloud") {
-    _cachedAdapter = new CloudStorageAdapter();
-  } else {
+  // On Blaze (default), use CloudStorageAdapter unless explicitly forced to spark_inline
+  if (mode === "spark_inline") {
     _cachedAdapter = new SparkInlineStorageAdapter();
+  } else {
+    _cachedAdapter = new CloudStorageAdapter();
   }
 
   return _cachedAdapter;
@@ -205,9 +242,9 @@ export function getImageStorageService(): IImageStorageAdapter {
  * Convenience: detect the current storage mode from the environment.
  */
 export function getCurrentStorageMode(): StorageMode {
-  return process.env.NEXT_PUBLIC_STORAGE_MODE === "cloud"
-    ? "cloud_storage"
-    : "spark_inline";
+  return process.env.NEXT_PUBLIC_STORAGE_MODE === "spark_inline"
+    ? "spark_inline"
+    : "cloud_storage";
 }
 
 /**

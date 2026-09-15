@@ -55,24 +55,24 @@ export interface ImageProfile {
   maxInlineBytes: number;
 }
 
-// ─── Profile Definitions ─────────────────────────────────────────────────────
+// ─── Profile Definitions (Blaze Cloud Storage Optimized) ───────────────────
 
 /**
- * At 640×800 (4:5) or 600×600 (1:1) at quality 0.86, portrait avatars deliver
- * razor-sharp facial details, skin/hair textures, and crisp clothing definition on Retina screens.
+ * At 800×1000 (4:5) or 800×800 (1:1) at quality 0.88, portrait avatars deliver
+ * high-fidelity facial details, sharp skin/hair textures, and crisp definition on Retina screens.
  */
 const AVATAR_PROFILE: ImageProfile = {
   label: "Portrait Photo",
-  maxWidth: 640,
-  maxHeight: 800,
-  quality: 0.86,
+  maxWidth: 800,
+  maxHeight: 1000,
+  quality: 0.88,
   format: "image/webp",
   preserveTransparency: false,
   defaultAspectRatio: "4:5",
   allowedAspectRatios: ["4:5", "3:4", "1:1", "free"],
   lockAspectRatio: false,
   circularMask: false,
-  targetSizeHint: "High-Density Retina WebP",
+  targetSizeHint: "Cloud CDN High-Density Retina WebP",
   maxInlineBytes: 150_000,
 };
 
@@ -81,88 +81,88 @@ const AVATAR_PROFILE: ImageProfile = {
  */
 const LOGO_PROFILE: ImageProfile = {
   label: "Club Logo / Insignia",
-  maxWidth: 512,
-  maxHeight: 512,
-  quality: 0.90,
+  maxWidth: 800,
+  maxHeight: 800,
+  quality: 0.95,
   format: "image/webp",
   preserveTransparency: true,
   defaultAspectRatio: "1:1",
   allowedAspectRatios: ["1:1", "free"],
   lockAspectRatio: false,
   circularMask: true,
-  targetSizeHint: "Crisp Alpha WebP/PNG",
+  targetSizeHint: "Ultra-Sharp Alpha WebP/PNG",
   maxInlineBytes: 120_000,
 };
 
 /**
  * Event posters contain fine typography, dates, sponsor logos, and QR codes.
- * Higher dimensions (960×1280) and 0.86 quality keep fine graphics and text perfectly legible.
+ * Higher dimensions (1440×1920) and 0.90 quality keep fine graphics and text perfectly legible on all devices.
  */
 const EVENT_POSTER_PROFILE: ImageProfile = {
   label: "Event Poster",
-  maxWidth: 960,
-  maxHeight: 1280,
-  quality: 0.86,
+  maxWidth: 1440,
+  maxHeight: 1920,
+  quality: 0.90,
   format: "image/webp",
   preserveTransparency: false,
   defaultAspectRatio: "3:4",
   allowedAspectRatios: ["3:4", "4:5", "16:9", "1:1", "free"],
   lockAspectRatio: false,
   circularMask: false,
-  targetSizeHint: "High-Legibility Event Poster",
+  targetSizeHint: "Cloud CDN Ultra-HD Event Poster",
   maxInlineBytes: 250_000,
 };
 
 const CARD_COVER_PROFILE: ImageProfile = {
   label: "Card Cover Image",
-  maxWidth: 800,
-  maxHeight: 450,
-  quality: 0.82,
+  maxWidth: 1200,
+  maxHeight: 675,
+  quality: 0.88,
   format: "image/webp",
   preserveTransparency: false,
   defaultAspectRatio: "16:9",
   allowedAspectRatios: ["16:9", "4:5", "3:4", "1:1", "21:9", "free"],
   lockAspectRatio: false,
   circularMask: false,
-  targetSizeHint: "Crisp Card Cover",
+  targetSizeHint: "Crisp High-Density Card Cover",
   maxInlineBytes: 180_000,
 };
 
 const BANNER_PROFILE: ImageProfile = {
   label: "Hero / Header Banner",
-  maxWidth: 1280,
-  maxHeight: 548,
-  quality: 0.82,
+  maxWidth: 1920,
+  maxHeight: 820,
+  quality: 0.88,
   format: "image/webp",
   preserveTransparency: false,
   defaultAspectRatio: "21:9",
   allowedAspectRatios: ["21:9", "16:9", "free"],
   lockAspectRatio: false,
   circularMask: false,
-  targetSizeHint: "Ultra-Wide Cinematic Banner",
+  targetSizeHint: "Cinematic 1080p Ultra-Wide Banner",
   maxInlineBytes: 250_000,
 };
 
 const GALLERY_PROFILE: ImageProfile = {
   label: "Gallery Photo",
-  maxWidth: 1440,
-  maxHeight: 960,
-  quality: 0.86,
+  maxWidth: 1920,
+  maxHeight: 1280,
+  quality: 0.90,
   format: "image/webp",
   preserveTransparency: false,
   defaultAspectRatio: "16:9",
   allowedAspectRatios: ["16:9", "4:5", "3:4", "1:1", "21:9", "free"],
   lockAspectRatio: false,
   circularMask: false,
-  targetSizeHint: "High-Res Showcase Photography",
+  targetSizeHint: "Showcase Full-HD Photography",
   maxInlineBytes: 250_000,
 };
 
 const THUMBNAIL_PROFILE: ImageProfile = {
   label: "Thumbnail Icon",
-  maxWidth: 200,
-  maxHeight: 200,
-  quality: 0.80,
+  maxWidth: 256,
+  maxHeight: 256,
+  quality: 0.85,
   format: "image/webp",
   preserveTransparency: false,
   defaultAspectRatio: "1:1",

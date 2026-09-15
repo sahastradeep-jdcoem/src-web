@@ -29,13 +29,14 @@ export const MAX_SAFE_BASE64_LENGTH = 350000; // ~250 KB max per individual imag
  * Downscales a base64 image data-url using HTML5 canvas
  * Ensures circle logos are ~5-8KB so Firestore documents never exceed 100KB total.
  */
-export async function compactBase64Image(dataUrl: string, maxDim = 160, quality = 0.70): Promise<string> {
+export async function compactBase64Image(dataUrl: string, maxDim = 1200, quality = 0.88): Promise<string> {
   if (typeof window === "undefined" || !dataUrl.startsWith("data:image/")) return dataUrl;
-  if (dataUrl.length < 18000) return dataUrl; // Already compact
+  // If image is already moderately sized (< 150KB), preserve its full fidelity on Blaze
+  if (dataUrl.length < 150000) return dataUrl;
 
   try {
     return new Promise((resolve) => {
-      const timer = setTimeout(() => resolve(dataUrl), 1500); // 1.5s safety timeout
+      const timer = setTimeout(() => resolve(dataUrl), 2000); // 2s safety timeout
       const img = new Image();
       img.onload = () => {
         clearTimeout(timer);
@@ -94,15 +95,15 @@ export async function compactClubDataset<T extends {
   // Memoize avatar compaction by data URL so duplicate references to the same avatar only compress once
   const avatarCache = new Map<string, Promise<string>>();
   const compactAvatar = (avatar?: string): Promise<string> => {
-    // With dedicated 1MB documents per club (12 clubs = 12 documents), avatars under 150KB do not need heavy compression
-    if (!avatar || !avatar.startsWith("data:image/") || avatar.length <= 150000) {
+    // Cloud Storage URLs and reasonably sized images bypass compaction entirely
+    if (!avatar || !avatar.startsWith("data:image/") || avatar.length <= 250000) {
       return Promise.resolve(avatar || "");
     }
     if (avatarCache.has(avatar)) {
       return avatarCache.get(avatar)!;
     }
-    // 650px height (520x650) at 0.84 quality produces super crisp Retina portraits at ~35-50KB
-    const p = compactBase64Image(avatar, 650, 0.84);
+    // High-resolution Retina portraits at 800px width with 0.88 quality
+    const p = compactBase64Image(avatar, 800, 0.88);
     avatarCache.set(avatar, p);
     return p;
   };
@@ -114,20 +115,20 @@ export async function compactClubDataset<T extends {
       let header = c.headerImage;
       let hero = (c as any).heroImage;
 
-      if (logo && logo.startsWith("data:image/") && logo.length > 15000) {
-        logo = await compactBase64Image(logo, 200, 0.75);
+      if (logo && logo.startsWith("data:image/") && logo.length > 50000) {
+        logo = await compactBase64Image(logo, 800, 0.92);
       }
-      if (card && card.startsWith("data:image/") && card.length > 25000) {
-        card = await compactBase64Image(card, 480, 0.72);
+      if (card && card.startsWith("data:image/") && card.length > 100000) {
+        card = await compactBase64Image(card, 1200, 0.88);
       }
-      if (header && header.startsWith("data:image/") && header.length > 28000) {
-        header = await compactBase64Image(header, 720, 0.72);
+      if (header && header.startsWith("data:image/") && header.length > 120000) {
+        header = await compactBase64Image(header, 1600, 0.88);
       }
       if (hero && hero.startsWith("data:image/")) {
         if (header && (hero === header || hero.slice(0, 100) === header.slice(0, 100))) {
           hero = ""; // Deduplicate duplicate hero image
-        } else if (hero.length > 28000) {
-          hero = await compactBase64Image(hero, 720, 0.72);
+        } else if (hero.length > 120000) {
+          hero = await compactBase64Image(hero, 1600, 0.88);
         }
       }
 
@@ -135,8 +136,8 @@ export async function compactClubDataset<T extends {
       if (Array.isArray(galleryImages)) {
         galleryImages = await Promise.all(
           galleryImages.map(async (g) => {
-            if (g && g.startsWith("data:image/") && g.length > 25000) {
-              return await compactBase64Image(g, 480, 0.65);
+            if (g && g.startsWith("data:image/") && g.length > 150000) {
+              return await compactBase64Image(g, 1600, 0.88);
             }
             return g;
           })
@@ -208,25 +209,25 @@ export async function compactEventDataset<T extends { poster?: string; cardImage
       let posterImg = e.posterImage;
       let header = e.headerImage;
 
-      // In the catalog document, compact thumbnails so 20+ events easily fit within the 750KB limit.
-      // The dedicated 1MB document for each individual event (site_content/event_{id}) stores full-resolution assets.
-      if (poster && poster.startsWith("data:image/") && poster.length > 35000) {
-        poster = await compactBase64Image(poster, 480, 0.75);
+      // On Blaze, each event has its own dedicated document (1 Event = 1 Document)
+      // Remote Cloud Storage CDN URLs pass through untouched with 0 byte overhead.
+      if (poster && poster.startsWith("data:image/") && poster.length > 150000) {
+        poster = await compactBase64Image(poster, 1440, 0.90);
       }
       if (card && (card === e.poster || card === poster)) {
         card = poster;
-      } else if (card && card.startsWith("data:image/") && card.length > 30000) {
-        card = await compactBase64Image(card, 480, 0.75);
+      } else if (card && card.startsWith("data:image/") && card.length > 100000) {
+        card = await compactBase64Image(card, 1200, 0.88);
       }
       if (posterImg && (posterImg === e.poster || posterImg === e.cardImage || posterImg === poster || posterImg === card)) {
         posterImg = poster || card;
-      } else if (posterImg && posterImg.startsWith("data:image/") && posterImg.length > 35000) {
-        posterImg = await compactBase64Image(posterImg, 480, 0.75);
+      } else if (posterImg && posterImg.startsWith("data:image/") && posterImg.length > 150000) {
+        posterImg = await compactBase64Image(posterImg, 1440, 0.90);
       }
       if (header && (header === e.poster || header === e.cardImage || header === e.posterImage || header === poster)) {
         header = poster || card || posterImg;
-      } else if (header && header.startsWith("data:image/") && header.length > 40000) {
-        header = await compactBase64Image(header, 720, 0.70);
+      } else if (header && header.startsWith("data:image/") && header.length > 150000) {
+        header = await compactBase64Image(header, 1600, 0.88);
       }
 
       return {
