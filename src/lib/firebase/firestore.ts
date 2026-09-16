@@ -983,6 +983,36 @@ export function subscribeToSiteContent<T>(docId: string, callback: (data: T) => 
 }
 
 // -----------------------------------------------------------------------------
+// CONTACT FORM SUBMISSIONS (Public Create, Admin Read/Write)
+// -----------------------------------------------------------------------------
+export const CONTACT_SUBMISSIONS_COLLECTION = "contact_submissions";
+
+export async function submitContactFormToFirestore(submission: {
+  id: string;
+  name: string;
+  email: string;
+  department?: string;
+  subject: string;
+  message: string;
+  submittedAt: string;
+  status?: string;
+}): Promise<void> {
+  try {
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      const sanitized = cleanUndefined(submission);
+      const docRef = doc(db, CONTACT_SUBMISSIONS_COLLECTION, submission.id);
+      await setDoc(docRef, {
+        ...sanitized,
+        createdAt: serverTimestamp(),
+      });
+    }
+  } catch (error: any) {
+    console.error(`Firestore submitContactForm error [${submission.id}]:`, error?.code || "", error?.message || error);
+    throw error;
+  }
+}
+
+// -----------------------------------------------------------------------------
 // INDIVIDUAL EVENT DOCUMENT MANAGEMENT (1 Event = 1 Document Invariant)
 // -----------------------------------------------------------------------------
 export const EVENTS_COLLECTION = "events";

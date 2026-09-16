@@ -17,6 +17,25 @@ export async function GET(request: NextRequest) {
       return new NextResponse("Invalid URL protocol. Only http/https supported.", { status: 400 });
     }
 
+    // SSRF Protection: Disallow localhost, cloud metadata, and private IP blocks
+    const hostname = parsed.hostname.toLowerCase();
+    const isPrivateOrInternal = 
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "0.0.0.0" ||
+      hostname === "::1" ||
+      hostname === "169.254.169.254" || // Cloud Instance Metadata
+      hostname === "metadata.google.internal" ||
+      hostname.endsWith(".internal") ||
+      hostname.endsWith(".local") ||
+      /^10\./.test(hostname) ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname) ||
+      /^192\.168\./.test(hostname);
+
+    if (isPrivateOrInternal) {
+      return new NextResponse("Access to private/internal network addresses is prohibited.", { status: 403 });
+    }
+
     const res = await fetch(imageUrl, {
       headers: {
         "User-Agent":

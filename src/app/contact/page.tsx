@@ -18,7 +18,7 @@ import {
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Accordion } from "@/components/ui/Accordion";
-import { saveSiteContentToFirestore, cleanUndefined } from "@/lib/firebase/firestore";
+import { submitContactFormToFirestore, cleanUndefined } from "@/lib/firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
 
 export default function ContactPage() {
@@ -78,8 +78,8 @@ export default function ContactPage() {
         status: "new",
       });
 
-      // Persist to Firestore contact_submissions collection
-      await saveSiteContentToFirestore(`contact_${submissionId}`, submission);
+      // Persist to Firestore contact_submissions collection (public write permitted in firestore.rules)
+      await submitContactFormToFirestore(submission);
 
       // Also save locally as backup
       try {
