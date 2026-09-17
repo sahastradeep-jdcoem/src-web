@@ -20,13 +20,15 @@ import {
   Building2,
   UserCheck,
   Vote,
-  CreditCard
+  CreditCard,
+  BellRing
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ADMIN_NAV = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { name: "Active Users", href: "/admin/users", icon: UserCheck },
+  { name: "SRC Member Dispatch", href: "/admin/src-updates", icon: BellRing },
   { name: "Hero Settings", href: "/admin/hero", icon: Sliders },
   { name: "Events & Fests", href: "/admin/events", icon: Calendar },
   { name: "Engagement Hub", href: "/admin/listings", icon: Vote },
