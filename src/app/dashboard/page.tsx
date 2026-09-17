@@ -1781,31 +1781,30 @@ export default function StudentDashboardPage() {
           isOpen={Boolean(selectedTicket)}
           onClose={() => setSelectedTicket(null)}
           title="Digital Delegate Pass"
-          maxWidth="xl"
-          contentClassName="max-h-[90vh] overflow-y-auto"
+          maxWidth="3xl"
+          dialogClassName="sm:max-h-[94vh]"
+          contentClassName="p-3 sm:p-4 md:p-5 overflow-y-auto md:overflow-visible"
         >
-          <div className="space-y-4 pt-2">
-            <div id="src-delegate-pass-card">
-              <TicketPass
-                registrationId={selectedTicket.id}
-                eventName={selectedTicket.eventName}
-                eventDate={events.find((e) => e.slug === selectedTicket.eventSlug || e.id === selectedTicket.eventSlug)?.date || selectedTicket.registeredAt}
-                eventVenue={events.find((e) => e.slug === selectedTicket.eventSlug || e.id === selectedTicket.eventSlug)?.venue || "Campus Venue"}
-                participantName={selectedTicket.participantName}
-                department={selectedTicket.department}
-                year={selectedTicket.year}
-                teamType={selectedTicket.teamType}
-                teamName={selectedTicket.teamName}
-                teamMembers={selectedTicket.teamMembers}
-                ticketCode={selectedTicket.ticketCode}
-                status={selectedTicket.status}
-                paymentStatus={selectedTicket.paymentStatus}
-                paymentId={selectedTicket.paymentId}
-                mode="dashboard"
-              />
-            </div>
+          <div className="space-y-3">
+            <TicketPass
+              registrationId={selectedTicket.id}
+              eventName={selectedTicket.eventName}
+              eventDate={events.find((e) => e.slug === selectedTicket.eventSlug || e.id === selectedTicket.eventSlug)?.date || selectedTicket.registeredAt}
+              eventVenue={events.find((e) => e.slug === selectedTicket.eventSlug || e.id === selectedTicket.eventSlug)?.venue || "Campus Venue"}
+              participantName={selectedTicket.participantName}
+              department={selectedTicket.department}
+              year={selectedTicket.year}
+              teamType={selectedTicket.teamType}
+              teamName={selectedTicket.teamName}
+              teamMembers={selectedTicket.teamMembers}
+              ticketCode={selectedTicket.ticketCode}
+              status={selectedTicket.status}
+              paymentStatus={selectedTicket.paymentStatus}
+              paymentId={selectedTicket.paymentId}
+              mode="dashboard"
+            />
 
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-200">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2.5 border-t border-slate-200">
               <Button
                 variant="outline"
                 size="sm"

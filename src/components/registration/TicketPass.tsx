@@ -99,7 +99,7 @@ export function TicketPass({
   };
 
   return (
-    <div className={cn("w-full max-w-3xl min-w-0 mx-auto", mode === "dashboard" ? "space-y-4 sm:space-y-0" : "space-y-6 sm:space-y-8")}>
+    <div className={cn("w-full max-w-3xl min-w-0 mx-auto", mode === "dashboard" ? "space-y-0" : "space-y-6 sm:space-y-8")}>
       {/* Top Banner - only on registration completion page */}
       {mode !== "dashboard" && (
         paymentStatus === "PENDING" ? (
@@ -139,10 +139,20 @@ export function TicketPass({
       </div>
 
       {/* Official Digital Ticket Pass Card (Exportable Target) */}
-      <div className="w-full max-w-full min-w-0 overflow-x-auto no-scrollbar py-2 touch-pan-x overscroll-x-contain">
+      <div className={cn(
+        "w-full max-w-full min-w-0 no-scrollbar touch-pan-x",
+        mode === "dashboard"
+          ? "overflow-x-auto md:overflow-visible py-0 overscroll-x-contain md:overscroll-none"
+          : "overflow-x-auto overscroll-x-contain py-2"
+      )}>
         <div
           id="src-delegate-pass-card"
-          className="relative w-[620px] sm:min-w-[680px] md:w-full max-w-[720px] shrink-0 rounded-3xl bg-white border border-slate-200 shadow-xl overflow-hidden text-left mx-auto font-sans"
+          className={cn(
+            "relative shrink-0 rounded-3xl bg-white border border-slate-200 shadow-xl overflow-hidden text-left mx-auto font-sans",
+            mode === "dashboard"
+              ? "w-[620px] sm:w-full max-w-[720px]"
+              : "w-[620px] sm:min-w-[680px] md:w-full max-w-[720px]"
+          )}
         >
           {/* Cancelled Pass Watermark Overlay */}
           {status === "CANCELLED" && (
@@ -159,15 +169,23 @@ export function TicketPass({
           )}
 
           {/* Ticket Top Strip */}
-          <div className="bg-[#17458F] px-6 py-5 sm:px-8 sm:py-6 flex flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5 sm:gap-4">
-              <div className="h-11 w-11 sm:h-12 sm:w-12 rounded-xl bg-white p-1 shrink-0 flex items-center justify-center overflow-hidden">
+          <div className={cn(
+            "bg-[#17458F] flex flex-row items-center justify-between gap-4",
+            mode === "dashboard"
+              ? "px-5 py-3 sm:px-6 sm:py-3.5"
+              : "px-6 py-5 sm:px-8 sm:py-6"
+          )}>
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className={cn(
+                "rounded-xl bg-white p-1 shrink-0 flex items-center justify-center overflow-hidden",
+                mode === "dashboard" ? "h-9 w-9 sm:h-10 sm:w-10" : "h-11 w-11 sm:h-12 sm:w-12"
+              )}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="/assets/SRC Logo.png"
                   alt="SRC Logo"
-                  width={48}
-                  height={48}
+                  width={mode === "dashboard" ? 40 : 48}
+                  height={mode === "dashboard" ? 40 : 48}
                   className="w-full h-full object-contain"
                   crossOrigin="anonymous"
                 />
@@ -176,10 +194,13 @@ export function TicketPass({
                 <span className="text-[10px] font-bold uppercase tracking-widest text-[#E78023] block leading-normal">
                   Official Delegate Pass
                 </span>
-                <h3 className="font-bold text-lg sm:text-2xl text-white font-sans leading-snug pb-0.5">
+                <h3 className={cn(
+                  "font-bold text-white font-sans leading-snug pb-0.5",
+                  mode === "dashboard" ? "text-base sm:text-xl" : "text-lg sm:text-2xl"
+                )}>
                   SAHASTRADEEP
                 </h3>
-                <p className="text-[11px] sm:text-xs text-slate-200 leading-normal">Student Representative Council • JDCOEM</p>
+                <p className="text-[10px] sm:text-[11px] text-slate-200 leading-normal">Student Representative Council • JDCOEM</p>
               </div>
             </div>
 
@@ -187,27 +208,41 @@ export function TicketPass({
               <span className="text-[10px] font-bold uppercase tracking-widest text-slate-200 block leading-normal">
                 Pass ID
               </span>
-              <p className="font-mono font-bold text-sm sm:text-lg text-[#E78023] leading-normal">
+              <p className={cn(
+                "font-mono font-bold text-[#E78023] leading-normal",
+                mode === "dashboard" ? "text-xs sm:text-base" : "text-sm sm:text-lg"
+              )}>
                 {registrationId}
               </p>
             </div>
           </div>
 
           {/* Ticket Perforation Notch */}
-          <div className="relative py-2 flex items-center justify-between px-2 sm:px-4 bg-slate-50">
+          <div className={cn(
+            "relative flex items-center justify-between px-2 sm:px-4 bg-slate-50",
+            mode === "dashboard" ? "py-1.5" : "py-2"
+          )}>
             <div className="w-5 h-5 -ml-5 sm:-ml-7 rounded-full bg-[#F8FAFC] border border-slate-200" />
             <div className="w-full border-t-2 border-dashed border-slate-300 mx-4" />
             <div className="w-5 h-5 -mr-5 sm:-mr-7 rounded-full bg-[#F8FAFC] border border-slate-200" />
           </div>
 
           {/* Ticket Body - Horizontal Layout */}
-          <div className="p-6 sm:p-8 flex flex-row items-center justify-between gap-6 sm:gap-8 bg-white">
+          <div className={cn(
+            "flex flex-row items-center justify-between bg-white",
+            mode === "dashboard"
+              ? "p-4 sm:p-5 gap-4 sm:gap-6"
+              : "p-6 sm:p-8 gap-6 sm:gap-8"
+          )}>
             
             {/* Main Info */}
-            <div className="flex-1 min-w-0 space-y-4">
+            <div className={cn(
+              "flex-1 min-w-0",
+              mode === "dashboard" ? "space-y-2 sm:space-y-2.5" : "space-y-4"
+            )}>
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[11px] sm:text-xs font-bold uppercase tracking-widest text-[#E78023] block leading-normal">
+                  <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-[#E78023] block leading-normal">
                     Event Selection
                   </span>
                   {parentEventName && (
@@ -221,34 +256,43 @@ export function TicketPass({
                     </span>
                   )}
                 </div>
-                <h4 className="font-extrabold text-xl sm:text-2xl text-[#0F172A] mt-0.5 font-sans leading-snug pb-1">
+                <h4 className={cn(
+                  "font-extrabold text-[#0F172A] mt-0.5 font-sans leading-snug pb-0.5",
+                  mode === "dashboard" ? "text-lg sm:text-xl" : "text-xl sm:text-2xl"
+                )}>
                   {eventName}
                 </h4>
-                <p className="text-xs text-slate-500 mt-0.5 font-medium leading-normal">
+                <p className={cn(
+                  "text-slate-500 font-medium leading-normal",
+                  mode === "dashboard" ? "text-[11px] sm:text-xs mt-0" : "text-xs mt-0.5"
+                )}>
                   {eventDate} • {eventVenue}
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 text-xs">
+              <div className={cn(
+                "grid grid-cols-2 text-xs",
+                mode === "dashboard" ? "gap-2.5 sm:gap-3" : "gap-4"
+              )}>
                 <div className="min-w-0">
-                  <span className="text-slate-500 uppercase font-bold text-[10px] block leading-normal">
+                  <span className="text-slate-500 uppercase font-bold text-[9px] sm:text-[10px] block leading-normal">
                     Participant
                   </span>
-                  <p className="font-bold text-slate-900 text-sm font-sans leading-snug pb-0.5">{participantName}</p>
-                  <p className="text-slate-600 text-[11px] font-medium leading-normal">{department} ({year})</p>
+                  <p className="font-bold text-slate-900 text-xs sm:text-sm font-sans leading-snug truncate pb-0.5">{participantName}</p>
+                  <p className="text-slate-600 text-[10px] sm:text-[11px] font-medium leading-normal truncate">{department} ({year})</p>
                 </div>
 
                 <div className="min-w-0">
-                  <span className="text-slate-500 uppercase font-bold text-[10px] block leading-normal">
+                  <span className="text-slate-500 uppercase font-bold text-[9px] sm:text-[10px] block leading-normal">
                     Category / Squad
                   </span>
-                  <p className="font-bold text-slate-900 text-sm font-sans leading-snug pb-0.5">
+                  <p className="font-bold text-slate-900 text-xs sm:text-sm font-sans leading-snug truncate pb-0.5">
                     {teamType === "Team" ? teamName || "Team Entry" : "Individual Entry"}
                   </p>
                   <Badge 
                     variant={status === "CHECKED_IN" ? "success" : status === "CANCELLED" ? "rose" : paymentStatus === "PENDING" ? "warning" : "orange"} 
                     size="sm" 
-                    className="mt-1"
+                    className={mode === "dashboard" ? "mt-0.5 text-[10px] py-0 px-2" : "mt-1"}
                   >
                     {paymentStatus === "PENDING" ? "PENDING REVIEW" : (status || "CONFIRMED")}
                   </Badge>
@@ -256,11 +300,17 @@ export function TicketPass({
               </div>
 
               {teamMembers && teamMembers.length > 0 && (
-                <div className="pt-2 border-t border-slate-100 font-medium">
-                  <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider block leading-normal">
+                <div className={cn(
+                  "border-t border-slate-100 font-medium",
+                  mode === "dashboard" ? "pt-1.5" : "pt-2"
+                )}>
+                  <span className="text-[9px] sm:text-[10px] text-slate-500 uppercase font-bold tracking-wider block leading-normal">
                     Roster Members:
                   </span>
-                  <p className="text-xs text-slate-700 mt-0.5 leading-relaxed font-sans">
+                  <p className={cn(
+                    "text-slate-700 leading-relaxed font-sans line-clamp-2",
+                    mode === "dashboard" ? "text-[11px] mt-0.5" : "text-xs mt-0.5"
+                  )}>
                     {teamMembers.join(" • ")}
                   </p>
                 </div>
@@ -268,15 +318,20 @@ export function TicketPass({
             </div>
 
             {/* Visual Scannable QR Code & Verification Block */}
-            <div className="w-44 sm:w-48 shrink-0 flex flex-col items-center justify-center p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-2.5">
-              <div className="relative p-2 bg-white rounded-xl shadow-xs border border-slate-200 flex items-center justify-center overflow-hidden">
+            <div className={cn(
+              "shrink-0 flex flex-col items-center justify-center rounded-2xl bg-slate-50 border border-slate-200 text-center",
+              mode === "dashboard"
+                ? "w-36 sm:w-40 p-2.5 sm:p-3 space-y-1.5"
+                : "w-44 sm:w-48 p-4 sm:p-5 space-y-2.5"
+            )}>
+              <div className="relative p-1.5 bg-white rounded-xl shadow-xs border border-slate-200 flex items-center justify-center overflow-hidden">
                 <ScannableQRCode
                   value={
                     typeof window !== "undefined"
                       ? `${window.location.origin}/verify/${encodeURIComponent(registrationId)}`
                       : `https://srcjdcoem.in/verify/${encodeURIComponent(registrationId)}`
                   }
-                  size={116}
+                  size={mode === "dashboard" ? 92 : 116}
                   level="H"
                   includeMargin={true}
                   fgColor="#0F172A"
@@ -286,18 +341,18 @@ export function TicketPass({
               </div>
 
               <div className="space-y-0.5">
-                <span className="font-mono text-[11px] font-bold text-[#E78023] block tracking-wider leading-normal">
+                <span className="font-mono text-[10px] sm:text-[11px] font-bold text-[#E78023] block tracking-wider leading-normal truncate max-w-full">
                   {ticketCode}
                 </span>
-                <p className="text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1 leading-normal">
+                <p className="text-[9px] sm:text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1 leading-normal">
                   {paymentStatus === "PENDING" ? (
                     <>
-                      <Clock className="w-3 h-3 text-amber-600" />
+                      <Clock className="w-2.5 h-2.5 text-amber-600 shrink-0" />
                       <span className="text-amber-700 font-bold">Awaiting Verification</span>
                     </>
                   ) : (
                     <>
-                      <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                      <ShieldCheck className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
                       <span>Scan for Gate Check-In</span>
                     </>
                   )}
@@ -308,54 +363,20 @@ export function TicketPass({
           </div>
 
           {/* Ticket Bottom Endorsement Footer */}
-          <div className="px-6 py-3.5 sm:px-8 sm:py-4 bg-slate-50 border-t border-slate-200 flex flex-row items-center justify-between text-[11px] sm:text-xs text-slate-500 font-medium gap-2 leading-normal">
-            <p>Entry permitted only with valid physical College ID card.</p>
-            <p className="font-semibold text-slate-700">JDCOEM Nagpur • SRC Sahastradeep</p>
+          <div className={cn(
+            "bg-slate-50 border-t border-slate-200 flex flex-row items-center justify-between font-medium gap-2 leading-normal",
+            mode === "dashboard"
+              ? "px-5 py-2 sm:px-6 sm:py-2.5 text-[10px] text-slate-500"
+              : "px-6 py-3.5 sm:px-8 sm:py-4 text-[11px] sm:text-xs text-slate-500"
+          )}>
+            <p className="truncate">Entry permitted only with valid physical College ID card.</p>
+            <p className="font-semibold text-slate-700 shrink-0">JDCOEM • Sahastradeep</p>
           </div>
         </div>
       </div>
 
-      {/* Action Buttons */}
-      {mode === "dashboard" ? (
-        <div className="sm:hidden flex items-center justify-center gap-3 pt-2">
-          {/* 1 Save Pass Button in place of Add to Calendar */}
-          <Button
-            onClick={handleDownloadImage}
-            disabled={isDownloading}
-            variant="outline"
-            size="md"
-            className="flex-1 max-w-[170px] gap-2 font-semibold"
-          >
-            {isDownloading ? (
-              <span key="exporting" className="inline-flex items-center gap-1.5">
-                <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#E78023]" />
-                <span>Saving...</span>
-              </span>
-            ) : downloadSuccess ? (
-              <span key="exported" className="inline-flex items-center gap-1.5">
-                <Check className="w-3.5 h-3.5 text-emerald-500" />
-                <span>Saved!</span>
-              </span>
-            ) : (
-              <span key="idle" className="inline-flex items-center gap-1.5">
-                <Download className="w-3.5 h-3.5 text-[#E78023]" />
-                <span>Save Pass</span>
-              </span>
-            )}
-          </Button>
-
-          {onClose && (
-            <Button
-              onClick={onClose}
-              variant="outline"
-              size="md"
-              className="flex-1 max-w-[170px] gap-2 font-semibold text-slate-700 hover:text-slate-900"
-            >
-              <span>Close Pass</span>
-            </Button>
-          )}
-        </div>
-      ) : (
+      {/* Action Buttons - Only on standalone registration completion page */}
+      {mode !== "dashboard" && (
         <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 pt-2 sm:pt-4">
           {/* 1-Click Save Pass Image to Gallery (Desktop / Tablet) */}
           <Button

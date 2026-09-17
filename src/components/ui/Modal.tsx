@@ -15,6 +15,7 @@ interface ModalProps {
   closeOnEscape?: boolean;
   showCloseButton?: boolean;
   contentClassName?: string;
+  dialogClassName?: string;
   headerAction?: React.ReactNode;
 }
 
@@ -35,6 +36,7 @@ export function Modal({
   closeOnEscape = true,
   showCloseButton = true,
   contentClassName,
+  dialogClassName,
   headerAction,
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
@@ -213,7 +215,8 @@ export function Modal({
         ref={modalRef}
         className={cn(
           "relative w-full max-w-full min-w-0 bg-white border border-slate-200 rounded-3xl shadow-2xl z-10 my-auto flex flex-col max-h-[92vh] sm:max-h-[86vh] overflow-hidden text-slate-800 overscroll-contain select-text shrink-0 modal-dialog-card",
-          maxWidthClasses[maxWidth]
+          maxWidthClasses[maxWidth],
+          dialogClassName
         )}
       >
         {/* Header - render dedicated header bar only when title or subtitle is supplied */}
