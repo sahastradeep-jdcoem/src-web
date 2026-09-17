@@ -81,6 +81,8 @@ interface UniversalImageUploaderProps {
   aspectRatioOverride?: AspectRatioType;
   /** Override allowed aspect ratios (usually derived from purpose) */
   allowedAspectRatiosOverride?: AspectRatioType[];
+  /** Lock the cropper to defaultAspectRatio / allowed aspect ratio only */
+  lockAspectRatioOverride?: boolean;
   /** Automatically open crop modal on file select (defaults to true for avatars or fixed-aspect images) */
   autoCrop?: boolean;
 }
@@ -99,6 +101,7 @@ export function UniversalImageUploader({
   className = "",
   aspectRatioOverride,
   allowedAspectRatiosOverride,
+  lockAspectRatioOverride,
   autoCrop,
 }: UniversalImageUploaderProps) {
   const profile = getImageProfile(purpose);
@@ -163,6 +166,10 @@ export function UniversalImageUploader({
   // Aspect ratio from profile or override
   const defaultRatio = aspectRatioOverride || profile.defaultAspectRatio;
   const allowedRatios = allowedAspectRatiosOverride || profile.allowedAspectRatios;
+  const isLocked =
+    lockAspectRatioOverride !== undefined
+      ? lockAspectRatioOverride
+      : (allowedRatios.length === 1 ? true : profile.lockAspectRatio);
 
   // ─── Cloud Upload (Blaze Mode) ──────────────────────────────────────────
 
@@ -710,7 +717,7 @@ export function UniversalImageUploader({
           imageSrc={rawImageToCrop}
           initialAspectRatio={defaultRatio === "auto" ? "16:9" : (defaultRatio as AspectRatioType)}
           allowedAspectRatios={allowedRatios as AspectRatioType[]}
-          lockAspectRatio={profile.lockAspectRatio}
+          lockAspectRatio={isLocked}
           isAvatar={profile.circularMask}
           onCropComplete={handleCropComplete}
           title={`Crop & Frame ${displayLabel}`}

@@ -74,9 +74,22 @@ export function ImageCropperModal({
   const effectiveAllowedRatios: AspectRatioType[] | undefined = 
     lockAspectRatio && initialAspectRatio && initialAspectRatio !== "auto" && initialAspectRatio !== "free"
       ? [initialAspectRatio]
-      : allowedAspectRatios;
+      : (allowedAspectRatios && allowedAspectRatios.length === 1
+          ? allowedAspectRatios
+          : allowedAspectRatios);
 
-  const [selectedRatio, setSelectedRatio] = useState<AspectRatioType>(initialAspectRatio);
+  const initialRatioCalc: AspectRatioType = (() => {
+    if (effectiveAllowedRatios && effectiveAllowedRatios.length > 0) {
+      if (!effectiveAllowedRatios.includes(initialAspectRatio)) {
+        return effectiveAllowedRatios[0];
+      }
+    }
+    return initialAspectRatio;
+  })();
+
+  const isCouncilAvatarContext = isAvatar || purpose === "avatar";
+
+  const [selectedRatio, setSelectedRatio] = useState<AspectRatioType>(initialRatioCalc);
   const [zoom, setZoom] = useState<number>(1);
   const [rotationSteps, setRotationSteps] = useState<number>(0); // 90-degree increments
   const [fineAngle, setFineAngle] = useState<number>(0); // -45 to +45 fine leveling
@@ -86,8 +99,10 @@ export function ImageCropperModal({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [showGrid, setShowGrid] = useState(true);
-  const [showCardFrame, setShowCardFrame] = useState(initialAspectRatio === "4:5" || initialAspectRatio === "3:4");
-  const [showCircleMask, setShowCircleMask] = useState(isAvatar && (initialAspectRatio === "1:1" || initialAspectRatio === "auto"));
+  const [showCardFrame, setShowCardFrame] = useState(
+    isCouncilAvatarContext && (initialRatioCalc === "4:5" || initialRatioCalc === "3:4")
+  );
+  const [showCircleMask, setShowCircleMask] = useState(isAvatar && (initialRatioCalc === "1:1" || initialRatioCalc === "auto"));
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imgNaturalSize, setImgNaturalSize] = useState({ width: 0, height: 0 });
   const [activeTab, setActiveTab] = useState<"crop" | "transform">("crop");
@@ -318,10 +333,10 @@ export function ImageCropperModal({
       setFlipH(false);
       setFlipV(false);
       setPan({ x: 0, y: 0 });
-      setShowCardFrame(initial === "4:5" || initial === "3:4");
+      setShowCardFrame(isCouncilAvatarContext && (initial === "4:5" || initial === "3:4"));
       setShowCircleMask(isAvatar && initial === "1:1");
     }
-  }, [isOpen, initialAspectRatio, effectiveAllowedRatios, isAvatar]);
+  }, [isOpen, initialAspectRatio, effectiveAllowedRatios, isAvatar, isCouncilAvatarContext]);
 
   // Mouse & Touch Pointer Pan and Touchscreen Pinch Zoom handlers
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -652,11 +667,32 @@ export function ImageCropperModal({
   if (!isOpen || !imageSrc) return null;
 
   const allRatioOptions: RatioPreset[] = [
-    { id: "4:5", label: "4:5 Team Card", sublabel: "Council Card / Portrait", ratio: 4 / 5, width: 12, height: 15 },
+    { 
+      id: "4:5", 
+      label: purpose === "eventPoster" ? "4:5 Vertical Poster" : "4:5 Portrait Card", 
+      sublabel: purpose === "eventPoster" ? "Official Notice / Pass Poster" : "Council Card / Portrait", 
+      ratio: 4 / 5, 
+      width: 12, 
+      height: 15 
+    },
     { id: "3:4", label: "3:4 Portrait", sublabel: "Portrait Postcard", ratio: 3 / 4, width: 12, height: 16 },
     { id: "1:1", label: "1:1 Square", sublabel: "Avatar / Logo / Badge", ratio: 1, width: 14, height: 14 },
-    { id: "16:9", label: "16:9 Banner", sublabel: "Landscape Hero / Card", ratio: 16 / 9, width: 18, height: 10 },
-    { id: "21:9", label: "21:9 Panoramic", sublabel: "Ultrawide Banner", ratio: 21 / 9, width: 22, height: 9 },
+    { 
+      id: "16:9", 
+      label: purpose === "cardCover" ? "16:9 Card Thumbnail" : "16:9 Banner", 
+      sublabel: purpose === "cardCover" ? "Catalog Card & Dashboard" : "Landscape Hero / Card", 
+      ratio: 16 / 9, 
+      width: 18, 
+      height: 10 
+    },
+    { 
+      id: "21:9", 
+      label: "21:9 Header Banner", 
+      sublabel: "Cinematic Detail Page Backdrop", 
+      ratio: 21 / 9, 
+      width: 22, 
+      height: 9 
+    },
     { id: "free", label: "Original Ratio", sublabel: "Natural Dimensions", ratio: 0, width: 14, height: 12 },
   ];
 
@@ -685,7 +721,7 @@ export function ImageCropperModal({
 
             {/* Quick Overlays Toolbar */}
             <div className="flex items-center gap-1.5">
-              {(selectedRatio === "4:5" || selectedRatio === "3:4") && (
+              {isCouncilAvatarContext && (selectedRatio === "4:5" || selectedRatio === "3:4") && (
                 <button
                   type="button"
                   onClick={() => setShowCardFrame(!showCardFrame)}
@@ -876,7 +912,7 @@ export function ImageCropperModal({
             )}
 
             {/* Team Card Frame Simulated Guide (Card Header Badge & Bottom Text Overlay) */}
-            {showCardFrame && (selectedRatio === "4:5" || selectedRatio === "3:4") && (
+            {showCardFrame && isCouncilAvatarContext && (selectedRatio === "4:5" || selectedRatio === "3:4") && (
               <div className="absolute inset-0 pointer-events-none flex flex-col justify-between">
                 {/* Simulated Top Tag */}
                 <div className="p-3 flex items-center justify-between">

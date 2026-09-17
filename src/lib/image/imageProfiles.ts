@@ -96,18 +96,18 @@ const LOGO_PROFILE: ImageProfile = {
 
 /**
  * Event posters contain fine typography, dates, sponsor logos, and QR codes.
- * Higher dimensions (1440×1920) and 0.90 quality keep fine graphics and text perfectly legible on all devices.
+ * High dimensions (1080×1350) and 0.90 quality deliver razor-sharp 4:5 vertical posters.
  */
 const EVENT_POSTER_PROFILE: ImageProfile = {
   label: "Event Poster",
-  maxWidth: 1440,
-  maxHeight: 1920,
+  maxWidth: 1080,
+  maxHeight: 1350,
   quality: 0.90,
   format: "image/webp",
   preserveTransparency: false,
-  defaultAspectRatio: "3:4",
-  allowedAspectRatios: ["3:4", "4:5", "16:9", "1:1", "free"],
-  lockAspectRatio: false,
+  defaultAspectRatio: "4:5",
+  allowedAspectRatios: ["4:5"],
+  lockAspectRatio: true,
   circularMask: false,
   targetSizeHint: "Cloud CDN Ultra-HD Event Poster",
   maxInlineBytes: 250_000,
@@ -121,8 +121,8 @@ const CARD_COVER_PROFILE: ImageProfile = {
   format: "image/webp",
   preserveTransparency: false,
   defaultAspectRatio: "16:9",
-  allowedAspectRatios: ["16:9", "4:5", "3:4", "1:1", "21:9", "free"],
-  lockAspectRatio: false,
+  allowedAspectRatios: ["16:9"],
+  lockAspectRatio: true,
   circularMask: false,
   targetSizeHint: "Crisp High-Density Card Cover",
   maxInlineBytes: 180_000,
@@ -136,8 +136,8 @@ const BANNER_PROFILE: ImageProfile = {
   format: "image/webp",
   preserveTransparency: false,
   defaultAspectRatio: "21:9",
-  allowedAspectRatios: ["21:9", "16:9", "free"],
-  lockAspectRatio: false,
+  allowedAspectRatios: ["21:9"],
+  lockAspectRatio: true,
   circularMask: false,
   targetSizeHint: "Cinematic 1080p Ultra-Wide Banner",
   maxInlineBytes: 250_000,

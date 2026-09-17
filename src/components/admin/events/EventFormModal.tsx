@@ -2916,6 +2916,9 @@ export function EventFormModal({
                   sublabel="For catalog cards & dashboard"
                   recommendedSize="1200 x 675 px (16:9)"
                   storagePath="events/cards"
+                  aspectRatioOverride="16:9"
+                  allowedAspectRatiosOverride={["16:9"]}
+                  lockAspectRatioOverride={true}
                   previewUrl={form.cardImage}
                   onUploadStateChange={onUploadStateChange}
                   onUrlChange={(url) => {
@@ -2932,6 +2935,9 @@ export function EventFormModal({
                   sublabel="For official notices & passes"
                   recommendedSize="1080 x 1350 px (4:5)"
                   storagePath="events/posters"
+                  aspectRatioOverride="4:5"
+                  allowedAspectRatiosOverride={["4:5"]}
+                  lockAspectRatioOverride={true}
                   previewUrl={form.posterImage}
                   onUploadStateChange={onUploadStateChange}
                   onUrlChange={(url) => {
@@ -2948,6 +2954,9 @@ export function EventFormModal({
                   sublabel="Cinematic backdrop on detail page"
                   recommendedSize="1920 x 820 px (21:9)"
                   storagePath="events/headers"
+                  aspectRatioOverride="21:9"
+                  allowedAspectRatiosOverride={["21:9"]}
+                  lockAspectRatioOverride={true}
                   previewUrl={form.headerImage}
                   onUploadStateChange={onUploadStateChange}
                   onUrlChange={(url) => {
