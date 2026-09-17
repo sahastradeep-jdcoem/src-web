@@ -11,6 +11,8 @@ interface EventCardProps {
   featuredLayout?: boolean;
 }
 
+const DEFAULT_EVENT_IMAGE = "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=1200&auto=format&fit=crop";
+
 export function EventCard({ event, featuredLayout = false }: EventCardProps) {
   const isRegistrationOpen = event.status === "Registration Open";
   const isCompleted = event.status === "Completed";
@@ -21,6 +23,8 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
     ? "slate"
     : "navy";
 
+  const eventImage = event.cardImage || event.poster || DEFAULT_EVENT_IMAGE;
+
   if (featuredLayout) {
     return (
       <div className="group rounded-3xl bg-white border border-slate-200 hover:border-[#17458F]/30 hover:shadow-xl transition-all duration-300 overflow-hidden shadow-xs flex flex-col lg:flex-row font-sans">
@@ -28,8 +32,8 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
         {/* Poster / Card Image */}
         <div className="relative lg:w-3/5 h-64 sm:h-80 lg:h-auto overflow-hidden">
           <Image
-            src={event.cardImage || event.poster}
-            alt={event.name}
+            src={eventImage}
+            alt={event.name || "Event Image"}
             fill
             unoptimized={true}
             className="object-cover transition-transform duration-500 group-hover:scale-[1.02]"
@@ -156,8 +160,8 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
       {/* Top Image Container */}
       <div className="relative h-48 w-full overflow-hidden">
         <Image
-          src={event.cardImage || event.poster}
-          alt={event.name}
+          src={eventImage}
+          alt={event.name || "Event Image"}
           fill
           unoptimized={true}
           className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"

@@ -22,7 +22,8 @@ import {
   syncEventsFromFirestore, 
   subscribeToEvents, 
   sortEventsByDate,
-  getEventDateTimestamp
+  getEventDateTimestamp,
+  sanitizeEventItem
 } from "@/lib/eventsStore";
 import { 
   getPublicTenures, 
@@ -150,11 +151,18 @@ export default function EventsPage() {
     const archivedTenures = tenuresList.filter((t) => !t.isDraft && !t.isCurrent);
     archivedTenures.forEach((t) => {
       if (Array.isArray(t.events)) {
-        t.events.forEach((evt) => {
-          if (evt && (evt.id || evt.slug)) {
-            const key = evt.id || evt.slug;
+        t.events.forEach((rawEvt, idx) => {
+          if (rawEvt) {
+            const sanitized = sanitizeEventItem(rawEvt);
+            const key = sanitized.id || sanitized.slug || `archive-${t.id}-${idx}`;
             map.set(key, {
-              ...evt,
+              ...sanitized,
+              id: sanitized.id || key,
+              name: sanitized.name || "Event",
+              category: sanitized.category || "Event",
+              status: sanitized.status || "Completed",
+              date: sanitized.date || "Past Session",
+              venue: sanitized.venue || "Campus",
               tenureLabel: t.label,
               tenureNumber: t.tenureNumber,
             });
@@ -165,12 +173,19 @@ export default function EventsPage() {
 
     // 2. Concluded / past events from the current session
     const currentTenure = getCurrentTenure();
-    eventsList.forEach((e) => {
+    eventsList.forEach((e, idx) => {
       if (e.isLive !== false && (e.status === "Completed" || e.status?.toLowerCase() === "completed")) {
-        const key = e.id || e.slug;
+        const sanitized = sanitizeEventItem(e);
+        const key = sanitized.id || sanitized.slug || `current-past-${idx}`;
         if (!map.has(key)) {
           map.set(key, {
-            ...e,
+            ...sanitized,
+            id: sanitized.id || key,
+            name: sanitized.name || "Event",
+            category: sanitized.category || "Event",
+            status: sanitized.status || "Completed",
+            date: sanitized.date || "Past Session",
+            venue: sanitized.venue || "Campus",
             tenureLabel: currentTenure?.label || "2025–26",
             tenureNumber: currentTenure?.tenureNumber || "1st Tenure",
           });

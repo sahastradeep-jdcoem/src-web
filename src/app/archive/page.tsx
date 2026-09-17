@@ -225,8 +225,8 @@ export default function ArchivePage() {
                       >
                         <div className="relative h-44 w-full overflow-hidden bg-slate-200">
                           <Image
-                            src={evt.poster}
-                            alt={evt.name}
+                            src={evt.poster || evt.cardImage || evt.posterImage || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=1200&auto=format&fit=crop"}
+                            alt={evt.name || "Event Image"}
                             fill
                             unoptimized={true}
                             className="object-cover"
