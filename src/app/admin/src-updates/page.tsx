@@ -49,9 +49,12 @@ import {
 import { 
   getStoredUsers, 
   syncUsersFromFirestore, 
-  RegisteredUserRecord 
+  RegisteredUserRecord,
+  resolveDesignationByBtId,
+  formatDesignationBadge
 } from "@/lib/usersStore";
 import { getStoredCouncilMembers } from "@/lib/councilStore";
+import { getCurrentTenure, CouncilTenure } from "@/lib/tenureStore";
 import { useAuth } from "@/context/AuthContext";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import Link from "next/link";
@@ -167,28 +170,29 @@ export default function AdminSrcUpdatesPage() {
     };
 
     window.addEventListener("src_users_updated", handleUsersUpdate);
+    window.addEventListener("src_tenures_updated", () => {
+      setSavedMembers(getAllSavedSrcMembers());
+    });
 
     return () => {
       unsubDispatches();
       window.removeEventListener("src_users_updated", handleUsersUpdate);
+      window.removeEventListener("src_tenures_updated", () => {});
     };
   }, []);
 
-  // Council portal adoption statistics
+  // Council portal adoption statistics (Tenure-wise across all SRC tiers: Admins, Spokespersons, Heads, Co-Heads, Members)
   const councilAdoption = useMemo(() => {
-    // 1. Central Council members (excluding faculty mentors)
-    const storedCouncil = getStoredCouncilMembers();
-    const centralCouncilMembers = storedCouncil.filter(
-      (m) => !/mentor/i.test(m.role || "") && !/sarvashree|munesh/i.test(m.name || "") && m.btId
-    );
-    const totalCentralCouncil = centralCouncilMembers.length > 0 ? centralCouncilMembers.length : 12;
+    // 1. Get current active tenure
+    const currentTenure: CouncilTenure = getCurrentTenure();
+    const tenureLabel = currentTenure?.label || "2025-26";
 
     // 2. Active registered users set of normalized BT IDs and emails
     const registeredBtIds = new Set<string>();
     const registeredEmails = new Set<string>();
 
     users.forEach((u) => {
-      if (!u.isDeleted) {
+      if (!u.isDeleted && u.status !== "deleted") {
         if (u.btId && u.btId.trim()) {
           registeredBtIds.add(u.btId.trim().toUpperCase());
         }
@@ -198,28 +202,124 @@ export default function AdminSrcUpdatesPage() {
       }
     });
 
-    // 3. Count onboarded central council
-    const onboardedCentralCouncil = centralCouncilMembers.filter((m) => {
-      const bt = (m.btId || "").trim().toUpperCase();
-      const em = (m.email || "").trim().toLowerCase();
-      return (bt && registeredBtIds.has(bt)) || (em && registeredEmails.has(em));
-    }).length;
+    // 3. Map of all unique student SRC positions in this active tenure by BT ID
+    // Tiers: Admin Council, Hosting Committee, Spokespersons, Club Leaders (Heads/Co-Heads), and Club Members
+    const tenureMemberMap = new Map<string, {
+      btId: string;
+      name: string;
+      role: string;
+      tier: "admin" | "spokesperson" | "head" | "cohead" | "member";
+    }>();
 
-    // 4. Count onboarded across all SRC levels (heads, co-heads, spokespersons, council)
-    const onboardedAllSrcCount = savedMembers.filter((m) => {
-      const bt = (m.btId || "").trim().toUpperCase();
-      return bt && registeredBtIds.has(bt);
-    }).length;
+    const registerMember = (btId?: string, name?: string, role?: string, defaultTier: "admin" | "spokesperson" | "head" | "cohead" | "member" = "member") => {
+      if (!btId || !btId.trim()) return;
+      const cleanBt = btId.trim().toUpperCase();
+      // Exclude mentors or test keys without real student BT IDs
+      if (/mentor/i.test(role || "") || (name && /sarvashree|munesh/i.test(name))) {
+        return;
+      }
 
-    const totalAllSrc = savedMembers.length;
-    const centralPercent = Math.round((onboardedCentralCouncil / Math.max(totalCentralCouncil, 1)) * 100);
+      let tier = defaultTier;
+      const rLower = (role || "").toLowerCase();
+      if (rLower.includes("co-head") || rLower.includes("colead") || rLower.includes("co-lead")) {
+        tier = "cohead";
+      } else if (rLower.includes("head") || rLower.includes("lead") || rLower.includes("president") || rLower.includes("secretary") || rLower.includes("coordinator")) {
+        tier = defaultTier === "spokesperson" ? "spokesperson" : defaultTier === "admin" ? "admin" : "head";
+      }
+
+      if (!tenureMemberMap.has(cleanBt)) {
+        tenureMemberMap.set(cleanBt, {
+          btId: cleanBt,
+          name: name?.trim() || "Council Member",
+          role: role?.trim() || "Council Member",
+          tier,
+        });
+      }
+    };
+
+    // A. Admin Council from current tenure
+    (currentTenure.adminCouncil || []).forEach((m) => {
+      registerMember(m.btId, m.name, m.role, "admin");
+    });
+
+    // B. Hosting Committee & Spokespersons from current tenure
+    (currentTenure.hostingCommittee || []).forEach((m) => {
+      registerMember(m.btId, m.name, m.role, "spokesperson");
+    });
+
+    // C. Chartered Clubs: Leaders (Heads & Co-Heads) and Regular Members
+    (currentTenure.clubs || []).forEach((club) => {
+      // Leaders
+      const leaders = [
+        ...(club.leaders || []),
+        ...(club.lead ? [club.lead] : []),
+        ...(club.coLead ? [club.coLead] : []),
+        ...(club.coLeads || []),
+      ];
+      leaders.forEach((l) => {
+        const isCoHead = l.roleType === "coLead" || (l.role && l.role.toLowerCase().includes("co-head"));
+        registerMember(l.btId, l.name, `${club.name} ${isCoHead ? "Co-Head" : "Head"}`, isCoHead ? "cohead" : "head");
+      });
+
+      // Club Members
+      if (Array.isArray(club.members)) {
+        club.members.forEach((m) => {
+          registerMember(m.btId, m.name, `${club.name} Member`, "member");
+        });
+      }
+    });
+
+    // D. In case savedMembers has additional active council/club entries with valid BT IDs for this tenure
+    savedMembers.forEach((sm) => {
+      if (sm.btId && !tenureMemberMap.has(sm.btId.trim().toUpperCase())) {
+        const isCoHead = sm.designation?.toLowerCase().includes("co-head");
+        const isHead = sm.designation?.toLowerCase().includes("head") || sm.level === "Club Leadership";
+        const isSpokes = sm.level === "Hosting Committee" || sm.level === "Spokesperson";
+        const isAdmin = sm.level === "Admin Council";
+        const tier = isCoHead ? "cohead" : isHead ? "head" : isSpokes ? "spokesperson" : isAdmin ? "admin" : "member";
+        registerMember(sm.btId, sm.name, sm.designation, tier);
+      }
+    });
+
+    // Also include any active registered users who have already been awarded an SRC designation badge
+    users.forEach((u) => {
+      if (!u.isDeleted && u.status !== "deleted" && u.btId && u.btId.trim()) {
+        const cleanBt = u.btId.trim().toUpperCase();
+        if (!tenureMemberMap.has(cleanBt)) {
+          const designation = resolveDesignationByBtId(cleanBt, u.displayName || u.name || undefined);
+          if (designation && designation.designationBadge) {
+            registerMember(cleanBt, u.displayName || u.name || "Student", designation.designationBadge, designation.isCouncilOfficer ? "admin" : "member");
+          }
+        }
+      }
+    });
+
+    const allTenureMembersList = Array.from(tenureMemberMap.values());
+    const totalTenureMembers = allTenureMembersList.length;
+
+    // Filter members that have an active registered account on the portal
+    const onboardedMembers = allTenureMembersList.filter((m) => registeredBtIds.has(m.btId));
+    const onboardedCount = onboardedMembers.length;
+
+    // Breakdown counts of members using the portal
+    const onboardedAdmins = onboardedMembers.filter((m) => m.tier === "admin").length;
+    const onboardedSpokespersons = onboardedMembers.filter((m) => m.tier === "spokesperson").length;
+    const onboardedHeads = onboardedMembers.filter((m) => m.tier === "head").length;
+    const onboardedCoHeads = onboardedMembers.filter((m) => m.tier === "cohead").length;
+    const onboardedRegularMembers = onboardedMembers.filter((m) => m.tier === "member").length;
+
+    const percent = Math.round((onboardedCount / Math.max(totalTenureMembers, 1)) * 100);
 
     return {
-      onboardedCentralCouncil,
-      totalCentralCouncil,
-      onboardedAllSrcCount,
-      totalAllSrc,
-      centralPercent,
+      tenureLabel,
+      onboardedCount,
+      totalTenureMembers,
+      percent,
+      onboardedAdmins,
+      onboardedSpokespersons,
+      onboardedHeads,
+      onboardedCoHeads,
+      onboardedRegularMembers,
     };
   }, [users, savedMembers]);
 
@@ -475,18 +575,21 @@ export default function AdminSrcUpdatesPage() {
           <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-[#17458F] to-[#0d2f66] text-white flex items-center justify-center shrink-0 shadow-xs">
             <UserCheck className="w-5 h-5" />
           </div>
-          <div className="space-y-0.5">
+          <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-heading font-bold text-sm sm:text-base text-slate-900">
                 Council Portal Adoption
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-100/80 text-[#17458F] border border-blue-200/80">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
-                {councilAdoption.centralPercent}% Reached
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#17458F]/10 text-[#17458F] border border-[#17458F]/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#17458F] animate-pulse"></span>
+                Tenure {councilAdoption.tenureLabel}
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                {councilAdoption.onboardedCount} of {councilAdoption.totalTenureMembers} Linked ({councilAdoption.percent}%)
               </span>
             </div>
-            <p className="text-xs text-slate-600">
-              <strong className="text-slate-900 font-semibold">{councilAdoption.onboardedCentralCouncil} of {councilAdoption.totalCentralCouncil}</strong> Central Council members hold an active portal account ({councilAdoption.onboardedAllSrcCount} total across all SRC tiers).
+            <p className="text-xs text-slate-600 leading-relaxed">
+              <strong className="text-slate-900 font-semibold">{councilAdoption.onboardedCount} SRC members</strong> (admins, spokespersons, club heads, co-heads &amp; members) have active portal accounts linked by BT ID in this tenure.
             </p>
           </div>
         </div>
