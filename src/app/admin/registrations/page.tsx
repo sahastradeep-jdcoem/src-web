@@ -354,8 +354,11 @@ export default function AdminRegistrationsPage() {
   const tenureFilteredEvents = useMemo(() => {
     if (selectedTenureId === "all") return eventsList;
     const matchedTenure = tenuresList.find((t) => t.id === selectedTenureId);
-    if (!matchedTenure || !matchedTenure.events) return eventsList;
-    return matchedTenure.events;
+    if (!matchedTenure) return eventsList;
+    if (matchedTenure.isCurrent || matchedTenure.status === "active") {
+      return eventsList;
+    }
+    return matchedTenure.events || [];
   }, [eventsList, selectedTenureId, tenuresList]);
 
   // Autocomplete / search filtered events for dropdown
@@ -471,15 +474,79 @@ export default function AdminRegistrationsPage() {
 
     // Filter by tenure
     if (selectedTenureId !== "all") {
-      const tenureEvents = tenuresList.find((t) => t.id === selectedTenureId)?.events || [];
-      const tenureEventSlugs = new Set(tenureEvents.map((e) => e.slug.toLowerCase()));
-      const tenureEventNames = new Set(tenureEvents.map((e) => e.name.toLowerCase()));
+      const currentTenure = tenuresList.find((t) => t.id === selectedTenureId);
+      if (!currentTenure) return list;
+
+      // Draft tenures should never capture live registrations unless explicitly assigned
+      if (currentTenure.isDraft || currentTenure.status === "draft") {
+        return list.filter((r: any) => r.tenureId === selectedTenureId);
+      }
+
+      const tenureEvents = currentTenure.events || [];
+      const tenureEventSlugs = new Set(tenureEvents.map((e) => (e.slug || "").toLowerCase()));
+      const tenureEventNames = new Set(tenureEvents.map((e) => (e.name || "").toLowerCase()));
+      const tenureEventIds = new Set(tenureEvents.map((e) => (e.id || "").toLowerCase()));
+
+      const targetId = selectedTenureId.toLowerCase().trim();
+      const targetLabel = (currentTenure.label || "").toLowerCase().trim();
+      const targetYearDigits = (currentTenure.academicYear || currentTenure.label || "").replace(/[^0-9]/g, "");
+
+      const tenureStartMs = currentTenure.startDate ? new Date(currentTenure.startDate).getTime() : NaN;
+      const tenureEndMs = currentTenure.endDate ? new Date(currentTenure.endDate).getTime() : NaN;
+      const isActiveTenure = !!(currentTenure.isCurrent || currentTenure.status === "active");
 
       list = list.filter((r: any) => {
-        if (r.tenureId && r.tenureId === selectedTenureId) return true;
-        const eSlug = (r.eventSlug || r.eventId || "").toLowerCase();
-        const eName = (r.eventName || "").toLowerCase();
-        return tenureEventSlugs.has(eSlug) || tenureEventNames.has(eName);
+        // 1. Direct match on explicit tenureId
+        if (r.tenureId) {
+          const cleanTid = r.tenureId.toLowerCase().trim();
+          const rYearDigits = cleanTid.replace(/[^0-9]/g, "");
+          if (
+            cleanTid === targetId ||
+            cleanTid === targetLabel ||
+            cleanTid.includes(targetLabel) ||
+            targetId.includes(cleanTid) ||
+            (targetYearDigits && rYearDigits && (targetYearDigits.includes(rYearDigits) || rYearDigits.includes(targetYearDigits)))
+          ) {
+            return true;
+          }
+        }
+
+        // 2. Match via event association
+        const rSlug = (r.eventSlug || "").toLowerCase();
+        const rId = (r.eventId || "").toLowerCase();
+        const rName = (r.eventName || "").toLowerCase();
+
+        if (
+          (rSlug && (tenureEventSlugs.has(rSlug) || tenureEventIds.has(rSlug))) ||
+          (rId && (tenureEventIds.has(rId) || tenureEventSlugs.has(rId))) ||
+          (rName && tenureEventNames.has(rName))
+        ) {
+          return true;
+        }
+
+        // 3. Current live tenure matches all active events in eventsList
+        if (isActiveTenure) {
+          const matchesCurrentEvent = eventsList.some((e) =>
+            (e.id && (e.id === r.eventId || e.id === r.eventSlug)) ||
+            (e.slug && (e.slug === r.eventSlug || e.slug === r.eventId)) ||
+            (e.name && e.name.toLowerCase() === rName)
+          );
+          if (matchesCurrentEvent) return true;
+          if (!r.tenureId) return true;
+        }
+
+        // 4. Historical archived tenure boundary check (only when both startDate and endDate exist)
+        if (!isNaN(tenureStartMs) && !isNaN(tenureEndMs) && !isActiveTenure) {
+          const targetTime = r.paidAt || r.registeredAt || r.createdAt || r.timestamp;
+          if (targetTime) {
+            const t = new Date(targetTime).getTime();
+            if (!isNaN(t) && t >= tenureStartMs && t <= tenureEndMs) {
+              return true;
+            }
+          }
+        }
+
+        return false;
       });
     }
 
