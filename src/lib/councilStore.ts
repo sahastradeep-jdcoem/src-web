@@ -737,6 +737,13 @@ export function repairCouncilSwapIfNeeded(members: TeamMember[], isFounding = fa
       }
     }
 
+    // Ensure Nisarg Jambhulkar name spelling consistency in legacy cache
+    if (copy.name && /nisarg\s+jambulkar/i.test(copy.name)) {
+      copy.name = "Nisarg Jambhulkar";
+      if (!copy.email) copy.email = "nisarg20jambhulkar@gmail.com";
+      repaired = true;
+    }
+
     return copy;
   });
 
