@@ -123,12 +123,11 @@ export default function EventsPage() {
   }, [eventsList, searchQuery]);
 
   // Active / Upcoming Events in the live calendar
+  // Current tenure completed events stay here — they only move to Past Tenure
+  // after an explicit tenure change is marked by administrators.
   const activeUpcomingEvents = useMemo(() => {
-    if (searchQuery.trim()) {
-      return filteredEvents;
-    }
-    return filteredEvents.filter((e) => e.status !== "Completed");
-  }, [filteredEvents, searchQuery]);
+    return filteredEvents;
+  }, [filteredEvents]);
 
   // Featured Flagship Event
   const featuredEvent = eventsList.find(
@@ -171,27 +170,10 @@ export default function EventsPage() {
       }
     });
 
-    // 2. Concluded / past events from the current session
-    const currentTenure = getCurrentTenure();
-    eventsList.forEach((e, idx) => {
-      if (e.isLive !== false && (e.status === "Completed" || e.status?.toLowerCase() === "completed")) {
-        const sanitized = sanitizeEventItem(e);
-        const key = sanitized.id || sanitized.slug || `current-past-${idx}`;
-        if (!map.has(key)) {
-          map.set(key, {
-            ...sanitized,
-            id: sanitized.id || key,
-            name: sanitized.name || "Event",
-            category: sanitized.category || "Event",
-            status: sanitized.status || "Completed",
-            date: sanitized.date || "Past Session",
-            venue: sanitized.venue || "Campus",
-            tenureLabel: currentTenure?.label || "2025–26",
-            tenureNumber: currentTenure?.tenureNumber || "1st Tenure",
-          });
-        }
-      }
-    });
+    // NOTE: Current tenure completed events are NOT added here.
+    // They remain in the main "Active & Upcoming" calendar grid.
+    // Events only appear in this archive section when they belong
+    // to an actual archived (non-current, non-draft) tenure.
 
     // Sort descending (most recent past event first, oldest on bottom)
     const list = Array.from(map.values());
@@ -334,7 +316,7 @@ export default function EventsPage() {
           <div className="flex items-center justify-between border-b border-slate-200 pb-4">
             <div>
               <h3 className="font-extrabold text-xl sm:text-2xl text-[#17458F] uppercase tracking-tight">
-                {searchQuery ? `Search Results (${filteredEvents.length})` : `Active & Upcoming Events (${activeUpcomingEvents.length})`}
+                {searchQuery ? `Search Results (${filteredEvents.length})` : `Current Tenure Events (${activeUpcomingEvents.length})`}
               </h3>
               <p className="text-xs text-slate-500 font-medium mt-0.5">
                 {searchQuery ? "Matches from live calendar" : `Official JDCOEM SRC Events for ${currentTenureLabel}`}
