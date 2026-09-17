@@ -66,6 +66,7 @@ import {
   subscribeToPaymentConfig,
   PaymentConfig 
 } from "@/lib/paymentConfigStore";
+import { getCurrentTenure } from "@/lib/tenureStore";
 
 interface RegistrationWizardProps {
   event: EventItem;
@@ -715,7 +716,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         currency: "INR",
         paidAt: paymentDetails?.paymentStatus === "PAID" ? new Date().toISOString() : undefined,
         registeredAt: new Date().toISOString(),
-        tenureId: "tenure-2025-26",
+        tenureId: getCurrentTenure()?.id || "tenure-2025-26",
         customAnswers: Object.keys(structuredAnswers).length > 0 ? structuredAnswers : undefined,
       });
     } catch (e) {
@@ -796,7 +797,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           btId: formData.btId,
           teamType: formData.teamType,
           teamSize: formData.teamType === "Team" ? teamMembers.length : 1,
-          tenureId: "2025-26",
+          tenureId: getCurrentTenure()?.id || "tenure-2025-26",
           upiId: paymentConfig.upiId,
           payeeName: paymentConfig.payeeName,
           paytmMid: paymentConfig.paytmMid,
@@ -880,7 +881,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           btId: formData.btId,
           teamType: formData.teamType,
           teamSize: formData.teamType === "Team" ? teamMembers.length : 1,
-          tenureId: "2025-26",
+          tenureId: getCurrentTenure()?.id || "tenure-2025-26",
           upiId: paymentConfig.upiId,
           payeeName: paymentConfig.payeeName,
           paytmMid: paymentConfig.paytmMid,

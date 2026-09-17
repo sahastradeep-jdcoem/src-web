@@ -242,6 +242,7 @@ export interface RegistrationRecord {
   refundAmount?: number;
   refundedAt?: string;
   eventId?: string;
+  tenureId?: string;
   verifiedBy?: string;
   verifiedAt?: string;
 }
