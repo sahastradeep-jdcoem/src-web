@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { 
   Plus, 
@@ -27,7 +27,8 @@ import {
   Globe,
   GraduationCap,
   Ban,
-  Ticket
+  Ticket,
+  Undo2
 } from "lucide-react";
 import { EventItem, ClubItem, CustomQuestion, TargetAudience } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -76,6 +77,14 @@ export default function AdminEventsPage() {
   const [isDeletingEvent, setIsDeletingEvent] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [pendingUploads, setPendingUploads] = useState(0);
+
+  // Undo-delete state: the event is soft-removed from UI immediately;
+  // real Firestore deletion fires only after the 10-second undo window expires.
+  const [pendingDeleteEvent, setPendingDeleteEvent] = useState<EventItem | null>(null);
+  const [undoCountdown, setUndoCountdown] = useState(0);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const undoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
 
   const handleUploadStateChange = (uploading: boolean) => {
     setPendingUploads((prev) => Math.max(0, prev + (uploading ? 1 : -1)));
@@ -533,43 +542,95 @@ export default function AdminEventsPage() {
     showNotice(`Duplicated "${evt.name}".`);
   };
 
-  const confirmDelete = async () => {
-    if (!eventToDelete) return;
+  /** Clear any running undo timers */
+  const clearUndoTimers = () => {
+    if (undoTimerRef.current) { clearTimeout(undoTimerRef.current); undoTimerRef.current = null; }
+    if (undoIntervalRef.current) { clearInterval(undoIntervalRef.current); undoIntervalRef.current = null; }
+  };
+
+  /** Fire immediately when user clicks the trash icon — soft-removes from UI and starts 10s undo window */
+  const handleDeleteClick = (evt: EventItem) => {
+    // If there's already a pending delete for another event, fire it immediately first
+    if (pendingDeleteEvent && pendingDeleteEvent.id !== evt.id) {
+      clearUndoTimers();
+      executePermanentDelete(pendingDeleteEvent);
+    }
+
+    // Soft-remove from UI instantly
+    setEventsList((prev) => prev.filter((e) => e.id !== evt.id && e.slug !== evt.slug));
+    setPendingDeleteEvent(evt);
+    setUndoCountdown(10);
+
+    // Tick down every second
+    undoIntervalRef.current = setInterval(() => {
+      setUndoCountdown((c) => Math.max(0, c - 1));
+    }, 1000);
+
+    // After 10s — execute real deletion
+    undoTimerRef.current = setTimeout(() => {
+      clearInterval(undoIntervalRef.current!);
+      undoIntervalRef.current = null;
+      executePermanentDelete(evt);
+    }, 10000);
+  };
+
+  /** User clicked Undo — restore the event back into the list */
+  const handleUndoDelete = () => {
+    if (!pendingDeleteEvent) return;
+    clearUndoTimers();
+    const restored = pendingDeleteEvent;
+    // Re-insert at original approximate position (prepend; user can reorder)
+    setEventsList((prev) => {
+      const alreadyPresent = prev.some((e) => e.id === restored.id);
+      if (alreadyPresent) return prev;
+      return [restored, ...prev];
+    });
+    setPendingDeleteEvent(null);
+    setUndoCountdown(0);
+    showNotice(`Restored "${restored.name}".`);
+  };
+
+  /** Actually delete — called when countdown reaches 0 or user navigates away */
+  const executePermanentDelete = async (evt: EventItem) => {
+    setPendingDeleteEvent(null);
+    setUndoCountdown(0);
     setIsDeletingEvent(true);
     try {
-      const deletedName = eventToDelete.name;
-      const deletedId = eventToDelete.id || "";
-      const deletedSlug = eventToDelete.slug || "";
+      const deletedId = evt.id || "";
+      const deletedSlug = evt.slug || "";
+      const deletedName = evt.name;
 
-      // 1. Optimistic local state update — remove from UI immediately
-      const updated = eventsList.filter(
-        (e) => e.id !== deletedId && e.slug !== deletedSlug
-      );
-      setEventsList(updated);
-
-      // 2. Purge pending queue so no stale offline write can resurrect the event
+      // Purge pending queue so no offline write can resurrect this event
       const purgeKeys = [deletedId, deletedSlug, `event_${deletedId}`, `event_${deletedSlug}`].filter(Boolean);
       purgePendingQueueFor(purgeKeys);
 
-      // 3. Permanently delete from all Firestore locations + write tombstone
+      // Permanently delete from all Firestore locations + write tombstone
       await deleteEventPermanentlyFromFirestore(deletedId, deletedSlug, deletedName);
 
-      // 4. Cascade-delete checkout sessions (already done inside deleteEventPermanentlyFromFirestore,
-      //    but called here explicitly for belt-and-suspenders safety)
+      // Belt-and-suspenders cascade for checkout sessions
       await deleteActiveCheckoutSessionsForEvent(deletedId, deletedSlug, deletedName);
 
-      // 5. Save local state to localStorage (without the deleted event)
-      await saveStoredEvents(updated);
+      // Persist local state (without deleted event)
+      const latest = getStoredEvents().filter((e) => e.id !== deletedId && e.slug !== deletedSlug);
+      await saveStoredEvents(latest);
 
-      setEventToDelete(null);
-      showNotice(`Deleted event "${deletedName}" permanently. All records purged.`);
+      showNotice(`"${deletedName}" permanently deleted.`);
     } catch (err) {
-      console.error("Failed to delete event:", err);
-      showNotice("Failed to delete event. Please try again.");
+      console.error("Failed to permanently delete event:", err);
+      showNotice("Delete failed. Please refresh and try again.");
     } finally {
       setIsDeletingEvent(false);
     }
   };
+
+  /** Legacy confirmDelete kept for any other callers (now a no-op redirect) */
+  const confirmDelete = () => {
+    if (eventToDelete) {
+      handleDeleteClick(eventToDelete);
+      setEventToDelete(null);
+    }
+  };
+
 
   const confirmCancelEvent = async () => {
     if (!eventToCancel) return;
@@ -853,6 +914,47 @@ export default function AdminEventsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {/* Undo-delete ghost card — appears for 10s after deletion */}
+          {pendingDeleteEvent && (
+            <div className="group bg-rose-50 rounded-2xl border-2 border-dashed border-rose-300 overflow-hidden shadow-2xs flex flex-col justify-between animate-in fade-in duration-300">
+              {/* Ghost image placeholder */}
+              <div className="relative h-48 w-full bg-rose-100 flex items-center justify-center">
+                <div className="text-center space-y-2 px-4">
+                  <div className="w-10 h-10 rounded-full bg-rose-200 flex items-center justify-center mx-auto">
+                    <Trash2 className="w-5 h-5 text-rose-500" />
+                  </div>
+                  <p className="text-rose-700 font-bold text-sm line-clamp-2">{pendingDeleteEvent.name}</p>
+                  <p className="text-rose-500 text-[11px]">Deleting in {undoCountdown}s…</p>
+                </div>
+                {/* Countdown ring */}
+                <svg
+                  className="absolute top-3 right-3 w-8 h-8 -rotate-90"
+                  viewBox="0 0 36 36"
+                >
+                  <circle cx="18" cy="18" r="15" fill="none" stroke="#fecaca" strokeWidth="3" />
+                  <circle
+                    cx="18" cy="18" r="15" fill="none"
+                    stroke="#ef4444" strokeWidth="3"
+                    strokeDasharray={`${(undoCountdown / 10) * 94.2} 94.2`}
+                    strokeLinecap="round"
+                    style={{ transition: "stroke-dasharray 1s linear" }}
+                  />
+                </svg>
+              </div>
+              {/* Undo action footer */}
+              <div className="px-4 py-3 bg-rose-100/60 border-t border-rose-200 flex items-center justify-between gap-2">
+                <p className="text-[11px] text-rose-700 font-medium">Deleted by mistake?</p>
+                <button
+                  type="button"
+                  onClick={handleUndoDelete}
+                  className="h-8 px-3 rounded-lg bg-white hover:bg-rose-50 text-rose-700 border border-rose-300 text-xs font-bold transition-all inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Undo2 className="w-3.5 h-3.5" />
+                  <span>Undo</span>
+                </button>
+              </div>
+            </div>
+          )}
           {filteredEvents.map((evt) => {
             const isCancelled = evt.isCancelled || evt.status === "Cancelled";
             const isWalkIn = Boolean(evt.noRegistrationRequired);
@@ -1079,7 +1181,7 @@ export default function AdminEventsPage() {
                     )}
                     <button
                       type="button"
-                      onClick={() => setEventToDelete(evt)}
+                      onClick={() => handleDeleteClick(evt)}
                       className="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-all inline-flex items-center justify-center cursor-pointer shadow-2xs"
                       title="Delete Event"
                     >
@@ -1091,56 +1193,6 @@ export default function AdminEventsPage() {
             );
           })}
         </div>
-      )}
-
-      {/* Modal: In-App Delete Confirmation */}
-      {eventToDelete && (
-        <Modal
-          isOpen={!!eventToDelete}
-          onClose={() => setEventToDelete(null)}
-          title="Delete Event"
-          subtitle={`Are you sure you want to remove this event?`}
-          maxWidth="md"
-        >
-          <div className="space-y-6 pt-2">
-            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-              <div className="text-xs space-y-1">
-                <p className="font-bold">This action will immediately delete:</p>
-                <p className="font-semibold text-rose-800 text-sm">{eventToDelete.name}</p>
-                <p className="text-slate-600 text-[11px]">
-                  The event page and listings across the portal will be removed. All associated registrations will be cleaned up.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-              <Button
-                type="button"
-                onClick={() => setEventToDelete(null)}
-                variant="outline"
-                size="sm"
-              >
-                Cancel
-              </Button>
-              <button
-                type="button"
-                onClick={confirmDelete}
-                disabled={isDeletingEvent}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-bold transition-all cursor-pointer shadow-xs inline-flex items-center gap-1.5"
-              >
-                {isDeletingEvent ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Deleting...</span>
-                  </>
-                ) : (
-                  <span>Yes, Delete Event</span>
-                )}
-              </button>
-            </div>
-          </div>
-        </Modal>
       )}
 
       {/* Modal: In-App Cancel Event Confirmation */}
