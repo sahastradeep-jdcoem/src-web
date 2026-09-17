@@ -7,7 +7,6 @@ import {
   Calendar, 
   Sparkles, 
   History, 
-  ChevronRight, 
   ArrowRight,
   Archive
 } from "lucide-react";
@@ -209,27 +208,16 @@ export default function EventsPage() {
 
         {/* Live / Upcoming Events Grid */}
         <div className="space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-            <div>
+          {searchQuery && (
+            <div className="border-b border-slate-200 pb-4">
               <h3 className="font-extrabold text-xl sm:text-2xl text-[#17458F] uppercase tracking-tight">
-                {searchQuery ? `Search Results (${filteredEvents.length})` : `Current Tenure Events (${activeUpcomingEvents.length})`}
+                Search Results ({filteredEvents.length})
               </h3>
               <p className="text-xs text-slate-500 font-medium mt-0.5">
-                {searchQuery ? "Matches from live calendar" : `Official JDCOEM SRC Events for ${currentTenureLabel}`}
+                Matches from live calendar
               </p>
             </div>
-
-            {!searchQuery && (
-              <Link
-                href="/events/past"
-                className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-[#17458F] uppercase tracking-wider transition-colors"
-              >
-                <History className="w-3.5 h-3.5 text-[#E78023]" />
-                <span>View Past Tenure Events</span>
-                <ChevronRight className="w-4 h-4" />
-              </Link>
-            )}
-          </div>
+          )}
 
           {activeUpcomingEvents.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
