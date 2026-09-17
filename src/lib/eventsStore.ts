@@ -519,8 +519,13 @@ export async function syncEventsFromFirestore(): Promise<EventItem[]> {
       return getStoredEvents();
     }
     if (remote !== null && Array.isArray(remote)) {
-      // Remote Firestore state is strictly authoritative for items & deletions (Directive #9)
       const current = getStoredEvents();
+      // If remote is empty but local has items (e.g. temporary network blip or initial load),
+      // avoid destructive wipe of local storage.
+      if (remote.length === 0 && current.length > 0) {
+        return current;
+      }
+      // Remote Firestore state is strictly authoritative for items & deletions (Directive #9)
       const rawMerged = reconcileArrayDatasets(current, remote);
       const sanitized = sanitizeEventsList(rawMerged);
       inMemoryEvents = sanitized;
@@ -543,8 +548,9 @@ export function subscribeToEvents(callback: (events: EventItem[]) => void): () =
   return subscribeToEventsFromFirestore((remote) => {
     if (remote !== null && Array.isArray(remote)) {
       if (hasPendingWritesFor("events") || isLocalWriteRecent("events", 15000)) return;
-      // Remote Firestore state is strictly authoritative (Directive #9)
       const current = getStoredEvents();
+      if (remote.length === 0 && current.length > 0) return;
+      // Remote Firestore state is strictly authoritative (Directive #9)
       const rawMerged = reconcileArrayDatasets(current, remote);
       const sanitized = sanitizeEventsList(rawMerged);
       inMemoryEvents = sanitized;

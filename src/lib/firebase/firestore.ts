@@ -1099,44 +1099,60 @@ export async function deleteEventFromFirestore(eventIdOrSlug: string): Promise<v
 
 /**
  * Fetch all individual event documents from Firestore (1 event = 1 document)
+ * Queries all three potential Firestore event stores in parallel:
+ * 1. Top-level /events collection (Directive #13: 1 Event = 1 Document)
+ * 2. Dedicated individual documents site_content/event_{id} written by saveEventToFirestore
+ * 3. Legacy events catalog in site_content/events
  */
 export async function getAllEventsFromFirestore(): Promise<EventItem[]> {
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       const mergedMap = new Map<string, EventItem>();
 
-      // 1. Read from top-level /events collection (1 Event = 1 Document)
-      try {
-        const colRef = collection(db, EVENTS_COLLECTION);
-        const snapshot = await getDocs(colRef);
-        snapshot.docs.forEach((d) => {
+      // Read both collections in parallel
+      const [eventsSnapResult, siteContentSnapResult] = await Promise.allSettled([
+        getDocs(collection(db, EVENTS_COLLECTION)),
+        getDocs(collection(db, SITE_CONTENT_COLLECTION)),
+      ]);
+
+      // 1. Process site_content collection: individual event_* docs + events catalog
+      if (siteContentSnapResult.status === "fulfilled") {
+        siteContentSnapResult.value.docs.forEach((d) => {
+          if (d.id.startsWith("event_")) {
+            const rawData = d.data();
+            const payload = rawData?.payload || rawData;
+            if (payload && typeof payload === "object") {
+              const cleanId = d.id.replace(/^event_/, "");
+              const evt = { id: cleanId, ...payload } as EventItem;
+              const key = evt.id || evt.slug || cleanId;
+              mergedMap.set(key, evt);
+            }
+          } else if (d.id === "events") {
+            const rawData = d.data();
+            const catalog = rawData?.payload;
+            if (Array.isArray(catalog)) {
+              catalog.forEach((evt) => {
+                if (evt && typeof evt === "object") {
+                  const key = evt.id || evt.slug || "";
+                  if (key && !mergedMap.has(key)) {
+                    mergedMap.set(key, evt);
+                  }
+                }
+              });
+            }
+          }
+        });
+      }
+
+      // 2. Process top-level /events collection (Directive #13: highest priority)
+      if (eventsSnapResult.status === "fulfilled") {
+        eventsSnapResult.value.docs.forEach((d) => {
           const data = d.data();
           const evt = { id: d.id, ...data } as EventItem;
           const key = evt.id || evt.slug || d.id;
           mergedMap.set(key, evt);
         });
-      } catch (colErr: any) {
-        // Expected when /events rules are not yet deployed
       }
-
-      // 2. Read individual event documents from site_content/event_{id}
-      // (These are the dedicated per-event docs written by saveEventToFirestore)
-      // — skipped here to avoid N+1 reads; they are checked by getEventFromFirestore for single lookups
-
-      // 3. Read legacy events catalog from site_content/events
-      try {
-        const catalog = await getSiteContentFromFirestore<EventItem[]>("events");
-        if (Array.isArray(catalog)) {
-          catalog.forEach((evt) => {
-            if (evt && typeof evt === "object") {
-              const key = evt.id || evt.slug || "";
-              if (key && !mergedMap.has(key)) {
-                mergedMap.set(key, evt);
-              }
-            }
-          });
-        }
-      } catch {}
 
       if (mergedMap.size > 0) {
         return Array.from(mergedMap.values());
@@ -1191,7 +1207,9 @@ export async function getEventFromFirestore(eventIdOrSlug: string): Promise<Even
 }
 
 /**
- * Subscribe to real-time updates of events
+ * Subscribe to real-time updates of events across all storage locations
+ * Debounces emissions by 100ms so all initial snapshots settle before emitting,
+ * preventing race conditions where a partial collection overwrites the full dataset.
  */
 export function subscribeToEventsFromFirestore(
   callback: (events: EventItem[]) => void
@@ -1200,48 +1218,62 @@ export function subscribeToEventsFromFirestore(
     return () => {};
   }
 
-  // Track events from both sources and merge
-  let collectionEvents: EventItem[] = [];
-  let legacyEvents: EventItem[] = [];
-  let collectionAvailable = false;
+  // Maps to track events by ID from different Firestore sources
+  const collectionEventsMap = new Map<string, EventItem>();
+  const siteEventsMap = new Map<string, EventItem>();
+  const legacyCatalogMap = new Map<string, EventItem>();
+
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   const emitMerged = () => {
     const mergedMap = new Map<string, EventItem>();
-    // Top-level /events docs take priority
-    collectionEvents.forEach((evt) => {
-      const key = evt.id || evt.slug || "";
-      if (key) mergedMap.set(key, evt);
+
+    // 1. Legacy catalog site_content/events (lowest priority)
+    legacyCatalogMap.forEach((evt, key) => {
+      mergedMap.set(key, evt);
     });
-    // Fill in legacy events that aren't in the /events collection
-    legacyEvents.forEach((evt) => {
-      const key = evt.id || evt.slug || "";
-      if (key && !mergedMap.has(key)) mergedMap.set(key, evt);
+
+    // 2. Dedicated site_content/event_* documents
+    siteEventsMap.forEach((evt, key) => {
+      mergedMap.set(key, evt);
     });
+
+    // 3. Top-level /events collection documents (highest priority, Directive #13)
+    collectionEventsMap.forEach((evt, key) => {
+      mergedMap.set(key, evt);
+    });
+
     if (mergedMap.size > 0) {
       callback(Array.from(mergedMap.values()));
     }
   };
 
+  const scheduleEmit = () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      emitMerged();
+    }, 100);
+  };
+
   const unsubscribers: (() => void)[] = [];
 
-  // 1. Subscribe to top-level /events collection
+  // 1. Subscribe to top-level /events collection (Directive #13)
   try {
     const colRef = collection(db, EVENTS_COLLECTION);
     const unsub = onSnapshot(
       colRef,
       (snapshot) => {
-        collectionAvailable = true;
-        collectionEvents = snapshot.docs.map((d) => {
+        collectionEventsMap.clear();
+        snapshot.docs.forEach((d) => {
           const data = d.data();
-          return { id: d.id, ...data } as EventItem;
+          const evt = { id: d.id, ...data } as EventItem;
+          const key = evt.id || evt.slug || d.id;
+          collectionEventsMap.set(key, evt);
         });
-        emitMerged();
+        scheduleEmit();
       },
       (error) => {
-        // Permission denied — collection not available, rely on legacy
-        if (error?.code === "permission-denied" || error?.message?.includes("Missing or insufficient permissions")) {
-          collectionAvailable = false;
-        } else {
+        if (error?.code !== "permission-denied" && !error?.message?.includes("Missing or insufficient permissions")) {
           console.warn("Firestore live events collection notice:", error);
         }
       }
@@ -1251,20 +1283,50 @@ export function subscribeToEventsFromFirestore(
     console.warn("Firestore subscription error for events collection:", e);
   }
 
-  // 2. Subscribe to legacy site_content/events
+  // 2. Subscribe to site_content collection to capture dedicated site_content/event_* docs and site_content/events catalog
   try {
-    const unsub = subscribeToSiteContent<EventItem[]>("events", (data) => {
-      if (Array.isArray(data)) {
-        legacyEvents = data;
-        emitMerged();
+    const siteColRef = collection(db, SITE_CONTENT_COLLECTION);
+    const unsub = onSnapshot(
+      siteColRef,
+      (snapshot) => {
+        siteEventsMap.clear();
+        legacyCatalogMap.clear();
+        snapshot.docs.forEach((d) => {
+          if (d.id.startsWith("event_")) {
+            const rawData = d.data();
+            const payload = rawData?.payload || rawData;
+            if (payload && typeof payload === "object") {
+              const cleanId = d.id.replace(/^event_/, "");
+              const evt = { id: cleanId, ...payload } as EventItem;
+              const key = evt.id || evt.slug || cleanId;
+              siteEventsMap.set(key, evt);
+            }
+          } else if (d.id === "events") {
+            const rawData = d.data();
+            const catalog = rawData?.payload;
+            if (Array.isArray(catalog)) {
+              catalog.forEach((evt) => {
+                if (evt && typeof evt === "object") {
+                  const key = evt.id || evt.slug || "";
+                  if (key) legacyCatalogMap.set(key, evt);
+                }
+              });
+            }
+          }
+        });
+        scheduleEmit();
+      },
+      (error) => {
+        console.warn("Firestore subscription notice for site_content events:", error);
       }
-    });
+    );
     unsubscribers.push(unsub);
   } catch (e) {
-    console.warn("Firestore subscription error for legacy events:", e);
+    console.warn("Firestore subscription error for site_content events:", e);
   }
 
   return () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
     unsubscribers.forEach((fn) => fn());
   };
 }
