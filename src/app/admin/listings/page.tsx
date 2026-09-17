@@ -505,7 +505,7 @@ export default function AdminListingsPage() {
             </div>
           </div>
           <p className="text-xs text-slate-500 font-medium">
-            Manage live student polls, club recruitments, fellowships, contest file drives, and confidential grievance desks.
+            Manage live student polls, applications, fellowships, contest file drives, and confidential grievance desks.
           </p>
         </div>
 
@@ -538,7 +538,7 @@ export default function AdminListingsPage() {
               { id: "all", label: "All Items" },
               { id: "voice", label: "📊 Polls" },
               { id: "opportunities", label: "💡 Opportunities" },
-              { id: "applications", label: "👥 Recruitments" },
+              { id: "applications", label: "👥 Applications" },
               { id: "submissions", label: "📤 Contests" },
               { id: "community", label: "🐞 Grievances" },
             ].map((tab) => (

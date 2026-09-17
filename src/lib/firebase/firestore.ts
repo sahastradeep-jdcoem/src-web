@@ -460,7 +460,7 @@ export function isTestPassRecord(r: any): boolean {
 }
 
 /**
- * Helper to identify Hub engagement records (polls, applications, recruitment, grievances).
+ * Helper to identify Hub engagement records (polls, applications, grievances).
  * Hub records are NOT event passes, have no check-in tickets, and must never appear as event passes.
  */
 export function isHubRecord(r: any): boolean {

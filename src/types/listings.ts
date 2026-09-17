@@ -3,7 +3,7 @@ import { CustomQuestion } from "./index";
 export type ListingType =
   | "event"            // 🎫 Physical/online festival, competition, workshop
   | "registration"     // 📝 Standalone event registration
-  | "application"      // 👥 Club recruitment, team selection, committee interview
+  | "application"      // 👥 General applications, registrations, and intake forms
   | "poll"             // 📊 Live poll / voting
   | "qa"               // ❓ Q&A / Ask the SRC
   | "survey"           // 📋 Survey & feedback

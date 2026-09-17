@@ -546,7 +546,7 @@ export function parseRegistrationToResponseRecord(docId: string, data: any): Lis
     });
   }
 
-  // 2. Hub Form Submissions (Applications, Recruitments, Contests, Grievances)
+  // 2. Hub Form Submissions (Applications, Contests, Grievances)
   if (docId.startsWith("hub_sub_") || data.customAnswers?.isHubSubmission) {
     const ca = data.customAnswers || {};
     const subId = ca.responseId || docId;

@@ -208,7 +208,7 @@ export default function StudentHubPage() {
               STUDENT ENGAGEMENT HUB
             </h1>
             <p className="text-sm sm:text-base text-slate-200 font-medium leading-relaxed">
-              Explore opportunities, vote on campus polls, apply for specialized club recruitments, submit creative entries, and file confidential student concerns.
+              Explore opportunities, vote on campus polls, apply for campus initiatives and programs, submit creative entries, and file confidential student concerns.
             </p>
           </div>
 
@@ -220,7 +220,7 @@ export default function StudentHubPage() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search polls, fellowships, challenges, or club recruitments..."
+                placeholder="Search polls, opportunities, challenges, or applications..."
                 className="w-full pl-11 pr-4 py-3 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 text-white text-xs sm:text-sm font-medium placeholder:text-slate-300 focus:outline-none focus:bg-white focus:text-slate-900 transition-all shadow-inner"
               />
             </div>
@@ -237,7 +237,7 @@ export default function StudentHubPage() {
             { id: "all", label: "🌟 All Engagements" },
             { id: "voice", label: "📊 Campus Polls" },
             { id: "opportunities", label: "💡 Opportunities" },
-            { id: "applications", label: "👥 Club Recruitments" },
+            { id: "applications", label: "👥 Applications" },
             { id: "submissions", label: "📤 Contests & Drives" },
             { id: "community", label: "🐞 Support & Grievances" },
           ].map((pill) => (

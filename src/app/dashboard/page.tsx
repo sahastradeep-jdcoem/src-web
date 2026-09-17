@@ -1666,7 +1666,7 @@ export default function StudentDashboardPage() {
                 </div>
                 <h4 className="font-heading font-bold text-base text-slate-800">No Hub Submissions Yet</h4>
                 <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  Participate in open club recruitments, photo challenges, student voice polls, or submit campus feedback.
+                  Participate in open applications, photo challenges, student voice polls, or submit campus feedback.
                 </p>
                 <Link
                   href="/hub"

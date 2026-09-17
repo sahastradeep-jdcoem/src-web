@@ -99,9 +99,9 @@ const PILLAR_OPTIONS: PillarOption[] = [
   {
     pillar: "applications",
     type: "application",
-    title: "Club & Team Recruitment",
-    badge: "INTERVIEWS & SELECTION",
-    description: "Recruit core coordinators, technical specialists, or club members with custom application Q&A.",
+    title: "Application Form",
+    badge: "APPLICATIONS & INTAKE",
+    description: "Launch general applications, program registrations, member sign-ups, or custom forms with custom Q&A.",
     icon: Users,
     gradient: "from-purple-600 to-pink-600",
   },
@@ -214,24 +214,24 @@ function getSectionsForType(type?: ListingType): ListingSectionDef[] {
       return [
         {
           id: "details",
-          label: "Drive Details",
+          label: "Application Details",
           shortLabel: "Details",
           icon: FileText,
-          description: "Drive headline, recruiting entity, campus eligibility, and schedule.",
+          description: "Application headline, organizing entity, campus eligibility, and schedule.",
         },
         {
           id: "visuals",
           label: "Visual Asset",
           shortLabel: "Visuals",
           icon: ImageIcon,
-          description: "Recruitment poster, header graphic, or official banner.",
+          description: "Application poster, header graphic, or official banner.",
         },
         {
           id: "qa",
-          label: "Candidate Q&A",
-          shortLabel: "Q&A",
+          label: "Application Questions",
+          shortLabel: "Questions",
           icon: HelpCircle,
-          description: "Candidate questionnaire, open positions, statement of purpose, and custom inquiries.",
+          description: "Applicant questions, required intake prompts, and custom entry fields.",
         },
       ];
     case "submission":
@@ -739,7 +739,7 @@ export function CreateListingModal({
           <div className="p-6 sm:p-8 space-y-6 overflow-y-auto">
             <div className="space-y-1">
               <p className="text-xs text-slate-500 font-medium">
-                Choose an engagement primitive below to launch interactive forms, real-time polls, recruitment drives, or official campus notices.
+                Choose an engagement primitive below to launch interactive forms, real-time polls, applications, or official campus notices.
               </p>
             </div>
 
@@ -923,7 +923,7 @@ export function CreateListingModal({
                           : selectedPillarOption.type === "opportunity"
                           ? "Google Cloud Research Fellowship 2026"
                           : selectedPillarOption.type === "application"
-                          ? "SRC Core Technical Committee Recruitment"
+                          ? "Student Leadership & Program Application 2026"
                           : selectedPillarOption.type === "submission"
                           ? "Collegiate UI/UX Design Challenge 2026"
                           : "Campus Canteen & Cafeteria Feedback Desk"
