@@ -1785,11 +1785,23 @@ export default function StudentDashboardPage() {
           isOpen={Boolean(selectedTicket)}
           onClose={() => setSelectedTicket(null)}
           title="Digital Delegate Pass"
-          maxWidth="xl"
-          contentClassName="max-h-[90vh] overflow-y-auto"
+          maxWidth="3xl"
+          contentClassName="p-3 sm:px-6 sm:py-4 overflow-y-auto"
+          headerAction={
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleDownloadSelectedTicket}
+              disabled={isDownloadingTicket}
+              className="hidden sm:inline-flex font-bold text-xs gap-1.5 cursor-pointer shadow-sm shadow-[#E78023]/20"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>{isDownloadingTicket ? "Exporting..." : ticketDownloadSuccess ? "Saved!" : "Download PNG"}</span>
+            </Button>
+          }
         >
-          <div className="space-y-4 pt-2">
-            <div id="src-delegate-pass-card">
+          <div className="space-y-3">
+            <div>
               <TicketPass
                 registrationId={selectedTicket.id}
                 eventName={selectedTicket.eventName}
@@ -1809,26 +1821,32 @@ export default function StudentDashboardPage() {
               />
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-200">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedTicket(null)}
-                className="w-full sm:w-auto cursor-pointer"
-              >
-                Close
-              </Button>
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-2 border-t border-slate-100">
+              <p className="text-[11px] sm:text-xs text-slate-500 text-center sm:text-left">
+                Entry permitted only with valid physical College ID card • JDCOEM Campus Gate
+              </p>
 
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleDownloadSelectedTicket}
-                disabled={isDownloadingTicket}
-                className="w-full sm:w-auto font-bold gap-2 cursor-pointer shadow-md shadow-[#E78023]/20"
-              >
-                <Download className="w-4 h-4" />
-                <span>{isDownloadingTicket ? "Exporting PNG..." : ticketDownloadSuccess ? "Pass Saved!" : "Download Pass (PNG)"}</span>
-              </Button>
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedTicket(null)}
+                  className="flex-1 sm:flex-none cursor-pointer"
+                >
+                  Close
+                </Button>
+
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleDownloadSelectedTicket}
+                  disabled={isDownloadingTicket}
+                  className="flex-1 sm:flex-none font-bold gap-2 cursor-pointer shadow-md shadow-[#E78023]/20 text-xs sm:text-sm"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>{isDownloadingTicket ? "Exporting..." : ticketDownloadSuccess ? "Saved!" : "Download Pass (PNG)"}</span>
+                </Button>
+              </div>
             </div>
           </div>
         </Modal>
