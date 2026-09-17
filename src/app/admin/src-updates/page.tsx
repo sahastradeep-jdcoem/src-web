@@ -46,13 +46,21 @@ import {
   verifySrcMemberByBtId, 
   SavedSrcMemberRecord 
 } from "@/lib/srcMembership";
+import { 
+  getStoredUsers, 
+  syncUsersFromFirestore, 
+  RegisteredUserRecord 
+} from "@/lib/usersStore";
+import { getStoredCouncilMembers } from "@/lib/councilStore";
 import { useAuth } from "@/context/AuthContext";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
+import Link from "next/link";
 
 export default function AdminSrcUpdatesPage() {
   const { user } = useAuth();
   const [dispatches, setDispatches] = useState<SrcDispatch[]>([]);
   const [savedMembers, setSavedMembers] = useState<SavedSrcMemberRecord[]>([]);
+  const [users, setUsers] = useState<RegisteredUserRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Filters
@@ -130,7 +138,9 @@ export default function AdminSrcUpdatesPage() {
   useEffect(() => {
     // 1. Initial local load
     setDispatches(getStoredSrcDispatches());
-    setSavedMembers(getAllSavedSrcMembers());
+    const allMembers = getAllSavedSrcMembers();
+    setSavedMembers(allMembers);
+    setUsers(getStoredUsers());
     setIsLoading(false);
 
     // 2. Cloud fetch & real-time sync
@@ -138,12 +148,80 @@ export default function AdminSrcUpdatesPage() {
       if (cloud && cloud.length > 0) setDispatches(cloud);
     });
 
-    const unsub = subscribeToSrcDispatches((updated) => {
+    syncUsersFromFirestore().then((syncedUsers) => {
+      if (syncedUsers && syncedUsers.length > 0) {
+        setUsers(syncedUsers);
+      }
+    });
+
+    const unsubDispatches = subscribeToSrcDispatches((updated) => {
       setDispatches(updated);
     });
 
-    return () => unsub();
+    const handleUsersUpdate = (e: any) => {
+      if (e.detail && Array.isArray(e.detail)) {
+        setUsers(e.detail);
+      } else {
+        setUsers(getStoredUsers());
+      }
+    };
+
+    window.addEventListener("src_users_updated", handleUsersUpdate);
+
+    return () => {
+      unsubDispatches();
+      window.removeEventListener("src_users_updated", handleUsersUpdate);
+    };
   }, []);
+
+  // Council portal adoption statistics
+  const councilAdoption = useMemo(() => {
+    // 1. Central Council members (excluding faculty mentors)
+    const storedCouncil = getStoredCouncilMembers();
+    const centralCouncilMembers = storedCouncil.filter(
+      (m) => !/mentor/i.test(m.role || "") && !/sarvashree|munesh/i.test(m.name || "") && m.btId
+    );
+    const totalCentralCouncil = centralCouncilMembers.length > 0 ? centralCouncilMembers.length : 12;
+
+    // 2. Active registered users set of normalized BT IDs and emails
+    const registeredBtIds = new Set<string>();
+    const registeredEmails = new Set<string>();
+
+    users.forEach((u) => {
+      if (!u.isDeleted) {
+        if (u.btId && u.btId.trim()) {
+          registeredBtIds.add(u.btId.trim().toUpperCase());
+        }
+        if (u.email && u.email.trim()) {
+          registeredEmails.add(u.email.trim().toLowerCase());
+        }
+      }
+    });
+
+    // 3. Count onboarded central council
+    const onboardedCentralCouncil = centralCouncilMembers.filter((m) => {
+      const bt = (m.btId || "").trim().toUpperCase();
+      const em = (m.email || "").trim().toLowerCase();
+      return (bt && registeredBtIds.has(bt)) || (em && registeredEmails.has(em));
+    }).length;
+
+    // 4. Count onboarded across all SRC levels (heads, co-heads, spokespersons, council)
+    const onboardedAllSrcCount = savedMembers.filter((m) => {
+      const bt = (m.btId || "").trim().toUpperCase();
+      return bt && registeredBtIds.has(bt);
+    }).length;
+
+    const totalAllSrc = savedMembers.length;
+    const centralPercent = Math.round((onboardedCentralCouncil / Math.max(totalCentralCouncil, 1)) * 100);
+
+    return {
+      onboardedCentralCouncil,
+      totalCentralCouncil,
+      onboardedAllSrcCount,
+      totalAllSrc,
+      centralPercent,
+    };
+  }, [users, savedMembers]);
 
   // Filtered dispatches
   const filteredDispatches = useMemo(() => {
@@ -359,34 +437,68 @@ export default function AdminSrcUpdatesPage() {
         </div>
       )}
 
-      {/* Header Banner */}
-      <div className="rounded-3xl bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0A1128] text-white p-6 sm:p-8 relative overflow-hidden shadow-xl border border-slate-700">
-        <div className="absolute -top-24 -right-24 w-80 h-80 bg-[#E78023]/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-[#17458F]/40 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#E78023]/20 border border-[#E78023]/40 text-[#E78023] text-xs font-extrabold uppercase tracking-widest">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>SRC Central Operations Studio</span>
-            </div>
-            <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-white tracking-tight uppercase">
-              SRC Operations Dispatch
+      {/* Top Header Strip */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-slate-200/80">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+            <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#0F172A] uppercase tracking-tight">
+              SRC OPERATIONS DISPATCH
             </h1>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-              Broadcast executive directives, schedule internal meetings & conclaves, and issue official payment QRs. Target all verified SRC members or direct messages to an individual officer via their College BT ID.
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-50 border border-slate-200 shadow-2xs">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="font-bold text-[#17458F] tabular-nums text-xs">{dispatches.length}</span>
+              <span className="text-slate-500 font-medium text-xs">Active Dispatches</span>
+            </div>
+          </div>
+          <p className="text-xs text-slate-500 font-medium max-w-3xl">
+            Internal executive directives, meeting schedules, official notices, and targeted dues/QRs for Student Representative Council officers.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+          <button
+            onClick={handleOpenCreateModal}
+            className="h-9 px-3.5 sm:px-4 rounded-xl bg-gradient-to-r from-[#E78023] to-[#D26E17] hover:from-[#d26e17] hover:to-[#be6113] text-white text-xs font-semibold tracking-normal transition-all duration-200 shadow-xs hover:shadow-md hover:shadow-[#E78023]/25 active:scale-[0.98] cursor-pointer inline-flex items-center justify-center gap-2"
+          >
+            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/95" />
+            <span>Compose New Dispatch</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Council Portal Adoption Display */}
+      <div className="rounded-2xl border border-slate-200/90 bg-gradient-to-r from-slate-50 via-blue-50/40 to-amber-50/30 p-4 sm:p-5 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-start sm:items-center gap-3.5">
+          <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-[#17458F] to-[#0d2f66] text-white flex items-center justify-center shrink-0 shadow-xs">
+            <UserCheck className="w-5 h-5" />
+          </div>
+          <div className="space-y-0.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-heading font-bold text-sm sm:text-base text-slate-900">
+                Council Portal Adoption
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-100/80 text-[#17458F] border border-blue-200/80">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+                {councilAdoption.centralPercent}% Reached
+              </span>
+            </div>
+            <p className="text-xs text-slate-600">
+              <strong className="text-slate-900 font-semibold">{councilAdoption.onboardedCentralCouncil} of {councilAdoption.totalCentralCouncil}</strong> Central Council members hold an active portal account ({councilAdoption.onboardedAllSrcCount} total across all SRC tiers).
             </p>
           </div>
+        </div>
 
-          <Button
-            onClick={handleOpenCreateModal}
-            variant="primary"
-            size="lg"
-            className="self-start md:self-auto shrink-0 flex items-center gap-2.5 font-bold shadow-lg shadow-[#E78023]/25 px-6 py-3.5 cursor-pointer"
+        <div className="flex items-center gap-2.5 shrink-0 self-end md:self-center">
+          <Link
+            href="/admin/users"
+            className="h-8 px-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-[#17458F] text-xs font-semibold tracking-normal inline-flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
           >
-            <Plus className="w-5 h-5" />
-            <span>Compose New Dispatch</span>
-          </Button>
+            <span>View User Roster</span>
+            <ExternalLink className="w-3 h-3 text-slate-400" />
+          </Link>
         </div>
       </div>
 
