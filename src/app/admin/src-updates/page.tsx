@@ -371,7 +371,7 @@ export default function AdminSrcUpdatesPage() {
               <span>SRC Central Operations Studio</span>
             </div>
             <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-white tracking-tight uppercase">
-              SRC Member Dispatch & Updates
+              SRC Operations Dispatch
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
               Broadcast executive directives, schedule internal meetings & conclaves, and issue official payment QRs. Target all verified SRC members or direct messages to an individual officer via their College BT ID.
@@ -671,7 +671,7 @@ export default function AdminSrcUpdatesPage() {
       <Modal
         isOpen={isModalOpen}
         onClose={() => !isSaving && setIsModalOpen(false)}
-        title={editingDispatch ? "Edit SRC Member Dispatch" : "Compose New SRC Dispatch"}
+        title={editingDispatch ? "Edit SRC Operations Dispatch" : "Compose New SRC Operations Dispatch"}
         maxWidth="2xl"
         contentClassName="max-h-[90vh] overflow-y-auto"
       >
