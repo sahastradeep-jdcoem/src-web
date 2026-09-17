@@ -621,10 +621,6 @@ export default function StudentDashboardPage() {
           {/* Top Status & Role Pill Strip */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider px-3 py-1 rounded-full bg-white/10 text-slate-300 border border-white/15 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>STUDENT DELEGATE PORTAL</span>
-              </span>
 
               {isVerifiedSrcMember ? (
                 <span className="text-[10px] font-extrabold uppercase tracking-wider px-3 py-1 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 border border-amber-400/40 flex items-center gap-1.5 shadow-xs">

@@ -1583,20 +1583,8 @@ export default function AdminRegistrationsPage() {
 
         </div>
 
-        {/* Right Corner: Gateway Settings + Export Excel */}
+        {/* Right Corner: Export Excel */}
         <div className="pt-1 md:pt-0 flex flex-wrap items-end gap-2">
-          <button
-            onClick={() => setIsPaymentConfigOpen(true)}
-            className="h-9 px-3 sm:px-3.5 rounded-xl text-xs font-semibold tracking-normal transition-all duration-200 inline-flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-[#002970] border border-[#002970]/30 shadow-xs active:scale-[0.98] cursor-pointer"
-            title="Configure Paytm for Business and active Treasurer UPI"
-          >
-            <CreditCard className="w-3.5 h-3.5 text-[#002970]" />
-            <span>Paytm Gateway</span>
-            <span className="px-1.5 py-0.5 rounded bg-blue-100 text-[#002970] font-mono text-[10px] font-bold">
-              {paymentConfig.upiId || "8237981028@paytm"}
-            </span>
-          </button>
-
           <button
             onClick={handleExportExcel}
             disabled={isExportDisabled}

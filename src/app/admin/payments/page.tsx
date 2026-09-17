@@ -702,14 +702,9 @@ export default function AdminPaymentsPage() {
       {/* 1. TOP HEADER & STUDIO TITLE */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-slate-200/60">
         <div>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-blue-50 border border-blue-200 text-[#17458F]">
-              <CreditCard className="w-5 h-5" />
-            </div>
-            <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#0F172A] uppercase tracking-tight">
-              PAYMENTS &amp; TREASURY STUDIO
-            </h1>
-          </div>
+          <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#0F172A] uppercase tracking-tight">
+            PAYMENTS &amp; TREASURY STUDIO
+          </h1>
           <p className="text-xs text-slate-500 font-medium mt-1">
             Institutional Financial Ledger • Real-time UPI &amp; Paytm Settlements
           </p>

@@ -152,25 +152,6 @@ export default function EventsPage() {
             </p>
           </div>
 
-          {/* Quick Action Buttons for Archives & Past Sessions */}
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start md:self-auto">
-            <Link
-              href="/events/past"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white border border-slate-200 hover:border-[#17458F] text-slate-700 hover:text-[#17458F] font-bold text-xs uppercase tracking-wider shadow-2xs transition-all"
-            >
-              <History className="w-4 h-4 text-[#E78023]" />
-              <span>Past Tenure Events</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-            <Link
-              href="/archive"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white border border-slate-200 hover:border-[#17458F] text-slate-700 hover:text-[#17458F] font-bold text-xs uppercase tracking-wider shadow-2xs transition-all"
-            >
-              <Archive className="w-4 h-4 text-[#E78023]" />
-              <span>Full Council Archive</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
         </div>
 
         {/* Search Toolbar */}
