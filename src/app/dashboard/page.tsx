@@ -794,30 +794,24 @@ export default function StudentDashboardPage() {
                 setActiveDashboardTab("accreditation");
               }
             }}
-            className={`p-4 sm:p-5 rounded-2xl border shadow-sm hover:shadow-md transition-all cursor-pointer group ${
-              isVerifiedSrcMember 
-                ? "bg-gradient-to-br from-[#0F172A] to-[#1E293B] text-white border-amber-500/30" 
-                : "bg-white border-slate-200/80"
-            }`}
+            className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200/80 shadow-sm hover:shadow-md transition-all cursor-pointer group"
           >
             <div className="flex items-center justify-between pb-2">
-              <span className={`text-[10px] font-bold uppercase tracking-wider ${isVerifiedSrcMember ? "text-amber-300" : "text-slate-400"}`}>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 Accreditation Level
               </span>
-              <div className={`h-8 w-8 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform ${
-                isVerifiedSrcMember ? "bg-amber-400/20 text-amber-300" : "bg-slate-100 text-slate-700"
-              }`}>
-                {isVerifiedSrcMember ? <Award className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
+              <div className="h-8 w-8 rounded-xl bg-amber-50 text-[#E78023] flex items-center justify-center group-hover:scale-105 transition-transform">
+                <Award className="w-4 h-4" />
               </div>
             </div>
-            <p className={`font-heading font-extrabold text-lg truncate ${isVerifiedSrcMember ? "text-amber-300" : "text-slate-900"}`}>
+            <p className="font-heading font-black text-2xl text-slate-900 truncate">
               {isVerifiedSrcMember 
                 ? (srcVerification.level || "Council Member") 
                 : isFaculty 
                 ? "Faculty Staff" 
                 : "Student Delegate"}
             </p>
-            <p className={`text-[11px] font-medium truncate pt-1 ${isVerifiedSrcMember ? "text-slate-300" : "text-slate-500"}`}>
+            <p className="text-[11px] text-slate-500 font-medium truncate pt-1">
               {isVerifiedSrcMember ? "Executive access authorized" : "Universal badge issued"}
             </p>
           </div>
@@ -832,45 +826,7 @@ export default function StudentDashboardPage() {
         <div className="flex items-center justify-between border-b border-slate-200 pb-4 gap-3 overflow-x-auto">
           <div className="flex items-center gap-2">
             
-            {/* Tab 1: Passes */}
-            <button
-              type="button"
-              onClick={() => setActiveDashboardTab("passes")}
-              className={`px-4 py-2.5 rounded-xl font-heading font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeDashboardTab === "passes"
-                  ? "bg-[#17458F] text-white shadow-sm"
-                  : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-              }`}
-            >
-              <Ticket className="w-4 h-4" />
-              <span>Event Passes</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                activeDashboardTab === "passes" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700 font-bold"
-              }`}>
-                {registrations.length}
-              </span>
-            </button>
-
-            {/* Tab 2: Hub Submissions */}
-            <button
-              type="button"
-              onClick={() => setActiveDashboardTab("hub")}
-              className={`px-4 py-2.5 rounded-xl font-heading font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeDashboardTab === "hub"
-                  ? "bg-[#17458F] text-white shadow-sm"
-                  : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-              }`}
-            >
-              <FileText className="w-4 h-4" />
-              <span>Hub Activity</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                activeDashboardTab === "hub" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700 font-bold"
-              }`}>
-                {hubResponses.length}
-              </span>
-            </button>
-
-            {/* Tab 3: EXCLUSIVE SRC MEMBER PORTAL (ONLY FOR VERIFIED SRC MEMBERS) */}
+            {/* Tab 1: EXCLUSIVE SRC MEMBER PORTAL (ONLY FOR VERIFIED SRC MEMBERS - FIRST POSITION) */}
             {isVerifiedSrcMember && (
               <button
                 type="button"
@@ -882,7 +838,7 @@ export default function StudentDashboardPage() {
                 }`}
               >
                 <Award className="w-4 h-4 text-amber-300" />
-                <span>SRC Council Operations</span>
+                <span>SRC Operations</span>
                 {directDispatchesCount > 0 ? (
                   <span className="bg-rose-500 text-white text-[10px] font-extrabold px-1.5 py-0.2 rounded-full animate-pulse">
                     {directDispatchesCount} Direct
@@ -897,6 +853,46 @@ export default function StudentDashboardPage() {
               </button>
             )}
 
+            {/* Tab 2: Event Passes ("Event Passes" on PC, "Pass" on Mobile) */}
+            <button
+              type="button"
+              onClick={() => setActiveDashboardTab("passes")}
+              className={`px-4 py-2.5 rounded-xl font-heading font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+                activeDashboardTab === "passes"
+                  ? "bg-[#17458F] text-white shadow-sm"
+                  : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+              }`}
+            >
+              <Ticket className="w-4 h-4" />
+              <span className="hidden sm:inline">Event Passes</span>
+              <span className="sm:hidden">Pass</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                activeDashboardTab === "passes" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700 font-bold"
+              }`}>
+                {registrations.length}
+              </span>
+            </button>
+
+            {/* Tab 3: Hub Activity ("Hub Activity" on PC, "Hub" on Mobile) */}
+            <button
+              type="button"
+              onClick={() => setActiveDashboardTab("hub")}
+              className={`px-4 py-2.5 rounded-xl font-heading font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+                activeDashboardTab === "hub"
+                  ? "bg-[#17458F] text-white shadow-sm"
+                  : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span className="hidden sm:inline">Hub Activity</span>
+              <span className="sm:hidden">Hub</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                activeDashboardTab === "hub" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700 font-bold"
+              }`}>
+                {hubResponses.length}
+              </span>
+            </button>
+
             {/* Tab 4: Mobile-only Accreditation Card Tab */}
             <button
               type="button"
@@ -908,7 +904,8 @@ export default function StudentDashboardPage() {
               }`}
             >
               <ShieldCheck className="w-4 h-4" />
-              <span>Digital Accreditation</span>
+              <span className="hidden sm:inline">Digital Accreditation</span>
+              <span className="sm:hidden">Badge</span>
             </button>
           </div>
 
