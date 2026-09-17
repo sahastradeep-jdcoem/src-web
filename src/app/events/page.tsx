@@ -110,11 +110,12 @@ export default function EventsPage() {
           !e.parentEventSlug
       )
       .filter((event) => {
+        const q = searchQuery.toLowerCase();
         const matchesSearch =
-          event.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          event.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          event.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (event.tagline && event.tagline.toLowerCase().includes(searchQuery.toLowerCase()));
+          (event.name || "").toLowerCase().includes(q) ||
+          (event.description || "").toLowerCase().includes(q) ||
+          (event.category || "").toLowerCase().includes(q) ||
+          (event.tagline && event.tagline.toLowerCase().includes(q));
 
         return matchesSearch;
       });
