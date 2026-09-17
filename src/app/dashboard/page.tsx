@@ -644,23 +644,6 @@ export default function StudentDashboardPage() {
                 </span>
               )}
             </div>
-
-            {/* Direct jump to SRC Executive Section if member */}
-            {isVerifiedSrcMember && (
-              <button
-                type="button"
-                onClick={() => setActiveDashboardTab("src_portal")}
-                className="hidden sm:inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-[#E78023] to-[#F97316] text-white text-xs font-bold uppercase tracking-wider shadow-md shadow-[#E78023]/25 hover:brightness-110 transition-all cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>SRC Council Headquarters</span>
-                {directDispatchesCount > 0 && (
-                  <span className="bg-white text-orange-950 px-1.5 py-0.2 rounded-full text-[10px] font-extrabold">
-                    {directDispatchesCount} Direct
-                  </span>
-                )}
-              </button>
-            )}
           </div>
 
           {/* Main Hero Row */}
