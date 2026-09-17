@@ -9,7 +9,6 @@ import {
   Linkedin, 
   Mail, 
   MapPin, 
-  Phone, 
   ChevronRight
 } from "lucide-react";
 
@@ -201,10 +200,7 @@ export default function Footer() {
                 <MapPin className="w-4 h-4 text-[#E78023] shrink-0 mt-0.5" />
                 <span>JDCOEM, Katol Road, Nagpur, Maharashtra — 441501</span>
               </p>
-              <p className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-[#E78023] shrink-0" />
-                <span>+91 712 281 0000 / 01</span>
-              </p>
+
               <p className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-[#E78023] shrink-0" />
                 <a href="mailto:srcjdcoem@gmail.com" className="hover:text-[#17458F] transition-colors">

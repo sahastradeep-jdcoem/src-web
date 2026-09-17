@@ -5,7 +5,6 @@ import Image from "next/image";
 import { 
   MapPin, 
   Mail, 
-  Phone, 
   Instagram, 
   Linkedin, 
   Send, 
@@ -189,13 +188,6 @@ export default function ContactPage() {
                   </div>
                 </div>
 
-                <div className="flex items-start gap-3">
-                  <Phone className="w-4 h-4 text-[#E78023] shrink-0 mt-0.5" />
-                  <div>
-                    <strong className="text-slate-900 block font-bold">Secretariat Helpline</strong>
-                    <span>+91 712 281 0000 / 01</span>
-                  </div>
-                </div>
 
                 <div className="flex items-start gap-3">
                   <Clock className="w-4 h-4 text-[#17458F] shrink-0 mt-0.5" />
