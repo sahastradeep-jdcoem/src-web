@@ -12,9 +12,7 @@ import {
   getStoredSpokespersons, 
   getStoredClubs,
   getStoredFoundingMembers,
-  getClubLeaders,
-  normalizeMemberName,
-  normalizePhoneticMemberName
+  getClubLeaders
 } from "./councilStore";
 
 export const USERS_STORAGE_KEY = "src_registered_users";
@@ -262,56 +260,6 @@ export function findStudentByBtId(btId: string): StudentDetails | null {
 }
 
 /**
- * Validate that a provided user name or email is compatible with a roster member's record.
- * Handles:
- * 1. Substring and exact matches (e.g. "Nisarg" <-> "Nisarg Jambhulkar")
- * 2. Phonetic and transliteration variants (e.g. Jambulkar <-> Jambhulkar, Sende <-> Shende)
- * 3. Token-based overlap (first name, middle name, or surname match >= 3 chars)
- * 4. Email local-part containing member's name or tokens (e.g. "nisarg20jambhulkar@gmail.com")
- */
-export function isNameCompatible(userName?: string | null, memberName?: string | null): boolean {
-  if (!userName || !memberName) return true;
-  const u = userName.trim();
-  const m = memberName.trim();
-  if (!u || !m) return true;
-
-  // 1. Direct or normalized string contains
-  const uNorm = normalizeMemberName(u);
-  const mNorm = normalizeMemberName(m);
-  if (!uNorm || !mNorm) return true;
-  if (uNorm.includes(mNorm) || mNorm.includes(uNorm)) return true;
-
-  // 2. Phonetic transliteration equivalence (e.g. Jambulkar <-> Jambhulkar)
-  const uPhonetic = normalizePhoneticMemberName(u);
-  const mPhonetic = normalizePhoneticMemberName(m);
-  if (uPhonetic.includes(mPhonetic) || mPhonetic.includes(uPhonetic)) return true;
-
-  // 3. Token-based overlap (first name, middle name, or surname match)
-  const noise = ["student", "jdcoem", "gmail", "com", "email", "ac", "in"];
-  const uTokens = u.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 3 && !noise.includes(t));
-  const mTokens = m.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 3 && !noise.includes(t));
-
-  for (const ut of uTokens) {
-    for (const mt of mTokens) {
-      if (ut === mt) return true;
-      if (normalizePhoneticMemberName(ut) === normalizePhoneticMemberName(mt)) return true;
-    }
-  }
-
-  // 4. Email address passed as userName (e.g. "nisarg20jambhulkar@gmail.com")
-  const emailPrefix = u.split("@")[0].toLowerCase().replace(/[^a-z]/g, "");
-  if (emailPrefix.length >= 3) {
-    for (const mt of mTokens) {
-      if (emailPrefix.includes(mt) || emailPrefix.includes(normalizePhoneticMemberName(mt))) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
-/**
  * Resolve special council badging and designations attached to a BT ID
  * Follows official 5-tier hierarchy:
  * 1. Admins (Council Admins) -> isCouncilOfficer: true
@@ -337,8 +285,12 @@ export function resolveDesignationByBtId(btId: string, userName?: string | null)
       return false;
     }
     // If userName is provided, verify match to prevent identity collision
-    if (userName && m.name && !isNameCompatible(userName, m.name)) {
-      return false;
+    if (userName && m.name) {
+      const uNorm = userName.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      const mNorm = m.name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (uNorm && mNorm && !uNorm.includes(mNorm) && !mNorm.includes(uNorm)) {
+        return false;
+      }
     }
     return true;
   });
@@ -354,8 +306,12 @@ export function resolveDesignationByBtId(btId: string, userName?: string | null)
   const hosting = getStoredHostingCommittee();
   const matchedHosting = hosting.find((m) => {
     if (!m.btId || m.btId.trim().toUpperCase() !== cleanBtId) return false;
-    if (userName && m.name && !isNameCompatible(userName, m.name)) {
-      return false;
+    if (userName && m.name) {
+      const uNorm = userName.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      const mNorm = m.name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (uNorm && mNorm && !uNorm.includes(mNorm) && !mNorm.includes(uNorm)) {
+        return false;
+      }
     }
     return true;
   });
@@ -370,8 +326,12 @@ export function resolveDesignationByBtId(btId: string, userName?: string | null)
   const spokes = getStoredSpokespersons();
   const matchedSpokes = spokes.find((m) => {
     if (!m.btId || m.btId.trim().toUpperCase() !== cleanBtId) return false;
-    if (userName && m.name && !isNameCompatible(userName, m.name)) {
-      return false;
+    if (userName && m.name) {
+      const uNorm = userName.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      const mNorm = m.name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (uNorm && mNorm && !uNorm.includes(mNorm) && !mNorm.includes(uNorm)) {
+        return false;
+      }
     }
     return true;
   });
@@ -390,9 +350,7 @@ export function resolveDesignationByBtId(btId: string, userName?: string | null)
     const leaders = getClubLeaders(club);
     for (const leader of leaders) {
       if (leader.btId && leader.btId.trim().toUpperCase() === cleanBtId) {
-        if (!userName || !leader.name || isNameCompatible(userName, leader.name)) {
-          matchedClubRoles.push({ clubName: club.name, leader });
-        }
+        matchedClubRoles.push({ clubName: club.name, leader });
       }
     }
   }
@@ -450,9 +408,7 @@ export function resolveDesignationByBtId(btId: string, userName?: string | null)
     if (Array.isArray(club.members)) {
       for (const member of club.members) {
         if (member.btId && member.btId.trim().toUpperCase() === cleanBtId) {
-          if (!userName || !member.name || isNameCompatible(userName, member.name)) {
-            matchedClubMembers.push({ clubName: club.name, member });
-          }
+          matchedClubMembers.push({ clubName: club.name, member });
         }
       }
     }
@@ -474,8 +430,12 @@ export function resolveDesignationByBtId(btId: string, userName?: string | null)
     if (/mentor/i.test(m.role || "") || (m.name && /sarvashree|munesh/i.test(m.name))) {
       return false;
     }
-    if (userName && m.name && !isNameCompatible(userName, m.name)) {
-      return false;
+    if (userName && m.name) {
+      const uNorm = userName.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      const mNorm = m.name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (uNorm && mNorm && !uNorm.includes(mNorm) && !mNorm.includes(uNorm)) {
+        return false;
+      }
     }
     return true;
   });
@@ -568,7 +528,7 @@ export function getStoredUsers(): RegisteredUserRecord[] {
   // Dynamically resolve designation badge & council status from live rosters
   return list.map((user) => {
     const cleanBtId = user.btId ? user.btId.trim().toUpperCase() : "";
-    const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId, user.displayName || user.name || user.email) : null;
+    const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId, user.name || user.email) : null;
     return {
       ...user,
       btId: cleanBtId,
@@ -601,7 +561,7 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
       if (!r || (!r.uid && !r.email)) continue;
       const localMatch = (r.uid ? localMap.get(r.uid) : null) || (r.email ? localMap.get(r.email.toLowerCase()) : null);
       const cleanBtId = (r.btId || localMatch?.btId || "").trim().toUpperCase();
-      const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId, r.displayName || r.name || localMatch?.displayName || localMatch?.name || r.email) : null;
+      const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId, r.name || localMatch?.name || r.email) : null;
       const assignedRole = r.role || localMatch?.role || "STUDENT";
       // Dynamic roster resolution takes precedence for linked BT IDs to prevent stale cloud badges
       const assignedBadge = designationInfo 
@@ -746,7 +706,7 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
     
     // Resolve designation badge based on BT ID
     const cleanBtId = (user.btId !== undefined ? user.btId : existing?.btId || "").trim().toUpperCase();
-    const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId, user.displayName || user.name || existing?.displayName || existing?.name || user.email) : null;
+    const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId, user.name || existing?.name || user.email) : null;
 
     const assignedRole = user.role || existing?.role || "STUDENT";
     const assignedBadge = designationInfo 
@@ -1049,7 +1009,7 @@ export async function reconcileAllUserDesignations(): Promise<RegisteredUserReco
   let changedCount = 0;
   const updated = current.map((u) => {
     const cleanBtId = u.btId ? u.btId.trim().toUpperCase() : "";
-    const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId, u.displayName || u.name || u.email) : null;
+    const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId, u.name || u.email) : null;
     const newBadge = designationInfo ? designationInfo.designationBadge : (cleanBtId ? undefined : (formatDesignationBadge(u.designationBadge) || undefined));
     const newOfficer = designationInfo ? designationInfo.isCouncilOfficer : (cleanBtId ? false : Boolean(u.isCouncilOfficer));
 
