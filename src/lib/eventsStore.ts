@@ -2,6 +2,7 @@ import { EventItem } from "@/types";
 import { 
   saveEventToFirestore,
   deleteEventFromFirestore,
+  deleteEventPermanentlyFromFirestore,
   getAllEventsFromFirestore,
   subscribeToEventsFromFirestore,
   getEventDocId,
@@ -15,7 +16,8 @@ import {
   markLocalWrite,
   getLastLocalWriteTime,
   isLocalWriteRecent,
-  compactEventDataset
+  compactEventDataset,
+  purgePendingQueueFor
 } from "./dataSyncEngine";
 
 const EVENTS_STORAGE_KEY = "src_events";
@@ -542,14 +544,22 @@ export async function syncEventsFromFirestore(): Promise<EventItem[]> {
 }
 
 /**
- * Subscribe to real-time events changes from Firestore across all devices
+ * Subscribe to real-time events changes from Firestore across all devices.
+ * The subscription is tombstone-aware: if an event is deleted (tombstoned in Firestore),
+ * the remote list is authoritative and the deletion is immediately reflected on all tabs.
  */
 export function subscribeToEvents(callback: (events: EventItem[]) => void): () => void {
   return subscribeToEventsFromFirestore((remote) => {
     if (remote !== null && Array.isArray(remote)) {
+      // Only skip if an active local write is in-flight (we just saved, data hasn't propagated yet)
       if (hasPendingWritesFor("events") || isLocalWriteRecent("events", 15000)) return;
+
       const current = getStoredEvents();
-      if (remote.length === 0 && current.length > 0) return;
+
+      // CRITICAL: Do NOT bail when remote is empty if there are no pending local writes.
+      // An empty remote after tombstone-deletion IS the authoritative state.
+      // We rely on the existing hasPendingWritesFor / isLocalWriteRecent guard above for that.
+
       // Remote Firestore state is strictly authoritative (Directive #9)
       const rawMerged = reconcileArrayDatasets(current, remote);
       const sanitized = sanitizeEventsList(rawMerged);
@@ -564,17 +574,42 @@ export function subscribeToEvents(callback: (events: EventItem[]) => void): () =
 }
 
 /**
- * Delete a specific event by ID or slug (1 Event = 1 Document)
+ * Delete a specific event permanently — from localStorage, in-memory cache, pending queue,
+ * and all Firestore locations — and record a tombstone so it can NEVER be resurrected.
  */
-export function deleteStoredEvent(idOrSlug: string): EventItem[] {
+export function deleteStoredEvent(idOrSlug: string, slug?: string, name?: string): EventItem[] {
   const current = getStoredEvents();
-  const updated = current.filter((e) => e.id !== idOrSlug && e.slug !== idOrSlug);
+
+  // Find the full event record so we have all three identifiers (id, slug, name)
+  const target = current.find((e) => e.id === idOrSlug || e.slug === idOrSlug);
+  const resolvedId = target?.id || idOrSlug;
+  const resolvedSlug = slug || target?.slug || idOrSlug;
+  const resolvedName = name || target?.name || "";
+
+  // 1. Remove from in-memory cache and localStorage immediately
+  const updated = current.filter(
+    (e) => e.id !== resolvedId && e.id !== resolvedSlug && e.slug !== resolvedSlug && e.slug !== resolvedId
+  );
   inMemoryEvents = updated;
   safeWriteEventsToLocalStorage(updated);
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("src_events_updated", { detail: updated }));
   }
-  deleteEventFromFirestore(idOrSlug).catch((err) => console.warn(`Delete failed for event [${idOrSlug}]:`, err));
+
+  // 2. Purge any pending queue writes for this event so they can never re-create it
+  const purgeKeys = [
+    resolvedId,
+    resolvedSlug,
+    `event_${resolvedId}`,
+    `event_${resolvedSlug}`,
+  ].filter(Boolean);
+  purgePendingQueueFor(purgeKeys);
+
+  // 3. Permanently delete from Firestore (all locations) and record tombstone
+  deleteEventPermanentlyFromFirestore(resolvedId, resolvedSlug, resolvedName).catch((err) =>
+    console.warn(`Permanent delete failed for event [${resolvedId}]:`, err)
+  );
+
   return updated;
 }
 

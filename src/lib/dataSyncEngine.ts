@@ -497,6 +497,48 @@ export async function processQueue(): Promise<boolean> {
   return allSuccess;
 }
 
+/**
+ * Purge all pending sync queue writes and write timestamps for specified docIds.
+ * Ensures deleted entities can never be resurrected by an offline queue flush or stale timestamp.
+ */
+export function purgePendingQueueFor(docIds: string[]): void {
+  if (typeof window === "undefined" || !Array.isArray(docIds) || docIds.length === 0) return;
+  const targetDocIds = new Set(docIds.map((d) => d.toLowerCase().trim()).filter(Boolean));
+
+  targetDocIds.forEach((id) => {
+    localWriteTimestamps.delete(id);
+    try {
+      localStorage.removeItem(`src_last_write_${id}`);
+      sessionStorage.removeItem(`src_last_write_${id}`);
+    } catch {}
+  });
+
+  try {
+    const queue = getPendingQueue();
+    const updated = queue.filter((item) => {
+      const itemDoc = (item.docId || "").toLowerCase().trim();
+      if (targetDocIds.has(itemDoc)) return false;
+      for (const t of targetDocIds) {
+        if (itemDoc.includes(t)) return false;
+      }
+      return true;
+    });
+
+    // Also clean array payloads in events / site_content_events queue items
+    updated.forEach((item) => {
+      if ((item.docId === "events" || item.docId === "site_content_events") && Array.isArray(item.payload)) {
+        item.payload = item.payload.filter((p: any) => {
+          const pId = (p?.id || "").toLowerCase().trim();
+          const pSlug = (p?.slug || "").toLowerCase().trim();
+          return !targetDocIds.has(pId) && !targetDocIds.has(pSlug);
+        });
+      }
+    });
+
+    savePendingQueue(updated);
+  } catch {}
+}
+
 // -------------------------------------------------------------
 // 3. SMART CONFLICT-FREE RECONCILIATION & MERGE ENGINE
 // -------------------------------------------------------------

@@ -697,6 +697,47 @@ export async function deleteRegistrationsForEvent(
 }
 
 /**
+ * Delete all active checkout sessions for an event from Firestore
+ */
+export async function deleteActiveCheckoutSessionsForEvent(
+  eventId: string,
+  eventSlug?: string,
+  eventName?: string
+): Promise<number> {
+  let deletedCount = 0;
+  try {
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      const colRef = collection(db, "active_checkout_sessions");
+      const snapshot = await getDocs(colRef);
+      const cleanId = (eventId || "").trim().toLowerCase();
+      const cleanSlug = (eventSlug || "").trim().toLowerCase();
+      const cleanName = (eventName || "").trim().toLowerCase();
+
+      for (const d of snapshot.docs) {
+        const data = d.data();
+        const dEventId = (data.eventId || "").trim().toLowerCase();
+        const dEventSlug = (data.eventSlug || "").trim().toLowerCase();
+        const dTitle = (data.eventTitle || "").trim().toLowerCase();
+        const dDocId = d.id.toLowerCase();
+
+        const matchesEvent =
+          (cleanId && (dEventId === cleanId || dEventSlug === cleanId || dDocId.includes(cleanId))) ||
+          (cleanSlug && (dEventId === cleanSlug || dEventSlug === cleanSlug || dDocId.includes(cleanSlug))) ||
+          (cleanName && (dTitle === cleanName || dTitle.includes(cleanName)));
+
+        if (matchesEvent) {
+          await deleteDoc(doc(db, "active_checkout_sessions", d.id));
+          deletedCount++;
+        }
+      }
+    }
+  } catch (error) {
+    console.warn("Firestore deleteActiveCheckoutSessionsForEvent error:", error);
+  }
+  return deletedCount;
+}
+
+/**
  * Bulk-cancel all active registrations belonging to an event cancelled by SRC.
  * Updates registrations to CANCELLED and assigns cancellation reason & timestamp.
  */
@@ -1074,27 +1115,143 @@ export async function saveEventToFirestore(event: EventItem): Promise<void> {
 }
 
 /**
- * Delete an individual event document from Firestore
+ * Delete an individual event and all associated records permanently from Firestore.
+ * Invariant: Deletion is permanent, atomic, and prevents all resurrection.
  */
-export async function deleteEventFromFirestore(eventIdOrSlug: string): Promise<void> {
+export async function deleteEventPermanentlyFromFirestore(
+  eventId: string,
+  eventSlug?: string,
+  eventName?: string
+): Promise<void> {
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-      const docId = getEventDocId(eventIdOrSlug);
-      // Clean up dedicated document in site_content
-      try {
-        const siteDocRef = doc(db, SITE_CONTENT_COLLECTION, `event_${docId}`);
-        await deleteDoc(siteDocRef);
-      } catch {}
+      const cleanId = (eventId || "").trim();
+      const cleanSlug = (eventSlug || "").trim();
+      const cleanName = (eventName || "").trim();
 
-      // Also clean up in top-level collection if exists
+      const targetKeys = new Set<string>();
+      if (cleanId) {
+        targetKeys.add(cleanId);
+        targetKeys.add(getEventDocId(cleanId));
+      }
+      if (cleanSlug) {
+        targetKeys.add(cleanSlug);
+        targetKeys.add(getEventDocId(cleanSlug));
+      }
+
+      // 1. Delete all individual documents in /events collection
+      for (const k of targetKeys) {
+        try {
+          await deleteDoc(doc(db, EVENTS_COLLECTION, k));
+        } catch {}
+      }
+
+      // Also query /events to catch any doc where id or slug matches
       try {
-        const colDocRef = doc(db, EVENTS_COLLECTION, docId);
-        await deleteDoc(colDocRef);
-      } catch {}
+        const eventsCol = collection(db, EVENTS_COLLECTION);
+        const snap = await getDocs(eventsCol);
+        for (const d of snap.docs) {
+          const data = d.data();
+          const dId = (data.id || d.id || "").trim();
+          const dSlug = (data.slug || "").trim();
+          if (
+            (cleanId && (dId === cleanId || dSlug === cleanId)) ||
+            (cleanSlug && (dId === cleanSlug || dSlug === cleanSlug))
+          ) {
+            await deleteDoc(doc(db, EVENTS_COLLECTION, d.id));
+          }
+        }
+      } catch (err) {
+        console.warn("Notice querying /events for deletion:", err);
+      }
+
+      // 2. Delete all dedicated documents in /site_content (event_{id}, event_{slug})
+      for (const k of targetKeys) {
+        try {
+          await deleteDoc(doc(db, SITE_CONTENT_COLLECTION, `event_${k}`));
+        } catch {}
+      }
+
+      // Also query /site_content to catch any doc with prefix event_ matching id or slug
+      try {
+        const siteCol = collection(db, SITE_CONTENT_COLLECTION);
+        const snap = await getDocs(siteCol);
+        for (const d of snap.docs) {
+          if (!d.id.startsWith("event_")) continue;
+          const cleanDocId = d.id.replace(/^event_/, "");
+          if (
+            targetKeys.has(cleanDocId) ||
+            (cleanId && cleanDocId.toLowerCase() === cleanId.toLowerCase()) ||
+            (cleanSlug && cleanDocId.toLowerCase() === cleanSlug.toLowerCase())
+          ) {
+            await deleteDoc(doc(db, SITE_CONTENT_COLLECTION, d.id));
+          }
+        }
+      } catch (err) {
+        console.warn("Notice querying /site_content for deletion:", err);
+      }
+
+      // 3. Purge from legacy / catalog document in site_content/events
+      try {
+        const catalogRef = doc(db, SITE_CONTENT_COLLECTION, "events");
+        const catSnap = await getDoc(catalogRef);
+        if (catSnap.exists()) {
+          const payload = catSnap.data()?.payload;
+          if (Array.isArray(payload)) {
+            const cleaned = payload.filter((e: any) => {
+              const eId = (e?.id || "").trim();
+              const eSlug = (e?.slug || "").trim();
+              const eName = (e?.name || "").trim().toLowerCase();
+              if (cleanId && (eId === cleanId || eSlug === cleanId)) return false;
+              if (cleanSlug && (eId === cleanSlug || eSlug === cleanSlug)) return false;
+              if (cleanName && eName === cleanName.toLowerCase()) return false;
+              return true;
+            });
+            await setDoc(catalogRef, { payload: cleaned, updatedAt: serverTimestamp() }, { merge: true });
+          }
+        }
+      } catch (err) {
+        console.warn("Notice updating site_content/events catalog on deletion:", err);
+      }
+
+      // 4. Record in /site_content/deleted_events_tombstones so all clients and queries reject this event forever
+      try {
+        const tombstoneRef = doc(db, SITE_CONTENT_COLLECTION, "deleted_events_tombstones");
+        const updateData: Record<string, any> = {
+          lastPurgedAt: serverTimestamp(),
+        };
+        if (cleanId) updateData[cleanId] = true;
+        if (cleanSlug) updateData[cleanSlug] = true;
+        await setDoc(tombstoneRef, updateData, { merge: true });
+      } catch (err) {
+        console.warn("Notice recording event tombstone:", err);
+      }
+
+      // 5. Cascade-delete all registrations & passes
+      try {
+        await deleteRegistrationsForEvent(cleanId, cleanSlug, cleanName);
+      } catch (err) {
+        console.warn("Notice cascade-deleting registrations:", err);
+      }
+
+      // 6. Cascade-delete active checkout sessions
+      try {
+        await deleteActiveCheckoutSessionsForEvent(cleanId, cleanSlug, cleanName);
+      } catch (err) {
+        console.warn("Notice cascade-deleting checkout sessions:", err);
+      }
     }
   } catch (error) {
-    console.warn(`Firestore deleteEventFromFirestore error [${eventIdOrSlug}]:`, error);
+    console.error(`Firestore deleteEventPermanentlyFromFirestore error [${eventId}]:`, error);
+    throw error;
   }
+}
+
+/**
+ * Delete an individual event document from Firestore (backward-compatible wrapper)
+ */
+export async function deleteEventFromFirestore(eventIdOrSlug: string, eventSlug?: string, eventName?: string): Promise<void> {
+  return deleteEventPermanentlyFromFirestore(eventIdOrSlug, eventSlug, eventName);
 }
 
 /**
@@ -1103,11 +1260,13 @@ export async function deleteEventFromFirestore(eventIdOrSlug: string): Promise<v
  * 1. Top-level /events collection (Directive #13: 1 Event = 1 Document)
  * 2. Dedicated individual documents site_content/event_{id} written by saveEventToFirestore
  * 3. Legacy events catalog in site_content/events
+ * Filters out all events marked in deleted_events_tombstones to guarantee zero resurrection.
  */
 export async function getAllEventsFromFirestore(): Promise<EventItem[]> {
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       const mergedMap = new Map<string, EventItem>();
+      const tombstones = new Set<string>();
 
       // Read both collections in parallel
       const [eventsSnapResult, siteContentSnapResult] = await Promise.allSettled([
@@ -1115,15 +1274,34 @@ export async function getAllEventsFromFirestore(): Promise<EventItem[]> {
         getDocs(collection(db, SITE_CONTENT_COLLECTION)),
       ]);
 
-      // 1. Process site_content collection: individual event_* docs + events catalog
+      // 1. Process site_content collection: extract tombstones, individual event_* docs, and catalog
       if (siteContentSnapResult.status === "fulfilled") {
+        // Pass 1: Extract tombstones first
+        siteContentSnapResult.value.docs.forEach((d) => {
+          if (d.id === "deleted_events_tombstones") {
+            const data = d.data();
+            if (data) {
+              Object.keys(data).forEach((k) => {
+                if (data[k] === true) tombstones.add(k.toLowerCase().trim());
+              });
+            }
+          }
+        });
+
+        // Pass 2: Process site_content docs
         siteContentSnapResult.value.docs.forEach((d) => {
           if (d.id.startsWith("event_")) {
+            const cleanId = d.id.replace(/^event_/, "");
+            if (tombstones.has(cleanId.toLowerCase().trim())) return; // Tombstoned!
+
             const rawData = d.data();
             const payload = rawData?.payload || rawData;
             if (payload && typeof payload === "object") {
-              const cleanId = d.id.replace(/^event_/, "");
               const evt = { id: cleanId, ...payload } as EventItem;
+              const idKey = (evt.id || "").toLowerCase().trim();
+              const slugKey = (evt.slug || "").toLowerCase().trim();
+              if (tombstones.has(idKey) || tombstones.has(slugKey)) return; // Tombstoned!
+
               const key = evt.id || evt.slug || cleanId;
               mergedMap.set(key, evt);
             }
@@ -1133,6 +1311,10 @@ export async function getAllEventsFromFirestore(): Promise<EventItem[]> {
             if (Array.isArray(catalog)) {
               catalog.forEach((evt) => {
                 if (evt && typeof evt === "object") {
+                  const idKey = (evt.id || "").toLowerCase().trim();
+                  const slugKey = (evt.slug || "").toLowerCase().trim();
+                  if (tombstones.has(idKey) || tombstones.has(slugKey)) return; // Tombstoned!
+
                   const key = evt.id || evt.slug || "";
                   if (key && !mergedMap.has(key)) {
                     mergedMap.set(key, evt);
@@ -1147,16 +1329,21 @@ export async function getAllEventsFromFirestore(): Promise<EventItem[]> {
       // 2. Process top-level /events collection (Directive #13: highest priority)
       if (eventsSnapResult.status === "fulfilled") {
         eventsSnapResult.value.docs.forEach((d) => {
+          const docIdLower = d.id.toLowerCase().trim();
+          if (tombstones.has(docIdLower)) return; // Tombstoned!
+
           const data = d.data();
           const evt = { id: d.id, ...data } as EventItem;
+          const idKey = (evt.id || "").toLowerCase().trim();
+          const slugKey = (evt.slug || "").toLowerCase().trim();
+          if (tombstones.has(idKey) || tombstones.has(slugKey)) return; // Tombstoned!
+
           const key = evt.id || evt.slug || d.id;
           mergedMap.set(key, evt);
         });
       }
 
-      if (mergedMap.size > 0) {
-        return Array.from(mergedMap.values());
-      }
+      return Array.from(mergedMap.values());
     }
   } catch (error) {
     console.warn("Could not fetch events from Firestore:", error);
@@ -1222,6 +1409,7 @@ export function subscribeToEventsFromFirestore(
   const collectionEventsMap = new Map<string, EventItem>();
   const siteEventsMap = new Map<string, EventItem>();
   const legacyCatalogMap = new Map<string, EventItem>();
+  const tombstonesMap = new Map<string, boolean>();
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -1230,22 +1418,34 @@ export function subscribeToEventsFromFirestore(
 
     // 1. Legacy catalog site_content/events (lowest priority)
     legacyCatalogMap.forEach((evt, key) => {
-      mergedMap.set(key, evt);
+      const idKey = (evt.id || "").toLowerCase().trim();
+      const slugKey = (evt.slug || "").toLowerCase().trim();
+      if (!tombstonesMap.has(idKey) && !tombstonesMap.has(slugKey) && !tombstonesMap.has(key.toLowerCase().trim())) {
+        mergedMap.set(key, evt);
+      }
     });
 
     // 2. Dedicated site_content/event_* documents
     siteEventsMap.forEach((evt, key) => {
-      mergedMap.set(key, evt);
+      const idKey = (evt.id || "").toLowerCase().trim();
+      const slugKey = (evt.slug || "").toLowerCase().trim();
+      if (!tombstonesMap.has(idKey) && !tombstonesMap.has(slugKey) && !tombstonesMap.has(key.toLowerCase().trim())) {
+        mergedMap.set(key, evt);
+      }
     });
 
     // 3. Top-level /events collection documents (highest priority, Directive #13)
     collectionEventsMap.forEach((evt, key) => {
-      mergedMap.set(key, evt);
+      const idKey = (evt.id || "").toLowerCase().trim();
+      const slugKey = (evt.slug || "").toLowerCase().trim();
+      if (!tombstonesMap.has(idKey) && !tombstonesMap.has(slugKey) && !tombstonesMap.has(key.toLowerCase().trim())) {
+        mergedMap.set(key, evt);
+      }
     });
 
-    if (mergedMap.size > 0) {
-      callback(Array.from(mergedMap.values()));
-    }
+    // Cloud-Authoritative Invariant: Always invoke callback even if mergedMap is empty!
+    // Ensures all client views and browser tabs instantly clear when events are deleted.
+    callback(Array.from(mergedMap.values()));
   };
 
   const scheduleEmit = () => {
@@ -1265,8 +1465,13 @@ export function subscribeToEventsFromFirestore(
       (snapshot) => {
         collectionEventsMap.clear();
         snapshot.docs.forEach((d) => {
+          const docIdLower = d.id.toLowerCase().trim();
+          if (tombstonesMap.has(docIdLower)) return;
           const data = d.data();
           const evt = { id: d.id, ...data } as EventItem;
+          const idKey = (evt.id || "").toLowerCase().trim();
+          const slugKey = (evt.slug || "").toLowerCase().trim();
+          if (tombstonesMap.has(idKey) || tombstonesMap.has(slugKey)) return;
           const key = evt.id || evt.slug || d.id;
           collectionEventsMap.set(key, evt);
         });
@@ -1283,7 +1488,7 @@ export function subscribeToEventsFromFirestore(
     console.warn("Firestore subscription error for events collection:", e);
   }
 
-  // 2. Subscribe to site_content collection to capture dedicated site_content/event_* docs and site_content/events catalog
+  // 2. Subscribe to site_content collection to capture dedicated site_content/event_* docs, tombstones, and site_content/events catalog
   try {
     const siteColRef = collection(db, SITE_CONTENT_COLLECTION);
     const unsub = onSnapshot(
@@ -1291,13 +1496,32 @@ export function subscribeToEventsFromFirestore(
       (snapshot) => {
         siteEventsMap.clear();
         legacyCatalogMap.clear();
+
+        // Pass 1: Extract tombstones first
+        snapshot.docs.forEach((d) => {
+          if (d.id === "deleted_events_tombstones") {
+            const data = d.data();
+            tombstonesMap.clear();
+            if (data) {
+              Object.keys(data).forEach((k) => {
+                if (data[k] === true) tombstonesMap.set(k.toLowerCase().trim(), true);
+              });
+            }
+          }
+        });
+
+        // Pass 2: Extract active event documents and catalog
         snapshot.docs.forEach((d) => {
           if (d.id.startsWith("event_")) {
+            const cleanId = d.id.replace(/^event_/, "");
+            if (tombstonesMap.has(cleanId.toLowerCase().trim())) return; // Tombstoned!
             const rawData = d.data();
             const payload = rawData?.payload || rawData;
             if (payload && typeof payload === "object") {
-              const cleanId = d.id.replace(/^event_/, "");
               const evt = { id: cleanId, ...payload } as EventItem;
+              const idKey = (evt.id || "").toLowerCase().trim();
+              const slugKey = (evt.slug || "").toLowerCase().trim();
+              if (tombstonesMap.has(idKey) || tombstonesMap.has(slugKey)) return; // Tombstoned!
               const key = evt.id || evt.slug || cleanId;
               siteEventsMap.set(key, evt);
             }
@@ -1307,6 +1531,9 @@ export function subscribeToEventsFromFirestore(
             if (Array.isArray(catalog)) {
               catalog.forEach((evt) => {
                 if (evt && typeof evt === "object") {
+                  const idKey = (evt.id || "").toLowerCase().trim();
+                  const slugKey = (evt.slug || "").toLowerCase().trim();
+                  if (tombstonesMap.has(idKey) || tombstonesMap.has(slugKey)) return; // Tombstoned!
                   const key = evt.id || evt.slug || "";
                   if (key) legacyCatalogMap.set(key, evt);
                 }

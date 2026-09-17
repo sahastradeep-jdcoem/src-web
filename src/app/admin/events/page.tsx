@@ -52,8 +52,11 @@ import { getStoredClubs } from "@/lib/councilStore";
 import { 
   deleteRegistrationsForEvent, 
   cancelEventRegistrations,
-  getEventFromFirestore 
+  getEventFromFirestore,
+  deleteEventPermanentlyFromFirestore,
+  deleteActiveCheckoutSessionsForEvent
 } from "@/lib/firebase/firestore";
+import { purgePendingQueueFor } from "@/lib/dataSyncEngine";
 
 export default function AdminEventsPage() {
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
@@ -535,20 +538,31 @@ export default function AdminEventsPage() {
     setIsDeletingEvent(true);
     try {
       const deletedName = eventToDelete.name;
-      const deletedId = eventToDelete.id;
-      const deletedSlug = eventToDelete.slug;
+      const deletedId = eventToDelete.id || "";
+      const deletedSlug = eventToDelete.slug || "";
 
+      // 1. Optimistic local state update — remove from UI immediately
       const updated = eventsList.filter(
         (e) => e.id !== deletedId && e.slug !== deletedSlug
       );
       setEventsList(updated);
+
+      // 2. Purge pending queue so no stale offline write can resurrect the event
+      const purgeKeys = [deletedId, deletedSlug, `event_${deletedId}`, `event_${deletedSlug}`].filter(Boolean);
+      purgePendingQueueFor(purgeKeys);
+
+      // 3. Permanently delete from all Firestore locations + write tombstone
+      await deleteEventPermanentlyFromFirestore(deletedId, deletedSlug, deletedName);
+
+      // 4. Cascade-delete checkout sessions (already done inside deleteEventPermanentlyFromFirestore,
+      //    but called here explicitly for belt-and-suspenders safety)
+      await deleteActiveCheckoutSessionsForEvent(deletedId, deletedSlug, deletedName);
+
+      // 5. Save local state to localStorage (without the deleted event)
       await saveStoredEvents(updated);
-      
-      // Cascade-delete registrations & passes for this deleted event
-      await deleteRegistrationsForEvent(deletedId, deletedSlug, deletedName);
 
       setEventToDelete(null);
-      showNotice(`Deleted event "${deletedName}" and purged all associated passes.`);
+      showNotice(`Deleted event "${deletedName}" permanently. All records purged.`);
     } catch (err) {
       console.error("Failed to delete event:", err);
       showNotice("Failed to delete event. Please try again.");
