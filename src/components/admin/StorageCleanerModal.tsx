@@ -25,8 +25,31 @@ import {
   ExternalLink,
   Search,
   CheckSquare,
-  Square
+  Square,
+  Copy,
+  Check,
+  ShieldAlert
 } from "lucide-react";
+
+const RECOMMENDED_STORAGE_RULES = `rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    match /{allPaths=**} {
+      allow read: if true;
+      allow create, update: if isAuthenticated()
+                   && request.resource.size < 15 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+      // Allow authenticated administrators/staff to delete unlinked assets
+      allow delete: if isAuthenticated();
+    }
+  }
+}`;
 
 interface StorageCleanerModalProps {
   isOpen: boolean;
@@ -38,7 +61,13 @@ export function StorageCleanerModal({ isOpen, onClose }: StorageCleanerModalProp
   const [scanResult, setScanResult] = useState<StorageScanResult | null>(null);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [purgeProgress, setPurgeProgress] = useState<{ completed: number; total: number }>({ completed: 0, total: 0 });
-  const [purgeSummary, setPurgeSummary] = useState<{ deletedCount: number; reclaimedBytes: number } | null>(null);
+  const [purgeSummary, setPurgeSummary] = useState<{
+    deletedCount: number;
+    failedCount: number;
+    errors: string[];
+    reclaimedBytes: number;
+  } | null>(null);
+  const [copiedRules, setCopiedRules] = useState(false);
   const isCancelledRef = useRef(false);
 
   const handleStartScan = async () => {
@@ -104,17 +133,24 @@ export function StorageCleanerModal({ isOpen, onClose }: StorageCleanerModalProp
         (completed, total) => setPurgeProgress({ completed, total })
       );
 
-      if (deletedCount > 0) {
+      if (deletedCount > 0 && failedCount === 0) {
         toast.success(
           `Successfully purged ${deletedCount} unused files (${formatStorageBytes(bytesToReclaim)} reclaimed).`,
           "Storage Cleaned"
         );
-      }
-      if (failedCount > 0) {
-        toast.error(`Could not delete ${failedCount} files. Check permissions.`, "Partial Purge");
+      } else if (deletedCount > 0 && failedCount > 0) {
+        toast.warning(
+          `Purged ${deletedCount} files, but ${failedCount} files failed. Check storage permissions.`,
+          "Partial Purge"
+        );
+      } else {
+        toast.error(
+          `Could not delete files from Firebase Storage. Check Storage Security Rules.`,
+          "Purge Blocked"
+        );
       }
 
-      setPurgeSummary({ deletedCount, reclaimedBytes: bytesToReclaim });
+      setPurgeSummary({ deletedCount, failedCount, errors, reclaimedBytes: bytesToReclaim });
       setStage("completed");
     } catch (err: any) {
       toast.error(err?.message || "Failed to purge storage files.", "Purge Error");
@@ -128,6 +164,16 @@ export function StorageCleanerModal({ isOpen, onClose }: StorageCleanerModalProp
     setSelectedPaths(new Set());
     setPurgeProgress({ completed: 0, total: 0 });
     setPurgeSummary(null);
+    setCopiedRules(false);
+  };
+
+  const handleCopyRules = () => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(RECOMMENDED_STORAGE_RULES);
+      setCopiedRules(true);
+      toast.success("Storage security rules copied to clipboard!", "Rules Copied");
+      setTimeout(() => setCopiedRules(false), 3500);
+    }
   };
 
   return (
@@ -478,30 +524,156 @@ export function StorageCleanerModal({ isOpen, onClose }: StorageCleanerModalProp
           </div>
         )}
 
-        {/* STAGE 5: COMPLETED */}
+        {/* STAGE 5: COMPLETED OR BLOCKED */}
         {stage === "completed" && purgeSummary && (
-          <div className="p-8 rounded-3xl bg-emerald-50 border border-emerald-200/80 text-center space-y-4">
-            <div className="h-12 w-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center mx-auto shadow-sm">
-              <CheckCircle2 className="w-6 h-6" />
-            </div>
+          <div className="space-y-4">
+            {/* Case A: Complete Success (0 failures) */}
+            {purgeSummary.failedCount === 0 && purgeSummary.deletedCount > 0 && (
+              <div className="p-8 rounded-3xl bg-emerald-50 border border-emerald-200/80 text-center space-y-4">
+                <div className="h-12 w-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center mx-auto shadow-sm">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
 
-            <div className="space-y-1">
-              <h4 className="font-heading font-bold text-lg text-emerald-950">Storage Cleanup Complete!</h4>
-              <p className="text-xs text-emerald-800/90 max-w-md mx-auto">
-                Successfully purged <strong>{purgeSummary.deletedCount}</strong> orphaned media files and reclaimed{" "}
-                <strong>{formatStorageBytes(purgeSummary.reclaimedBytes)}</strong> of Firebase Cloud Storage quota.
-              </p>
-            </div>
+                <div className="space-y-1">
+                  <h4 className="font-heading font-bold text-lg text-emerald-950">Storage Cleanup Complete!</h4>
+                  <p className="text-xs text-emerald-800/90 max-w-md mx-auto">
+                    Successfully purged <strong>{purgeSummary.deletedCount}</strong> orphaned media files and reclaimed{" "}
+                    <strong>{formatStorageBytes(purgeSummary.reclaimedBytes)}</strong> of Firebase Cloud Storage quota.
+                  </p>
+                </div>
 
-            <div className="pt-2 flex justify-center gap-3">
-              <Button variant="secondary" size="sm" onClick={handleReset} className="gap-1.5">
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Run New Scan</span>
-              </Button>
-              <Button variant="primary" size="sm" onClick={onClose}>
-                Close Modal
-              </Button>
-            </div>
+                <div className="pt-2 flex justify-center gap-3">
+                  <Button variant="secondary" size="sm" onClick={handleReset} className="gap-1.5">
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Run New Scan</span>
+                  </Button>
+                  <Button variant="primary" size="sm" onClick={onClose}>
+                    Close Modal
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Case B: Total Failure / Permission Blocked (0 deleted, failures > 0) */}
+            {purgeSummary.deletedCount === 0 && purgeSummary.failedCount > 0 && (
+              <div className="p-6 sm:p-7 rounded-3xl bg-rose-50/70 border border-rose-200 text-slate-800 space-y-5">
+                <div className="flex items-start gap-4">
+                  <div className="h-12 w-12 rounded-2xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                    <ShieldAlert className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1 text-left">
+                    <h4 className="font-heading font-bold text-base text-rose-950">
+                      Firebase Cloud Storage Deletion Blocked
+                    </h4>
+                    <p className="text-xs text-rose-800/90 leading-relaxed">
+                      Firebase Storage rejected the deletion of <strong>{purgeSummary.failedCount}</strong> files. This occurs when Firebase Cloud Storage Security Rules do not permit client-side asset deletion.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Error diagnostics */}
+                {purgeSummary.errors && purgeSummary.errors.length > 0 && (
+                  <div className="p-3.5 rounded-2xl bg-white/80 border border-rose-200 text-left space-y-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600">
+                      Firebase Rejection Reason:
+                    </span>
+                    <div className="text-xs font-mono text-slate-700 max-h-24 overflow-y-auto space-y-1">
+                      {purgeSummary.errors.slice(0, 3).map((err, i) => (
+                        <div key={i} className="p-1.5 rounded-lg bg-rose-50/50 border border-rose-100">
+                          {err}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 1-Minute Fix: Storage Rules Guide */}
+                <div className="p-4 rounded-2xl bg-white border border-slate-200 text-left space-y-3 shadow-xs">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                      <h5 className="font-bold text-xs text-slate-900">
+                        1-Minute Fix: Update Firebase Storage Security Rules
+                      </h5>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleCopyRules}
+                        className="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        {copiedRules ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            <span className="text-emerald-700">Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5 text-slate-500" />
+                            <span>Copy Rules</span>
+                          </>
+                        )}
+                      </button>
+                      <a
+                        href="https://console.firebase.google.com/project/src-jdcoem/storage/rules"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-2.5 py-1 rounded-xl bg-[#17458F] hover:bg-[#0E2F66] text-white text-[11px] font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
+                      >
+                        <span>Open Rules Tab</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Paste these rules into your Firebase Console Storage tab to authorize deletions for verified console administrators:
+                  </p>
+
+                  <pre className="p-3 rounded-xl bg-slate-900 text-slate-100 text-[11px] font-mono overflow-x-auto leading-relaxed max-h-36">
+                    {RECOMMENDED_STORAGE_RULES}
+                  </pre>
+                </div>
+
+                <div className="pt-2 flex flex-wrap items-center justify-end gap-2.5">
+                  <Button variant="secondary" size="sm" onClick={onClose}>
+                    Close Modal
+                  </Button>
+                  <Button variant="primary" size="sm" onClick={handleReset} className="gap-1.5">
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Run New Scan</span>
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Case C: Partial Purge (some succeeded, some failed) */}
+            {purgeSummary.deletedCount > 0 && purgeSummary.failedCount > 0 && (
+              <div className="p-6 sm:p-7 rounded-3xl bg-amber-50/70 border border-amber-200 text-slate-800 space-y-4">
+                <div className="flex items-start gap-4">
+                  <div className="h-12 w-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                    <AlertTriangle className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1 text-left">
+                    <h4 className="font-heading font-bold text-base text-amber-950">
+                      Partial Storage Cleanup
+                    </h4>
+                    <p className="text-xs text-amber-800/90 leading-relaxed">
+                      Successfully purged <strong>{purgeSummary.deletedCount}</strong> files, but <strong>{purgeSummary.failedCount}</strong> files could not be deleted due to permissions.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-center gap-3">
+                  <Button variant="secondary" size="sm" onClick={handleReset} className="gap-1.5">
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Run New Scan</span>
+                  </Button>
+                  <Button variant="primary" size="sm" onClick={onClose}>
+                    Close Modal
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

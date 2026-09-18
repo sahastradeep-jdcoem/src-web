@@ -12,16 +12,29 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    // Safety fallback for primary college administrators
+    function isHardcodedAdmin() {
+      return isAuthenticated() && request.auth.token.email in [
+        'shendeha@jdcoem.ac.in',
+        'studentrepresentcouncil@jdcoem.ac.in',
+        'harshshende0718@gmail.com',
+        'harshxfr@gmail.com',
+        'admin@jdcoem.ac.in',
+        'src.president@jdcoem.ac.in',
+        'src.mentor@jdcoem.ac.in',
+        'src.gensec@jdcoem.ac.in'
+      ];
+    }
+
+    // Authoritative Admin check: dynamic /admins collection + /users collection + safety fallback
     function isAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.email in [
-          'shendeha@jdcoem.ac.in',
-          'studentrepresentcouncil@jdcoem.ac.in'
-        ] ||
-        (exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) &&
-         get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.active != false) ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'COUNCIL_ADMIN')
+      return isHardcodedAdmin() || (
+        isAuthenticated() && (
+          (exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) &&
+           get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.active != false) ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'COUNCIL_ADMIN')
+        )
       );
     }
 

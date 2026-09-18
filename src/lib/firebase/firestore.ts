@@ -91,12 +91,13 @@ const USERS_COLLECTION = "users";
 export async function checkIsAdminInFirestore(email?: string | null, uid?: string | null): Promise<boolean> {
   const normalizedEmail = (email || "").toLowerCase().trim();
 
-  // Default fallback admin list
+  // Default fallback admin list (break-glass safety net)
   const DEFAULT_ADMINS = [
     "shendeha@jdcoem.ac.in",
     "studentrepresentcouncil@jdcoem.ac.in",
-    "admin@jdcoem.ac.in",
+    "harshshende0718@gmail.com",
     "harshxfr@gmail.com",
+    "admin@jdcoem.ac.in",
     "src.president@jdcoem.ac.in",
     "src.mentor@jdcoem.ac.in",
     "src.gensec@jdcoem.ac.in",

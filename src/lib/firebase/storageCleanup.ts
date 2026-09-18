@@ -1,5 +1,5 @@
 import { ref, listAll, getMetadata, getDownloadURL, deleteObject, StorageReference } from "firebase/storage";
-import { storage } from "./config";
+import { storage, auth } from "./config";
 import { getSiteContentFromFirestore } from "./firestore";
 import { getStoredEvents } from "@/lib/eventsStore";
 import { 
@@ -49,6 +49,37 @@ export function formatStorageBytes(bytes: number): string {
   const units = ["B", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+/**
+ * Helper to race a promise against a timeout without swallowing rejections
+ */
+function racePromiseWithTimeout<T>(promise: Promise<T>, ms: number, timeoutMsg: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        reject(new Error(timeoutMsg));
+      }
+    }, ms);
+
+    promise
+      .then((val) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          resolve(val);
+        }
+      })
+      .catch((err) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          reject(err);
+        }
+      });
+  });
 }
 
 /**
@@ -607,7 +638,7 @@ export async function scanOrphanStorageFiles(): Promise<StorageScanResult> {
 
 /**
  * Permanently deletes orphan files from Firebase Cloud Storage.
- * Executes in controlled batches with progress tracking.
+ * Executes in controlled batches with auth validation and strict error transparency.
  */
 export async function purgeOrphanStorageFiles(
   orphanPaths: string[],
@@ -615,6 +646,30 @@ export async function purgeOrphanStorageFiles(
 ): Promise<{ deletedCount: number; failedCount: number; errors: string[] }> {
   if (!storage) {
     return { deletedCount: 0, failedCount: orphanPaths.length, errors: ["Firebase Storage not initialized."] };
+  }
+
+  // 1. Ensure Firebase Auth state is ready
+  if (auth && typeof (auth as any).authStateReady === "function") {
+    try {
+      await (auth as any).authStateReady();
+    } catch {}
+  }
+
+  const currentUser = auth?.currentUser;
+  if (!currentUser) {
+    const errMsg = "Authentication Required: You must be actively signed in with an authorized Google Administrator account to delete files from Firebase Cloud Storage. Please sign in via the top-right profile icon, then retry.";
+    return {
+      deletedCount: 0,
+      failedCount: orphanPaths.length,
+      errors: [errMsg],
+    };
+  }
+
+  // 2. Refresh the ID token so permissions and session claims are up-to-date
+  try {
+    await currentUser.getIdToken(true);
+  } catch (tokenErr: any) {
+    console.warn("Notice: Could not refresh auth token before storage purge:", tokenErr);
   }
 
   const activeStorage = storage;
@@ -629,11 +684,32 @@ export async function purgeOrphanStorageFiles(
       batch.map(async (path) => {
         try {
           const fileRef = ref(activeStorage, path);
-          await withTimeout(deleteObject(fileRef), 4000, null);
+          await racePromiseWithTimeout(
+            deleteObject(fileRef),
+            8000,
+            `Deletion timed out for ${path}`
+          );
           deletedCount++;
         } catch (err: any) {
-          failedCount++;
-          errors.push(`Failed to delete ${path}: ${err?.message || "Unknown error"}`);
+          // If the file was already deleted or not found, treat as successfully cleaned
+          if (err?.code === "storage/object-not-found" || err?.status_ === 404) {
+            deletedCount++;
+          } else {
+            failedCount++;
+            const isAuthError =
+              err?.code === "storage/unauthorized" ||
+              err?.code === "storage/forbidden" ||
+              err?.status_ === 403;
+
+            const reason = isAuthError
+              ? `Permission Denied (storage/unauthorized): Firebase Storage Security Rules blocked deletion of "${path}". Please update your Storage Rules in Firebase Console.`
+              : err?.message || err?.code || `Failed to delete ${path}`;
+
+            console.error(`[StorageCleanup] Failed to delete ${path}:`, err);
+            if (!errors.includes(reason)) {
+              errors.push(reason);
+            }
+          }
         }
       })
     );

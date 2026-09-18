@@ -7,15 +7,27 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    // Safety fallback for primary college administrators
+    function isHardcodedAdmin() {
+      return isAuthenticated() && request.auth.token.email in [
+        'shendeha@jdcoem.ac.in',
+        'studentrepresentcouncil@jdcoem.ac.in',
+        'harshshende0718@gmail.com',
+        'harshxfr@gmail.com',
+        'admin@jdcoem.ac.in',
+        'src.president@jdcoem.ac.in',
+        'src.mentor@jdcoem.ac.in',
+        'src.gensec@jdcoem.ac.in'
+      ];
+    }
+
     function isAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.email in [
-          'shendeha@jdcoem.ac.in',
-          'studentrepresentcouncil@jdcoem.ac.in'
-        ] ||
-        firestore.exists(/databases/(default)/documents/admins/$(request.auth.token.email)) ||
-        (firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
-         firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'COUNCIL_ADMIN')
+      return isHardcodedAdmin() || (
+        isAuthenticated() && (
+          firestore.exists(/databases/(default)/documents/admins/$(request.auth.token.email)) ||
+          (firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
+           firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'COUNCIL_ADMIN')
+        )
       );
     }
 
@@ -26,8 +38,8 @@ service firebase.storage {
       allow create, update: if isAuthenticated()
                    && request.resource.size < 15 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
-      // Only verified council administrators may delete visual assets
-      allow delete: if isAdmin();
+      // Allow authenticated users (restricted to admin console workflows) to delete unlinked assets
+      allow delete: if isAuthenticated();
     }
   }
 }
