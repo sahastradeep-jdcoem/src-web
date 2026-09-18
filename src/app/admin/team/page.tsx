@@ -85,7 +85,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { PositionFormModal } from "@/components/admin/team/PositionFormModal";
 import { ClubMembersModal } from "@/components/admin/team/ClubMembersModal";
-import { reconcileAllUserDesignations } from "@/lib/usersStore";
+import { reconcileAllUserDesignations, checkBtIdPositionConflict } from "@/lib/usersStore";
 import { cn } from "@/lib/utils";
 
 type TeamCategoryTab = "council" | "hosting" | "founding" | "clubs" | "pillars" | "members";
@@ -622,12 +622,18 @@ export default function AdminTeamPage() {
   // Save club members directly to cloud and local storage
   const handleSaveClubMembers = async (clubIdOrSlug: string, updatedMembers: ClubMember[]) => {
     isSavingRef.current = true;
+    // Strictly sanitize: ensure no officers can ever be persisted as club members
+    const sanitizedMembers = updatedMembers.filter((m) => {
+      const conflict = checkBtIdPositionConflict(m.btId, clubIdOrSlug);
+      return !conflict.isOfficer;
+    });
+
     const updatedClubs = clubsList.map((c) => {
       if (c.id === clubIdOrSlug || c.slug === clubIdOrSlug) {
         return {
           ...c,
-          members: updatedMembers,
-          memberCount: Math.max(c.memberCount || 0, updatedMembers.length),
+          members: sanitizedMembers,
+          memberCount: Math.max(c.memberCount || 0, sanitizedMembers.length),
         };
       }
       return c;

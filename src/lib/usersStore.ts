@@ -450,6 +450,165 @@ export function resolveDesignationByBtId(btId: string, userName?: string | null)
   return null;
 }
 
+export interface BtIdPositionConflict {
+  hasConflict: boolean;
+  isOfficer: boolean;
+  conflictType: "council" | "hosting" | "spokesperson" | "club_leadership" | "pillar" | "other_club_member" | "none";
+  positionTitle?: string;
+  category?: string;
+  holderName?: string;
+  clubName?: string;
+  errorDescription?: string;
+}
+
+/**
+ * Check if a BT ID already holds an official position (Admin Council, Hosting, Club Head/Co-Head)
+ * or is already enrolled in another club, preventing position loopholes.
+ */
+export function checkBtIdPositionConflict(
+  btId?: string | null,
+  currentClubIdOrSlug?: string | null
+): BtIdPositionConflict {
+  if (!btId || !btId.trim()) {
+    return { hasConflict: false, isOfficer: false, conflictType: "none" };
+  }
+  const cleanBtId = btId.trim().toUpperCase();
+
+  // 1. Tier 1: Check Admin Council
+  const council = getStoredCouncilMembers();
+  const matchedCouncil = council.find((m) => {
+    if (!m.btId || m.btId.trim().toUpperCase() !== cleanBtId) return false;
+    if (/mentor/i.test(m.role || "") || (m.name && /sarvashree|munesh/i.test(m.name))) {
+      return false;
+    }
+    return true;
+  });
+  if (matchedCouncil) {
+    return {
+      hasConflict: true,
+      isOfficer: true,
+      conflictType: "council",
+      positionTitle: matchedCouncil.role || "Council Officer",
+      category: "Admin Council",
+      holderName: matchedCouncil.name,
+      errorDescription: `Already appointed as ${matchedCouncil.role || "Officer"} in Admin Council`,
+    };
+  }
+
+  // 2. Tier 2: Check Hosting Committee
+  const hosting = getStoredHostingCommittee();
+  const matchedHosting = hosting.find((m) => m.btId && m.btId.trim().toUpperCase() === cleanBtId);
+  if (matchedHosting) {
+    return {
+      hasConflict: true,
+      isOfficer: true,
+      conflictType: "hosting",
+      positionTitle: matchedHosting.role || "Hosting Committee",
+      category: "Hosting Committee",
+      holderName: matchedHosting.name,
+      errorDescription: `Already appointed as ${matchedHosting.role || "Host"} in Hosting Committee`,
+    };
+  }
+
+  // 3. Tier 2 (cont): Check Spokespersons
+  const spokes = getStoredSpokespersons();
+  const matchedSpokes = spokes.find((m) => m.btId && m.btId.trim().toUpperCase() === cleanBtId);
+  if (matchedSpokes) {
+    return {
+      hasConflict: true,
+      isOfficer: true,
+      conflictType: "spokesperson",
+      positionTitle: matchedSpokes.role || "Spokesperson",
+      category: "Spokesperson",
+      holderName: matchedSpokes.name,
+      errorDescription: `Already appointed as ${matchedSpokes.role || "Spokesperson"} in Spokespersons Committee`,
+    };
+  }
+
+  // 4. Tier 3 & 4: Check Chartered Club Leadership (Heads & Co-Heads) across all clubs
+  const clubs = getStoredClubs();
+  for (const c of clubs) {
+    const leaders = getClubLeaders(c);
+    const matchedLeader = leaders.find((l) => l.btId && l.btId.trim().toUpperCase() === cleanBtId);
+    if (matchedLeader) {
+      const isCoLead = matchedLeader.roleType === "coLead" || (matchedLeader.role && matchedLeader.role.toLowerCase().includes("co-head"));
+      const title = matchedLeader.role && !["Club Head", "Club Co-Head", "Head", "Co-Head"].includes(matchedLeader.role.trim())
+        ? matchedLeader.role
+        : `${c.name} ${isCoLead ? "Co-Head" : "Head"}`;
+      return {
+        hasConflict: true,
+        isOfficer: true,
+        conflictType: "club_leadership",
+        positionTitle: title,
+        category: "Club Leadership",
+        holderName: matchedLeader.name,
+        clubName: c.name,
+        errorDescription: `Already appointed as ${title} in ${c.name}`,
+      };
+    }
+  }
+
+  // 5. Special fallback (Sanskruti Tidke - Event Club Co-Head)
+  if (cleanBtId === "BT240115DS") {
+    return {
+      hasConflict: true,
+      isOfficer: true,
+      conflictType: "club_leadership",
+      positionTitle: "Event Club Co-Head",
+      category: "Club Leadership",
+      holderName: "Sanskruti Tidke",
+      clubName: "Event Club",
+      errorDescription: "Already appointed as Event Club Co-Head",
+    };
+  }
+
+  // 6. Check Founding Council
+  const founders = getStoredFoundingMembers();
+  const matchedFounder = founders.find((m) => {
+    if (!m.btId || m.btId.trim().toUpperCase() !== cleanBtId) return false;
+    if (/mentor/i.test(m.role || "") || (m.name && /sarvashree|munesh/i.test(m.name))) {
+      return false;
+    }
+    return true;
+  });
+  if (matchedFounder) {
+    return {
+      hasConflict: true,
+      isOfficer: true,
+      conflictType: "council",
+      positionTitle: matchedFounder.role || "Founding Member",
+      category: "Founding Council",
+      holderName: matchedFounder.name,
+      errorDescription: `Already appointed as ${matchedFounder.role || "Founding Officer"} in Founding Council`,
+    };
+  }
+
+  // 7. Check if already inducted in another club
+  if (currentClubIdOrSlug) {
+    const targetNorm = currentClubIdOrSlug.toLowerCase().trim();
+    for (const c of clubs) {
+      const isTarget = (c.id && c.id.toLowerCase().trim() === targetNorm) || (c.slug && c.slug.toLowerCase().trim() === targetNorm);
+      if (!isTarget && Array.isArray(c.members)) {
+        const found = c.members.find((m) => m.btId && m.btId.trim().toUpperCase() === cleanBtId);
+        if (found) {
+          return {
+            hasConflict: true,
+            isOfficer: false,
+            conflictType: "other_club_member",
+            positionTitle: `${c.name} Member`,
+            category: "Club Member",
+            holderName: found.name,
+            clubName: c.name,
+            errorDescription: `Already enrolled as a member in ${c.name}`,
+          };
+        }
+      }
+    }
+  }
+
+  return { hasConflict: false, isOfficer: false, conflictType: "none" };
+}
+
 export const DEFAULT_REGISTERED_USERS: RegisteredUserRecord[] = [
   {
     uid: "58FLEfmf2cTinCGYuRYVdkkwk7G3",

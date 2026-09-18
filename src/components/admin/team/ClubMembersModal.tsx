@@ -8,13 +8,14 @@ import {
   Search, 
   CheckCircle2, 
   AlertCircle, 
+  ShieldAlert,
   X, 
   Loader2 
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { ClubItem, ClubMember } from "@/types";
-import { findStudentByBtId } from "@/lib/usersStore";
+import { findStudentByBtId, checkBtIdPositionConflict, BtIdPositionConflict } from "@/lib/usersStore";
 import { getDepartmentShortName } from "@/lib/departmentsStore";
 
 interface ClubMembersModalProps {
@@ -51,36 +52,77 @@ export function ClubMembersModal({
     return new Set(club.members.map((m) => m.btId.trim().toUpperCase()));
   }, [club]);
 
-  // Split parsed tokens into new vs existing
-  const { newBtIds, duplicateBtIds } = useMemo(() => {
+  // Split parsed tokens into: valid new, duplicate in this club, officer conflict, other club member
+  const { newBtIds, duplicateBtIds, conflictingOfficerBtIds, otherClubBtIds } = useMemo(() => {
     const newIds: string[] = [];
     const dupIds: string[] = [];
+    const officerConflicts: { btId: string; conflict: BtIdPositionConflict }[] = [];
+    const otherClubMembers: { btId: string; conflict: BtIdPositionConflict }[] = [];
+
     for (const bt of parsedBtIds) {
-      if (existingBtIds.has(bt)) {
+      const conflict = checkBtIdPositionConflict(bt, club?.slug || club?.id);
+      if (conflict.isOfficer) {
+        // STRICT BLOCK: Anyone who holds an official position (Admin, Spokesperson, Head, Co-Head)
+        // cannot be added as a club member
+        officerConflicts.push({ btId: bt, conflict });
+      } else if (existingBtIds.has(bt)) {
         dupIds.push(bt);
       } else {
+        if (conflict.conflictType === "other_club_member") {
+          otherClubMembers.push({ btId: bt, conflict });
+        }
         newIds.push(bt);
       }
     }
-    return { newBtIds: newIds, duplicateBtIds: dupIds };
-  }, [parsedBtIds, existingBtIds]);
+    return { 
+      newBtIds: newIds, 
+      duplicateBtIds: dupIds, 
+      conflictingOfficerBtIds: officerConflicts,
+      otherClubBtIds: otherClubMembers 
+    };
+  }, [parsedBtIds, existingBtIds, club]);
+
+  // Detect any existing members in this club who hold officer positions (loophole cleanup)
+  const existingOfficerConflicts = useMemo(() => {
+    if (!club || !Array.isArray(club.members)) return [];
+    return club.members
+      .map((m) => ({
+        member: m,
+        conflict: checkBtIdPositionConflict(m.btId, club.slug || club.id),
+      }))
+      .filter((item) => item.conflict.isOfficer);
+  }, [club]);
 
   // Pre-fetch student info for preview
   const previewDetails = useMemo(() => {
     const map = new Map<string, ReturnType<typeof findStudentByBtId>>();
-    for (const bt of newBtIds) {
+    for (const bt of parsedBtIds) {
       map.set(bt, findStudentByBtId(bt));
     }
     return map;
-  }, [newBtIds]);
+  }, [parsedBtIds]);
 
   const handleAddMembers = async () => {
     if (!club || newBtIds.length === 0 || isSaving) return;
 
+    // Filter out any officer conflicts defensively
+    const safeNewIds = newBtIds.filter((bt) => {
+      const conflict = checkBtIdPositionConflict(bt, club.slug || club.id);
+      return !conflict.isOfficer;
+    });
+
+    if (safeNewIds.length === 0) {
+      setFeedback({
+        type: "error",
+        message: "No valid members to add. Entered IDs already hold leadership/officer positions.",
+      });
+      return;
+    }
+
     setIsSaving(true);
     setFeedback(null);
     try {
-      const newClubMembers: ClubMember[] = newBtIds.map((btId) => {
+      const newClubMembers: ClubMember[] = safeNewIds.map((btId) => {
         const studentInfo = findStudentByBtId(btId);
         return {
           id: `mem-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -106,6 +148,37 @@ export function ClubMembersModal({
       setFeedback({
         type: "error",
         message: err?.message || "Failed to save members. Please try again.",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRemoveAllOfficerConflicts = async () => {
+    if (!club || isSaving || existingOfficerConflicts.length === 0) return;
+    const count = existingOfficerConflicts.length;
+    if (!window.confirm(`Remove ${count} conflicted officer${count === 1 ? "" : "s"} from the ${club.name} members roster?`)) {
+      return;
+    }
+
+    setIsSaving(true);
+    setFeedback(null);
+    try {
+      const sanitized = (club.members || []).filter((m) => {
+        const conflict = checkBtIdPositionConflict(m.btId, club.slug || club.id);
+        return !conflict.isOfficer;
+      });
+      await onSaveMembers(club.slug || club.id, sanitized);
+      setFeedback({
+        type: "success",
+        message: `Resolved position loophole: Removed ${count} officer${count === 1 ? "" : "s"} from the club member roster.`,
+      });
+      setTimeout(() => setFeedback(null), 4000);
+    } catch (err: any) {
+      console.error("Error cleaning conflicted members:", err);
+      setFeedback({
+        type: "error",
+        message: err?.message || "Failed to remove conflicted members.",
       });
     } finally {
       setIsSaving(false);
@@ -236,15 +309,37 @@ export function ClubMembersModal({
             className="w-full px-4 py-3 rounded-xl border border-slate-200 text-xs sm:text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-[#17458F] focus:border-transparent transition-all resize-y"
           />
 
+          {/* Position Conflict Alert Banner */}
+          {conflictingOfficerBtIds.length > 0 && (
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs space-y-1.5 shadow-xs">
+              <div className="flex items-center gap-2 font-bold text-rose-800">
+                <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>Position Conflict: Officers Cannot Be Added As Club Members</span>
+              </div>
+              <p className="text-[11px] text-rose-700 leading-relaxed">
+                The following student{conflictingOfficerBtIds.length === 1 ? "" : "s"} already hold official positions in the SRC hierarchy. In accordance with the 5-tier governance structure (Admins ➔ Spokespersons ➔ Heads ➔ Co-Heads ➔ Members), officers cannot hold general club member status:
+              </p>
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {conflictingOfficerBtIds.map(({ btId, conflict }) => (
+                  <span key={btId} className="px-2 py-0.5 rounded-md bg-rose-100/90 border border-rose-300 font-mono text-[10px] text-rose-900 font-bold flex items-center gap-1">
+                    <span>{btId}</span>
+                    <span>({conflict.holderName || "Officer"})</span>
+                    <span className="text-rose-600 font-normal">➔ {conflict.positionTitle}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Live Preview of parsed BT IDs */}
           {parsedBtIds.length > 0 && (
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
-              <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center justify-between text-xs flex-wrap gap-2">
                 <span className="font-bold text-slate-700">
                   Detected {parsedBtIds.length} BT ID{parsedBtIds.length === 1 ? "" : "s"}:
                 </span>
                 <span className="text-slate-500 font-medium">
-                  {newBtIds.length} New • {duplicateBtIds.length} Already in Club
+                  {newBtIds.length} Valid New • {conflictingOfficerBtIds.length > 0 && <strong className="text-rose-600">{conflictingOfficerBtIds.length} Blocked (Officer) • </strong>}{duplicateBtIds.length} Already in Club
                 </span>
               </div>
 
@@ -252,6 +347,23 @@ export function ClubMembersModal({
                 {parsedBtIds.map((bt) => {
                   const isExisting = existingBtIds.has(bt);
                   const student = previewDetails.get(bt);
+                  const conflict = checkBtIdPositionConflict(bt, club?.slug || club?.id);
+
+                  if (conflict.isOfficer) {
+                    return (
+                      <span
+                        key={bt}
+                        className="text-[10px] font-medium px-2 py-1 rounded-md bg-rose-50 text-rose-800 border border-rose-300 flex items-center gap-1.5"
+                        title={`Position Conflict: Already appointed as ${conflict.positionTitle} (${conflict.category})`}
+                      >
+                        <ShieldAlert className="w-3 h-3 text-rose-600 shrink-0" />
+                        <span className="font-mono font-bold line-through">{bt}</span>
+                        <span className="font-semibold text-rose-700">
+                          ⛔ {conflict.positionTitle} (Officer Conflict)
+                        </span>
+                      </span>
+                    );
+                  }
 
                   if (isExisting) {
                     return (
@@ -261,6 +373,21 @@ export function ClubMembersModal({
                         title="Already a member of this club"
                       >
                         {bt} (Already In)
+                      </span>
+                    );
+                  }
+
+                  if (conflict.conflictType === "other_club_member") {
+                    return (
+                      <span
+                        key={bt}
+                        className="text-[10px] font-medium px-2.5 py-1 rounded-md border border-amber-200 bg-amber-50/70 text-amber-900 flex items-center gap-1.5"
+                        title={`Already in ${conflict.clubName}`}
+                      >
+                        <span className="font-mono font-bold">{bt}</span>
+                        <span className="text-amber-800 font-semibold">
+                          ➔ {student?.name || bt} (in {conflict.clubName})
+                        </span>
                       </span>
                     );
                   }
@@ -332,6 +459,30 @@ export function ClubMembersModal({
 
         {/* SECTION 2: CURRENT MEMBERS ROSTER TABLE */}
         <div className="space-y-3">
+          {/* Loophole Warning Banner for already-inducted officers */}
+          {existingOfficerConflicts.length > 0 && (
+            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-300 text-rose-950 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-rose-800">
+                  <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>Position Conflict Detected: {existingOfficerConflicts.length} Officer{existingOfficerConflicts.length === 1 ? "" : "s"} Listed as Members</span>
+                </div>
+                <p className="text-[11px] text-rose-700 leading-relaxed">
+                  {existingOfficerConflicts.map((c) => `${c.member.name || c.member.btId} (${c.conflict.positionTitle})`).join(", ")} {existingOfficerConflicts.length === 1 ? "holds an official leadership position" : "hold official leadership positions"} and cannot be retained as regular club members.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleRemoveAllOfficerConflicts}
+                disabled={isSaving}
+                className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase tracking-wider transition-all shrink-0 cursor-pointer shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Remove Conflicted ({existingOfficerConflicts.length})</span>
+              </button>
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h4 className="font-bold text-sm text-[#0F172A] uppercase tracking-wide">
@@ -386,11 +537,17 @@ export function ClubMembersModal({
                     const displayName = member.name || studentInfo?.name;
                     const displayDept = member.department || studentInfo?.department;
                     const displayYear = member.year || studentInfo?.year;
+                    const conflict = checkBtIdPositionConflict(member.btId, club.slug || club.id);
+                    const isOfficerConflict = conflict.isOfficer;
 
                     return (
                       <tr
                         key={member.id || member.btId || idx}
-                        className="hover:bg-slate-50/80 transition-colors"
+                        className={`transition-colors ${
+                          isOfficerConflict 
+                            ? "bg-rose-50/70 hover:bg-rose-100/60 border-l-4 border-l-rose-500" 
+                            : "hover:bg-slate-50/80"
+                        }`}
                       >
                         <td className="py-2.5 px-4 text-center font-mono text-slate-400 font-bold">
                           {idx + 1}
@@ -399,7 +556,20 @@ export function ClubMembersModal({
                           {member.btId}
                         </td>
                         <td className="py-2.5 px-4">
-                          {displayName ? (
+                          {isOfficerConflict ? (
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-rose-950">{displayName || member.btId}</span>
+                                <span className="text-[9px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded-md border border-rose-300 flex items-center gap-1">
+                                  <ShieldAlert className="w-2.5 h-2.5 text-rose-600 shrink-0" />
+                                  <span>Officer Conflict</span>
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-rose-600 font-semibold">
+                                Already holds: {conflict.positionTitle} ({conflict.category})
+                              </p>
+                            </div>
+                          ) : displayName ? (
                             <div className="flex items-center gap-1.5">
                               <span className="font-bold text-[#0F172A]">{displayName}</span>
                               <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200">
@@ -426,8 +596,12 @@ export function ClubMembersModal({
                             type="button"
                             onClick={() => handleRemoveMember(member)}
                             disabled={isSaving}
-                            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer disabled:opacity-30"
-                            title="Remove member from club"
+                            className={`p-1.5 rounded-lg transition-colors cursor-pointer disabled:opacity-30 ${
+                              isOfficerConflict
+                                ? "text-rose-600 bg-rose-100/80 hover:bg-rose-200 hover:text-rose-800"
+                                : "text-rose-500 hover:bg-rose-50 hover:text-rose-700"
+                            }`}
+                            title={isOfficerConflict ? "Remove conflicted officer from members" : "Remove member from club"}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>

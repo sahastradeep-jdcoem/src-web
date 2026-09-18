@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { 
@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { getStoredClubs, syncClubsFromFirestore, subscribeToClubs, getClubLeaders, findClub } from "@/lib/councilStore";
 import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
-import { findStudentByBtId } from "@/lib/usersStore";
+import { findStudentByBtId, checkBtIdPositionConflict } from "@/lib/usersStore";
 import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { ClubItem, EventItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -31,6 +31,15 @@ interface ClubDetailViewProps {
 export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailViewProps) {
   const [club, setClub] = useState<ClubItem>(initialClub);
   const [events, setEvents] = useState<EventItem[]>(clubEvents);
+
+  // Strictly filter out any officers from public member display
+  const displayMembers = useMemo(() => {
+    if (!club.members || !Array.isArray(club.members)) return [];
+    return club.members.filter((m) => {
+      const conflict = checkBtIdPositionConflict(m.btId, club.slug || club.id);
+      return !conflict.isOfficer;
+    });
+  }, [club.members, club.slug, club.id]);
 
   useEffect(() => {
     const applyClub = (list: ClubItem[]) => {
@@ -160,7 +169,7 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
                 </span>
                 <span className="text-xs font-bold text-white px-3 py-1 rounded-full bg-white/20 backdrop-blur-xs flex items-center gap-1.5">
                   <Users className="w-3.5 h-3.5 text-[#E78023]" />
-                  <span>{Math.max(club.memberCount || 0, club.members?.length || 0)} Active Members</span>
+                  <span>{Math.max(club.memberCount || 0, displayMembers.length)} Active Members</span>
                 </span>
               </div>
 
@@ -273,8 +282,8 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
           </div>
         </section>
 
-        {/* Club Members Section (Names only, zero photos) */}
-        {club.members && club.members.length > 0 && (
+        {/* Club Members Section (Names only, zero photos, strictly non-officers) */}
+        {displayMembers.length > 0 && (
           <section className="space-y-6">
             <div className="border-b border-slate-200 pb-4 flex items-center justify-between">
               <div>
@@ -287,12 +296,12 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
                 </p>
               </div>
               <span className="text-xs font-bold text-[#17458F] bg-blue-50 border border-blue-200 px-3 py-1 rounded-full">
-                {club.members.length} {club.members.length === 1 ? "Member" : "Members"}
+                {displayMembers.length} {displayMembers.length === 1 ? "Member" : "Members"}
               </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {club.members.map((member, idx) => {
+              {displayMembers.map((member, idx) => {
                 const studentInfo = findStudentByBtId(member.btId);
                 const displayName = member.name || studentInfo?.name || member.btId;
                 const displayDept = member.department || studentInfo?.department;
