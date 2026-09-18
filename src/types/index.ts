@@ -23,7 +23,7 @@ export interface EventPrize {
   perks: string[];
 }
 
-export type CustomQuestionType = 
+export type SrcFormFieldType = 
   | "short_text" 
   | "long_text" 
   | "multiple_choice" 
@@ -31,9 +31,12 @@ export type CustomQuestionType =
   | "dropdown" 
   | "note";
 
-export interface CustomQuestion {
+export type SrcFormQuestionType = SrcFormFieldType;
+export type CustomQuestionType = SrcFormFieldType;
+
+export interface SrcFormField {
   id: string;
-  type: CustomQuestionType;
+  type: SrcFormFieldType;
   question: string;
   description?: string;
   placeholder?: string;
@@ -41,6 +44,10 @@ export interface CustomQuestion {
   options?: string[]; // For multiple_choice, checkboxes, dropdown
   noteContent?: string; // For "note" / important announcement banners
 }
+
+// Aliases for SRC Forms codebase compatibility and Firestore data serialization
+export type SrcFormQuestion = SrcFormField;
+export type CustomQuestion = SrcFormField;
 
 export interface EventItem {
   id: string;
@@ -94,7 +101,7 @@ export interface EventItem {
     role?: string;
     phone?: string;
   };
-  customQuestions?: CustomQuestion[];
+  customQuestions?: SrcFormField[]; // SRC Forms fields
   isParentFest?: boolean;
   parentEventId?: string;
   parentEventSlug?: string;

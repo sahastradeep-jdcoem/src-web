@@ -30,7 +30,7 @@ import {
   Ticket,
   Undo2
 } from "lucide-react";
-import { EventItem, ClubItem, CustomQuestion, TargetAudience } from "@/types";
+import { EventItem, ClubItem, SrcFormField, CustomQuestion, TargetAudience } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";

@@ -32,9 +32,9 @@ import {
   FileArchive
 } from "lucide-react";
 import { ListingItem, ListingType, ListingPillar, TargetAudience } from "@/types/listings";
-import { CustomQuestionsBuilder } from "@/components/admin/events/CustomQuestionsBuilder";
+import { SrcFormsBuilder } from "@/components/admin/forms/SrcFormsBuilder";
 import { UniversalImageUploader } from "@/components/ui/UniversalImageUploader";
-import { CustomQuestion } from "@/types";
+import { SrcFormField, CustomQuestion } from "@/types";
 import { saveStoredListings, getStoredListings } from "@/lib/listingsStore";
 import { cn } from "@/lib/utils";
 
@@ -1509,8 +1509,8 @@ export function CreateListingModal({
               {/* ========================================================= */}
               {activeSection === "qa" && selectedPillarOption.type !== "poll" && (
                 <div className="space-y-5 animate-in fade-in duration-200">
-                  <CustomQuestionsBuilder
-                    questions={customQuestions}
+                  <SrcFormsBuilder
+                    fields={customQuestions}
                     onChange={(qs) => setCustomQuestions(qs)}
                   />
                 </div>

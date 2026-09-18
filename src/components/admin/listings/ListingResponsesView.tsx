@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import { ListingItem, ListingResponseRecord } from "@/types/listings";
 import { resolveResponseWithUserProfile, getPollStats } from "@/lib/listingsStore";
-import { CustomQuestion } from "@/types";
+import { SrcFormField, CustomQuestion } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";

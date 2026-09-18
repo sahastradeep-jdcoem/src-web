@@ -45,7 +45,7 @@ import {
   RotateCcw,
   Copy
 } from "lucide-react";
-import { RegistrationRecord, EventItem, CustomQuestion } from "@/types";
+import { RegistrationRecord, EventItem, SrcFormField, CustomQuestion } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";

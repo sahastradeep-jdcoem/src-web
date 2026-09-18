@@ -1,4 +1,4 @@
-import { CustomQuestion } from "./index";
+import { SrcFormField, CustomQuestion } from "./index";
 
 export type ListingType =
   | "event"            // 🎫 Physical/online festival, competition, workshop
@@ -104,8 +104,8 @@ export interface ListingItem {
   parentEventName?: string;
   subEventBadge?: string;
 
-  // Custom Q&N Form Fields
-  customQuestions?: CustomQuestion[];
+  // SRC Forms Fields
+  customQuestions?: SrcFormField[];
 
   // Form & Response Settings
   allowResponseEditing?: boolean; // Controlled from admin: allows students to revise/edit submitted responses

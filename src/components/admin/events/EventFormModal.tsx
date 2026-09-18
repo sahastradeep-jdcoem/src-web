@@ -38,8 +38,8 @@ import {
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { UniversalImageUploader } from "@/components/ui/UniversalImageUploader";
-import { CustomQuestionsBuilder } from "@/components/admin/events/CustomQuestionsBuilder";
-import { EventItem, ClubItem, CustomQuestion, TargetAudience, EventScheduleItem, EventPrize } from "@/types";
+import { SrcFormsBuilder } from "@/components/admin/forms/SrcFormsBuilder";
+import { EventItem, ClubItem, SrcFormField, CustomQuestion, TargetAudience, EventScheduleItem, EventPrize } from "@/types";
 import { cn } from "@/lib/utils";
 
 export type EventModalSection = "details" | "schedule" | "registration" | "participation" | "visuals" | "qa";
@@ -2974,8 +2974,8 @@ export function EventFormModal({
         {/* ========================================================= */}
         {activeSection === "qa" && (
           <div className="space-y-4 animate-in fade-in duration-200">
-            <CustomQuestionsBuilder
-              questions={form.customQuestions}
+            <SrcFormsBuilder
+              fields={form.customQuestions}
               onChange={(qs) => setForm({ ...form, customQuestions: qs })}
             />
           </div>
