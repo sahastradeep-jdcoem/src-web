@@ -469,7 +469,7 @@ export default function StudentHubPage() {
                         className="w-full py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer group/btn"
                       >
                         <span>
-                          {isOpp ? "Apply for Fellowship" : isSub ? "Submit Entry" : isIssue ? "File Confidential Concern" : "Apply / Audition"}
+                          {isOpp ? "Apply for Fellowship" : isSub ? "Submit Entry" : isIssue ? "File Confidential Concern" : "Fill Form"}
                         </span>
                         <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-0.5 transition-transform" />
                       </Link>
