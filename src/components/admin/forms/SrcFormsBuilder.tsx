@@ -13,6 +13,7 @@ import {
   CircleDot, 
   CheckSquare, 
   ChevronDownSquare, 
+  ChevronDown,
   AlertCircle,
   Sparkles,
   Info
@@ -20,6 +21,7 @@ import {
 
 export interface SrcFormsBuilderProps {
   fields?: SrcFormField[];
+  initialFields?: SrcFormField[];
   questions?: SrcFormField[]; // Backward-compatibility alias
   onChange: (fields: SrcFormField[]) => void;
 }
@@ -28,44 +30,44 @@ const QUESTION_TYPE_CONFIG: Record<SrcFormFieldType, { label: string; icon: any;
   short_text: {
     label: "Short Answer",
     icon: AlignLeft,
-    placeholder: "e.g. GitHub Profile URL, Discord ID, College BT-ID",
-    desc: "Single line text response",
+    placeholder: "e.g. Full Name, GitHub Username, BT ID",
+    desc: "Single-line plain text response",
   },
   long_text: {
     label: "Paragraph",
     icon: AlignJustify,
-    placeholder: "e.g. Briefly describe your project idea or hackathon motivation",
-    desc: "Multi-line detailed answer",
+    placeholder: "e.g. Why would you like to join the SRC Core Team?",
+    desc: "Multi-line detailed text area",
   },
   multiple_choice: {
     label: "Multiple Choice",
     icon: CircleDot,
-    placeholder: "e.g. Select your T-Shirt size or track preference",
-    desc: "Single selection from options (Radio)",
+    placeholder: "e.g. Choose your preferred committee",
+    desc: "Single option selection with radio buttons",
   },
   checkboxes: {
     label: "Checkboxes",
     icon: CheckSquare,
-    placeholder: "e.g. Select all programming languages or skills you know",
-    desc: "Multiple selections allowed",
+    placeholder: "e.g. Which operational sessions can you attend?",
+    desc: "Multi-option selection with checkboxes",
   },
   dropdown: {
     label: "Dropdown",
-    icon: ChevronDownSquare,
-    placeholder: "e.g. Select your college branch or year of study",
-    desc: "Dropdown selection menu",
+    icon: ChevronDown,
+    placeholder: "e.g. Academic Department",
+    desc: "Compact dropdown list selector",
   },
   note: {
-    label: "Important Note / Guidelines",
+    label: "Council Notice / Banner",
     icon: AlertCircle,
     placeholder: "e.g. Bring your own laptops and valid college ID cards",
     desc: "Highlighted instruction banner (No answer required)",
   },
 };
 
-export function SrcFormsBuilder({ fields, questions, onChange }: SrcFormsBuilderProps) {
-  // Gracefully support both `fields` or `questions` props
-  const activeFields: SrcFormField[] = fields ?? questions ?? [];
+export function SrcFormsBuilder({ fields, initialFields, questions, onChange }: SrcFormsBuilderProps) {
+  // Gracefully support both `fields`, `initialFields`, or `questions` props
+  const activeFields: SrcFormField[] = fields ?? initialFields ?? questions ?? [];
 
   const addField = (type: SrcFormFieldType = "short_text") => {
     const newField: SrcFormField = {

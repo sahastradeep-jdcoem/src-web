@@ -23,24 +23,37 @@ import {
   Filter,
   ShieldCheck,
   Building,
-  Target
+  Target,
+  ClipboardList,
+  FileSpreadsheet,
+  Eye,
+  BarChart3
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
+import { SrcFormField } from "@/types";
 import { 
   SrcDispatch, 
   SrcDispatchCategory, 
   SrcDispatchPriority, 
-  SrcDispatchTarget 
+  SrcDispatchTarget,
+  SrcDispatchResponseRecord
 } from "@/types/srcDispatch";
 import { 
   getStoredSrcDispatches, 
   saveStoredSrcDispatches, 
   syncSrcDispatchesFromFirestore, 
-  subscribeToSrcDispatches 
+  subscribeToSrcDispatches,
+  getStoredDispatchResponses,
+  updateDispatchResponseStatus,
+  deleteStoredDispatchResponse,
+  syncDispatchResponsesFromFirestore,
+  subscribeToDispatchResponses
 } from "@/lib/srcDispatchesStore";
+import { SrcFormsBuilder } from "@/components/admin/forms/SrcFormsBuilder";
+import { SrcFormsResponseViewer } from "@/components/admin/forms/SrcFormsResponseViewer";
 import { 
   getAllSavedSrcMembers, 
   verifySrcMemberByBtId, 
@@ -62,6 +75,8 @@ import Link from "next/link";
 export default function AdminSrcUpdatesPage() {
   const { user } = useAuth();
   const [dispatches, setDispatches] = useState<SrcDispatch[]>([]);
+  const [dispatchResponses, setDispatchResponses] = useState<SrcDispatchResponseRecord[]>([]);
+  const [inspectingDispatch, setInspectingDispatch] = useState<SrcDispatch | null>(null);
   const [savedMembers, setSavedMembers] = useState<SavedSrcMemberRecord[]>([]);
   const [users, setUsers] = useState<RegisteredUserRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -106,6 +121,11 @@ export default function AdminSrcUpdatesPage() {
     paymentDeadline: string;
     paymentQrImageUrl: string;
     paymentNote: string;
+    // SRC Forms Details
+    formFields: SrcFormField[];
+    formDeadline: string;
+    allowResponseEditing: boolean;
+    requiresApproval: boolean;
   }>({
     title: "",
     category: "update",
@@ -131,6 +151,10 @@ export default function AdminSrcUpdatesPage() {
     paymentDeadline: "",
     paymentQrImageUrl: "",
     paymentNote: "Please include your BT ID in UPI remarks for automatic reconciliation.",
+    formFields: [],
+    formDeadline: "",
+    allowResponseEditing: true,
+    requiresApproval: true,
   });
 
   const showToast = (msg: string) => {
@@ -141,6 +165,7 @@ export default function AdminSrcUpdatesPage() {
   useEffect(() => {
     // 1. Initial local load
     setDispatches(getStoredSrcDispatches());
+    setDispatchResponses(getStoredDispatchResponses());
     const allMembers = getAllSavedSrcMembers();
     setSavedMembers(allMembers);
     setUsers(getStoredUsers());
@@ -151,6 +176,10 @@ export default function AdminSrcUpdatesPage() {
       if (cloud && cloud.length > 0) setDispatches(cloud);
     });
 
+    syncDispatchResponsesFromFirestore().then((cloudResps) => {
+      if (cloudResps && cloudResps.length > 0) setDispatchResponses(cloudResps);
+    });
+
     syncUsersFromFirestore().then((syncedUsers) => {
       if (syncedUsers && syncedUsers.length > 0) {
         setUsers(syncedUsers);
@@ -159,6 +188,10 @@ export default function AdminSrcUpdatesPage() {
 
     const unsubDispatches = subscribeToSrcDispatches((updated) => {
       setDispatches(updated);
+    });
+
+    const unsubResponses = subscribeToDispatchResponses((updatedResps) => {
+      setDispatchResponses(updatedResps);
     });
 
     const handleUsersUpdate = (e: any) => {
@@ -176,6 +209,7 @@ export default function AdminSrcUpdatesPage() {
 
     return () => {
       unsubDispatches();
+      unsubResponses();
       window.removeEventListener("src_users_updated", handleUsersUpdate);
       window.removeEventListener("src_tenures_updated", () => {});
     };
@@ -346,9 +380,10 @@ export default function AdminSrcUpdatesPage() {
     const total = dispatches.length;
     const broadcastCount = dispatches.filter((d) => d.targetType === "all_members").length;
     const directCount = dispatches.filter((d) => d.targetType === "single_member").length;
+    const formCount = dispatches.filter((d) => d.category === "form" || (d.formFields && d.formFields.length > 0)).length;
     const paymentCount = dispatches.filter((d) => d.category === "payment_qr").length;
     const eventCount = dispatches.filter((d) => d.category === "event").length;
-    return { total, broadcastCount, directCount, paymentCount, eventCount };
+    return { total, broadcastCount, directCount, formCount, paymentCount, eventCount };
   }, [dispatches]);
 
   // Open modal for Create
@@ -379,6 +414,10 @@ export default function AdminSrcUpdatesPage() {
       paymentDeadline: "",
       paymentQrImageUrl: "",
       paymentNote: "Please include your BT ID in UPI remarks for automatic reconciliation.",
+      formFields: [],
+      formDeadline: "",
+      allowResponseEditing: true,
+      requiresApproval: true,
     });
     setIsModalOpen(true);
   };
@@ -411,6 +450,10 @@ export default function AdminSrcUpdatesPage() {
       paymentDeadline: dispatch.paymentDetails?.deadline || "",
       paymentQrImageUrl: dispatch.paymentDetails?.qrImageUrl || "",
       paymentNote: dispatch.paymentDetails?.note || "Please include your BT ID in UPI remarks for automatic reconciliation.",
+      formFields: dispatch.formFields ? JSON.parse(JSON.stringify(dispatch.formFields)) : [],
+      formDeadline: dispatch.formDeadline || "",
+      allowResponseEditing: dispatch.allowResponseEditing ?? true,
+      requiresApproval: dispatch.requiresApproval ?? true,
     });
     setIsModalOpen(true);
   };
@@ -492,6 +535,13 @@ export default function AdminSrcUpdatesPage() {
         };
       }
 
+      if (formData.category === "form" || (formData.formFields && formData.formFields.length > 0)) {
+        payload.formFields = formData.formFields.length > 0 ? formData.formFields : undefined;
+        payload.formDeadline = formData.formDeadline.trim() || undefined;
+        payload.allowResponseEditing = formData.allowResponseEditing;
+        payload.requiresApproval = formData.requiresApproval;
+      }
+
       let updatedList: SrcDispatch[];
       if (isNew) {
         updatedList = [payload, ...dispatches];
@@ -526,6 +576,50 @@ export default function AdminSrcUpdatesPage() {
       alert("Failed to delete dispatch.");
     }
   };
+
+  // Response Management
+  const handleUpdateResponseStatus = async (
+    responseId: string,
+    status: "pending" | "approved" | "rejected" | "resolved" | "reviewed",
+    adminNote?: string
+  ) => {
+    await updateDispatchResponseStatus(responseId, status, adminNote);
+    setDispatchResponses(getStoredDispatchResponses());
+    showToast(`Response status updated to "${status}".`);
+  };
+
+  const handleDeleteResponse = async (responseId: string) => {
+    if (confirm("Are you sure you want to delete this response record?")) {
+      await deleteStoredDispatchResponse(responseId);
+      setDispatchResponses(getStoredDispatchResponses());
+      showToast("Response record deleted.");
+    }
+  };
+
+  // Dedicated SRC Forms Response Viewer View
+  if (inspectingDispatch) {
+    const targetResponses = dispatchResponses.filter((r) => r.dispatchId === inspectingDispatch.id);
+    return (
+      <div className="space-y-6 pb-16">
+        {toastMessage && (
+          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-xl animate-fade-in border border-emerald-400/30 font-medium text-sm">
+            <CheckCircle2 className="w-5 h-5 text-emerald-100" />
+            <span>{toastMessage}</span>
+          </div>
+        )}
+
+        <SrcFormsResponseViewer
+          title={inspectingDispatch.title}
+          subtitle={`SRC Council Operations Dispatch (${inspectingDispatch.targetType === "all_members" ? "All SRC Members" : `Target BT: ${inspectingDispatch.targetBtId}`})`}
+          fields={inspectingDispatch.formFields || []}
+          responses={targetResponses}
+          onBack={() => setInspectingDispatch(null)}
+          onUpdateStatus={handleUpdateResponseStatus}
+          onDeleteResponse={handleDeleteResponse}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 pb-16">
@@ -665,7 +759,7 @@ export default function AdminSrcUpdatesPage() {
 
           {/* Category Filter Pills */}
           <div className="flex flex-wrap items-center gap-1.5 text-xs">
-            {(["ALL", "update", "event", "payment_qr", "notice"] as const).map((cat) => (
+            {(["ALL", "update", "form", "event", "payment_qr", "notice"] as const).map((cat) => (
               <button
                 key={cat}
                 type="button"
@@ -676,7 +770,7 @@ export default function AdminSrcUpdatesPage() {
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 }`}
               >
-                {cat === "ALL" ? "All Categories" : cat.replace("_", " ")}
+                {cat === "ALL" ? "All Categories" : cat === "form" ? "SRC Forms" : cat.replace("_", " ")}
               </button>
             ))}
           </div>
@@ -847,6 +941,45 @@ export default function AdminSrcUpdatesPage() {
                       </div>
                     )}
 
+                    {/* Form Preview */}
+                    {(item.category === "form" || (item.formFields && item.formFields.length > 0)) && (
+                      <div className="mt-3 p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-950">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-heading font-bold text-sm text-emerald-900 flex items-center gap-1.5">
+                              <ClipboardList className="w-4 h-4 text-emerald-700" />
+                              SRC Form Attached
+                            </span>
+                            <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded">
+                              {item.formFields?.length || 0} questions
+                            </span>
+                            {item.requiresApproval && (
+                              <span className="text-[10px] font-bold text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded">
+                                Requires Review
+                              </span>
+                            )}
+                          </div>
+                          {item.formDeadline && (
+                            <p className="text-[11px] font-semibold text-rose-600 flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              <span>Deadline: {item.formDeadline}</span>
+                            </p>
+                          )}
+                        </div>
+
+                        <Button
+                          onClick={() => setInspectingDispatch(item)}
+                          size="sm"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-sm cursor-pointer shrink-0"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>
+                            View Responses ({dispatchResponses.filter((r) => r.dispatchId === item.id).length})
+                          </span>
+                        </Button>
+                      </div>
+                    )}
+
                     <div className="pt-2 text-[11px] text-slate-400 flex items-center gap-3">
                       <span>By: <strong className="text-slate-700">{item.authorName}</strong> ({item.authorRole || "Admin"})</span>
                       <span>•</span>
@@ -856,11 +989,22 @@ export default function AdminSrcUpdatesPage() {
 
                   {/* Right actions */}
                   <div className="flex sm:flex-col items-center gap-2 shrink-0 border-t sm:border-t-0 pt-3 sm:pt-0">
+                    {(item.category === "form" || (item.formFields && item.formFields.length > 0)) && (
+                      <Button
+                        onClick={() => setInspectingDispatch(item)}
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 text-xs font-bold text-emerald-700 border-emerald-300 hover:bg-emerald-50 cursor-pointer w-full sm:w-auto"
+                      >
+                        <BarChart3 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Responses ({dispatchResponses.filter((r) => r.dispatchId === item.id).length})</span>
+                      </Button>
+                    )}
                     <Button
                       onClick={() => handleOpenEditModal(item)}
                       variant="outline"
                       size="sm"
-                      className="gap-1.5 text-xs font-bold text-slate-700 hover:text-[#17458F] cursor-pointer"
+                      className="gap-1.5 text-xs font-bold text-slate-700 hover:text-[#17458F] cursor-pointer w-full sm:w-auto"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                       <span>Edit</span>
@@ -869,7 +1013,7 @@ export default function AdminSrcUpdatesPage() {
                       onClick={() => setDeletingDispatch(item)}
                       variant="ghost"
                       size="sm"
-                      className="gap-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 cursor-pointer"
+                      className="gap-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 cursor-pointer w-full sm:w-auto"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Delete</span>
@@ -896,10 +1040,11 @@ export default function AdminSrcUpdatesPage() {
             <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
               Dispatch Category <span className="text-rose-500">*</span>
             </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
               {[
                 { id: "update", label: "Official Update", icon: BellRing },
                 { id: "event", label: "Council Event", icon: Calendar },
+                { id: "form", label: "SRC Form", icon: ClipboardList },
                 { id: "payment_qr", label: "Payment QR", icon: CreditCard },
                 { id: "notice", label: "Notice / Memo", icon: Sparkles },
               ].map((c) => {
@@ -1199,6 +1344,60 @@ export default function AdminSrcUpdatesPage() {
                   storagePath="src_payment_qrs"
                   previewUrl={formData.paymentQrImageUrl}
                   onUrlChange={(url) => setFormData((prev) => ({ ...prev, paymentQrImageUrl: url }))}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Category-Specific Fields: SRC Forms */}
+          {formData.category === "form" && (
+            <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50/60 border border-emerald-200 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-200/80 pb-3">
+                <div className="flex items-center gap-2 text-xs font-bold text-emerald-950 uppercase tracking-wider">
+                  <ClipboardList className="w-4 h-4 text-emerald-700" />
+                  <span>SRC Forms Builder</span>
+                  <span className="text-[10px] normal-case font-normal px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300/60">
+                    Council Operations Form
+                  </span>
+                </div>
+                <div className="flex items-center gap-4 text-xs">
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none text-slate-700 font-medium">
+                    <input
+                      type="checkbox"
+                      checked={formData.allowResponseEditing}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, allowResponseEditing: e.target.checked }))}
+                      className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span>Allow response editing</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none text-slate-700 font-medium">
+                    <input
+                      type="checkbox"
+                      checked={formData.requiresApproval}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, requiresApproval: e.target.checked }))}
+                      className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span>Requires review</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 uppercase">Submission Deadline (Optional)</label>
+                  <input
+                    type="date"
+                    value={formData.formDeadline}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, formDeadline: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl border border-emerald-300 text-xs bg-white text-slate-800"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <SrcFormsBuilder
+                  fields={formData.formFields}
+                  onChange={(fields) => setFormData((prev) => ({ ...prev, formFields: fields }))}
                 />
               </div>
             </div>

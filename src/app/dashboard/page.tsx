@@ -34,7 +34,10 @@ import {
   ChevronRight,
   Maximize2,
   CalendarPlus,
-  Compass
+  Compass,
+  ClipboardList,
+  Send,
+  Edit2
 } from "lucide-react";
 import { CancelRegistrationModal } from "@/components/registration/CancelRegistrationModal";
 import { Badge } from "@/components/ui/Badge";
@@ -68,12 +71,18 @@ import { downloadPassAsImage } from "@/lib/passExport";
 import { verifySrcMemberByBtId } from "@/lib/srcMembership";
 import { 
   SrcDispatch, 
-  SrcDispatchCategory 
+  SrcDispatchCategory,
+  SrcDispatchResponseRecord 
 } from "@/types/srcDispatch";
+import { SrcFormField } from "@/types";
 import { 
   getStoredSrcDispatches, 
   syncSrcDispatchesFromFirestore, 
-  subscribeToSrcDispatches 
+  subscribeToSrcDispatches,
+  getStoredDispatchResponses,
+  saveStoredDispatchResponse,
+  syncDispatchResponsesFromFirestore,
+  subscribeToDispatchResponses
 } from "@/lib/srcDispatchesStore";
 
 export default function StudentDashboardPage() {
@@ -87,7 +96,7 @@ export default function StudentDashboardPage() {
   // Navigation & Sub-filters
   const [activeDashboardTab, setActiveDashboardTab] = useState<"passes" | "hub" | "src_portal" | "accreditation">("passes");
   const [passFilter, setPassFilter] = useState<"ALL" | "UPCOMING" | "CHECKED_IN">("ALL");
-  const [srcFilter, setSrcFilter] = useState<"ALL" | "DIRECT" | "UPDATE" | "EVENT" | "PAYMENT">("ALL");
+  const [srcFilter, setSrcFilter] = useState<"ALL" | "DIRECT" | "UPDATE" | "EVENT" | "PAYMENT" | "FORM">("ALL");
 
   // Interaction Modals
   const [selectedTicket, setSelectedTicket] = useState<RegistrationRecord | null>(null);
@@ -101,9 +110,14 @@ export default function StudentDashboardPage() {
   const [copiedBtId, setCopiedBtId] = useState(false);
   const [copiedUpiId, setCopiedUpiId] = useState<string | null>(null);
 
-  // SRC Dispatches state
+  // SRC Dispatches & Forms state
   const [srcDispatches, setSrcDispatches] = useState<SrcDispatch[]>([]);
+  const [dispatchResponses, setDispatchResponses] = useState<SrcDispatchResponseRecord[]>([]);
   const [acknowledgedDues, setAcknowledgedDues] = useState<string[]>([]);
+  const [formAnswers, setFormAnswers] = useState<Record<string, Record<string, any>>>({});
+  const [submittingForms, setSubmittingForms] = useState<Record<string, boolean>>({});
+  const [editingFormIds, setEditingFormIds] = useState<Record<string, boolean>>({});
+  const [formFeedback, setFormFeedback] = useState<Record<string, { type: "success" | "error"; text: string }>>({});
 
   // 1. Authoritative SRC Membership Verification
   const srcVerification = useMemo(() => {
@@ -485,6 +499,21 @@ export default function StudentDashboardPage() {
       if (remoteResponses && isCurrent) updateResponses(remoteResponses);
     });
 
+    // 6. SRC Dispatch Responses Sync
+    const updateDispatchResponses = (overrideList?: SrcDispatchResponseRecord[]) => {
+      const allResps = overrideList || getStoredDispatchResponses();
+      if (isCurrent) setDispatchResponses(allResps);
+    };
+
+    updateDispatchResponses();
+    syncDispatchResponsesFromFirestore().then((resps) => {
+      if (resps && isCurrent) updateDispatchResponses(resps);
+    });
+
+    const unsubDispatchResponses = subscribeToDispatchResponses((remoteResps) => {
+      if (remoteResps && isCurrent) updateDispatchResponses(remoteResps);
+    });
+
     return () => {
       isCurrent = false;
       unsubEvents();
@@ -492,6 +521,7 @@ export default function StudentDashboardPage() {
       unsubRegistrations();
       unsubListings();
       unsubHub();
+      unsubDispatchResponses();
     };
   }, [user]);
 
@@ -508,6 +538,23 @@ export default function StudentDashboardPage() {
     });
   }, [srcDispatches, isVerifiedSrcMember, user?.btId]);
 
+  // Dispatch responses matching this current user
+  const userDispatchResponses = useMemo(() => {
+    if (!user) return [];
+    const uId = user.uid;
+    const uEmail = (user.email || "").toLowerCase().trim();
+    const uBt = (user.btId || "").toUpperCase().trim();
+    const uName = (user.displayName || user.name || "").toLowerCase().trim();
+
+    return dispatchResponses.filter((r) => {
+      if (uId && r.userId === uId) return true;
+      if (uEmail && (r.userEmail || "").toLowerCase().trim() === uEmail) return true;
+      if (uBt && (r.btId || "").toUpperCase().trim() === uBt) return true;
+      if (uName && (r.userName || "").toLowerCase().trim() === uName) return true;
+      return false;
+    });
+  }, [dispatchResponses, user]);
+
   const directDispatchesCount = useMemo(() => {
     const cleanBt = (user?.btId || "").trim().toUpperCase();
     if (!cleanBt) return 0;
@@ -515,6 +562,12 @@ export default function StudentDashboardPage() {
       (d) => d.targetType === "single_member" && d.targetBtId?.trim().toUpperCase() === cleanBt
     ).length;
   }, [userSrcDispatches, user?.btId]);
+
+  const formsCount = useMemo(() => {
+    return userSrcDispatches.filter(
+      (d) => d.category === "form" || (d.formFields && d.formFields.length > 0)
+    ).length;
+  }, [userSrcDispatches]);
 
   const filteredSrcDispatches = useMemo(() => {
     const cleanBt = (user?.btId || "").trim().toUpperCase();
@@ -525,9 +578,108 @@ export default function StudentDashboardPage() {
       if (srcFilter === "UPDATE") return d.category === "update" || d.category === "notice";
       if (srcFilter === "EVENT") return d.category === "event";
       if (srcFilter === "PAYMENT") return d.category === "payment_qr";
+      if (srcFilter === "FORM") return d.category === "form" || (d.formFields && d.formFields.length > 0);
       return true;
     });
   }, [userSrcDispatches, srcFilter, user?.btId]);
+
+  // Form answer mutation and submission
+  const handleAnswerChange = (dispatchId: string, questionId: string, value: any) => {
+    setFormAnswers((prev) => ({
+      ...prev,
+      [dispatchId]: {
+        ...(prev[dispatchId] || {}),
+        [questionId]: value,
+      },
+    }));
+  };
+
+  const handleSubmitForm = async (dispatch: SrcDispatch) => {
+    if (!dispatch.formFields || dispatch.formFields.length === 0) return;
+    const answers = formAnswers[dispatch.id] || {};
+
+    // Validate required questions
+    for (const field of dispatch.formFields) {
+      if (field.type === "note") continue;
+      if (field.required) {
+        const val = answers[field.id];
+        if (
+          val === undefined ||
+          val === null ||
+          val === "" ||
+          (Array.isArray(val) && val.length === 0)
+        ) {
+          setFormFeedback((prev) => ({
+            ...prev,
+            [dispatch.id]: {
+              type: "error",
+              text: `Please answer required question: "${field.question}"`,
+            },
+          }));
+          return;
+        }
+      }
+    }
+
+    setSubmittingForms((prev) => ({ ...prev, [dispatch.id]: true }));
+    try {
+      const existing = userDispatchResponses.find((r) => r.dispatchId === dispatch.id);
+
+      const record: SrcDispatchResponseRecord = {
+        id: existing ? existing.id : `disp-resp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        dispatchId: dispatch.id,
+        dispatchTitle: dispatch.title,
+        userId: user?.uid || `user-${Date.now()}`,
+        userName: user?.displayName || user?.name || "Council Officer",
+        userEmail: user?.email || "",
+        btId: user?.btId?.toUpperCase() || "",
+        department: user?.department || user?.facultyDepartment || "Engineering",
+        year: user?.year || "Student",
+        answers,
+        submittedAt: existing ? existing.submittedAt : new Date().toISOString(),
+        updatedAt: existing ? new Date().toISOString() : undefined,
+        status: existing ? existing.status : (dispatch.requiresApproval ? "pending" : "approved"),
+        adminNote: existing?.adminNote,
+      };
+
+      await saveStoredDispatchResponse(record);
+      setDispatchResponses(getStoredDispatchResponses());
+      setEditingFormIds((prev) => ({ ...prev, [dispatch.id]: false }));
+      setFormFeedback((prev) => ({
+        ...prev,
+        [dispatch.id]: {
+          type: "success",
+          text: existing ? "Your response was updated successfully!" : "Form submitted successfully to the Council Secretariat!",
+        },
+      }));
+      setTimeout(() => {
+        setFormFeedback((prev) => {
+          const next = { ...prev };
+          delete next[dispatch.id];
+          return next;
+        });
+      }, 5000);
+    } catch (err) {
+      console.error("Failed to submit dispatch form response:", err);
+      setFormFeedback((prev) => ({
+        ...prev,
+        [dispatch.id]: {
+          type: "error",
+          text: "Failed to submit response. Please check your connection.",
+        },
+      }));
+    } finally {
+      setSubmittingForms((prev) => ({ ...prev, [dispatch.id]: false }));
+    }
+  };
+
+  const handleStartEditResponse = (dispatch: SrcDispatch, existingResponse: SrcDispatchResponseRecord) => {
+    setFormAnswers((prev) => ({
+      ...prev,
+      [dispatch.id]: { ...(existingResponse.answers || {}) },
+    }));
+    setEditingFormIds((prev) => ({ ...prev, [dispatch.id]: true }));
+  };
 
   // Filtered Passes
   const filteredPasses = useMemo(() => {
@@ -1018,6 +1170,19 @@ export default function StudentDashboardPage() {
                 >
                   Payment QRs & Dues
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSrcFilter("FORM")}
+                  className={`px-3 py-1.5 rounded-xl font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
+                    srcFilter === "FORM"
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  <ClipboardList className="w-3 h-3" />
+                  <span>SRC Forms ({formsCount})</span>
+                </button>
               </div>
 
               <span className="text-[11px] text-slate-400 font-medium">
@@ -1280,6 +1445,357 @@ export default function StudentDashboardPage() {
                                 <span>{isAcknowledged ? "Marked as Cleared" : "Mark as Paid"}</span>
                               </button>
                             </div>
+                          </div>
+                        )}
+
+                        {/* SRC Forms Interactive Question Card */}
+                        {(item.category === "form" || (item.formFields && item.formFields.length > 0)) && (
+                          <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-emerald-50/50 via-white to-slate-50 border border-emerald-200 shadow-xs space-y-4">
+                            {/* Form Header */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-100 pb-3.5">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-8 w-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
+                                    <ClipboardList className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <h4 className="font-heading font-extrabold text-sm sm:text-base text-slate-900">
+                                      SRC Council Operations Form
+                                    </h4>
+                                    <p className="text-[11px] text-slate-500 font-medium">
+                                      Official survey & operational intake for Council Officers
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-2 text-xs">
+                                <span className="px-2.5 py-1 rounded-lg bg-emerald-100/80 text-emerald-800 font-bold text-[11px]">
+                                  {item.formFields?.length || 0} Questions
+                                </span>
+                                {item.formDeadline && (
+                                  <span className="px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 font-bold text-[11px] flex items-center gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    <span>Due: {item.formDeadline}</span>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Check if student has already submitted a response */}
+                            {(() => {
+                              const existingResp = userDispatchResponses.find((r) => r.dispatchId === item.id);
+                              const isEditing = editingFormIds[item.id];
+                              const currentAnswers = formAnswers[item.id] || (existingResp ? existingResp.answers : {});
+                              const feedback = formFeedback[item.id];
+
+                              if (existingResp && !isEditing) {
+                                return (
+                                  <div className="space-y-4">
+                                    {/* Submitted Response Status Card */}
+                                    <div className="p-4 rounded-2xl bg-white border border-emerald-200 space-y-3">
+                                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                                        <div className="flex items-center gap-2">
+                                          <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                                          <div>
+                                            <p className="font-heading font-bold text-xs sm:text-sm text-slate-900">
+                                              Your Response Has Been Recorded
+                                            </p>
+                                            <p className="text-[11px] text-slate-500">
+                                              Submitted on {new Date(existingResp.submittedAt).toLocaleDateString("en-IN", {
+                                                day: "numeric",
+                                                month: "short",
+                                                year: "numeric",
+                                                hour: "2-digit",
+                                                minute: "2-digit"
+                                              })}
+                                              {existingResp.updatedAt && " (Edited)"}
+                                            </p>
+                                          </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                          <span className={`text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full ${
+                                            existingResp.status === "approved"
+                                              ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                              : existingResp.status === "rejected"
+                                              ? "bg-rose-100 text-rose-800 border border-rose-300"
+                                              : existingResp.status === "reviewed"
+                                              ? "bg-blue-100 text-blue-800 border border-blue-300"
+                                              : "bg-amber-100 text-amber-800 border border-amber-300"
+                                          }`}>
+                                            {!existingResp.status || existingResp.status === "pending"
+                                              ? "Pending Review"
+                                              : existingResp.status.toUpperCase()}
+                                          </span>
+
+                                          {item.allowResponseEditing !== false && (
+                                            <Button
+                                              type="button"
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={() => handleStartEditResponse(item, existingResp)}
+                                              className="text-xs font-bold text-[#17458F] border-[#17458F]/30 hover:bg-blue-50 cursor-pointer gap-1.5 h-8"
+                                            >
+                                              <Edit2 className="w-3.5 h-3.5" />
+                                              <span>Edit Response</span>
+                                            </Button>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Admin Note if present */}
+                                      {existingResp.adminNote && (
+                                        <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200 text-xs space-y-1">
+                                          <p className="font-bold text-blue-900 flex items-center gap-1.5">
+                                            <ShieldCheck className="w-3.5 h-3.5 text-[#17458F]" />
+                                            <span>Secretariat Review Note:</span>
+                                          </p>
+                                          <p className="text-slate-700 leading-relaxed pl-5">
+                                            {existingResp.adminNote}
+                                          </p>
+                                        </div>
+                                      )}
+
+                                      {/* Submitted Answers Summary */}
+                                      <div className="space-y-2 pt-1">
+                                        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                                          Submitted Answers:
+                                        </p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                          {(item.formFields || []).map((q, idx) => {
+                                            if (q.type === "note") return null;
+                                            const ans = existingResp.answers?.[q.id];
+                                            const ansText = Array.isArray(ans)
+                                              ? ans.join(", ")
+                                              : ans !== undefined && ans !== null && ans !== ""
+                                              ? String(ans)
+                                              : "—";
+
+                                            return (
+                                              <div key={q.id || idx} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs">
+                                                <span className="font-medium text-slate-500 block truncate">
+                                                  {q.question}
+                                                </span>
+                                                <span className="font-bold text-slate-900 block mt-0.5 whitespace-pre-wrap break-words">
+                                                  {ansText}
+                                                </span>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              }
+
+                              {/* Interactive Form Questions */}
+                              return (
+                                <div className="space-y-4 pt-1">
+                                  {/* Feedback Alert */}
+                                  {feedback && (
+                                    <div className={`p-3 rounded-xl flex items-center gap-2 text-xs font-semibold ${
+                                      feedback.type === "success"
+                                        ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                                        : "bg-rose-100 text-rose-900 border border-rose-300"
+                                    }`}>
+                                      {feedback.type === "success" ? (
+                                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                      ) : (
+                                        <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                                      )}
+                                      <span>{feedback.text}</span>
+                                    </div>
+                                  )}
+
+                                  <div className="space-y-4">
+                                    {(item.formFields || []).map((field, idx) => {
+                                      // 1. Note / Announcement
+                                      if (field.type === "note") {
+                                        return (
+                                          <div key={field.id || idx} className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200 space-y-1">
+                                            <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                                              <AlertCircle className="w-4 h-4 text-[#E78023] shrink-0" />
+                                              <span>{field.question || "Council Notice"}</span>
+                                            </div>
+                                            {field.noteContent && (
+                                              <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-line pl-6">
+                                                {field.noteContent}
+                                              </p>
+                                            )}
+                                          </div>
+                                        );
+                                      }
+
+                                      const qVal = currentAnswers[field.id];
+
+                                      return (
+                                        <div key={field.id || idx} className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2">
+                                          <div className="space-y-0.5">
+                                            <label className="text-xs font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                                              <span>{idx + 1}. {field.question}</span>
+                                              {field.required && (
+                                                <span className="text-rose-500 font-bold">*</span>
+                                              )}
+                                            </label>
+                                            {field.description && (
+                                              <p className="text-[11px] text-slate-500 font-medium">
+                                                {field.description}
+                                              </p>
+                                            )}
+                                          </div>
+
+                                          {/* Short Text */}
+                                          {field.type === "short_text" && (
+                                            <input
+                                              type="text"
+                                              placeholder={field.placeholder || "Your answer..."}
+                                              value={qVal || ""}
+                                              onChange={(e) => handleAnswerChange(item.id, field.id, e.target.value)}
+                                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/60 text-xs font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:bg-white"
+                                            />
+                                          )}
+
+                                          {/* Long Text / Paragraph */}
+                                          {field.type === "long_text" && (
+                                            <textarea
+                                              rows={3}
+                                              placeholder={field.placeholder || "Detailed remarks or feedback..."}
+                                              value={qVal || ""}
+                                              onChange={(e) => handleAnswerChange(item.id, field.id, e.target.value)}
+                                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/60 text-xs font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:bg-white leading-relaxed"
+                                            />
+                                          )}
+
+                                          {/* Multiple Choice */}
+                                          {field.type === "multiple_choice" && (
+                                            <div className="space-y-1.5 pt-1">
+                                              {(field.options || []).map((opt) => {
+                                                const isSelected = qVal === opt;
+                                                return (
+                                                  <button
+                                                    key={opt}
+                                                    type="button"
+                                                    onClick={() => handleAnswerChange(item.id, field.id, opt)}
+                                                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-left text-xs font-medium transition-all cursor-pointer ${
+                                                      isSelected
+                                                        ? "bg-emerald-50 border-emerald-500 text-emerald-950 font-bold shadow-2xs"
+                                                        : "bg-slate-50/60 border-slate-200 text-slate-700 hover:bg-slate-100"
+                                                    }`}
+                                                  >
+                                                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                                                      isSelected
+                                                        ? "border-emerald-600 bg-emerald-600 text-white"
+                                                        : "border-slate-300 bg-white"
+                                                    }`}>
+                                                      {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                                    </div>
+                                                    <span>{opt}</span>
+                                                  </button>
+                                                );
+                                              })}
+                                            </div>
+                                          )}
+
+                                          {/* Checkboxes */}
+                                          {field.type === "checkboxes" && (
+                                            <div className="space-y-1.5 pt-1">
+                                              {(field.options || []).map((opt) => {
+                                                const selectedList: string[] = Array.isArray(qVal) ? qVal : [];
+                                                const isChecked = selectedList.includes(opt);
+                                                return (
+                                                  <button
+                                                    key={opt}
+                                                    type="button"
+                                                    onClick={() => {
+                                                      const next = isChecked
+                                                        ? selectedList.filter((x) => x !== opt)
+                                                        : [...selectedList, opt];
+                                                      handleAnswerChange(item.id, field.id, next);
+                                                    }}
+                                                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-left text-xs font-medium transition-all cursor-pointer ${
+                                                      isChecked
+                                                        ? "bg-emerald-50 border-emerald-500 text-emerald-950 font-bold shadow-2xs"
+                                                        : "bg-slate-50/60 border-slate-200 text-slate-700 hover:bg-slate-100"
+                                                    }`}
+                                                  >
+                                                    <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${
+                                                      isChecked
+                                                        ? "border-emerald-600 bg-emerald-600 text-white"
+                                                        : "border-slate-300 bg-white"
+                                                    }`}>
+                                                      {isChecked && <Check className="w-3 h-3 text-white stroke-[3]" />}
+                                                    </div>
+                                                    <span>{opt}</span>
+                                                  </button>
+                                                );
+                                              })}
+                                            </div>
+                                          )}
+
+                                          {/* Dropdown */}
+                                          {field.type === "dropdown" && (
+                                            <select
+                                              value={qVal || ""}
+                                              onChange={(e) => handleAnswerChange(item.id, field.id, e.target.value)}
+                                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/60 text-xs font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:bg-white"
+                                            >
+                                              <option value="">-- Choose Option --</option>
+                                              {(field.options || []).map((opt) => (
+                                                <option key={opt} value={opt}>
+                                                  {opt}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+
+                                  {/* Form Submit Row */}
+                                  <div className="pt-3 border-t border-emerald-100 flex flex-wrap items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                      <span>Answers are recorded securely and transmitted directly to Council Administration.</span>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                      {isEditing && (
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => setEditingFormIds((prev) => ({ ...prev, [item.id]: false }))}
+                                          disabled={submittingForms[item.id]}
+                                          className="text-xs font-medium text-slate-600 cursor-pointer"
+                                        >
+                                          Cancel
+                                        </Button>
+                                      )}
+
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        disabled={submittingForms[item.id]}
+                                        onClick={() => handleSubmitForm(item)}
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer"
+                                      >
+                                        <Send className="w-3.5 h-3.5" />
+                                        <span>
+                                          {submittingForms[item.id]
+                                            ? "Submitting..."
+                                            : isEditing
+                                            ? "Save Changes"
+                                            : "Submit Form"}
+                                        </span>
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </div>
                         )}
 

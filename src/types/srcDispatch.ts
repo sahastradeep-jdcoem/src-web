@@ -1,4 +1,6 @@
-export type SrcDispatchCategory = "update" | "event" | "payment_qr" | "notice";
+import { SrcFormField } from "@/types";
+
+export type SrcDispatchCategory = "update" | "event" | "payment_qr" | "notice" | "form";
 export type SrcDispatchPriority = "normal" | "important" | "urgent";
 export type SrcDispatchTarget = "all_members" | "single_member";
 
@@ -23,6 +25,29 @@ export interface SrcDispatchPaymentDetails {
   note?: string;
 }
 
+export interface SrcDispatchResponseRecord {
+  id: string;
+  dispatchId: string;
+  dispatchTitle?: string;
+  userId?: string;
+  userEmail?: string;
+  userName?: string;
+  userBtId?: string;
+  btId?: string;
+  userDepartment?: string;
+  department?: string;
+  userYear?: string;
+  year?: string;
+  userPhone?: string;
+  phone?: string;
+  submittedAt: string;
+  updatedAt?: string;
+  status?: "pending" | "approved" | "rejected" | "resolved" | "reviewed";
+  adminFeedback?: string;
+  adminNote?: string;
+  answers: Record<string, any>;
+}
+
 export interface SrcDispatch {
   id: string;
   title: string;
@@ -37,6 +62,13 @@ export interface SrcDispatch {
   createdAt: string;
   eventDetails?: SrcDispatchEventDetails;
   paymentDetails?: SrcDispatchPaymentDetails;
+  
+  // SRC Forms Integration
+  formFields?: SrcFormField[];
+  formDeadline?: string;
+  allowResponseEditing?: boolean;
+  requiresApproval?: boolean;
+
   authorName: string;
   authorRole?: string;
   status: "active" | "archived";
