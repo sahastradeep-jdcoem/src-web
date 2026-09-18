@@ -166,14 +166,14 @@ export function CustomQuestionsBuilder({ questions = [], onChange }: CustomQuest
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold font-heading uppercase tracking-wider text-[#17458F] flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
-              <span>Custom Questions &amp; Notes (Q&amp;N Studio)</span>
+              <span>SRC Forms Builder</span>
             </span>
             <span className="px-2 py-0.5 rounded-full bg-white border border-slate-200 text-[#17458F] text-[10px] font-bold">
               {questions.length} {questions.length === 1 ? "Field" : "Fields"}
             </span>
           </div>
           <p className="text-[11px] text-slate-500 font-sans">
-            Add Google Forms-style custom questions and guideline notes to this event registration.
+            Build custom questions, delegate questionnaires, and guideline notes with SRC Forms.
           </p>
         </div>
 
@@ -221,9 +221,9 @@ export function CustomQuestionsBuilder({ questions = [], onChange }: CustomQuest
             <AlignLeft className="w-5 h-5 text-[#E78023]" />
           </div>
           <div className="space-y-0.5">
-            <h4 className="text-xs font-bold text-slate-800 font-heading">No Custom Questions or Notes Yet</h4>
+            <h4 className="text-xs font-bold text-slate-800 font-heading">No SRC Form Fields Added Yet</h4>
             <p className="text-[11px] text-slate-500 max-w-md mx-auto">
-              Add fields like T-Shirt size, GitHub URL, preferred track, dietary needs, or event instructions.
+              Add fields like T-Shirt size, GitHub URL, preferred track, dietary needs, or event instructions with SRC Forms.
             </p>
           </div>
           <div className="pt-2">
@@ -233,7 +233,7 @@ export function CustomQuestionsBuilder({ questions = [], onChange }: CustomQuest
               className="px-4 py-2 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold transition-all shadow-xs inline-flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Add First Question</span>
+              <span>Add First Field</span>
             </button>
           </div>
         </div>

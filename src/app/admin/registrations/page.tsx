@@ -2387,13 +2387,13 @@ export default function AdminRegistrationsPage() {
                     </div>
                   )}
 
-                  {/* Custom Questions & Answers Studio Section */}
+                  {/* SRC Forms Custom Questions & Answers Studio Section */}
                   {currentIndividual.customAnswers && Object.keys(currentIndividual.customAnswers).length > 0 && (
                     <div className="space-y-4 pt-4 border-t border-slate-200">
                       <div className="flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-[#E78023]" />
                         <h3 className="font-heading font-bold text-sm text-slate-900 uppercase">
-                          Event-Specific Questions &amp; Form Responses
+                          SRC Forms • Custom Question Responses
                         </h3>
                       </div>
 

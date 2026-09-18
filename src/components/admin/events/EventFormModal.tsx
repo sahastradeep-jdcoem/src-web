@@ -7,6 +7,7 @@ import {
   Users, 
   Image as ImageIcon, 
   HelpCircle, 
+  ClipboardList,
   Calendar as CalendarIcon, 
   MapPin, 
   Clock, 
@@ -215,10 +216,10 @@ const SECTIONS: {
   },
   {
     id: "qa",
-    label: "Q&A",
-    shortLabel: "Q&A",
-    icon: HelpCircle,
-    description: "Custom delegate questionnaires and registration inquiry forms.",
+    label: "SRC Forms",
+    shortLabel: "SRC Forms",
+    icon: ClipboardList,
+    description: "Custom delegate questionnaires, surveys, and SRC Forms inquiry fields.",
   },
 ];
 
@@ -2969,7 +2970,7 @@ export function EventFormModal({
         )}
 
         {/* ========================================================= */}
-        {/* 5. Q&A SECTION                                            */}
+        {/* 5. SRC FORMS BUILDER SECTION                             */}
         {/* ========================================================= */}
         {activeSection === "qa" && (
           <div className="space-y-4 animate-in fade-in duration-200">

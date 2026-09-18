@@ -1471,7 +1471,7 @@ export function ListingResponsesView({
                   {/* Form Questions & Answers Cards */}
                   <div className="space-y-4 pt-2">
                     <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
-                      Candidate Questionnaire Answers
+                      SRC Forms • Submitted Responses
                     </h4>
 
                     {listing.customQuestions && listing.customQuestions.length > 0 ? (

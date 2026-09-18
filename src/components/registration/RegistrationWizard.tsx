@@ -1828,14 +1828,14 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               </div>
             )}
 
-            {/* Custom Event Questions & Notes Section (Q&N) */}
+            {/* Custom Event Questions & Notes Section (SRC Forms) */}
             {event.customQuestions && event.customQuestions.length > 0 && (
               <div className="space-y-6 pt-6 border-t border-slate-200">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-extrabold uppercase tracking-wider text-[#17458F] font-heading flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
-                      <span>Event-Specific Questions &amp; Guidelines</span>
+                      <span>SRC Forms • Event Questions &amp; Guidelines</span>
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 font-medium">

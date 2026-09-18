@@ -14,6 +14,7 @@ import {
   Trash2, 
   CheckCircle2,
   HelpCircle,
+  ClipboardList,
   FileText,
   ImageIcon,
   ChevronLeft,
@@ -204,10 +205,10 @@ function getSectionsForType(type?: ListingType): ListingSectionDef[] {
         },
         {
           id: "qa",
-          label: "Application Q&A",
-          shortLabel: "Q&A",
-          icon: HelpCircle,
-          description: "Custom screening questions, portfolio prompts, and candidate intake fields.",
+          label: "SRC Forms",
+          shortLabel: "SRC Forms",
+          icon: ClipboardList,
+          description: "Screening questions, portfolio prompts, and candidate intake fields with SRC Forms.",
         },
       ];
     case "application":
@@ -228,10 +229,10 @@ function getSectionsForType(type?: ListingType): ListingSectionDef[] {
         },
         {
           id: "qa",
-          label: "Application Questions",
-          shortLabel: "Questions",
-          icon: HelpCircle,
-          description: "Applicant questions, required intake prompts, and custom entry fields.",
+          label: "SRC Forms",
+          shortLabel: "SRC Forms",
+          icon: ClipboardList,
+          description: "Applicant questions, required intake prompts, and custom entry fields with SRC Forms.",
         },
       ];
     case "submission":
@@ -259,10 +260,10 @@ function getSectionsForType(type?: ListingType): ListingSectionDef[] {
         },
         {
           id: "qa",
-          label: "Submission Q&A",
-          shortLabel: "Q&A",
-          icon: HelpCircle,
-          description: "Project metadata, abstract, demo link, and custom entry questions.",
+          label: "SRC Forms",
+          shortLabel: "SRC Forms",
+          icon: ClipboardList,
+          description: "Project metadata, abstract, demo link, and custom entry questions with SRC Forms.",
         },
       ];
     case "issue":
@@ -290,10 +291,10 @@ function getSectionsForType(type?: ListingType): ListingSectionDef[] {
         },
         {
           id: "qa",
-          label: "Intake Q&A",
-          shortLabel: "Q&A",
-          icon: HelpCircle,
-          description: "Incident location, room number, urgency details, and inquiry fields.",
+          label: "SRC Forms",
+          shortLabel: "SRC Forms",
+          icon: ClipboardList,
+          description: "Incident location, room number, urgency details, and inquiry fields with SRC Forms.",
         },
       ];
     default:
@@ -321,10 +322,10 @@ function getSectionsForType(type?: ListingType): ListingSectionDef[] {
         },
         {
           id: "qa",
-          label: "Q&A",
-          shortLabel: "Q&A",
-          icon: HelpCircle,
-          description: "Custom questions and inquiry fields.",
+          label: "SRC Forms",
+          shortLabel: "SRC Forms",
+          icon: ClipboardList,
+          description: "Custom questions, surveys, and inquiry fields with SRC Forms.",
         },
       ];
   }
@@ -1504,7 +1505,7 @@ export function CreateListingModal({
               )}
 
               {/* ========================================================= */}
-              {/* 4. Q&A / QUESTIONNAIRE SECTION (All types except poll)     */}
+              {/* 4. SRC FORMS BUILDER SECTION (All types except poll)       */}
               {/* ========================================================= */}
               {activeSection === "qa" && selectedPillarOption.type !== "poll" && (
                 <div className="space-y-5 animate-in fade-in duration-200">
