@@ -190,16 +190,6 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
                 <span>Explore</span>
               </Link>
             )}
-
-            <button
-              type="button"
-              onClick={handleShare}
-              title="Share event link"
-              className="py-3 px-3.5 rounded-xl border border-slate-200 hover:border-[#17458F] hover:bg-blue-50/40 text-slate-700 hover:text-[#17458F] transition-all flex items-center gap-1.5 justify-center cursor-pointer shrink-0 font-semibold text-xs"
-            >
-              {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Share2 className="w-4 h-4" />}
-              <span className="hidden sm:inline">{copied ? "Copied" : "Share"}</span>
-            </button>
           </div>
         </div>
 
@@ -334,16 +324,6 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
               <span>Explore</span>
             </Link>
           )}
-
-          <button
-            type="button"
-            onClick={handleShare}
-            title="Share event link"
-            className="py-2.5 px-3 rounded-xl border border-slate-200 hover:border-[#17458F] hover:bg-blue-50/40 text-slate-700 hover:text-[#17458F] transition-all flex items-center gap-1.5 justify-center cursor-pointer shrink-0 font-semibold text-xs"
-          >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Share2 className="w-3.5 h-3.5" />}
-            <span className="hidden sm:inline">{copied ? "Copied" : "Share"}</span>
-          </button>
         </div>
       </div>
 

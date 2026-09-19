@@ -316,14 +316,6 @@ export default function EventDetailPage() {
                   {event.subEventBadge}
                 </span>
               )}
-              <button
-                type="button"
-                onClick={handleShare}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white text-xs font-bold uppercase tracking-wider transition-all shadow-xs cursor-pointer hover:scale-105 active:scale-95"
-              >
-                {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5 text-white" />}
-                <span>{copiedLink ? "Link Copied" : "Share"}</span>
-              </button>
               {event.tagline && (
                 <span className="text-xs font-extrabold uppercase tracking-widest text-[#E78023] ml-2">
                   • {event.tagline}
@@ -1011,14 +1003,6 @@ export default function EventDetailPage() {
 
       {/* Mobile Sticky Action Bar */}
       <div className="md:hidden fixed bottom-0 inset-x-0 z-40 p-3 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-2xl flex items-center justify-between gap-3 animate-in slide-in-from-bottom-2 duration-200">
-        <button
-          type="button"
-          onClick={handleShare}
-          className="p-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 flex items-center justify-center min-w-[44px] min-h-[44px] shrink-0 cursor-pointer"
-          title="Share Event"
-        >
-          {copiedLink ? <Check className="w-4 h-4 text-emerald-600" /> : <Share2 className="w-4 h-4 text-slate-700" />}
-        </button>
         {!event.noRegistrationRequired && isRegistrationOpen && !(isJdcoemOnly && isExternalStudent) ? (
           <>
             <div className="pl-1">
