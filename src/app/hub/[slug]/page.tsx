@@ -227,12 +227,31 @@ export default function ListingDetailPage() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const handleShare = () => {
-    if (typeof window !== "undefined") {
-      navigator.clipboard.writeText(window.location.href);
+  const handleShare = async () => {
+    if (typeof window === "undefined") return;
+    const shareUrl = window.location.href;
+    const shareData = {
+      title: listing?.title ? `${listing.title} | SRC JDCOEM` : "SRC JDCOEM Engagement Hub",
+      text: listing?.summary || listing?.description || "Check out this official form/opportunity at SRC JDCOEM!",
+      url: shareUrl,
+    };
+
+    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (err: any) {
+        if (err?.name === "AbortError") return;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
       setCopiedLink(true);
-      showToast("Listing URL copied to clipboard!");
-      setTimeout(() => setCopiedLink(false), 2000);
+      showToast("Link copied to clipboard!");
+      setTimeout(() => setCopiedLink(false), 2500);
+    } catch {
+      showToast("Could not copy link to clipboard");
     }
   };
 

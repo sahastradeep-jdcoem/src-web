@@ -21,7 +21,9 @@ import {
   ArrowDown,
   Lock,
   GraduationCap,
-  Globe
+  Globe,
+  Share2,
+  Check
 } from "lucide-react";
 import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, sanitizeEventItem } from "@/lib/eventsStore";
 import { EventItem } from "@/types";
@@ -32,6 +34,7 @@ import { PrizeCard } from "@/components/events/PrizeCard";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { isExternalUser } from "@/lib/usersStore";
+import { toast } from "@/lib/toastStore";
 
 export default function EventDetailPage() {
   const params = useParams();
@@ -41,6 +44,35 @@ export default function EventDetailPage() {
   const [event, setEvent] = useState<EventItem | null>(null);
   const [subEvents, setSubEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const handleShare = async () => {
+    if (typeof window === "undefined") return;
+    const shareUrl = window.location.href;
+    const shareData = {
+      title: event?.name ? `${event.name} | SRC JDCOEM` : "SRC JDCOEM Event",
+      text: event?.tagline || event?.description || "Check out this official event at JDCOEM!",
+      url: shareUrl,
+    };
+
+    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (err: any) {
+        if (err?.name === "AbortError") return;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopiedLink(true);
+      toast.show("Event link copied to clipboard!", "success", { title: "Share Link" });
+      setTimeout(() => setCopiedLink(false), 2500);
+    } catch {
+      toast.show("Could not copy link to clipboard", "error");
+    }
+  };
 
   const isExternalStudent = isExternalUser(user);
 
@@ -225,13 +257,24 @@ export default function EventDetailPage() {
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
 
         <div className="max-w-7xl mx-auto w-full relative z-10 space-y-6">
-          <Link
-            href="/events"
-            className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-200 hover:text-[#E78023] transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Back to All Events</span>
-          </Link>
+          <div className="flex items-center justify-between gap-4">
+            <Link
+              href="/events"
+              className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-200 hover:text-[#E78023] transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to All Events</span>
+            </Link>
+
+            <button
+              type="button"
+              onClick={handleShare}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white text-xs font-bold uppercase tracking-wider transition-all shadow-md cursor-pointer hover:scale-105 active:scale-95"
+            >
+              {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5 text-white" />}
+              <span>{copiedLink ? "Link Copied" : "Share Event"}</span>
+            </button>
+          </div>
 
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -799,6 +842,17 @@ export default function EventDetailPage() {
                     )}
                   </div>
                 )}
+
+                <div className="pt-3 border-t border-slate-100 text-center">
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-[#17458F] transition-colors cursor-pointer"
+                  >
+                    {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Share2 className="w-3.5 h-3.5 text-slate-400" />}
+                    <span>{copiedLink ? "Festival Link Copied!" : "Share this Festival"}</span>
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-6">
@@ -930,6 +984,17 @@ export default function EventDetailPage() {
                     )}
                   </div>
                 )}
+
+                <div className="pt-3 border-t border-slate-100 text-center">
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-[#17458F] transition-colors cursor-pointer"
+                  >
+                    {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Share2 className="w-3.5 h-3.5 text-slate-400" />}
+                    <span>{copiedLink ? "Event Link Copied!" : "Share this Event"}</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>

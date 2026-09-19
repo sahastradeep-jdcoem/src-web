@@ -1,0 +1,107 @@
+import type { Metadata } from "next";
+import { getEventFromFirestore, getAllEventsFromFirestore } from "@/lib/firebase/firestore";
+import { EventItem } from "@/types";
+
+
+function getValidOgImageUrl(imgUrl?: string): string {
+  if (!imgUrl) return "/assets/SRC Logo.png";
+  const trimmed = imgUrl.trim();
+  // Social crawlers cannot fetch base64 data URLs; use fallback logo
+  if (trimmed.startsWith("data:")) return "/assets/SRC Logo.png";
+  return trimmed;
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+
+  if (!slug) {
+    return {
+      title: "Event Details | SRC JDCOEM",
+      description: "Explore collegiate fests, workshops, and competitions organized by the Student Representative Council at JDCOEM Nagpur.",
+    };
+  }
+
+  let event: EventItem | null = null;
+
+  try {
+    event = await getEventFromFirestore(slug);
+    if (!event) {
+      const all = await getAllEventsFromFirestore();
+      event = all.find((e) => e.slug === slug || e.id === slug) || null;
+    }
+  } catch (err) {
+    console.warn(`[events/[slug]/layout] Failed to load event for metadata (${slug}):`, err);
+  }
+
+  // Comply with Draft Isolation Invariant (Directive #6)
+  if (!event || event.isLive === false || event.status === "draft") {
+    return {
+      title: "Event Details",
+      description: "Explore collegiate events, competitions, and festivals organized by the Student Representative Council at JDCOEM Nagpur.",
+      openGraph: {
+        title: "Event Details | SAHASTRADEEP • SRC JDCOEM",
+        description: "Explore collegiate events, competitions, and festivals organized by the Student Representative Council at JDCOEM Nagpur.",
+        url: `https://srcjdcoem.in/events/${slug}`,
+        siteName: "SAHASTRADEEP — SRC JDCOEM",
+        images: [
+          {
+            url: "/assets/SRC Logo.png",
+            width: 800,
+            height: 800,
+            alt: "SRC JDCOEM",
+          },
+        ],
+      },
+    };
+  }
+
+  const title = event.name;
+  const rawDescription =
+    event.tagline ||
+    event.description ||
+    `Official event organized by the Student Representative Council (SRC) at JDCOEM Nagpur.`;
+  const cleanDescription =
+    rawDescription.length > 200 ? `${rawDescription.slice(0, 197)}...` : rawDescription;
+
+  // Directive: The event thumbnail image (cardImage priority, then posterImage, poster, headerImage)
+  const thumbnailRaw = event.cardImage || event.posterImage || event.poster || event.headerImage;
+  const ogImageUrl = getValidOgImageUrl(thumbnailRaw);
+
+  const eventUrl = `https://srcjdcoem.in/events/${event.slug || slug}`;
+
+  return {
+    title: `${title} | SRC JDCOEM`,
+    description: cleanDescription,
+    openGraph: {
+      title: `${title} | SRC JDCOEM`,
+      description: cleanDescription,
+      url: eventUrl,
+      siteName: "SAHASTRADEEP — SRC JDCOEM",
+      type: "article",
+      images: [
+        {
+          url: ogImageUrl,
+          alt: `${title} thumbnail`,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${title} | SRC JDCOEM`,
+      description: cleanDescription,
+      images: [ogImageUrl],
+    },
+  };
+}
+
+export default function EventDetailLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return <>{children}</>;
+}

@@ -1,10 +1,13 @@
-import React from "react";
+"use client";
+
+import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Calendar, Clock, MapPin, Users, Layers, Sparkles } from "lucide-react";
+import { Calendar, Clock, MapPin, Users, Layers, Sparkles, Share2, Check } from "lucide-react";
 import { EventItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
+import { toast } from "@/lib/toastStore";
 
 interface EventCardProps {
   event: EventItem;
@@ -24,6 +27,38 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
     : "navy";
 
   const eventImage = event.cardImage || event.poster || DEFAULT_EVENT_IMAGE;
+  const [copied, setCopied] = useState(false);
+
+  const handleShare = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof window === "undefined") return;
+
+    const eventUrl = `${window.location.origin}/events/${event.slug}`;
+    const shareData = {
+      title: `${event.name} | SRC JDCOEM`,
+      text: event.tagline || event.description || "Official SRC event at JDCOEM!",
+      url: eventUrl,
+    };
+
+    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (err: any) {
+        if (err?.name === "AbortError") return;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(eventUrl);
+      setCopied(true);
+      toast.show("Event link copied to clipboard!", "success");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.show("Could not copy link", "error");
+    }
+  };
 
   if (featuredLayout) {
     return (
@@ -131,7 +166,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
           </div>
 
           {/* Action CTAs — Inter SemiBold */}
-          <div className="flex items-center gap-3 pt-4 border-t border-slate-100">
+          <div className="flex items-center gap-2.5 pt-4 border-t border-slate-100">
             <Link
               href={`/events/${event.slug}`}
               className="flex-1 py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#17458F] text-xs font-sans font-semibold uppercase tracking-wider text-center transition-all cursor-pointer"
@@ -147,6 +182,15 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
                 <span>Explore</span>
               </Link>
             )}
+
+            <button
+              type="button"
+              onClick={handleShare}
+              title="Share event link"
+              className="py-3 px-3.5 rounded-xl border border-slate-200 hover:border-[#17458F] hover:bg-slate-50 text-slate-600 hover:text-[#17458F] transition-all flex items-center justify-center cursor-pointer shrink-0"
+            >
+              {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Share2 className="w-4 h-4" />}
+            </button>
           </div>
         </div>
 
@@ -270,6 +314,15 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
               <span>Explore</span>
             </Link>
           )}
+
+          <button
+            type="button"
+            onClick={handleShare}
+            title="Share event link"
+            className="py-2.5 px-2.5 rounded-xl border border-slate-200 hover:border-[#17458F] hover:bg-slate-50 text-slate-600 hover:text-[#17458F] transition-all flex items-center justify-center cursor-pointer shrink-0"
+          >
+            {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Share2 className="w-3.5 h-3.5" />}
+          </button>
         </div>
       </div>
 

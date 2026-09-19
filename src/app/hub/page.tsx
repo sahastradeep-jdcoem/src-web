@@ -20,7 +20,8 @@ import {
   Lock,
   ExternalLink,
   GraduationCap,
-  Globe
+  Globe,
+  Share2
 } from "lucide-react";
 import { 
   getStoredListings, 
@@ -133,6 +134,35 @@ export default function StudentHubPage() {
   const showToast = (msg: string) => {
     setFeedbackNotice(msg);
     setTimeout(() => setFeedbackNotice(null), 4000);
+  };
+
+  const handleShareLink = async (e: React.MouseEvent, item: ListingItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof window === "undefined") return;
+
+    const shareUrl = `${window.location.origin}/hub/${item.slug}`;
+    const shareData = {
+      title: `${item.title} | SRC JDCOEM`,
+      text: item.summary || "Check this out on the SRC JDCOEM Engagement Hub!",
+      url: shareUrl,
+    };
+
+    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (err: any) {
+        if (err?.name === "AbortError") return;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      showToast(`Link for "${item.title}" copied to clipboard!`);
+    } catch {
+      showToast("Could not copy link to clipboard");
+    }
   };
 
   const filteredListings = useMemo(() => {
@@ -284,12 +314,22 @@ export default function StudentHubPage() {
                         {(item.targetAudience === "jdcoem_only" || item.isInterCollege === false) ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
                       </span>
                     </div>
-                    {item.deadline && (
-                      <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-[#E78023]" />
-                        <span>Ends {item.deadline}</span>
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {item.deadline && (
+                        <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-[#E78023]" />
+                          <span>Ends {item.deadline}</span>
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => handleShareLink(e, item)}
+                        title="Share link"
+                        className="p-1.5 rounded-lg border border-slate-200 hover:border-[#17458F] hover:bg-slate-50 text-slate-400 hover:text-[#17458F] transition-colors cursor-pointer shrink-0"
+                      >
+                        <Share2 className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Header Image if present */}
