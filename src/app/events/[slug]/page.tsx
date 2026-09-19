@@ -35,6 +35,7 @@ import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { isExternalUser } from "@/lib/usersStore";
 import { toast } from "@/lib/toastStore";
+import { useSocialShare } from "@/context/SocialShareContext";
 
 export default function EventDetailPage() {
   const params = useParams();
@@ -46,32 +47,30 @@ export default function EventDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  const handleShare = async () => {
-    if (typeof window === "undefined") return;
-    const shareUrl = window.location.href;
-    const shareData = {
-      title: event?.name ? `${event.name} | SRC JDCOEM` : "SRC JDCOEM Event",
-      text: event?.tagline || event?.description || "Check out this official event at JDCOEM!",
-      url: shareUrl,
-    };
+  const { openShare } = useSocialShare();
 
-    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
-      try {
-        await navigator.share(shareData);
-        return;
-      } catch (err: any) {
-        if (err?.name === "AbortError") return;
-      }
-    }
+  const handleShare = () => {
+    if (!event) return;
 
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopiedLink(true);
-      toast.show("Event link copied to clipboard!", "success", { title: "Share Link" });
-      setTimeout(() => setCopiedLink(false), 2500);
-    } catch {
-      toast.show("Could not copy link to clipboard", "error");
-    }
+    const canonicalUrl = `https://www.srcjdcoem.in/events/${event.slug || slug}`;
+    const heroImage = event.cardImage || event.posterImage || event.poster || event.headerImage;
+
+    openShare({
+      type: "event",
+      typeLabel: event.isParentFest ? "CAMPUS FESTIVAL" : event.category ? `${event.category.toUpperCase()} EVENT` : "CAMPUS EVENT",
+      title: event.name,
+      subtitle: event.tagline || (event.description ? `${event.description.slice(0, 140)}...` : undefined),
+      description: event.description,
+      imageUrl: heroImage,
+      badge: event.targetAudience === "jdcoem_only" || event.isInterCollege === false ? "🎓 JDCOEM Only" : "🌐 Inter-College",
+      date: event.date,
+      time: event.time,
+      venue: event.venue,
+      organizer: event.organizer,
+      entryFee: event.noRegistrationRequired ? "Open Walk-in" : event.entryFee || "Free Entry",
+      ctaText: "Tap to Explore & Register",
+      url: canonicalUrl,
+    });
   };
 
   const isExternalStudent = isExternalUser(user);

@@ -8,6 +8,7 @@ import { AuthModal } from "@/components/auth/AuthModal";
 import { ProfileSetupModal } from "@/components/auth/ProfileSetupModal";
 import { ToastContainer } from "@/components/ui/Toast";
 import SEOStructuredData from "@/components/seo/SEOStructuredData";
+import { SocialShareProvider } from "@/context/SocialShareContext";
 
 export const viewport: Viewport = {
   themeColor: "#17458F",
@@ -74,14 +75,16 @@ export default function RootLayout({
           <SEOStructuredData />
         </Suspense>
         <AuthProvider>
-          <Navbar />
-          <main className="flex-grow pt-16 w-full min-w-0 overflow-x-clip">
-            {children}
-          </main>
-          <Footer />
-          <AuthModal />
-          <ProfileSetupModal />
-          <ToastContainer />
+          <SocialShareProvider>
+            <Navbar />
+            <main className="flex-grow pt-16 w-full min-w-0 overflow-x-clip">
+              {children}
+            </main>
+            <Footer />
+            <AuthModal />
+            <ProfileSetupModal />
+            <ToastContainer />
+          </SocialShareProvider>
         </AuthProvider>
       </body>
     </html>

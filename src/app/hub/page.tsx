@@ -39,6 +39,7 @@ import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { isExternalUser as checkIsExternalUser } from "@/lib/usersStore";
 import confetti from "canvas-confetti";
+import { useSocialShare } from "@/context/SocialShareContext";
 
 export default function StudentHubPage() {
   const { user, openAuthModal } = useAuth();
@@ -136,33 +137,28 @@ export default function StudentHubPage() {
     setTimeout(() => setFeedbackNotice(null), 4000);
   };
 
-  const handleShareLink = async (e: React.MouseEvent, item: ListingItem) => {
+  const { openShare } = useSocialShare();
+
+  const handleShareLink = (e: React.MouseEvent, item: ListingItem) => {
     e.preventDefault();
     e.stopPropagation();
-    if (typeof window === "undefined") return;
 
-    const shareUrl = `${window.location.origin}/hub/${item.slug}`;
-    const shareData = {
-      title: `${item.title} | SRC JDCOEM`,
-      text: item.summary || "Check this out on the SRC JDCOEM Engagement Hub!",
-      url: shareUrl,
-    };
+    const canonicalUrl = `https://www.srcjdcoem.in/hub/${item.slug}`;
+    const heroImage = item.coverImage || item.bannerImage;
 
-    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
-      try {
-        await navigator.share(shareData);
-        return;
-      } catch (err: any) {
-        if (err?.name === "AbortError") return;
-      }
-    }
-
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      showToast(`Link for "${item.title}" copied to clipboard!`);
-    } catch {
-      showToast("Could not copy link to clipboard");
-    }
+    openShare({
+      type: "form",
+      typeLabel: item.type ? `SRC ${item.type.toUpperCase()}` : "STUDENT OPPORTUNITY",
+      title: item.title,
+      subtitle: item.summary || (item.description ? `${item.description.slice(0, 140)}...` : undefined),
+      description: item.description,
+      imageUrl: heroImage,
+      badge: item.targetAudience === "jdcoem_only" || item.isInterCollege === false ? "🎓 JDCOEM Only" : "🌐 Inter-College",
+      deadline: item.deadline ? `Ends ${item.deadline}` : undefined,
+      organizer: item.organizer,
+      ctaText: "Open Form & Participate",
+      url: canonicalUrl,
+    });
   };
 
   const filteredListings = useMemo(() => {

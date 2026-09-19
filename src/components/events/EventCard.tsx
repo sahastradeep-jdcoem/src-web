@@ -8,6 +8,7 @@ import { EventItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toastStore";
+import { useSocialShare } from "@/context/SocialShareContext";
 
 interface EventCardProps {
   event: EventItem;
@@ -28,36 +29,31 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
 
   const eventImage = event.cardImage || event.poster || DEFAULT_EVENT_IMAGE;
   const [copied, setCopied] = useState(false);
+  const { openShare } = useSocialShare();
 
-  const handleShare = async (e: React.MouseEvent) => {
+  const handleShare = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (typeof window === "undefined") return;
 
-    const eventUrl = `${window.location.origin}/events/${event.slug}`;
-    const shareData = {
-      title: `${event.name} | SRC JDCOEM`,
-      text: event.tagline || event.description || "Official SRC event at JDCOEM!",
-      url: eventUrl,
-    };
+    const canonicalUrl = `https://www.srcjdcoem.in/events/${event.slug}`;
+    const heroImage = event.cardImage || event.poster || DEFAULT_EVENT_IMAGE;
 
-    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
-      try {
-        await navigator.share(shareData);
-        return;
-      } catch (err: any) {
-        if (err?.name === "AbortError") return;
-      }
-    }
-
-    try {
-      await navigator.clipboard.writeText(eventUrl);
-      setCopied(true);
-      toast.show("Event link copied to clipboard!", "success");
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.show("Could not copy link", "error");
-    }
+    openShare({
+      type: "event",
+      typeLabel: event.isParentFest ? "CAMPUS FESTIVAL" : event.category ? `${event.category.toUpperCase()} EVENT` : "CAMPUS EVENT",
+      title: event.name,
+      subtitle: event.tagline || (event.description ? `${event.description.slice(0, 140)}...` : undefined),
+      description: event.description,
+      imageUrl: heroImage,
+      badge: event.targetAudience === "jdcoem_only" || event.isInterCollege === false ? "🎓 JDCOEM Only" : "🌐 Inter-College",
+      date: event.date,
+      time: event.time,
+      venue: event.venue,
+      organizer: event.organizer,
+      entryFee: event.noRegistrationRequired ? "Open Walk-in" : event.entryFee || "Free Entry",
+      ctaText: "Tap to Explore & Register",
+      url: canonicalUrl,
+    });
   };
 
   if (featuredLayout) {
