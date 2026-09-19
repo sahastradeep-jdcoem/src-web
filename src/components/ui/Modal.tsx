@@ -17,6 +17,7 @@ interface ModalProps {
   contentClassName?: string;
   dialogClassName?: string;
   headerAction?: React.ReactNode;
+  footer?: React.ReactNode;
 }
 
 // Module-level state to manage nested / multi-modal scroll locks cleanly
@@ -38,6 +39,7 @@ export function Modal({
   contentClassName,
   dialogClassName,
   headerAction,
+  footer,
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -137,8 +139,13 @@ export function Modal({
         el = el.parentElement;
       }
 
-      // If mouse is over a non-scrollable part of the modal (header, footer, buttons, margins):
+      // If mouse is over a non-scrollable part of the modal (buttons, empty rows):
+      // fallback to the modal's primary scrollable content container
       if (!scrollableEl) {
+        scrollableEl = modalRef.current.querySelector(".overflow-y-auto") as HTMLElement | null;
+      }
+
+      if (!scrollableEl || scrollableEl.scrollHeight <= scrollableEl.clientHeight) {
         e.preventDefault();
         e.stopPropagation();
         return;
@@ -271,6 +278,13 @@ export function Modal({
         >
           {children}
         </div>
+
+        {/* Dedicated Footer - pinned outside the scroll area, always visible */}
+        {footer && (
+          <div className="p-4 sm:px-6 sm:py-4 border-t border-slate-100 bg-white/95 backdrop-blur-md shrink-0 z-10 select-none">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

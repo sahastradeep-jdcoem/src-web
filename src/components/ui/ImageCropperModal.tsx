@@ -34,7 +34,7 @@ import {
 import { Modal } from "./Modal";
 import { Button } from "./Button";
 
-export type AspectRatioType = "16:9" | "4:5" | "3:4" | "21:9" | "1:1" | "auto" | "free";
+export type AspectRatioType = "1.91:1" | "16:9" | "4:5" | "3:4" | "21:9" | "1:1" | "auto" | "free";
 
 interface ImageCropperModalProps {
   isOpen: boolean;
@@ -180,6 +180,8 @@ export function ImageCropperModal({
   // Compute aspect ratio numerical value
   const getRatioMultiplier = useCallback((ratio: AspectRatioType): number => {
     switch (ratio) {
+      case "1.91:1":
+        return 1200 / 630;
       case "16:9":
         return 16 / 9;
       case "4:5":
@@ -205,16 +207,16 @@ export function ImageCropperModal({
   // Calibrated Viewport Box Boundaries (fits comfortably within laptop displays)
   const cropBoxDims = useMemo(() => {
     const maxBoxW = 440;
-    const maxBoxH = 290;
+    const maxBoxH = 220;
     const ratio = currentRatio > 0 ? currentRatio : (16 / 9);
 
     if (ratio >= (maxBoxW / maxBoxH)) {
       const width = maxBoxW;
-      const height = Math.max(80, Math.round(width / ratio));
+      const height = Math.max(70, Math.round(width / ratio));
       return { width, height };
     } else {
       const height = maxBoxH;
-      const width = Math.max(80, Math.round(height * ratio));
+      const width = Math.max(70, Math.round(height * ratio));
       return { width, height };
     }
   }, [currentRatio]);
@@ -667,6 +669,14 @@ export function ImageCropperModal({
   if (!isOpen || !imageSrc) return null;
 
   const allRatioOptions: RatioPreset[] = [
+    {
+      id: "1.91:1",
+      label: "Social Card (1200×630)",
+      sublabel: "1.91:1 OpenGraph / Social",
+      ratio: 1200 / 630,
+      width: 19,
+      height: 10,
+    },
     { 
       id: "4:5", 
       label: purpose === "eventPoster" ? "4:5 Vertical Poster" : "4:5 Portrait Card", 
@@ -707,7 +717,42 @@ export function ImageCropperModal({
       title={title}
       subtitle="Pan, zoom, level, and frame your photography with pixel-perfect studio precision."
       maxWidth="2xl"
-      contentClassName="p-4 sm:p-5"
+      contentClassName="p-3.5 sm:p-4"
+      footer={
+        <div className="flex items-center justify-between w-full">
+          <div className="text-[11px] text-slate-400 hidden sm:flex items-center gap-2">
+            <span>Shortcuts:</span>
+            <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded-sm font-mono text-[10px]">Arrow keys</kbd>
+            <span>pan</span>
+            <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded-sm font-mono text-[10px]">+/-</kbd>
+            <span>zoom</span>
+            <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded-sm font-mono text-[10px]">R</kbd>
+            <span>rotate</span>
+          </div>
+
+          <div className="flex items-center gap-2 ml-auto">
+            <Button
+              type="button"
+              variant="outline"
+              size="md"
+              onClick={onClose}
+            >
+              Cancel
+            </Button>
+
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              onClick={handleApplyCrop}
+              className="gap-2 bg-[#E78023] hover:bg-[#D26E17] text-white font-extrabold shadow-md hover:shadow-lg transition-all"
+            >
+              <Crop className="w-4 h-4" />
+              <span>Apply Crop &amp; Frame</span>
+            </Button>
+          </div>
+        </div>
+      }
     >
       <div className="space-y-3">
         
@@ -857,7 +902,7 @@ export function ImageCropperModal({
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
           className="relative w-full bg-[#0B0F17] rounded-3xl overflow-hidden border border-slate-800 flex items-center justify-center select-none shadow-2xl p-3 sm:p-4 touch-none cursor-grab active:cursor-grabbing"
-          style={{ minHeight: "280px", maxHeight: "330px" }}
+          style={{ minHeight: "200px", maxHeight: "260px" }}
         >
           {isResolvingImage && (
             <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-30">
@@ -1340,42 +1385,6 @@ export function ImageCropperModal({
           )}
 
         </div>
-
-        {/* Footer Actions */}
-        <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-          <div className="text-[11px] text-slate-400 hidden sm:flex items-center gap-2">
-            <span>Shortcuts:</span>
-            <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded-sm font-mono text-[10px]">Arrow keys</kbd>
-            <span>pan</span>
-            <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded-sm font-mono text-[10px]">+/-</kbd>
-            <span>zoom</span>
-            <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded-sm font-mono text-[10px]">R</kbd>
-            <span>rotate</span>
-          </div>
-
-          <div className="flex items-center gap-2 ml-auto">
-            <Button
-              type="button"
-              variant="outline"
-              size="md"
-              onClick={onClose}
-            >
-              Cancel
-            </Button>
-
-            <Button
-              type="button"
-              variant="primary"
-              size="md"
-              onClick={handleApplyCrop}
-              className="gap-2 bg-[#E78023] hover:bg-[#D26E17] text-white font-extrabold shadow-md hover:shadow-lg transition-all"
-            >
-              <Crop className="w-4 h-4" />
-              <span>Apply Crop &amp; Frame</span>
-            </Button>
-          </div>
-        </div>
-
       </div>
     </Modal>
   );

@@ -114,12 +114,11 @@ export async function syncListingsFromFirestore(): Promise<ListingItem[] | null>
     const remote = await getSiteContentFromFirestore<ListingItem[]>("listings");
     if (remote && Array.isArray(remote)) {
       // Purge any legacy hardcoded mock or deleted items if found in cloud
-      const hasMockItems = remote.some((l) => MOCK_LISTING_IDS.has(l.id) || MOCK_LISTING_IDS.has(l.slug));
       let cleanRemote = remote.filter((l) => !MOCK_LISTING_IDS.has(l.id) && !MOCK_LISTING_IDS.has(l.slug));
 
-      // If all items were wiped, fallback to initialListings
-      if (cleanRemote.length === 0 && initialListings.length > 0) {
-        cleanRemote = [...initialListings];
+      // If all items were wiped, do not fallback to initialListings
+      if (cleanRemote.length === 0) {
+        cleanRemote = [];
       }
 
       if (typeof window !== "undefined") {
@@ -129,11 +128,6 @@ export async function syncListingsFromFirestore(): Promise<ListingItem[] | null>
         } catch (e) {
           console.warn("Failed to update localStorage with remote listings:", e);
         }
-      }
-
-      // If mock or deleted items were detected in remote, immediately flush clean dataset back to Firestore
-      if (hasMockItems) {
-        saveSiteContentToFirestore("listings", compactListingsDataset(cleanRemote)).catch(() => {});
       }
 
       return cleanRemote;
@@ -792,69 +786,11 @@ export async function syncListingResponsesFromFirestore(): Promise<ListingRespon
     if (firestoreDb && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       try {
         const regSnap = await getDocs(collection(firestoreDb, "registrations"));
-        const existingRegIds = new Set<string>();
 
         regSnap.docs.forEach((d) => {
-          existingRegIds.add(d.id);
           const parsed = parseRegistrationToResponseRecord(d.id, d.data());
           if (parsed) {
             fromRegistrations.push(parsed);
-          }
-        });
-
-        // Auto-heal: If any local submission was not yet pushed to registrations, push it now
-        local.forEach((localRec) => {
-          if (localRec.listingType !== "poll" && !localRec.id.startsWith("hub_poll_")) {
-            const expectedDocId = `hub_sub_${localRec.ticketCode || localRec.id}`;
-            if (!existingRegIds.has(expectedDocId)) {
-              const regDocRef = doc(firestoreDb, "registrations", expectedDocId);
-              setDoc(
-                regDocRef,
-                cleanUndefined({
-                  id: expectedDocId,
-                  eventId: localRec.listingId,
-                  eventTitle: `[HUB] ${localRec.listingTitle || "Form Submission"}`,
-                  leaderName: localRec.userName || "Applicant",
-                  email: localRec.userEmail || "",
-                  phone: "",
-                  college: "JDCOEM",
-                  department: localRec.userDepartment || "",
-                  year: localRec.userYear || "",
-                  btId: localRec.btId || "",
-                  teamSize: 1,
-                  status: localRec.status ? (localRec.status === "approved" ? "CONFIRMED" : localRec.status.toUpperCase()) : "PENDING",
-                  registeredAt: localRec.createdAt || new Date().toISOString(),
-                  createdAt: serverTimestamp(),
-                  ticketCode: localRec.ticketCode || "",
-                  isPass: false,
-                  customAnswers: {
-                    isHubSubmission: true,
-                    isPass: false,
-                    responseId: localRec.id,
-                    listingId: localRec.listingId,
-                    listingSlug: localRec.listingSlug || "",
-                    listingType: localRec.listingType || "application",
-                    listingTitle: localRec.listingTitle || "",
-                    userId: localRec.userId || null,
-                    userName: localRec.userName || "Applicant",
-                    userEmail: localRec.userEmail || null,
-                    userDepartment: localRec.userDepartment || "",
-                    userYear: localRec.userYear || "",
-                    btId: localRec.btId || null,
-                    answers: localRec.answers || {},
-                    selectedOptionIds: localRec.selectedOptionIds || [],
-                    submissionLink: localRec.submissionLink || null,
-                    fileUrl: localRec.fileUrl || null,
-                    ticketCode: localRec.ticketCode || "",
-                    status: localRec.status || "pending",
-                    adminFeedback: localRec.adminFeedback || "",
-                    createdAt: localRec.createdAt || new Date().toISOString(),
-                    updatedAt: localRec.updatedAt || new Date().toISOString(),
-                  },
-                }),
-                { merge: true }
-              ).catch(() => {});
-            }
           }
         });
       } catch (e) {
@@ -863,28 +799,6 @@ export async function syncListingResponsesFromFirestore(): Promise<ListingRespon
     }
 
     const merged = mergeResponseLists(local, remoteList, fromRegistrations);
-
-    // Auto-heal cloud records: If any response was stored with the old fallback but user profile has their verified department, heal it in Firestore
-    if (firestoreDb && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-      merged.forEach((rec) => {
-        if (rec.listingType !== "poll" && !rec.id.startsWith("hub_poll_") && rec.userDepartment && rec.userDepartment !== "Computer Science & Engineering") {
-          const expectedDocId = `hub_sub_${rec.ticketCode || rec.id}`;
-          const regDocRef = doc(firestoreDb, "registrations", expectedDocId);
-          setDoc(
-            regDocRef,
-            cleanUndefined({
-              department: rec.userDepartment,
-              year: rec.userYear || "",
-              "customAnswers.userDepartment": rec.userDepartment,
-              "customAnswers.userYear": rec.userYear || "",
-              updatedAt: new Date().toISOString(),
-            }),
-            { merge: true }
-          ).catch(() => {});
-        }
-      });
-      saveSiteContentToFirestore("listing_responses", merged).catch(() => {});
-    }
 
     if (typeof window !== "undefined") {
       try {

@@ -987,6 +987,22 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
 // 4. AUTO-RECOVERY ON NETWORK RECONNECTION
 // -------------------------------------------------------------
 if (typeof window !== "undefined") {
+  // Purge stale queue items on module load to prevent old Chrome profiles
+  // from flushing outdated data to Firestore (Root Cause: multi-profile stale queue flush)
+  const QUEUE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
+  try {
+    const bootQueue = getPendingQueue();
+    if (bootQueue.length > 0) {
+      const now = Date.now();
+      const freshItems = bootQueue.filter((item) => (now - item.timestamp) < QUEUE_MAX_AGE_MS);
+      const staleCount = bootQueue.length - freshItems.length;
+      if (staleCount > 0) {
+        console.warn(`[SyncEngine] Purged ${staleCount} stale queue item(s) older than ${QUEUE_MAX_AGE_MS / 1000}s on boot.`);
+        savePendingQueue(freshItems);
+      }
+    }
+  } catch {}
+
   window.addEventListener("online", () => {
     console.info("[SyncEngine] Device back online. Flushing pending cloud writes...");
     processQueue();

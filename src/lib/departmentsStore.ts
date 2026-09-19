@@ -349,7 +349,7 @@ export async function cascadeDepartmentRename(oldDeptName: string, newDeptName: 
 
   // 2. Cascade to Listing Responses
   try {
-    const responses = getStoredListingResponses();
+    const responses = (await getSiteContentFromFirestore<any[]>("listing_responses")) || getStoredListingResponses();
     let responsesModified = false;
     const updatedResponses = responses.map((r) => {
       if (r.userDepartment && r.userDepartment.trim().toLowerCase() === cleanOld.toLowerCase()) {
@@ -396,7 +396,7 @@ export async function cascadeDepartmentRename(oldDeptName: string, newDeptName: 
 
   // 3. Cascade to Council Members
   try {
-    const council = getStoredCouncilMembers();
+    const council = (await getSiteContentFromFirestore<any[]>("council_team")) || getStoredCouncilMembers();
     let councilModified = false;
     const updatedCouncil = council.map((m) => {
       if (m.department && m.department.trim().toLowerCase() === cleanOld.toLowerCase()) {
@@ -419,7 +419,7 @@ export async function cascadeDepartmentRename(oldDeptName: string, newDeptName: 
 
   // 4. Cascade to Tenures
   try {
-    const tenures = getStoredTenures();
+    const tenures = (await getSiteContentFromFirestore<any[]>("council_tenures")) || getStoredTenures();
     let tenuresModified = false;
     const mapMemberList = (list?: any[]) => {
       if (!Array.isArray(list)) return list;

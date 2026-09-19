@@ -950,10 +950,7 @@ export async function syncTenuresFromFirestore(): Promise<CouncilTenure[]> {
         }
       }
 
-      // Persist any imported/updated draft rosters back to Firestore
-      if (localDrafts.some((d) => (d.adminCouncil?.length || 0) > 3)) {
-        enqueueCloudWrite("council_tenures", cleanUndefined(merged), "Synced Draft Council Tenures");
-      }
+      // Local drafts are kept for reconciliation, but never auto-written back to cloud on mount/sync.
       
       if (typeof window !== "undefined") {
         try {

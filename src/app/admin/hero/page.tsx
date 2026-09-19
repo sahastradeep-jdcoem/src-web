@@ -464,11 +464,14 @@ export default function AdminHeroSettingsPage() {
 
             {/* Custom Banner Upload Dropzone */}
             <UniversalImageUploader
-              purpose="banner"
+              purpose="ogBanner"
               label="Upload Custom 1200×630 Social Banner"
-              sublabel="Overrides the default dynamic card with your custom artwork or poster"
+              sublabel="Calibrated 1.91:1 / 16:9 for WhatsApp, Telegram, X / Twitter, and LinkedIn previews"
               storagePath="og_banners"
               previewUrl={settings.ogImageUrl}
+              aspectRatioOverride="1.91:1"
+              allowedAspectRatiosOverride={["1.91:1", "16:9", "free"]}
+              lockAspectRatioOverride={false}
               onUploadStateChange={handleUploadStateChange}
               onUrlChange={(cloudUrl) => {
                 if (cloudUrl) {

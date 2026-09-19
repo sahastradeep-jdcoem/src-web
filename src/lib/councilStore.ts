@@ -837,7 +837,7 @@ export async function syncCouncilMembersFromFirestore(): Promise<TeamMember[]> {
       // Auto-heal 1st tenure founding members if count is out of sync with council admins
       const currentFounders = getStoredFoundingMembers();
       if (merged.length > 0 && currentFounders.length !== merged.length) {
-        syncCouncilAdminsToFounding(merged, true);
+        console.warn("Council count mismatch. Auto-heal disabled.");
       }
       return merged;
     }
@@ -1009,10 +1009,7 @@ export function subscribeToCouncilMembers(callback: (members: TeamMember[]) => v
         merged = deduplicateTeamMembers(members);
       }
 
-
-      if (repaired) {
-        saveStoredCouncilMembers(merged, true);
-      } else if (typeof window !== "undefined") {
+      if (typeof window !== "undefined") {
         try {
           localStorage.setItem("src_council_team", JSON.stringify(merged));
         } catch {}
@@ -1250,16 +1247,7 @@ export async function syncClubsFromFirestore(): Promise<ClubItem[]> {
         // but has leaders from the previous monolithic document or local cache, migrate it now!
         const existingLeaders = getClubLeaders(club);
         if (existingLeaders.length > 0 && (club.slug || club.id)) {
-          saveClubLeadersDocument(club.slug || club.id, {
-            clubId: club.id,
-            clubSlug: club.slug,
-            clubName: club.name,
-            lead: club.lead,
-            coLead: club.coLead,
-            coLeads: club.coLeads,
-            leaders: existingLeaders,
-            members: Array.isArray(club.members) ? club.members : [],
-          }).catch((err) => console.warn(`Auto-migration failed for ${club.slug}:`, err));
+          console.info(`Auto-migration disabled for ${club.slug || club.id}`);
         }
 
         return club;
@@ -1339,7 +1327,6 @@ export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => v
               try {
                 localStorage.setItem(`src_${getClubLeadersDocId(slug)}`, JSON.stringify(doc));
               } catch {}
-              syncClubsFromFirestore().catch(() => {});
             }
           }).catch(() => {});
         }

@@ -45,7 +45,10 @@ export default async function Image() {
   }
 
   // 3. Case A: Admin uploaded a custom 1200x630 banner photo (full image takeover)
-  if (heroSettings.ogImageUrl && heroSettings.ogImageUrl.trim().startsWith("http")) {
+  if (
+    heroSettings.ogImageUrl &&
+    (heroSettings.ogImageUrl.trim().startsWith("http") || heroSettings.ogImageUrl.trim().startsWith("data:image"))
+  ) {
     return new ImageResponse(
       (
         <div

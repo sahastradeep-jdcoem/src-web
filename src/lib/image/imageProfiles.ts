@@ -23,6 +23,7 @@ export type ImagePurpose =
   | "eventPoster"
   | "cardCover"
   | "banner"
+  | "ogBanner"
   | "gallery"
   | "thumbnail";
 
@@ -143,6 +144,21 @@ const BANNER_PROFILE: ImageProfile = {
   maxInlineBytes: 250_000,
 };
 
+const OG_BANNER_PROFILE: ImageProfile = {
+  label: "Social Share Card (OpenGraph)",
+  maxWidth: 1200,
+  maxHeight: 630,
+  quality: 0.90,
+  format: "image/webp",
+  preserveTransparency: false,
+  defaultAspectRatio: "1.91:1",
+  allowedAspectRatios: ["1.91:1", "16:9", "free"],
+  lockAspectRatio: false,
+  circularMask: false,
+  targetSizeHint: "1200×630 WhatsApp / Twitter / Social Preview",
+  maxInlineBytes: 250_000,
+};
+
 const GALLERY_PROFILE: ImageProfile = {
   label: "Gallery Photo",
   maxWidth: 1920,
@@ -181,6 +197,7 @@ export const IMAGE_PROFILES: Record<ImagePurpose, ImageProfile> = {
   eventPoster: EVENT_POSTER_PROFILE,
   cardCover: CARD_COVER_PROFILE,
   banner: BANNER_PROFILE,
+  ogBanner: OG_BANNER_PROFILE,
   gallery: GALLERY_PROFILE,
   thumbnail: THUMBNAIL_PROFILE,
 } as const;
