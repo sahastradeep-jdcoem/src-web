@@ -96,50 +96,69 @@ export async function renderStoryToCanvas(
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
 
-  // 1. BASE BACKGROUND: Deep dynamic gradient
+  // 1. BASE BACKGROUND: Official SRC collegiate midnight navy gradient
   const bgGrad = ctx.createLinearGradient(0, 0, 1080, 1920);
-  bgGrad.addColorStop(0, palette.midBase || "#0E234A");
-  bgGrad.addColorStop(0.45, palette.deepBase || "#070D1A");
-  bgGrad.addColorStop(1, "#030712");
+  bgGrad.addColorStop(0, "#07122A");   // Deep SRC Navy
+  bgGrad.addColorStop(0.35, "#0D224C"); // Mid SRC Blue
+  bgGrad.addColorStop(0.70, "#08142A"); // Dark Navy
+  bgGrad.addColorStop(1, "#030712");    // Midnight slate
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, 1080, 1920);
 
-  // 2. ATMOSPHERIC BLURRED BACKDROP (Spotify-style ambient layer)
+  // 2. SRC BRAND ACCENT LIGHTS (Atmospheric glows in SRC orange & gold)
+  ctx.save();
+  // Top-right SRC Orange aura
+  const orangeAura = ctx.createRadialGradient(960, 260, 40, 960, 260, 680);
+  orangeAura.addColorStop(0, "rgba(231, 128, 35, 0.28)"); // #E78023
+  orangeAura.addColorStop(0.5, "rgba(231, 128, 35, 0.08)");
+  orangeAura.addColorStop(1, "rgba(0, 0, 0, 0)");
+  ctx.fillStyle = orangeAura;
+  ctx.fillRect(400, 0, 680, 900);
+
+  // Center-left SRC Royal Blue glow
+  const blueAura = ctx.createRadialGradient(160, 800, 50, 160, 800, 750);
+  blueAura.addColorStop(0, "rgba(23, 69, 143, 0.35)"); // #17458F
+  blueAura.addColorStop(0.6, "rgba(23, 69, 143, 0.10)");
+  blueAura.addColorStop(1, "rgba(0, 0, 0, 0)");
+  ctx.fillStyle = blueAura;
+  ctx.fillRect(0, 300, 800, 1000);
+
+  // Bottom-center Warm Glow behind CTA
+  const bottomGlow = ctx.createRadialGradient(540, 1720, 60, 540, 1720, 550);
+  bottomGlow.addColorStop(0, "rgba(231, 128, 35, 0.20)");
+  bottomGlow.addColorStop(1, "rgba(0, 0, 0, 0)");
+  ctx.fillStyle = bottomGlow;
+  ctx.fillRect(100, 1400, 880, 520);
+  ctx.restore();
+
+  // Subtle geometric brand watermarks / background grid lines
+  ctx.save();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.035)";
+  ctx.lineWidth = 1;
+  for (let x = 120; x < 1080; x += 160) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, 1920);
+    ctx.stroke();
+  }
+  for (let y = 140; y < 1920; y += 160) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(1080, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Preload Hero Artwork Image for Card Content
   let heroImg: HTMLImageElement | null = null;
   if (payload.imageUrl) {
     try {
       const proxiedUrl = getProxiedImageUrl(payload.imageUrl);
       heroImg = await loadImage(proxiedUrl);
     } catch {
-      console.warn("[storyCanvasRenderer] Could not load hero image for atmospheric backdrop");
+      console.warn("[storyCanvasRenderer] Could not load hero image for card");
     }
   }
-
-  if (heroImg) {
-    ctx.save();
-    // Draw enlarged blurred image across the canvas
-    ctx.filter = "blur(54px) brightness(0.38) saturate(1.3)";
-    ctx.drawImage(heroImg, -100, -100, 1280, 2120);
-    ctx.restore();
-
-    // Dark tint overlay to guarantee foreground legibility
-    const tintGrad = ctx.createLinearGradient(0, 0, 0, 1920);
-    tintGrad.addColorStop(0, "rgba(5, 10, 24, 0.45)");
-    tintGrad.addColorStop(0.5, "rgba(3, 7, 18, 0.72)");
-    tintGrad.addColorStop(1, "rgba(2, 4, 10, 0.92)");
-    ctx.fillStyle = tintGrad;
-    ctx.fillRect(0, 0, 1080, 1920);
-  }
-
-  // 3. AMBIENT GLOW LIGHTS
-  ctx.save();
-  const radialGlow = ctx.createRadialGradient(540, 680, 50, 540, 680, 650);
-  radialGlow.addColorStop(0, palette.glowColor || "rgba(231,128,35,0.28)");
-  radialGlow.addColorStop(0.6, "rgba(23, 69, 143, 0.15)");
-  radialGlow.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = radialGlow;
-  ctx.fillRect(0, 200, 1080, 1100);
-  ctx.restore();
 
   // 4. INSTITUTIONAL HEADER (Y = 160px) — Instagram Top Safe Zone Clearance
   const headerY = 170;
@@ -423,7 +442,7 @@ export async function renderStoryToCanvas(
   ctx.fillStyle = "#FFFFFF";
   ctx.font = "bold 22px system-ui, -apple-system, sans-serif";
   ctx.textBaseline = "middle";
-  const ctaTitle = payload.ctaText || (payload.type === "event" ? "Explore on Website" : "Open Official Form");
+  const ctaTitle = payload.ctaText || (payload.type === "event" ? "Tap Link Sticker to View" : "Tap Link to Participate");
   ctx.fillText(`🔗  ${ctaTitle}`, 124, footerY + 40);
 
   // Arrow symbol on right of CTA

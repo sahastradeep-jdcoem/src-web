@@ -139,8 +139,18 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
     }
   };
 
-  // Native Web Share API Handler
+  // Native Web Share API Handler (Direct transfer to Instagram on iOS / Android)
   const handleNativeShare = async () => {
+    // 1. Pre-copy canonical link to clipboard so the user can immediately paste it into Instagram's Link Sticker
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard) {
+        await navigator.clipboard.writeText(shareUrlWithUtm);
+        setCopiedLink(true);
+      }
+    } catch {
+      // Non-blocking clipboard fallback
+    }
+
     if (!storyBlob) {
       handleDownload();
       return;
@@ -151,27 +161,27 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
 
     const shareDataWithFile = {
       title: `${payload.title} | SRC JDCOEM`,
-      text: payload.subtitle || `Check out this ${payload.type} from SRC JDCOEM!`,
+      text: payload.subtitle || `Check out ${payload.title} on Sahastradeep • SRC JDCOEM!`,
       url: shareUrlWithUtm,
       files: [file],
     };
 
     const shareDataWithoutFile = {
       title: `${payload.title} | SRC JDCOEM`,
-      text: payload.subtitle || `Check out this ${payload.type} from SRC JDCOEM!`,
+      text: payload.subtitle || `Check out ${payload.title} on Sahastradeep • SRC JDCOEM!`,
       url: shareUrlWithUtm,
     };
 
     try {
-      // 1. Check if browser can share files directly (iOS Safari, Android Chrome)
+      // Check if browser can share files directly (iOS Safari, Android Chrome -> Instagram Story)
       if (navigator.canShare && navigator.canShare(shareDataWithFile)) {
         await navigator.share(shareDataWithFile);
-        toast.show("Story shared successfully!", "success");
+        toast.show("Story visual & link ready! Tap Instagram in the share sheet.", "success");
         setIsSharing(false);
         return;
       }
 
-      // 2. Fall back to standard link share if file sharing unsupported
+      // Fall back to standard link share if file sharing unsupported
       if (navigator.share && navigator.canShare && navigator.canShare(shareDataWithoutFile)) {
         await navigator.share(shareDataWithoutFile);
         toast.show("Link shared! Download the Story image to post.", "info");
@@ -186,11 +196,21 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
       console.warn("[SocialShareModal] Native share error, falling back to download:", err);
     }
 
-    // 3. Fallback: Download image + copy link + open instructions
+    // Fallback: Download image + copy link + show guidance
     setIsSharing(false);
     handleDownload();
     handleCopyLink();
     setShowInstructions(true);
+  };
+
+  // Direct Instagram App Launcher (deeplink for mobile devices)
+  const handleOpenInstagram = () => {
+    // Attempt to launch Instagram app camera / story composer
+    window.location.href = "instagram://camera";
+    setTimeout(() => {
+      // If Instagram app didn't capture within 1.2s, fallback to web
+      window.open("https://www.instagram.com", "_blank");
+    }, 1200);
   };
 
   return (
@@ -322,7 +342,7 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
 
             {/* Primary Action Buttons */}
             <div className="space-y-2.5 pt-1">
-              {/* 1. Share Story Button */}
+              {/* 1. Share Story Button (Native mobile share to Instagram / apps) */}
               <button
                 type="button"
                 onClick={handleNativeShare}
@@ -334,11 +354,20 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
                 ) : (
                   <Share2 className="w-4 h-4" />
                 )}
-                <span>Share Story</span>
+                <span>Share to Story</span>
               </button>
 
-              {/* 2. Download Image Button */}
+              {/* 2. Direct Actions: Open Instagram & Download Image */}
               <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleOpenInstagram}
+                  className="py-3 px-3 rounded-2xl bg-gradient-to-r from-[#833ab4]/20 via-[#fd1d1d]/20 to-[#fcb045]/20 hover:from-[#833ab4]/30 hover:via-[#fd1d1d]/30 hover:to-[#fcb045]/30 border border-pink-500/30 text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98]"
+                >
+                  <Instagram className="w-3.5 h-3.5 text-pink-400" />
+                  <span>Open Instagram</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={handleDownload}
@@ -346,23 +375,23 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
                   className="py-3 px-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] disabled:opacity-50"
                 >
                   <Download className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Download Image</span>
-                </button>
-
-                {/* 3. Copy Link Button */}
-                <button
-                  type="button"
-                  onClick={handleCopyLink}
-                  className="py-3 px-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98]"
-                >
-                  {copiedLink ? (
-                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  ) : (
-                    <Copy className="w-3.5 h-3.5 text-amber-400" />
-                  )}
-                  <span>{copiedLink ? "Link Copied!" : "Copy Link"}</span>
+                  <span>Save Image</span>
                 </button>
               </div>
+
+              {/* 3. Copy Link Action */}
+              <button
+                type="button"
+                onClick={handleCopyLink}
+                className="w-full py-2.5 px-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700/80 text-slate-200 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98]"
+              >
+                {copiedLink ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5 text-amber-400" />
+                )}
+                <span>{copiedLink ? "Link Copied to Clipboard!" : "Copy Official Link"}</span>
+              </button>
             </div>
 
             {/* Instagram Posting Instructions Banner */}
