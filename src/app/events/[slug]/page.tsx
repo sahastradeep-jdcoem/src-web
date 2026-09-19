@@ -317,6 +317,14 @@ export default function EventDetailPage() {
                   {event.subEventBadge}
                 </span>
               )}
+              <button
+                type="button"
+                onClick={handleShare}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white text-xs font-bold uppercase tracking-wider transition-all shadow-xs cursor-pointer hover:scale-105 active:scale-95"
+              >
+                {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5 text-white" />}
+                <span>{copiedLink ? "Link Copied" : "Share"}</span>
+              </button>
               {event.tagline && (
                 <span className="text-xs font-extrabold uppercase tracking-widest text-[#E78023] ml-2">
                   • {event.tagline}
@@ -843,13 +851,13 @@ export default function EventDetailPage() {
                   </div>
                 )}
 
-                <div className="pt-3 border-t border-slate-100 text-center">
+                <div className="pt-4 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={handleShare}
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-[#17458F] transition-colors cursor-pointer"
+                    className="w-full py-3 px-4 rounded-2xl border-2 border-slate-200 hover:border-[#17458F] hover:bg-slate-50 text-slate-700 hover:text-[#17458F] text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs hover:shadow-md active:scale-98"
                   >
-                    {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Share2 className="w-3.5 h-3.5 text-slate-400" />}
+                    {copiedLink ? <Check className="w-4 h-4 text-emerald-600" /> : <Share2 className="w-4 h-4 text-[#17458F]" />}
                     <span>{copiedLink ? "Festival Link Copied!" : "Share this Festival"}</span>
                   </button>
                 </div>
@@ -985,13 +993,13 @@ export default function EventDetailPage() {
                   </div>
                 )}
 
-                <div className="pt-3 border-t border-slate-100 text-center">
+                <div className="pt-4 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={handleShare}
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-[#17458F] transition-colors cursor-pointer"
+                    className="w-full py-3 px-4 rounded-2xl border-2 border-slate-200 hover:border-[#17458F] hover:bg-slate-50 text-slate-700 hover:text-[#17458F] text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs hover:shadow-md active:scale-98"
                   >
-                    {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Share2 className="w-3.5 h-3.5 text-slate-400" />}
+                    {copiedLink ? <Check className="w-4 h-4 text-emerald-600" /> : <Share2 className="w-4 h-4 text-[#17458F]" />}
                     <span>{copiedLink ? "Event Link Copied!" : "Share this Event"}</span>
                   </button>
                 </div>
@@ -1003,21 +1011,40 @@ export default function EventDetailPage() {
       </div>
 
       {/* Mobile Sticky Action Bar */}
-      {!event.noRegistrationRequired && isRegistrationOpen && !(isJdcoemOnly && isExternalStudent) && (
-        <div className="md:hidden fixed bottom-0 inset-x-0 z-40 p-3 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-2xl flex items-center justify-between gap-3 animate-in slide-in-from-bottom-2 duration-200">
-          <div className="pl-1">
-            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Registration Fee</span>
-            <span className="text-xs font-bold text-emerald-600">{event.entryFee || "Free Entry"}</span>
-          </div>
-          <Link
-            href={`/events/${event.slug}/register`}
-            className="flex-1 py-3 px-4 rounded-xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2 shadow-md shadow-[#E78023]/25 min-h-[44px]"
+      <div className="md:hidden fixed bottom-0 inset-x-0 z-40 p-3 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-2xl flex items-center justify-between gap-3 animate-in slide-in-from-bottom-2 duration-200">
+        <button
+          type="button"
+          onClick={handleShare}
+          className="p-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 flex items-center justify-center min-w-[44px] min-h-[44px] shrink-0 cursor-pointer"
+          title="Share Event"
+        >
+          {copiedLink ? <Check className="w-4 h-4 text-emerald-600" /> : <Share2 className="w-4 h-4 text-slate-700" />}
+        </button>
+        {!event.noRegistrationRequired && isRegistrationOpen && !(isJdcoemOnly && isExternalStudent) ? (
+          <>
+            <div className="pl-1">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Registration Fee</span>
+              <span className="text-xs font-bold text-emerald-600">{event.entryFee || "Free Entry"}</span>
+            </div>
+            <Link
+              href={`/events/${event.slug}/register`}
+              className="flex-1 py-3 px-4 rounded-xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2 shadow-md shadow-[#E78023]/25 min-h-[44px]"
+            >
+              <span>REGISTER NOW</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={handleShare}
+            className="flex-1 py-3 px-4 rounded-xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2 min-h-[44px] cursor-pointer"
           >
-            <span>REGISTER NOW</span>
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
-      )}
+            <Share2 className="w-4 h-4" />
+            <span>{copiedLink ? "Link Copied!" : "Share Event"}</span>
+          </button>
+        )}
+      </div>
     </div>
   );
 }

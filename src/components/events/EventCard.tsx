@@ -106,6 +106,18 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
               </Badge>
             )}
           </div>
+
+          {/* Floating Share Button on Featured Banner */}
+          <button
+            type="button"
+            onClick={handleShare}
+            aria-label="Share event"
+            title="Share event link"
+            className="absolute top-4 right-4 px-3 py-1.5 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md text-white border border-white/25 transition-all shadow-md cursor-pointer hover:scale-105 active:scale-95 z-10 flex items-center gap-1.5 text-xs font-semibold"
+          >
+            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
+            <span>{copied ? "Copied" : "Share"}</span>
+          </button>
         </div>
 
         {/* Content */}
@@ -165,13 +177,13 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
             </div>
           </div>
 
-          {/* Action CTAs — Inter SemiBold */}
-          <div className="flex items-center gap-2.5 pt-4 border-t border-slate-100">
+          {/* Action Buttons */}
+          <div className="pt-4 border-t border-slate-100 flex items-center gap-3">
             <Link
               href={`/events/${event.slug}`}
-              className="flex-1 py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#17458F] text-xs font-sans font-semibold uppercase tracking-wider text-center transition-all cursor-pointer"
+              className="flex-1 py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#17458F] text-xs font-sans font-semibold uppercase tracking-wider text-center transition-colors cursor-pointer"
             >
-              Event Details
+              Details
             </Link>
 
             {event.isParentFest && (
@@ -187,9 +199,10 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
               type="button"
               onClick={handleShare}
               title="Share event link"
-              className="py-3 px-3.5 rounded-xl border border-slate-200 hover:border-[#17458F] hover:bg-slate-50 text-slate-600 hover:text-[#17458F] transition-all flex items-center justify-center cursor-pointer shrink-0"
+              className="py-3 px-3.5 rounded-xl border border-slate-200 hover:border-[#17458F] hover:bg-blue-50/40 text-slate-700 hover:text-[#17458F] transition-all flex items-center gap-1.5 justify-center cursor-pointer shrink-0 font-semibold text-xs"
             >
               {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Share2 className="w-4 h-4" />}
+              <span className="hidden sm:inline">{copied ? "Copied" : "Share"}</span>
             </button>
           </div>
         </div>
@@ -242,6 +255,17 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
             </Badge>
           )}
         </div>
+
+        {/* Floating Share Button on Image */}
+        <button
+          type="button"
+          onClick={handleShare}
+          aria-label="Share event"
+          title="Share event link"
+          className="absolute top-3 right-3 p-2 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md text-white border border-white/25 transition-all shadow-md cursor-pointer hover:scale-110 active:scale-95 z-10 flex items-center justify-center"
+        >
+          {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5 text-white" />}
+        </button>
       </div>
 
       {/* Bottom Card Content */}
@@ -319,9 +343,10 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
             type="button"
             onClick={handleShare}
             title="Share event link"
-            className="py-2.5 px-2.5 rounded-xl border border-slate-200 hover:border-[#17458F] hover:bg-slate-50 text-slate-600 hover:text-[#17458F] transition-all flex items-center justify-center cursor-pointer shrink-0"
+            className="py-2.5 px-3 rounded-xl border border-slate-200 hover:border-[#17458F] hover:bg-blue-50/40 text-slate-700 hover:text-[#17458F] transition-all flex items-center gap-1.5 justify-center cursor-pointer shrink-0 font-semibold text-xs"
           >
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Share2 className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline">{copied ? "Copied" : "Share"}</span>
           </button>
         </div>
       </div>
