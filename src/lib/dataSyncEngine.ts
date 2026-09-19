@@ -922,14 +922,12 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
           continue;
         }
 
-        // For draft tenure sessions (!isCurrent): local draft roster is active staged work
+        // For draft tenure sessions (!isCurrent): only preserve local draft array if this device has an active in-flight write
         const isDraftTenure = (remoteItem as any)?.isCurrent === false || (localItem as any)?.isCurrent === false;
-        if (isDraftTenure && localArr.length > 0) {
-          // If local draft has imported positions or custom additions, keep local draft array!
-          if (localArr.length >= remoteArr.length) {
-            result[k] = localArr;
-            continue;
-          }
+        const hasRecentDraftWrite = isDraftTenure && (isLocalWriteRecent("council_tenures", 15000) || hasPendingWritesFor("council_tenures"));
+        if (hasRecentDraftWrite && localArr.length > 0) {
+          result[k] = localArr;
+          continue;
         }
 
         if (localArr.length > 0 && remoteArr.length === 0) {
@@ -968,9 +966,10 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
         continue;
       }
 
-      // For draft sessions: local edits to draft properties take precedence over older remote templates
+      // For draft sessions: only preserve local edits if this device has an active in-flight write
       const isDraftSession = (remoteItem as any)?.isCurrent === false || (localItem as any)?.isCurrent === false;
-      if (isDraftSession && localVal !== undefined && localVal !== null && localVal !== "") {
+      const hasRecentDraftSessionWrite = isDraftSession && (isLocalWriteRecent("council_tenures", 15000) || hasPendingWritesFor("council_tenures"));
+      if (hasRecentDraftSessionWrite && localVal !== undefined && localVal !== null && localVal !== "") {
         result[k] = localVal;
         continue;
       }

@@ -86,6 +86,7 @@ import { Modal } from "@/components/ui/Modal";
 import { PositionFormModal } from "@/components/admin/team/PositionFormModal";
 import { ClubMembersModal } from "@/components/admin/team/ClubMembersModal";
 import { reconcileAllUserDesignations, checkBtIdPositionConflict } from "@/lib/usersStore";
+import { isLocalWriteRecent, hasPendingWritesFor } from "@/lib/dataSyncEngine";
 import { cn } from "@/lib/utils";
 
 type TeamCategoryTab = "council" | "hosting" | "founding" | "clubs" | "pillars" | "members";
@@ -286,22 +287,30 @@ export default function AdminTeamPage() {
       setHostingMembers(getStoredHostingCommittee());
       setFoundingMembersList(storedFounders);
     } else if (targetTenure) {
-      const draftCouncil = getStoredDraftCouncil(targetTenure.id);
-      const draftHosting = getStoredDraftHosting(targetTenure.id);
-      const councilList = draftCouncil.length > 0 ? draftCouncil : (targetTenure.adminCouncil || []);
+      const hasRecentTenureWrite = isLocalWriteRecent("council_tenures", 15000) || hasPendingWritesFor("council_tenures");
+      const draftCouncil = hasRecentTenureWrite ? getStoredDraftCouncil(targetTenure.id) : [];
+      const draftHosting = hasRecentTenureWrite ? getStoredDraftHosting(targetTenure.id) : [];
+      const councilList = draftCouncil.length > 0
+        ? draftCouncil
+        : (Array.isArray(targetTenure.adminCouncil) ? targetTenure.adminCouncil : []);
       let founderList = isFirst ? (targetTenure.foundingMembers || getStoredFoundingMembers()) : [];
       if (isFirst && councilList.length > 0 && councilList.length !== founderList.length) {
         founderList = syncCouncilAdminsToFounding(councilList, true);
       }
       setCouncilMembers(councilList);
-      setHostingMembers(draftHosting.length > 0 ? draftHosting : (targetTenure.hostingCommittee || []));
+      setHostingMembers(
+        draftHosting.length > 0
+          ? draftHosting
+          : (Array.isArray(targetTenure.hostingCommittee) ? targetTenure.hostingCommittee : [])
+      );
       setFoundingMembersList(founderList);
     }
 
     if (targetTenure?.isCurrent) {
       setClubsList(getStoredClubs());
     } else if (targetTenure) {
-      const draftClubs = getStoredDraftClubs(targetTenure.id);
+      const hasRecentTenureWrite = isLocalWriteRecent("council_tenures", 15000) || hasPendingWritesFor("council_tenures");
+      const draftClubs = hasRecentTenureWrite ? getStoredDraftClubs(targetTenure.id) : [];
       setClubsList(draftClubs.length > 0 ? draftClubs : (targetTenure.clubs && targetTenure.clubs.length > 0 ? targetTenure.clubs : getStoredClubs()));
     } else {
       setClubsList(getStoredClubs());
@@ -465,15 +474,22 @@ export default function AdminTeamPage() {
       setHostingMembers(getStoredHostingCommittee());
       setFoundingMembersList(storedFounders);
     } else if (targetTenure) {
-      const draftCouncil = getStoredDraftCouncil(targetTenure.id);
-      const draftHosting = getStoredDraftHosting(targetTenure.id);
-      const councilList = draftCouncil.length > 0 ? draftCouncil : (targetTenure.adminCouncil || []);
+      const hasRecentTenureWrite = isLocalWriteRecent("council_tenures", 15000) || hasPendingWritesFor("council_tenures");
+      const draftCouncil = hasRecentTenureWrite ? getStoredDraftCouncil(targetTenure.id) : [];
+      const draftHosting = hasRecentTenureWrite ? getStoredDraftHosting(targetTenure.id) : [];
+      const councilList = draftCouncil.length > 0
+        ? draftCouncil
+        : (Array.isArray(targetTenure.adminCouncil) ? targetTenure.adminCouncil : []);
       let founderList = isFirst ? (targetTenure.foundingMembers || getStoredFoundingMembers()) : [];
       if (isFirst && councilList.length > 0 && councilList.length !== founderList.length) {
         founderList = syncCouncilAdminsToFounding(councilList, true);
       }
       setCouncilMembers(councilList);
-      setHostingMembers(draftHosting.length > 0 ? draftHosting : (targetTenure.hostingCommittee || []));
+      setHostingMembers(
+        draftHosting.length > 0
+          ? draftHosting
+          : (Array.isArray(targetTenure.hostingCommittee) ? targetTenure.hostingCommittee : [])
+      );
       setFoundingMembersList(founderList);
     }
   };
