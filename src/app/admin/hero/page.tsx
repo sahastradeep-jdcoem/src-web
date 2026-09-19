@@ -20,7 +20,8 @@ import {
   Trash2,
   Plus,
   Inbox,
-  Loader2
+  Loader2,
+  Globe
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -366,6 +367,144 @@ export default function AdminHeroSettingsPage() {
                 <Plus className="w-3.5 h-3.5 text-[#17458F]" />
                 <span>Save Current Photo to Presets Gallery</span>
               </button>
+            </div>
+          </div>
+
+          {/* ─── NEW: OPENGRAPH & SOCIAL SHARE BANNER (1200x630) ─── */}
+          <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-[#E78023]" />
+                  <h3 className="font-bold text-base text-slate-900">
+                    Social Share Preview Card (OpenGraph)
+                  </h3>
+                  <Badge variant="navy" size="sm">
+                    1200 × 630
+                  </Badge>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Controls the preview thumbnail and card displayed when links are shared on WhatsApp, Telegram, X / Twitter, LinkedIn, and Facebook.
+                </p>
+              </div>
+
+              {settings.ogImageUrl && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleUpdate("ogImageUrl", "");
+                    showNotice("Custom OG banner removed. Default dynamic branded card restored.");
+                  }}
+                  className="text-xs font-semibold text-rose-600 hover:text-rose-700 transition-colors"
+                >
+                  Reset to Default
+                </button>
+              )}
+            </div>
+
+            {/* Live Social Card Preview */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600">
+                <span>Simulated WhatsApp / Twitter Card Preview</span>
+                <span className="font-mono text-slate-400">1200 x 630 px</span>
+              </div>
+
+              <div className="relative aspect-[1200/630] rounded-2xl overflow-hidden border border-slate-800 bg-[#0B1E3F] shadow-lg flex flex-col justify-between p-5 text-white">
+                {settings.ogImageUrl ? (
+                  <>
+                    <Image
+                      src={settings.ogImageUrl}
+                      alt="Custom OG Banner"
+                      fill
+                      className="object-cover"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
+                    <div className="relative z-10 flex justify-end">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-black/70 text-white border border-white/20">
+                        Custom Image Active
+                      </span>
+                    </div>
+                    <div className="relative z-10 flex items-center justify-between">
+                      <p className="text-xs font-bold text-white drop-shadow">
+                        {settings.ogTitle || "SAHASTRADEEP — SRC JDCOEM"}
+                      </p>
+                      <span className="text-[10px] text-slate-300 font-mono">srcjdcoem.in</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Default Dynamic Card Preview Simulation */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] tracking-widest text-slate-300 uppercase font-semibold">
+                        JD College of Engineering & Management
+                      </span>
+                      <span className="text-[9px] px-2 py-0.5 rounded-full bg-white/10 border border-white/20 text-slate-200">
+                        srcjdcoem.in
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[9px] font-bold text-[#E78023] uppercase tracking-wider block">
+                        {settings.heroOverline || "Autonomous Student Council"}
+                      </span>
+                      <h4 className="text-xl font-extrabold text-white tracking-tight">
+                        {settings.ogTitle || "SAHASTRADEEP"}
+                      </h4>
+                      <p className="text-xs text-slate-300 line-clamp-2 max-w-sm">
+                        {settings.ogDescription || settings.heroTagline || "Official digital gateway to the Student Representative Council (SRC) of JDCOEM Nagpur."}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-white/10 text-[9px] text-slate-400">
+                      <span>12+ Chartered Clubs • Flagship Fests • Verified Passes</span>
+                      <span>Nagpur, Maharashtra</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Custom Banner Upload Dropzone */}
+            <UniversalImageUploader
+              purpose="banner"
+              label="Upload Custom 1200×630 Social Banner"
+              sublabel="Overrides the default dynamic card with your custom artwork or poster"
+              storagePath="og_banners"
+              previewUrl={settings.ogImageUrl}
+              onUploadStateChange={handleUploadStateChange}
+              onUrlChange={(cloudUrl) => {
+                if (cloudUrl) {
+                  handleUpdate("ogImageUrl", cloudUrl);
+                  showNotice("New social share preview banner uploaded!");
+                }
+              }}
+            />
+
+            {/* Custom OG Meta Text Overrides */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-100">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">
+                  Card Headline Override (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={settings.ogTitle || ""}
+                  onChange={(e) => handleUpdate("ogTitle", e.target.value)}
+                  placeholder="e.g. SAHASTRADEEP — SRC JDCOEM"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">
+                  Card Subtitle Override (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={settings.ogDescription || ""}
+                  onChange={(e) => handleUpdate("ogDescription", e.target.value)}
+                  placeholder="e.g. Official Student Council Portal"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
+                />
+              </div>
             </div>
           </div>
 

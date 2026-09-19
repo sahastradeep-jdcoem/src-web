@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
@@ -6,7 +7,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { ProfileSetupModal } from "@/components/auth/ProfileSetupModal";
 import { ToastContainer } from "@/components/ui/Toast";
-import { JsonLd } from "@/components/seo/JsonLd";
+import SEOStructuredData from "@/components/seo/SEOStructuredData";
 
 export const viewport: Viewport = {
   themeColor: "#17458F",
@@ -17,7 +18,10 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://srcjdcoem.in"),
-  title: "SAHASTRADEEP | Student Representative Council • JDCOEM Nagpur",
+  title: {
+    default: "SAHASTRADEEP | Student Representative Council • JDCOEM Nagpur",
+    template: "%s | SAHASTRADEEP • SRC JDCOEM",
+  },
   description: "Official digital platform of the Student Representative Council (SRC) of JD College of Engineering & Management, Nagpur. Uniting 12 clubs, flagship fests, and student leadership.",
   manifest: "/manifest.json",
   icons: {
@@ -28,7 +32,7 @@ export const metadata: Metadata = {
     title: "SAHASTRADEEP — SRC JDCOEM",
     description: "Official Student Representative Council portal of JDCOEM Nagpur. Flagship fests, 12 club charters, and student accreditation.",
     url: "https://srcjdcoem.in",
-    siteName: "SRC JDCOEM",
+    siteName: "SAHASTRADEEP — SRC JDCOEM",
     images: [
       {
         url: "/assets/SRC Logo.png",
@@ -39,6 +43,11 @@ export const metadata: Metadata = {
     ],
     locale: "en_IN",
     type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "SAHASTRADEEP — SRC JDCOEM",
+    description: "Official Student Representative Council portal of JDCOEM Nagpur. Flagship fests, 12 club charters, and student accreditation.",
   },
 };
 
@@ -58,7 +67,9 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans flex flex-col justify-between selection:bg-[#E78023] selection:text-white">
-        <JsonLd type="Organization" />
+        <Suspense fallback={null}>
+          <SEOStructuredData />
+        </Suspense>
         <AuthProvider>
           <Navbar />
           <main className="flex-grow pt-16 w-full min-w-0 overflow-x-clip">

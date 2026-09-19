@@ -7,6 +7,9 @@ export interface HeroSettings {
   heroHeadline: string;
   heroTagline: string;
   tickerText?: string;
+  ogImageUrl?: string;
+  ogTitle?: string;
+  ogDescription?: string;
 }
 
 export const DEFAULT_HERO_SETTINGS: HeroSettings = {
@@ -18,6 +21,9 @@ export const DEFAULT_HERO_SETTINGS: HeroSettings = {
   heroHeadline: "DRIVEN BY IMPACT.",
   heroTagline: "Leading today. Inspiring tomorrow.",
   tickerText: "Who ARE WE SRC!",
+  ogImageUrl: "",
+  ogTitle: "",
+  ogDescription: "",
 };
 
 export interface HeroPreset {

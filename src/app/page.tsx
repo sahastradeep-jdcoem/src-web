@@ -16,7 +16,12 @@ export const metadata: Metadata = {
     title: "SAHASTRADEEP | Student Representative Council • JDCOEM",
     description: "Official portal of SRC JDCOEM Nagpur. Flagship fests, 12 chartered clubs, and digital delegate passes.",
     url: "https://srcjdcoem.in",
-    siteName: "SRC JDCOEM",
+    siteName: "SAHASTRADEEP — SRC JDCOEM",
+  },
+  twitter: {
+    card: "summary",
+    title: "SAHASTRADEEP | Student Representative Council • JDCOEM",
+    description: "Official portal of SRC JDCOEM Nagpur. Flagship fests, 12 chartered clubs, and digital delegate passes.",
   },
 };
 

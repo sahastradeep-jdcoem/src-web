@@ -18,13 +18,18 @@ import BrandStrip from "@/components/layout/BrandStrip";
 import { PillarsOfStrengthSection } from "@/components/team/PillarsOfStrengthSection";
 
 export const metadata: Metadata = {
-  title: "About Us | SAHASTRADEEP • SRC JDCOEM",
+  title: "About Us",
   description: "Learn about the mission, vision, history, and patron leadership of the Student Representative Council (SRC) at JD College of Engineering & Management, Nagpur.",
   openGraph: {
     title: "About Us | SAHASTRADEEP • SRC JDCOEM",
     description: "Discover the governance, institutional pillars, and founding history of the Student Representative Council of JDCOEM Nagpur.",
     url: "https://srcjdcoem.in/about",
-    siteName: "SRC JDCOEM",
+    siteName: "SAHASTRADEEP — SRC JDCOEM",
+  },
+  twitter: {
+    card: "summary",
+    title: "About Us | SAHASTRADEEP • SRC JDCOEM",
+    description: "Discover the governance, institutional pillars, and founding history of the Student Representative Council of JDCOEM Nagpur.",
   },
 };
 
