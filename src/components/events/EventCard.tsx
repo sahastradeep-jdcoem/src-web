@@ -36,7 +36,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
     e.stopPropagation();
 
     const canonicalUrl = `https://www.srcjdcoem.in/events/${event.slug}`;
-    const heroImage = event.cardImage || event.poster || DEFAULT_EVENT_IMAGE;
+    const heroImage = event.cardImage;
 
     openShare({
       type: "event",

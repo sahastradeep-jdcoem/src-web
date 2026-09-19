@@ -204,12 +204,12 @@ export async function renderStoryToCanvas(
   ctx.fillText(typeText, pillX + 16, pillY + pillH / 2);
   ctx.restore();
 
-  // 5. HERO ARTWORK CARD (Y = 275px, Width = 888px, Height = 740px)
+  // 5. HERO ARTWORK CARD (Y = 270px, Width = 888px, Height = 500px — Exact 16:9 Aspect Ratio)
   const cardX = 96;
-  const cardY = 275;
+  const cardY = 270;
   const cardW = 888;
-  const cardH = 740;
-  const cardRadius = 36;
+  const cardH = 500; // 888 * (9 / 16) = 499.5 ≈ 500px (Exact 16:9)
+  const cardRadius = 32;
 
   ctx.save();
   // Card Drop Shadow & Ambient Glow
@@ -255,16 +255,16 @@ export async function renderStoryToCanvas(
     ctx.fillRect(cardX, cardY, cardW, cardH);
 
     if (srcLogoImg) {
-      ctx.drawImage(srcLogoImg, cardX + cardW / 2 - 100, cardY + cardH / 2 - 100, 200, 200);
+      ctx.drawImage(srcLogoImg, cardX + cardW / 2 - 80, cardY + cardH / 2 - 80, 160, 160);
     }
   }
 
   // Inner subtle gradient overlay on bottom of card
-  const innerGrad = ctx.createLinearGradient(0, cardY + cardH - 180, 0, cardY + cardH);
+  const innerGrad = ctx.createLinearGradient(0, cardY + cardH - 120, 0, cardY + cardH);
   innerGrad.addColorStop(0, "rgba(0,0,0,0)");
-  innerGrad.addColorStop(1, "rgba(0,0,0,0.6)");
+  innerGrad.addColorStop(1, "rgba(0,0,0,0.5)");
   ctx.fillStyle = innerGrad;
-  ctx.fillRect(cardX, cardY + cardH - 180, cardW, 180);
+  ctx.fillRect(cardX, cardY + cardH - 120, cardW, 120);
 
   ctx.restore();
 
@@ -276,8 +276,8 @@ export async function renderStoryToCanvas(
   ctx.stroke();
   ctx.restore();
 
-  // 6. CONTENT & TYPOGRAPHY SECTION (Y = 1055px)
-  let currentY = 1055;
+  // 6. CONTENT & TYPOGRAPHY SECTION (Starts right below 16:9 card)
+  let currentY = 820;
 
   // Category & Audience Badges Strip
   if (payload.badge) {

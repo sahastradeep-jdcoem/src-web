@@ -53,7 +53,7 @@ export default function EventDetailPage() {
     if (!event) return;
 
     const canonicalUrl = `https://www.srcjdcoem.in/events/${event.slug || slug}`;
-    const heroImage = event.cardImage || event.posterImage || event.poster || event.headerImage;
+    const heroImage = event.cardImage;
 
     openShare({
       type: "event",
