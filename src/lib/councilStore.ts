@@ -1018,7 +1018,7 @@ export function subscribeToCouncilMembers(callback: (members: TeamMember[]) => v
       // Auto-heal 1st tenure founding members if count is out of sync with council admins
       const currentFounders = getStoredFoundingMembers();
       if (merged.length > 0 && currentFounders.length !== merged.length) {
-        syncCouncilAdminsToFounding(merged, true);
+        console.warn("Council count mismatch in subscription. Passive writeback disabled.");
       }
       callback(merged);
     }

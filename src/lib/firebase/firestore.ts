@@ -999,6 +999,28 @@ export async function getSiteContentFromFirestore<T>(docId: string): Promise<T |
 }
 
 /**
+ * Get the updatedAt timestamp (as epoch ms) for a site_content document.
+ * Returns null if the document doesn't exist or has no updatedAt field.
+ */
+export async function getDocumentUpdatedAtMs(docId: string): Promise<number | null> {
+  try {
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      const docRef = doc(db, SITE_CONTENT_COLLECTION, docId);
+      const snapshot = await getDoc(docRef);
+      if (snapshot.exists()) {
+        const updatedAt = snapshot.data()?.updatedAt;
+        if (updatedAt && typeof updatedAt.toMillis === "function") {
+          return updatedAt.toMillis();
+        }
+      }
+    }
+  } catch (error) {
+    console.warn(`Firestore getDocumentUpdatedAt error [${docId}]`, error);
+  }
+  return null;
+}
+
+/**
  * Subscribe to real-time changes of site content document
  */
 export function subscribeToSiteContent<T>(docId: string, callback: (data: T) => void): () => void {

@@ -4,7 +4,8 @@ import {
   saveSiteContentToFirestore, 
   getSiteContentFromFirestore, 
   cleanUndefined,
-  saveEventToFirestore 
+  saveEventToFirestore,
+  getDocumentUpdatedAtMs
 } from "./firebase/firestore";
 
 const QUEUE_STORAGE_KEY = "src_pending_cloud_sync_queue";
@@ -454,6 +455,7 @@ export async function processQueue(): Promise<boolean> {
   if (isProcessingQueue || typeof window === "undefined") return false;
   isProcessingQueue = true;
   let allSuccess = true;
+  const QUEUE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes — reject stale queue items
 
   try {
     while (true) {
@@ -461,7 +463,32 @@ export async function processQueue(): Promise<boolean> {
       if (currentQueue.length === 0) break;
 
       const item = currentQueue[0];
+
+      // GUARD 1: Queue age limit — reject items older than 5 minutes
+      // This prevents stale Chrome profiles from flushing outdated data to Firestore.
+      if (Date.now() - item.timestamp > QUEUE_MAX_AGE_MS) {
+        console.warn(`[SyncEngine] Dropping stale queue item for ${item.docId} (age: ${Math.round((Date.now() - item.timestamp) / 1000)}s)`);
+        const latestQueue = getPendingQueue();
+        const updatedQueue = latestQueue.filter((q) => q.id !== item.id && q.docId !== item.docId);
+        savePendingQueue(updatedQueue);
+        continue;
+      }
+
       try {
+        // GUARD 2: Version check — for non-event site_content docs, verify the
+        // Firestore document hasn't been updated AFTER this queue item was created.
+        // If it has, the queue item is stale and would overwrite newer data.
+        if (!item.docId.startsWith("event_") && !item.docId.startsWith("events/")) {
+          const remoteUpdatedAt = await getDocumentUpdatedAtMs(item.docId);
+          if (remoteUpdatedAt && remoteUpdatedAt > item.timestamp) {
+            console.warn(`[SyncEngine] Dropping stale queue item for ${item.docId}: Firestore doc is newer (remote: ${new Date(remoteUpdatedAt).toISOString()}, queue: ${new Date(item.timestamp).toISOString()})`);
+            const latestQueue = getPendingQueue();
+            const updatedQueue = latestQueue.filter((q) => q.id !== item.id && q.docId !== item.docId);
+            savePendingQueue(updatedQueue);
+            continue;
+          }
+        }
+
         if (item.docId.startsWith("event_") || item.docId.startsWith("events/")) {
           await saveEventToFirestore(item.payload);
         } else {
@@ -560,7 +587,17 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
     if (
       Array.isArray(localList) && localList.length > 0 && (
         isLocalWriteRecent("events", 15000) ||
-        hasPendingWritesFor("events")
+        isLocalWriteRecent("council_team", 15000) ||
+        isLocalWriteRecent("clubs", 15000) ||
+        isLocalWriteRecent("council_tenures", 15000) ||
+        isLocalWriteRecent("founding_members", 15000) ||
+        isLocalWriteRecent("hosting_committee", 15000) ||
+        hasPendingWritesFor("events") ||
+        hasPendingWritesFor("council_team") ||
+        hasPendingWritesFor("clubs") ||
+        hasPendingWritesFor("council_tenures") ||
+        hasPendingWritesFor("founding_members") ||
+        hasPendingWritesFor("hosting_committee")
       )
     ) {
       return localList;
@@ -896,7 +933,16 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
         }
 
         if (localArr.length > 0 && remoteArr.length === 0) {
-          result[k] = localArr;
+          // Directive #9: Remote is authoritative for deletions.
+          // Only preserve local sub-array if a very recent local write is in-flight.
+          const hasRecentWrite =
+            isLocalWriteRecent("clubs", 15000) ||
+            isLocalWriteRecent("council_team", 15000) ||
+            isLocalWriteRecent("council_tenures", 15000) ||
+            hasPendingWritesFor("clubs") ||
+            hasPendingWritesFor("council_team") ||
+            hasPendingWritesFor("council_tenures");
+          result[k] = hasRecentWrite ? localArr : [];
           continue;
         }
         if (remoteArr.length > 0 && localArr.length === 0) {
@@ -911,26 +957,10 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
           hasPendingWritesFor("clubs") ||
           hasPendingWritesFor("council_tenures");
 
-        if (isLeaderOrClubSubArray && (hasRecentSubArrayWrites || localArr.length > remoteArr.length)) {
-          const reconciled = reconcileArrayDatasets(localArr, remoteArr);
-          const localOnly = localArr.filter((locItem: any) => {
-            const locId = locItem?.id || locItem?.slug || locItem?.btId;
-            const locName = locItem?.name?.trim().toLowerCase();
-            const isMatch = reconciled.some((r: any) => {
-              const rId = r?.id || r?.slug || r?.btId;
-              const rName = r?.name?.trim().toLowerCase();
-              return (locId && rId && locId === rId) || (locName && rName && locName === rName);
-            });
-            if (isMatch) return false;
-            // Keep if there were recent local writes, or if it is a recently generated local leader ID
-            if (hasRecentSubArrayWrites) return true;
-            if (typeof locId === "string" && locId.startsWith("leader-")) {
-              const createdTs = parseInt(locId.split("-")[1] || "0", 10);
-              if (createdTs > 0 && Date.now() - createdTs < 300000) return true;
-            }
-            return false;
-          });
-          result[k] = [...reconciled, ...localOnly];
+        if (isLeaderOrClubSubArray && hasRecentSubArrayWrites) {
+          // Recent local writes: reconcile per-field values but do NOT append local-only items.
+          // Remote is authoritative for which items exist (Directive #9).
+          result[k] = reconcileArrayDatasets(localArr, remoteArr);
           continue;
         }
 
