@@ -42,7 +42,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
       type: "event",
       typeLabel: event.isParentFest ? "CAMPUS FESTIVAL" : event.category ? `${event.category.toUpperCase()} EVENT` : "CAMPUS EVENT",
       title: event.name,
-      subtitle: event.tagline || (event.description ? `${event.description.slice(0, 140)}...` : undefined),
+      subtitle: event.description || event.tagline,
       description: event.description,
       imageUrl: heroImage,
       badge: event.targetAudience === "jdcoem_only" || event.isInterCollege === false ? "🎓 JDCOEM Only" : "🌐 Inter-College",

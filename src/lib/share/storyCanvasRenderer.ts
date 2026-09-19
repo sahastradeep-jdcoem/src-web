@@ -316,14 +316,21 @@ export async function renderStoryToCanvas(
   }
   currentY += 14;
 
-  // Subtitle / Tagline (clean, high legibility)
-  if (payload.subtitle && wrappedTitleLines.length <= 2) {
-    ctx.font = "500 24px system-ui, -apple-system, sans-serif";
-    ctx.fillStyle = "rgba(241, 245, 249, 0.9)";
-    const subLines = wrapText(ctx, payload.subtitle, 888, 2);
-    for (const sLine of subLines) {
-      ctx.fillText(sLine, 96, currentY);
-      currentY += 34;
+  // Subtitle / Brief Description (renders complete text with adaptive sizing)
+  const descriptionText = payload.description || payload.subtitle;
+  if (descriptionText) {
+    const isLongDescription = descriptionText.length > 120;
+    const descFontSize = isLongDescription ? 21 : 24;
+    const lineSpacing = isLongDescription ? 30 : 34;
+
+    ctx.font = `500 ${descFontSize}px system-ui, -apple-system, sans-serif`;
+    ctx.fillStyle = "rgba(241, 245, 249, 0.92)";
+
+    // Allow up to 4 lines for complete brief descriptions
+    const descLines = wrapText(ctx, descriptionText, 888, 4);
+    for (const dLine of descLines) {
+      ctx.fillText(dLine, 96, currentY);
+      currentY += lineSpacing;
     }
     currentY += 16;
   }
