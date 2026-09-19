@@ -82,7 +82,10 @@ export async function saveClubLeadersDocument(
     }
   });
 
-  const normalizedLead = payload.lead && payload.lead.name && !isPlaceholderLeaderName(payload.lead.name)
+  // Directive #9: Remote Firestore & dedicated documents must never hold zombie lead/coLead when leaders is empty!
+  const hasLeaders = rawLeaders.length > 0;
+
+  const normalizedLead = hasLeaders && payload.lead && payload.lead.name && !isPlaceholderLeaderName(payload.lead.name)
     ? {
         ...payload.lead,
         avatar:
@@ -92,7 +95,7 @@ export async function saveClubLeadersDocument(
       }
     : null;
 
-  const normalizedCoLead = payload.coLead && payload.coLead.name && !isPlaceholderLeaderName(payload.coLead.name)
+  const normalizedCoLead = hasLeaders && payload.coLead && payload.coLead.name && !isPlaceholderLeaderName(payload.coLead.name)
     ? {
         ...payload.coLead,
         avatar:
@@ -108,7 +111,7 @@ export async function saveClubLeadersDocument(
     ...payload,
     lead: normalizedLead,
     coLead: normalizedCoLead,
-    coLeads: Array.isArray(payload.coLeads) ? payload.coLeads : [],
+    coLeads: hasLeaders && Array.isArray(payload.coLeads) ? payload.coLeads : [],
     leaders: rawLeaders,
     members: rawMembers,
     updatedAt: Date.now(),
@@ -279,17 +282,25 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
       return "";
     };
 
+    // Directive #9: Remote & local empty leaders array is authoritative.
+    // If leaders is an explicit empty array or all leaders were deleted, do NOT resurrect lead/coLead!
+    const hasExplicitEmptyLeaders = Array.isArray(c.leaders) && c.leaders.length === 0;
+
     // Find primary lead & coLead avatars from leaders
-    const leadLeader = leaders.find(
-      (l) => (l.roleType === "lead" || (l.role && !l.role.toLowerCase().includes("co-head"))) && resolveAvatar(l)
-    ) || leaders.find((l) => (l.roleType === "lead" || (l.role && !l.role.toLowerCase().includes("co-head")))) || leaders[0];
+    const leadLeader = hasExplicitEmptyLeaders
+      ? undefined
+      : leaders.find(
+          (l) => (l.roleType === "lead" || (l.role && !l.role.toLowerCase().includes("co-head"))) && resolveAvatar(l)
+        ) || leaders.find((l) => (l.roleType === "lead" || (l.role && !l.role.toLowerCase().includes("co-head")))) || leaders[0];
 
-    const coLeadLeader = leaders.find(
-      (l) => (l.roleType === "coLead" || (l.role && l.role.toLowerCase().includes("co-head"))) && resolveAvatar(l)
-    ) || leaders.find((l) => (l.roleType === "coLead" || (l.role && l.role.toLowerCase().includes("co-head"))));
+    const coLeadLeader = hasExplicitEmptyLeaders
+      ? undefined
+      : leaders.find(
+          (l) => (l.roleType === "coLead" || (l.role && l.role.toLowerCase().includes("co-head"))) && resolveAvatar(l)
+        ) || leaders.find((l) => (l.roleType === "coLead" || (l.role && l.role.toLowerCase().includes("co-head"))));
 
-    const rawLead = c.lead && !isPlaceholderLeaderName(c.lead.name) ? c.lead : undefined;
-    const rawCoLead = c.coLead && !isPlaceholderLeaderName(c.coLead.name) ? c.coLead : undefined;
+    const rawLead = !hasExplicitEmptyLeaders && c.lead && !isPlaceholderLeaderName(c.lead.name) ? c.lead : undefined;
+    const rawCoLead = !hasExplicitEmptyLeaders && c.coLead && !isPlaceholderLeaderName(c.coLead.name) ? c.coLead : undefined;
 
     const leadAvatar = resolveAvatar(leadLeader) || resolveAvatar(rawLead);
     const coLeadAvatar = resolveAvatar(coLeadLeader) || resolveAvatar(rawCoLead);
@@ -306,7 +317,8 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
         avatar: finalLeadAvatar,
         name: (rawLead && rawLead.name?.trim()) ? rawLead.name.trim() : (leadLeader.name || ""),
       };
-    } else if (rawLead) {
+    } else if (rawLead && !Array.isArray(c.leaders)) {
+      // Only permit legacy rawLead fallback if c.leaders was uninitialized/undefined
       lead = {
         ...rawLead,
         avatar: resolveAvatar(rawLead) || leadAvatar || sanitizeAvatar(rawLead.avatar) || "",
@@ -325,14 +337,15 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
         avatar: finalCoLeadAvatar,
         name: (rawCoLead && rawCoLead.name?.trim()) ? rawCoLead.name.trim() : (coLeadLeader.name || ""),
       };
-    } else if (rawCoLead) {
+    } else if (rawCoLead && !Array.isArray(c.leaders)) {
+      // Only permit legacy rawCoLead fallback if c.leaders was uninitialized/undefined
       coLead = {
         ...rawCoLead,
         avatar: resolveAvatar(rawCoLead) || coLeadAvatar || sanitizeAvatar(rawCoLead.avatar) || "",
       };
     }
 
-    const rawCoLeads = Array.isArray(c.coLeads)
+    const rawCoLeads = !hasExplicitEmptyLeaders && Array.isArray(c.coLeads)
       ? c.coLeads.filter((cl) => cl && !isPlaceholderLeaderName(cl.name))
       : [];
 
@@ -365,10 +378,7 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
       };
     });
 
-    if (finalLeaders.length === 0) {
-      if (lead && lead.name) finalLeaders.push({ ...lead, roleType: "lead", id: `${c.id || c.slug}-lead-0` });
-      if (coLead && coLead.name) finalLeaders.push({ ...coLead, roleType: "coLead", id: `${c.id || c.slug}-colead-0` });
-    }
+    // Zero-Resurrection Guarantee: If finalLeaders is empty, do NOT resurrect leaders from lead/coLead!
 
     // Auto-heal Robotics Club slug if legacy agentic-ai was stored
     let slug = c.slug;
@@ -1212,14 +1222,18 @@ export async function syncClubsFromFirestore(): Promise<ClubItem[]> {
             } catch {}
           }
 
-          const leaders = Array.isArray(leaderDoc.leaders)
-            ? leaderDoc.leaders
-            : (club.leaders || []);
-          const lead = leaderDoc.lead !== undefined ? (leaderDoc.lead || undefined) : club.lead;
-          const coLead = leaderDoc.coLead !== undefined ? (leaderDoc.coLead || undefined) : club.coLead;
-          const coLeads = Array.isArray(leaderDoc.coLeads)
+          // Directive #9: Cloud leaders document is authoritative. If leaders is empty, strictly clear lead/coLead!
+          const hasDocLeaders = Array.isArray(leaderDoc.leaders) && leaderDoc.leaders.length > 0;
+          const leaders = Array.isArray(leaderDoc.leaders) ? leaderDoc.leaders : (club.leaders || []);
+          const lead = hasDocLeaders && leaderDoc.lead && !isPlaceholderLeaderName(leaderDoc.lead.name)
+            ? leaderDoc.lead
+            : undefined;
+          const coLead = hasDocLeaders && leaderDoc.coLead && !isPlaceholderLeaderName(leaderDoc.coLead.name)
+            ? leaderDoc.coLead
+            : undefined;
+          const coLeads = hasDocLeaders && Array.isArray(leaderDoc.coLeads)
             ? leaderDoc.coLeads
-            : (club.coLeads || []);
+            : [];
           const members = Array.isArray(leaderDoc.members)
             ? leaderDoc.members
             : (club.members || []);
@@ -1283,13 +1297,14 @@ export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => v
           }
         }
         if (leaderDoc) {
+          const hasDocLeaders = Array.isArray(leaderDoc.leaders) && leaderDoc.leaders.length > 0;
           return {
             ...club,
-            lead: leaderDoc.lead !== undefined ? (leaderDoc.lead || undefined) : club.lead,
-            coLead: leaderDoc.coLead !== undefined ? (leaderDoc.coLead || undefined) : club.coLead,
-            coLeads: Array.isArray(leaderDoc.coLeads) ? leaderDoc.coLeads : club.coLeads,
-            leaders: Array.isArray(leaderDoc.leaders) ? leaderDoc.leaders : club.leaders,
-            members: Array.isArray(leaderDoc.members) ? leaderDoc.members : club.members,
+            lead: hasDocLeaders && leaderDoc.lead && !isPlaceholderLeaderName(leaderDoc.lead.name) ? leaderDoc.lead : undefined,
+            coLead: hasDocLeaders && leaderDoc.coLead && !isPlaceholderLeaderName(leaderDoc.coLead.name) ? leaderDoc.coLead : undefined,
+            coLeads: hasDocLeaders && Array.isArray(leaderDoc.coLeads) ? leaderDoc.coLeads : [],
+            leaders: Array.isArray(leaderDoc.leaders) ? leaderDoc.leaders : (club.leaders || []),
+            members: Array.isArray(leaderDoc.members) ? leaderDoc.members : (club.members || []),
           };
         }
 

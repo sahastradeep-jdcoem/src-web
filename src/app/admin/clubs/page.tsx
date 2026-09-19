@@ -78,13 +78,15 @@ export default function AdminClubsPage() {
     if (target.clubs && Array.isArray(target.clubs) && target.clubs.length > 0) {
       return target.clubs;
     }
-    // First-time opening draft session: initialize isolated draft copy from live clubs
-    const liveClubs = getStoredClubs();
-    if (liveClubs && liveClubs.length > 0) {
-      saveStoredDraftClubs(target.id, liveClubs);
-      return liveClubs;
-    }
-    return mockClubs;
+    // Directive #6 & #9: Draft sessions must strictly maintain isolation from live club leaders.
+    return mockClubs.map((mc) => ({
+      ...mc,
+      lead: undefined,
+      coLead: undefined,
+      coLeads: [],
+      leaders: [],
+      members: [],
+    }));
   };
 
   const loadData = () => {

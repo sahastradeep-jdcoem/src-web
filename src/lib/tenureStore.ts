@@ -389,8 +389,19 @@ export function getStoredTenures(): CouncilTenure[] {
         const parsed = JSON.parse(rawStoredClubs);
         if (Array.isArray(parsed)) resolvedClubs = parsed;
       } catch {}
-    } else if (Array.isArray(t.clubs)) {
+    } else if (Array.isArray(t.clubs) && t.clubs.length > 0) {
       resolvedClubs = t.clubs;
+    } else if (!isCurrent) {
+      // Directive #6 & #9: Draft tenures are strictly isolated from live clubs.
+      // Default to clean chartered clubs with zero leaders.
+      resolvedClubs = mockClubs.map((mc) => ({
+        ...mc,
+        lead: undefined,
+        coLead: undefined,
+        coLeads: [],
+        leaders: [],
+        members: []
+      }));
     } else {
       resolvedClubs = activeClubs;
     }

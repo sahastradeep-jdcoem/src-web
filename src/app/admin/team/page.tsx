@@ -84,6 +84,7 @@ import {
 } from "@/lib/tenureStore";
 import { getStoredDepartments, syncDepartmentsFromFirestore, getDepartmentShortName } from "@/lib/departmentsStore";
 import { adminCouncilMembers, hostingCommitteeMembers, foundingMembers as defaultFoundingMembers } from "@/data/team";
+import { mockClubs } from "@/data/clubs";
 import { TeamMember, ClubItem, ClubLeader, ClubMember, InstitutionalPillar } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -311,10 +312,18 @@ export default function AdminTeamPage() {
           : (Array.isArray(targetTenure.hostingCommittee) ? targetTenure.hostingCommittee : [])
       );
       setFoundingMembersList(founderList);
+      const draftClubsFallback = mockClubs.map((mc) => ({
+        ...mc,
+        lead: undefined,
+        coLead: undefined,
+        coLeads: [],
+        leaders: [],
+        members: [],
+      }));
       setClubsList(
         rawClubs !== null
           ? getStoredDraftClubs(targetTenure.id)
-          : (Array.isArray(targetTenure.clubs) ? targetTenure.clubs : getStoredClubs())
+          : (Array.isArray(targetTenure.clubs) && targetTenure.clubs.length > 0 ? targetTenure.clubs : draftClubsFallback)
       );
     } else {
       setClubsList(getStoredClubs());
@@ -342,7 +351,7 @@ export default function AdminTeamPage() {
       if (res && !isSavingRef.current) {
         const allTenures = getStoredTenures();
         const cur = allTenures.find((t) => t.id === (selectedTenureId || "tenure-2025-26"));
-        if (!cur || cur.isCurrent) {
+        if (cur && cur.isCurrent) {
           setClubsList(res);
         }
       }
@@ -377,7 +386,7 @@ export default function AdminTeamPage() {
       if (isSavingRef.current) return;
       const allTenures = getStoredTenures();
       const cur = allTenures.find((t) => t.id === (selectedTenureId || "tenure-2025-26"));
-      if (!cur || cur.isCurrent) {
+      if (cur && cur.isCurrent) {
         setCouncilMembers(remote);
       }
     });
@@ -385,7 +394,7 @@ export default function AdminTeamPage() {
       if (isSavingRef.current) return;
       const allTenures = getStoredTenures();
       const cur = allTenures.find((t) => t.id === (selectedTenureId || "tenure-2025-26"));
-      if (!cur || cur.isCurrent) {
+      if (cur && cur.isCurrent) {
         setHostingMembers(remote);
       }
     });
@@ -400,7 +409,9 @@ export default function AdminTeamPage() {
     });
     const unsubClubs = subscribeToClubs((updated) => {
       if (isSavingRef.current) return;
-      if (!selectedTenure || selectedTenure.isCurrent) {
+      const allTenures = getStoredTenures();
+      const cur = allTenures.find((t) => t.id === (selectedTenureId || "tenure-2025-26"));
+      if (cur && cur.isCurrent) {
         setClubsList(updated);
       }
     });
@@ -509,11 +520,34 @@ export default function AdminTeamPage() {
           : (Array.isArray(targetTenure.hostingCommittee) ? targetTenure.hostingCommittee : [])
       );
       setFoundingMembersList(founderList);
+      const draftClubsFallback = mockClubs.map((mc) => ({
+        ...mc,
+        lead: undefined,
+        coLead: undefined,
+        coLeads: [],
+        leaders: [],
+        members: [],
+      }));
       setClubsList(
         rawClubs !== null
           ? getStoredDraftClubs(targetTenure.id)
-          : (Array.isArray(targetTenure.clubs) ? targetTenure.clubs : getStoredClubs())
+          : (Array.isArray(targetTenure.clubs) && targetTenure.clubs.length > 0 ? targetTenure.clubs : draftClubsFallback)
       );
+
+      // Directive #11: Immediate asynchronous fetch from Firestore on tenure selection
+      if (!targetTenure.isCurrent) {
+        Promise.all([
+          syncDraftCouncilFromFirestore(targetTenure.id),
+          syncDraftHostingFromFirestore(targetTenure.id),
+          syncDraftClubsFromFirestore(targetTenure.id)
+        ]).then(([dCouncil, dHosting, dClubs]) => {
+          if (!isSavingRef.current) {
+            if (dCouncil !== null) setCouncilMembers(dCouncil);
+            if (dHosting !== null) setHostingMembers(dHosting);
+            if (dClubs !== null) setClubsList(dClubs);
+          }
+        }).catch(() => {});
+      }
     }
   };
 
@@ -1229,7 +1263,7 @@ export default function AdminTeamPage() {
           await saveStoredClubs(updatedClubs);
           updateTenureRoster(selectedTenure.id, { clubs: updatedClubs }, true);
         } else if (selectedTenure) {
-          saveStoredDraftClubs(selectedTenure.id, updatedClubs);
+          await saveStoredDraftClubs(selectedTenure.id, updatedClubs);
           updateTenureRoster(selectedTenure.id, { clubs: updatedClubs }, true);
         }
         setIsSaved(true);
