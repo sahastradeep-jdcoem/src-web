@@ -56,7 +56,7 @@ export async function generateMetadata({
         title: "SRC Form & Opportunity | Engagement Hub",
         description: "Official applications, forms, polls, and opportunities by SRC JDCOEM.",
         url: `https://srcjdcoem.in/hub/${slug}`,
-        siteName: "SAHASTRADEEP — SRC JDCOEM",
+        siteName: "Sahastradeep - SRC JDCOEM",
         images: [
           {
             url: "/assets/SRC Logo.png",
@@ -90,7 +90,7 @@ export async function generateMetadata({
       title: `${title} | SRC JDCOEM`,
       description: cleanDescription,
       url: listingUrl,
-      siteName: "SAHASTRADEEP — SRC JDCOEM",
+      siteName: "Sahastradeep - SRC JDCOEM",
       type: "website",
       images: [
         {

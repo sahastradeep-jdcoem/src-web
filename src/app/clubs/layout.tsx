@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     title: "Clubs | SAHASTRADEEP • SRC JDCOEM",
     description: "Discover 12 student clubs under SRC JDCOEM Nagpur — from coding and robotics to dance, music, and drama.",
     url: "https://srcjdcoem.in/clubs",
-    siteName: "SAHASTRADEEP — SRC JDCOEM",
+    siteName: "Sahastradeep - SRC JDCOEM",
   },
   twitter: {
     card: "summary",

@@ -17,10 +17,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://srcjdcoem.in"),
+  metadataBase: new URL("https://www.srcjdcoem.in"),
+  alternates: {
+    canonical: "https://www.srcjdcoem.in",
+  },
   title: {
-    default: "SAHASTRADEEP | Student Representative Council • JDCOEM Nagpur",
-    template: "%s | SAHASTRADEEP • SRC JDCOEM",
+    default: "Sahastradeep - SRC JDCOEM | Student Representative Council • JDCOEM",
+    template: "%s | Sahastradeep - SRC JDCOEM",
   },
   description: "Official digital platform of the Student Representative Council (SRC) of JD College of Engineering & Management, Nagpur. Uniting 12 clubs, flagship fests, and student leadership.",
   manifest: "/manifest.json",
@@ -29,10 +32,10 @@ export const metadata: Metadata = {
     apple: "/assets/SRC Logo.png",
   },
   openGraph: {
-    title: "SAHASTRADEEP — SRC JDCOEM",
+    title: "Sahastradeep - SRC JDCOEM",
     description: "Official Student Representative Council portal of JDCOEM Nagpur. Flagship fests, 12 club charters, and student accreditation.",
-    url: "https://srcjdcoem.in",
-    siteName: "SAHASTRADEEP — SRC JDCOEM",
+    url: "https://www.srcjdcoem.in",
+    siteName: "Sahastradeep - SRC JDCOEM",
     images: [
       {
         url: "/assets/SRC Logo.png",
@@ -46,7 +49,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "SAHASTRADEEP — SRC JDCOEM",
+    title: "Sahastradeep - SRC JDCOEM",
     description: "Official Student Representative Council portal of JDCOEM Nagpur. Flagship fests, 12 club charters, and student accreditation.",
   },
 };

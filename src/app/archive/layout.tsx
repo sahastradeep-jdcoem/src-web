@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     title: "Archive | SAHASTRADEEP • SRC JDCOEM",
     description: "Historical records, previous tenures, and past council rosters of SRC JDCOEM Nagpur.",
     url: "https://srcjdcoem.in/archive",
-    siteName: "SAHASTRADEEP — SRC JDCOEM",
+    siteName: "Sahastradeep - SRC JDCOEM",
   },
   twitter: {
     card: "summary",

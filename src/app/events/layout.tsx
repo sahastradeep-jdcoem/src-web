@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     title: "Events | SAHASTRADEEP • SRC JDCOEM",
     description: "Discover upcoming and past events organized by SRC JDCOEM Nagpur — flagship fests, hackathons, and campus competitions.",
     url: "https://srcjdcoem.in/events",
-    siteName: "SAHASTRADEEP — SRC JDCOEM",
+    siteName: "Sahastradeep - SRC JDCOEM",
   },
   twitter: {
     card: "summary",

@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     title: "About Us | SAHASTRADEEP • SRC JDCOEM",
     description: "Discover the governance, institutional pillars, and founding history of the Student Representative Council of JDCOEM Nagpur.",
     url: "https://srcjdcoem.in/about",
-    siteName: "SAHASTRADEEP — SRC JDCOEM",
+    siteName: "Sahastradeep - SRC JDCOEM",
   },
   twitter: {
     card: "summary",

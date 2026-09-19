@@ -34,14 +34,16 @@ export function JsonLd({ type = "Organization", leadershipData, eventData }: Jso
     const websiteSchema = {
       "@context": "https://schema.org",
       "@type": "WebSite",
-      name: "SAHASTRADEEP — SRC JDCOEM",
+      name: "Sahastradeep - SRC JDCOEM",
       alternateName: [
-        "SRC JDCOEM",
         "Sahastradeep",
+        "SRC JDCOEM",
+        "SAHASTRADEEP",
         "Student Representative Council JDCOEM",
         "SRC JDCOEM Nagpur",
+        "SAHASTRADEEP — SRC JDCOEM",
       ],
-      url: baseUrl,
+      url: "https://www.srcjdcoem.in",
     };
 
     return (

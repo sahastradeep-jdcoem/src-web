@@ -46,7 +46,7 @@ export async function generateMetadata({
         title: "Event Details | SAHASTRADEEP • SRC JDCOEM",
         description: "Explore collegiate events, competitions, and festivals organized by the Student Representative Council at JDCOEM Nagpur.",
         url: `https://srcjdcoem.in/events/${slug}`,
-        siteName: "SAHASTRADEEP — SRC JDCOEM",
+        siteName: "Sahastradeep - SRC JDCOEM",
         images: [
           {
             url: "/assets/SRC Logo.png",
@@ -80,7 +80,7 @@ export async function generateMetadata({
       title: `${title} | SRC JDCOEM`,
       description: cleanDescription,
       url: eventUrl,
-      siteName: "SAHASTRADEEP — SRC JDCOEM",
+      siteName: "Sahastradeep - SRC JDCOEM",
       type: "article",
       images: [
         {

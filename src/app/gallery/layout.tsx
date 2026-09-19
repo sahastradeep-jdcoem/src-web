@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     title: "Gallery | SAHASTRADEEP • SRC JDCOEM",
     description: "Photo gallery from SRC JDCOEM events, flagship fests, and campus moments.",
     url: "https://srcjdcoem.in/gallery",
-    siteName: "SAHASTRADEEP — SRC JDCOEM",
+    siteName: "Sahastradeep - SRC JDCOEM",
   },
   twitter: {
     card: "summary",

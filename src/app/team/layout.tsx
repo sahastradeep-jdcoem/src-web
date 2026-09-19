@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     title: "Our Team | SAHASTRADEEP • SRC JDCOEM",
     description: "Meet the elected student leaders and council members of SRC JDCOEM Nagpur.",
     url: "https://srcjdcoem.in/team",
-    siteName: "SAHASTRADEEP — SRC JDCOEM",
+    siteName: "Sahastradeep - SRC JDCOEM",
   },
   twitter: {
     card: "summary",

@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     title: "Contact Us | SAHASTRADEEP • SRC JDCOEM",
     description: "Connect with SRC JDCOEM for partnerships, club activities, event inquiries, and official communications.",
     url: "https://srcjdcoem.in/contact",
-    siteName: "SAHASTRADEEP — SRC JDCOEM",
+    siteName: "Sahastradeep - SRC JDCOEM",
   },
   twitter: {
     card: "summary",
