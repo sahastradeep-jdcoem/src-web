@@ -972,7 +972,7 @@ export async function saveSiteContentToFirestore<T>(docId: string, data: T): Pro
       }
 
       const docRef = doc(db, SITE_CONTENT_COLLECTION, docId);
-      await setDoc(docRef, { payload: sanitized, updatedAt: serverTimestamp() }, { merge: true });
+      await setDoc(docRef, { payload: sanitized, updatedAt: serverTimestamp() });
     }
   } catch (error: any) {
     console.error(`Firestore saveSiteContent error [${docId}]:`, error?.code || "", error?.message || error);
@@ -1118,7 +1118,7 @@ export async function saveEventToFirestore(event: EventItem): Promise<void> {
       // 1 Event = 1 Document: Write to dedicated document site_content/event_{docId}
       // This is immediately permitted by match /site_content/{docId} in deployed Firestore rules
       const siteDocRef = doc(db, SITE_CONTENT_COLLECTION, `event_${docId}`);
-      await setDoc(siteDocRef, { payload: sanitized, updatedAt: serverTimestamp() }, { merge: true });
+      await setDoc(siteDocRef, { payload: sanitized, updatedAt: serverTimestamp() });
 
       // Dual-write to top-level collection /events/{docId} if rules allow it
       try {

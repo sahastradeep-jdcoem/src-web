@@ -836,8 +836,15 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
 
         let mergedObj: any;
         if (isRemotePlaceholder && !isLocalPlaceholder) {
-          // Local has actual student leader, remote is a generic placeholder -> local takes precedence!
-          mergedObj = { ...remoteObj, ...localObj };
+          // Directive #9: Remote is strictly authoritative for deletions.
+          // If remote does NOT have this leader (deleted in remote), only keep localObj if this device has an active in-flight or recent write!
+          const hasRecentWrite = isLocalWriteRecent("clubs", 15000) || hasPendingWritesFor("clubs");
+          if (hasRecentWrite) {
+            mergedObj = { ...remoteObj, ...localObj };
+          } else {
+            result[k] = undefined;
+            continue;
+          }
         } else if (isLocalPlaceholder && !isRemotePlaceholder) {
           // If local was cleared/deleted and local write is recent or pending, do not resurrect!
           if (isLocalWriteRecent("clubs", 30000) || hasPendingWritesFor("clubs")) {

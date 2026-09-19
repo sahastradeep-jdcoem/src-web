@@ -82,7 +82,7 @@ export async function saveClubLeadersDocument(
     }
   });
 
-  const normalizedLead = payload.lead
+  const normalizedLead = payload.lead && payload.lead.name && !isPlaceholderLeaderName(payload.lead.name)
     ? {
         ...payload.lead,
         avatar:
@@ -90,9 +90,9 @@ export async function saveClubLeadersDocument(
             ? ""
             : payload.lead.avatar || "",
       }
-    : payload.lead;
+    : null;
 
-  const normalizedCoLead = payload.coLead
+  const normalizedCoLead = payload.coLead && payload.coLead.name && !isPlaceholderLeaderName(payload.coLead.name)
     ? {
         ...payload.coLead,
         avatar:
@@ -100,7 +100,7 @@ export async function saveClubLeadersDocument(
             ? ""
             : payload.coLead.avatar || "",
       }
-    : payload.coLead;
+    : null;
 
   const rawMembers = Array.isArray(payload.members) ? payload.members : [];
 
@@ -108,6 +108,7 @@ export async function saveClubLeadersDocument(
     ...payload,
     lead: normalizedLead,
     coLead: normalizedCoLead,
+    coLeads: Array.isArray(payload.coLeads) ? payload.coLeads : [],
     leaders: rawLeaders,
     members: rawMembers,
     updatedAt: Date.now(),
@@ -133,13 +134,9 @@ export async function getClubLeadersDocument(slugOrId: string): Promise<ClubLead
   const docId = getClubLeadersDocId(slugOrId);
   try {
     const remote = await getSiteContentFromFirestore<ClubLeadersDocument>(docId);
-    if (
-      remote &&
-      (remote.lead ||
-        remote.coLead ||
-        (Array.isArray(remote.leaders) && remote.leaders.length > 0) ||
-        (Array.isArray(remote.members) && remote.members.length > 0))
-    ) {
+    if (remote !== null && typeof remote === "object") {
+      // Directive #9: Remote Firestore state is strictly authoritative.
+      // An empty document with 0 leaders is the authoritative truth, not a missing document!
       return remote;
     }
   } catch (err) {
@@ -1205,13 +1202,7 @@ export async function syncClubsFromFirestore(): Promise<ClubItem[]> {
         const leaderDocResult = leaderDocsResults[idx];
         const leaderDoc = leaderDocResult && leaderDocResult.status === "fulfilled" ? leaderDocResult.value : null;
 
-        if (
-          leaderDoc &&
-          (leaderDoc.lead ||
-            leaderDoc.coLead ||
-            (Array.isArray(leaderDoc.leaders) && leaderDoc.leaders.length > 0) ||
-            (Array.isArray(leaderDoc.members) && leaderDoc.members.length > 0))
-        ) {
+        if (leaderDoc) {
           // Cache dedicated leader document in localStorage for instant 0ms reads across tabs
           const slug = club.slug || club.id;
           if (typeof window !== "undefined" && slug) {
@@ -1221,15 +1212,15 @@ export async function syncClubsFromFirestore(): Promise<ClubItem[]> {
             } catch {}
           }
 
-          const leaders = Array.isArray(leaderDoc.leaders) && leaderDoc.leaders.length > 0
+          const leaders = Array.isArray(leaderDoc.leaders)
             ? leaderDoc.leaders
             : (club.leaders || []);
-          const lead = leaderDoc.lead || club.lead;
-          const coLead = leaderDoc.coLead || club.coLead;
-          const coLeads = Array.isArray(leaderDoc.coLeads) && leaderDoc.coLeads.length > 0
+          const lead = leaderDoc.lead !== undefined ? (leaderDoc.lead || undefined) : club.lead;
+          const coLead = leaderDoc.coLead !== undefined ? (leaderDoc.coLead || undefined) : club.coLead;
+          const coLeads = Array.isArray(leaderDoc.coLeads)
             ? leaderDoc.coLeads
             : (club.coLeads || []);
-          const members = Array.isArray(leaderDoc.members) && leaderDoc.members.length > 0
+          const members = Array.isArray(leaderDoc.members)
             ? leaderDoc.members
             : (club.members || []);
 
@@ -1291,32 +1282,14 @@ export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => v
             } catch {}
           }
         }
-        if (
-          leaderDoc &&
-          (leaderDoc.lead ||
-            leaderDoc.coLead ||
-            (Array.isArray(leaderDoc.leaders) && leaderDoc.leaders.length > 0) ||
-            (Array.isArray(leaderDoc.members) && leaderDoc.members.length > 0))
-        ) {
+        if (leaderDoc) {
           return {
             ...club,
-            lead: leaderDoc.lead || club.lead,
-            coLead: leaderDoc.coLead || club.coLead,
-            coLeads: (Array.isArray(leaderDoc.coLeads) && leaderDoc.coLeads.length > 0) ? leaderDoc.coLeads : club.coLeads,
-            leaders: (Array.isArray(leaderDoc.leaders) && leaderDoc.leaders.length > 0) ? leaderDoc.leaders : club.leaders,
-            members: (Array.isArray(leaderDoc.members) && leaderDoc.members.length > 0) ? leaderDoc.members : club.members,
-          };
-        }
-
-        // Fallback to in-memory current to preserve existing leader avatars
-        const currentClub = current.find((c) => c.id === club.id || c.slug === club.slug);
-        if (currentClub && (currentClub.lead?.avatar || currentClub.leaders?.some((l) => l.avatar))) {
-          return {
-            ...club,
-            lead: currentClub.lead || club.lead,
-            coLead: currentClub.coLead || club.coLead,
-            coLeads: currentClub.coLeads || club.coLeads,
-            leaders: currentClub.leaders || club.leaders,
+            lead: leaderDoc.lead !== undefined ? (leaderDoc.lead || undefined) : club.lead,
+            coLead: leaderDoc.coLead !== undefined ? (leaderDoc.coLead || undefined) : club.coLead,
+            coLeads: Array.isArray(leaderDoc.coLeads) ? leaderDoc.coLeads : club.coLeads,
+            leaders: Array.isArray(leaderDoc.leaders) ? leaderDoc.leaders : club.leaders,
+            members: Array.isArray(leaderDoc.members) ? leaderDoc.members : club.members,
           };
         }
 

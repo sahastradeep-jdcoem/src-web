@@ -75,6 +75,11 @@ import {
   getStoredDraftClubs,
   saveStoredDraftClubs,
   syncDraftClubsFromFirestore,
+  syncDraftCouncilFromFirestore,
+  syncDraftHostingFromFirestore,
+  DRAFT_COUNCIL_PREFIX,
+  DRAFT_HOSTING_PREFIX,
+  DRAFT_CLUBS_PREFIX,
   CouncilTenure 
 } from "@/lib/tenureStore";
 import { getStoredDepartments, syncDepartmentsFromFirestore, getDepartmentShortName } from "@/lib/departmentsStore";
@@ -286,12 +291,14 @@ export default function AdminTeamPage() {
       setCouncilMembers(storedCouncil);
       setHostingMembers(getStoredHostingCommittee());
       setFoundingMembersList(storedFounders);
+      setClubsList(getStoredClubs());
     } else if (targetTenure) {
-      const hasRecentTenureWrite = isLocalWriteRecent("council_tenures", 15000) || hasPendingWritesFor("council_tenures");
-      const draftCouncil = hasRecentTenureWrite ? getStoredDraftCouncil(targetTenure.id) : [];
-      const draftHosting = hasRecentTenureWrite ? getStoredDraftHosting(targetTenure.id) : [];
-      const councilList = draftCouncil.length > 0
-        ? draftCouncil
+      const rawCouncil = typeof window !== "undefined" ? localStorage.getItem(`${DRAFT_COUNCIL_PREFIX}${targetTenure.id}`) : null;
+      const rawHosting = typeof window !== "undefined" ? localStorage.getItem(`${DRAFT_HOSTING_PREFIX}${targetTenure.id}`) : null;
+      const rawClubs = typeof window !== "undefined" ? localStorage.getItem(`${DRAFT_CLUBS_PREFIX}${targetTenure.id}`) : null;
+
+      const councilList = rawCouncil !== null
+        ? getStoredDraftCouncil(targetTenure.id)
         : (Array.isArray(targetTenure.adminCouncil) ? targetTenure.adminCouncil : []);
       let founderList = isFirst ? (targetTenure.foundingMembers || getStoredFoundingMembers()) : [];
       if (isFirst && councilList.length > 0 && councilList.length !== founderList.length) {
@@ -299,19 +306,16 @@ export default function AdminTeamPage() {
       }
       setCouncilMembers(councilList);
       setHostingMembers(
-        draftHosting.length > 0
-          ? draftHosting
+        rawHosting !== null
+          ? getStoredDraftHosting(targetTenure.id)
           : (Array.isArray(targetTenure.hostingCommittee) ? targetTenure.hostingCommittee : [])
       );
       setFoundingMembersList(founderList);
-    }
-
-    if (targetTenure?.isCurrent) {
-      setClubsList(getStoredClubs());
-    } else if (targetTenure) {
-      const hasRecentTenureWrite = isLocalWriteRecent("council_tenures", 15000) || hasPendingWritesFor("council_tenures");
-      const draftClubs = hasRecentTenureWrite ? getStoredDraftClubs(targetTenure.id) : [];
-      setClubsList(draftClubs.length > 0 ? draftClubs : (targetTenure.clubs && targetTenure.clubs.length > 0 ? targetTenure.clubs : getStoredClubs()));
+      setClubsList(
+        rawClubs !== null
+          ? getStoredDraftClubs(targetTenure.id)
+          : (Array.isArray(targetTenure.clubs) ? targetTenure.clubs : getStoredClubs())
+      );
     } else {
       setClubsList(getStoredClubs());
     }
@@ -335,16 +339,28 @@ export default function AdminTeamPage() {
       if (res && !isSavingRef.current) loadData();
     });
     syncClubsFromFirestore().then((res) => {
-      if (res && !isSavingRef.current) setClubsList(res);
+      if (res && !isSavingRef.current) {
+        const allTenures = getStoredTenures();
+        const cur = allTenures.find((t) => t.id === (selectedTenureId || "tenure-2025-26"));
+        if (!cur || cur.isCurrent) {
+          setClubsList(res);
+        }
+      }
     });
 
     if (selectedTenureId) {
       const allTenures = getStoredTenures();
       const target = allTenures.find((t) => t.id === selectedTenureId);
       if (target && !target.isCurrent) {
-        syncDraftClubsFromFirestore(selectedTenureId).then((res) => {
-          if (res && Array.isArray(res) && res.length > 0 && !isSavingRef.current) {
-            setClubsList(res);
+        Promise.all([
+          syncDraftCouncilFromFirestore(selectedTenureId),
+          syncDraftHostingFromFirestore(selectedTenureId),
+          syncDraftClubsFromFirestore(selectedTenureId)
+        ]).then(([dCouncil, dHosting, dClubs]) => {
+          if (!isSavingRef.current) {
+            if (dCouncil !== null) setCouncilMembers(dCouncil);
+            if (dHosting !== null) setHostingMembers(dHosting);
+            if (dClubs !== null) setClubsList(dClubs);
           }
         });
       }
@@ -473,12 +489,14 @@ export default function AdminTeamPage() {
       setCouncilMembers(storedCouncil);
       setHostingMembers(getStoredHostingCommittee());
       setFoundingMembersList(storedFounders);
+      setClubsList(getStoredClubs());
     } else if (targetTenure) {
-      const hasRecentTenureWrite = isLocalWriteRecent("council_tenures", 15000) || hasPendingWritesFor("council_tenures");
-      const draftCouncil = hasRecentTenureWrite ? getStoredDraftCouncil(targetTenure.id) : [];
-      const draftHosting = hasRecentTenureWrite ? getStoredDraftHosting(targetTenure.id) : [];
-      const councilList = draftCouncil.length > 0
-        ? draftCouncil
+      const rawCouncil = typeof window !== "undefined" ? localStorage.getItem(`${DRAFT_COUNCIL_PREFIX}${targetTenure.id}`) : null;
+      const rawHosting = typeof window !== "undefined" ? localStorage.getItem(`${DRAFT_HOSTING_PREFIX}${targetTenure.id}`) : null;
+      const rawClubs = typeof window !== "undefined" ? localStorage.getItem(`${DRAFT_CLUBS_PREFIX}${targetTenure.id}`) : null;
+
+      const councilList = rawCouncil !== null
+        ? getStoredDraftCouncil(targetTenure.id)
         : (Array.isArray(targetTenure.adminCouncil) ? targetTenure.adminCouncil : []);
       let founderList = isFirst ? (targetTenure.foundingMembers || getStoredFoundingMembers()) : [];
       if (isFirst && councilList.length > 0 && councilList.length !== founderList.length) {
@@ -486,11 +504,16 @@ export default function AdminTeamPage() {
       }
       setCouncilMembers(councilList);
       setHostingMembers(
-        draftHosting.length > 0
-          ? draftHosting
+        rawHosting !== null
+          ? getStoredDraftHosting(targetTenure.id)
           : (Array.isArray(targetTenure.hostingCommittee) ? targetTenure.hostingCommittee : [])
       );
       setFoundingMembersList(founderList);
+      setClubsList(
+        rawClubs !== null
+          ? getStoredDraftClubs(targetTenure.id)
+          : (Array.isArray(targetTenure.clubs) ? targetTenure.clubs : getStoredClubs())
+      );
     }
   };
 
@@ -657,7 +680,13 @@ export default function AdminTeamPage() {
 
     setClubsList(updatedClubs);
     try {
-      await saveStoredClubs(updatedClubs);
+      if (selectedTenure?.isCurrent) {
+        await saveStoredClubs(updatedClubs);
+        updateTenureRoster(selectedTenure.id, { clubs: updatedClubs }, true);
+      } else if (selectedTenure) {
+        await saveStoredDraftClubs(selectedTenure.id, updatedClubs);
+        updateTenureRoster(selectedTenure.id, { clubs: updatedClubs }, true);
+      }
       await reconcileAllUserDesignations();
 
       const refreshed = updatedClubs.find((c) => c.id === clubIdOrSlug || c.slug === clubIdOrSlug) || null;
@@ -1105,11 +1134,11 @@ export default function AdminTeamPage() {
       setClubsList(updatedClubs);
       isSavingRef.current = true;
       try {
-        await saveStoredClubs(updatedClubs);
         if (selectedTenure?.isCurrent) {
+          await saveStoredClubs(updatedClubs);
           updateTenureRoster(selectedTenure.id, { clubs: updatedClubs }, true);
         } else if (selectedTenure) {
-          saveStoredDraftClubs(selectedTenure.id, updatedClubs);
+          await saveStoredDraftClubs(selectedTenure.id, updatedClubs);
           updateTenureRoster(selectedTenure.id, { clubs: updatedClubs }, true);
         }
         setIsSaved(true);
@@ -1196,8 +1225,8 @@ export default function AdminTeamPage() {
 
         setClubsList(updatedClubs);
         isSavingRef.current = true;
-        await saveStoredClubs(updatedClubs);
         if (selectedTenure?.isCurrent) {
+          await saveStoredClubs(updatedClubs);
           updateTenureRoster(selectedTenure.id, { clubs: updatedClubs }, true);
         } else if (selectedTenure) {
           saveStoredDraftClubs(selectedTenure.id, updatedClubs);
