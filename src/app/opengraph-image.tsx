@@ -4,6 +4,7 @@ import path from "path";
 import { getSiteContentFromFirestore } from "@/lib/firebase/firestore";
 import { HeroSettings, DEFAULT_HERO_SETTINGS } from "@/data/heroSettings";
 
+export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const alt = "SAHASTRADEEP | Student Representative Council • JDCOEM Nagpur";
 export const size = {
@@ -49,65 +50,91 @@ export default async function Image() {
     heroSettings.ogImageUrl &&
     (heroSettings.ogImageUrl.trim().startsWith("http") || heroSettings.ogImageUrl.trim().startsWith("data:image"))
   ) {
-    return new ImageResponse(
-      (
-        <div
-          style={{
-            width: "100%",
-            height: "100%",
-            display: "flex",
-            position: "relative",
-            backgroundColor: "#0B1E3F",
-            overflow: "hidden",
-          }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={heroSettings.ogImageUrl}
-            alt={heroSettings.ogTitle || "SAHASTRADEEP — SRC JDCOEM"}
+    let customImageSrc = heroSettings.ogImageUrl.trim();
+
+    // If it's a remote URL, safely fetch and convert to base64 buffer with timeout
+    if (customImageSrc.startsWith("http")) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const res = await fetch(customImageSrc, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          const buffer = await res.arrayBuffer();
+          const mimeType = res.headers.get("content-type") || "image/jpeg";
+          customImageSrc = `data:${mimeType};base64,${Buffer.from(buffer).toString("base64")}`;
+        } else {
+          customImageSrc = "";
+        }
+      } catch (err) {
+        console.warn("[opengraph-image] Could not fetch remote banner, falling back to generated card:", err);
+        customImageSrc = "";
+      }
+    }
+
+    if (customImageSrc) {
+      return new ImageResponse(
+        (
+          <div
             style={{
               width: "100%",
               height: "100%",
-              objectFit: "cover",
-            }}
-          />
-
-          {/* Optional subtle bottom watermark badge for authenticity */}
-          <div
-            style={{
-              position: "absolute",
-              bottom: "24px",
-              right: "28px",
               display: "flex",
-              alignItems: "center",
-              gap: "10px",
-              padding: "8px 18px",
-              borderRadius: "999px",
-              background: "rgba(15, 23, 42, 0.85)",
-              border: "1px solid rgba(255, 255, 255, 0.25)",
-              color: "#FFFFFF",
-              fontSize: "14px",
-              fontWeight: 700,
-              letterSpacing: "0.05em",
+              position: "relative",
+              backgroundColor: "#0B1E3F",
+              overflow: "hidden",
             }}
           >
-            <div
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={customImageSrc}
+              alt={heroSettings.ogTitle || "SAHASTRADEEP — SRC JDCOEM"}
+              width={1200}
+              height={630}
               style={{
-                width: "8px",
-                height: "8px",
-                borderRadius: "50%",
-                background: "#E78023",
-                display: "flex",
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
               }}
             />
-            srcjdcoem.in
+
+            {/* Optional subtle bottom watermark badge for authenticity */}
+            <div
+              style={{
+                position: "absolute",
+                bottom: "24px",
+                right: "28px",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                padding: "8px 18px",
+                borderRadius: "999px",
+                background: "rgba(15, 23, 42, 0.85)",
+                border: "1px solid rgba(255, 255, 255, 0.25)",
+                color: "#FFFFFF",
+                fontSize: "14px",
+                fontWeight: 700,
+                letterSpacing: "0.05em",
+              }}
+            >
+              <div
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "50%",
+                  background: "#E78023",
+                  display: "flex",
+                }}
+              />
+              srcjdcoem.in
+            </div>
           </div>
-        </div>
-      ),
-      {
-        ...size,
-      }
-    );
+        ),
+        {
+          ...size,
+        }
+      );
+    }
   }
 
   // 4. Case B: Dynamic High-Fidelity Branded Card using Admin Typography & Presets
@@ -174,6 +201,8 @@ export default async function Image() {
             <img
               src={jdHeaderBase64}
               alt="JDCOEM"
+              width={200}
+              height={42}
               style={{
                 height: "42px",
                 objectFit: "contain",
@@ -309,6 +338,8 @@ export default async function Image() {
               <img
                 src={srcLogoBase64}
                 alt="SRC Logo"
+                width={190}
+                height={190}
                 style={{
                   width: "100%",
                   height: "100%",
