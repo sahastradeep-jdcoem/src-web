@@ -204,18 +204,18 @@ export async function renderStoryToCanvas(
   ctx.fillText(typeText, pillX + 16, pillY + pillH / 2);
   ctx.restore();
 
-  // 5. HERO ARTWORK CARD (Y = 270px, Width = 888px, Height = 500px — Exact 16:9 Aspect Ratio)
+  // 5. HERO ARTWORK CARD (Y = 250px, Width = 888px, Height = 500px — Exact 16:9 Aspect Ratio)
   const cardX = 96;
-  const cardY = 270;
+  const cardY = 250;
   const cardW = 888;
   const cardH = 500; // 888 * (9 / 16) = 499.5 ≈ 500px (Exact 16:9)
-  const cardRadius = 32;
+  const cardRadius = 28;
 
   ctx.save();
   // Card Drop Shadow & Ambient Glow
-  ctx.shadowColor = "rgba(0, 0, 0, 0.65)";
-  ctx.shadowBlur = 45;
-  ctx.shadowOffsetY = 24;
+  ctx.shadowColor = "rgba(0, 0, 0, 0.75)";
+  ctx.shadowBlur = 50;
+  ctx.shadowOffsetY = 20;
 
   roundRect(ctx, cardX, cardY, cardW, cardH, cardRadius);
   ctx.fillStyle = "#0B1528";
@@ -268,16 +268,16 @@ export async function renderStoryToCanvas(
 
   ctx.restore();
 
-  // Crisp Hairline Card Border
+  // Crisp Hairline Card Border with high contrast
   ctx.save();
   roundRect(ctx, cardX, cardY, cardW, cardH, cardRadius);
-  ctx.strokeStyle = palette.cardBorder || "rgba(255, 255, 255, 0.26)";
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+  ctx.lineWidth = 2.5;
   ctx.stroke();
   ctx.restore();
 
-  // 6. CONTENT & TYPOGRAPHY SECTION (Starts right below 16:9 card)
-  let currentY = 820;
+  // 6. CONTENT & TYPOGRAPHY SECTION (Starts cleanly below 16:9 card)
+  let currentY = 790;
 
   // Category & Audience Badges Strip
   if (payload.badge) {
@@ -289,7 +289,7 @@ export async function renderStoryToCanvas(
 
     ctx.save();
     roundRect(ctx, 96, currentY, bW, bH, 17);
-    ctx.fillStyle = "rgba(231, 128, 35, 0.9)";
+    ctx.fillStyle = "#E78023";
     ctx.fill();
 
     ctx.fillStyle = "#FFFFFF";
@@ -297,13 +297,13 @@ export async function renderStoryToCanvas(
     ctx.fillText(badgeText, 96 + 14, currentY + bH / 2);
     ctx.restore();
 
-    currentY += 52;
+    currentY += 50;
   }
 
-  // Event / Form Title (Adaptive Font Size + Smart Line Wrap)
-  let titleFontSize = 58;
-  if (payload.title.length > 50) titleFontSize = 46;
-  else if (payload.title.length > 30) titleFontSize = 52;
+  // Event / Form Title (High-contrast, bold typography)
+  let titleFontSize = 62;
+  if (payload.title.length > 45) titleFontSize = 48;
+  else if (payload.title.length > 25) titleFontSize = 54;
 
   ctx.font = `900 ${titleFontSize}px system-ui, -apple-system, sans-serif`;
   ctx.fillStyle = "#FFFFFF";
@@ -312,20 +312,20 @@ export async function renderStoryToCanvas(
   const wrappedTitleLines = wrapText(ctx, payload.title.toUpperCase(), 888, 3);
   for (const line of wrappedTitleLines) {
     ctx.fillText(line, 96, currentY);
-    currentY += titleFontSize * 1.15;
+    currentY += titleFontSize * 1.16;
   }
-  currentY += 16;
+  currentY += 14;
 
-  // Subtitle / Tagline (if present)
+  // Subtitle / Tagline (clean, high legibility)
   if (payload.subtitle && wrappedTitleLines.length <= 2) {
     ctx.font = "500 24px system-ui, -apple-system, sans-serif";
-    ctx.fillStyle = "rgba(226, 232, 240, 0.88)";
+    ctx.fillStyle = "rgba(241, 245, 249, 0.9)";
     const subLines = wrapText(ctx, payload.subtitle, 888, 2);
     for (const sLine of subLines) {
       ctx.fillText(sLine, 96, currentY);
       currentY += 34;
     }
-    currentY += 12;
+    currentY += 16;
   }
 
   // 7. METADATA CARDS (Date, Time, Venue / Deadline)
@@ -348,24 +348,24 @@ export async function renderStoryToCanvas(
   }
 
   if (metaItems.length > 0) {
-    const metaContainerY = Math.min(currentY, 1420);
+    const metaContainerY = Math.min(Math.max(currentY, 1180), 1360);
     const metaColWidth = metaItems.length >= 3 ? 282 : metaItems.length === 2 ? 430 : 888;
 
     metaItems.slice(0, 3).forEach((item, idx) => {
       const mX = 96 + idx * (metaColWidth + 18);
       const mY = metaContainerY;
-      const mH = 88;
+      const mH = 92;
 
       ctx.save();
       roundRect(ctx, mX, mY, metaColWidth, mH, 20);
-      ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.09)";
       ctx.fill();
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.22)";
+      ctx.lineWidth = 1.5;
       ctx.stroke();
 
       // Label
-      ctx.fillStyle = "#E78023";
+      ctx.fillStyle = "#FFB366";
       ctx.font = "800 13px system-ui, -apple-system, sans-serif";
       ctx.textBaseline = "top";
       ctx.fillText(`${item.iconSymbol} ${item.label}`, mX + 18, mY + 16);
@@ -373,7 +373,6 @@ export async function renderStoryToCanvas(
       // Value
       ctx.fillStyle = "#FFFFFF";
       ctx.font = "700 20px system-ui, -apple-system, sans-serif";
-      // Truncate value if too long for column
       let displayVal = item.value;
       while (ctx.measureText(displayVal).width > metaColWidth - 36 && displayVal.length > 4) {
         displayVal = displayVal.slice(0, -1).trim();
@@ -384,21 +383,21 @@ export async function renderStoryToCanvas(
       ctx.restore();
     });
 
-    currentY = metaContainerY + 110;
+    currentY = metaContainerY + 120;
   }
 
   // Organizer Credit
   if (payload.organizer) {
-    ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
-    ctx.font = "600 17px system-ui, -apple-system, sans-serif";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+    ctx.font = "600 18px system-ui, -apple-system, sans-serif";
     ctx.textBaseline = "top";
     ctx.fillText(`Organized by: ${payload.organizer}`, 96, currentY);
-    currentY += 34;
+    currentY += 36;
   }
 
   // 8. BOTTOM FOOTER & DESTINATION CALLOUT (Instagram Bottom Safe Zone Clearance)
-  const footerY = 1660;
-  const qrSize = 136;
+  const footerY = 1630;
+  const qrSize = 144;
   const hasQr = Boolean(options.includeQrCode);
 
   if (hasQr) {
@@ -417,11 +416,11 @@ export async function renderStoryToCanvas(
       const qrX = 1080 - 96 - qrSize - 16;
       const qrY = footerY - 10;
       ctx.save();
-      roundRect(ctx, qrX, qrY, qrSize + 16, qrSize + 16, 20);
+      roundRect(ctx, qrX, qrY, qrSize + 16, qrSize + 16, 22);
       ctx.fillStyle = "#FFFFFF";
       ctx.fill();
-      ctx.shadowColor = "rgba(0,0,0,0.5)";
-      ctx.shadowBlur = 20;
+      ctx.shadowColor = "rgba(0,0,0,0.6)";
+      ctx.shadowBlur = 24;
       ctx.drawImage(qrImg, qrX + 8, qrY + 8, qrSize, qrSize);
       ctx.restore();
     } catch (e) {
@@ -432,35 +431,35 @@ export async function renderStoryToCanvas(
   // Pill CTA: "Link in Story / Scan to Explore"
   const ctaWidth = hasQr ? 680 : 888;
   ctx.save();
-  roundRect(ctx, 96, footerY, ctaWidth, 80, 24);
+  roundRect(ctx, 96, footerY, ctaWidth, 84, 24);
   const ctaGrad = ctx.createLinearGradient(96, footerY, 96 + ctaWidth, footerY);
   ctaGrad.addColorStop(0, "#E78023");
-  ctaGrad.addColorStop(1, "#FF9B3F");
+  ctaGrad.addColorStop(1, "#F59E0B");
   ctx.fillStyle = ctaGrad;
   ctx.fill();
 
   ctx.fillStyle = "#FFFFFF";
-  ctx.font = "bold 22px system-ui, -apple-system, sans-serif";
+  ctx.font = "bold 23px system-ui, -apple-system, sans-serif";
   ctx.textBaseline = "middle";
   const ctaTitle = payload.ctaText || (payload.type === "event" ? "Tap Link Sticker to View" : "Tap Link to Participate");
-  ctx.fillText(`🔗  ${ctaTitle}`, 124, footerY + 40);
+  ctx.fillText(`🔗  ${ctaTitle}`, 124, footerY + 42);
 
   // Arrow symbol on right of CTA
   ctx.font = "900 24px system-ui, -apple-system, sans-serif";
-  ctx.fillText("→", 96 + ctaWidth - 48, footerY + 40);
+  ctx.fillText("→", 96 + ctaWidth - 48, footerY + 42);
   ctx.restore();
 
   // Canonical Clean URL Display
   const cleanDisplayUrl = payload.url.replace(/^https?:\/\//, "");
-  ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
-  ctx.font = "600 18px system-ui, -apple-system, sans-serif";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+  ctx.font = "700 19px system-ui, -apple-system, sans-serif";
   ctx.textBaseline = "top";
-  ctx.fillText(cleanDisplayUrl, 96, footerY + 96);
+  ctx.fillText(cleanDisplayUrl, 96, footerY + 104);
 
   // Institution Accreditation
-  ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
-  ctx.font = "500 14px system-ui, -apple-system, sans-serif";
-  ctx.fillText("JD College of Engineering & Management, Nagpur • An Autonomous Institute", 96, footerY + 124);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+  ctx.font = "500 15px system-ui, -apple-system, sans-serif";
+  ctx.fillText("JD College of Engineering & Management, Nagpur • An Autonomous Institute", 96, footerY + 134);
 
   return canvas;
 }
