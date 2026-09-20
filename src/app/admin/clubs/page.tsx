@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { 
@@ -25,7 +25,7 @@ import {
   ArrowDown,
   ArrowUpDown
 } from "lucide-react";
-import { getStoredClubs, saveStoredClubs, syncClubsFromFirestore, getClubLeaders } from "@/lib/councilStore";
+import { getStoredClubs, saveStoredClubs, saveStoredClubsOrderOnly, syncClubsFromFirestore, getClubLeaders } from "@/lib/councilStore";
 import { reconcileAllUserDesignations } from "@/lib/usersStore";
 import { compactClubDataset } from "@/lib/dataSyncEngine";
 import { 
@@ -58,6 +58,7 @@ export default function AdminClubsPage() {
   const [isSaved, setIsSaved] = useState(false);
   const [isSavingList, setIsSavingList] = useState(false);
   const [pendingUploads, setPendingUploads] = useState(0);
+  const reorderSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleUploadStateChange = (uploading: boolean) => {
     setPendingUploads((prev) => Math.max(0, prev + (uploading ? 1 : -1)));
@@ -149,6 +150,10 @@ export default function AdminClubsPage() {
       window.removeEventListener("src_clubs_updated", handleUpdate);
       window.removeEventListener("src_draft_clubs_updated", handleDraftClubsUpdate);
       window.removeEventListener("storage", handleUpdate);
+      // Cleanup debounce timer on unmount
+      if (reorderSaveTimerRef.current) {
+        clearTimeout(reorderSaveTimerRef.current);
+      }
     };
   }, [selectedTenureId]);
 
@@ -175,7 +180,9 @@ export default function AdminClubsPage() {
       if (selectedTenure?.isCurrent) {
         // LIVE TENURE: Persist to live clubs store (localStorage & Firestore site_content/clubs)
         await saveStoredClubs(updated);
-        updateTenureRoster(selectedTenure.id, { clubs: updated });
+        // skipActiveStoreSync=true: saveStoredClubs above already did the full cloud write,
+        // updateTenureRoster must NOT call saveStoredClubs a second time!
+        updateTenureRoster(selectedTenure.id, { clubs: updated }, true);
       } else if (selectedTenure) {
         // DRAFT SESSION: Strictly isolated to draft tenure! NEVER touch live stores!
         await saveStoredDraftClubs(selectedTenure.id, updated);
@@ -351,7 +358,32 @@ export default function AdminClubsPage() {
       order: idx + 1,
     }));
 
-    saveList(resequenced);
+    // 1. Instant optimistic UI update — zero latency
+    setClubs(resequenced);
+
+    // 2. Debounced cloud save — batches rapid arrow clicks into a single Firestore write
+    if (reorderSaveTimerRef.current) {
+      clearTimeout(reorderSaveTimerRef.current);
+    }
+    reorderSaveTimerRef.current = setTimeout(async () => {
+      setIsSavingList(true);
+      try {
+        if (selectedTenure?.isCurrent) {
+          // Use the lightweight order-only save — skips N individual leader doc writes
+          await saveStoredClubsOrderOnly(resequenced);
+          updateTenureRoster(selectedTenure.id, { clubs: resequenced }, true);
+        } else if (selectedTenure) {
+          await saveStoredDraftClubs(selectedTenure.id, resequenced);
+          updateTenureRoster(selectedTenure.id, { clubs: resequenced });
+        }
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 3000);
+      } catch (error) {
+        console.error("Failed to save club reorder:", error);
+      } finally {
+        setIsSavingList(false);
+      }
+    }, 600);
   };
 
   const handleResetDefaults = () => {

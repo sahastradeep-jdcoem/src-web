@@ -1185,6 +1185,72 @@ export async function saveStoredClubs(clubs: ClubItem[]): Promise<void> {
   }
 }
 
+/**
+ * Lightweight save that only persists club order/sequence changes to Firestore.
+ * Skips the expensive per-club leader document rewrites since leader data hasn't changed.
+ * Use this for reorder operations (arrow up/down) where only `order` fields change.
+ */
+export async function saveStoredClubsOrderOnly(clubs: ClubItem[]): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    // 1. Synchronize avatars in memory
+    const syncedClubs = hydrateClubAvatars(clubs);
+
+    // 2. SKIP leader document rewrites — order change doesn't affect leader data!
+
+    // 3. Compact presentation media for the master catalog
+    const compacted = await compactClubDataset(syncedClubs);
+    const sanitized = cleanUndefined(compacted);
+
+    // 4. Strip heavy base64 leader avatars for the master document
+    const strippedMasterPayload = sanitized.map((c) => ({
+      ...c,
+      lead: c.lead ? { ...c.lead, avatar: "" } : c.lead,
+      coLead: c.coLead ? { ...c.coLead, avatar: "" } : c.coLead,
+      coLeads: Array.isArray(c.coLeads) ? c.coLeads.map((cl) => ({ ...cl, avatar: "" })) : c.coLeads,
+      leaders: Array.isArray(c.leaders) ? c.leaders.map((l) => ({ ...l, avatar: "" })) : c.leaders,
+      members: Array.isArray(c.members) ? c.members : [],
+    }));
+
+    markLocalWrite("clubs");
+    try {
+      localStorage.setItem("src_clubs_roster", JSON.stringify(syncedClubs));
+    } catch (lsErr) {
+      console.warn("Direct localStorage write notice for clubs (order-only), applying fallback:", lsErr);
+      try {
+        localStorage.setItem("src_clubs_roster", JSON.stringify(strippedMasterPayload));
+      } catch (err2) {
+        console.error("Critical: Failed to save clubs to localStorage even after fallback", err2);
+      }
+    }
+    window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: syncedClubs }));
+    window.dispatchEvent(new CustomEvent("src_tenures_updated"));
+
+    // 5. Direct cloud write & queue backup for the master catalog document only
+    let cloudWriteError: any = null;
+    try {
+      await saveSiteContentToFirestore("clubs", strippedMasterPayload);
+    } catch (err) {
+      console.warn("Firestore direct write for clubs (order-only) failed, enqueuing:", err);
+      cloudWriteError = err;
+    }
+    enqueueCloudWrite("clubs", strippedMasterPayload, `Clubs Directory Reorder (${clubs.length} Clubs)`);
+
+    if (cloudWriteError) {
+      const errMsg = cloudWriteError?.message || String(cloudWriteError);
+      if (errMsg.includes("permission-denied") || errMsg.includes("Missing or insufficient permissions")) {
+        throw new Error("Admin session expired. Please refresh the page and sign in again.");
+      }
+      if (errMsg.includes("longer than") || errMsg.includes("exceeds the maximum") || errMsg.includes("invalid-argument")) {
+        throw new Error(`Cloud document size limit reached: ${errMsg}`);
+      }
+    }
+  } catch (e) {
+    console.error("Could not save clubs order to storage", e);
+    throw e;
+  }
+}
+
 export async function syncClubsFromFirestore(): Promise<ClubItem[]> {
   try {
     const requestTime = Date.now();
