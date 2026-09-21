@@ -1417,7 +1417,7 @@ export async function getEventFromFirestore(eventIdOrSlug: string): Promise<Even
 }
 
 /**
- * Subscribe to real-time updates of events across all storage locations
+ * Subscribe to real-time updates of events across all storage locations.
  * Debounces emissions by 100ms so all initial snapshots settle before emitting,
  * preventing race conditions where a partial collection overwrites the full dataset.
  */
@@ -1436,7 +1436,16 @@ export function subscribeToEventsFromFirestore(
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // Both collections must deliver their first snapshot before we emit.
+  // Without this guard, whichever collection arrives first emits a partial list
+  // (e.g. only /events docs arrive, site_content hasn't loaded yet → 1 event shown).
+  let collectionReady = false;
+  let siteContentReady = false;
+
   const emitMerged = () => {
+    // Do not emit until both sources have provided at least one snapshot
+    if (!collectionReady || !siteContentReady) return;
+
     const mergedMap = new Map<string, EventItem>();
 
     // 1. Legacy catalog site_content/events (lowest priority)
@@ -1498,17 +1507,22 @@ export function subscribeToEventsFromFirestore(
           const key = evt.id || evt.slug || d.id;
           collectionEventsMap.set(key, evt);
         });
+        collectionReady = true;
         scheduleEmit();
       },
       (error) => {
         if (error?.code !== "permission-denied" && !error?.message?.includes("Missing or insufficient permissions")) {
           console.warn("Firestore live events collection notice:", error);
         }
+        // Mark ready even on error so site_content alone can still unblock emission
+        collectionReady = true;
+        scheduleEmit();
       }
     );
     unsubscribers.push(unsub);
   } catch (e) {
     console.warn("Firestore subscription error for events collection:", e);
+    collectionReady = true; // Unblock in case this collection errors at setup
   }
 
   // 2. Subscribe to site_content collection to capture dedicated site_content/event_* docs, tombstones, and site_content/events catalog
@@ -1564,15 +1578,20 @@ export function subscribeToEventsFromFirestore(
             }
           }
         });
+        siteContentReady = true;
         scheduleEmit();
       },
       (error) => {
         console.warn("Firestore subscription notice for site_content events:", error);
+        // Mark ready even on error so /events collection alone can still unblock emission
+        siteContentReady = true;
+        scheduleEmit();
       }
     );
     unsubscribers.push(unsub);
   } catch (e) {
     console.warn("Firestore subscription error for site_content events:", e);
+    siteContentReady = true; // Unblock in case this collection errors at setup
   }
 
   return () => {
