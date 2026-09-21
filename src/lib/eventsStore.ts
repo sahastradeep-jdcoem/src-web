@@ -15,7 +15,6 @@ import {
   hasPendingWritesFor, 
   markLocalWrite,
   getLastLocalWriteTime,
-  isLocalWriteRecent,
   compactEventDataset,
   purgePendingQueueFor
 } from "./dataSyncEngine";
@@ -551,14 +550,15 @@ export async function syncEventsFromFirestore(): Promise<EventItem[]> {
 export function subscribeToEvents(callback: (events: EventItem[]) => void): () => void {
   return subscribeToEventsFromFirestore((remote) => {
     if (remote !== null && Array.isArray(remote)) {
-      // Only skip if an active local write is in-flight (we just saved, data hasn't propagated yet)
-      if (hasPendingWritesFor("events") || isLocalWriteRecent("events", 15000)) return;
+      // Only skip if an admin save is actively in-flight (pending queue not yet flushed to Firestore).
+      // Do NOT use isLocalWriteRecent here — that 15s window blocks the public /events page from
+      // updating after any admin change, causing stale-data on first load (visible → refresh required).
+      if (hasPendingWritesFor("events")) return;
 
       const current = getStoredEvents();
 
       // CRITICAL: Do NOT bail when remote is empty if there are no pending local writes.
       // An empty remote after tombstone-deletion IS the authoritative state.
-      // We rely on the existing hasPendingWritesFor / isLocalWriteRecent guard above for that.
 
       // Remote Firestore state is strictly authoritative (Directive #9)
       const rawMerged = reconcileArrayDatasets(current, remote);
