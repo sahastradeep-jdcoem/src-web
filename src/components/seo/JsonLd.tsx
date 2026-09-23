@@ -27,7 +27,7 @@ interface JsonLdProps {
 }
 
 export function JsonLd({ type = "Organization", leadershipData, eventData }: JsonLdProps) {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.srcjdcoem.in";
+  const baseUrl = "https://www.srcjdcoem.in";
 
   /* ── WebSite Schema ── */
   if (type === "WebSite") {
