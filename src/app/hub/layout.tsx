@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Hub | SAHASTRADEEP • SRC JDCOEM",
     description: "Explore opportunities, campus polls, applications, contests, and student support on the SRC JDCOEM Student Engagement Hub.",
-    url: "https://srcjdcoem.in/hub",
+    url: "https://www.srcjdcoem.in/hub",
     siteName: "Sahastradeep - SRC JDCOEM",
   },
   twitter: {

@@ -3,10 +3,13 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Gallery",
   description: "Browse photos and highlights from events, fests, and campus activities organized by the Student Representative Council at JDCOEM Nagpur.",
+  alternates: {
+    canonical: "https://www.srcjdcoem.in/gallery",
+  },
   openGraph: {
     title: "Gallery | SAHASTRADEEP • SRC JDCOEM",
     description: "Photo gallery from SRC JDCOEM events, flagship fests, and campus moments.",
-    url: "https://srcjdcoem.in/gallery",
+    url: "https://www.srcjdcoem.in/gallery",
     siteName: "Sahastradeep - SRC JDCOEM",
   },
   twitter: {

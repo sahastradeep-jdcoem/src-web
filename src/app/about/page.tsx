@@ -20,10 +20,13 @@ import { PillarsOfStrengthSection } from "@/components/team/PillarsOfStrengthSec
 export const metadata: Metadata = {
   title: "About Us",
   description: "Learn about the mission, vision, history, and patron leadership of the Student Representative Council (SRC) at JD College of Engineering & Management, Nagpur.",
+  alternates: {
+    canonical: "https://www.srcjdcoem.in/about",
+  },
   openGraph: {
     title: "About Us | SAHASTRADEEP • SRC JDCOEM",
     description: "Discover the governance, institutional pillars, and founding history of the Student Representative Council of JDCOEM Nagpur.",
-    url: "https://srcjdcoem.in/about",
+    url: "https://www.srcjdcoem.in/about",
     siteName: "Sahastradeep - SRC JDCOEM",
   },
   twitter: {

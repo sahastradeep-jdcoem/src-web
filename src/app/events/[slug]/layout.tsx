@@ -42,10 +42,13 @@ export async function generateMetadata({
     return {
       title: "Event Details",
       description: "Explore collegiate events, competitions, and festivals organized by the Student Representative Council at JDCOEM Nagpur.",
+      alternates: {
+        canonical: `https://www.srcjdcoem.in/events/${slug}`,
+      },
       openGraph: {
         title: "Event Details | SAHASTRADEEP • SRC JDCOEM",
         description: "Explore collegiate events, competitions, and festivals organized by the Student Representative Council at JDCOEM Nagpur.",
-        url: `https://srcjdcoem.in/events/${slug}`,
+        url: `https://www.srcjdcoem.in/events/${slug}`,
         siteName: "Sahastradeep - SRC JDCOEM",
         images: [
           {
@@ -71,11 +74,14 @@ export async function generateMetadata({
   const thumbnailRaw = event.cardImage || event.posterImage || event.poster || event.headerImage;
   const ogImageUrl = getValidOgImageUrl(thumbnailRaw);
 
-  const eventUrl = `https://srcjdcoem.in/events/${event.slug || slug}`;
+  const eventUrl = `https://www.srcjdcoem.in/events/${event.slug || slug}`;
 
   return {
     title: `${title} | SRC JDCOEM`,
     description: cleanDescription,
+    alternates: {
+      canonical: eventUrl,
+    },
     openGraph: {
       title: `${title} | SRC JDCOEM`,
       description: cleanDescription,

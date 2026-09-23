@@ -12,6 +12,18 @@ import { Badge } from "@/components/ui/Badge";
 export const metadata: Metadata = {
   title: "Sahastradeep - SRC JDCOEM | Student Representative Council • JDCOEM",
   description: "Official digital gateway to the Student Representative Council (SRC) of JD College of Engineering & Management. Explore flagship collegiate fests, 12 student clubs, and campus leadership.",
+  alternates: {
+    canonical: "https://www.srcjdcoem.in",
+  },
+  keywords: [
+    "SRC JDCOEM",
+    "Sahastradeep",
+    "Student Representative Council",
+    "JDCOEM Nagpur",
+    "JD College of Engineering and Management",
+    "SRC",
+    "Sahastradeep JDCOEM",
+  ],
   openGraph: {
     title: "Sahastradeep - SRC JDCOEM",
     description: "Official portal of SRC JDCOEM Nagpur. Flagship fests, 12 chartered clubs, and digital delegate passes.",

@@ -52,10 +52,13 @@ export async function generateMetadata({
     return {
       title: "SRC Form & Opportunity | Engagement Hub",
       description: "Official applications, forms, polls, and opportunities by SRC JDCOEM.",
+      alternates: {
+        canonical: `https://www.srcjdcoem.in/hub/${slug}`,
+      },
       openGraph: {
         title: "SRC Form & Opportunity | Engagement Hub",
         description: "Official applications, forms, polls, and opportunities by SRC JDCOEM.",
-        url: `https://srcjdcoem.in/hub/${slug}`,
+        url: `https://www.srcjdcoem.in/hub/${slug}`,
         siteName: "Sahastradeep - SRC JDCOEM",
         images: [
           {
@@ -81,11 +84,14 @@ export async function generateMetadata({
   const headerImageRaw = listing.coverImage || listing.bannerImage;
   const ogImageUrl = getValidOgImageUrl(headerImageRaw);
 
-  const listingUrl = `https://srcjdcoem.in/hub/${listing.slug || slug}`;
+  const listingUrl = `https://www.srcjdcoem.in/hub/${listing.slug || slug}`;
 
   return {
     title: `${title} | SRC JDCOEM`,
     description: cleanDescription,
+    alternates: {
+      canonical: listingUrl,
+    },
     openGraph: {
       title: `${title} | SRC JDCOEM`,
       description: cleanDescription,

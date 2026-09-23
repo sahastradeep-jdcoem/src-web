@@ -27,7 +27,7 @@ interface JsonLdProps {
 }
 
 export function JsonLd({ type = "Organization", leadershipData, eventData }: JsonLdProps) {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://srcjdcoem.in";
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.srcjdcoem.in";
 
   /* ── WebSite Schema ── */
   if (type === "WebSite") {
@@ -36,12 +36,13 @@ export function JsonLd({ type = "Organization", leadershipData, eventData }: Jso
       "@type": "WebSite",
       name: "Sahastradeep - SRC JDCOEM",
       alternateName: [
-        "Sahastradeep",
         "SRC JDCOEM",
+        "Sahastradeep",
         "SAHASTRADEEP",
         "Student Representative Council JDCOEM",
         "SRC JDCOEM Nagpur",
         "SAHASTRADEEP — SRC JDCOEM",
+        "JDCOEM SRC",
       ],
       url: "https://www.srcjdcoem.in",
     };

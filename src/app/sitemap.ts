@@ -4,7 +4,7 @@ import { getAllEventsFromFirestore } from "@/lib/firebase/firestore";
 import { EventItem } from "@/types";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://srcjdcoem.in";
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.srcjdcoem.in";
   const now = new Date();
 
   // Static core routes
