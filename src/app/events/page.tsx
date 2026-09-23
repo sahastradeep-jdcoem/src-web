@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { 
   Search, 
@@ -33,6 +33,8 @@ export default function EventsPage() {
   const [tenuresList, setTenuresList] = useState<CouncilTenure[]>([]);
   const [currentTenureLabel, setCurrentTenureLabel] = useState("2025–26");
   const [searchQuery, setSearchQuery] = useState("");
+  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
+  const hasSynced = useRef(false);
 
   const refreshTenures = () => {
     const pub = getPublicTenures();
@@ -44,18 +46,40 @@ export default function EventsPage() {
   };
 
   useEffect(() => {
-    setEventsList(getStoredEvents());
+    // Show cached localStorage data ONLY if it has a reasonable number of events.
+    // Stale/partial cache (e.g. 1 event from Firestore SDK cache) must not flash.
+    const cached = getStoredEvents();
+    if (cached.length > 1) {
+      setEventsList(cached);
+      setIsLoadingEvents(false);
+    }
     refreshTenures();
 
+    // Primary data source: fetch from Firestore server (bypasses SDK cache)
     syncEventsFromFirestore().then((res) => {
-      if (res && Array.isArray(res)) setEventsList(res);
+      if (res && Array.isArray(res)) {
+        hasSynced.current = true;
+        setEventsList(res);
+        setIsLoadingEvents(false);
+      }
+    }).catch(() => {
+      // On sync error, fall back to whatever we have (even stale cache)
+      if (!hasSynced.current) {
+        setEventsList(getStoredEvents());
+        setIsLoadingEvents(false);
+      }
     });
+
     syncTenuresFromFirestore().then((res) => {
       if (res && Array.isArray(res)) refreshTenures();
     });
 
     const unsubscribeEvents = subscribeToEvents((remoteEvents) => {
-      if (Array.isArray(remoteEvents)) setEventsList(remoteEvents);
+      if (Array.isArray(remoteEvents)) {
+        hasSynced.current = true;
+        setEventsList(remoteEvents);
+        setIsLoadingEvents(false);
+      }
     });
 
     const unsubscribeTenures = subscribeToTenures(() => {
@@ -68,8 +92,18 @@ export default function EventsPage() {
       } else {
         setEventsList(getStoredEvents());
       }
+      setIsLoadingEvents(false);
       refreshTenures();
     };
+
+    // Timeout: if sync + subscription haven't delivered after 4 seconds, show whatever we have
+    const syncTimeout = setTimeout(() => {
+      if (!hasSynced.current) {
+        const fallback = getStoredEvents();
+        if (fallback.length > 0) setEventsList(fallback);
+        setIsLoadingEvents(false);
+      }
+    }, 4000);
 
     window.addEventListener("src_events_updated", handleUpdate);
     window.addEventListener("src_tenures_updated", handleUpdate);
@@ -77,6 +111,7 @@ export default function EventsPage() {
     window.addEventListener("storage", handleUpdate);
 
     return () => {
+      clearTimeout(syncTimeout);
       unsubscribeEvents();
       unsubscribeTenures();
       window.removeEventListener("src_events_updated", handleUpdate);
@@ -200,7 +235,20 @@ export default function EventsPage() {
             </div>
           )}
 
-          {activeUpcomingEvents.length > 0 ? (
+          {isLoadingEvents && activeUpcomingEvents.length === 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="rounded-3xl bg-white border border-slate-200 overflow-hidden animate-pulse">
+                  <div className="h-48 bg-slate-100" />
+                  <div className="p-5 space-y-3">
+                    <div className="h-5 bg-slate-100 rounded-lg w-3/4" />
+                    <div className="h-3 bg-slate-100 rounded-lg w-1/2" />
+                    <div className="h-10 bg-slate-100 rounded-xl w-full mt-4" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : activeUpcomingEvents.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {activeUpcomingEvents.map((evt) => (
                 <EventCard key={evt.id} event={evt} />

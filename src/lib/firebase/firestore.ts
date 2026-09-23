@@ -1418,8 +1418,16 @@ export async function getEventFromFirestore(eventIdOrSlug: string): Promise<Even
 
 /**
  * Subscribe to real-time updates of events across all storage locations.
- * Debounces emissions by 100ms so all initial snapshots settle before emitting,
- * preventing race conditions where a partial collection overwrites the full dataset.
+ *
+ * IMPORTANT: Firestore onSnapshot fires from the LOCAL CACHE first (~10ms) before
+ * the SERVER response (~500ms). The cache often has only partial data (e.g. 1 event
+ * that was saved to /events collection). If we emit from cache, the subscription
+ * overwrites localStorage and inMemoryEvents with that 1 event, causing a stale-data
+ * flash on the public /events page.
+ *
+ * To prevent this, we use snapshot.metadata.fromCache to skip pure-cache emissions.
+ * We only emit after at least one SERVER snapshot has arrived from each collection.
+ * A 3-second fallback timer ensures offline users still see cached data.
  */
 export function subscribeToEventsFromFirestore(
   callback: (events: EventItem[]) => void
@@ -1436,15 +1444,35 @@ export function subscribeToEventsFromFirestore(
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Both collections must deliver their first snapshot before we emit.
-  // Without this guard, whichever collection arrives first emits a partial list
-  // (e.g. only /events docs arrive, site_content hasn't loaded yet → 1 event shown).
+  // Gate 1: Both collections must deliver at least one snapshot (cache or server)
   let collectionReady = false;
   let siteContentReady = false;
 
+  // Gate 2: At least one collection must deliver a SERVER snapshot (not from cache).
+  // This prevents emitting stale/partial cache data that overwrites good localStorage.
+  let collectionFromServer = false;
+  let siteContentFromServer = false;
+
+  // Fallback: if the user is offline, all snapshots are fromCache.
+  // After 3 seconds, accept cache data as final so the UI isn't permanently empty.
+  let offlineFallbackFired = false;
+  const offlineFallback = setTimeout(() => {
+    offlineFallbackFired = true;
+    if (collectionReady && siteContentReady && !collectionFromServer && !siteContentFromServer) {
+      // Both delivered from cache, server never responded — user is offline
+      scheduleEmit();
+    }
+  }, 3000);
+
+  const hasServerData = () => collectionFromServer || siteContentFromServer || offlineFallbackFired;
+
   const emitMerged = () => {
-    // Do not emit until both sources have provided at least one snapshot
+    // Don't emit until both sources have provided at least one snapshot
     if (!collectionReady || !siteContentReady) return;
+
+    // Don't emit until at least one source has provided SERVER data (not just cache).
+    // Cache snapshots often contain partial/stale data that would overwrite good state.
+    if (!hasServerData()) return;
 
     const mergedMap = new Map<string, EventItem>();
 
@@ -1508,21 +1536,25 @@ export function subscribeToEventsFromFirestore(
           collectionEventsMap.set(key, evt);
         });
         collectionReady = true;
+        if (!snapshot.metadata.fromCache) {
+          collectionFromServer = true;
+        }
         scheduleEmit();
       },
       (error) => {
         if (error?.code !== "permission-denied" && !error?.message?.includes("Missing or insufficient permissions")) {
           console.warn("Firestore live events collection notice:", error);
         }
-        // Mark ready even on error so site_content alone can still unblock emission
         collectionReady = true;
+        collectionFromServer = true; // On error, unblock so site_content alone can emit
         scheduleEmit();
       }
     );
     unsubscribers.push(unsub);
   } catch (e) {
     console.warn("Firestore subscription error for events collection:", e);
-    collectionReady = true; // Unblock in case this collection errors at setup
+    collectionReady = true;
+    collectionFromServer = true;
   }
 
   // 2. Subscribe to site_content collection to capture dedicated site_content/event_* docs, tombstones, and site_content/events catalog
@@ -1579,23 +1611,28 @@ export function subscribeToEventsFromFirestore(
           }
         });
         siteContentReady = true;
+        if (!snapshot.metadata.fromCache) {
+          siteContentFromServer = true;
+        }
         scheduleEmit();
       },
       (error) => {
         console.warn("Firestore subscription notice for site_content events:", error);
-        // Mark ready even on error so /events collection alone can still unblock emission
         siteContentReady = true;
+        siteContentFromServer = true; // On error, unblock so /events alone can emit
         scheduleEmit();
       }
     );
     unsubscribers.push(unsub);
   } catch (e) {
     console.warn("Firestore subscription error for site_content events:", e);
-    siteContentReady = true; // Unblock in case this collection errors at setup
+    siteContentReady = true;
+    siteContentFromServer = true;
   }
 
   return () => {
     if (debounceTimer) clearTimeout(debounceTimer);
+    clearTimeout(offlineFallback);
     unsubscribers.forEach((fn) => fn());
   };
 }
