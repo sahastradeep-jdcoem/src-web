@@ -1432,10 +1432,15 @@ export function subscribeToEventsFromFirestore(
   const tombstonesMap = new Map<string, boolean>();
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-  let hasReceivedSnapshot = false;
+  let hasReceivedServerSnapshot = false;
+  let hasReceivedAnySnapshot = false;
 
   const emitMerged = () => {
-    if (!hasReceivedSnapshot) return;
+    // Only emit if we have received a server snapshot OR if we have non-empty events from cache.
+    // Never emit an empty list from a pure cache snapshot while waiting for server response!
+    if (!hasReceivedServerSnapshot && collectionEventsMap.size === 0) {
+      return;
+    }
 
     const validEvents: EventItem[] = [];
     collectionEventsMap.forEach((evt, key) => {
@@ -1463,6 +1468,14 @@ export function subscribeToEventsFromFirestore(
       emitMerged();
     }, 40);
   };
+
+  // Offline fallback: if no server response arrives in 3.5 seconds, emit whatever was cached
+  const offlineFallback = setTimeout(() => {
+    if (!hasReceivedServerSnapshot && hasReceivedAnySnapshot) {
+      hasReceivedServerSnapshot = true;
+      emitMerged();
+    }
+  }, 3500);
 
   const unsubscribers: (() => void)[] = [];
 
@@ -1516,21 +1529,28 @@ export function subscribeToEventsFromFirestore(
           collectionEventsMap.set(key, evt);
         });
 
-        hasReceivedSnapshot = true;
+        hasReceivedAnySnapshot = true;
+        if (!snapshot.metadata.fromCache) {
+          hasReceivedServerSnapshot = true;
+        }
         scheduleEmit();
       },
       (error) => {
         if (error?.code !== "permission-denied" && !error?.message?.includes("Missing or insufficient permissions")) {
           console.warn("Firestore live events collection notice:", error);
         }
+        hasReceivedServerSnapshot = true;
+        scheduleEmit();
       }
     );
     unsubscribers.push(unsubEvents);
   } catch (e) {
     console.warn("Firestore subscription error for events collection:", e);
+    hasReceivedServerSnapshot = true;
   }
 
   return () => {
+    clearTimeout(offlineFallback);
     if (debounceTimer) clearTimeout(debounceTimer);
     unsubscribers.forEach((fn) => fn());
   };

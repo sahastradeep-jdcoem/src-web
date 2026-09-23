@@ -48,26 +48,25 @@ export default function EventsPage() {
   };
 
   useEffect(() => {
-    // Show cached localStorage data ONLY if it has a reasonable number of events.
-    // Stale/partial cache (e.g. 1 event from Firestore SDK cache) must not flash.
+    // 1. Show cached localStorage data immediately (0ms load)
     const cached = getStoredEvents();
-    if (cached.length > 1) {
+    if (cached.length > 0) {
       setEventsList(cached);
       setIsLoadingEvents(false);
     }
     refreshTenures();
 
-    // Primary data source: fetch from Firestore server (bypasses SDK cache)
+    // 2. Fetch from Firestore server directly (<150ms)
     syncEventsFromFirestore().then((res) => {
-      if (res && Array.isArray(res)) {
+      if (res && Array.isArray(res) && res.length > 0) {
         hasSynced.current = true;
         setEventsList(res);
         setIsLoadingEvents(false);
       }
     }).catch(() => {
-      // On sync error, fall back to whatever we have (even stale cache)
       if (!hasSynced.current) {
-        setEventsList(getStoredEvents());
+        const fallback = getStoredEvents();
+        if (fallback.length > 0) setEventsList(fallback);
         setIsLoadingEvents(false);
       }
     });
@@ -77,7 +76,7 @@ export default function EventsPage() {
     });
 
     const unsubscribeEvents = subscribeToEvents((remoteEvents) => {
-      if (Array.isArray(remoteEvents)) {
+      if (Array.isArray(remoteEvents) && remoteEvents.length > 0) {
         hasSynced.current = true;
         setEventsList(remoteEvents);
         setIsLoadingEvents(false);
@@ -88,38 +87,62 @@ export default function EventsPage() {
       refreshTenures();
     });
 
-    const handleUpdate = (e: any) => {
+    // CRITICAL: Differentiate event updates from tenure updates!
+    // NEVER overwrite eventsList with tenure objects!
+    const handleEventsUpdate = (e: any) => {
       if (e?.detail && Array.isArray(e.detail)) {
-        setEventsList(e.detail);
-      } else {
-        setEventsList(getStoredEvents());
+        const valid = e.detail.filter(
+          (evt: any) => Boolean(evt?.name && typeof evt.name === "string" && evt.name.trim().length > 0)
+        );
+        if (valid.length > 0) {
+          hasSynced.current = true;
+          setEventsList(valid);
+          setIsLoadingEvents(false);
+          return;
+        }
       }
-      setIsLoadingEvents(false);
+      const stored = getStoredEvents();
+      if (stored.length > 0) {
+        setEventsList(stored);
+        setIsLoadingEvents(false);
+      }
+    };
+
+    const handleTenuresUpdate = () => {
       refreshTenures();
     };
 
-    // Timeout: if sync + subscription haven't delivered after 4 seconds, show whatever we have
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "src_events" || !e.key) {
+        handleEventsUpdate(e);
+      }
+      if (e.key?.includes("tenure") || !e.key) {
+        handleTenuresUpdate();
+      }
+    };
+
+    // Timeout: if sync + subscription haven't delivered after 3.5 seconds, show stored events
     const syncTimeout = setTimeout(() => {
       if (!hasSynced.current) {
         const fallback = getStoredEvents();
         if (fallback.length > 0) setEventsList(fallback);
         setIsLoadingEvents(false);
       }
-    }, 4000);
+    }, 3500);
 
-    window.addEventListener("src_events_updated", handleUpdate);
-    window.addEventListener("src_tenures_updated", handleUpdate);
-    window.addEventListener("src_tenure_changed", handleUpdate);
-    window.addEventListener("storage", handleUpdate);
+    window.addEventListener("src_events_updated", handleEventsUpdate);
+    window.addEventListener("src_tenures_updated", handleTenuresUpdate);
+    window.addEventListener("src_tenure_changed", handleTenuresUpdate);
+    window.addEventListener("storage", handleStorage);
 
     return () => {
       clearTimeout(syncTimeout);
       unsubscribeEvents();
       unsubscribeTenures();
-      window.removeEventListener("src_events_updated", handleUpdate);
-      window.removeEventListener("src_tenures_updated", handleUpdate);
-      window.removeEventListener("src_tenure_changed", handleUpdate);
-      window.removeEventListener("storage", handleUpdate);
+      window.removeEventListener("src_events_updated", handleEventsUpdate);
+      window.removeEventListener("src_tenures_updated", handleTenuresUpdate);
+      window.removeEventListener("src_tenure_changed", handleTenuresUpdate);
+      window.removeEventListener("storage", handleStorage);
     };
   }, []);
 

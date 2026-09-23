@@ -569,8 +569,11 @@ export function subscribeToEvents(callback: (events: EventItem[]) => void): () =
 
       const current = getStoredEvents();
 
-      // CRITICAL: Do NOT bail when remote is empty if there are no pending local writes.
-      // An empty remote after tombstone-deletion IS the authoritative state.
+      // Guard: If remote is empty [] but local has items, do not destructively wipe local items
+      // on initial snapshot transitions. Matches syncEventsFromFirestore guard.
+      if (remote.length === 0 && current.length > 0) {
+        return;
+      }
 
       // Remote Firestore state is strictly authoritative (Directive #9)
       const rawMerged = reconcileArrayDatasets(current, remote);
