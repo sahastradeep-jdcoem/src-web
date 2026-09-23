@@ -29,7 +29,8 @@ import {
   ShieldCheck,
   FolderArchive,
   Link2,
-  FileArchive
+  FileArchive,
+  Power
 } from "lucide-react";
 import { ListingItem, ListingType, ListingPillar, TargetAudience } from "@/types/listings";
 import { SrcFormsBuilder } from "@/components/admin/forms/SrcFormsBuilder";
@@ -383,6 +384,7 @@ export function CreateListingModal({
   const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
   const [allowResponseEditing, setAllowResponseEditing] = useState(true);
   const [requiresApproval, setRequiresApproval] = useState(true);
+  const [isAcceptingResponses, setIsAcceptingResponses] = useState(true);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -404,6 +406,7 @@ export function CreateListingModal({
       setCustomQuestions(initialData.customQuestions || []);
       setAllowResponseEditing(initialData.allowResponseEditing !== false);
       setRequiresApproval(initialData.requiresApproval !== false);
+      setIsAcceptingResponses(initialData.status !== "closed" && initialData.isAcceptingResponses !== false);
 
       if (initialData.pollConfig) {
         setPollOptions(
@@ -450,6 +453,7 @@ export function CreateListingModal({
       setCoverImage("https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1200&auto=format&fit=crop");
       setCustomQuestions([]);
       setAllowResponseEditing(true);
+      setIsAcceptingResponses(true);
       setPollOptions(["Option A", "Option B"]);
       setPollAnonymous(false);
       setPollMultipleChoices(false);
@@ -552,6 +556,8 @@ export function CreateListingModal({
           slug: newSlug,
           targetAudience,
           isInterCollege: targetAudience === "inter_college",
+          status: isAcceptingResponses ? "active" : "closed",
+          isAcceptingResponses,
           summary: summary.trim() || title.trim(),
           description: description.trim() || summary.trim() || title.trim(),
           organizer: organizer.trim() || "SRC JDCOEM",
@@ -638,8 +644,9 @@ export function CreateListingModal({
         title: title.trim(),
         pillar: selectedPillarOption.pillar,
         type: selectedPillarOption.type,
-        status: "active",
+        status: isAcceptingResponses ? "active" : "closed",
         isLive: true,
+        isAcceptingResponses,
         targetAudience,
         isInterCollege: targetAudience === "inter_college",
         summary: summary.trim() || title.trim(),
@@ -1016,6 +1023,47 @@ export function CreateListingModal({
                         ? "ℹ️ External non-JDCOEM students can view details, but registration & submission will be restricted."
                         : "ℹ️ Open to students and external delegates across all colleges and institutions."}
                     </p>
+                  </div>
+
+                  {/* Accepting Responses Switch */}
+                  <div className="p-4 rounded-2xl bg-white border border-slate-200 flex items-center justify-between gap-4 shadow-2xs">
+                    <div className="space-y-0.5 pr-4">
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                          <Power className="w-3.5 h-3.5 text-[#17458F]" />
+                          <span>Accepting Responses</span>
+                        </label>
+                        <span className={cn(
+                          "text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full border transition-all",
+                          isAcceptingResponses
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-rose-50 text-rose-700 border-rose-200"
+                        )}>
+                          {isAcceptingResponses ? "Accepting Responses" : "Responses Closed"}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 font-medium leading-normal">
+                        Control whether students can submit entries or vote on this form. Turn off to stop accepting responses.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={isAcceptingResponses}
+                      onClick={() => setIsAcceptingResponses(!isAcceptingResponses)}
+                      className={cn(
+                        "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                        isAcceptingResponses ? "bg-emerald-600" : "bg-slate-300"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out",
+                          isAcceptingResponses ? "translate-x-5" : "translate-x-0"
+                        )}
+                      />
+                    </button>
                   </div>
 
                   {/* Allow Response Editing Switch */}

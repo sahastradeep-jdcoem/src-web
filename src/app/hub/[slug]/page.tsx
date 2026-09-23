@@ -253,6 +253,10 @@ export default function ListingDetailPage() {
 
   const handleVote = (optionId: string) => {
     if (!listing) return;
+    if (listing.status === "closed" || listing.isAcceptingResponses === false) {
+      showToast("Voting is closed for this poll.");
+      return;
+    }
     if (!user) {
       openAuthModal();
       showToast("Please sign in with your student account to cast your vote.");
@@ -291,6 +295,10 @@ export default function ListingDetailPage() {
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!listing) return;
+    if (listing.status === "closed" || listing.isAcceptingResponses === false) {
+      showToast("This form is no longer accepting responses.");
+      return;
+    }
     if (!user) {
       openAuthModal();
       showToast("Please sign in with your student account to submit this form.");
@@ -463,6 +471,12 @@ export default function ListingDetailPage() {
                     {isJdcoemOnly ? <GraduationCap className="w-3 h-3" /> : <Globe className="w-3 h-3" />}
                     <span>{isJdcoemOnly ? "JDCOEM Only" : "Inter-College"}</span>
                   </span>
+                  {(listing.status === "closed" || listing.isAcceptingResponses === false) && (
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full bg-rose-600 text-white inline-flex items-center gap-1 shadow-xs">
+                      <Lock className="w-3 h-3" />
+                      <span>Responses Closed</span>
+                    </span>
+                  )}
                 </div>
                 <h1 className="font-heading font-extrabold text-2xl sm:text-4xl uppercase tracking-tight text-white">
                   {listing.title}
@@ -482,6 +496,12 @@ export default function ListingDetailPage() {
                   {isJdcoemOnly ? <GraduationCap className="w-3 h-3" /> : <Globe className="w-3 h-3" />}
                   <span>{isJdcoemOnly ? "JDCOEM Only" : "Inter-College"}</span>
                 </span>
+                {(listing.status === "closed" || listing.isAcceptingResponses === false) && (
+                  <span className="text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full bg-rose-600 text-white inline-flex items-center gap-1 shadow-xs">
+                    <Lock className="w-3 h-3" />
+                    <span>Responses Closed</span>
+                  </span>
+                )}
               </div>
               <h1 className="font-heading font-extrabold text-2xl sm:text-4xl uppercase tracking-tight text-white">
                 {listing.title}
@@ -491,6 +511,17 @@ export default function ListingDetailPage() {
 
           {/* Metadata Badges */}
           <div className="px-6 sm:px-8 flex flex-wrap items-center gap-3 text-xs font-bold text-slate-500">
+            {(listing.status === "closed" || listing.isAcceptingResponses === false) ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border bg-rose-50 text-rose-700 border-rose-200">
+                <Lock className="w-3.5 h-3.5 text-rose-600" />
+                <span>Responses Closed</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border bg-emerald-50 text-emerald-800 border-emerald-200">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Accepting Responses</span>
+              </span>
+            )}
             <span className={cn(
               "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border",
               isJdcoemOnly
@@ -533,16 +564,19 @@ export default function ListingDetailPage() {
             const userVotedOptionId = user && listing ? votedPolls[listing.id] : null;
             const isOptionValid = Boolean(listing && userVotedOptionId && listing.pollConfig.options.some((o) => o.id === userVotedOptionId));
             const hasVoted = Boolean(user) && Boolean(userVotedOptionId) && isOptionValid;
+            const isPollClosed = listing.status === "closed" || listing.isAcceptingResponses === false;
             const pollStats = getPollStats(listing, allResponses, user?.uid, userVotedOptionId);
 
             return (
               <div className="p-6 sm:p-8 border-t border-slate-200 space-y-5">
                 <div className="flex items-center justify-between">
                   <h3 className="font-heading font-extrabold text-lg text-[#17458F] uppercase">
-                    {hasVoted ? "Poll Results" : "Cast Your Vote"}
+                    {hasVoted ? "Poll Results" : isPollClosed ? "Poll Results (Closed)" : "Cast Your Vote"}
                   </h3>
                   <span className="text-xs font-bold text-slate-400">
-                    {!user
+                    {isPollClosed
+                      ? "🔒 Voting is closed"
+                      : !user
                       ? "Sign in to vote"
                       : hasVoted
                       ? "✓ Vote Submitted"
@@ -550,7 +584,14 @@ export default function ListingDetailPage() {
                   </span>
                 </div>
 
-                {!user && (
+                {isPollClosed && (
+                  <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 flex items-center gap-2.5 text-rose-800 text-xs font-bold">
+                    <Lock className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>This poll is closed and no longer accepting votes.</span>
+                  </div>
+                )}
+
+                {!user && !isPollClosed && (
                   <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-bold text-[#17458F]">
                     <div className="flex items-center gap-2.5">
                       <Lock className="w-4 h-4 text-[#17458F] shrink-0" />
@@ -582,8 +623,12 @@ export default function ListingDetailPage() {
                       <button
                         key={opt.id}
                         type="button"
-                        disabled={(isJdcoemOnly && isExternalUser) || hasVoted}
+                        disabled={(isJdcoemOnly && isExternalUser) || hasVoted || isPollClosed}
                         onClick={() => {
+                          if (isPollClosed) {
+                            showToast("Voting is closed for this poll.");
+                            return;
+                          }
                           if (!user) {
                             openAuthModal();
                             showToast("Please sign in with your student account to cast your vote.");
@@ -595,17 +640,17 @@ export default function ListingDetailPage() {
                         }}
                         className={cn(
                           "w-full relative overflow-hidden rounded-2xl border p-4 text-left transition-all",
-                          isJdcoemOnly && isExternalUser
+                          (isJdcoemOnly && isExternalUser) || (isPollClosed && !hasVoted)
                             ? "border-slate-200 bg-slate-50/70 opacity-80 cursor-not-allowed"
-                            : hasVoted
+                            : (hasVoted || isPollClosed)
                             ? isSelectedByUser
                               ? "border-[#17458F] bg-blue-50/40 cursor-default"
                               : "border-slate-200 bg-slate-50/60 cursor-default"
                             : "border-slate-200 bg-slate-50 hover:bg-white hover:border-[#17458F] cursor-pointer group"
                         )}
                       >
-                        {/* Background percentage fill bar — ONLY shown after selecting your vote */}
-                        {hasVoted && (
+                        {/* Background percentage fill bar — shown after selecting vote or when poll closed */}
+                        {(hasVoted || isPollClosed) && (
                           <div
                             className={cn(
                               "absolute left-0 top-0 bottom-0 -z-10 transition-all duration-700",
@@ -617,7 +662,9 @@ export default function ListingDetailPage() {
 
                         <div className="flex items-center justify-between text-xs sm:text-sm font-bold text-slate-800">
                           <div className="flex items-center gap-3">
-                            {!hasVoted ? (
+                            {isPollClosed && !hasVoted ? (
+                              <span className="w-4 h-4 rounded-full border border-slate-300 shrink-0" />
+                            ) : !hasVoted ? (
                               <span className="w-4 h-4 rounded-full border-2 border-slate-300 group-hover:border-[#17458F] flex items-center justify-center shrink-0">
                                 <span className="w-2 h-2 rounded-full bg-transparent group-hover:bg-[#17458F] transition-colors" />
                               </span>
@@ -629,7 +676,7 @@ export default function ListingDetailPage() {
                               <span className="w-4 h-4 rounded-full border border-slate-200 shrink-0" />
                             )}
                             <span className={cn(
-                              hasVoted
+                              (hasVoted || isPollClosed)
                                 ? isSelectedByUser ? "text-[#17458F] font-extrabold" : "text-slate-700"
                                 : (isJdcoemOnly && isExternalUser ? "" : "group-hover:text-[#17458F] transition-colors")
                             )}>
@@ -637,8 +684,8 @@ export default function ListingDetailPage() {
                             </span>
                           </div>
 
-                          {/* ONLY show percent, and ONLY after selecting your vote. NO no of votes! */}
-                          {hasVoted && (
+                          {/* Show percent after selecting vote or if poll is closed */}
+                          {(hasVoted || isPollClosed) && (
                             <div className="flex items-center gap-2 shrink-0">
                               {isSelectedByUser && (
                                 <span className="text-[10px] font-mono font-bold text-[#17458F] bg-blue-100 px-2 py-0.5 rounded-md">
@@ -658,201 +705,241 @@ export default function ListingDetailPage() {
           })()}
 
           {/* APPLICATION / SUBMISSION / GRIEVANCE FORM */}
-          {!isPoll && (
-            <div id="apply" className="p-6 sm:p-8 border-t border-slate-200 space-y-6 scroll-mt-24">
-              <h3 className="font-heading font-extrabold text-lg text-[#17458F] uppercase">
-                {isIssue ? "Submit Confidential Inquiry" : "Participant Application"}
-              </h3>
+          {!isPoll && (() => {
+            const isClosed = listing.status === "closed" || listing.isAcceptingResponses === false;
 
-              {isJdcoemOnly && isExternalUser ? (
-                <div className="p-8 rounded-3xl bg-amber-50/80 border border-amber-200/80 text-center space-y-4">
-                  <div className="inline-flex p-3 rounded-2xl bg-amber-100 text-amber-700">
-                    <Lock className="w-8 h-8" />
-                  </div>
-                  <div className="space-y-1">
-                    <h4 className="font-heading font-extrabold text-lg text-amber-950 uppercase">
-                      Restricted to JDCOEM Students
-                    </h4>
-                    <p className="text-xs text-amber-800 max-w-md mx-auto leading-relaxed">
-                      This initiative is reserved exclusively for enrolled students of JDCOEM. While external guests can view the guidelines and announcements, submissions and voting require a verified JDCOEM student account.
-                    </p>
-                  </div>
-                  <div className="pt-2">
-                    <Link
-                      href="/login"
-                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-xs"
-                    >
-                      <span>Sign in with JDCOEM Account</span>
-                    </Link>
-                  </div>
-                </div>
-              ) : !user ? (
-                /* Unauthenticated Guard: Student Sign-In Required */
-                <div className="p-8 sm:p-10 rounded-3xl bg-blue-50/70 border border-blue-200 text-center space-y-4 max-w-lg mx-auto shadow-xs animate-in fade-in duration-300">
-                  <div className="w-14 h-14 rounded-2xl bg-[#17458F] text-white flex items-center justify-center mx-auto shadow-md">
-                    <Lock className="w-6 h-6" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <h4 className="font-heading font-extrabold text-xl text-[#0F172A] uppercase">
-                      Student Authentication Required
-                    </h4>
-                    <p className="text-xs text-slate-600 font-medium leading-relaxed max-w-sm mx-auto">
-                      Please sign in with your student Google account to fill out and submit this {isIssue ? "confidential inquiry" : isSub ? "submission" : isOpp ? "application" : "form"}.
-                    </p>
-                  </div>
-                  <div className="pt-2">
-                    <Button
-                      onClick={openAuthModal}
-                      variant="primary"
-                      size="md"
-                      className="gap-2 mx-auto cursor-pointer"
-                    >
-                      <LogIn className="w-4 h-4" />
-                      <span>Sign In with Student Account</span>
-                    </Button>
-                  </div>
-                </div>
-              ) : receiptCode ? (
-                <div className="p-8 rounded-3xl bg-emerald-50 border border-emerald-200 text-center space-y-4">
-                  <div className="inline-flex p-3 rounded-full bg-emerald-100 text-emerald-600">
-                    <CheckCircle2 className="w-10 h-10" />
-                  </div>
-                  <h4 className="font-heading font-extrabold text-xl text-emerald-950 uppercase">
-                    Submission Received
-                  </h4>
-                  <p className="text-xs text-emerald-800 font-sans max-w-sm mx-auto">
-                    Your response has been registered and synced to the central database.
-                  </p>
-                  <div className="p-3 bg-white rounded-xl border border-emerald-200 max-w-xs mx-auto">
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Reference ID</span>
-                    <span className="font-mono font-extrabold text-lg text-[#17458F]">{receiptCode}</span>
-                  </div>
-                  <Link
-                    href="/dashboard"
-                    className="inline-block px-5 py-2 rounded-xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider"
-                  >
-                    Track in Student Dashboard
-                  </Link>
-                </div>
-              ) : existingResponse && !isEditingResponse ? (
-                /* PREVENT DUPLICATES: ALREADY SUBMITTED VIEW */
-                <div className="p-6 sm:p-8 rounded-3xl bg-slate-50/80 border border-slate-200 space-y-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                        <CheckCircle2 className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h4 className="font-heading font-extrabold text-base text-slate-900 uppercase">
-                            You&apos;ve Already Submitted This Form
-                          </h4>
-                          <span className={cn(
-                            "text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full border",
-                            existingResponse.status === "approved" || existingResponse.status === "resolved"
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                              : existingResponse.status === "rejected"
-                              ? "bg-rose-50 text-rose-700 border-rose-200"
-                              : "bg-amber-50 text-amber-800 border-amber-200"
-                          )}>
-                            {existingResponse.status?.toUpperCase() || "PENDING REVIEW"}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 font-medium pt-0.5">
-                          Submitted on {new Date(existingResponse.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                          {existingResponse.updatedAt && (
-                            <span className="text-slate-400"> • Updated {new Date(existingResponse.updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="p-2.5 rounded-xl bg-white border border-slate-200 flex sm:flex-col items-center sm:items-end justify-between gap-0.5 shrink-0 shadow-2xs">
-                      <span className="text-[10px] uppercase font-bold text-slate-400">Reference Ticket</span>
-                      <span className="font-mono font-extrabold text-xs text-[#17458F]">{existingResponse.ticketCode}</span>
-                    </div>
-                  </div>
-
-                  {/* Summary of Recorded Responses */}
-                  <div className="space-y-3">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-600 block">
-                      Your Recorded Responses
+            return (
+              <div id="apply" className="p-6 sm:p-8 border-t border-slate-200 space-y-6 scroll-mt-24">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="font-heading font-extrabold text-lg text-[#17458F] uppercase">
+                    {isIssue ? "Submit Confidential Inquiry" : "Participant Application"}
+                  </h3>
+                  {isClosed && (
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 inline-flex items-center gap-1 shadow-2xs">
+                      <Lock className="w-3 h-3 text-rose-600" />
+                      <span>Responses Closed</span>
                     </span>
-                    <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 space-y-3 text-xs shadow-2xs">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-3 border-b border-slate-100 text-slate-600">
-                        <div>
-                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Applicant Name</span>
-                          <span className="font-bold text-slate-900">{existingResponse.userName}</span> ({existingResponse.userEmail})
-                        </div>
-                        <div>
-                          <span className="text-[10px] uppercase font-bold text-slate-400 block">Academic Details</span>
-                          <span className="font-medium text-slate-900">{existingResponse.userDepartment} • {existingResponse.userYear}</span>
-                          {existingResponse.btId && <span className="font-mono text-slate-500 block">BT ID: {existingResponse.btId}</span>}
-                        </div>
-                      </div>
+                  )}
+                </div>
 
-                      {existingResponse.submissionLink && (
-                        <div className="pb-3 border-b border-slate-100">
-                          <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Portfolio / Repo Link</span>
-                          <a
-                            href={existingResponse.submissionLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#17458F] hover:underline"
-                          >
-                            <span>{existingResponse.submissionLink}</span>
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
-                        </div>
-                      )}
-
-                      {listing.customQuestions && listing.customQuestions.length > 0 && (
-                        <div className="space-y-2.5 pt-1">
-                          {listing.customQuestions.filter(q => q.type !== "note").map((q) => {
-                            const ans = existingResponse.answers?.[q.id];
-                            return (
-                              <div key={q.id} className="space-y-1">
-                                <span className="text-[11px] font-bold text-slate-500 block">{q.question}</span>
-                                <p className="text-xs font-semibold text-slate-800 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                                  {Array.isArray(ans) ? ans.join(", ") : ans ? String(ans) : "No response provided"}
-                                </p>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                {isJdcoemOnly && isExternalUser ? (
+                  <div className="p-8 rounded-3xl bg-amber-50/80 border border-amber-200/80 text-center space-y-4">
+                    <div className="inline-flex p-3 rounded-2xl bg-amber-100 text-amber-700">
+                      <Lock className="w-8 h-8" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="font-heading font-extrabold text-lg text-amber-950 uppercase">
+                        Restricted to JDCOEM Students
+                      </h4>
+                      <p className="text-xs text-amber-800 max-w-md mx-auto leading-relaxed">
+                        This initiative is reserved exclusively for enrolled students of JDCOEM. While external guests can view the guidelines and announcements, submissions and voting require a verified JDCOEM student account.
+                      </p>
+                    </div>
+                    <div className="pt-2">
+                      <Link
+                        href="/login"
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-xs"
+                      >
+                        <span>Sign in with JDCOEM Account</span>
+                      </Link>
                     </div>
                   </div>
-
-                  {/* Actions Bar */}
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-                    {listing.allowResponseEditing !== false ? (
-                      <button
-                        type="button"
-                        onClick={() => setIsEditingResponse(true)}
-                        className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                        <span>Edit Your Response</span>
-                      </button>
-                    ) : (
-                      <div className="flex items-center gap-2 text-slate-500 text-xs font-medium py-1">
-                        <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span>Response editing is disabled for this listing by council administrators.</span>
-                      </div>
-                    )}
-
+                ) : receiptCode ? (
+                  <div className="p-8 rounded-3xl bg-emerald-50 border border-emerald-200 text-center space-y-4">
+                    <div className="inline-flex p-3 rounded-full bg-emerald-100 text-emerald-600">
+                      <CheckCircle2 className="w-10 h-10" />
+                    </div>
+                    <h4 className="font-heading font-extrabold text-xl text-emerald-950 uppercase">
+                      Submission Received
+                    </h4>
+                    <p className="text-xs text-emerald-800 font-sans max-w-sm mx-auto">
+                      Your response has been registered and synced to the central database.
+                    </p>
+                    <div className="p-3 bg-white rounded-xl border border-emerald-200 max-w-xs mx-auto">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Reference ID</span>
+                      <span className="font-mono font-extrabold text-lg text-[#17458F]">{receiptCode}</span>
+                    </div>
                     <Link
                       href="/dashboard"
-                      className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
+                      className="inline-block px-5 py-2 rounded-xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider"
                     >
-                      <span>View in Student Dashboard</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
+                      Track in Student Dashboard
                     </Link>
                   </div>
-                </div>
-              ) : (
-                <form onSubmit={handleFormSubmit} className="space-y-4">
+                ) : existingResponse && !isEditingResponse ? (
+                  /* PREVENT DUPLICATES: ALREADY SUBMITTED VIEW */
+                  <div className="p-6 sm:p-8 rounded-3xl bg-slate-50/80 border border-slate-200 space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                          <CheckCircle2 className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-heading font-extrabold text-base text-slate-900 uppercase">
+                              You&apos;ve Already Submitted This Form
+                            </h4>
+                            <span className={cn(
+                              "text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full border",
+                              existingResponse.status === "approved" || existingResponse.status === "resolved"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : existingResponse.status === "rejected"
+                                ? "bg-rose-50 text-rose-700 border-rose-200"
+                                : "bg-amber-50 text-amber-800 border-amber-200"
+                            )}>
+                              {existingResponse.status?.toUpperCase() || "PENDING REVIEW"}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 font-medium pt-0.5">
+                            Submitted on {new Date(existingResponse.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                            {existingResponse.updatedAt && (
+                              <span className="text-slate-400"> • Updated {new Date(existingResponse.updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="p-2.5 rounded-xl bg-white border border-slate-200 flex sm:flex-col items-center sm:items-end justify-between gap-0.5 shrink-0 shadow-2xs">
+                        <span className="text-[10px] uppercase font-bold text-slate-400">Reference Ticket</span>
+                        <span className="font-mono font-extrabold text-xs text-[#17458F]">{existingResponse.ticketCode}</span>
+                      </div>
+                    </div>
+
+                    {/* Summary of Recorded Responses */}
+                    <div className="space-y-3">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-600 block">
+                        Your Recorded Responses
+                      </span>
+                      <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 space-y-3 text-xs shadow-2xs">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-3 border-b border-slate-100 text-slate-600">
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block">Applicant Name</span>
+                            <span className="font-bold text-slate-900">{existingResponse.userName}</span> ({existingResponse.userEmail})
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block">Academic Details</span>
+                            <span className="font-medium text-slate-900">{existingResponse.userDepartment} • {existingResponse.userYear}</span>
+                            {existingResponse.btId && <span className="font-mono text-slate-500 block">BT ID: {existingResponse.btId}</span>}
+                          </div>
+                        </div>
+
+                        {existingResponse.submissionLink && (
+                          <div className="pb-3 border-b border-slate-100">
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Portfolio / Repo Link</span>
+                            <a
+                              href={existingResponse.submissionLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 text-xs font-bold text-[#17458F] hover:underline"
+                            >
+                              <span>{existingResponse.submissionLink}</span>
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                        )}
+
+                        {listing.customQuestions && listing.customQuestions.length > 0 && (
+                          <div className="space-y-2.5 pt-1">
+                            {listing.customQuestions.filter(q => q.type !== "note").map((q) => {
+                              const ans = existingResponse.answers?.[q.id];
+                              return (
+                                <div key={q.id} className="space-y-1">
+                                  <span className="text-[11px] font-bold text-slate-500 block">{q.question}</span>
+                                  <p className="text-xs font-semibold text-slate-800 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                    {Array.isArray(ans) ? ans.join(", ") : ans ? String(ans) : "No response provided"}
+                                  </p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Actions Bar */}
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                      {isClosed ? (
+                        <div className="flex items-center gap-2 text-rose-600 text-xs font-semibold py-1">
+                          <Lock className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                          <span>Responses are closed. Edits are no longer accepted.</span>
+                        </div>
+                      ) : listing.allowResponseEditing !== false ? (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingResponse(true)}
+                          className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          <span>Edit Your Response</span>
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-2 text-slate-500 text-xs font-medium py-1">
+                          <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>Response editing is disabled for this listing by council administrators.</span>
+                        </div>
+                      )}
+
+                      <Link
+                        href="/dashboard"
+                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
+                      >
+                        <span>View in Student Dashboard</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </div>
+                  </div>
+                ) : isClosed ? (
+                  /* RESPONSES CLOSED GUARD FOR UNREGISTERED STUDENTS */
+                  <div className="p-8 sm:p-10 rounded-3xl bg-slate-50 border border-slate-200 text-center space-y-4 max-w-lg mx-auto shadow-2xs animate-in fade-in duration-300">
+                    <div className="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto shadow-xs">
+                      <Lock className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <h4 className="font-heading font-extrabold text-xl text-slate-900 uppercase">
+                        Responses Are Closed
+                      </h4>
+                      <p className="text-xs text-slate-600 font-medium leading-relaxed max-w-sm mx-auto">
+                        This {isIssue ? "confidential inquiry channel" : isSub ? "submission portal" : isOpp ? "application form" : "form"} is no longer accepting new responses. Thank you for your interest!
+                      </p>
+                    </div>
+                    <div className="pt-2">
+                      <Link
+                        href="/hub"
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-xs"
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                        <span>Back to Engagement Hub</span>
+                      </Link>
+                    </div>
+                  </div>
+                ) : !user ? (
+                  /* Unauthenticated Guard: Student Sign-In Required */
+                  <div className="p-8 sm:p-10 rounded-3xl bg-blue-50/70 border border-blue-200 text-center space-y-4 max-w-lg mx-auto shadow-xs animate-in fade-in duration-300">
+                    <div className="w-14 h-14 rounded-2xl bg-[#17458F] text-white flex items-center justify-center mx-auto shadow-md">
+                      <Lock className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <h4 className="font-heading font-extrabold text-xl text-[#0F172A] uppercase">
+                        Student Authentication Required
+                      </h4>
+                      <p className="text-xs text-slate-600 font-medium leading-relaxed max-w-sm mx-auto">
+                        Please sign in with your student Google account to fill out and submit this {isIssue ? "confidential inquiry" : isSub ? "submission" : isOpp ? "application" : "form"}.
+                      </p>
+                    </div>
+                    <div className="pt-2">
+                      <Button
+                        onClick={openAuthModal}
+                        variant="primary"
+                        size="md"
+                        className="gap-2 mx-auto cursor-pointer"
+                      >
+                        <LogIn className="w-4 h-4" />
+                        <span>Sign In with Student Account</span>
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleFormSubmit} className="space-y-4">
                   {existingResponse && isEditingResponse && (
                     <div className="p-4 rounded-2xl bg-blue-50/90 border border-blue-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-blue-950 animate-in fade-in">
                       <div className="flex items-center gap-2.5">
@@ -1123,7 +1210,8 @@ export default function ListingDetailPage() {
                 </form>
               )}
             </div>
-          )}
+          );
+        })()}
 
         </div>
 

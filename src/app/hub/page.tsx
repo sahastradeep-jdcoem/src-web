@@ -194,6 +194,10 @@ export default function StudentHubPage() {
       return;
     }
     const matched = listings.find((l) => l.id === listingId);
+    if (matched && (matched.status === "closed" || matched.isAcceptingResponses === false)) {
+      showToast("Voting has closed for this poll.");
+      return;
+    }
     if (matched && (matched.targetAudience === "jdcoem_only" || matched.isInterCollege === false) && isExternalUser) {
       showToast("Voting on this listing is restricted to JDCOEM campus students.");
       return;
@@ -325,6 +329,11 @@ export default function StudentHubPage() {
                       )}>
                         {(item.targetAudience === "jdcoem_only" || item.isInterCollege === false) ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
                       </span>
+                      {(item.status === "closed" || item.isAcceptingResponses === false) && (
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full border bg-rose-50 text-rose-700 border-rose-200">
+                          Closed
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       {item.deadline && (
@@ -392,6 +401,7 @@ export default function StudentHubPage() {
                     const userVotedOptionId = user ? (votedPolls[item.id] || (user as any).votedPolls?.[item.id]) : null;
                     const isOptionValid = Boolean(item.pollConfig?.options.some((o) => o.id === userVotedOptionId));
                     const hasVoted = Boolean(user) && Boolean(userVotedOptionId) && isOptionValid;
+                    const isClosed = item.status === "closed" || item.isAcceptingResponses === false;
                     const pollStats = getPollStats(item, responses, user?.uid, userVotedOptionId);
 
                     return (
@@ -405,8 +415,12 @@ export default function StudentHubPage() {
                               <button
                                 key={opt.id}
                                 type="button"
-                                disabled={hasVoted}
+                                disabled={hasVoted || isClosed}
                                 onClick={() => {
+                                  if (isClosed) {
+                                    showToast("Voting is closed for this poll.");
+                                    return;
+                                  }
                                   if (!user) {
                                     openAuthModal();
                                     showToast("Please sign in with your student account to vote.");
@@ -418,7 +432,9 @@ export default function StudentHubPage() {
                                 }}
                                 className={cn(
                                   "w-full relative overflow-hidden rounded-xl border p-3 text-left transition-all",
-                                  hasVoted
+                                  isClosed && !hasVoted
+                                    ? "border-slate-200 bg-slate-50/70 text-slate-500 cursor-not-allowed"
+                                    : hasVoted
                                     ? isSelectedByUser
                                       ? "border-[#17458F] bg-blue-50/40 cursor-default"
                                       : "border-slate-200 bg-slate-50/60 cursor-default"
@@ -474,7 +490,9 @@ export default function StudentHubPage() {
                         </div>
                         <div className="flex items-center justify-between text-[11px] pt-1">
                           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                            {!user
+                            {isClosed
+                              ? "🔒 Voting has closed"
+                              : !user
                               ? "🔒 Sign in to vote"
                               : (votedPolls[item.id] || (user as any).votedPolls?.[item.id]) && item.pollConfig?.options.some((o) => o.id === (votedPolls[item.id] || (user as any).votedPolls?.[item.id]))
                               ? "✓ Your vote recorded" 
@@ -514,6 +532,11 @@ export default function StudentHubPage() {
                       <div className="w-full py-2.5 px-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2">
                         <Lock className="w-3.5 h-3.5 text-amber-700" />
                         <span>JDCOEM Students Only</span>
+                      </div>
+                    ) : (item.status === "closed" || item.isAcceptingResponses === false) ? (
+                      <div className="w-full py-2.5 px-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2 cursor-not-allowed">
+                        <Lock className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Responses Closed</span>
                       </div>
                     ) : (
                       <Link

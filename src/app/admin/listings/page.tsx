@@ -41,7 +41,7 @@ import {
 import { saveSiteContentToFirestore } from "@/lib/firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { doc, deleteDoc } from "firebase/firestore";
-import { ListingItem, ListingType, ListingPillar, ListingResponseRecord, TargetAudience } from "@/types/listings";
+import { ListingItem, ListingType, ListingPillar, ListingStatus, ListingResponseRecord, TargetAudience } from "@/types/listings";
 import { CreateListingModal } from "@/components/admin/listings/CreateListingModal";
 import { ListingResponsesView } from "@/components/admin/listings/ListingResponsesView";
 import { EventFormModal, EventFormData, formatDateToReadable } from "@/components/admin/events/EventFormModal";
@@ -267,11 +267,22 @@ export default function AdminListingsPage() {
   };
 
   const handleToggleStatus = (item: ListingItem) => {
-    const nextStatus = item.status === "active" ? "closed" : "active";
-    const updated = listings.map((l) => (l.id === item.id ? { ...l, status: nextStatus } : l));
+    const isCurrentlyClosed = item.status === "closed" || item.isAcceptingResponses === false;
+    const nextStatus: ListingStatus = isCurrentlyClosed ? "active" : "closed";
+    const nextAccepting = isCurrentlyClosed;
+    const updated = listings.map((l) => (l.id === item.id ? { ...l, status: nextStatus, isAcceptingResponses: nextAccepting } : l));
     setListings(updated as ListingItem[]);
     saveStoredListings(updated as ListingItem[]);
-    showToast(`Marked "${item.title}" as ${nextStatus.toUpperCase()}.`);
+    showToast(`Marked "${item.title}" as ${nextAccepting ? "ACCEPTING RESPONSES" : "RESPONSES CLOSED"}.`);
+  };
+
+  const handleToggleAcceptingResponses = (accepting: boolean) => {
+    if (!liveInspectingListing) return;
+    const nextStatus: ListingStatus = accepting ? "active" : "closed";
+    const updated = listings.map((l) => (l.id === liveInspectingListing.id ? { ...l, status: nextStatus, isAcceptingResponses: accepting } : l));
+    setListings(updated as ListingItem[]);
+    saveStoredListings(updated as ListingItem[]);
+    showToast(`Form "${liveInspectingListing.title}" is now ${accepting ? "ACCEPTING RESPONSES" : "RESPONSES CLOSED"}.`);
   };
 
   const handleToggleAudience = (item: ListingItem) => {
@@ -484,6 +495,7 @@ export default function AdminListingsPage() {
           onExportExcel={handleExportExcel}
           onResetPollVotes={() => handleResetPollVotes(liveInspectingListing)}
           onToggleApprovalWorkflow={handleToggleApprovalWorkflow}
+          onToggleAcceptingResponses={handleToggleAcceptingResponses}
           onEditListing={handleEditInspectingListing}
         />
       ) : (
@@ -654,13 +666,18 @@ export default function AdminListingsPage() {
                         <button
                           type="button"
                           onClick={() => handleToggleStatus(item)}
-                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                            item.status === "active"
-                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
-                              : "bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200"
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer border ${
+                            item.status !== "closed" && item.isAcceptingResponses !== false
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                              : "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
                           }`}
+                          title={
+                            item.status !== "closed" && item.isAcceptingResponses !== false
+                              ? "Currently accepting responses. Click to stop accepting responses."
+                              : "Responses closed. Click to resume accepting responses."
+                          }
                         >
-                          {item.status}
+                          {item.status !== "closed" && item.isAcceptingResponses !== false ? "● Active" : "○ Closed"}
                         </button>
                       </td>
 

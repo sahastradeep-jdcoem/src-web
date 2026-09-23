@@ -49,6 +49,7 @@ export interface ListingResponsesViewProps {
   onExportExcel: () => void;
   onResetPollVotes?: () => void;
   onToggleApprovalWorkflow?: (enabled: boolean) => void;
+  onToggleAcceptingResponses?: (accepting: boolean) => void;
   onEditListing?: () => void;
 }
 
@@ -61,6 +62,7 @@ export function ListingResponsesView({
   onExportExcel,
   onResetPollVotes,
   onToggleApprovalWorkflow,
+  onToggleAcceptingResponses,
   onEditListing,
 }: ListingResponsesViewProps) {
   const responses = useMemo(() => {
@@ -688,10 +690,12 @@ export function ListingResponsesView({
                 {listing.title}
               </h1>
               <span className={cn(
-                "px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider",
-                listing.status === "active" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-600 border border-slate-200"
+                "px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider border",
+                listing.status !== "closed" && listing.isAcceptingResponses !== false
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  : "bg-rose-50 text-rose-700 border-rose-200"
               )}>
-                {listing.status || "ACTIVE"}
+                {listing.status !== "closed" && listing.isAcceptingResponses !== false ? "ACCEPTING RESPONSES" : "RESPONSES CLOSED"}
               </span>
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-blue-50 text-[#17458F] border border-blue-200">
                 {listing.pillar} • {listing.type}
@@ -704,6 +708,42 @@ export function ListingResponsesView({
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          {onToggleAcceptingResponses && (
+            <div className="inline-flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white border border-slate-200 shadow-2xs">
+              <span className="text-xs font-bold text-slate-700">Accept Responses</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={listing.status !== "closed" && listing.isAcceptingResponses !== false}
+                onClick={() => onToggleAcceptingResponses(listing.status === "closed" || listing.isAcceptingResponses === false)}
+                className={cn(
+                  "relative inline-flex h-5 w-10 items-center rounded-full transition-colors cursor-pointer focus:outline-none",
+                  listing.status !== "closed" && listing.isAcceptingResponses !== false ? "bg-emerald-600" : "bg-slate-300"
+                )}
+                title={
+                  listing.status !== "closed" && listing.isAcceptingResponses !== false
+                    ? "Currently accepting responses. Click to stop accepting responses."
+                    : "Responses currently closed. Click to resume accepting responses."
+                }
+              >
+                <span
+                  className={cn(
+                    "inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow-xs",
+                    listing.status !== "closed" && listing.isAcceptingResponses !== false ? "translate-x-5" : "translate-x-1"
+                  )}
+                />
+              </button>
+              <span className={cn(
+                "text-[10px] font-extrabold uppercase font-mono px-1.5 py-0.5 rounded",
+                listing.status !== "closed" && listing.isAcceptingResponses !== false
+                  ? "text-emerald-700 bg-emerald-50 border border-emerald-200"
+                  : "text-rose-700 bg-rose-50 border border-rose-200"
+              )}>
+                {listing.status !== "closed" && listing.isAcceptingResponses !== false ? "OPEN" : "STOPPED"}
+              </span>
+            </div>
+          )}
+
           {onToggleApprovalWorkflow && (
             <div className="inline-flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white border border-slate-200 shadow-2xs">
               <span className="text-xs font-bold text-slate-700">Approval Workflow</span>
