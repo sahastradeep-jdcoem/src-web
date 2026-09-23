@@ -13,6 +13,8 @@ import {
 import { EventCard } from "@/components/events/EventCard";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
+import { StaggerGrid, StaggerItem } from "@/components/ui/StaggerContainer";
+import { EventCardSkeleton } from "@/components/ui/SkeletonCard";
 import { 
   getStoredEvents, 
   syncEventsFromFirestore, 
@@ -126,6 +128,7 @@ export default function EventsPage() {
     const filtered = eventsList
       .filter(
         (e) =>
+          Boolean(e?.name && typeof e.name === "string" && e.name.trim().length > 0) &&
           e.isLive !== false &&
           e.status !== "draft" &&
           !e.isCancelled &&
@@ -157,6 +160,7 @@ export default function EventsPage() {
   // Featured Flagship Event
   const featuredEvent = eventsList.find(
     (e) =>
+      Boolean(e?.name && typeof e.name === "string" && e.name.trim().length > 0) &&
       Boolean(e.isFeatured) &&
       e.isLive !== false &&
       e.status !== "draft" &&
@@ -237,23 +241,18 @@ export default function EventsPage() {
 
           {isLoadingEvents && activeUpcomingEvents.length === 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="rounded-3xl bg-white border border-slate-200 overflow-hidden animate-pulse">
-                  <div className="h-48 bg-slate-100" />
-                  <div className="p-5 space-y-3">
-                    <div className="h-5 bg-slate-100 rounded-lg w-3/4" />
-                    <div className="h-3 bg-slate-100 rounded-lg w-1/2" />
-                    <div className="h-10 bg-slate-100 rounded-xl w-full mt-4" />
-                  </div>
-                </div>
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <EventCardSkeleton key={i} />
               ))}
             </div>
           ) : activeUpcomingEvents.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <StaggerGrid className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" staggerDelay={0.06}>
               {activeUpcomingEvents.map((evt) => (
-                <EventCard key={evt.id} event={evt} />
+                <StaggerItem key={evt.id || evt.slug}>
+                  <EventCard event={evt} />
+                </StaggerItem>
               ))}
-            </div>
+            </StaggerGrid>
           ) : (
             <div className="p-12 text-center rounded-3xl bg-white border border-slate-200 space-y-3">
               <Calendar className="w-8 h-8 text-[#E78023] mx-auto opacity-70" />

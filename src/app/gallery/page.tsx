@@ -13,6 +13,7 @@ import {
   syncGalleryFromFirestore, 
   subscribeToGallery 
 } from "@/lib/galleryStore";
+import { GalleryCardSkeleton } from "@/components/ui/SkeletonCard";
 import { LightboxModal } from "@/components/gallery/LightboxModal";
 import { GalleryPhoto } from "@/types";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ export default function GalleryPage() {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [activePhotoIndex, setActivePhotoIndex] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const categories = useMemo(() => {
     const existing = Array.from(new Set(photos.map((p) => p.category).filter(Boolean)));
@@ -44,16 +46,26 @@ export default function GalleryPage() {
   }, [categories, selectedCategory]);
 
   useEffect(() => {
-    setPhotos(getStoredGalleryPhotos());
+    const cached = getStoredGalleryPhotos();
+    setPhotos(cached);
+    if (cached.length > 0) setIsLoading(false);
 
     syncGalleryFromFirestore().then((res) => {
-      if (res) setPhotos(res);
+      if (res && res.length > 0) setPhotos(res);
+      setIsLoading(false);
+    }).catch(() => {
+      setIsLoading(false);
     });
 
-    const unsub = subscribeToGallery((p) => setPhotos(p));
+    const unsub = subscribeToGallery((p) => {
+      if (p && p.length > 0) setPhotos(p);
+      setIsLoading(false);
+    });
 
     const handleUpdate = () => {
-      setPhotos(getStoredGalleryPhotos());
+      const stored = getStoredGalleryPhotos();
+      setPhotos(stored);
+      setIsLoading(false);
     };
 
     window.addEventListener("src_gallery_updated", handleUpdate);
@@ -166,7 +178,15 @@ export default function GalleryPage() {
         </div>
 
         {/* FEED CONTENT CONTAINER */}
-        {filteredPhotos.length === 0 ? (
+        {isLoading && filteredPhotos.length === 0 ? (
+          <div className="columns-2 sm:columns-3 lg:columns-4 gap-3 sm:gap-5 [column-fill:_balance]">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+              <div key={i} className="break-inside-avoid mb-3 sm:mb-5">
+                <GalleryCardSkeleton />
+              </div>
+            ))}
+          </div>
+        ) : filteredPhotos.length === 0 ? (
           /* VSCO Empty State */
           <div className="py-24 text-center space-y-4 max-w-md mx-auto">
             <div className="w-16 h-16 rounded-3xl bg-slate-100 border border-slate-200 flex items-center justify-center mx-auto text-slate-400">

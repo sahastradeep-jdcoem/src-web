@@ -14,6 +14,8 @@ import {
 import { EventCard } from "@/components/events/EventCard";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
+import { StaggerGrid, StaggerItem } from "@/components/ui/StaggerContainer";
+import { EventCardSkeleton } from "@/components/ui/SkeletonCard";
 import {
   getPublicTenures,
   syncTenuresFromFirestore,
@@ -31,17 +33,28 @@ export default function PastTenureEventsPage() {
   const [selectedTenureId, setSelectedTenureId] = useState<string>("all");
   const [page, setPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(6);
+  const [isLoading, setIsLoading] = useState(true);
 
   const refreshTenures = () => {
-    setTenuresList(getPublicTenures());
+    const pub = getPublicTenures();
+    setTenuresList(pub);
+    if (pub.length > 0) setIsLoading(false);
   };
 
   useEffect(() => {
     refreshTenures();
 
-    syncTenuresFromFirestore().then(() => refreshTenures());
+    syncTenuresFromFirestore().then(() => {
+      refreshTenures();
+      setIsLoading(false);
+    }).catch(() => {
+      setIsLoading(false);
+    });
 
-    const unsubTenures = subscribeToTenures(() => refreshTenures());
+    const unsubTenures = subscribeToTenures(() => {
+      refreshTenures();
+      setIsLoading(false);
+    });
 
     window.addEventListener("src_tenures_updated", refreshTenures);
     window.addEventListener("src_tenure_changed", refreshTenures);
@@ -260,22 +273,30 @@ export default function PastTenureEventsPage() {
         </div>
 
         {/* ---- Events Grid ---- */}
-        {paginated.length > 0 ? (
+        {isLoading && paginated.length === 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <EventCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : paginated.length > 0 ? (
           <div className="space-y-10">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <StaggerGrid className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" staggerDelay={0.05}>
               {paginated.map((evt) => (
-                <div key={evt.id} className="relative group">
-                  <EventCard event={evt} />
-                  {(evt as any).tenureLabel && (
-                    <div className="absolute top-3 right-3 pointer-events-none z-10">
-                      <span className="px-2.5 py-0.5 rounded-full bg-slate-900/80 backdrop-blur-sm text-white text-[10px] font-bold uppercase tracking-wider border border-white/20 shadow-md">
-                        {(evt as any).tenureLabel}
-                      </span>
-                    </div>
-                  )}
-                </div>
+                <StaggerItem key={evt.id}>
+                  <div className="relative group">
+                    <EventCard event={evt} />
+                    {(evt as any).tenureLabel && (
+                      <div className="absolute top-3 right-3 pointer-events-none z-10">
+                        <span className="px-2.5 py-0.5 rounded-full bg-slate-900/80 backdrop-blur-sm text-white text-[10px] font-bold uppercase tracking-wider border border-white/20 shadow-md">
+                          {(evt as any).tenureLabel}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </StaggerItem>
               ))}
-            </div>
+            </StaggerGrid>
 
             {/* ---- Google-Style Pagination ---- */}
             {totalPages > 1 && (

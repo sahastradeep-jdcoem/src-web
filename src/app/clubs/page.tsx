@@ -7,23 +7,35 @@ import { ClubItem } from "@/types";
 import { ClubCard } from "@/components/clubs/ClubCard";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
+import { StaggerGrid, StaggerItem } from "@/components/ui/StaggerContainer";
+import { ClubCardSkeleton } from "@/components/ui/SkeletonCard";
 
 export default function ClubsDirectoryPage() {
   const [clubs, setClubs] = useState<ClubItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    setClubs(getStoredClubs());
+    const cached = getStoredClubs();
+    setClubs(cached);
+    if (cached.length > 0) setIsLoading(false);
+
     syncClubsFromFirestore().then((res) => {
-      if (res) setClubs(res);
+      if (res && res.length > 0) setClubs(res);
+      setIsLoading(false);
+    }).catch(() => {
+      setIsLoading(false);
     });
 
     const unsubscribe = subscribeToClubs((remoteClubs) => {
-      setClubs(remoteClubs);
+      if (remoteClubs && remoteClubs.length > 0) setClubs(remoteClubs);
+      setIsLoading(false);
     });
 
     const handleUpdate = () => {
-      setClubs(getStoredClubs());
+      const stored = getStoredClubs();
+      setClubs(stored);
+      setIsLoading(false);
     };
 
     window.addEventListener("src_clubs_updated", handleUpdate);
@@ -55,7 +67,7 @@ export default function ClubsDirectoryPage() {
         {/* Page Header */}
         <div className="space-y-4 max-w-3xl">
           <h1 className="font-extrabold text-4xl sm:text-6xl text-[#0F172A] tracking-tight uppercase leading-none font-heading">
-            {clubs.length} CLUBS.
+            {clubs.length > 0 ? clubs.length : 12} CLUBS.
             <br />
             <span className="text-[#E78023]">ONE COMMUNITY.</span>
           </h1>
@@ -89,12 +101,20 @@ export default function ClubsDirectoryPage() {
             </span>
           </div>
 
-          {filteredClubs.length > 0 ? (
+          {isLoading && filteredClubs.length === 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredClubs.map((club) => (
-                <ClubCard key={club.id} club={club} />
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <ClubCardSkeleton key={i} />
               ))}
             </div>
+          ) : filteredClubs.length > 0 ? (
+            <StaggerGrid className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" staggerDelay={0.05}>
+              {filteredClubs.map((club) => (
+                <StaggerItem key={club.id}>
+                  <ClubCard club={club} />
+                </StaggerItem>
+              ))}
+            </StaggerGrid>
           ) : (
             <div className="p-12 text-center rounded-3xl bg-white border border-slate-200 space-y-3">
               <Sparkles className="w-8 h-8 text-[#E78023] mx-auto opacity-70" />

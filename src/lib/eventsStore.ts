@@ -313,7 +313,15 @@ export function sortEventsByDate<T extends Partial<EventItem>>(events: T[], refe
 
 export function sanitizeEventsList(events: EventItem[]): EventItem[] {
   if (!Array.isArray(events)) return [];
-  const valid = events.filter((e) => e && typeof e === "object" && Boolean(e.id || e.slug || e.name));
+  // Strict Event Invariant: Must be a valid object with a non-empty name and at least an id or slug.
+  // Never admit ghost, blank, or placeholder items lacking a title into the events catalog.
+  const valid = events.filter((e) => (
+    e && 
+    typeof e === "object" && 
+    typeof e.name === "string" && 
+    e.name.trim().length > 0 && 
+    Boolean(e.id || e.slug)
+  ));
   const sanitized = valid.map(sanitizeEventItem);
   return sortEventsByDate(sanitized);
 }
@@ -375,6 +383,10 @@ export function getStoredEvents(): EventItem[] {
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed)) {
         const sanitized = sanitizeEventsList(parsed);
+        // If stale or ghost entries were stripped, write back the cleaned list
+        if (sanitized.length !== parsed.length) {
+          safeWriteEventsToLocalStorage(sanitized);
+        }
         inMemoryEvents = sanitized;
         return sanitized;
       }

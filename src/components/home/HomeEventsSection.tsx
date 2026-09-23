@@ -6,6 +6,7 @@ import { Flame, ArrowRight, Calendar, Inbox } from "lucide-react";
 import { EventCard } from "@/components/events/EventCard";
 import { EventItem } from "@/types";
 import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, sortEventsByDate } from "@/lib/eventsStore";
+import { StaggerGrid, StaggerItem } from "@/components/ui/StaggerContainer";
 import LeadershipSpotlightSection from "./LeadershipSpotlightSection";
 
 export default function HomeEventsSection() {
@@ -55,6 +56,7 @@ export default function HomeEventsSection() {
   const liveEvents = sortEventsByDate(
     eventsList.filter(
       (e) =>
+        Boolean(e?.name && typeof e.name === "string" && e.name.trim().length > 0) &&
         e.isLive !== false &&
         e.status !== "draft" &&
         !e.isCancelled &&
@@ -91,6 +93,7 @@ export default function HomeEventsSection() {
         </section>
       );
     }
+
     return <LeadershipSpotlightSection />;
   }
 
@@ -130,13 +133,15 @@ export default function HomeEventsSection() {
           <EventCard event={featuredEvent} featuredLayout={true} />
         )}
 
-        {/* Supporting Grid if multiple events are added */}
+        {/* Supporting Grid with Staggered Entrance */}
         {otherEvents.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+          <StaggerGrid className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2" staggerDelay={0.06}>
             {otherEvents.map((evt) => (
-              <EventCard key={evt.id || evt.slug} event={evt} />
+              <StaggerItem key={evt.id || evt.slug}>
+                <EventCard event={evt} />
+              </StaggerItem>
             ))}
-          </div>
+          </StaggerGrid>
         )}
 
       </div>

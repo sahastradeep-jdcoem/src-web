@@ -35,6 +35,8 @@ import { TeamMember, ClubItem } from "@/types";
 import { CouncilMemberCard } from "@/components/team/CouncilMemberCard";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
+import { StaggerGrid, StaggerItem } from "@/components/ui/StaggerContainer";
+import { MemberCardSkeleton } from "@/components/ui/SkeletonCard";
 
 export default function TeamPage() {
   const [councilMembers, setCouncilMembers] = useState<TeamMember[]>([]);
@@ -43,47 +45,54 @@ export default function TeamPage() {
   const [clubs, setClubs] = useState<ClubItem[]>([]);
   const [activeFilter, setActiveFilter] = useState<string>("All");
   const [currentTenure, setCurrentTenure] = useState<CouncilTenure | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const initialTenure = getCurrentTenure();
     setCurrentTenure(initialTenure);
-    setCouncilMembers(getStoredCouncilMembers());
-    setHostingMembers(getStoredHostingCommittee());
-    setSpokespersons(getStoredSpokespersons());
+    const cachedCouncil = getStoredCouncilMembers();
+    const cachedHosting = getStoredHostingCommittee();
+    const cachedSpokes = getStoredSpokespersons();
+    const cachedClubs = getStoredClubs();
 
-    const initialClubs = getStoredClubs();
-    setClubs(initialClubs);
+    setCouncilMembers(cachedCouncil);
+    setHostingMembers(cachedHosting);
+    setSpokespersons(cachedSpokes);
+    setClubs(cachedClubs);
 
-    syncCouncilMembersFromFirestore().then((res) => { if (res) setCouncilMembers(res); });
-    syncHostingCommitteeFromFirestore().then((res) => { if (res) setHostingMembers(res); });
-    syncSpokespersonsFromFirestore().then((res) => { if (res) setSpokespersons(res); });
+    if (cachedCouncil.length > 0 || cachedClubs.length > 0) {
+      setIsLoading(false);
+    }
 
-    syncClubsFromFirestore().then((res) => {
-      if (res && res.length > 0) {
-        setClubs(res);
-      }
+    Promise.allSettled([
+      syncCouncilMembersFromFirestore().then((res) => { if (res) setCouncilMembers(res); }),
+      syncHostingCommitteeFromFirestore().then((res) => { if (res) setHostingMembers(res); }),
+      syncSpokespersonsFromFirestore().then((res) => { if (res) setSpokespersons(res); }),
+      syncClubsFromFirestore().then((res) => { if (res && res.length > 0) setClubs(res); }),
+      syncTenuresFromFirestore().then((tenures) => {
+        const active = tenures.find((t) => t.isCurrent);
+        if (active) setCurrentTenure(active);
+      }),
+    ]).finally(() => {
+      setIsLoading(false);
     });
 
-    syncTenuresFromFirestore().then((tenures) => {
-      const active = tenures.find((t) => t.isCurrent);
-      if (active) {
-        setCurrentTenure(active);
-      }
+    const unsubCouncil = subscribeToCouncilMembers((remote) => {
+      setCouncilMembers(remote);
+      setIsLoading(false);
     });
-
-    const unsubCouncil = subscribeToCouncilMembers((remote) => setCouncilMembers(remote));
-    const unsubHosting = subscribeToHostingCommittee((remote) => setHostingMembers(remote));
+    const unsubHosting = subscribeToHostingCommittee((remote) => {
+      setHostingMembers(remote);
+      setIsLoading(false);
+    });
     const unsubSpokes = subscribeToSpokespersons((remote) => setSpokespersons(remote));
     const unsubClubs = subscribeToClubs((remote) => {
-      if (remote && remote.length > 0) {
-        setClubs(remote);
-      }
+      if (remote && remote.length > 0) setClubs(remote);
+      setIsLoading(false);
     });
     const unsubTenures = subscribeToTenures((tenures) => {
       const active = tenures.find((t) => t.isCurrent);
-      if (active) {
-        setCurrentTenure(active);
-      }
+      if (active) setCurrentTenure(active);
     });
 
     const handleUpdate = () => {
@@ -93,6 +102,7 @@ export default function TeamPage() {
       setHostingMembers(getStoredHostingCommittee());
       setSpokespersons(getStoredSpokespersons());
       setClubs(getStoredClubs());
+      setIsLoading(false);
     };
 
     window.addEventListener("src_tenures_updated", handleUpdate);
@@ -283,13 +293,21 @@ export default function TeamPage() {
           </div>
 
           {/* Cards Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
-            {sortedCouncilMembers.map((member) => (
-              <CouncilMemberCard key={member.id} member={member} categoryLabel="ADMIN" />
-            ))}
-          </div>
-
-          {councilMembers.length === 0 && (
+          {isLoading && councilMembers.length === 0 ? (
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                <MemberCardSkeleton key={i} />
+              ))}
+            </div>
+          ) : sortedCouncilMembers.length > 0 ? (
+            <StaggerGrid className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6" staggerDelay={0.04}>
+              {sortedCouncilMembers.map((member) => (
+                <StaggerItem key={member.id}>
+                  <CouncilMemberCard member={member} categoryLabel="ADMIN" />
+                </StaggerItem>
+              ))}
+            </StaggerGrid>
+          ) : (
             <div className="p-8 text-center bg-white rounded-3xl border border-slate-200 text-slate-500 text-xs">
               No admins listed yet.
             </div>
@@ -314,11 +332,13 @@ export default function TeamPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
+            <StaggerGrid className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6" staggerDelay={0.04}>
               {sortedHostingMembers.map((member) => (
-                <CouncilMemberCard key={member.id} member={member} categoryLabel="HOSTING" />
+                <StaggerItem key={member.id}>
+                  <CouncilMemberCard member={member} categoryLabel="HOSTING" />
+                </StaggerItem>
               ))}
-            </div>
+            </StaggerGrid>
           </section>
         )}
 
@@ -348,11 +368,13 @@ export default function TeamPage() {
               </Link>
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
+            <StaggerGrid className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6" staggerDelay={0.04}>
               {clubLeadMembers.map((member) => (
-                <CouncilMemberCard key={member.id} member={member} />
+                <StaggerItem key={member.id}>
+                  <CouncilMemberCard member={member} />
+                </StaggerItem>
               ))}
-            </div>
+            </StaggerGrid>
           </section>
         )}
 

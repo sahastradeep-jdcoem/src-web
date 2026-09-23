@@ -1291,72 +1291,34 @@ export async function getAllEventsFromFirestore(): Promise<EventItem[]> {
       const mergedMap = new Map<string, EventItem>();
       const tombstones = new Set<string>();
 
-      // Read both collections in parallel
-      const [eventsSnapResult, siteContentSnapResult] = await Promise.allSettled([
+      // Target /events collection and the single tombstone doc in parallel (<150ms total)
+      const [eventsSnapResult, tombstonesSnapResult] = await Promise.allSettled([
         getDocs(collection(db, EVENTS_COLLECTION)),
-        getDocs(collection(db, SITE_CONTENT_COLLECTION)),
+        getDoc(doc(db, SITE_CONTENT_COLLECTION, "deleted_events_tombstones")),
       ]);
 
-      // 1. Process site_content collection: extract tombstones, individual event_* docs, and catalog
-      if (siteContentSnapResult.status === "fulfilled") {
-        // Pass 1: Extract tombstones first
-        siteContentSnapResult.value.docs.forEach((d) => {
-          if (d.id === "deleted_events_tombstones") {
-            const data = d.data();
-            if (data) {
-              Object.keys(data).forEach((k) => {
-                if (data[k] === true) tombstones.add(k.toLowerCase().trim());
-              });
-            }
-          }
-        });
-
-        // Pass 2: Process site_content docs
-        siteContentSnapResult.value.docs.forEach((d) => {
-          if (d.id.startsWith("event_")) {
-            const cleanId = d.id.replace(/^event_/, "");
-            if (tombstones.has(cleanId.toLowerCase().trim())) return; // Tombstoned!
-
-            const rawData = d.data();
-            const payload = rawData?.payload || rawData;
-            if (payload && typeof payload === "object") {
-              const evt = { id: cleanId, ...payload } as EventItem;
-              const idKey = (evt.id || "").toLowerCase().trim();
-              const slugKey = (evt.slug || "").toLowerCase().trim();
-              if (tombstones.has(idKey) || tombstones.has(slugKey)) return; // Tombstoned!
-
-              const key = evt.id || evt.slug || cleanId;
-              mergedMap.set(key, evt);
-            }
-          } else if (d.id === "events") {
-            const rawData = d.data();
-            const catalog = rawData?.payload;
-            if (Array.isArray(catalog)) {
-              catalog.forEach((evt) => {
-                if (evt && typeof evt === "object") {
-                  const idKey = (evt.id || "").toLowerCase().trim();
-                  const slugKey = (evt.slug || "").toLowerCase().trim();
-                  if (tombstones.has(idKey) || tombstones.has(slugKey)) return; // Tombstoned!
-
-                  const key = evt.id || evt.slug || "";
-                  if (key && !mergedMap.has(key)) {
-                    mergedMap.set(key, evt);
-                  }
-                }
-              });
-            }
-          }
-        });
+      // 1. Process tombstones
+      if (tombstonesSnapResult.status === "fulfilled" && tombstonesSnapResult.value.exists()) {
+        const data = tombstonesSnapResult.value.data();
+        if (data) {
+          Object.keys(data).forEach((k) => {
+            if (data[k] === true) tombstones.add(k.toLowerCase().trim());
+          });
+        }
       }
 
-      // 2. Process top-level /events collection (Directive #13: highest priority)
+      // 2. Process top-level /events collection (Directive #13: authoritative primary)
       if (eventsSnapResult.status === "fulfilled") {
         eventsSnapResult.value.docs.forEach((d) => {
           const docIdLower = d.id.toLowerCase().trim();
           if (tombstones.has(docIdLower)) return; // Tombstoned!
 
           const data = d.data();
-          const evt = { id: d.id, ...data } as EventItem;
+          // STRICT VALIDATION: Require a valid non-empty name to prevent ghost/blank items
+          const name = typeof data?.name === "string" ? data.name.trim() : "";
+          if (!name) return;
+
+          const evt = { id: d.id, ...data, name } as EventItem;
           const idKey = (evt.id || "").toLowerCase().trim();
           const slugKey = (evt.slug || "").toLowerCase().trim();
           if (tombstones.has(idKey) || tombstones.has(slugKey)) return; // Tombstoned!
@@ -1364,6 +1326,31 @@ export async function getAllEventsFromFirestore(): Promise<EventItem[]> {
           const key = evt.id || evt.slug || d.id;
           mergedMap.set(key, evt);
         });
+      }
+
+      // 3. Fallback: If /events collection was empty (e.g. legacy installation), read site_content/events doc
+      if (mergedMap.size === 0) {
+        try {
+          const legacySnap = await getDoc(doc(db, SITE_CONTENT_COLLECTION, "events"));
+          if (legacySnap.exists()) {
+            const rawData = legacySnap.data();
+            const catalog = rawData?.payload;
+            if (Array.isArray(catalog)) {
+              catalog.forEach((evt) => {
+                if (evt && typeof evt === "object" && typeof evt.name === "string" && evt.name.trim().length > 0) {
+                  const idKey = (evt.id || "").toLowerCase().trim();
+                  const slugKey = (evt.slug || "").toLowerCase().trim();
+                  if (!tombstones.has(idKey) && !tombstones.has(slugKey)) {
+                    const key = evt.id || evt.slug || "";
+                    if (key) mergedMap.set(key, evt);
+                  }
+                }
+              });
+            }
+          }
+        } catch (e) {
+          console.warn("Legacy catalog fallback check skipped:", e);
+        }
       }
 
       return Array.from(mergedMap.values());
@@ -1429,6 +1416,11 @@ export async function getEventFromFirestore(eventIdOrSlug: string): Promise<Even
  * We only emit after at least one SERVER snapshot has arrived from each collection.
  * A 3-second fallback timer ensures offline users still see cached data.
  */
+/**
+ * Subscribe to real-time updates of events directly from the top-level /events collection.
+ * Uses a single tombstone document listener for instantaneous sync with zero delay.
+ * Strictly guarantees that any item without a valid name is rejected.
+ */
 export function subscribeToEventsFromFirestore(
   callback: (events: EventItem[]) => void
 ): () => void {
@@ -1436,203 +1428,110 @@ export function subscribeToEventsFromFirestore(
     return () => {};
   }
 
-  // Maps to track events by ID from different Firestore sources
   const collectionEventsMap = new Map<string, EventItem>();
-  const siteEventsMap = new Map<string, EventItem>();
-  const legacyCatalogMap = new Map<string, EventItem>();
   const tombstonesMap = new Map<string, boolean>();
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-  // Gate 1: Both collections must deliver at least one snapshot (cache or server)
-  let collectionReady = false;
-  let siteContentReady = false;
-
-  // Gate 2: At least one collection must deliver a SERVER snapshot (not from cache).
-  // This prevents emitting stale/partial cache data that overwrites good localStorage.
-  let collectionFromServer = false;
-  let siteContentFromServer = false;
-
-  // Fallback: if the user is offline, all snapshots are fromCache.
-  // After 3 seconds, accept cache data as final so the UI isn't permanently empty.
-  let offlineFallbackFired = false;
-  const offlineFallback = setTimeout(() => {
-    offlineFallbackFired = true;
-    if (collectionReady && siteContentReady && !collectionFromServer && !siteContentFromServer) {
-      // Both delivered from cache, server never responded — user is offline
-      scheduleEmit();
-    }
-  }, 3000);
-
-  const hasServerData = () => collectionFromServer || siteContentFromServer || offlineFallbackFired;
+  let hasReceivedSnapshot = false;
 
   const emitMerged = () => {
-    // Don't emit until both sources have provided at least one snapshot
-    if (!collectionReady || !siteContentReady) return;
+    if (!hasReceivedSnapshot) return;
 
-    // Don't emit until at least one source has provided SERVER data (not just cache).
-    // Cache snapshots often contain partial/stale data that would overwrite good state.
-    if (!hasServerData()) return;
-
-    const mergedMap = new Map<string, EventItem>();
-
-    // 1. Legacy catalog site_content/events (lowest priority)
-    legacyCatalogMap.forEach((evt, key) => {
-      const idKey = (evt.id || "").toLowerCase().trim();
-      const slugKey = (evt.slug || "").toLowerCase().trim();
-      if (!tombstonesMap.has(idKey) && !tombstonesMap.has(slugKey) && !tombstonesMap.has(key.toLowerCase().trim())) {
-        mergedMap.set(key, evt);
-      }
-    });
-
-    // 2. Dedicated site_content/event_* documents
-    siteEventsMap.forEach((evt, key) => {
-      const idKey = (evt.id || "").toLowerCase().trim();
-      const slugKey = (evt.slug || "").toLowerCase().trim();
-      if (!tombstonesMap.has(idKey) && !tombstonesMap.has(slugKey) && !tombstonesMap.has(key.toLowerCase().trim())) {
-        mergedMap.set(key, evt);
-      }
-    });
-
-    // 3. Top-level /events collection documents (highest priority, Directive #13)
+    const validEvents: EventItem[] = [];
     collectionEventsMap.forEach((evt, key) => {
       const idKey = (evt.id || "").toLowerCase().trim();
       const slugKey = (evt.slug || "").toLowerCase().trim();
-      if (!tombstonesMap.has(idKey) && !tombstonesMap.has(slugKey) && !tombstonesMap.has(key.toLowerCase().trim())) {
-        mergedMap.set(key, evt);
+      const nameKey = (evt.name || "").toLowerCase().trim();
+
+      // Check tombstones & require valid name
+      if (
+        nameKey.length > 0 &&
+        !tombstonesMap.has(idKey) &&
+        !tombstonesMap.has(slugKey) &&
+        !tombstonesMap.has(key.toLowerCase().trim())
+      ) {
+        validEvents.push(evt);
       }
     });
 
-    // Cloud-Authoritative Invariant: Always invoke callback even if mergedMap is empty!
-    // Ensures all client views and browser tabs instantly clear when events are deleted.
-    callback(Array.from(mergedMap.values()));
+    callback(validEvents);
   };
 
   const scheduleEmit = () => {
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       emitMerged();
-    }, 100);
+    }, 40);
   };
 
   const unsubscribers: (() => void)[] = [];
 
-  // 1. Subscribe to top-level /events collection (Directive #13)
+  // 1. Subscribe to tombstone document
+  try {
+    const tombstoneDocRef = doc(db, SITE_CONTENT_COLLECTION, "deleted_events_tombstones");
+    const unsubTombstone = onSnapshot(
+      tombstoneDocRef,
+      (docSnap) => {
+        tombstonesMap.clear();
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data) {
+            Object.keys(data).forEach((k) => {
+              if (data[k] === true) tombstonesMap.set(k.toLowerCase().trim(), true);
+            });
+          }
+        }
+        scheduleEmit();
+      },
+      (error) => {
+        console.warn("Tombstone listener notice:", error);
+      }
+    );
+    unsubscribers.push(unsubTombstone);
+  } catch (e) {
+    console.warn("Could not subscribe to event tombstones:", e);
+  }
+
+  // 2. Subscribe to top-level /events collection (Directive #13: 1 Event = 1 Document)
   try {
     const colRef = collection(db, EVENTS_COLLECTION);
-    const unsub = onSnapshot(
+    const unsubEvents = onSnapshot(
       colRef,
       (snapshot) => {
         collectionEventsMap.clear();
         snapshot.docs.forEach((d) => {
           const docIdLower = d.id.toLowerCase().trim();
           if (tombstonesMap.has(docIdLower)) return;
+
           const data = d.data();
-          const evt = { id: d.id, ...data } as EventItem;
+          const name = typeof data?.name === "string" ? data.name.trim() : "";
+          if (!name) return; // Discard corrupt/ghost items lacking title
+
+          const evt = { id: d.id, ...data, name } as EventItem;
           const idKey = (evt.id || "").toLowerCase().trim();
           const slugKey = (evt.slug || "").toLowerCase().trim();
           if (tombstonesMap.has(idKey) || tombstonesMap.has(slugKey)) return;
+
           const key = evt.id || evt.slug || d.id;
           collectionEventsMap.set(key, evt);
         });
-        collectionReady = true;
-        if (!snapshot.metadata.fromCache) {
-          collectionFromServer = true;
-        }
+
+        hasReceivedSnapshot = true;
         scheduleEmit();
       },
       (error) => {
         if (error?.code !== "permission-denied" && !error?.message?.includes("Missing or insufficient permissions")) {
           console.warn("Firestore live events collection notice:", error);
         }
-        collectionReady = true;
-        collectionFromServer = true; // On error, unblock so site_content alone can emit
-        scheduleEmit();
       }
     );
-    unsubscribers.push(unsub);
+    unsubscribers.push(unsubEvents);
   } catch (e) {
     console.warn("Firestore subscription error for events collection:", e);
-    collectionReady = true;
-    collectionFromServer = true;
-  }
-
-  // 2. Subscribe to site_content collection to capture dedicated site_content/event_* docs, tombstones, and site_content/events catalog
-  try {
-    const siteColRef = collection(db, SITE_CONTENT_COLLECTION);
-    const unsub = onSnapshot(
-      siteColRef,
-      (snapshot) => {
-        siteEventsMap.clear();
-        legacyCatalogMap.clear();
-
-        // Pass 1: Extract tombstones first
-        snapshot.docs.forEach((d) => {
-          if (d.id === "deleted_events_tombstones") {
-            const data = d.data();
-            tombstonesMap.clear();
-            if (data) {
-              Object.keys(data).forEach((k) => {
-                if (data[k] === true) tombstonesMap.set(k.toLowerCase().trim(), true);
-              });
-            }
-          }
-        });
-
-        // Pass 2: Extract active event documents and catalog
-        snapshot.docs.forEach((d) => {
-          if (d.id.startsWith("event_")) {
-            const cleanId = d.id.replace(/^event_/, "");
-            if (tombstonesMap.has(cleanId.toLowerCase().trim())) return; // Tombstoned!
-            const rawData = d.data();
-            const payload = rawData?.payload || rawData;
-            if (payload && typeof payload === "object") {
-              const evt = { id: cleanId, ...payload } as EventItem;
-              const idKey = (evt.id || "").toLowerCase().trim();
-              const slugKey = (evt.slug || "").toLowerCase().trim();
-              if (tombstonesMap.has(idKey) || tombstonesMap.has(slugKey)) return; // Tombstoned!
-              const key = evt.id || evt.slug || cleanId;
-              siteEventsMap.set(key, evt);
-            }
-          } else if (d.id === "events") {
-            const rawData = d.data();
-            const catalog = rawData?.payload;
-            if (Array.isArray(catalog)) {
-              catalog.forEach((evt) => {
-                if (evt && typeof evt === "object") {
-                  const idKey = (evt.id || "").toLowerCase().trim();
-                  const slugKey = (evt.slug || "").toLowerCase().trim();
-                  if (tombstonesMap.has(idKey) || tombstonesMap.has(slugKey)) return; // Tombstoned!
-                  const key = evt.id || evt.slug || "";
-                  if (key) legacyCatalogMap.set(key, evt);
-                }
-              });
-            }
-          }
-        });
-        siteContentReady = true;
-        if (!snapshot.metadata.fromCache) {
-          siteContentFromServer = true;
-        }
-        scheduleEmit();
-      },
-      (error) => {
-        console.warn("Firestore subscription notice for site_content events:", error);
-        siteContentReady = true;
-        siteContentFromServer = true; // On error, unblock so /events alone can emit
-        scheduleEmit();
-      }
-    );
-    unsubscribers.push(unsub);
-  } catch (e) {
-    console.warn("Firestore subscription error for site_content events:", e);
-    siteContentReady = true;
-    siteContentFromServer = true;
   }
 
   return () => {
     if (debounceTimer) clearTimeout(debounceTimer);
-    clearTimeout(offlineFallback);
     unsubscribers.forEach((fn) => fn());
   };
 }

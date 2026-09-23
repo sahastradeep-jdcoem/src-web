@@ -40,6 +40,8 @@ import { cn } from "@/lib/utils";
 import { isExternalUser as checkIsExternalUser } from "@/lib/usersStore";
 import confetti from "canvas-confetti";
 import { useSocialShare } from "@/context/SocialShareContext";
+import { StaggerGrid, StaggerItem } from "@/components/ui/StaggerContainer";
+import { ListingCardSkeleton } from "@/components/ui/SkeletonCard";
 
 export default function StudentHubPage() {
   const { user, openAuthModal } = useAuth();
@@ -50,6 +52,7 @@ export default function StudentHubPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [votedPolls, setVotedPolls] = useState<Record<string, string>>({});
   const [feedbackNotice, setFeedbackNotice] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     // Purge any obsolete un-scoped legacy voted key from storage
@@ -95,14 +98,19 @@ export default function StudentHubPage() {
   }, [user]);
 
   useEffect(() => {
-    setListings(getStoredListings());
+    const cachedListings = getStoredListings();
+    setListings(cachedListings);
     setResponses(getStoredListingResponses());
+    if (cachedListings.length > 0) setIsLoading(false);
 
     // CRITICAL: Fetch fresh from Firestore on mount
     syncListingsFromFirestore().then((remote) => {
       if (remote && Array.isArray(remote)) {
         setListings(remote);
       }
+      setIsLoading(false);
+    }).catch(() => {
+      setIsLoading(false);
     });
 
     syncListingResponsesFromFirestore().then((res) => {
@@ -114,6 +122,7 @@ export default function StudentHubPage() {
     const unsubListings = subscribeToListings((updated) => {
       if (updated && Array.isArray(updated)) {
         setListings(updated);
+        setIsLoading(false);
         if (user?.uid) {
           setVotedPolls(getStoredVotedPolls(user.uid));
         }
@@ -282,18 +291,25 @@ export default function StudentHubPage() {
         </div>
 
         {/* Listings Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredListings.map((item) => {
-            const isPoll = item.type === "poll";
-            const isOpp = item.type === "opportunity";
-            const isIssue = item.type === "issue";
-            const isSub = item.type === "submission";
+        {isLoading && filteredListings.length === 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <ListingCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : filteredListings.length > 0 ? (
+          <StaggerGrid className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" staggerDelay={0.05}>
+            {filteredListings.map((item) => {
+              const isPoll = item.type === "poll";
+              const isOpp = item.type === "opportunity";
+              const isIssue = item.type === "issue";
+              const isSub = item.type === "submission";
 
-            return (
-              <div
-                key={item.id}
-                className="group rounded-3xl bg-white border border-slate-200 p-6 flex flex-col justify-between hover:border-[#17458F] hover:shadow-xl transition-all space-y-5"
-              >
+              return (
+                <StaggerItem key={item.id} className="h-full">
+                  <div
+                    className="group rounded-3xl bg-white border border-slate-200 p-6 flex flex-col justify-between hover:border-[#17458F] hover:shadow-xl transition-all space-y-5 h-full"
+                  >
                 <div className="space-y-4">
                   {/* Top Badges */}
                   <div className="flex items-center justify-between gap-2">
@@ -521,10 +537,12 @@ export default function StudentHubPage() {
                   </div>
                 )}
               </div>
-            );
-          })}
-        </div>
-      </div>
+            </StaggerItem>
+          );
+        })}
+      </StaggerGrid>
+    ) : null}
+  </div>
 
     </div>
   );
