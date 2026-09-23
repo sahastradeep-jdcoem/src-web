@@ -17,43 +17,43 @@ export const viewport: Viewport = {
   maximumScale: 5,
 };
 
-export const metadata: Metadata = {
-  metadataBase: new URL("https://www.srcjdcoem.in"),
-  alternates: {
-    canonical: "https://www.srcjdcoem.in",
-  },
-  title: {
-    default: "Sahastradeep - SRC JDCOEM | Student Representative Council • JDCOEM",
-    template: "%s | Sahastradeep - SRC JDCOEM",
-  },
-  description: "Official digital platform of the Student Representative Council (SRC) of JD College of Engineering & Management, Nagpur. Uniting 12 clubs, flagship fests, and student leadership.",
-  manifest: "/manifest.json",
-  icons: {
-    icon: "/assets/SRC Logo.png",
-    apple: "/assets/SRC Logo.png",
-  },
-  openGraph: {
-    title: "Sahastradeep - SRC JDCOEM",
-    description: "Official Student Representative Council portal of JDCOEM Nagpur. Flagship fests, 12 club charters, and student accreditation.",
-    url: "https://www.srcjdcoem.in",
-    siteName: "Sahastradeep - SRC JDCOEM",
-    images: [
-      {
-        url: "/assets/SRC Logo.png",
-        width: 800,
-        height: 800,
-        alt: "SRC JDCOEM Official Seal",
-      },
-    ],
-    locale: "en_IN",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Sahastradeep - SRC JDCOEM",
-    description: "Official Student Representative Council portal of JDCOEM Nagpur. Flagship fests, 12 club charters, and student accreditation.",
-  },
-};
+import { getHeroOgMetadata } from "@/data/seoMetadata";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const heroOg = await getHeroOgMetadata();
+
+  return {
+    metadataBase: new URL("https://www.srcjdcoem.in"),
+    alternates: {
+      canonical: "https://www.srcjdcoem.in",
+    },
+    title: {
+      default: "Sahastradeep - SRC JDCOEM | Student Representative Council • JDCOEM",
+      template: "%s | Sahastradeep - SRC JDCOEM",
+    },
+    description: "Official digital platform of the Student Representative Council (SRC) of JD College of Engineering & Management, Nagpur. Uniting 12 clubs, flagship fests, and student leadership.",
+    manifest: "/manifest.json",
+    icons: {
+      icon: "/assets/src-logo.png",
+      apple: "/assets/src-logo.png",
+    },
+    openGraph: {
+      title: heroOg.ogTitle,
+      description: heroOg.ogDescription,
+      url: "https://www.srcjdcoem.in",
+      siteName: "Sahastradeep - SRC JDCOEM",
+      images: heroOg.ogImages,
+      locale: "en_IN",
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: heroOg.ogTitle,
+      description: heroOg.ogDescription,
+      images: heroOg.twitterImages,
+    },
+  };
+}
 
 export default function RootLayout({
   children,

@@ -107,7 +107,7 @@ export function JsonLd({ type = "Organization", leadershipData, eventData }: Jso
     name: "Student Representative Council (SRC) — JDCOEM Nagpur",
     alternateName: "Sahastradeep",
     url: baseUrl,
-    logo: `${baseUrl}/assets/SRC Logo.png`,
+    logo: `${baseUrl}/assets/src-logo.png`,
     description:
       "Official Student Representative Council of JD College of Engineering and Management, Nagpur. Empowering students, coordinating 12 professional and cultural club charters, organizing university fests, and fostering campus leadership.",
     address: {

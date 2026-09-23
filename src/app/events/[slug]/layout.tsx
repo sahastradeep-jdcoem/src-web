@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { getEventFromFirestore, getAllEventsFromFirestore } from "@/lib/firebase/firestore";
 import { EventItem } from "@/types";
+import { DEFAULT_OG_IMAGES, DEFAULT_OG_IMAGE_URL } from "@/data/seoMetadata";
 
 
 function getValidOgImageUrl(imgUrl?: string): string {
-  if (!imgUrl) return "/assets/SRC Logo.png";
+  if (!imgUrl) return DEFAULT_OG_IMAGE_URL;
   const trimmed = imgUrl.trim();
   // Social crawlers cannot fetch base64 data URLs; use fallback logo
-  if (trimmed.startsWith("data:")) return "/assets/SRC Logo.png";
+  if (trimmed.startsWith("data:")) return DEFAULT_OG_IMAGE_URL;
   return trimmed;
 }
 
@@ -50,14 +51,7 @@ export async function generateMetadata({
         description: "Explore collegiate events, competitions, and festivals organized by the Student Representative Council at JDCOEM Nagpur.",
         url: `https://www.srcjdcoem.in/events/${slug}`,
         siteName: "Sahastradeep - SRC JDCOEM",
-        images: [
-          {
-            url: "/assets/SRC Logo.png",
-            width: 800,
-            height: 800,
-            alt: "SRC JDCOEM",
-          },
-        ],
+        images: DEFAULT_OG_IMAGES,
       },
     };
   }

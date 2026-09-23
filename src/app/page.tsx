@@ -8,34 +8,43 @@ import HeroSection from "@/components/home/HeroSection";
 import HomeClubsSection from "@/components/home/HomeClubsSection";
 import HomeEventsSection from "@/components/home/HomeEventsSection";
 import { Badge } from "@/components/ui/Badge";
+import { getHeroOgMetadata } from "@/data/seoMetadata";
 
-export const metadata: Metadata = {
-  title: "Sahastradeep - SRC JDCOEM | Student Representative Council • JDCOEM",
-  description: "Official digital gateway to the Student Representative Council (SRC) of JD College of Engineering & Management. Explore flagship collegiate fests, 12 student clubs, and campus leadership.",
-  alternates: {
-    canonical: "https://www.srcjdcoem.in",
-  },
-  keywords: [
-    "SRC JDCOEM",
-    "Sahastradeep",
-    "Student Representative Council",
-    "JDCOEM Nagpur",
-    "JD College of Engineering and Management",
-    "SRC",
-    "Sahastradeep JDCOEM",
-  ],
-  openGraph: {
-    title: "Sahastradeep - SRC JDCOEM",
-    description: "Official portal of SRC JDCOEM Nagpur. Flagship fests, 12 chartered clubs, and digital delegate passes.",
-    url: "https://www.srcjdcoem.in",
-    siteName: "Sahastradeep - SRC JDCOEM",
-  },
-  twitter: {
-    card: "summary",
-    title: "Sahastradeep - SRC JDCOEM",
-    description: "Official portal of SRC JDCOEM Nagpur. Flagship fests, 12 chartered clubs, and digital delegate passes.",
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const heroOg = await getHeroOgMetadata();
+
+  return {
+    title: "Sahastradeep - SRC JDCOEM | Student Representative Council • JDCOEM",
+    description: "Official digital gateway to the Student Representative Council (SRC) of JD College of Engineering & Management. Explore flagship collegiate fests, 12 student clubs, and campus leadership.",
+    alternates: {
+      canonical: "https://www.srcjdcoem.in",
+    },
+    keywords: [
+      "SRC JDCOEM",
+      "Sahastradeep",
+      "Student Representative Council",
+      "JDCOEM Nagpur",
+      "JD College of Engineering and Management",
+      "SRC",
+      "Sahastradeep JDCOEM",
+    ],
+    openGraph: {
+      title: heroOg.ogTitle,
+      description: heroOg.ogDescription,
+      url: "https://www.srcjdcoem.in",
+      siteName: "Sahastradeep - SRC JDCOEM",
+      images: heroOg.ogImages,
+      locale: "en_IN",
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: heroOg.ogTitle,
+      description: heroOg.ogDescription,
+      images: heroOg.twitterImages,
+    },
+  };
+}
 
 export default function HomePage() {
   return (

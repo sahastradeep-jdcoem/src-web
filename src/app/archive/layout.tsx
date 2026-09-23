@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { DEFAULT_OG_IMAGES, DEFAULT_TWITTER_IMAGES } from "@/data/seoMetadata";
 
 export const metadata: Metadata = {
   title: "Archive",
@@ -11,11 +12,13 @@ export const metadata: Metadata = {
     description: "Historical records, previous tenures, and past council rosters of SRC JDCOEM Nagpur.",
     url: "https://www.srcjdcoem.in/archive",
     siteName: "Sahastradeep - SRC JDCOEM",
+    images: DEFAULT_OG_IMAGES,
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "Archive | SAHASTRADEEP • SRC JDCOEM",
     description: "Historical records, previous tenures, and past council rosters of SRC JDCOEM Nagpur.",
+    images: DEFAULT_TWITTER_IMAGES,
   },
 };
 
