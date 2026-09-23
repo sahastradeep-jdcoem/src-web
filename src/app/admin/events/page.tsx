@@ -219,11 +219,12 @@ export default function AdminEventsPage() {
       slug: `${formData.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${randSuffix}`,
       name: formData.name,
       category: formData.category as any,
-      date: formData.date || "TBD 2026",
-      rawDate: formData.rawDate || undefined,
-      rawEndDate: formData.isMultiDay ? (formData.rawEndDate || formData.rawDate) : undefined,
-      endDate: formData.isMultiDay ? (formData.endDate || undefined) : undefined,
-      isMultiDay: Boolean(formData.isMultiDay),
+      date: formData.isDateTbd ? (formData.date?.trim() || "Coming Soon") : (formData.date || "TBD 2026"),
+      rawDate: formData.isDateTbd ? undefined : (formData.rawDate || undefined),
+      rawEndDate: (!formData.isDateTbd && formData.isMultiDay) ? (formData.rawEndDate || formData.rawDate) : undefined,
+      endDate: (!formData.isDateTbd && formData.isMultiDay) ? (formData.endDate || undefined) : undefined,
+      isMultiDay: Boolean(!formData.isDateTbd && formData.isMultiDay),
+      isDateTbd: Boolean(formData.isDateTbd),
       time: formData.time || "10:00 AM IST",
       venue: formData.venue,
       organizer: formData.organizer?.trim() || "",
@@ -348,6 +349,7 @@ export default function AdminEventsPage() {
       date: editingEvent.date,
       endDate: editingEvent.endDate || "",
       isMultiDay: Boolean(editingEvent.isMultiDay || (editingEvent.rawEndDate && editingEvent.rawEndDate !== editingEvent.rawDate)),
+      isDateTbd: Boolean(editingEvent.isDateTbd || (editingEvent.date && /\b(coming soon|to be announced|tba|to be decided|tbd)\b/i.test(editingEvent.date))),
       time: editingEvent.time || "10:00 AM IST",
       venue: editingEvent.venue,
       organizer: editingEvent.organizer || "",
@@ -448,11 +450,12 @@ export default function AdminEventsPage() {
       ...editingEvent,
       name: formData.name,
       category: formData.category as any,
-      date: formData.date,
-      rawDate: formData.rawDate || undefined,
-      rawEndDate: formData.isMultiDay ? (formData.rawEndDate || formData.rawDate) : undefined,
-      endDate: formData.isMultiDay ? (formData.endDate || undefined) : undefined,
-      isMultiDay: Boolean(formData.isMultiDay),
+      date: formData.isDateTbd ? (formData.date?.trim() || "Coming Soon") : formData.date,
+      rawDate: formData.isDateTbd ? undefined : (formData.rawDate || undefined),
+      rawEndDate: (!formData.isDateTbd && formData.isMultiDay) ? (formData.rawEndDate || formData.rawDate) : undefined,
+      endDate: (!formData.isDateTbd && formData.isMultiDay) ? (formData.endDate || undefined) : undefined,
+      isMultiDay: Boolean(!formData.isDateTbd && formData.isMultiDay),
+      isDateTbd: Boolean(formData.isDateTbd),
       time: formData.time || editingEvent.time || "10:00 AM IST",
       venue: formData.venue,
       organizer: formData.organizer?.trim() || editingEvent.organizer || "",
@@ -1071,9 +1074,14 @@ export default function AdminEventsPage() {
                     </div>
 
                     <div className="flex items-center justify-between text-xs font-semibold text-slate-700 pt-1">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <CalendarIcon className="w-3.5 h-3.5 text-[#E78023]" />
                         <span>{evt.date}</span>
+                        {(evt.isDateTbd || /\b(coming soon|to be announced|tba|to be decided|tbd)\b/i.test(evt.date)) && (
+                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded leading-none">
+                            TBA
+                          </span>
+                        )}
                       </div>
                       {evt.time && (
                         <div className="flex items-center gap-1 text-[11px] text-slate-500">
@@ -1104,6 +1112,8 @@ export default function AdminEventsPage() {
                               ? "rose"
                               : evt.status === "Registration Open"
                               ? "orange"
+                              : evt.status === "Upcoming"
+                              ? "warning"
                               : "slate"
                           }
                           size="sm"

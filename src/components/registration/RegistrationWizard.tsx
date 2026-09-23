@@ -522,7 +522,11 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
   const handleProceedToStep2 = async () => {
     if (event.status === "Completed" || event.status?.toLowerCase() === "completed" || (event.status && event.status !== "Registration Open")) {
-      alert(`Registrations are closed for this event (${event.status}). Registration cannot happen.`);
+      if (event.status === "Upcoming") {
+        alert("Registrations for this event have not opened yet. Please check back soon!");
+      } else {
+        alert(`Registrations are closed for this event (${event.status}). Registration cannot happen.`);
+      }
       return;
     }
     if (!user) {
@@ -750,7 +754,11 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   const handleConfirmRegistration = async () => {
     if (isSubmitting) return;
     if (event.status === "Completed" || event.status?.toLowerCase() === "completed" || (event.status && event.status !== "Registration Open")) {
-      alert(`Registrations are closed for this event (${event.status}). Registration cannot happen.`);
+      if (event.status === "Upcoming") {
+        alert("Registrations for this event have not opened yet. Please check back soon!");
+      } else {
+        alert(`Registrations are closed for this event (${event.status}). Registration cannot happen.`);
+      }
       return;
     }
     setIsSubmitting(true);
@@ -1067,6 +1075,33 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     };
   }, [paytmCheckoutData?.orderId]);
 
+
+  if (event.status === "Upcoming") {
+    return (
+      <div className="max-w-xl mx-auto p-8 rounded-3xl bg-white border border-slate-200 text-center space-y-5 shadow-sm">
+        <div className="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center mx-auto text-amber-600">
+          <Clock className="w-7 h-7" />
+        </div>
+        <div className="space-y-2">
+          <Badge variant="warning" size="md">Registrations Yet to Start • Event Upcoming</Badge>
+          <h3 className="font-heading font-extrabold text-2xl text-[#0F172A] uppercase">
+            {event.name}
+          </h3>
+          <p className="text-xs text-slate-600 leading-relaxed font-medium">
+            Official registrations for this event have not opened yet. {event.registrationStartDate ? `Registrations are scheduled to open on ${event.registrationStartDate}. ` : ""}Please stay tuned!
+          </p>
+        </div>
+        <div className="pt-2">
+          <Link
+            href={`/events/${event.slug}`}
+            className="inline-flex px-6 py-3 rounded-2xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#123670] transition-all shadow-sm"
+          >
+            &larr; View Event Details
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (event.status === "Completed" || event.status?.toLowerCase() === "completed") {
     return (

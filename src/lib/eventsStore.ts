@@ -194,6 +194,15 @@ export function getEventDateTimestamp(event: Partial<EventItem> | null | undefin
   const dateStr = (event.date || "").trim();
   const timeOffset = parseTimeString(event.time);
 
+  // If date is marked as Coming Soon / TBD / Not revealed yet
+  if (Boolean(event.isDateTbd) || !dateStr || /\b(tbd|to be decided|coming soon|announced soon|tba|to be announced)\b/i.test(dateStr)) {
+    if (event.registrationStartDate) {
+      const regStart = Date.parse(event.registrationStartDate);
+      if (!isNaN(regStart)) return regStart + timeOffset;
+    }
+    return Number.MAX_SAFE_INTEGER;
+  }
+
   // 0. Try event.rawDate if specified in YYYY-MM-DD format
   if (event.rawDate) {
     const rawMatch = event.rawDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -203,14 +212,6 @@ export function getEventDateTimestamp(event: Partial<EventItem> | null | undefin
       const d = parseInt(rawMatch[3], 10);
       return new Date(y, m, d).getTime() + timeOffset;
     }
-  }
-
-  if (!dateStr || /\b(tbd|to be decided|coming soon|announced soon)\b/i.test(dateStr)) {
-    if (event.registrationStartDate) {
-      const regStart = Date.parse(event.registrationStartDate);
-      if (!isNaN(regStart)) return regStart + timeOffset;
-    }
-    return Number.MAX_SAFE_INTEGER;
   }
 
   // 1. Try ISO date (YYYY-MM-DD)

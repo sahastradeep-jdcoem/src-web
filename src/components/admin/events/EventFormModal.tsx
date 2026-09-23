@@ -50,6 +50,7 @@ export interface EventFormData {
   rawDate: string;
   date: string;
   isMultiDay?: boolean;
+  isDateTbd?: boolean;
   rawEndDate?: string;
   endDate?: string;
   time: string;
@@ -241,7 +242,12 @@ export function EventFormModal({
 
   const defaultRawDate = new Date().toISOString().split("T")[0];
 
-  const initialIsMulti = initialData?.isMultiDay || (Boolean(initialData?.rawEndDate) && initialData?.rawEndDate !== initialData?.rawDate) || false;
+  const isInitialDateTbd = Boolean(
+    initialData?.isDateTbd ||
+    (initialData?.date && /\b(coming soon|tbd|to be announced|to be decided)\b/i.test(initialData.date))
+  );
+
+  const initialIsMulti = !isInitialDateTbd && (initialData?.isMultiDay || (Boolean(initialData?.rawEndDate) && initialData?.rawEndDate !== initialData?.rawDate) || false);
   const initialRawEndDate = initialData?.rawEndDate || initialData?.rawDate || defaultRawDate;
 
   const initialHasSchedule = initialData?.hasSchedule !== undefined
@@ -265,7 +271,10 @@ export function EventFormModal({
     category: initialData?.category || "Technical",
     rawDate: initialData?.rawDate || defaultRawDate,
     rawEndDate: initialRawEndDate,
-    date: initialData?.date || (initialIsMulti ? formatDateRangeToReadable(initialData?.rawDate || defaultRawDate, initialRawEndDate) : formatDateToReadable(defaultRawDate)),
+    isDateTbd: isInitialDateTbd,
+    date: isInitialDateTbd
+      ? (initialData?.date || "Coming Soon")
+      : (initialData?.date || (initialIsMulti ? formatDateRangeToReadable(initialData?.rawDate || defaultRawDate, initialRawEndDate) : formatDateToReadable(defaultRawDate))),
     endDate: initialData?.endDate || (initialIsMulti ? formatDateToReadable(initialRawEndDate) : ""),
     isMultiDay: initialIsMulti,
     time: initialData?.time || "10:00 AM IST",
@@ -325,11 +334,17 @@ export function EventFormModal({
 
       const isMulti = initialData.isMultiDay || (Boolean(initialData.rawEndDate) && initialData.rawEndDate !== initialData.rawDate) || false;
       const endVal = initialData.rawEndDate || initialData.rawDate || form.rawDate;
+      const isDateTbdVal = Boolean(
+        initialData.isDateTbd ||
+        (initialData.date && /\b(coming soon|to be announced|tba|to be decided|tbd)\b/i.test(initialData.date))
+      );
       setForm((prev) => ({
         ...prev,
         ...initialData,
         isMultiDay: isMulti,
+        isDateTbd: isDateTbdVal,
         rawEndDate: endVal,
+        date: isDateTbdVal ? (initialData.date || "Coming Soon") : (initialData.date || (isMulti ? formatDateRangeToReadable(initialData.rawDate || form.rawDate, endVal) : formatDateToReadable(initialData.rawDate || form.rawDate))),
         endDate: initialData.endDate || (isMulti ? formatDateToReadable(endVal) : ""),
         time: initialData.time || prev.time || "10:00 AM IST",
         noRegistrationRequired: Boolean(initialData.noRegistrationRequired),
@@ -380,6 +395,7 @@ export function EventFormModal({
         : formatDateToReadable(val);
       return {
         ...prev,
+        isDateTbd: false,
         rawDate: val,
         rawEndDate: isMulti ? endVal : val,
         date: formatted || val,
@@ -393,6 +409,7 @@ export function EventFormModal({
       const formatted = formatDateRangeToReadable(prev.rawDate, val);
       return {
         ...prev,
+        isDateTbd: false,
         rawEndDate: val,
         date: formatted || prev.rawDate,
         endDate: formatDateToReadable(val),
@@ -408,11 +425,36 @@ export function EventFormModal({
         : formatDateToReadable(prev.rawDate);
       return {
         ...prev,
+        isDateTbd: false,
         isMultiDay: isMulti,
         rawEndDate: isMulti ? endVal : prev.rawDate,
         date: formatted || prev.rawDate,
         endDate: isMulti ? formatDateToReadable(endVal) : "",
       };
+    });
+  };
+
+  const handleToggleDateTbd = (isTbd: boolean) => {
+    setForm((prev) => {
+      if (isTbd) {
+        return {
+          ...prev,
+          isDateTbd: true,
+          date: prev.isDateTbd && prev.date ? prev.date : "Coming Soon",
+        };
+      } else {
+        const isMulti = Boolean(prev.isMultiDay);
+        const endVal = prev.rawEndDate && prev.rawEndDate >= prev.rawDate ? prev.rawEndDate : prev.rawDate;
+        const formatted = isMulti
+          ? formatDateRangeToReadable(prev.rawDate, endVal)
+          : formatDateToReadable(prev.rawDate);
+        return {
+          ...prev,
+          isDateTbd: false,
+          date: formatted || prev.rawDate,
+          endDate: isMulti ? formatDateToReadable(endVal) : "",
+        };
+      }
     });
   };
 
@@ -1249,18 +1291,21 @@ export function EventFormModal({
                     <span>Event Date &amp; Duration *</span>
                   </label>
                   <p className="text-[11px] text-slate-500">
-                    Choose whether the event is held on a single day or spans across multiple days.
+                    Choose whether the event is held on a single day, across multiple days, or date is coming soon (TBA).
                   </p>
                 </div>
 
                 {/* Duration Mode Switch */}
-                <div className="inline-flex p-1 bg-slate-200/70 rounded-xl shrink-0">
+                <div className="inline-flex p-1 bg-slate-200/70 rounded-xl shrink-0 flex-wrap gap-1">
                   <button
                     type="button"
-                    onClick={() => handleToggleMultiDay(false)}
+                    onClick={() => {
+                      handleToggleDateTbd(false);
+                      handleToggleMultiDay(false);
+                    }}
                     className={cn(
                       "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                      !form.isMultiDay
+                      !form.isDateTbd && !form.isMultiDay
                         ? "bg-white text-[#17458F] shadow-xs"
                         : "text-slate-600 hover:text-slate-900"
                     )}
@@ -1269,21 +1314,114 @@ export function EventFormModal({
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleToggleMultiDay(true)}
+                    onClick={() => {
+                      handleToggleDateTbd(false);
+                      handleToggleMultiDay(true);
+                    }}
                     className={cn(
                       "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                      form.isMultiDay
+                      !form.isDateTbd && form.isMultiDay
                         ? "bg-white text-[#E78023] shadow-xs"
                         : "text-slate-600 hover:text-slate-900"
                     )}
                   >
                     Multi-Day (Period)
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleDateTbd(true)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                      form.isDateTbd
+                        ? "bg-amber-500 text-white shadow-xs"
+                        : "text-slate-600 hover:text-slate-900"
+                    )}
+                  >
+                    Coming Soon (TBA)
+                  </button>
                 </div>
               </div>
 
               {/* Date & Time Input Fields */}
-              {!form.isMultiDay ? (
+              {form.isDateTbd ? (
+                <div className="space-y-3 pt-1">
+                  <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/80 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Date Coming Soon / To Be Announced</span>
+                      </span>
+                      <span className="text-[10px] font-bold text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-md border border-amber-300">
+                        Date TBA Badge Active
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-800 leading-relaxed">
+                      Use this option when the event date is not finalized yet. The website will display a sleek &ldquo;Date TBA&rdquo; badge on event cards and detail hero headers.
+                    </p>
+                    <div className="space-y-1.5 pt-1">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+                        Custom Display Label *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={form.date}
+                        onChange={(e) => setForm({ ...form, date: e.target.value })}
+                        placeholder="e.g. Coming Soon, Date TBA, or Coming Soon • Nov 2026"
+                        className="w-full px-4 py-2.5 rounded-xl bg-white border border-amber-300 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F]"
+                      />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <span className="text-[10px] text-slate-500 font-semibold mr-1">Quick Presets:</span>
+                      {["Coming Soon", "Date TBA", "Revealing Soon", "To Be Announced"].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setForm({ ...form, date: preset })}
+                          className={cn(
+                            "px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-all cursor-pointer",
+                            form.date === preset
+                              ? "bg-amber-600 text-white border-amber-600 shadow-xs"
+                              : "bg-white text-slate-700 border-slate-200 hover:border-amber-300 hover:bg-amber-50"
+                          )}
+                        >
+                          {preset}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-[#E78023]" />
+                        <span>Event Time</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={form.time}
+                        onChange={(e) => setForm({ ...form, time: e.target.value })}
+                        placeholder="e.g. Will be announced or 10:00 AM"
+                        className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-[#E78023]" />
+                        <span>Venue *</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={form.venue}
+                        onChange={(e) => setForm({ ...form, venue: e.target.value })}
+                        placeholder="e.g. JDCOEM Campus or TBA"
+                        className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : !form.isMultiDay ? (
                 <div className="space-y-3 pt-1">
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">

@@ -227,6 +227,12 @@ export default function EventDetailPage() {
   }
 
   const isRegistrationOpen = event.status === "Registration Open";
+  const isUpcoming = event.status === "Upcoming";
+  const isDateComingSoon = Boolean(
+    event.isDateTbd ||
+    !event.date ||
+    /\b(coming soon|to be announced|tba|to be decided|tbd)\b/i.test(event.date)
+  );
   const isJdcoemOnly = event.targetAudience === "jdcoem_only" || event.isInterCollege === false;
 
   const displayRules = Array.from(
@@ -332,12 +338,18 @@ export default function EventDetailPage() {
           <div className="flex flex-wrap items-center gap-6 sm:gap-8 pt-4 border-t border-white/20 text-xs sm:text-sm text-slate-200">
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-[#E78023] shrink-0" />
-              <span className="font-bold text-white">{event.date}</span>
-              {event.isMultiDay && (
+              <span className={cn("font-bold text-white", isDateComingSoon && "text-amber-300")}>
+                {event.date || "Coming Soon"}
+              </span>
+              {isDateComingSoon ? (
+                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                  Date TBA
+                </span>
+              ) : event.isMultiDay ? (
                 <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
                   Multi-Day
                 </span>
-              )}
+              ) : null}
             </div>
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-slate-300 shrink-0" />
@@ -856,8 +868,12 @@ export default function EventDetailPage() {
             ) : (
               <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-6">
                 <div className="space-y-2">
-                  <Badge variant={event.noRegistrationRequired ? "success" : isRegistrationOpen ? "orange" : "slate"} size="md">
-                    {event.noRegistrationRequired ? "Open Attendance" : event.status}
+                  <Badge variant={event.noRegistrationRequired ? "success" : isRegistrationOpen ? "orange" : isUpcoming ? "warning" : "slate"} size="md">
+                    {event.noRegistrationRequired
+                      ? "Open Attendance"
+                      : isUpcoming
+                      ? "Upcoming • Opening Soon"
+                      : event.status}
                   </Badge>
                   <h3 className="font-heading font-extrabold text-2xl text-[#0F172A]">
                     {event.noRegistrationRequired ? "Event Access & Entry" : "Registration Portal"}
@@ -886,7 +902,11 @@ export default function EventDetailPage() {
                   <div className="flex justify-between items-center py-1 border-b border-slate-100">
                     <span className="text-slate-500">Registration:</span>
                     <span className="font-bold text-[#E78023]">
-                      {event.noRegistrationRequired ? "Not Required (Walk-in)" : (event.registrationDeadline || "Open until slots filled")}
+                      {event.noRegistrationRequired
+                        ? "Not Required (Walk-in)"
+                        : isUpcoming
+                        ? (event.registrationStartDate ? `Starts on ${event.registrationStartDate}` : "Opening Soon")
+                        : (event.registrationDeadline || "Open until slots filled")}
                     </span>
                   </div>
                   <div className="flex justify-between items-center py-1 border-b border-slate-100">
@@ -947,6 +967,18 @@ export default function EventDetailPage() {
                       <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                     </Link>
                   )
+                ) : isUpcoming ? (
+                  <div className="space-y-2">
+                    <div className="w-full py-3.5 px-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2">
+                      <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Registration Opens Soon</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 text-center font-medium leading-relaxed">
+                      {event.registrationStartDate
+                        ? `Official registrations are scheduled to start on ${event.registrationStartDate}. Check back soon!`
+                        : "Official registrations will open soon. Follow updates on this portal!"}
+                    </p>
+                  </div>
                 ) : (event.status === "Completed" || event.status?.toLowerCase() === "completed") ? (
                   <div className="w-full py-3.5 px-4 rounded-2xl bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -1018,14 +1050,28 @@ export default function EventDetailPage() {
             </Link>
           </>
         ) : (
-          <button
-            type="button"
-            onClick={handleShare}
-            className="flex-1 py-3 px-4 rounded-xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2 min-h-[44px] cursor-pointer"
-          >
-            <Share2 className="w-4 h-4" />
-            <span>{copiedLink ? "Link Copied!" : "Share Event"}</span>
-          </button>
+          <div className="w-full flex items-center gap-2">
+            <div className="flex-1 py-3 px-3 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-1.5 min-h-[44px]">
+              {isUpcoming ? (
+                <>
+                  <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span className="text-amber-800">Registration Opens Soon</span>
+                </>
+              ) : (event.status === "Completed" || event.status?.toLowerCase() === "completed") ? (
+                <span>Event Completed</span>
+              ) : (
+                <span>Registration Closed</span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={handleShare}
+              className="p-3 rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-[#17458F] text-xs font-bold flex items-center justify-center min-h-[44px] min-w-[44px] cursor-pointer shadow-2xs"
+              aria-label="Share event"
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
+          </div>
         )}
       </div>
     </div>
