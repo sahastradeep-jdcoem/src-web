@@ -25,7 +25,14 @@ import {
   Share2,
   Check
 } from "lucide-react";
-import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, sanitizeEventItem } from "@/lib/eventsStore";
+import { 
+  getStoredEvents, 
+  syncEventsFromFirestore, 
+  subscribeToEvents, 
+  sanitizeEventItem,
+  isRegistrationDeadlinePassed,
+  isEventCompletedByDate
+} from "@/lib/eventsStore";
 import { EventItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Accordion } from "@/components/ui/Accordion";
@@ -63,8 +70,8 @@ export default function EventDetailPage() {
       description: event.description,
       imageUrl: heroImage,
       badge: event.targetAudience === "jdcoem_only" || event.isInterCollege === false ? "🎓 JDCOEM Only" : "🌐 Inter-College",
-      date: event.date,
-      time: event.time,
+      date: event.status === "Coming Soon" ? "Coming Soon" : event.date,
+      time: event.status === "Coming Soon" ? undefined : event.time,
       venue: event.venue,
       organizer: event.organizer,
       entryFee: event.noRegistrationRequired ? "Open Walk-in" : event.entryFee || "Free Entry",
@@ -226,10 +233,12 @@ export default function EventDetailPage() {
     );
   }
 
-  const isRegistrationOpen = event.status === "Registration Open";
+  const isComingSoon = event.status === "Coming Soon";
   const isUpcoming = event.status === "Upcoming";
-  const isDateComingSoon = Boolean(
-    event.isDateTbd ||
+  const isCompleted = event.status === "Completed" || event.status?.toLowerCase() === "completed" || isEventCompletedByDate(event);
+  const isDeadlinePassed = isRegistrationDeadlinePassed(event);
+  const isRegistrationOpen = event.status === "Registration Open" && !isDeadlinePassed && !isCompleted;
+  const isDateComingSoon = isComingSoon || Boolean(
     !event.date ||
     /\b(coming soon|to be announced|tba|to be decided|tbd)\b/i.test(event.date)
   );
@@ -305,7 +314,17 @@ export default function EventDetailPage() {
                 )}
               </span>
               <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/90 text-slate-900 shadow-xs">
-                {event.status}
+                {isComingSoon
+                  ? "Coming Soon"
+                  : isUpcoming
+                  ? "Upcoming"
+                  : isRegistrationOpen
+                  ? "Registration Open"
+                  : isCompleted
+                  ? "Completed"
+                  : isDeadlinePassed
+                  ? "Registration Closed"
+                  : event.status}
               </span>
               {event.parentEventName && (
                 <Link
@@ -338,23 +357,29 @@ export default function EventDetailPage() {
           <div className="flex flex-wrap items-center gap-6 sm:gap-8 pt-4 border-t border-white/20 text-xs sm:text-sm text-slate-200">
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-[#E78023] shrink-0" />
-              <span className={cn("font-bold text-white", isDateComingSoon && "text-amber-300")}>
-                {event.date || "Coming Soon"}
-              </span>
-              {isDateComingSoon ? (
-                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                  Date TBA
+              {isComingSoon ? (
+                <span className="font-bold text-amber-300">
+                  Coming Soon
                 </span>
-              ) : event.isMultiDay ? (
-                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                  Multi-Day
-                </span>
-              ) : null}
+              ) : (
+                <>
+                  <span className="font-bold text-white">
+                    {event.date}
+                  </span>
+                  {event.isMultiDay && (
+                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                      Multi-Day
+                    </span>
+                  )}
+                </>
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-slate-300 shrink-0" />
-              <span>{event.time || "10:00 AM IST"}</span>
-            </div>
+            {event.time && !isComingSoon && (
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-slate-300 shrink-0" />
+                <span>{event.time}</span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4 text-[#E78023] shrink-0" />
               <span>{event.venue || "JDCOEM Campus"}</span>
@@ -493,7 +518,11 @@ export default function EventDetailPage() {
                           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 font-medium pt-2 border-t border-slate-100">
                             <div className="flex items-center gap-1">
                               <Calendar className="w-3.5 h-3.5 text-[#E78023]" />
-                              <span>{sub.date}</span>
+                              {sub.status === "Coming Soon" ? (
+                                <span className="font-bold text-amber-600">Coming Soon</span>
+                              ) : (
+                                <span>{sub.date}</span>
+                              )}
                             </div>
                             {topPrize && (
                               <div className="flex items-center gap-1 text-[#17458F] font-bold">
@@ -515,10 +544,23 @@ export default function EventDetailPage() {
                             >
                               Details
                             </Link>
-                            {sub.status === "Completed" || sub.status?.toLowerCase() === "completed" || event.status === "Completed" || event.status?.toLowerCase() === "completed" ? (
+                            {sub.status === "Completed" || sub.status?.toLowerCase() === "completed" || event.status === "Completed" || event.status?.toLowerCase() === "completed" || isEventCompletedByDate(sub) ? (
                               <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 text-xs font-bold uppercase tracking-wider">
                                 <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
                                 <span>Completed</span>
+                              </span>
+                            ) : sub.status === "Coming Soon" ? (
+                              <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold uppercase tracking-wider">
+                                <span>Coming Soon</span>
+                              </span>
+                            ) : sub.status === "Upcoming" ? (
+                              <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold uppercase tracking-wider">
+                                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                                <span>Opens Soon</span>
+                              </span>
+                            ) : isRegistrationDeadlinePassed(sub) ? (
+                              <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 text-xs font-bold uppercase tracking-wider">
+                                <span>Closed</span>
                               </span>
                             ) : sub.noRegistrationRequired ? (
                               <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold uppercase tracking-wider">
@@ -703,7 +745,9 @@ export default function EventDetailPage() {
                   </div>
                   <div className="flex justify-between items-center py-1 border-b border-slate-100/80">
                     <span className="text-slate-500 font-medium">Festival Date</span>
-                    <span className="font-bold text-slate-900">{event.date}</span>
+                    <span className="font-bold text-slate-900">
+                      {isComingSoon ? <span className="text-amber-600">Coming Soon</span> : event.date}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center py-1 border-b border-slate-100/80">
                     <span className="text-slate-500 font-medium">Festival Venue</span>
@@ -738,7 +782,7 @@ export default function EventDetailPage() {
                 </div>
 
                 {/* Action Buttons: Enhanced Pro Max CTA Stack */}
-                {event.status === "Completed" || event.status?.toLowerCase() === "completed" ? (
+                {isCompleted ? (
                   <div className="space-y-3 pt-1">
                     <div className="w-full py-3.5 px-4 rounded-2xl bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2 shadow-xs">
                       <CheckCircle2 className="w-4 h-4 text-slate-500 shrink-0" />
@@ -751,6 +795,23 @@ export default function EventDetailPage() {
                       >
                         <Layers className="w-3.5 h-3.5 text-[#17458F]" />
                         <span>Explore Lineup &amp; Highlights ({subEvents.length})</span>
+                        <ArrowDown className="w-3.5 h-3.5 transition-transform group-hover:translate-y-0.5 text-[#E78023]" />
+                      </a>
+                    )}
+                  </div>
+                ) : isComingSoon ? (
+                  <div className="space-y-3 pt-1">
+                    <div className="w-full py-3.5 px-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2 shadow-xs">
+                      <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Festival Coming Soon</span>
+                    </div>
+                    {subEvents.length > 0 && (
+                      <a
+                        href="#competitions"
+                        className="w-full py-3 px-4 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200/80 border border-slate-200 text-[#17458F] text-xs font-bold uppercase tracking-wider text-center transition-all flex items-center justify-center gap-2 group cursor-pointer"
+                      >
+                        <Layers className="w-3.5 h-3.5 text-[#17458F]" />
+                        <span>Explore Lineup &amp; Details ({subEvents.length})</span>
                         <ArrowDown className="w-3.5 h-3.5 transition-transform group-hover:translate-y-0.5 text-[#E78023]" />
                       </a>
                     )}
@@ -904,8 +965,14 @@ export default function EventDetailPage() {
                     <span className="font-bold text-[#E78023]">
                       {event.noRegistrationRequired
                         ? "Not Required (Walk-in)"
+                        : isComingSoon
+                        ? "Coming Soon"
                         : isUpcoming
                         ? (event.registrationStartDate ? `Starts on ${event.registrationStartDate}` : "Opening Soon")
+                        : isCompleted
+                        ? "Concluded"
+                        : isDeadlinePassed
+                        ? "Closed (Deadline Passed)"
                         : (event.registrationDeadline || "Open until slots filled")}
                     </span>
                   </div>
@@ -947,6 +1014,16 @@ export default function EventDetailPage() {
                       This event is open for walk-in attendance. Simply arrive at <strong>{event.venue || "JDCOEM Campus"}</strong> on <strong>{event.date}</strong> at <strong>{event.time || "10:00 AM IST"}</strong>.
                     </p>
                   </div>
+                ) : isComingSoon ? (
+                  <div className="space-y-2">
+                    <div className="w-full py-3.5 px-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Coming Soon</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 text-center font-medium leading-relaxed">
+                      Dates, schedule, and registrations for this event are coming soon. Follow updates on this portal!
+                    </p>
+                  </div>
                 ) : isRegistrationOpen ? (
                   isJdcoemOnly && isExternalStudent ? (
                     <div className="space-y-2">
@@ -979,14 +1056,22 @@ export default function EventDetailPage() {
                         : "Official registrations will open soon. Follow updates on this portal!"}
                     </p>
                   </div>
-                ) : (event.status === "Completed" || event.status?.toLowerCase() === "completed") ? (
+                ) : isCompleted ? (
                   <div className="w-full py-3.5 px-4 rounded-2xl bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                     <span>Event Completed • Registration Closed</span>
                   </div>
                 ) : (
-                  <div className="w-full py-3.5 rounded-2xl bg-slate-100 text-slate-400 text-xs font-bold uppercase tracking-wider text-center">
-                    Registration Closed
+                  <div className="space-y-2">
+                    <div className="w-full py-3.5 px-4 rounded-2xl bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-slate-500 shrink-0" />
+                      <span>Registration Closed</span>
+                    </div>
+                    {isDeadlinePassed && event.registrationDeadline && (
+                      <p className="text-[11px] text-slate-500 text-center font-medium leading-relaxed">
+                        Registration closed on {event.registrationDeadline}.
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -1052,12 +1137,17 @@ export default function EventDetailPage() {
         ) : (
           <div className="w-full flex items-center gap-2">
             <div className="flex-1 py-3 px-3 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-1.5 min-h-[44px]">
-              {isUpcoming ? (
+              {isComingSoon ? (
+                <>
+                  <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span className="text-amber-800">Coming Soon</span>
+                </>
+              ) : isUpcoming ? (
                 <>
                   <Clock className="w-4 h-4 text-amber-600 shrink-0" />
                   <span className="text-amber-800">Registration Opens Soon</span>
                 </>
-              ) : (event.status === "Completed" || event.status?.toLowerCase() === "completed") ? (
+              ) : isCompleted ? (
                 <span>Event Completed</span>
               ) : (
                 <span>Registration Closed</span>

@@ -6,7 +6,7 @@ export type EventCategory =
   | "Workshops"
   | "Fest";
 
-export type EventStatus = "Registration Open" | "Upcoming" | "Completed" | "Cancelled" | "draft";
+export type EventStatus = "Registration Open" | "Upcoming" | "Coming Soon" | "Completed" | "Cancelled" | "draft";
 
 export type TargetAudience = "jdcoem_only" | "inter_college";
 
@@ -60,7 +60,6 @@ export interface EventItem {
   endDate?: string; // Formatted end date string
   rawEndDate?: string; // ISO format (YYYY-MM-DD) for end date
   isMultiDay?: boolean; // True when event spans multiple days
-  isDateTbd?: boolean; // True when event date is Coming Soon / To Be Announced
   time: string;
   venue: string;
   organizer: string;

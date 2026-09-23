@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toastStore";
 import { useSocialShare } from "@/context/SocialShareContext";
+import { isRegistrationDeadlinePassed } from "@/lib/eventsStore";
 
 interface EventCardProps {
   event: EventItem;
@@ -18,23 +19,32 @@ interface EventCardProps {
 const DEFAULT_EVENT_IMAGE = "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=1200&auto=format&fit=crop";
 
 export function EventCard({ event, featuredLayout = false }: EventCardProps) {
-  const isRegistrationOpen = event.status === "Registration Open";
-  const isCompleted = event.status === "Completed";
+  const isComingSoon = event.status === "Coming Soon";
   const isUpcoming = event.status === "Upcoming";
+  const isCompleted = event.status === "Completed";
+  const isDeadlinePassed = isRegistrationDeadlinePassed(event);
+  const isRegistrationOpen = event.status === "Registration Open" && !isDeadlinePassed && !isCompleted;
+  const isRegistrationClosed = (event.status === "Registration Open" && isDeadlinePassed) || isCompleted;
 
-  const isDateComingSoon = Boolean(
-    event.isDateTbd ||
-    !event.date ||
-    /\b(coming soon|to be announced|tba|to be decided|tbd)\b/i.test(event.date)
-  );
-
-  const statusVariant = isRegistrationOpen
-    ? "orange"
+  const statusVariant = isComingSoon
+    ? "warning"
     : isUpcoming
     ? "warning"
+    : isRegistrationOpen
+    ? "orange"
+    : "slate";
+
+  const statusLabel = isComingSoon
+    ? "Coming Soon"
+    : isUpcoming
+    ? "Upcoming"
+    : isRegistrationOpen
+    ? "Registration Open"
     : isCompleted
-    ? "slate"
-    : "navy";
+    ? "Completed"
+    : isDeadlinePassed
+    ? "Registration Closed"
+    : event.status;
 
   const eventImage = event.cardImage || event.poster || DEFAULT_EVENT_IMAGE;
   const [copied, setCopied] = useState(false);
@@ -55,8 +65,8 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
       description: event.description,
       imageUrl: heroImage,
       badge: event.targetAudience === "jdcoem_only" || event.isInterCollege === false ? "🎓 JDCOEM Only" : "🌐 Inter-College",
-      date: event.date,
-      time: event.time,
+      date: isComingSoon ? "Coming Soon" : event.date,
+      time: isComingSoon ? undefined : event.time,
       venue: event.venue,
       organizer: event.organizer,
       entryFee: event.noRegistrationRequired ? "Open Walk-in" : event.entryFee || "Free Entry",
@@ -107,7 +117,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
               </span>
             ) : (
               <Badge variant={statusVariant} size="sm">
-                {event.status}
+                {statusLabel}
               </Badge>
             )}
           </div>
@@ -146,20 +156,22 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
             <div className="pt-3 space-y-2 text-xs text-slate-600 border-t border-slate-100 font-sans font-medium">
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-[#E78023] shrink-0" />
-                <span className={cn("font-semibold", isDateComingSoon ? "text-amber-600 font-bold" : "text-[#0F172A]")}>
-                  {event.date || "Coming Soon"}
-                </span>
-                {isDateComingSoon ? (
-                  <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                    Date TBA
-                  </span>
-                ) : event.isMultiDay ? (
-                  <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                    Multi-Day
-                  </span>
-                ) : null}
+                {isComingSoon ? (
+                  <span className="font-bold text-amber-600">Coming Soon</span>
+                ) : (
+                  <>
+                    <span className="font-semibold text-[#0F172A]">
+                      {event.date}
+                    </span>
+                    {event.isMultiDay && (
+                      <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                        Multi-Day
+                      </span>
+                    )}
+                  </>
+                )}
               </div>
-              {event.time && (
+              {event.time && !isComingSoon && (
                 <div className="flex items-center gap-2 text-slate-500">
                   <Clock className="w-4 h-4 text-slate-400 shrink-0" />
                   <span>{event.time}</span>
@@ -252,7 +264,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
             </span>
           ) : (
             <Badge variant={statusVariant} size="sm">
-              {event.status}
+              {statusLabel}
             </Badge>
           )}
         </div>
@@ -290,20 +302,22 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
         <div className="space-y-1.5 text-xs text-slate-600 pt-3 border-t border-slate-100 font-sans font-medium">
           <div className="flex items-center gap-2">
             <Calendar className="w-3.5 h-3.5 text-[#E78023] shrink-0" />
-            <span className={cn("font-semibold truncate", isDateComingSoon ? "text-amber-600 font-bold" : "text-[#0F172A]")}>
-              {event.date || "Coming Soon"}
-            </span>
-            {isDateComingSoon ? (
-              <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
-                Date TBA
-              </span>
-            ) : event.isMultiDay ? (
-              <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
-                Multi-Day
-              </span>
-            ) : null}
+            {isComingSoon ? (
+              <span className="font-bold text-amber-600">Coming Soon</span>
+            ) : (
+              <>
+                <span className="font-semibold text-[#0F172A] truncate">
+                  {event.date}
+                </span>
+                {event.isMultiDay && (
+                  <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
+                    Multi-Day
+                  </span>
+                )}
+              </>
+            )}
           </div>
-          {event.time && (
+          {event.time && !isComingSoon && (
             <div className="flex items-center gap-2 text-slate-500 text-[11px]">
               <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               <span className="truncate">{event.time}</span>

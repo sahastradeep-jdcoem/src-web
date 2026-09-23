@@ -19,7 +19,7 @@ import {
   CheckCircle2,
   Clock
 } from "lucide-react";
-import { getStoredEvents, syncEventsFromFirestore } from "@/lib/eventsStore";
+import { getStoredEvents, syncEventsFromFirestore, isRegistrationDeadlinePassed, isEventCompletedByDate } from "@/lib/eventsStore";
 import { EventItem } from "@/types";
 import { RegistrationWizard } from "@/components/registration/RegistrationWizard";
 import { Badge } from "@/components/ui/Badge";
@@ -199,6 +199,44 @@ export default function EventRegisterPage() {
     );
   }
 
+  if (event.status === "Coming Soon") {
+    return (
+      <div className="min-h-[70vh] bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center space-y-6">
+        <div className="p-4 rounded-3xl bg-amber-50 border border-amber-200 text-amber-600">
+          <Sparkles className="w-10 h-10 mx-auto text-amber-600" />
+        </div>
+        <div className="space-y-3 max-w-lg">
+          <Badge variant="warning" size="md">Coming Soon • Registrations Not Open</Badge>
+          <h1 className="font-heading font-extrabold text-2xl text-[#0F172A] uppercase">
+            {event.name}
+          </h1>
+          <div className="p-4 rounded-2xl bg-white border border-amber-200 text-left space-y-1.5 shadow-xs">
+            <span className="text-[10px] font-bold text-amber-700 uppercase tracking-widest block font-sans">
+              Registration Notice:
+            </span>
+            <p className="text-xs text-slate-700 leading-relaxed font-medium">
+              Dates, schedules, and registrations for this event are coming soon. Please stay tuned and check back soon!
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Link
+            href={`/events/${event.slug}`}
+            className="px-6 py-3 rounded-2xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider transition-all hover:bg-[#123670] shadow-sm"
+          >
+            View Event Details
+          </Link>
+          <Link
+            href="/events"
+            className="px-6 py-3 rounded-2xl bg-slate-100 text-slate-700 text-xs font-bold uppercase tracking-wider transition-all hover:bg-slate-200 border border-slate-200"
+          >
+            Browse All Events
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (event.status === "Upcoming") {
     return (
       <div className="min-h-[70vh] bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center space-y-6">
@@ -237,7 +275,7 @@ export default function EventRegisterPage() {
     );
   }
 
-  const isEventCompleted = event.status === "Completed" || event.status?.toLowerCase() === "completed";
+  const isEventCompleted = event.status === "Completed" || event.status?.toLowerCase() === "completed" || isEventCompletedByDate(event);
   if (isEventCompleted) {
     return (
       <div className="min-h-[70vh] bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center space-y-6">
@@ -267,6 +305,48 @@ export default function EventRegisterPage() {
             className="px-6 py-3 rounded-2xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider transition-all hover:bg-[#123670] shadow-sm"
           >
             &larr; Browse Upcoming Events
+          </Link>
+          <Link
+            href="/dashboard"
+            className="px-6 py-3 rounded-2xl bg-white border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider transition-all hover:bg-slate-50 shadow-2xs"
+          >
+            Go to Student Dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const isDeadlinePassed = isRegistrationDeadlinePassed(event);
+  if (isDeadlinePassed) {
+    return (
+      <div className="min-h-[70vh] bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center space-y-6">
+        <div className="p-4 rounded-3xl bg-slate-100 border border-slate-200 text-slate-600">
+          <AlertCircle className="w-10 h-10 mx-auto text-slate-500" />
+        </div>
+        <div className="space-y-3 max-w-lg">
+          <Badge variant="slate" size="md">Registration Closed • Deadline Passed</Badge>
+          <h1 className="font-heading font-extrabold text-2xl text-[#0F172A] uppercase">
+            {event.name}
+          </h1>
+          <div className="p-4 rounded-2xl bg-white border border-slate-200 text-left space-y-1.5 shadow-xs">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block font-sans">
+              Registration Period Ended:
+            </span>
+            <p className="text-xs text-slate-700 leading-relaxed font-medium">
+              The official registration deadline for this event was <strong>{event.registrationDeadline}</strong>. Registrations have been automatically closed.
+            </p>
+          </div>
+          <p className="text-xs text-slate-500 leading-relaxed font-sans">
+            Already registered? View your verified event pass and details on your Student Dashboard.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Link
+            href="/events"
+            className="px-6 py-3 rounded-2xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider transition-all hover:bg-[#123670] shadow-sm"
+          >
+            &larr; Browse Available Events
           </Link>
           <Link
             href="/dashboard"

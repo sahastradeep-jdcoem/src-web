@@ -19,7 +19,8 @@ import {
   getStoredEvents, 
   syncEventsFromFirestore, 
   subscribeToEvents, 
-  sortEventsByDate
+  sortEventsByDate,
+  isEventCompletedByDate
 } from "@/lib/eventsStore";
 import { 
   getPublicTenures, 
@@ -190,6 +191,7 @@ export default function EventsPage() {
       !e.isCancelled &&
       e.status !== "Cancelled" &&
       e.status !== "Completed" &&
+      !isEventCompletedByDate(e) &&
       !e.parentEventId &&
       !e.parentEventSlug
   );

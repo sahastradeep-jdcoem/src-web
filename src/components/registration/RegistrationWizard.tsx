@@ -67,6 +67,7 @@ import {
   PaymentConfig 
 } from "@/lib/paymentConfigStore";
 import { getCurrentTenure } from "@/lib/tenureStore";
+import { isRegistrationDeadlinePassed, isEventCompletedByDate } from "@/lib/eventsStore";
 
 interface RegistrationWizardProps {
   event: EventItem;
@@ -521,9 +522,15 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   };
 
   const handleProceedToStep2 = async () => {
-    if (event.status === "Completed" || event.status?.toLowerCase() === "completed" || (event.status && event.status !== "Registration Open")) {
-      if (event.status === "Upcoming") {
+    const isCompleted = event.status === "Completed" || event.status?.toLowerCase() === "completed" || isEventCompletedByDate(event);
+    const isDeadlinePassed = isRegistrationDeadlinePassed(event);
+    if (isCompleted || isDeadlinePassed || (event.status && event.status !== "Registration Open")) {
+      if (event.status === "Coming Soon") {
+        alert("This event is coming soon. Registrations have not opened yet.");
+      } else if (event.status === "Upcoming") {
         alert("Registrations for this event have not opened yet. Please check back soon!");
+      } else if (isDeadlinePassed) {
+        alert(`The registration deadline for this event has passed (${event.registrationDeadline || "Closed"}).`);
       } else {
         alert(`Registrations are closed for this event (${event.status}). Registration cannot happen.`);
       }
@@ -753,9 +760,15 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
   const handleConfirmRegistration = async () => {
     if (isSubmitting) return;
-    if (event.status === "Completed" || event.status?.toLowerCase() === "completed" || (event.status && event.status !== "Registration Open")) {
-      if (event.status === "Upcoming") {
+    const isCompleted = event.status === "Completed" || event.status?.toLowerCase() === "completed" || isEventCompletedByDate(event);
+    const isDeadlinePassed = isRegistrationDeadlinePassed(event);
+    if (isCompleted || isDeadlinePassed || (event.status && event.status !== "Registration Open")) {
+      if (event.status === "Coming Soon") {
+        alert("This event is coming soon. Registrations have not opened yet.");
+      } else if (event.status === "Upcoming") {
         alert("Registrations for this event have not opened yet. Please check back soon!");
+      } else if (isDeadlinePassed) {
+        alert(`The registration deadline for this event has passed (${event.registrationDeadline || "Closed"}).`);
       } else {
         alert(`Registrations are closed for this event (${event.status}). Registration cannot happen.`);
       }
@@ -1076,6 +1089,33 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   }, [paytmCheckoutData?.orderId]);
 
 
+  if (event.status === "Coming Soon") {
+    return (
+      <div className="max-w-xl mx-auto p-8 rounded-3xl bg-white border border-slate-200 text-center space-y-5 shadow-sm">
+        <div className="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center mx-auto text-amber-600">
+          <Sparkles className="w-7 h-7" />
+        </div>
+        <div className="space-y-2">
+          <Badge variant="warning" size="md">Coming Soon • Registrations Not Open</Badge>
+          <h3 className="font-heading font-extrabold text-2xl text-[#0F172A] uppercase">
+            {event.name}
+          </h3>
+          <p className="text-xs text-slate-600 leading-relaxed font-medium">
+            Dates, schedules, and registrations for this event are coming soon. Please stay tuned and follow official announcements on this portal!
+          </p>
+        </div>
+        <div className="pt-2">
+          <Link
+            href={`/events/${event.slug}`}
+            className="inline-flex px-6 py-3 rounded-2xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#123670] transition-all shadow-sm"
+          >
+            &larr; View Event Details
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (event.status === "Upcoming") {
     return (
       <div className="max-w-xl mx-auto p-8 rounded-3xl bg-white border border-slate-200 text-center space-y-5 shadow-sm">
@@ -1103,7 +1143,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     );
   }
 
-  if (event.status === "Completed" || event.status?.toLowerCase() === "completed") {
+  const isWizardCompleted = event.status === "Completed" || event.status?.toLowerCase() === "completed" || isEventCompletedByDate(event);
+  if (isWizardCompleted) {
     return (
       <div className="max-w-xl mx-auto p-8 rounded-3xl bg-white border border-slate-200 text-center space-y-5 shadow-sm">
         <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto text-slate-500">
@@ -1116,6 +1157,34 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           </h3>
           <p className="text-xs text-slate-600 leading-relaxed font-medium">
             This event has officially concluded and is marked as <strong>Completed</strong>. Registration is closed and cannot be submitted.
+          </p>
+        </div>
+        <div className="pt-2">
+          <Link
+            href="/events"
+            className="inline-flex px-6 py-3 rounded-2xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#123670] transition-all shadow-sm"
+          >
+            &larr; Explore Available Events
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const isWizardDeadlinePassed = isRegistrationDeadlinePassed(event);
+  if (isWizardDeadlinePassed) {
+    return (
+      <div className="max-w-xl mx-auto p-8 rounded-3xl bg-white border border-slate-200 text-center space-y-5 shadow-sm">
+        <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto text-slate-500">
+          <AlertCircle className="w-7 h-7" />
+        </div>
+        <div className="space-y-2">
+          <Badge variant="slate" size="md">Registration Closed • Deadline Passed</Badge>
+          <h3 className="font-heading font-extrabold text-2xl text-[#0F172A] uppercase">
+            {event.name}
+          </h3>
+          <p className="text-xs text-slate-600 leading-relaxed font-medium">
+            The registration deadline for this event was <strong>{event.registrationDeadline}</strong>. Registrations are officially closed.
           </p>
         </div>
         <div className="pt-2">

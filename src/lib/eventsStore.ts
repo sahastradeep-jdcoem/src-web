@@ -44,8 +44,13 @@ export function sanitizeEventItem(event: EventItem): EventItem {
 
   const organizerVal = (event.organizer || "").trim();
 
+  // Shift status to "Completed" if event date has passed (next day of event date)
+  const isAutoCompleted = isEventCompletedByDate(event);
+  const effectiveStatus = isAutoCompleted ? "Completed" : (event.status || "Upcoming");
+
   return {
     ...event,
+    status: effectiveStatus,
     organizer: organizerVal,
     organizerClubSlug: event.organizerClubSlug || (organizerVal === "SRC JDCOEM" || organizerVal.toLowerCase().includes("council") ? "src-council" : undefined),
     isPaid: isPaidVal,
@@ -187,15 +192,130 @@ export function parseTimeString(timeStr?: string): number {
 }
 
 /**
+ * Universal date parser that extracts a Unix timestamp.
+ * If defaultToEndOfDay is true, sets time to 23:59:59.999 (unless time is explicitly specified).
+ */
+export function parseDateStringToTimestamp(dateStr?: string, defaultToEndOfDay: boolean = false): number | null {
+  if (!dateStr || typeof dateStr !== "string") return null;
+  const trimmed = dateStr.trim();
+  if (!trimmed) return null;
+
+  // 1. ISO YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (isoMatch) {
+    const y = parseInt(isoMatch[1], 10);
+    const m = parseInt(isoMatch[2], 10) - 1;
+    const d = parseInt(isoMatch[3], 10);
+    const hasTime = isoMatch[4] !== undefined;
+    const hours = hasTime ? parseInt(isoMatch[4], 10) : (defaultToEndOfDay ? 23 : 0);
+    const minutes = hasTime && isoMatch[5] !== undefined ? parseInt(isoMatch[5], 10) : (defaultToEndOfDay ? 59 : 0);
+    const seconds = hasTime && isoMatch[6] !== undefined ? parseInt(isoMatch[6], 10) : (defaultToEndOfDay ? 59 : 0);
+    const ms = defaultToEndOfDay && !hasTime ? 999 : 0;
+    return new Date(y, m, d, hours, minutes, seconds, ms).getTime();
+  }
+
+  // 2. Day Month Year (e.g. "24 September 2026", "22 to 24 September 2026", "24th Sep 2026")
+  // Captures the LAST day in ranges so multi-day events calculate the completion on the final day
+  const dmyMatch = trimmed.match(/(?:(?:\d{1,2}(?:st|nd|rd|th)?\s*(?:[-–—to]+|to)\s*)?(\d{1,2}))(?:st|nd|rd|th)?[\s\-_]+([A-Za-z]+)[\s\-_,]+(\d{4})/i);
+  if (dmyMatch) {
+    const day = parseInt(dmyMatch[1], 10);
+    const mStr = dmyMatch[2].toLowerCase();
+    const year = parseInt(dmyMatch[3], 10);
+    if (MONTH_MAP[mStr] !== undefined) {
+      const hours = defaultToEndOfDay ? 23 : 0;
+      const minutes = defaultToEndOfDay ? 59 : 0;
+      const seconds = defaultToEndOfDay ? 59 : 0;
+      const ms = defaultToEndOfDay ? 999 : 0;
+      return new Date(year, MONTH_MAP[mStr], day, hours, minutes, seconds, ms).getTime();
+    }
+  }
+
+  // 3. Month Day Year (e.g. "September 24, 2026", "September 22 - 24, 2026")
+  const mdyMatch = trimmed.match(/([A-Za-z]+)[\s\-_]+(?:(?:\d{1,2}(?:st|nd|rd|th)?\s*(?:[-–—to]+|to)\s*)?(\d{1,2}))(?:st|nd|rd|th)?[\s\-_,]+(\d{4})/i);
+  if (mdyMatch) {
+    const mStr = mdyMatch[1].toLowerCase();
+    const day = parseInt(mdyMatch[2], 10);
+    const year = parseInt(mdyMatch[3], 10);
+    if (MONTH_MAP[mStr] !== undefined) {
+      const hours = defaultToEndOfDay ? 23 : 0;
+      const minutes = defaultToEndOfDay ? 59 : 0;
+      const seconds = defaultToEndOfDay ? 59 : 0;
+      const ms = defaultToEndOfDay ? 999 : 0;
+      return new Date(year, MONTH_MAP[mStr], day, hours, minutes, seconds, ms).getTime();
+    }
+  }
+
+  // 4. Standard Date.parse
+  const direct = Date.parse(trimmed);
+  if (!isNaN(direct)) {
+    const d = new Date(direct);
+    if (defaultToEndOfDay && !trimmed.includes(":") && !trimmed.includes("T")) {
+      d.setHours(23, 59, 59, 999);
+    }
+    return d.getTime();
+  }
+
+  return null;
+}
+
+/**
+ * Automatically determine if registrations have closed based on registrationDeadline.
+ * Registration closes at the end of the registrationDeadline day (23:59:59.999) or specified deadline time.
+ */
+export function isRegistrationDeadlinePassed(event: Partial<EventItem> | null | undefined): boolean {
+  if (!event) return false;
+  if (event.noRegistrationRequired) return false;
+  if (!event.registrationDeadline) return false;
+  const deadlineTs = parseDateStringToTimestamp(event.registrationDeadline, true);
+  if (!deadlineTs) return false;
+  return Date.now() > deadlineTs;
+}
+
+/**
+ * Automatically shift event status to "Completed" on the next day of the event date (or end date).
+ * Once the event day finishes (after 23:59:59.999), on the next day, it resolves to completed.
+ */
+export function isEventCompletedByDate(event: Partial<EventItem> | null | undefined): boolean {
+  if (!event) return false;
+  if (event.status === "Completed" || event.status?.toLowerCase() === "completed") return true;
+  if (event.status === "Cancelled" || event.isCancelled) return false;
+  if (event.status === "draft") return false;
+  if (event.status === "Coming Soon") return false;
+
+  const targetDateStr = event.rawEndDate || event.rawDate || event.endDate || event.date;
+  if (!targetDateStr) return false;
+
+  if (/\b(coming soon|tba|to be announced|tbd)\b/i.test(targetDateStr)) return false;
+
+  const endOfDayTs = parseDateStringToTimestamp(targetDateStr, true);
+  if (!endOfDayTs) return false;
+
+  return Date.now() > endOfDayTs;
+}
+
+/**
+ * Resolves the effective status of an event taking into account automatic completion.
+ */
+export function getEventEffectiveStatus(event: Partial<EventItem> | null | undefined): EventItem["status"] {
+  if (!event) return "Upcoming";
+  if (event.isCancelled || event.status === "Cancelled") return "Cancelled";
+  if (event.status === "draft") return "draft";
+  if (event.status === "Coming Soon") return "Coming Soon";
+  if (isEventCompletedByDate(event)) return "Completed";
+  return event.status || "Upcoming";
+}
+
+/**
  * Extract a comparable Unix timestamp (earliest first) from an event's date, time, and fallback fields.
  */
 export function getEventDateTimestamp(event: Partial<EventItem> | null | undefined): number {
   if (!event) return Number.MAX_SAFE_INTEGER;
+  if (event.status === "Coming Soon") return Number.MAX_SAFE_INTEGER;
   const dateStr = (event.date || "").trim();
   const timeOffset = parseTimeString(event.time);
 
-  // If date is marked as Coming Soon / TBD / Not revealed yet
-  if (Boolean(event.isDateTbd) || !dateStr || /\b(tbd|to be decided|coming soon|announced soon|tba|to be announced)\b/i.test(dateStr)) {
+  // If date contains placeholder or TBA
+  if (!dateStr || /\b(tbd|to be decided|coming soon|announced soon|tba|to be announced)\b/i.test(dateStr)) {
     if (event.registrationStartDate) {
       const regStart = Date.parse(event.registrationStartDate);
       if (!isNaN(regStart)) return regStart + timeOffset;
@@ -276,7 +396,7 @@ export function sortEventsByDate<T extends Partial<EventItem>>(events: T[], refe
   ).getTime();
 
   const isPast = (e: Partial<EventItem>) => {
-    if (e.status === "Completed" || e.status?.toLowerCase() === "completed") return true;
+    if (e.status === "Completed" || e.status?.toLowerCase() === "completed" || isEventCompletedByDate(e)) return true;
     const ts = getEventDateTimestamp(e);
     if (ts === Number.MAX_SAFE_INTEGER) return false;
     return ts < startOfToday;

@@ -47,7 +47,8 @@ import {
   saveStoredEvents, 
   syncEventsFromFirestore,
   subscribeToEvents,
-  sortEventsByDate
+  sortEventsByDate,
+  isRegistrationDeadlinePassed
 } from "@/lib/eventsStore";
 import { getStoredClubs } from "@/lib/councilStore";
 import { 
@@ -160,11 +161,13 @@ export default function AdminEventsPage() {
 
       // Status matching
       if (selectedStatus === "open") {
-        if (e.isCancelled || e.status !== "Registration Open" || e.noRegistrationRequired) return false;
+        if (e.isCancelled || e.status !== "Registration Open" || e.noRegistrationRequired || isRegistrationDeadlinePassed(e)) return false;
       } else if (selectedStatus === "walkin") {
         if (!e.noRegistrationRequired) return false;
       } else if (selectedStatus === "upcoming") {
         if (e.isCancelled || e.status !== "Upcoming") return false;
+      } else if (selectedStatus === "coming_soon") {
+        if (e.isCancelled || e.status !== "Coming Soon") return false;
       } else if (selectedStatus === "completed") {
         if (e.status !== "Completed") return false;
       } else if (selectedStatus === "cancelled") {
@@ -219,12 +222,11 @@ export default function AdminEventsPage() {
       slug: `${formData.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${randSuffix}`,
       name: formData.name,
       category: formData.category as any,
-      date: formData.isDateTbd ? (formData.date?.trim() || "Coming Soon") : (formData.date || "TBD 2026"),
-      rawDate: formData.isDateTbd ? undefined : (formData.rawDate || undefined),
-      rawEndDate: (!formData.isDateTbd && formData.isMultiDay) ? (formData.rawEndDate || formData.rawDate) : undefined,
-      endDate: (!formData.isDateTbd && formData.isMultiDay) ? (formData.endDate || undefined) : undefined,
-      isMultiDay: Boolean(!formData.isDateTbd && formData.isMultiDay),
-      isDateTbd: Boolean(formData.isDateTbd),
+      date: formData.date || "TBD 2026",
+      rawDate: formData.rawDate || undefined,
+      rawEndDate: formData.isMultiDay ? (formData.rawEndDate || formData.rawDate) : undefined,
+      endDate: formData.isMultiDay ? (formData.endDate || undefined) : undefined,
+      isMultiDay: Boolean(formData.isMultiDay),
       time: formData.time || "10:00 AM IST",
       venue: formData.venue,
       organizer: formData.organizer?.trim() || "",
@@ -349,7 +351,6 @@ export default function AdminEventsPage() {
       date: editingEvent.date,
       endDate: editingEvent.endDate || "",
       isMultiDay: Boolean(editingEvent.isMultiDay || (editingEvent.rawEndDate && editingEvent.rawEndDate !== editingEvent.rawDate)),
-      isDateTbd: Boolean(editingEvent.isDateTbd || (editingEvent.date && /\b(coming soon|to be announced|tba|to be decided|tbd)\b/i.test(editingEvent.date))),
       time: editingEvent.time || "10:00 AM IST",
       venue: editingEvent.venue,
       organizer: editingEvent.organizer || "",
@@ -450,12 +451,11 @@ export default function AdminEventsPage() {
       ...editingEvent,
       name: formData.name,
       category: formData.category as any,
-      date: formData.isDateTbd ? (formData.date?.trim() || "Coming Soon") : formData.date,
-      rawDate: formData.isDateTbd ? undefined : (formData.rawDate || undefined),
-      rawEndDate: (!formData.isDateTbd && formData.isMultiDay) ? (formData.rawEndDate || formData.rawDate) : undefined,
-      endDate: (!formData.isDateTbd && formData.isMultiDay) ? (formData.endDate || undefined) : undefined,
-      isMultiDay: Boolean(!formData.isDateTbd && formData.isMultiDay),
-      isDateTbd: Boolean(formData.isDateTbd),
+      date: formData.date,
+      rawDate: formData.rawDate || undefined,
+      rawEndDate: formData.isMultiDay ? (formData.rawEndDate || formData.rawDate) : undefined,
+      endDate: formData.isMultiDay ? (formData.endDate || undefined) : undefined,
+      isMultiDay: Boolean(formData.isMultiDay),
       time: formData.time || editingEvent.time || "10:00 AM IST",
       venue: formData.venue,
       organizer: formData.organizer?.trim() || editingEvent.organizer || "",
@@ -821,7 +821,7 @@ export default function AdminEventsPage() {
             { 
               id: "open", 
               label: "Registration Open", 
-              count: eventsList.filter((e) => !e.isCancelled && e.status === "Registration Open" && !e.noRegistrationRequired).length 
+              count: eventsList.filter((e) => !e.isCancelled && e.status === "Registration Open" && !e.noRegistrationRequired && !isRegistrationDeadlinePassed(e)).length 
             },
             { 
               id: "walkin", 
@@ -832,6 +832,11 @@ export default function AdminEventsPage() {
               id: "upcoming", 
               label: "Upcoming", 
               count: eventsList.filter((e) => !e.isCancelled && e.status === "Upcoming").length 
+            },
+            { 
+              id: "coming_soon", 
+              label: "Coming Soon", 
+              count: eventsList.filter((e) => !e.isCancelled && e.status === "Coming Soon").length 
             },
             { 
               id: "completed", 
@@ -1076,14 +1081,20 @@ export default function AdminEventsPage() {
                     <div className="flex items-center justify-between text-xs font-semibold text-slate-700 pt-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <CalendarIcon className="w-3.5 h-3.5 text-[#E78023]" />
-                        <span>{evt.date}</span>
-                        {(evt.isDateTbd || /\b(coming soon|to be announced|tba|to be decided|tbd)\b/i.test(evt.date)) && (
-                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded leading-none">
-                            TBA
-                          </span>
+                        {evt.status === "Coming Soon" ? (
+                          <span className="font-bold text-amber-600">Coming Soon</span>
+                        ) : (
+                          <>
+                            <span>{evt.date}</span>
+                            {/\b(coming soon|to be announced|tba|to be decided|tbd)\b/i.test(evt.date) && (
+                              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded leading-none">
+                                TBA
+                              </span>
+                            )}
+                          </>
                         )}
                       </div>
-                      {evt.time && (
+                      {evt.time && evt.status !== "Coming Soon" && (
                         <div className="flex items-center gap-1 text-[11px] text-slate-500">
                           <Clock className="w-3 h-3 text-slate-400" />
                           <span>{evt.time}</span>
@@ -1110,15 +1121,23 @@ export default function AdminEventsPage() {
                           variant={
                             isCancelled
                               ? "rose"
-                              : evt.status === "Registration Open"
-                              ? "orange"
+                              : evt.status === "Coming Soon"
+                              ? "warning"
                               : evt.status === "Upcoming"
                               ? "warning"
+                              : evt.status === "Registration Open" && isRegistrationDeadlinePassed(evt)
+                              ? "slate"
+                              : evt.status === "Registration Open"
+                              ? "orange"
                               : "slate"
                           }
                           size="sm"
                         >
-                          {isCancelled ? "Cancelled" : evt.status}
+                          {isCancelled
+                            ? "Cancelled"
+                            : evt.status === "Registration Open" && isRegistrationDeadlinePassed(evt)
+                            ? "Registration Closed"
+                            : evt.status}
                         </Badge>
                       )}
                     </div>
