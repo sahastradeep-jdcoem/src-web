@@ -68,6 +68,8 @@ export interface SrcDispatch {
   formDeadline?: string;
   allowResponseEditing?: boolean;
   requiresApproval?: boolean;
+  isAcceptingResponses?: boolean;
+  coverImage?: string;
 
   authorName: string;
   authorRole?: string;

@@ -25,7 +25,9 @@ import {
   Trash2,
   HelpCircle,
   BarChart3,
-  ListFilter
+  ListFilter,
+  Power,
+  Pencil
 } from "lucide-react";
 import { SrcFormField } from "@/types";
 import { Button } from "@/components/ui/Button";
@@ -60,6 +62,9 @@ export interface SrcFormsResponseViewerProps {
   onDeleteResponse?: (respId: string) => void;
   allowStatusResolution?: boolean;
   itemNameLabel?: string;
+  isAcceptingResponses?: boolean;
+  onToggleAcceptingResponses?: (accepting: boolean) => void;
+  onEditForm?: () => void;
 }
 
 type ActiveTab = "summary" | "question" | "individual" | "table";
@@ -75,6 +80,9 @@ export function SrcFormsResponseViewer({
   onDeleteResponse,
   allowStatusResolution = true,
   itemNameLabel = "Dispatch",
+  isAcceptingResponses = true,
+  onToggleAcceptingResponses,
+  onEditForm,
 }: SrcFormsResponseViewerProps) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("summary");
   const [selectedQuestionIndex, setSelectedQuestionIndex] = useState<number>(0);
@@ -277,7 +285,64 @@ export function SrcFormsResponseViewer({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {/* Status Badge */}
+          <span
+            className={cn(
+              "px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider border shadow-2xs transition-all",
+              isAcceptingResponses
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : "bg-rose-50 text-rose-700 border-rose-200"
+            )}
+          >
+            {isAcceptingResponses ? "ACCEPTING RESPONSES" : "RESPONSES CLOSED"}
+          </span>
+
+          {/* Toggle Accept Responses */}
+          {onToggleAcceptingResponses && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50/80 shadow-2xs">
+              <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                <Power className={cn("w-3.5 h-3.5", isAcceptingResponses ? "text-emerald-600" : "text-slate-400")} />
+                <span>Accept Responses</span>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isAcceptingResponses}
+                onClick={() => onToggleAcceptingResponses(!isAcceptingResponses)}
+                className={cn(
+                  "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                  isAcceptingResponses ? "bg-emerald-600" : "bg-slate-300"
+                )}
+                title={
+                  isAcceptingResponses
+                    ? "Click to stop accepting new responses"
+                    : "Click to resume accepting responses"
+                }
+              >
+                <span
+                  className={cn(
+                    "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out",
+                    isAcceptingResponses ? "translate-x-4" : "translate-x-0"
+                  )}
+                />
+              </button>
+            </div>
+          )}
+
+          {/* Edit Form Button */}
+          {onEditForm && (
+            <Button
+              onClick={onEditForm}
+              variant="outline"
+              size="sm"
+              className="bg-white hover:bg-slate-50 text-slate-700 border-slate-200 text-xs font-bold gap-1.5 cursor-pointer shadow-2xs"
+            >
+              <Pencil className="w-3.5 h-3.5 text-slate-600" />
+              <span>Edit Form</span>
+            </Button>
+          )}
+
           <Button
             onClick={handleExportExcel}
             variant="outline"

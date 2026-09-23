@@ -27,11 +27,14 @@ import {
   ClipboardList,
   FileSpreadsheet,
   Eye,
-  BarChart3
+  BarChart3,
+  Power
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { CreateSrcFormModal } from "@/components/admin/forms/CreateSrcFormModal";
+import { cn } from "@/lib/utils";
 import { ImageUploadDropzone } from "@/components/ui/ImageUploadDropzone";
 import { SrcFormField } from "@/types";
 import { 
@@ -92,6 +95,10 @@ export default function AdminSrcUpdatesPage() {
   const [deletingDispatch, setDeletingDispatch] = useState<SrcDispatch | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // SRC Form Studio Modal State (Mirroring Engagement Hub CreateListingModal)
+  const [isSrcFormModalOpen, setIsSrcFormModalOpen] = useState(false);
+  const [editingSrcFormDispatch, setEditingSrcFormDispatch] = useState<SrcDispatch | null>(null);
 
   // Form State
   const [formData, setFormData] = useState<{
@@ -386,6 +393,31 @@ export default function AdminSrcUpdatesPage() {
     return { total, broadcastCount, directCount, formCount, paymentCount, eventCount };
   }, [dispatches]);
 
+  // Open Studio modal for Create SRC Form
+  const handleOpenCreateSrcFormModal = () => {
+    setEditingSrcFormDispatch(null);
+    setIsSrcFormModalOpen(true);
+  };
+
+  // Open Studio modal for Edit SRC Form
+  const handleOpenEditSrcFormModal = (dispatch: SrcDispatch) => {
+    setEditingSrcFormDispatch(dispatch);
+    setIsSrcFormModalOpen(true);
+  };
+
+  // Toggle Accepting Responses for an SRC Form dispatch
+  const handleToggleDispatchAcceptingResponses = async (dispatchId: string, accepting: boolean) => {
+    const updated = dispatches.map((d) =>
+      d.id === dispatchId ? { ...d, isAcceptingResponses: accepting } : d
+    );
+    setDispatches(updated);
+    if (inspectingDispatch && inspectingDispatch.id === dispatchId) {
+      setInspectingDispatch({ ...inspectingDispatch, isAcceptingResponses: accepting });
+    }
+    await saveStoredSrcDispatches(updated);
+    showToast(`Form is now ${accepting ? "ACCEPTING RESPONSES" : "RESPONSES CLOSED"}.`);
+  };
+
   // Open modal for Create
   const handleOpenCreateModal = () => {
     setEditingDispatch(null);
@@ -424,6 +456,10 @@ export default function AdminSrcUpdatesPage() {
 
   // Open modal for Edit
   const handleOpenEditModal = (dispatch: SrcDispatch) => {
+    if (dispatch.category === "form" || (dispatch.formFields && dispatch.formFields.length > 0)) {
+      handleOpenEditSrcFormModal(dispatch);
+      return;
+    }
     setEditingDispatch(dispatch);
     setFormData({
       title: dispatch.title || "",
@@ -616,6 +652,9 @@ export default function AdminSrcUpdatesPage() {
           onBack={() => setInspectingDispatch(null)}
           onUpdateStatus={handleUpdateResponseStatus}
           onDeleteResponse={handleDeleteResponse}
+          isAcceptingResponses={inspectingDispatch.isAcceptingResponses !== false}
+          onToggleAcceptingResponses={(accepting) => handleToggleDispatchAcceptingResponses(inspectingDispatch.id, accepting)}
+          onEditForm={() => handleOpenEditSrcFormModal(inspectingDispatch)}
         />
       </div>
     );
@@ -654,11 +693,18 @@ export default function AdminSrcUpdatesPage() {
 
         <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
           <button
+            onClick={handleOpenCreateSrcFormModal}
+            className="h-9 px-3.5 sm:px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white text-xs font-semibold tracking-normal transition-all duration-200 shadow-xs hover:shadow-md hover:shadow-emerald-900/20 active:scale-[0.98] cursor-pointer inline-flex items-center justify-center gap-2"
+          >
+            <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/95" />
+            <span>+ Create SRC Form</span>
+          </button>
+          <button
             onClick={handleOpenCreateModal}
-            className="h-9 px-3.5 sm:px-4 rounded-xl bg-gradient-to-r from-[#E78023] to-[#D26E17] hover:from-[#d26e17] hover:to-[#be6113] text-white text-xs font-semibold tracking-normal transition-all duration-200 shadow-xs hover:shadow-md hover:shadow-[#E78023]/25 active:scale-[0.98] cursor-pointer inline-flex items-center justify-center gap-2"
+            className="h-9 px-3.5 sm:px-4 rounded-xl bg-gradient-to-r from-[#17458F] to-[#123670] hover:from-[#123670] hover:to-[#0c2650] text-white text-xs font-semibold tracking-normal transition-all duration-200 shadow-xs hover:shadow-md hover:shadow-[#17458F]/20 active:scale-[0.98] cursor-pointer inline-flex items-center justify-center gap-2"
           >
             <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/95" />
-            <span>Compose New Dispatch</span>
+            <span>Compose Dispatch</span>
           </button>
         </div>
       </div>
@@ -945,7 +991,7 @@ export default function AdminSrcUpdatesPage() {
                     {(item.category === "form" || (item.formFields && item.formFields.length > 0)) && (
                       <div className="mt-3 p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-950">
                         <div className="space-y-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <span className="font-heading font-bold text-sm text-emerald-900 flex items-center gap-1.5">
                               <ClipboardList className="w-4 h-4 text-emerald-700" />
                               SRC Form Attached
@@ -958,6 +1004,23 @@ export default function AdminSrcUpdatesPage() {
                                 Requires Review
                               </span>
                             )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleDispatchAcceptingResponses(item.id, item.isAcceptingResponses === false);
+                              }}
+                              className={cn(
+                                "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider transition-colors cursor-pointer border",
+                                item.isAcceptingResponses !== false
+                                  ? "bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200"
+                                  : "bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-200"
+                              )}
+                              title="Click to toggle response acceptance"
+                            >
+                              <span className={cn("w-1.5 h-1.5 rounded-full", item.isAcceptingResponses !== false ? "bg-emerald-600 animate-pulse" : "bg-rose-600")} />
+                              {item.isAcceptingResponses !== false ? "Accepting Responses" : "Responses Closed"}
+                            </button>
                           </div>
                           {item.formDeadline && (
                             <p className="text-[11px] font-semibold text-rose-600 flex items-center gap-1">
@@ -990,15 +1053,31 @@ export default function AdminSrcUpdatesPage() {
                   {/* Right actions */}
                   <div className="flex sm:flex-col items-center gap-2 shrink-0 border-t sm:border-t-0 pt-3 sm:pt-0">
                     {(item.category === "form" || (item.formFields && item.formFields.length > 0)) && (
-                      <Button
-                        onClick={() => setInspectingDispatch(item)}
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5 text-xs font-bold text-emerald-700 border-emerald-300 hover:bg-emerald-50 cursor-pointer w-full sm:w-auto"
-                      >
-                        <BarChart3 className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Responses ({dispatchResponses.filter((r) => r.dispatchId === item.id).length})</span>
-                      </Button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleDispatchAcceptingResponses(item.id, item.isAcceptingResponses === false)}
+                          className={cn(
+                            "flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border w-full sm:w-auto",
+                            item.isAcceptingResponses !== false
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
+                              : "bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100"
+                          )}
+                          title="Click to toggle accepting responses"
+                        >
+                          <Power className="w-3.5 h-3.5" />
+                          <span>{item.isAcceptingResponses !== false ? "Active" : "Closed"}</span>
+                        </button>
+                        <Button
+                          onClick={() => setInspectingDispatch(item)}
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5 text-xs font-bold text-emerald-700 border-emerald-300 hover:bg-emerald-50 cursor-pointer w-full sm:w-auto"
+                        >
+                          <BarChart3 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Responses ({dispatchResponses.filter((r) => r.dispatchId === item.id).length})</span>
+                        </Button>
+                      </>
                     )}
                     <Button
                       onClick={() => handleOpenEditModal(item)}
@@ -1054,7 +1133,14 @@ export default function AdminSrcUpdatesPage() {
                   <button
                     key={c.id}
                     type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, category: c.id as SrcDispatchCategory }))}
+                    onClick={() => {
+                      if (c.id === "form") {
+                        setIsModalOpen(false);
+                        handleOpenCreateSrcFormModal();
+                        return;
+                      }
+                      setFormData((prev) => ({ ...prev, category: c.id as SrcDispatchCategory }));
+                    }}
                     className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
                       isSelected
                         ? "bg-[#17458F] text-white border-[#17458F] shadow-sm"
@@ -1498,6 +1584,26 @@ export default function AdminSrcUpdatesPage() {
           </div>
         </div>
       </Modal>
+
+      {/* CREATE / EDIT SRC FORM STUDIO MODAL */}
+      <CreateSrcFormModal
+        isOpen={isSrcFormModalOpen}
+        onClose={() => {
+          setIsSrcFormModalOpen(false);
+          setEditingSrcFormDispatch(null);
+        }}
+        onSuccess={(saved) => {
+          setDispatches(getStoredSrcDispatches());
+          showToast(
+            editingSrcFormDispatch
+              ? `SRC Form "${saved.title}" updated successfully.`
+              : `SRC Form "${saved.title}" published successfully.`
+          );
+        }}
+        mode={editingSrcFormDispatch ? "edit" : "create"}
+        initialData={editingSrcFormDispatch}
+        savedMembers={savedMembers}
+      />
     </div>
   );
 }

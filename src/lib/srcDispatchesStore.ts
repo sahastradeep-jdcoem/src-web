@@ -122,6 +122,7 @@ export function compactSrcDispatches(dispatches: SrcDispatch[]): SrcDispatch[] {
   return dispatches.map((d) => ({
     ...d,
     content: d.content || "",
+    coverImage: d.coverImage && d.coverImage.length > 350000 ? "" : d.coverImage,
     paymentDetails: d.paymentDetails ? {
       ...d.paymentDetails,
       qrImageUrl: d.paymentDetails.qrImageUrl && d.paymentDetails.qrImageUrl.length > 350000 
