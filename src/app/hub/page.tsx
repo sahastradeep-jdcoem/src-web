@@ -192,6 +192,28 @@ export default function StudentHubPage() {
       });
   }, [listings, selectedPillar, searchQuery]);
 
+  // Pillar counts for filter badges
+  const pillarCounts = useMemo(() => {
+    const active = listings.filter((item) => item.isLive !== false && item.status !== "draft");
+    return {
+      all: active.length,
+      voice: active.filter((item) => item.pillar === "voice").length,
+      opportunities: active.filter((item) => item.pillar === "opportunities").length,
+      applications: active.filter((item) => item.pillar === "applications").length,
+      submissions: active.filter((item) => item.pillar === "submissions").length,
+      community: active.filter((item) => item.pillar === "community").length,
+    };
+  }, [listings]);
+
+  const filterTabs = [
+    { id: "all", label: "All Engagements", icon: Sparkles },
+    { id: "voice", label: "Campus Polls", icon: Vote },
+    { id: "opportunities", label: "Opportunities", icon: Briefcase },
+    { id: "applications", label: "Applications", icon: Users },
+    { id: "submissions", label: "Contests & Drives", icon: UploadCloud },
+    { id: "community", label: "Support & Grievances", icon: ShieldAlert },
+  ];
+
   const handleVote = (listingId: string, optionId: string) => {
     if (!user) {
       openAuthModal();
@@ -245,19 +267,19 @@ export default function StudentHubPage() {
       )}
 
       {/* Hero Header */}
-      <section className="relative pt-24 pb-14 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-slate-900 via-[#17458F] to-slate-900 text-white overflow-hidden">
-        <div className="max-w-7xl mx-auto space-y-6 relative z-10 text-center sm:text-left">
-          <div className="max-w-3xl space-y-3">
-            <h1 className="font-heading font-extrabold text-4xl sm:text-6xl text-white tracking-tight uppercase">
+      <section className="relative pt-20 sm:pt-24 pb-10 sm:pb-14 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-slate-900 via-[#17458F] to-slate-900 text-white overflow-hidden">
+        <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6 relative z-10 text-center sm:text-left">
+          <div className="max-w-3xl space-y-2 sm:space-y-3">
+            <h1 className="font-heading font-extrabold text-3xl sm:text-5xl lg:text-6xl text-white tracking-tight uppercase">
               STUDENT ENGAGEMENT HUB
             </h1>
-            <p className="text-sm sm:text-base text-slate-200 font-medium leading-relaxed">
+            <p className="text-xs sm:text-base text-slate-200 font-medium leading-relaxed max-w-2xl">
               Explore opportunities, vote on campus polls, apply for campus initiatives and programs, submit creative entries, and file confidential student concerns.
             </p>
           </div>
 
           {/* Search & Stats Bar */}
-          <div className="pt-4 max-w-xl">
+          <div className="pt-2 sm:pt-4 max-w-xl">
             <div className="relative">
               <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
               <input
@@ -265,7 +287,7 @@ export default function StudentHubPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search polls, opportunities, challenges, or applications..."
-                className="w-full pl-11 pr-4 py-3 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 text-white text-xs sm:text-sm font-medium placeholder:text-slate-300 focus:outline-none focus:bg-white focus:text-slate-900 transition-all shadow-inner"
+                className="w-full pl-11 pr-4 py-2.5 sm:py-3 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 text-white text-xs sm:text-sm font-medium placeholder:text-slate-300 focus:outline-none focus:bg-white focus:text-slate-900 transition-all shadow-inner"
               />
             </div>
           </div>
@@ -273,30 +295,47 @@ export default function StudentHubPage() {
       </section>
 
       {/* Pillar Tabs & Main Grid */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 relative z-20 space-y-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 relative z-20 space-y-6 sm:space-y-8">
         
-        {/* Navigation Filter Pills */}
-        <div className="p-2 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-wrap items-center gap-2">
-          {[
-            { id: "all", label: "🌟 All Engagements" },
-            { id: "voice", label: "📊 Campus Polls" },
-            { id: "opportunities", label: "💡 Opportunities" },
-            { id: "applications", label: "👥 Applications" },
-            { id: "submissions", label: "📤 Contests & Drives" },
-            { id: "community", label: "🐞 Support & Grievances" },
-          ].map((pill) => (
-            <button
-              key={pill.id}
-              onClick={() => setSelectedPillar(pill.id as any)}
-              className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                selectedPillar === pill.id
-                  ? "bg-[#17458F] text-white shadow-xs"
-                  : "bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-              }`}
-            >
-              {pill.label}
-            </button>
-          ))}
+        {/* Navigation Filter Pills Toolbar - Space-Saving Horizontal Scroll on Mobile */}
+        <div className="relative">
+          <div className="p-1.5 sm:p-2 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar sm:flex-wrap scroll-smooth">
+            {filterTabs.map((pill) => {
+              const Icon = pill.icon;
+              const count = pillarCounts[pill.id as keyof typeof pillarCounts] || 0;
+              const isSelected = selectedPillar === pill.id;
+
+              return (
+                <button
+                  key={pill.id}
+                  onClick={() => setSelectedPillar(pill.id as any)}
+                  className={cn(
+                    "shrink-0 inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap select-none min-h-[38px]",
+                    isSelected
+                      ? "bg-[#17458F] text-white shadow-xs"
+                      : "bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  )}
+                >
+                  <Icon className={cn("w-3.5 h-3.5 shrink-0", isSelected ? "text-white" : "text-slate-500")} />
+                  <span>{pill.label}</span>
+                  {count > 0 && (
+                    <span
+                      className={cn(
+                        "ml-0.5 px-1.5 py-0.5 text-[10px] font-extrabold rounded-md leading-none",
+                        isSelected
+                          ? "bg-white/20 text-white"
+                          : "bg-slate-200/80 text-slate-600"
+                      )}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {/* Subtle Right Edge Fade Gradient on Mobile to indicate horizontal scroll */}
+          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white via-white/80 to-transparent rounded-r-2xl sm:hidden" />
         </div>
 
         {/* Listings Grid */}
