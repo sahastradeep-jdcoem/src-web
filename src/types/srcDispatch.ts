@@ -76,5 +76,6 @@ export interface SrcDispatch {
 
   authorName: string;
   authorRole?: string;
-  status: "active" | "archived";
+  status: "active" | "archived" | "draft";
+  isLive?: boolean;
 }

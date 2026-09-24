@@ -30,9 +30,11 @@ import {
   FolderArchive,
   Link2,
   FileArchive,
-  Power
+  Power,
+  Save,
+  Send
 } from "lucide-react";
-import { ListingItem, ListingType, ListingPillar, TargetAudience } from "@/types/listings";
+import { ListingItem, ListingType, ListingPillar, TargetAudience, ListingStatus } from "@/types/listings";
 import { SrcFormsBuilder } from "@/components/admin/forms/SrcFormsBuilder";
 import { UniversalImageUploader } from "@/components/ui/UniversalImageUploader";
 import { SrcFormField, CustomQuestion } from "@/types";
@@ -533,19 +535,23 @@ export function CreateListingModal({
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveOrPublish = async (asDraft: boolean = false) => {
     if (!selectedPillarOption) return;
 
     if (!title.trim()) {
       setActiveSection("details");
-      setFormError("Please provide a Title / Headline in the Details section before saving.");
+      setFormError(asDraft ? "Please provide at least a Title / Headline to save as draft." : "Please provide a Title / Headline in the Details section before publishing.");
       return;
     }
 
     try {
       setIsSubmitting(true);
       setFormError(null);
+
+      const targetStatus: ListingStatus = asDraft
+        ? "draft"
+        : (isAcceptingResponses ? "active" : "closed");
+      const isLiveFlag = !asDraft;
 
       // EDIT MODE: Update existing item in place
       if (mode === "edit" && initialData) {
@@ -562,8 +568,10 @@ export function CreateListingModal({
           slug: newSlug,
           targetAudience,
           isInterCollege: targetAudience === "inter_college",
-          status: isAcceptingResponses ? "active" : "closed",
-          isAcceptingResponses,
+          status: targetStatus,
+          isLive: isLiveFlag,
+          isAcceptingResponses: asDraft ? false : isAcceptingResponses,
+          publishedAt: asDraft ? initialData.publishedAt : (initialData.publishedAt || new Date().toISOString()),
           summary: summary.trim() || title.trim(),
           description: description.trim() || summary.trim() || title.trim(),
           organizer: organizer.trim() || "SRC JDCOEM",
@@ -652,9 +660,10 @@ export function CreateListingModal({
         title: title.trim(),
         pillar: selectedPillarOption.pillar,
         type: selectedPillarOption.type,
-        status: isAcceptingResponses ? "active" : "closed",
-        isLive: true,
-        isAcceptingResponses,
+        status: targetStatus,
+        isLive: isLiveFlag,
+        isAcceptingResponses: asDraft ? false : isAcceptingResponses,
+        publishedAt: asDraft ? undefined : new Date().toISOString(),
         targetAudience,
         isInterCollege: targetAudience === "inter_college",
         summary: summary.trim() || title.trim(),
@@ -717,6 +726,11 @@ export function CreateListingModal({
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleSaveOrPublish(false);
   };
 
   return (
@@ -1616,29 +1630,44 @@ export function CreateListingModal({
                 )}
               </div>
 
-              {/* Primary Publish Button */}
-              <button
-                type="submit"
-                disabled={pendingUploads > 0 || isSubmitting}
-                className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer order-1 sm:order-3"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin text-white" />
-                    <span>Saving to Cloud Database...</span>
-                  </>
-                ) : pendingUploads > 0 ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin text-white" />
-                    <span>Uploading Image ({pendingUploads})...</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-                    <span>{mode === "edit" ? "Save Listing Changes" : `Publish ${selectedPillarOption.title}`}</span>
-                  </>
-                )}
-              </button>
+              {/* Right Action Buttons: Save Draft vs Publish */}
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end order-1 sm:order-3">
+                <button
+                  type="button"
+                  onClick={() => handleSaveOrPublish(true)}
+                  disabled={pendingUploads > 0 || isSubmitting}
+                  className="px-4 py-2.5 rounded-xl border border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold uppercase tracking-wider transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Save form configurations as a private draft without publishing live"
+                >
+                  <Save className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Save as Draft</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSaveOrPublish(false)}
+                  disabled={pendingUploads > 0 || isSubmitting}
+                  className="px-5 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                  title="Publish form live to the Engagement Hub"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      <span>Saving...</span>
+                    </>
+                  ) : pendingUploads > 0 ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      <span>Uploading Image ({pendingUploads})...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>{mode === "edit" && initialData?.status !== "draft" ? "Update & Save" : `Publish ${selectedPillarOption.title}`}</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
           </form>

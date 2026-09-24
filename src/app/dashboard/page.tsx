@@ -537,6 +537,8 @@ export default function StudentDashboardPage() {
     if (!isVerifiedSrcMember) return [];
     const cleanBt = (user?.btId || "").trim().toUpperCase();
     return srcDispatches.filter((d) => {
+      // Draft isolation invariant: drafts are never visible to students
+      if (d.status === "draft" || d.isLive === false) return false;
       if (d.targetType === "all_members") return true;
       if (d.targetType === "single_member" && d.targetBtId && cleanBt) {
         return d.targetBtId.trim().toUpperCase() === cleanBt;

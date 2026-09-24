@@ -18,7 +18,9 @@ import {
   Target, 
   Building2, 
   CheckCircle2, 
-  AlertCircle
+  AlertCircle,
+  Save,
+  Send
 } from "lucide-react";
 import { SrcDispatch, SrcDispatchPriority, SrcDispatchTarget } from "@/types/srcDispatch";
 import { SrcFormsBuilder } from "@/components/admin/forms/SrcFormsBuilder";
@@ -243,8 +245,7 @@ export function CreateSrcFormModal({
   };
 
   // Submit Handler
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveOrPublish = async (asDraft: boolean = false) => {
     setFormError(null);
 
     if (pendingUploads > 0) {
@@ -253,33 +254,38 @@ export function CreateSrcFormModal({
     }
 
     if (!title.trim()) {
-      setFormError("Form title is required.");
+      setFormError(asDraft ? "Please enter at least a form title to save as draft." : "Form title is required.");
       setActiveSection("details");
       return;
     }
 
-    if (!content.trim()) {
-      setFormError("Message content / instructions are required.");
-      setActiveSection("details");
-      return;
-    }
+    // Only strictly validate instructions and questions when publishing live
+    if (!asDraft) {
+      if (!content.trim()) {
+        setFormError("Message content / instructions are required before publishing.");
+        setActiveSection("details");
+        return;
+      }
 
-    if (targetType === "single_member" && !targetBtId.trim()) {
-      setFormError("Please enter or select a target College BT ID.");
-      setActiveSection("details");
-      return;
-    }
+      if (targetType === "single_member" && !targetBtId.trim()) {
+        setFormError("Please enter or select a target College BT ID.");
+        setActiveSection("details");
+        return;
+      }
 
-    if (formFields.length === 0) {
-      setFormError("Please add at least one question in the SRC Forms Builder.");
-      setActiveSection("qa");
-      return;
+      if (formFields.length === 0) {
+        setFormError("Please add at least one question in the SRC Forms Builder before publishing.");
+        setActiveSection("qa");
+        return;
+      }
     }
 
     setIsSubmitting(true);
 
     try {
       const allDispatches = getStoredSrcDispatches();
+      const targetStatus: "active" | "draft" = asDraft ? "draft" : "active";
+      const isLiveFlag = !asDraft;
 
       if (mode === "edit" && initialData) {
         const updatedDispatch: SrcDispatch = {
@@ -290,8 +296,8 @@ export function CreateSrcFormModal({
           targetType,
           targetBtId: targetType === "single_member" ? targetBtId.trim().toUpperCase() : undefined,
           targetMemberName: targetType === "single_member" ? targetMemberName || undefined : undefined,
-          content: content.trim(),
-          badgeText: badgeText.trim() || "SRC Forms",
+          content: content.trim() || title.trim(),
+          badgeText: badgeText.trim() || (asDraft ? "Draft Form" : "SRC Forms"),
           formFields,
           formDeadline: formDeadline || undefined,
           allowResponseEditing,
@@ -302,6 +308,8 @@ export function CreateSrcFormModal({
           authorRole: authorRole.trim() || "Council Administrator",
           whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
           whatsappGroupName: whatsappGroupName.trim() || undefined,
+          status: targetStatus,
+          isLive: isLiveFlag,
         };
 
         const updated = allDispatches.map((d) => (d.id === initialData.id ? updatedDispatch : d));
@@ -316,8 +324,8 @@ export function CreateSrcFormModal({
           targetType,
           targetBtId: targetType === "single_member" ? targetBtId.trim().toUpperCase() : undefined,
           targetMemberName: targetType === "single_member" ? targetMemberName || undefined : undefined,
-          content: content.trim(),
-          badgeText: badgeText.trim() || "SRC Forms",
+          content: content.trim() || title.trim(),
+          badgeText: badgeText.trim() || (asDraft ? "Draft Form" : "SRC Forms"),
           createdAt: new Date().toISOString(),
           formFields,
           formDeadline: formDeadline || undefined,
@@ -329,7 +337,8 @@ export function CreateSrcFormModal({
           authorRole: authorRole.trim() || "Council Administrator",
           whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
           whatsappGroupName: whatsappGroupName.trim() || undefined,
-          status: "active",
+          status: targetStatus,
+          isLive: isLiveFlag,
         };
 
         const updated = [newDispatch, ...allDispatches];
@@ -344,6 +353,11 @@ export function CreateSrcFormModal({
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleSaveOrPublish(false);
   };
 
   return (
@@ -941,29 +955,44 @@ export function CreateSrcFormModal({
               )}
             </div>
 
-            {/* Primary Action Button */}
-            <button
-              type="submit"
-              disabled={isSubmitting || pendingUploads > 0}
-              className={cn(
-                "w-full sm:w-auto px-6 py-2.5 rounded-xl text-white text-xs font-bold uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer order-1 sm:order-3",
-                isSubmitting || pendingUploads > 0
-                  ? "bg-slate-400 cursor-not-allowed"
-                  : "bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 shadow-emerald-900/20"
-              )}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Saving Form...</span>
-                </>
-              ) : (
-                <>
-                  <Check className="w-4 h-4" />
-                  <span>{mode === "edit" ? "Update Form & Save" : "Save & Publish Form"}</span>
-                </>
-              )}
-            </button>
+            {/* Right Action Buttons: Save Draft vs Publish */}
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end order-1 sm:order-3">
+              <button
+                type="button"
+                onClick={() => handleSaveOrPublish(true)}
+                disabled={isSubmitting || pendingUploads > 0}
+                className="px-4 py-2.5 rounded-xl border border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold uppercase tracking-wider transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                title="Save form configurations as a private draft without publishing live"
+              >
+                <Save className="w-3.5 h-3.5 text-slate-500" />
+                <span>Save as Draft</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSaveOrPublish(false)}
+                disabled={isSubmitting || pendingUploads > 0}
+                className={cn(
+                  "px-5 py-2.5 rounded-xl text-white text-xs font-bold uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer",
+                  isSubmitting || pendingUploads > 0
+                    ? "bg-slate-400 cursor-not-allowed"
+                    : "bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 shadow-emerald-900/20"
+                )}
+                title="Publish form live to the student portal and council desk"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Publishing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" />
+                    <span>{mode === "edit" && initialData?.status !== "draft" ? "Update & Save" : "Publish Form"}</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
         </form>

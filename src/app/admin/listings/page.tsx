@@ -663,22 +663,46 @@ export default function AdminListingsPage() {
                       </td>
 
                       <td className="py-4 px-6">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleStatus(item)}
-                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer border ${
-                            item.status !== "closed" && item.isAcceptingResponses !== false
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                              : "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
-                          }`}
-                          title={
-                            item.status !== "closed" && item.isAcceptingResponses !== false
-                              ? "Currently accepting responses. Click to stop accepting responses."
-                              : "Responses closed. Click to resume accepting responses."
-                          }
-                        >
-                          {item.status !== "closed" && item.isAcceptingResponses !== false ? "● Active" : "○ Closed"}
-                        </button>
+                        {item.status === "draft" || item.isLive === false ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-300">
+                              📝 Draft
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = listings.map((l) =>
+                                  l.id === item.id
+                                    ? { ...l, status: "active" as const, isLive: true, isAcceptingResponses: true, publishedAt: l.publishedAt || new Date().toISOString() }
+                                    : l
+                                );
+                                saveStoredListings(updated);
+                                showToast(`"${item.title}" published live.`);
+                              }}
+                              className="px-2 py-0.5 rounded-md bg-[#17458F] hover:bg-[#123670] text-white text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                              title="Publish this draft live now"
+                            >
+                              Publish Live
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleStatus(item)}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer border ${
+                              item.status !== "closed" && item.isAcceptingResponses !== false
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                                : "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
+                            }`}
+                            title={
+                              item.status !== "closed" && item.isAcceptingResponses !== false
+                                ? "Currently accepting responses. Click to stop accepting responses."
+                                : "Responses closed. Click to resume accepting responses."
+                            }
+                          >
+                            {item.status !== "closed" && item.isAcceptingResponses !== false ? "● Active" : "○ Closed"}
+                          </button>
+                        )}
                       </td>
 
                       <td className="py-4 px-6 text-right">

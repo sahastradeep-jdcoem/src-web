@@ -903,6 +903,12 @@ export default function AdminSrcUpdatesPage() {
                         </span>
                       )}
 
+                      {(item.status === "draft" || item.isLive === false) && (
+                        <span className="text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
+                          📝 Draft
+                        </span>
+                      )}
+
                       {item.badgeText && (
                         <span className="text-[10px] font-semibold text-slate-500 bg-slate-50 px-2 py-0.5 rounded">
                           {item.badgeText}
@@ -1054,20 +1060,38 @@ export default function AdminSrcUpdatesPage() {
                   <div className="flex sm:flex-col items-center gap-2 shrink-0 border-t sm:border-t-0 pt-3 sm:pt-0">
                     {(item.category === "form" || (item.formFields && item.formFields.length > 0)) && (
                       <>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleDispatchAcceptingResponses(item.id, item.isAcceptingResponses === false)}
-                          className={cn(
-                            "flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border w-full sm:w-auto",
-                            item.isAcceptingResponses !== false
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
-                              : "bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100"
-                          )}
-                          title="Click to toggle accepting responses"
-                        >
-                          <Power className="w-3.5 h-3.5" />
-                          <span>{item.isAcceptingResponses !== false ? "Active" : "Closed"}</span>
-                        </button>
+                        {item.status === "draft" || item.isLive === false ? (
+                          <Button
+                            onClick={async () => {
+                              const updated = dispatches.map((d) =>
+                                d.id === item.id ? { ...d, status: "active" as const, isLive: true } : d
+                              );
+                              await saveStoredSrcDispatches(updated);
+                              showToast(`"${item.title}" published live!`);
+                            }}
+                            size="sm"
+                            className="bg-[#17458F] hover:bg-[#123670] text-white font-bold text-xs gap-1.5 shadow-sm cursor-pointer w-full sm:w-auto"
+                            title="Publish this draft form live now"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            <span>Publish Live</span>
+                          </Button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleDispatchAcceptingResponses(item.id, item.isAcceptingResponses === false)}
+                            className={cn(
+                              "flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border w-full sm:w-auto",
+                              item.isAcceptingResponses !== false
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
+                                : "bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100"
+                            )}
+                            title="Click to toggle accepting responses"
+                          >
+                            <Power className="w-3.5 h-3.5" />
+                            <span>{item.isAcceptingResponses !== false ? "Active" : "Closed"}</span>
+                          </button>
+                        )}
                         <Button
                           onClick={() => setInspectingDispatch(item)}
                           variant="outline"
