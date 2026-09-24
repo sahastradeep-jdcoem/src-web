@@ -330,6 +330,9 @@ export function ClubFormModal({
                   sublabel="For /clubs directory grid (16:9)"
                   recommendedSize="1200 x 675 px (16:9)"
                   storagePath="clubs/cards"
+                  aspectRatioOverride="16:9"
+                  allowedAspectRatiosOverride={["16:9"]}
+                  lockAspectRatioOverride={true}
                   previewUrl={formClub.cardImage}
                   onUploadStateChange={onUploadStateChange}
                   onUrlChange={(url) => {
@@ -346,6 +349,9 @@ export function ClubFormModal({
                   sublabel="Cinematic backdrop on /clubs/[slug]"
                   recommendedSize="1920 x 820 px (21:9)"
                   storagePath="clubs/headers"
+                  aspectRatioOverride="21:9"
+                  allowedAspectRatiosOverride={["21:9"]}
+                  lockAspectRatioOverride={true}
                   previewUrl={formClub.headerImage}
                   onUploadStateChange={onUploadStateChange}
                   onUrlChange={(url) => {
@@ -362,6 +368,9 @@ export function ClubFormModal({
                   sublabel="Circular insignia emblem (1:1)"
                   recommendedSize="500 x 500 px (Circle PNG)"
                   storagePath="clubs/logos"
+                  aspectRatioOverride="1:1"
+                  allowedAspectRatiosOverride={["1:1"]}
+                  lockAspectRatioOverride={true}
                   previewUrl={formClub.logoImage}
                   onUploadStateChange={onUploadStateChange}
                   onUrlChange={(url) => {

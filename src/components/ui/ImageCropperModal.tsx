@@ -71,23 +71,26 @@ export function ImageCropperModal({
   title = "Crop & Frame Photo",
   purpose,
 }: ImageCropperModalProps) {
-  const effectiveAllowedRatios: AspectRatioType[] | undefined = 
-    lockAspectRatio && initialAspectRatio && initialAspectRatio !== "auto" && initialAspectRatio !== "free"
-      ? [initialAspectRatio]
-      : (allowedAspectRatios && allowedAspectRatios.length === 1
-          ? allowedAspectRatios
-          : allowedAspectRatios);
+  const effectiveAllowedRatios = useMemo<AspectRatioType[] | undefined>(() => {
+    if (lockAspectRatio && initialAspectRatio && initialAspectRatio !== "auto" && initialAspectRatio !== "free") {
+      return [initialAspectRatio];
+    }
+    if (allowedAspectRatios && allowedAspectRatios.length === 1) {
+      return allowedAspectRatios;
+    }
+    return allowedAspectRatios;
+  }, [lockAspectRatio, initialAspectRatio, allowedAspectRatios]);
 
-  const initialRatioCalc: AspectRatioType = (() => {
+  const initialRatioCalc: AspectRatioType = useMemo(() => {
     if (effectiveAllowedRatios && effectiveAllowedRatios.length > 0) {
       if (!effectiveAllowedRatios.includes(initialAspectRatio)) {
         return effectiveAllowedRatios[0];
       }
     }
     return initialAspectRatio;
-  })();
+  }, [effectiveAllowedRatios, initialAspectRatio]);
 
-  const isCouncilAvatarContext = isAvatar || purpose === "avatar";
+  const isCouncilAvatarContext = purpose === "avatar" || (isAvatar && purpose !== "logo");
 
   const [selectedRatio, setSelectedRatio] = useState<AspectRatioType>(initialRatioCalc);
   const [zoom, setZoom] = useState<number>(1);
@@ -108,6 +111,7 @@ export function ImageCropperModal({
   const [activeTab, setActiveTab] = useState<"crop" | "transform">("crop");
   const [safeSrc, setSafeSrc] = useState<string>(imageSrc);
   const [isResolvingImage, setIsResolvingImage] = useState<boolean>(false);
+  const prevIsOpenRef = useRef(false);
   const createdObjectUrlRef = useRef<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -320,9 +324,9 @@ export function ImageCropperModal({
     }
   }, [safeSrc]);
 
-  // Sync initial state when modal opens
+  // Sync initial state strictly when modal opens (false -> true)
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !prevIsOpenRef.current) {
       let initial: AspectRatioType = initialAspectRatio === "auto" ? "16:9" : initialAspectRatio;
       if (effectiveAllowedRatios && effectiveAllowedRatios.length > 0 && !effectiveAllowedRatios.includes(initial)) {
         const first = effectiveAllowedRatios[0];
@@ -338,6 +342,7 @@ export function ImageCropperModal({
       setShowCardFrame(isCouncilAvatarContext && (initial === "4:5" || initial === "3:4"));
       setShowCircleMask(isAvatar && initial === "1:1");
     }
+    prevIsOpenRef.current = isOpen;
   }, [isOpen, initialAspectRatio, effectiveAllowedRatios, isAvatar, isCouncilAvatarContext]);
 
   // Mouse & Touch Pointer Pan and Touchscreen Pinch Zoom handlers
@@ -685,12 +690,18 @@ export function ImageCropperModal({
       width: 12, 
       height: 15 
     },
-    { id: "3:4", label: "3:4 Portrait", sublabel: "Portrait Postcard", ratio: 3 / 4, width: 12, height: 16 },
-    { id: "1:1", label: "1:1 Square", sublabel: "Avatar / Logo / Badge", ratio: 1, width: 14, height: 14 },
+    { 
+      id: "1:1", 
+      label: purpose === "logo" ? "1:1 Club Logo" : "1:1 Square", 
+      sublabel: purpose === "logo" ? "Circular Insignia Emblem" : "Avatar / Logo / Badge", 
+      ratio: 1, 
+      width: 14, 
+      height: 14 
+    },
     { 
       id: "16:9", 
       label: purpose === "cardCover" ? "16:9 Card Thumbnail" : "16:9 Banner", 
-      sublabel: purpose === "cardCover" ? "Catalog Card & Dashboard" : "Landscape Hero / Card", 
+      sublabel: purpose === "cardCover" ? "Catalog Card & Directory Grid" : "Landscape Hero / Card", 
       ratio: 16 / 9, 
       width: 18, 
       height: 10 
