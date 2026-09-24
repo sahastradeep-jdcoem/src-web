@@ -1506,7 +1506,7 @@ export default function ListingDetailPage() {
                         <button
                           type="button"
                           onClick={handleNextSection}
-                          className="px-6 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                          className="px-6 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] active:bg-[#0e2a56] text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
                         >
                           <span>Next</span>
                           <ChevronRight className="w-4 h-4" />
@@ -1515,13 +1515,16 @@ export default function ListingDetailPage() {
                         <button
                           type="submit"
                           disabled={isSubmitting}
-                          className="px-8 py-3 rounded-2xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer disabled:opacity-50"
+                          className="px-8 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold uppercase tracking-wider transition-all shadow-md hover:shadow-lg hover:shadow-emerald-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
                         >
-                          {isSubmitting 
-                            ? "Saving..." 
-                            : existingResponse 
-                            ? "Update Response & Save Changes" 
-                            : "Send Application & Log Ticket"}
+                          {isSubmitting ? (
+                            <span>Submitting...</span>
+                          ) : (
+                            <>
+                              <Check className="w-4 h-4 text-white stroke-[2.5]" />
+                              <span>{existingResponse ? "Update & Submit" : "Submit"}</span>
+                            </>
+                          )}
                         </button>
                       )}
                     </div>
