@@ -759,9 +759,9 @@ export function CreateListingModal({
             )}>
               <PillarIcon className="w-5 h-5" />
             </div>
-            <div className="space-y-0.5 min-w-0">
+            <div className="space-y-0.5 min-w-0 shrink-0">
               <div className="flex items-center gap-2">
-                <h2 className="font-heading font-extrabold text-base sm:text-lg tracking-tight uppercase truncate">
+                <h2 className="font-heading font-extrabold text-sm sm:text-base tracking-tight uppercase whitespace-nowrap">
                   {mode === "edit"
                     ? `EDIT ${selectedPillarOption?.title || "LISTING"}`
                     : step === "select_type"
@@ -915,7 +915,10 @@ export function CreateListingModal({
             )}
 
             {/* Scrollable Form Body */}
-            <div className="p-6 sm:p-8 space-y-6 overflow-y-auto flex-1">
+            <div className={cn(
+              "overflow-y-auto flex-1",
+              activeSection === "qa" ? "p-0" : "p-6 sm:p-8 space-y-6"
+            )}>
               
               {/* ========================================================= */}
               {/* 1. DETAILS SECTION                                        */}
@@ -1566,7 +1569,7 @@ export function CreateListingModal({
               {/* 4. SRC FORMS BUILDER SECTION (All types except poll)       */}
               {/* ========================================================= */}
               {activeSection === "qa" && selectedPillarOption.type !== "poll" && (
-                <div className="space-y-5 animate-in fade-in duration-200">
+                <div className="animate-in fade-in duration-200">
                   <SrcFormsBuilder
                     fields={customQuestions}
                     onChange={(qs) => setCustomQuestions(qs)}

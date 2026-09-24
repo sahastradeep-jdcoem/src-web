@@ -462,48 +462,9 @@ export function SrcFormsBuilder({
   // ── JSX ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-4">
-      {/* Validation Panel (if opened) */}
-      {showValidation && sectionGroups.length > 1 && (
-        <div className={cn(
-          "p-4 rounded-2xl border space-y-2",
-          validationIssues.length === 0
-            ? "bg-emerald-50/60 border-emerald-200"
-            : "bg-amber-50/60 border-amber-300"
-        )}>
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-              {validationIssues.length === 0 ? (
-                <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Section Routing — No Issues</>
-              ) : (
-                <><AlertTriangle className="w-3.5 h-3.5 text-amber-600" /> Section Routing — {validationIssues.length} {validationIssues.length === 1 ? "Issue" : "Issues"} Found</>
-              )}
-            </span>
-            <button
-              type="button"
-              onClick={() => setShowValidation(false)}
-              className="p-1 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-white cursor-pointer"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          {validationIssues.length === 0 ? (
-            <p className="text-[11px] text-emerald-700">All section routes are valid. Respondents will be guided correctly.</p>
-          ) : (
-            <ul className="space-y-1.5">
-              {validationIssues.map((issue, i) => (
-                <li key={i} className="flex items-start gap-2 text-[11px] text-amber-900">
-                  <AlertTriangle className="w-3 h-3 text-amber-600 mt-0.5 shrink-0" />
-                  <span>{issue.message}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
-      {/* Quick Add Presets — sticky while scrolling */}
-      <div className="sticky top-0 z-20 -mx-1 px-1 py-2 bg-white/95 backdrop-blur-sm border-b border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-2">
+    <div className="flex flex-col flex-1 min-h-0 w-full relative">
+      {/* Quick Add Presets — STUCK DIRECTLY TO GRADIENT HEADER */}
+      <div className="sticky top-0 z-30 w-full px-4 sm:px-6 py-2.5 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-2 shrink-0">
         <div className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
@@ -588,20 +549,59 @@ export function SrcFormsBuilder({
         )}
       </div>
 
+      {/* Main Form Fields Container */}
+      <div className="p-4 sm:p-6 space-y-4">
+        {/* Validation Panel (if opened) */}
+        {showValidation && sectionGroups.length > 1 && (
+          <div className={cn(
+            "p-4 rounded-2xl border space-y-2",
+            validationIssues.length === 0
+              ? "bg-emerald-50/60 border-emerald-200"
+              : "bg-amber-50/60 border-amber-300"
+          )}>
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                {validationIssues.length === 0 ? (
+                  <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Section Routing — No Issues</>
+                ) : (
+                  <><AlertTriangle className="w-3.5 h-3.5 text-amber-600" /> Section Routing — {validationIssues.length} {validationIssues.length === 1 ? "Issue" : "Issues"} Found</>
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowValidation(false)}
+                className="p-1 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-white cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {validationIssues.length === 0 ? (
+              <p className="text-[11px] text-emerald-700">All section routes are valid. Respondents will be guided correctly.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {validationIssues.map((issue, i) => (
+                  <li key={i} className="flex items-start gap-2 text-[11px] text-amber-900">
+                    <AlertTriangle className="w-3 h-3 text-amber-600 mt-0.5 shrink-0" />
+                    <span>{issue.message}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
-
-      {/* Preview Modal */}
-      {preview.open && (
-        <PreviewPanel
-          sectionGroups={sectionGroups}
-          preview={preview}
-          onNext={previewNext}
-          onBack={previewBack}
-          onSetAnswer={previewSetAnswer}
-          onReset={previewReset}
-          onClose={() => setPreview(PREVIEW_INIT)}
-        />
-      )}
+        {/* Preview Modal */}
+        {preview.open && (
+          <PreviewPanel
+            sectionGroups={sectionGroups}
+            preview={preview}
+            onNext={previewNext}
+            onBack={previewBack}
+            onSetAnswer={previewSetAnswer}
+            onReset={previewReset}
+            onClose={() => setPreview(PREVIEW_INIT)}
+          />
+        )}
 
       {/* Empty State */}
       {activeFields.length === 0 ? (
@@ -1134,6 +1134,7 @@ export function SrcFormsBuilder({
           })}
         </div>
       )}
+      </div>
     </div>
   );
 }

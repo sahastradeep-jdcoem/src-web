@@ -457,7 +457,10 @@ export function CreateSrcFormModal({
           )}
 
           {/* SCROLLABLE FORM BODY */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+          <div className={cn(
+            "flex-1 overflow-y-auto",
+            activeSection === "qa" ? "p-0" : "p-4 sm:p-6 space-y-6"
+          )}>
 
             {/* ========================================================= */}
             {/* 1. DETAILS SECTION                                        */}
@@ -876,7 +879,7 @@ export function CreateSrcFormModal({
             {/* 3. SRC FORMS BUILDER SECTION                              */}
             {/* ========================================================= */}
             {activeSection === "qa" && (
-              <div className="space-y-5 animate-in fade-in duration-200">
+              <div className="animate-in fade-in duration-200">
                 <SrcFormsBuilder
                   fields={formFields}
                   onChange={(qs) => setFormFields(qs)}
