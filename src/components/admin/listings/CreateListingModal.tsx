@@ -101,8 +101,8 @@ const PILLAR_OPTIONS: PillarOption[] = [
   {
     pillar: "applications",
     type: "application",
-    title: "Application Form",
-    badge: "APPLICATIONS & INTAKE",
+    title: "SRC Forms",
+    badge: "SRC FORMS & INTAKE",
     description: "Launch general applications, program registrations, member sign-ups, or custom forms with custom Q&A.",
     icon: Users,
     gradient: "from-purple-600 to-pink-600",
@@ -216,10 +216,10 @@ function getSectionsForType(type?: ListingType): ListingSectionDef[] {
       return [
         {
           id: "details",
-          label: "Application Details",
+          label: "SRC Form Details",
           shortLabel: "Details",
           icon: FileText,
-          description: "Application headline, organizing entity, campus eligibility, and schedule.",
+          description: "Form headline, organizing entity, campus eligibility, and schedule.",
         },
         {
           id: "visuals",
