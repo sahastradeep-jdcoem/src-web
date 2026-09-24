@@ -1187,12 +1187,12 @@ export default function ListingDetailPage() {
 
                   {/* Section Progress Header for multi-section forms */}
                   {formSections.length > 1 && currentSection && (
-                    <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-50/90 via-slate-50 to-indigo-50/80 border border-blue-100 space-y-2.5 shadow-2xs">
+                    <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-blue-50/90 via-slate-50 to-indigo-50/80 border border-blue-100 space-y-2 shadow-2xs">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg bg-[#17458F]/10 text-[#17458F]">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#17458F]/10 text-[#17458F]">
                           Section {activeRouteInfo.currentStepNumber} of {activeRouteInfo.totalSteps}
                         </span>
-                        <span className="text-[11px] font-semibold text-slate-500">
+                        <span className="text-[10px] font-semibold text-slate-500">
                           {activeRouteInfo.progressPercent}% Completed
                         </span>
                       </div>
@@ -1202,9 +1202,11 @@ export default function ListingDetailPage() {
                           style={{ width: `${activeRouteInfo.progressPercent}%` }}
                         />
                       </div>
-                      <h4 className="font-heading font-extrabold text-base text-slate-900 pt-0.5">
-                        {currentSection.title}
-                      </h4>
+                      {currentSection.title && !/^section(\s*\d+)?$/i.test(currentSection.title.trim()) && (
+                        <h4 className="font-heading font-extrabold text-sm text-slate-900 pt-0.5">
+                          {currentSection.title}
+                        </h4>
+                      )}
                       {currentSection.description && (
                         <p className="text-xs text-slate-600 leading-relaxed font-medium">
                           {currentSection.description}
