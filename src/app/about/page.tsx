@@ -12,7 +12,10 @@ import {
   CheckCircle2, 
   ArrowRight,
   Award,
-  Layers
+  Layers,
+  Palette,
+  Code2,
+  Linkedin
 } from "lucide-react";
 import BrandStrip from "@/components/layout/BrandStrip";
 import { PillarsOfStrengthSection } from "@/components/team/PillarsOfStrengthSection";
@@ -195,7 +198,140 @@ export default function AboutPage() {
           </div>
         </section>
 
-        {/* SECTION 4: INSTITUTIONAL BRAND STRIP */}
+        {/* SECTION 4: PERMANENT STUDENT CREDITS */}
+        <section id="credits" className="space-y-8 pt-4">
+          <div className="space-y-2 text-center max-w-2xl mx-auto">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#E78023] flex items-center justify-center gap-1.5">
+              <Sparkles className="w-4 h-4" />
+              <span>Permanent Recognition</span>
+            </span>
+            <h2 className="font-extrabold text-3xl sm:text-4xl text-[#0F172A] uppercase">
+              CREATIVE &amp; TECHNICAL CREDITS
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600">
+              Honoring the student architects behind the foundational visual identity and digital web platform of Sahastradeep.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-5xl mx-auto items-stretch">
+            
+            {/* Card 1: SRC Logo Design */}
+            <div className="p-7 sm:p-8 rounded-3xl bg-white border border-slate-200 hover:border-[#E78023]/40 shadow-sm transition-all flex flex-col justify-between space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="h-12 w-12 rounded-2xl bg-[#E78023]/10 border border-[#E78023]/20 flex items-center justify-center text-[#E78023]">
+                    <Palette className="w-6 h-6" />
+                  </div>
+                  <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-[11px] font-bold uppercase tracking-wider">
+                    Brand Identity
+                  </span>
+                </div>
+
+                <div>
+                  <h3 className="font-extrabold text-xl text-[#0F172A]">
+                    SRC Logo Design
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-600 mt-1.5 leading-relaxed">
+                    Conceptualized and designed the official Sahastradeep insignia, crest geometry, and institutional visual brand identity.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-4 border-t border-slate-100">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block">
+                  Design Contributors
+                </span>
+
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70 hover:bg-slate-100/70 transition-colors">
+                    <div>
+                      <h4 className="font-bold text-sm text-[#0F172A]">Gokul Pawar</h4>
+                      <p className="text-xs text-slate-500 font-medium">DS 2nd Yr (2025–26)</p>
+                    </div>
+                    <a
+                      href="https://www.linkedin.com/in/gokul-pawar-612664333/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 text-[#0077B5] hover:bg-[#0077B5] hover:text-white hover:border-[#0077B5] shadow-xs text-xs font-semibold transition-all min-h-[44px] min-w-[44px] justify-center"
+                      aria-label="Gokul Pawar LinkedIn Profile"
+                    >
+                      <Linkedin className="w-4 h-4 shrink-0" />
+                      <span className="hidden sm:inline">LinkedIn</span>
+                    </a>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70 hover:bg-slate-100/70 transition-colors">
+                    <div>
+                      <h4 className="font-bold text-sm text-[#0F172A]">Sakshant Waghmare</h4>
+                      <p className="text-xs text-slate-500 font-medium">DS (2025–26)</p>
+                    </div>
+                    <a
+                      href="https://www.linkedin.com/in/sakshant-waghmare-51340b384/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 text-[#0077B5] hover:bg-[#0077B5] hover:text-white hover:border-[#0077B5] shadow-xs text-xs font-semibold transition-all min-h-[44px] min-w-[44px] justify-center"
+                      aria-label="Sakshant Waghmare LinkedIn Profile"
+                    >
+                      <Linkedin className="w-4 h-4 shrink-0" />
+                      <span className="hidden sm:inline">LinkedIn</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 2: SRC Website Development */}
+            <div className="p-7 sm:p-8 rounded-3xl bg-white border border-slate-200 hover:border-[#17458F]/40 shadow-sm transition-all flex flex-col justify-between space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="h-12 w-12 rounded-2xl bg-[#17458F]/10 border border-[#17458F]/20 flex items-center justify-center text-[#17458F]">
+                    <Code2 className="w-6 h-6" />
+                  </div>
+                  <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-[11px] font-bold uppercase tracking-wider">
+                    Digital Platform
+                  </span>
+                </div>
+
+                <div>
+                  <h3 className="font-extrabold text-xl text-[#0F172A]">
+                    SRC Website Development
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-600 mt-1.5 leading-relaxed">
+                    Architected and engineered the official web portal, real-time event systems, ticketing workflows, and student console architecture.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-4 border-t border-slate-100">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block">
+                  Engineering Lead
+                </span>
+
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70 hover:bg-slate-100/70 transition-colors">
+                    <div>
+                      <h4 className="font-bold text-sm text-[#0F172A]">Harsh Shende</h4>
+                      <p className="text-xs text-slate-500 font-medium">CSE 4th Yr. (2026–27)</p>
+                    </div>
+                    <a
+                      href="https://www.linkedin.com/in/harsh-shende-xfr/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 text-[#0077B5] hover:bg-[#0077B5] hover:text-white hover:border-[#0077B5] shadow-xs text-xs font-semibold transition-all min-h-[44px] min-w-[44px] justify-center"
+                      aria-label="Harsh Shende LinkedIn Profile"
+                    >
+                      <Linkedin className="w-4 h-4 shrink-0" />
+                      <span className="hidden sm:inline">LinkedIn</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        {/* SECTION 5: INSTITUTIONAL BRAND STRIP */}
         <div className="pt-8">
           <BrandStrip />
         </div>

@@ -243,9 +243,42 @@ export default function Footer() {
         </div>
 
         {/* Bottom Strip */}
-        <div className="pt-8 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-          <p>© {currentTenureLabel} SRC JDCOEM — Sahastradeep. All rights reserved.</p>
-          <div className="flex items-center gap-4 font-semibold text-slate-600">
+        <div className="pt-8 border-t border-slate-200 flex flex-col lg:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+          <div className="flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3 text-center sm:text-left">
+            <p>© {currentTenureLabel} SRC JDCOEM — Sahastradeep. All rights reserved.</p>
+            <span className="hidden sm:inline text-slate-300">•</span>
+            <div className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1 text-[11px] text-slate-500">
+              <span className="text-slate-400">Logo Design:</span>
+              <a
+                href="https://www.linkedin.com/in/gokul-pawar-612664333/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-slate-700 hover:text-[#E78023] transition-colors underline decoration-slate-300 underline-offset-2"
+              >
+                Gokul Pawar
+              </a>
+              <span className="text-slate-400">&amp;</span>
+              <a
+                href="https://www.linkedin.com/in/sakshant-waghmare-51340b384/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-slate-700 hover:text-[#E78023] transition-colors underline decoration-slate-300 underline-offset-2"
+              >
+                Sakshant Waghmare
+              </a>
+              <span className="text-slate-300 mx-0.5">|</span>
+              <span className="text-slate-400">Web Dev:</span>
+              <a
+                href="https://www.linkedin.com/in/harsh-shende-xfr/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-slate-700 hover:text-[#17458F] transition-colors underline decoration-slate-300 underline-offset-2"
+              >
+                Harsh Shende
+              </a>
+            </div>
+          </div>
+          <div className="flex items-center gap-4 font-semibold text-slate-600 shrink-0">
             <span className="text-[#17458F]">Student Representative Council</span>
             <span className="text-[#E78023]">•</span>
             <span>JDCOEM Nagpur</span>
