@@ -313,3 +313,32 @@ export function formatWhatsAppUrl(rawUrl?: string): string {
 
   return clean.startsWith("chat.whatsapp.com") ? `https://${clean}` : clean;
 }
+
+/**
+ * Returns the first whatsapp_link field (with a non-empty waGroupUrl) found
+ * inside the sections the respondent actually visited (sectionPath).
+ *
+ * Falls back to null if no whatsapp_link exists in any visited section.
+ * This powers option-based conditional post-submit WhatsApp group cards:
+ *   • Dance answer → Section 3 visited → Section 3 WA link shown
+ *   • Music answer → Section 4 visited → Section 4 WA link shown
+ *
+ * @param sections  Output of getFormSectionGroups()
+ * @param sectionPath  Ordered list of section IDs the respondent traversed
+ */
+export function getWhatsAppLinkForPath(
+  sections: FormSectionGroup[],
+  sectionPath: string[]
+): SrcFormField | null {
+  if (!sectionPath || sectionPath.length === 0) return null;
+
+  for (const sectionId of sectionPath) {
+    const section = sections.find((s) => s.id === sectionId);
+    if (!section) continue;
+    const waField = section.fields.find(
+      (f) => f.type === "whatsapp_link" && f.waGroupUrl?.trim()
+    );
+    if (waField) return waField;
+  }
+  return null;
+}

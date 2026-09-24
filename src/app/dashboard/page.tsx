@@ -43,7 +43,7 @@ import {
   MessageCircle
 } from "lucide-react";
 import { WhatsAppJoinCard } from "@/components/forms/WhatsAppJoinCard";
-import { getFormSectionGroups, getNextSectionTarget, analyzeSectionResponses, getVisitedSectionPath } from "@/lib/srcFormsHelper";
+import { getFormSectionGroups, getNextSectionTarget, analyzeSectionResponses, getVisitedSectionPath, getWhatsAppLinkForPath } from "@/lib/srcFormsHelper";
 import { CancelRegistrationModal } from "@/components/registration/CancelRegistrationModal";
 import { Badge } from "@/components/ui/Badge";
 import { getDepartmentShortName, resolveCanonicalDepartmentName } from "@/lib/departmentsStore";
@@ -1711,11 +1711,17 @@ export default function StudentDashboardPage() {
                                         </div>
                                       )}
 
-                                      {/* WhatsApp Group Join Card (Post-submission) */}
+                                      {/* WhatsApp Group Join Card (Post-submission) — section-path aware */}
                                       {(() => {
-                                        const inlineWa = item.formFields?.find((f) => f.type === "whatsapp_link" && f.waGroupUrl);
-                                        const effectiveWaUrl = item.whatsappGroupUrl || inlineWa?.waGroupUrl;
-                                        const effectiveWaName = item.whatsappGroupName || inlineWa?.waGroupName || inlineWa?.question || "Official WhatsApp Group";
+                                        const sections = getFormSectionGroups(item.formFields || []);
+                                        // Prefer the WA link from the sections the respondent actually visited
+                                        const pathWa = existingResp.sectionPath
+                                          ? getWhatsAppLinkForPath(sections, existingResp.sectionPath)
+                                          : null;
+                                        // Fall back: first WA link anywhere in the form, then top-level prop
+                                        const fallbackWa = item.formFields?.find((f) => f.type === "whatsapp_link" && f.waGroupUrl);
+                                        const effectiveWaUrl = pathWa?.waGroupUrl || item.whatsappGroupUrl || fallbackWa?.waGroupUrl;
+                                        const effectiveWaName = pathWa?.waGroupName || pathWa?.question || item.whatsappGroupName || fallbackWa?.waGroupName || fallbackWa?.question || "Official WhatsApp Group";
                                         if (!effectiveWaUrl) return null;
 
                                         return (

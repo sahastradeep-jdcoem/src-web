@@ -31,7 +31,7 @@ import {
   MessageCircle
 } from "lucide-react";
 import { WhatsAppJoinCard } from "@/components/forms/WhatsAppJoinCard";
-import { getFormSectionGroups, getVisitedSectionPath } from "@/lib/srcFormsHelper";
+import { getFormSectionGroups, getVisitedSectionPath, getWhatsAppLinkForPath } from "@/lib/srcFormsHelper";
 import { Button } from "@/components/ui/Button";
 import { DEFAULT_DEPARTMENTS } from "@/data/departments";
 import { 
@@ -77,6 +77,7 @@ export default function ListingDetailPage() {
   const [customAnswers, setCustomAnswers] = useState<Record<string, any>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [receiptCode, setReceiptCode] = useState<string | null>(null);
+  const [submittedSectionPath, setSubmittedSectionPath] = useState<string[] | undefined>(undefined);
   const [votedPolls, setVotedPolls] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -370,6 +371,7 @@ export default function ListingDetailPage() {
         showToast("Your response has been updated successfully!");
       } else {
         setReceiptCode(ticketCode);
+        setSubmittedSectionPath(sectionPath);
       }
       try {
         confetti({ particleCount: 90, spread: 80, origin: { y: 0.5 } });
@@ -768,9 +770,13 @@ export default function ListingDetailPage() {
                       <span className="font-mono font-extrabold text-lg text-[#17458F]">{receiptCode}</span>
                     </div>
                     {(() => {
-                      const waField = listing.customQuestions?.find((q) => q.type === "whatsapp_link" && q.waGroupUrl);
-                      const effectiveWaUrl = listing.whatsappGroupUrl || waField?.waGroupUrl;
-                      const effectiveWaName = listing.whatsappGroupName || waField?.waGroupName || waField?.question || "Official WhatsApp Group";
+                      const sections = getFormSectionGroups(listing.customQuestions || []);
+                      const pathWa = submittedSectionPath
+                        ? getWhatsAppLinkForPath(sections, submittedSectionPath)
+                        : null;
+                      const fallbackWa = listing.customQuestions?.find((q) => q.type === "whatsapp_link" && q.waGroupUrl);
+                      const effectiveWaUrl = pathWa?.waGroupUrl || listing.whatsappGroupUrl || fallbackWa?.waGroupUrl;
+                      const effectiveWaName = pathWa?.waGroupName || pathWa?.question || listing.whatsappGroupName || fallbackWa?.waGroupName || fallbackWa?.question || "Official WhatsApp Group";
                       if (!effectiveWaUrl) return null;
                       return (
                         <div className="pt-2 max-w-sm mx-auto text-left">
@@ -879,11 +885,15 @@ export default function ListingDetailPage() {
                           </div>
                         )}
 
-                        {/* WhatsApp Group Join Card for existing submission */}
+                        {/* WhatsApp Group Join Card for existing submission — section-path aware */}
                         {(() => {
-                          const waField = listing.customQuestions?.find((q) => q.type === "whatsapp_link" && q.waGroupUrl);
-                          const effectiveWaUrl = listing.whatsappGroupUrl || waField?.waGroupUrl;
-                          const effectiveWaName = listing.whatsappGroupName || waField?.waGroupName || waField?.question || "Official WhatsApp Group";
+                          const sections = getFormSectionGroups(listing.customQuestions || []);
+                          const pathWa = existingResponse?.sectionPath
+                            ? getWhatsAppLinkForPath(sections, existingResponse.sectionPath)
+                            : null;
+                          const fallbackWa = listing.customQuestions?.find((q) => q.type === "whatsapp_link" && q.waGroupUrl);
+                          const effectiveWaUrl = pathWa?.waGroupUrl || listing.whatsappGroupUrl || fallbackWa?.waGroupUrl;
+                          const effectiveWaName = pathWa?.waGroupName || pathWa?.question || listing.whatsappGroupName || fallbackWa?.waGroupName || fallbackWa?.question || "Official WhatsApp Group";
                           if (!effectiveWaUrl) return null;
                           return (
                             <div className="pt-2">
