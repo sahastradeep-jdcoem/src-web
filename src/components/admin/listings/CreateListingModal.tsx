@@ -734,47 +734,50 @@ export function CreateListingModal({
     handleSaveOrPublish(false);
   };
 
+  const PillarIcon = selectedPillarOption?.icon || ClipboardList;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200 modal-overlay-container">
-      <div className="relative w-full max-w-4xl rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden my-auto font-sans flex flex-col modal-dialog-card">
+      <div className="relative w-full max-w-5xl h-[92vh] sm:h-[88vh] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 text-left modal-dialog-card">
         
-        {/* Header Strip with Integrated Section Tabs */}
-        <div className="px-5 py-3.5 bg-gradient-to-r from-slate-900 to-[#17458F] text-white flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/10 shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
+        {/* MODAL HEADER WITH INTEGRATED TABS */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:px-6 bg-slate-900 text-white shrink-0 border-b border-slate-800">
+          <div className="flex items-center gap-3 min-w-0">
             {step === "configure_form" && mode !== "edit" && (
               <button
                 type="button"
                 onClick={handleBackToSelect}
-                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer shrink-0"
-                title="Choose different type"
+                className="p-2 rounded-2xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer shrink-0"
+                title="Choose different template"
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
             )}
+            <div className={cn(
+              "p-2.5 rounded-2xl text-white shadow-md shrink-0 bg-gradient-to-br",
+              selectedPillarOption ? selectedPillarOption.gradient : "from-blue-600 to-indigo-700"
+            )}>
+              <PillarIcon className="w-5 h-5" />
+            </div>
             <div className="space-y-0.5 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-[#E78023] text-white shadow-xs">
-                  {mode === "edit" ? "EDIT ACTIVE" : "SRC ENGAGEMENT STUDIO"}
+                <h2 className="font-heading font-extrabold text-base sm:text-lg tracking-tight uppercase truncate">
+                  {mode === "edit"
+                    ? `EDIT ${selectedPillarOption?.title || "LISTING"}`
+                    : step === "select_type"
+                    ? "WHAT WOULD YOU LIKE TO PUBLISH?"
+                    : `CREATE ${selectedPillarOption?.title}`}
+                </h2>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 font-bold uppercase tracking-wider shrink-0">
+                  SRC Engagement
                 </span>
-                {step === "configure_form" && selectedPillarOption && (
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 truncate">
-                    • {selectedPillarOption.title}
-                  </span>
-                )}
               </div>
-              <h2 className="font-heading font-extrabold text-base sm:text-lg text-white uppercase tracking-tight truncate">
-                {mode === "edit"
-                  ? `Edit ${selectedPillarOption?.title || "Listing"}`
-                  : step === "select_type"
-                  ? "What would you like to publish?"
-                  : `Create ${selectedPillarOption?.title}`}
-              </h2>
             </div>
           </div>
 
-          {/* Section Tabs shifted right into the blue gradient header */}
+          {/* Section Tabs integrated into header */}
           {step === "configure_form" && selectedPillarOption && (
-            <div className="flex items-center gap-1.5 bg-black/20 backdrop-blur-xs p-1 rounded-2xl border border-white/15 overflow-x-auto no-scrollbar shrink-0">
+            <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-xs p-1 rounded-2xl border border-white/10 overflow-x-auto no-scrollbar shrink-0">
               {sections.map((sec) => {
                 const Icon = sec.icon;
                 const isActive = activeSection === sec.id;
@@ -795,7 +798,7 @@ export function CreateListingModal({
                     badge = "Setup";
                   }
                 } else if (sec.id === "visuals") {
-                  badge = coverImage ? "Asset Set" : "Default";
+                  badge = coverImage ? "Cover Set" : "Default";
                 } else if (sec.id === "qa") {
                   const qCount = customQuestions.filter(q => q.type !== "section" && q.type !== "whatsapp_link" && q.type !== "note").length;
                   badge = qCount > 0 ? `${qCount} Qs` : "0 Qs";
@@ -812,7 +815,7 @@ export function CreateListingModal({
                     className={cn(
                       "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 select-none",
                       isActive
-                        ? "bg-white text-[#17458F] shadow-sm font-extrabold"
+                        ? "bg-white text-slate-900 shadow-sm font-extrabold"
                         : "text-white/80 hover:text-white hover:bg-white/10"
                     )}
                   >
@@ -823,7 +826,7 @@ export function CreateListingModal({
                         className={cn(
                           "text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-md leading-none",
                           isActive
-                            ? "bg-[#17458F]/10 text-[#17458F]"
+                            ? "bg-slate-100 text-slate-800"
                             : "bg-white/15 text-white/90 border border-white/20"
                         )}
                       >
@@ -839,8 +842,8 @@ export function CreateListingModal({
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={onClose}
-              className="p-1.5 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-              aria-label="Close"
+              className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              aria-label="Close modal"
             >
               <X className="w-5 h-5" />
             </button>
