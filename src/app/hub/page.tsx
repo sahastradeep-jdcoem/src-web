@@ -39,7 +39,6 @@ import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { isExternalUser as checkIsExternalUser } from "@/lib/usersStore";
 import confetti from "canvas-confetti";
-import { useSocialShare } from "@/context/SocialShareContext";
 import { StaggerGrid, StaggerItem } from "@/components/ui/StaggerContainer";
 import { ListingCardSkeleton } from "@/components/ui/SkeletonCard";
 
@@ -53,6 +52,7 @@ export default function StudentHubPage() {
   const [votedPolls, setVotedPolls] = useState<Record<string, string>>({});
   const [feedbackNotice, setFeedbackNotice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     // Purge any obsolete un-scoped legacy voted key from storage
@@ -146,28 +146,33 @@ export default function StudentHubPage() {
     setTimeout(() => setFeedbackNotice(null), 4000);
   };
 
-  const { openShare } = useSocialShare();
-
-  const handleShareLink = (e: React.MouseEvent, item: ListingItem) => {
+  const handleShareLink = async (e: React.MouseEvent, item: ListingItem) => {
     e.preventDefault();
     e.stopPropagation();
 
-    const canonicalUrl = `https://www.srcjdcoem.in/hub/${item.slug}`;
-    const heroImage = item.coverImage || item.bannerImage;
+    const canonicalUrl = typeof window !== "undefined"
+      ? `${window.location.origin}/hub/${item.slug}`
+      : `https://www.srcjdcoem.in/hub/${item.slug}`;
 
-    openShare({
-      type: "form",
-      typeLabel: item.type ? `SRC ${item.type.toUpperCase()}` : "STUDENT OPPORTUNITY",
-      title: item.title,
-      subtitle: item.summary || (item.description ? `${item.description.slice(0, 140)}...` : undefined),
-      description: item.description,
-      imageUrl: heroImage,
-      badge: item.targetAudience === "jdcoem_only" || item.isInterCollege === false ? "🎓 JDCOEM Only" : "🌐 Inter-College",
-      deadline: item.deadline ? `Ends ${item.deadline}` : undefined,
-      organizer: item.organizer,
-      ctaText: "Open Form & Participate",
-      url: canonicalUrl,
-    });
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(canonicalUrl);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = canonicalUrl;
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
+      setCopiedId(item.id);
+      showToast("Link copied to clipboard!");
+      setTimeout(() => setCopiedId(null), 2500);
+    } catch {
+      showToast("Failed to copy link. Please copy from address bar.");
+    }
   };
 
   const filteredListings = useMemo(() => {
@@ -345,10 +350,19 @@ export default function StudentHubPage() {
                       <button
                         type="button"
                         onClick={(e) => handleShareLink(e, item)}
-                        title="Share link"
-                        className="p-1.5 rounded-lg border border-slate-200 hover:border-[#17458F] hover:bg-slate-50 text-slate-400 hover:text-[#17458F] transition-colors cursor-pointer shrink-0"
+                        title={copiedId === item.id ? "Link copied!" : "Share link"}
+                        className={cn(
+                          "p-1.5 rounded-lg border transition-colors cursor-pointer shrink-0",
+                          copiedId === item.id
+                            ? "border-emerald-300 bg-emerald-50 text-emerald-600"
+                            : "border-slate-200 hover:border-[#17458F] hover:bg-slate-50 text-slate-400 hover:text-[#17458F]"
+                        )}
                       >
-                        <Share2 className="w-3 h-3" />
+                        {copiedId === item.id ? (
+                          <Check className="w-3 h-3 text-emerald-600 stroke-[2.5]" />
+                        ) : (
+                          <Share2 className="w-3 h-3" />
+                        )}
                       </button>
                     </div>
                   </div>

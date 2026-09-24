@@ -60,7 +60,6 @@ import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { isExternalUser as checkIsExternalUser } from "@/lib/usersStore";
 import confetti from "canvas-confetti";
-import { useSocialShare } from "@/context/SocialShareContext";
 
 export default function ListingDetailPage() {
   const params = useParams();
@@ -243,27 +242,32 @@ export default function ListingDetailPage() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const { openShare } = useSocialShare();
-
-  const handleShare = () => {
+  const handleShare = async () => {
     if (!listing) return;
 
-    const canonicalUrl = `https://www.srcjdcoem.in/hub/${listing.slug || slug}`;
-    const heroImage = listing.coverImage || listing.bannerImage;
+    const canonicalUrl = typeof window !== "undefined"
+      ? `${window.location.origin}/hub/${listing.slug || slug}`
+      : `https://www.srcjdcoem.in/hub/${listing.slug || slug}`;
 
-    openShare({
-      type: "form",
-      typeLabel: listing.type ? `SRC ${listing.type.toUpperCase()}` : "STUDENT OPPORTUNITY",
-      title: listing.title,
-      subtitle: listing.summary || (listing.description ? `${listing.description.slice(0, 140)}...` : undefined),
-      description: listing.description,
-      imageUrl: heroImage,
-      badge: listing.targetAudience === "jdcoem_only" || listing.isInterCollege === false ? "🎓 JDCOEM Only" : "🌐 Inter-College",
-      deadline: listing.deadline ? `Ends ${listing.deadline}` : undefined,
-      organizer: listing.organizer,
-      ctaText: "Open Form & Participate",
-      url: canonicalUrl,
-    });
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(canonicalUrl);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = canonicalUrl;
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
+      setCopiedLink(true);
+      showToast("Link copied to clipboard!");
+      setTimeout(() => setCopiedLink(false), 2500);
+    } catch {
+      showToast("Failed to copy link. Please copy from address bar.");
+    }
   };
 
   const handleVote = (optionId: string) => {
