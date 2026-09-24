@@ -94,6 +94,8 @@ export interface EventFormData {
   targetAudience: TargetAudience;
   isInterCollege: boolean;
   isFeatured?: boolean;
+  whatsappGroupUrl?: string;
+  whatsappGroupName?: string;
 }
 
 export function formatDateRangeToReadable(startIso: string, endIso: string): string {
@@ -310,6 +312,8 @@ export function EventFormModal({
     targetAudience: initialData?.targetAudience || "inter_college",
     isInterCollege: initialData?.isInterCollege !== false,
     isFeatured: Boolean(initialData?.isFeatured),
+    whatsappGroupUrl: initialData?.whatsappGroupUrl || "",
+    whatsappGroupName: initialData?.whatsappGroupName || "",
   });
 
   useEffect(() => {
@@ -368,6 +372,8 @@ export function EventFormModal({
           ? Boolean(initialData.isPaid)
           : Boolean((initialData.feeAmount && initialData.feeAmount > 0) || (initialData as any).entryFee?.includes("₹")),
         feeAmount: typeof initialData.feeAmount === "number" && initialData.feeAmount > 0 ? initialData.feeAmount : (initialData.isPaid ? 100 : 0),
+        whatsappGroupUrl: initialData.whatsappGroupUrl || "",
+        whatsappGroupName: initialData.whatsappGroupName || "",
       }));
     }
   }, [initialData]);
@@ -2986,6 +2992,10 @@ export function EventFormModal({
             <SrcFormsBuilder
               fields={form.customQuestions}
               onChange={(qs) => setForm({ ...form, customQuestions: qs })}
+              whatsappGroupUrl={form.whatsappGroupUrl}
+              onWhatsappGroupUrlChange={(url) => setForm({ ...form, whatsappGroupUrl: url })}
+              whatsappGroupName={form.whatsappGroupName}
+              onWhatsappGroupNameChange={(name) => setForm({ ...form, whatsappGroupName: name })}
             />
           </div>
         )}

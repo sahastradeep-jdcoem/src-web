@@ -136,6 +136,10 @@ export function CreateSrcFormModal({
   // Dynamic Custom Questions
   const [formFields, setFormFields] = useState<SrcFormField[]>([]);
 
+  // WhatsApp Group Link
+  const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
+  const [whatsappGroupName, setWhatsappGroupName] = useState("");
+
   // Initialize or reset form state
   useEffect(() => {
     if (initialData && mode === "edit") {
@@ -154,6 +158,8 @@ export function CreateSrcFormModal({
       setAllowResponseEditing(initialData.allowResponseEditing !== false);
       setRequiresApproval(initialData.requiresApproval !== false);
       setFormFields(initialData.formFields ? JSON.parse(JSON.stringify(initialData.formFields)) : []);
+      setWhatsappGroupUrl(initialData.whatsappGroupUrl || "");
+      setWhatsappGroupName(initialData.whatsappGroupName || "");
       setActiveSection("details");
       setFormError(null);
     } else if (isOpen && mode === "create") {
@@ -171,6 +177,8 @@ export function CreateSrcFormModal({
       setIsAcceptingResponses(true);
       setAllowResponseEditing(true);
       setRequiresApproval(true);
+      setWhatsappGroupUrl("");
+      setWhatsappGroupName("");
       setFormFields([
         {
           id: `q-${Date.now()}-1`,
@@ -292,6 +300,8 @@ export function CreateSrcFormModal({
           coverImage: coverImage.trim() || undefined,
           authorName: authorName.trim() || "SRC Admin",
           authorRole: authorRole.trim() || "Council Administrator",
+          whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
+          whatsappGroupName: whatsappGroupName.trim() || undefined,
         };
 
         const updated = allDispatches.map((d) => (d.id === initialData.id ? updatedDispatch : d));
@@ -317,6 +327,8 @@ export function CreateSrcFormModal({
           coverImage: coverImage.trim() || undefined,
           authorName: authorName.trim() || "SRC Admin",
           authorRole: authorRole.trim() || "Council Administrator",
+          whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
+          whatsappGroupName: whatsappGroupName.trim() || undefined,
           status: "active",
         };
 
@@ -884,6 +896,10 @@ export function CreateSrcFormModal({
                 <SrcFormsBuilder
                   fields={formFields}
                   onChange={(qs) => setFormFields(qs)}
+                  whatsappGroupUrl={whatsappGroupUrl}
+                  onWhatsappGroupUrlChange={setWhatsappGroupUrl}
+                  whatsappGroupName={whatsappGroupName}
+                  onWhatsappGroupNameChange={setWhatsappGroupName}
                 />
               </div>
             )}

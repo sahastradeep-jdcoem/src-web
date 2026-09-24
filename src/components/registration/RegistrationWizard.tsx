@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { EventItem } from "@/types";
 import { TicketPass } from "@/components/registration/TicketPass";
+import { WhatsAppJoinCard } from "@/components/forms/WhatsAppJoinCard";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
@@ -2355,7 +2356,18 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
       {/* STEP 4: PASS TICKET DISPLAY */}
       {currentStep === 4 && generatedTicket && (
-        <div ref={stepContainerRef} id="registration-step-card" className="scroll-mt-20">
+        <div ref={stepContainerRef} id="registration-step-card" className="scroll-mt-20 space-y-6">
+          {event.whatsappGroupUrl && (
+            <div className="max-w-xl mx-auto">
+              <WhatsAppJoinCard
+                whatsappGroupUrl={event.whatsappGroupUrl}
+                whatsappGroupName={event.whatsappGroupName}
+                variant="card"
+                title="Join Official WhatsApp Group"
+                subtitle="Connect with event coordinators, get instant notices, schedule changes, and collaborate with delegates."
+              />
+            </div>
+          )}
           <TicketPass
             registrationId={generatedTicket.registrationId}
             eventName={event.name}

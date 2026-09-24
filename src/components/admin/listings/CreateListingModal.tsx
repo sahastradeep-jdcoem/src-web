@@ -385,6 +385,8 @@ export function CreateListingModal({
   const [allowResponseEditing, setAllowResponseEditing] = useState(true);
   const [requiresApproval, setRequiresApproval] = useState(true);
   const [isAcceptingResponses, setIsAcceptingResponses] = useState(true);
+  const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
+  const [whatsappGroupName, setWhatsappGroupName] = useState("");
 
   useEffect(() => {
     if (!isOpen) return;
@@ -407,6 +409,8 @@ export function CreateListingModal({
       setAllowResponseEditing(initialData.allowResponseEditing !== false);
       setRequiresApproval(initialData.requiresApproval !== false);
       setIsAcceptingResponses(initialData.status !== "closed" && initialData.isAcceptingResponses !== false);
+      setWhatsappGroupUrl(initialData.whatsappGroupUrl || "");
+      setWhatsappGroupName(initialData.whatsappGroupName || "");
 
       if (initialData.pollConfig) {
         setPollOptions(
@@ -454,6 +458,8 @@ export function CreateListingModal({
       setCustomQuestions([]);
       setAllowResponseEditing(true);
       setIsAcceptingResponses(true);
+      setWhatsappGroupUrl("");
+      setWhatsappGroupName("");
       setPollOptions(["Option A", "Option B"]);
       setPollAnonymous(false);
       setPollMultipleChoices(false);
@@ -566,6 +572,8 @@ export function CreateListingModal({
           allowResponseEditing: selectedPillarOption.type === "poll" ? false : allowResponseEditing,
           requiresApproval: selectedPillarOption.type === "poll" ? false : requiresApproval,
           customQuestions: customQuestions.length > 0 ? customQuestions : undefined,
+          whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
+          whatsappGroupName: whatsappGroupName.trim() || undefined,
         };
 
         if (selectedPillarOption.type === "poll") {
@@ -657,6 +665,8 @@ export function CreateListingModal({
         allowResponseEditing: selectedPillarOption.type === "poll" ? false : allowResponseEditing,
         requiresApproval: selectedPillarOption.type === "poll" ? false : requiresApproval,
         customQuestions: customQuestions.length > 0 ? customQuestions : undefined,
+        whatsappGroupUrl: whatsappGroupUrl.trim() || undefined,
+        whatsappGroupName: whatsappGroupName.trim() || undefined,
       };
 
       // Attach Subtype Configs
@@ -1560,6 +1570,10 @@ export function CreateListingModal({
                   <SrcFormsBuilder
                     fields={customQuestions}
                     onChange={(qs) => setCustomQuestions(qs)}
+                    whatsappGroupUrl={whatsappGroupUrl}
+                    onWhatsappGroupUrlChange={setWhatsappGroupUrl}
+                    whatsappGroupName={whatsappGroupName}
+                    onWhatsappGroupNameChange={setWhatsappGroupName}
                   />
                 </div>
               )}

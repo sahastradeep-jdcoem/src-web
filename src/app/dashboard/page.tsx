@@ -32,6 +32,7 @@ import {
   CreditCard,
   Copy,
   ChevronRight,
+  ChevronLeft,
   Maximize2,
   CalendarPlus,
   Compass,
@@ -40,6 +41,8 @@ import {
   Edit2,
   Power
 } from "lucide-react";
+import { WhatsAppJoinCard } from "@/components/forms/WhatsAppJoinCard";
+import { getFormSectionGroups, getNextSectionTarget, analyzeSectionResponses } from "@/lib/srcFormsHelper";
 import { CancelRegistrationModal } from "@/components/registration/CancelRegistrationModal";
 import { Badge } from "@/components/ui/Badge";
 import { getDepartmentShortName, resolveCanonicalDepartmentName } from "@/lib/departmentsStore";
@@ -119,6 +122,8 @@ export default function StudentDashboardPage() {
   const [submittingForms, setSubmittingForms] = useState<Record<string, boolean>>({});
   const [editingFormIds, setEditingFormIds] = useState<Record<string, boolean>>({});
   const [formFeedback, setFormFeedback] = useState<Record<string, { type: "success" | "error"; text: string }>>({});
+  const [activeFormSectionIds, setActiveFormSectionIds] = useState<Record<string, string>>({});
+  const [formSectionHistories, setFormSectionHistories] = useState<Record<string, string[]>>({});
 
   // 1. Authoritative SRC Membership Verification
   const srcVerification = useMemo(() => {
@@ -595,29 +600,134 @@ export default function StudentDashboardPage() {
     }));
   };
 
+  const handleFormNextSection = (dispatch: SrcDispatch) => {
+    const sections = getFormSectionGroups(dispatch.formFields || []);
+    const currentSectionId = activeFormSectionIds[dispatch.id] || sections[0]?.id || "section-1";
+    const currentSection = sections.find((s) => s.id === currentSectionId) || sections[0];
+    const answers = formAnswers[dispatch.id] || {};
+
+    if (currentSection) {
+      for (const field of currentSection.fields) {
+        if (field.type === "note" || field.type === "section") continue;
+        if (field.required) {
+          const val = answers[field.id];
+          if (
+            val === undefined ||
+            val === null ||
+            val === "" ||
+            (Array.isArray(val) && val.length === 0)
+          ) {
+            setFormFeedback((prev) => ({
+              ...prev,
+              [dispatch.id]: {
+                type: "error",
+                text: `Please answer required question: "${field.question}"`,
+              },
+            }));
+            return;
+          }
+        }
+      }
+    }
+
+    const target = getNextSectionTarget(currentSection, sections, answers);
+    if (target === "submit") {
+      handleSubmitForm(dispatch);
+    } else {
+      setFormFeedback((prev) => {
+        const next = { ...prev };
+        delete next[dispatch.id];
+        return next;
+      });
+      setFormSectionHistories((prev) => ({
+        ...prev,
+        [dispatch.id]: [...(prev[dispatch.id] || []), currentSection.id],
+      }));
+      setActiveFormSectionIds((prev) => ({
+        ...prev,
+        [dispatch.id]: target,
+      }));
+    }
+  };
+
+  const handleFormPrevSection = (dispatch: SrcDispatch) => {
+    const history = formSectionHistories[dispatch.id] || [];
+    if (history.length === 0) return;
+    const prevSectionId = history[history.length - 1];
+    setFormSectionHistories((prev) => ({
+      ...prev,
+      [dispatch.id]: history.slice(0, -1),
+    }));
+    setActiveFormSectionIds((prev) => ({
+      ...prev,
+      [dispatch.id]: prevSectionId,
+    }));
+    setFormFeedback((prev) => {
+      const next = { ...prev };
+      delete next[dispatch.id];
+      return next;
+    });
+  };
+
   const handleSubmitForm = async (dispatch: SrcDispatch) => {
     if (!dispatch.formFields || dispatch.formFields.length === 0) return;
     const answers = formAnswers[dispatch.id] || {};
+    const sections = getFormSectionGroups(dispatch.formFields || []);
 
-    // Validate required questions
-    for (const field of dispatch.formFields) {
-      if (field.type === "note") continue;
-      if (field.required) {
-        const val = answers[field.id];
-        if (
-          val === undefined ||
-          val === null ||
-          val === "" ||
-          (Array.isArray(val) && val.length === 0)
-        ) {
-          setFormFeedback((prev) => ({
-            ...prev,
-            [dispatch.id]: {
-              type: "error",
-              text: `Please answer required question: "${field.question}"`,
-            },
-          }));
-          return;
+    // Validate required questions along the traversed branching path
+    if (sections.length > 1) {
+      const visited = new Set<string>();
+      let curSection: typeof sections[0] | undefined = sections[0];
+
+      while (curSection && !visited.has(curSection.id)) {
+        visited.add(curSection.id);
+        for (const field of curSection.fields) {
+          if (field.type === "note" || field.type === "section") continue;
+          if (field.required) {
+            const val = answers[field.id];
+            if (
+              val === undefined ||
+              val === null ||
+              val === "" ||
+              (Array.isArray(val) && val.length === 0)
+            ) {
+              setActiveFormSectionIds((prev) => ({ ...prev, [dispatch.id]: curSection!.id }));
+              setFormFeedback((prev) => ({
+                ...prev,
+                [dispatch.id]: {
+                  type: "error",
+                  text: `Please answer required question: "${field.question}"`,
+                },
+              }));
+              return;
+            }
+          }
+        }
+
+        const nextTarget = getNextSectionTarget(curSection, sections, answers);
+        if (nextTarget === "submit") break;
+        curSection = sections.find((s) => s.id === nextTarget);
+      }
+    } else {
+      for (const field of dispatch.formFields) {
+        if (field.type === "note" || field.type === "section") continue;
+        if (field.required) {
+          const val = answers[field.id];
+          if (
+            val === undefined ||
+            val === null ||
+            val === "" ||
+            (Array.isArray(val) && val.length === 0)
+          ) {
+            setFormFeedback((prev) => ({
+              ...prev,
+              [dispatch.id]: {
+                type: "error",
+                text: `Please answer required question: "${field.question}"`,
+              },
+            }));
+            return;
+          }
         }
       }
     }
@@ -646,6 +756,16 @@ export default function StudentDashboardPage() {
       await saveStoredDispatchResponse(record);
       setDispatchResponses(getStoredDispatchResponses());
       setEditingFormIds((prev) => ({ ...prev, [dispatch.id]: false }));
+      setActiveFormSectionIds((prev) => {
+        const next = { ...prev };
+        delete next[dispatch.id];
+        return next;
+      });
+      setFormSectionHistories((prev) => {
+        const next = { ...prev };
+        delete next[dispatch.id];
+        return next;
+      });
       setFormFeedback((prev) => ({
         ...prev,
         [dispatch.id]: {
@@ -1585,34 +1705,125 @@ export default function StudentDashboardPage() {
                                         </div>
                                       )}
 
-                                      {/* Submitted Answers Summary */}
-                                      <div className="space-y-2 pt-1">
-                                        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                                          Submitted Answers:
-                                        </p>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                          {(item.formFields || []).map((q, idx) => {
-                                            if (q.type === "note") return null;
-                                            const ans = existingResp.answers?.[q.id];
-                                            const ansText = Array.isArray(ans)
-                                              ? ans.join(", ")
-                                              : ans !== undefined && ans !== null && ans !== ""
-                                              ? String(ans)
-                                              : "—";
-
-                                            return (
-                                              <div key={q.id || idx} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs">
-                                                <span className="font-medium text-slate-500 block truncate">
-                                                  {q.question}
-                                                </span>
-                                                <span className="font-bold text-slate-900 block mt-0.5 whitespace-pre-wrap break-words">
-                                                  {ansText}
-                                                </span>
-                                              </div>
-                                            );
-                                          })}
+                                      {/* WhatsApp Group Join Card */}
+                                      {item.whatsappGroupUrl && (
+                                        <div className="pt-2">
+                                          <WhatsAppJoinCard
+                                            whatsappGroupUrl={item.whatsappGroupUrl}
+                                            whatsappGroupName={item.whatsappGroupName}
+                                            variant="card"
+                                            title="Official Council Operations WhatsApp Group"
+                                            subtitle="Connect with council leads, receive real-time circulars, and collaborate with members."
+                                          />
                                         </div>
-                                      </div>
+                                      )}
+
+                                      {/* Submitted Answers Summary (Grouped By Section) */}
+                                      {(() => {
+                                        const sections = getFormSectionGroups(item.formFields || []);
+                                        const analyzed = analyzeSectionResponses(sections, existingResp.answers || {});
+
+                                        return (
+                                          <div className="space-y-4 pt-1">
+                                            <div className="flex items-center justify-between">
+                                              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                                                Submitted Answers:
+                                              </p>
+                                              {sections.length > 1 && (
+                                                <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                                                  {sections.length} Sections
+                                                </span>
+                                              )}
+                                            </div>
+
+                                            {sections.length > 1 ? (
+                                              <div className="space-y-3">
+                                                {analyzed.map((secInfo) => {
+                                                  const { section, answeredCount, totalCount, isCompletelySkipped } = secInfo;
+                                                  const eligibleFields = section.fields.filter((f) => f.type !== "note" && f.type !== "section");
+
+                                                  return (
+                                                    <div
+                                                      key={section.id}
+                                                      className={cn(
+                                                        "p-3.5 rounded-2xl border",
+                                                        isCompletelySkipped ? "bg-slate-50/50 border-slate-200/60 opacity-60" : "bg-slate-50/90 border-slate-200"
+                                                      )}
+                                                    >
+                                                      <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-slate-200/60">
+                                                        <div>
+                                                          <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded mr-1.5">
+                                                            Section {section.sectionIndex}
+                                                          </span>
+                                                          <span className="text-xs font-bold text-slate-800">
+                                                            {section.title}
+                                                          </span>
+                                                        </div>
+                                                        {isCompletelySkipped ? (
+                                                          <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded bg-slate-200 text-slate-600">
+                                                            Skipped via Branching
+                                                          </span>
+                                                        ) : (
+                                                          <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                                                            Completed ({answeredCount}/{totalCount})
+                                                          </span>
+                                                        )}
+                                                      </div>
+
+                                                      {!isCompletelySkipped && (
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                          {eligibleFields.map((q) => {
+                                                            const ans = existingResp.answers?.[q.id];
+                                                            const ansText = Array.isArray(ans)
+                                                              ? ans.join(", ")
+                                                              : ans !== undefined && ans !== null && ans !== ""
+                                                              ? String(ans)
+                                                              : "—";
+
+                                                            return (
+                                                              <div key={q.id} className="p-2.5 rounded-xl bg-white border border-slate-200/80 text-xs">
+                                                                <span className="font-medium text-slate-500 block truncate">
+                                                                  {q.question}
+                                                                </span>
+                                                                <span className="font-bold text-slate-900 block mt-0.5 whitespace-pre-wrap break-words">
+                                                                  {ansText}
+                                                                </span>
+                                                              </div>
+                                                            );
+                                                          })}
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            ) : (
+                                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                                {(item.formFields || []).map((q, idx) => {
+                                                  if (q.type === "note" || q.type === "section") return null;
+                                                  const ans = existingResp.answers?.[q.id];
+                                                  const ansText = Array.isArray(ans)
+                                                    ? ans.join(", ")
+                                                    : ans !== undefined && ans !== null && ans !== ""
+                                                    ? String(ans)
+                                                    : "—";
+
+                                                  return (
+                                                    <div key={q.id || idx} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs">
+                                                      <span className="font-medium text-slate-500 block truncate">
+                                                        {q.question}
+                                                      </span>
+                                                      <span className="font-bold text-slate-900 block mt-0.5 whitespace-pre-wrap break-words">
+                                                        {ansText}
+                                                      </span>
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })()}
                                     </div>
                                   </div>
                                 );
@@ -1635,16 +1846,26 @@ export default function StudentDashboardPage() {
                                 );
                               }
 
-                              {/* Interactive Form Questions */}
+                              {/* Interactive Form Questions with Multi-Section Navigation */}
+                              const sections = getFormSectionGroups(item.formFields || []);
+                              const currentSectionId = activeFormSectionIds[item.id] || sections[0]?.id || "section-1";
+                              const currentSection = sections.find((s) => s.id === currentSectionId) || sections[0];
+                              const currentSectionIdx = sections.findIndex((s) => s.id === currentSection?.id);
+                              const sectionHistory = formSectionHistories[item.id] || [];
+                              const canGoBack = sectionHistory.length > 0;
+                              const nextTarget = getNextSectionTarget(currentSection, sections, currentAnswers);
+                              const isLastStep = nextTarget === "submit" || (currentSectionIdx === sections.length - 1 && sections.length > 1);
+
                               return (
                                 <div className="space-y-4 pt-1">
                                   {/* Feedback Alert */}
                                   {feedback && (
-                                    <div className={`p-3 rounded-xl flex items-center gap-2 text-xs font-semibold ${
+                                    <div className={cn(
+                                      "p-3 rounded-xl flex items-center gap-2 text-xs font-semibold",
                                       feedback.type === "success"
                                         ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
                                         : "bg-rose-100 text-rose-900 border border-rose-300"
-                                    }`}>
+                                    )}>
                                       {feedback.type === "success" ? (
                                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                                       ) : (
@@ -1654,8 +1875,25 @@ export default function StudentDashboardPage() {
                                     </div>
                                   )}
 
+                                  {/* Section Header (if multiple sections exist) */}
+                                  {sections.length > 1 && currentSection && (
+                                    <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/80 space-y-1">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-600/10 text-emerald-800">
+                                          Section {currentSection.sectionIndex} of {sections.length}
+                                        </span>
+                                      </div>
+                                      <h4 className="font-heading font-extrabold text-sm text-slate-900">
+                                        {currentSection.title}
+                                      </h4>
+                                      {currentSection.description && (
+                                        <p className="text-xs text-slate-600 font-medium">{currentSection.description}</p>
+                                      )}
+                                    </div>
+                                  )}
+
                                   <div className="space-y-4">
-                                    {(item.formFields || []).map((field, idx) => {
+                                    {(currentSection ? currentSection.fields : item.formFields || []).map((field, idx) => {
                                       // 1. Note / Announcement
                                       if (field.type === "note") {
                                         return (
@@ -1671,6 +1909,10 @@ export default function StudentDashboardPage() {
                                             )}
                                           </div>
                                         );
+                                      }
+
+                                      if (field.type === "section") {
+                                        return null;
                                       }
 
                                       const qVal = currentAnswers[field.id];
@@ -1723,17 +1965,19 @@ export default function StudentDashboardPage() {
                                                     key={opt}
                                                     type="button"
                                                     onClick={() => handleAnswerChange(item.id, field.id, opt)}
-                                                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-left text-xs font-medium transition-all cursor-pointer ${
+                                                    className={cn(
+                                                      "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-left text-xs font-medium transition-all cursor-pointer",
                                                       isSelected
                                                         ? "bg-emerald-50 border-emerald-500 text-emerald-950 font-bold shadow-2xs"
                                                         : "bg-slate-50/60 border-slate-200 text-slate-700 hover:bg-slate-100"
-                                                    }`}
+                                                    )}
                                                   >
-                                                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                                                    <div className={cn(
+                                                      "w-4 h-4 rounded-full border flex items-center justify-center shrink-0",
                                                       isSelected
                                                         ? "border-emerald-600 bg-emerald-600 text-white"
                                                         : "border-slate-300 bg-white"
-                                                    }`}>
+                                                    )}>
                                                       {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                                                     </div>
                                                     <span>{opt}</span>
@@ -1759,17 +2003,9 @@ export default function StudentDashboardPage() {
                                                         : [...selectedList, opt];
                                                       handleAnswerChange(item.id, field.id, next);
                                                     }}
-                                                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-left text-xs font-medium transition-all cursor-pointer ${
-                                                      isChecked
-                                                        ? "bg-emerald-50 border-emerald-500 text-emerald-950 font-bold shadow-2xs"
-                                                        : "bg-slate-50/60 border-slate-200 text-slate-700 hover:bg-slate-100"
-                                                    }`}
+                                                    className={cn("w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-left text-xs font-medium transition-all cursor-pointer", isChecked ? "bg-emerald-50 border-emerald-500 text-emerald-950 font-bold shadow-2xs" : "bg-slate-50/60 border-slate-200 text-slate-700 hover:bg-slate-100")}
                                                   >
-                                                    <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${
-                                                      isChecked
-                                                        ? "border-emerald-600 bg-emerald-600 text-white"
-                                                        : "border-slate-300 bg-white"
-                                                    }`}>
+                                                    <div className={cn("w-4 h-4 rounded-md border flex items-center justify-center shrink-0", isChecked ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 bg-white")}>
                                                       {isChecked && <Check className="w-3 h-3 text-white stroke-[3]" />}
                                                     </div>
                                                     <span>{opt}</span>
@@ -1799,11 +2035,23 @@ export default function StudentDashboardPage() {
                                     })}
                                   </div>
 
-                                  {/* Form Submit Row */}
+                                  {/* Form Navigation / Submit Row */}
                                   <div className="pt-3 border-t border-emerald-100 flex flex-wrap items-center justify-between gap-3">
-                                    <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                                      <span>Answers are recorded securely and transmitted directly to Council Administration.</span>
+                                    <div className="flex items-center gap-2">
+                                      {canGoBack && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleFormPrevSection(item)}
+                                          className="px-3.5 py-2 rounded-xl border border-slate-200 hover:border-slate-300 bg-white text-slate-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                                        >
+                                          <ChevronLeft className="w-3.5 h-3.5" />
+                                          <span>Back</span>
+                                        </button>
+                                      )}
+                                      <div className="hidden sm:flex items-center gap-2 text-[11px] text-slate-500">
+                                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                        <span>Answers transmitted directly to Council Administration.</span>
+                                      </div>
                                     </div>
 
                                     <div className="flex items-center gap-2">
@@ -1820,22 +2068,34 @@ export default function StudentDashboardPage() {
                                         </Button>
                                       )}
 
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        disabled={submittingForms[item.id]}
-                                        onClick={() => handleSubmitForm(item)}
-                                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer"
-                                      >
-                                        <Send className="w-3.5 h-3.5" />
-                                        <span>
-                                          {submittingForms[item.id]
-                                            ? "Submitting..."
-                                            : isEditing
-                                            ? "Save Changes"
-                                            : "Submit Form"}
-                                        </span>
-                                      </Button>
+                                      {!isLastStep && sections.length > 1 ? (
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          onClick={() => handleFormNextSection(item)}
+                                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer"
+                                        >
+                                          <span>Next Section</span>
+                                          <ChevronRight className="w-3.5 h-3.5" />
+                                        </Button>
+                                      ) : (
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          disabled={submittingForms[item.id]}
+                                          onClick={() => handleSubmitForm(item)}
+                                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer"
+                                        >
+                                          <Send className="w-3.5 h-3.5" />
+                                          <span>
+                                            {submittingForms[item.id]
+                                              ? "Submitting..."
+                                              : isEditing
+                                              ? "Save Changes"
+                                              : "Submit Form"}
+                                          </span>
+                                        </Button>
+                                      )}
                                     </div>
                                   </div>
                                 </div>

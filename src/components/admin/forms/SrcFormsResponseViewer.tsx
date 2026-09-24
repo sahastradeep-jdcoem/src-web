@@ -33,6 +33,7 @@ import { SrcFormField } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
+import { getFormSectionGroups, analyzeSectionResponses } from "@/lib/srcFormsHelper";
 
 export interface SrcFormsResponseRecord {
   id: string;
@@ -202,6 +203,17 @@ export function SrcFormsResponseViewer({
 
   // Current individual respondent
   const currentIndividual = responses[individualIndex] || null;
+
+  // Google Forms–style section grouping
+  const formSections = useMemo(() => {
+    return getFormSectionGroups(fields);
+  }, [fields]);
+
+  // Section analysis for the current individual respondent
+  const currentIndividualSections = useMemo(() => {
+    if (!currentIndividual) return [];
+    return analyzeSectionResponses(formSections, currentIndividual.answers || {});
+  }, [formSections, currentIndividual]);
 
   // Excel / Spreadsheet Export
   const handleExportExcel = () => {
@@ -667,11 +679,33 @@ export function SrcFormsResponseViewer({
                   onChange={(e) => setSelectedQuestionIndex(Number(e.target.value))}
                   className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-800 focus:outline-none focus:border-[#17458F] cursor-pointer"
                 >
-                  {activeQuestions.map((q, idx) => (
-                    <option key={q.id} value={idx}>
-                      Q{idx + 1}: {q.question} ({q.type.replace("_", " ")})
-                    </option>
-                  ))}
+                  {formSections.length > 1 ? (
+                    formSections.map((sec) => {
+                      const secQuestions = sec.fields.filter((f) => f.type !== "note");
+                      if (secQuestions.length === 0) return null;
+                      return (
+                        <optgroup
+                          key={sec.id}
+                          label={`Section ${sec.sectionIndex}: ${sec.title}`}
+                        >
+                          {secQuestions.map((q) => {
+                            const globalIdx = activeQuestions.findIndex((aq) => aq.id === q.id);
+                            return (
+                              <option key={q.id} value={globalIdx}>
+                                Q{globalIdx + 1}: {q.question} ({q.type.replace("_", " ")})
+                              </option>
+                            );
+                          })}
+                        </optgroup>
+                      );
+                    })
+                  ) : (
+                    activeQuestions.map((q, idx) => (
+                      <option key={q.id} value={idx}>
+                        Q{idx + 1}: {q.question} ({q.type.replace("_", " ")})
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
 
@@ -852,14 +886,109 @@ export function SrcFormsResponseViewer({
                     </div>
                   </div>
 
-                  {/* Form Questions & Answers Cards */}
-                  <div className="space-y-4">
-                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
-                      SRC Forms • Submitted Responses
-                    </h4>
+                  {/* Form Questions & Answers Cards (Grouped By Sections) */}
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                      <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
+                        SRC Forms • Submitted Responses by Section
+                      </h4>
+                      {formSections.length > 1 && (
+                        <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                          {formSections.length} Sections
+                        </span>
+                      )}
+                    </div>
 
                     {activeQuestions.length === 0 ? (
                       <p className="text-xs text-slate-400 italic">No questions defined in form.</p>
+                    ) : formSections.length > 1 ? (
+                      <div className="space-y-5">
+                        {currentIndividualSections.map((secInfo) => {
+                          const { section, answeredCount, totalCount, isCompletelySkipped } = secInfo;
+                          const eligibleFields = section.fields.filter((f) => f.type !== "note");
+
+                          return (
+                            <div
+                              key={section.id}
+                              className={cn(
+                                "rounded-2xl border transition-all overflow-hidden",
+                                isCompletelySkipped
+                                  ? "bg-slate-50/60 border-slate-200/80"
+                                  : "bg-white border-slate-200 shadow-2xs"
+                              )}
+                            >
+                              {/* Section Divider Header */}
+                              <div className="p-4 bg-slate-50/80 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#17458F]/10 text-[#17458F]">
+                                      Section {section.sectionIndex} of {formSections.length}
+                                    </span>
+                                    <h5 className="font-heading font-extrabold text-sm text-slate-900">
+                                      {section.title}
+                                    </h5>
+                                  </div>
+                                  {section.description && (
+                                    <p className="text-xs text-slate-500 mt-1">{section.description}</p>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  {isCompletelySkipped ? (
+                                    <span className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-slate-200/70 text-slate-600 border border-slate-300/70">
+                                      Skipped via Branching (0/{totalCount})
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      Completed ({answeredCount}/{totalCount})
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Section Fields */}
+                              <div className="p-4 space-y-3">
+                                {eligibleFields.length === 0 ? (
+                                  <p className="text-xs text-slate-400 italic">No questions in this section.</p>
+                                ) : isCompletelySkipped ? (
+                                  <div className="p-3 rounded-xl bg-slate-100/70 border border-dashed border-slate-200 text-xs text-slate-500 italic">
+                                    This section was bypassed based on the responder&apos;s answer branching choices.
+                                  </div>
+                                ) : (
+                                  eligibleFields.map((q, qIdx) => {
+                                    const rawAns = currentIndividual.answers ? currentIndividual.answers[q.id] : undefined;
+                                    const hasAnswer = rawAns !== undefined && rawAns !== null && rawAns !== "";
+                                    const displayAns = Array.isArray(rawAns) ? rawAns.join(", ") : String(rawAns || "—");
+
+                                    return (
+                                      <div
+                                        key={q.id}
+                                        className={cn(
+                                          "p-4 rounded-xl border space-y-1.5",
+                                          hasAnswer ? "bg-slate-50 border-slate-200" : "bg-slate-50/40 border-slate-200/60 opacity-60"
+                                        )}
+                                      >
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                                            <span className="text-[#E78023] font-mono text-[11px]">Q{qIdx + 1}.</span>
+                                            <span>{q.question}</span>
+                                          </span>
+                                          <span className="text-[10px] font-semibold text-slate-400 uppercase bg-slate-200/60 px-2 py-0.5 rounded">
+                                            {q.type.replace("_", " ")}
+                                          </span>
+                                        </div>
+                                        <p className="text-sm font-semibold text-slate-900 pl-6 break-words">
+                                          {displayAns}
+                                        </p>
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     ) : (
                       activeQuestions.map((q, qIdx) => {
                         const rawAns = currentIndividual.answers ? currentIndividual.answers[q.id] : undefined;

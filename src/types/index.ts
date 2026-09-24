@@ -29,7 +29,8 @@ export type SrcFormFieldType =
   | "multiple_choice" 
   | "checkboxes" 
   | "dropdown" 
-  | "note";
+  | "note"
+  | "section";
 
 export type SrcFormQuestionType = SrcFormFieldType;
 export type CustomQuestionType = SrcFormFieldType;
@@ -43,6 +44,16 @@ export interface SrcFormField {
   required?: boolean;
   options?: string[]; // For multiple_choice, checkboxes, dropdown
   noteContent?: string; // For "note" / important announcement banners
+  sectionId?: string; // Which section this question belongs to
+  goToSection?: Record<string, string>; // Option-level routing: optionValue -> targetSectionId | "next" | "submit"
+  afterSection?: "next" | "submit" | string; // For section headers: where to go after this section (default: "next")
+}
+
+export interface SrcFormSection {
+  id: string;
+  title: string;
+  description?: string;
+  afterSection?: "next" | "submit" | string;
 }
 
 // Aliases for SRC Forms codebase compatibility and Firestore data serialization
@@ -102,6 +113,8 @@ export interface EventItem {
     phone?: string;
   };
   customQuestions?: SrcFormField[]; // SRC Forms fields
+  whatsappGroupUrl?: string; // Optional WhatsApp community / group join link shown after registration
+  whatsappGroupName?: string; // Optional friendly group name
   isParentFest?: boolean;
   parentEventId?: string;
   parentEventSlug?: string;

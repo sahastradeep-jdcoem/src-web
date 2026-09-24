@@ -70,6 +70,8 @@ export interface SrcDispatch {
   requiresApproval?: boolean;
   isAcceptingResponses?: boolean;
   coverImage?: string;
+  whatsappGroupUrl?: string; // Optional WhatsApp group join link displayed after submission
+  whatsappGroupName?: string; // Optional friendly group title
 
   authorName: string;
   authorRole?: string;

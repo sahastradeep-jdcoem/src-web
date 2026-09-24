@@ -111,6 +111,8 @@ export interface ListingItem {
   allowResponseEditing?: boolean; // Controlled from admin: allows students to revise/edit submitted responses
   requiresApproval?: boolean; // Controlled from admin: whether responses require approval / resolution workflow
   isAcceptingResponses?: boolean; // Controlled from admin: toggle to accept or stop accepting responses
+  whatsappGroupUrl?: string; // Optional WhatsApp group join link displayed after submission
+  whatsappGroupName?: string; // Optional friendly group title
 
   // Polymorphic Subtype Configs
   pollConfig?: PollConfig;
