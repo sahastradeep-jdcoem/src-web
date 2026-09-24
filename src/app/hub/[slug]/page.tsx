@@ -33,7 +33,14 @@ import {
   ChevronRight
 } from "lucide-react";
 import { WhatsAppJoinCard } from "@/components/forms/WhatsAppJoinCard";
-import { getFormSectionGroups, getVisitedSectionPath, getWhatsAppLinkForPath, getNextSectionTarget } from "@/lib/srcFormsHelper";
+import { 
+  getFormSectionGroups, 
+  getVisitedSectionPath, 
+  getWhatsAppLinkForPath, 
+  getNextSectionTarget, 
+  getActiveRouteInfo, 
+  pruneSkippedSectionAnswers 
+} from "@/lib/srcFormsHelper";
 import { Button } from "@/components/ui/Button";
 import { DEFAULT_DEPARTMENTS } from "@/data/departments";
 import { 
@@ -312,8 +319,12 @@ export default function ListingDetailPage() {
   const currentSectionIdx = formSections.findIndex((s) => s.id === currentSection?.id);
   const isFirstSection = currentSectionIdx <= 0;
   const canGoBack = sectionHistory.length > 0;
-  const nextTarget = currentSection ? getNextSectionTarget(currentSection, formSections, customAnswers) : "submit";
-  const isLastStep = formSections.length <= 1 || nextTarget === "submit";
+
+  const activeRouteInfo = useMemo(() => {
+    return getActiveRouteInfo(formSections, customAnswers, currentSectionId, sectionHistory);
+  }, [formSections, customAnswers, currentSectionId, sectionHistory]);
+
+  const isLastStep = activeRouteInfo.isLastStep;
 
   const handleNextSection = () => {
     if (!currentSection) return;
@@ -352,7 +363,7 @@ export default function ListingDetailPage() {
       }
     }
 
-    const target = getNextSectionTarget(currentSection, formSections, customAnswers);
+    const target = activeRouteInfo.nextTarget;
     if (target === "submit") {
       handleFormSubmit();
     } else {
@@ -459,9 +470,15 @@ export default function ListingDetailPage() {
     const isUpdate = Boolean(existingResponse);
     const ticketCode = existingResponse?.ticketCode || `SRC-${listing.type.toUpperCase().slice(0, 3)}-${Math.floor(10000 + Math.random() * 90000)}`;
 
-    const sectionPath = listing.customQuestions && listing.customQuestions.length > 0
-      ? getVisitedSectionPath(getFormSectionGroups(listing.customQuestions), customAnswers)
-      : undefined;
+    const finalSectionPath = activeRouteInfo.visitedPath.length > 0
+      ? activeRouteInfo.visitedPath
+      : (listing.customQuestions ? getVisitedSectionPath(formSections, customAnswers) : undefined);
+
+    const prunedAnswers = pruneSkippedSectionAnswers(
+      formSections,
+      finalSectionPath || [],
+      customAnswers
+    );
 
     const responseRecord: ListingResponseRecord = {
       id: existingResponse ? existingResponse.id : `resp-${Date.now()}`,
@@ -476,8 +493,8 @@ export default function ListingDetailPage() {
       userYear: candidateYear,
       btId: candidateBtId || existingResponse?.btId || undefined,
       isAnonymous: Boolean(listing.issueConfig?.allowAnonymous),
-      answers: Object.keys(customAnswers).length > 0 ? customAnswers : undefined,
-      sectionPath,
+      answers: Object.keys(prunedAnswers).length > 0 ? prunedAnswers : undefined,
+      sectionPath: finalSectionPath,
       submissionLink: submissionLink || undefined,
       ticketCode,
       status: existingResponse?.status || (listing.requiresApproval === false ? "reviewed" : "pending"),
@@ -494,7 +511,7 @@ export default function ListingDetailPage() {
         showToast("Your response has been updated successfully!");
       } else {
         setReceiptCode(ticketCode);
-        setSubmittedSectionPath(sectionPath);
+        setSubmittedSectionPath(finalSectionPath);
       }
       try {
         confetti({ particleCount: 90, spread: 80, origin: { y: 0.5 } });
@@ -1165,16 +1182,16 @@ export default function ListingDetailPage() {
                     <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-50/90 via-slate-50 to-indigo-50/80 border border-blue-100 space-y-2.5 shadow-2xs">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg bg-[#17458F]/10 text-[#17458F]">
-                          Section {currentSection.sectionIndex} of {formSections.length}
+                          Section {activeRouteInfo.currentStepNumber} of {activeRouteInfo.totalSteps}
                         </span>
                         <span className="text-[11px] font-semibold text-slate-500">
-                          {Math.round(((currentSectionIdx + 1) / formSections.length) * 100)}% Completed
+                          {activeRouteInfo.progressPercent}% Completed
                         </span>
                       </div>
                       <div className="w-full h-1.5 bg-slate-200/80 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-[#17458F] transition-all duration-300 rounded-full"
-                          style={{ width: `${Math.round(((currentSectionIdx + 1) / formSections.length) * 100)}%` }}
+                          style={{ width: `${activeRouteInfo.progressPercent}%` }}
                         />
                       </div>
                       <h4 className="font-heading font-extrabold text-base text-slate-900 pt-0.5">

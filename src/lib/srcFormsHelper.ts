@@ -11,9 +11,21 @@ export interface FormSectionGroup {
 
 export interface SectionValidationIssue {
   type: "orphaned_ref" | "circular" | "unreachable" | "self_loop";
+  severity?: "error" | "warning";
   message: string;
   fieldId?: string;
   sectionId?: string;
+  optionLabel?: string;
+}
+
+export interface ActiveRouteInfo {
+  visitedPath: string[];
+  projectedPath: string[];
+  currentStepNumber: number;
+  totalSteps: number;
+  progressPercent: number;
+  isLastStep: boolean;
+  nextTarget: string | "submit";
 }
 
 /**
@@ -174,6 +186,113 @@ export function getVisitedSectionPath(
 }
 
 /**
+ * Calculates dynamic route information for Google Forms-style section progression.
+ * Evaluates the respondent's actual traversed history plus projected future branch
+ * destinations based on current answers, ensuring the "Section X of Y" indicator
+ * reflects the respondent's ACTIVE route rather than arbitrary physical array size.
+ */
+export function getActiveRouteInfo(
+  allSections: FormSectionGroup[],
+  answers: Record<string, any> = {},
+  activeSectionId?: string,
+  sectionHistory: string[] = []
+): ActiveRouteInfo {
+  if (!allSections || allSections.length === 0) {
+    return {
+      visitedPath: [],
+      projectedPath: [],
+      currentStepNumber: 1,
+      totalSteps: 1,
+      progressPercent: 100,
+      isLastStep: true,
+      nextTarget: "submit",
+    };
+  }
+
+  const effectiveActiveId =
+    activeSectionId && allSections.some((s) => s.id === activeSectionId)
+      ? activeSectionId
+      : allSections[0].id;
+
+  const currentSection =
+    allSections.find((s) => s.id === effectiveActiveId) || allSections[0];
+
+  const nextTarget = getNextSectionTarget(currentSection, allSections, answers);
+
+  const visitedPath = [...sectionHistory, effectiveActiveId];
+  const seen = new Set<string>(visitedPath);
+  const projectedRemaining: string[] = [];
+
+  let curTarget = nextTarget;
+  let hops = 0;
+  while (curTarget !== "submit" && hops < 50) {
+    hops++;
+    if (seen.has(curTarget)) break; // cycle guard
+    seen.add(curTarget);
+    projectedRemaining.push(curTarget);
+
+    const nextSec = allSections.find((s) => s.id === curTarget);
+    if (!nextSec) break;
+    curTarget = getNextSectionTarget(nextSec, allSections, answers);
+  }
+
+  const projectedPath = [...visitedPath, ...projectedRemaining];
+  const currentStepNumber = visitedPath.length;
+  const totalSteps = Math.max(projectedPath.length, currentStepNumber);
+  const progressPercent = Math.min(
+    100,
+    Math.max(10, Math.round((currentStepNumber / totalSteps) * 100))
+  );
+  const isLastStep =
+    allSections.length <= 1 ||
+    nextTarget === "submit" ||
+    projectedRemaining.length === 0;
+
+  return {
+    visitedPath,
+    projectedPath,
+    currentStepNumber,
+    totalSteps,
+    progressPercent,
+    isLastStep,
+    nextTarget,
+  };
+}
+
+/**
+ * Prunes answers belonging to skipped sections so that if a respondent navigates back,
+ * changes an answer, and takes a different branch, answers from bypassed sections
+ * are NOT submitted into Firestore or counted as dangling responses.
+ */
+export function pruneSkippedSectionAnswers(
+  allSections: FormSectionGroup[],
+  visitedSectionIds: string[],
+  answers: Record<string, any> = {}
+): Record<string, any> {
+  if (!visitedSectionIds || visitedSectionIds.length === 0) return answers;
+  if (!allSections || allSections.length <= 1) return answers;
+
+  const visitedSet = new Set(visitedSectionIds);
+  const validFieldIds = new Set<string>();
+
+  for (const section of allSections) {
+    if (visitedSet.has(section.id)) {
+      for (const field of section.fields) {
+        validFieldIds.add(field.id);
+      }
+    }
+  }
+
+  const pruned: Record<string, any> = {};
+  for (const [k, v] of Object.entries(answers)) {
+    if (validFieldIds.has(k)) {
+      pruned[k] = v;
+    }
+  }
+  return pruned;
+}
+
+/**
  * Determines which sections have answers recorded for response presentation.
  */
 export function analyzeSectionResponses(
@@ -223,6 +342,7 @@ export function validateSectionGraph(
       if (!sectionIds.has(rule)) {
         issues.push({
           type: "orphaned_ref",
+          severity: "error",
           message: `Section "${section.title}" routes to a deleted or missing section.`,
           sectionId: section.id,
         });
@@ -230,6 +350,7 @@ export function validateSectionGraph(
       if (rule === section.id) {
         issues.push({
           type: "self_loop",
+          severity: "error",
           message: `Section "${section.title}" routes to itself.`,
           sectionId: section.id,
         });
@@ -244,9 +365,21 @@ export function validateSectionGraph(
           if (!sectionIds.has(target)) {
             issues.push({
               type: "orphaned_ref",
-              message: `Option "${opt}" in question "${field.question || field.id}" routes to a deleted section.`,
+              severity: "error",
+              message: `Option "${opt}" in question "${field.question || field.id}" routes to a section that no longer exists.`,
               fieldId: field.id,
               sectionId: section.id,
+              optionLabel: opt,
+            });
+          }
+          if (target === section.id) {
+            issues.push({
+              type: "self_loop",
+              severity: "error",
+              message: `Option "${opt}" routes to its own section (${section.title}), causing a loop.`,
+              fieldId: field.id,
+              sectionId: section.id,
+              optionLabel: opt,
             });
           }
         }
@@ -279,6 +412,7 @@ export function validateSectionGraph(
       if (!reachable.has(section.id)) {
         issues.push({
           type: "unreachable",
+          severity: "warning",
           message: `Section "${section.title}" may be unreachable — no route points to it.`,
           sectionId: section.id,
         });

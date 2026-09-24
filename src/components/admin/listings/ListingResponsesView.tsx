@@ -29,11 +29,15 @@ import {
   Trophy,
   Award,
   ShieldCheck,
-  RotateCcw
+  RotateCcw,
+  GitBranch,
+  X,
+  MessageCircle
 } from "lucide-react";
 import { ListingItem, ListingResponseRecord } from "@/types/listings";
 import { resolveResponseWithUserProfile, getPollStats } from "@/lib/listingsStore";
 import { SrcFormField, CustomQuestion } from "@/types";
+import { getFormSectionGroups, analyzeSectionResponses } from "@/lib/srcFormsHelper";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
@@ -234,6 +238,15 @@ export function ListingResponsesView({
   }, [responses, statusFilter, searchQuery, listing.requiresApproval]);
 
   const currentIndividual = responses[individualIndex] || null;
+
+  const formSections = useMemo(() => {
+    return getFormSectionGroups((listing.customQuestions as SrcFormField[]) || []);
+  }, [listing.customQuestions]);
+
+  const currentIndividualSections = useMemo(() => {
+    if (!currentIndividual) return [];
+    return analyzeSectionResponses(formSections, currentIndividual.answers || {});
+  }, [formSections, currentIndividual]);
 
   // --------------------------------------------------------------------------
   // DEDICATED POLL ANALYTICS & BALLOT DISTRIBUTION STUDIO (NO GOOGLE FORM TABS)
@@ -1510,14 +1523,187 @@ export function ListingResponsesView({
 
                   {/* Form Questions & Answers Cards */}
                   <div className="space-y-4 pt-2">
-                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
-                      SRC Forms • Submitted Responses
-                    </h4>
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                      <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
+                        SRC Forms • Submitted Responses
+                      </h4>
+                      {formSections.length > 1 && (
+                        <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                          {formSections.length} Sections
+                        </span>
+                      )}
+                    </div>
 
-                    {listing.customQuestions && listing.customQuestions.length > 0 ? (
+                    {formSections.length > 1 ? (
+                      <div className="space-y-5">
+                        {/* Respondent Section Journey Path Tracker */}
+                        <div className="p-4 rounded-2xl bg-purple-50/70 border border-purple-200/80 space-y-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-extrabold uppercase tracking-wider text-purple-950 flex items-center gap-1.5 text-[11px]">
+                              <GitBranch className="w-3.5 h-3.5 text-purple-600" />
+                              Respondent Section Journey (Conditional Flow)
+                            </span>
+                            <span className="text-[10px] font-mono font-bold text-purple-700 bg-purple-100/90 px-2 py-0.5 rounded-full">
+                              {currentIndividual.sectionPath ? `${currentIndividual.sectionPath.length} Sections Visited` : "Flow Tracked"}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5 text-xs pt-0.5">
+                            {formSections.map((sec, sIdx) => {
+                              const wasVisited = currentIndividual.sectionPath && currentIndividual.sectionPath.length > 0
+                                ? currentIndividual.sectionPath.includes(sec.id)
+                                : (currentIndividualSections.find((s) => s.section.id === sec.id)?.answeredCount || 0) > 0 || sIdx === 0;
+                              return (
+                                <React.Fragment key={sec.id}>
+                                  <span
+                                    className={cn(
+                                      "px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-2xs",
+                                      wasVisited
+                                        ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                                        : "bg-slate-100 text-slate-400 border border-slate-200 line-through opacity-60"
+                                    )}
+                                  >
+                                    {wasVisited ? (
+                                      <Check className="w-3 h-3 text-emerald-600 stroke-[3]" />
+                                    ) : (
+                                      <X className="w-3 h-3 text-slate-400" />
+                                    )}
+                                    <span>Sec {sec.sectionIndex}: {sec.title}</span>
+                                  </span>
+                                  {sIdx < formSections.length - 1 && (
+                                    <span className="text-slate-300 font-bold text-xs">→</span>
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {currentIndividualSections.map((secInfo) => {
+                          const { section, answeredCount, totalCount, isCompletelySkipped } = secInfo;
+                          const eligibleFields = section.fields.filter((f) => f.type !== "note" && f.type !== "section" && f.type !== "whatsapp_link");
+
+                          return (
+                            <div
+                              key={section.id}
+                              className={cn(
+                                "rounded-2xl border transition-all overflow-hidden",
+                                isCompletelySkipped
+                                  ? "bg-slate-50/60 border-slate-200/80"
+                                  : "bg-white border-slate-200 shadow-2xs"
+                              )}
+                            >
+                              {/* Section Header */}
+                              <div className="p-4 bg-slate-50/80 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#17458F]/10 text-[#17458F]">
+                                      Section {section.sectionIndex} of {formSections.length}
+                                    </span>
+                                    <h5 className="font-heading font-extrabold text-sm text-slate-900">
+                                      {section.title}
+                                    </h5>
+                                  </div>
+                                  {section.description && (
+                                    <p className="text-xs text-slate-500 mt-1">{section.description}</p>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  {isCompletelySkipped ? (
+                                    <span className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200 flex items-center gap-1">
+                                      <span>↷ Skipped by conditional logic</span>
+                                      <span className="text-slate-400 font-normal">(0/{totalCount})</span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                                      <span>✓ Answered</span>
+                                      <span className="text-emerald-600/70 font-normal">({answeredCount}/{totalCount})</span>
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Section Questions */}
+                              <div className="p-4 space-y-3">
+                                {eligibleFields.length === 0 ? (
+                                  <p className="text-xs text-slate-400 italic">No questions in this section.</p>
+                                ) : isCompletelySkipped ? (
+                                  <div className="p-3 rounded-xl bg-slate-100/70 border border-dashed border-slate-200 text-xs text-slate-500 italic flex items-center gap-2">
+                                    <span className="px-2 py-0.5 rounded-full bg-slate-200/80 text-[10px] font-bold not-italic text-slate-700">↷ Skipped by conditional logic</span>
+                                    <span>This section was bypassed based on the responder&apos;s answer branching choices.</span>
+                                  </div>
+                                ) : (
+                                  eligibleFields.map((q, qIdx) => {
+                                    const rawAns = currentIndividual.answers ? currentIndividual.answers[q.id] : undefined;
+                                    const hasAnswer = rawAns !== undefined && rawAns !== null && rawAns !== "";
+
+                                    return (
+                                      <div
+                                        key={q.id}
+                                        className={cn(
+                                          "p-4 rounded-xl border space-y-1.5",
+                                          hasAnswer ? "bg-slate-50 border-slate-200" : "bg-slate-50/40 border-slate-200/60 opacity-60"
+                                        )}
+                                      >
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                                            <span className="text-[#E78023] font-mono text-[11px]">Q{qIdx + 1}.</span>
+                                            <span>{q.question}</span>
+                                          </span>
+                                          <div className="flex items-center gap-1.5">
+                                            {hasAnswer ? (
+                                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                                                ✓ Answered
+                                              </span>
+                                            ) : (
+                                              <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                                                ↷ Skipped
+                                              </span>
+                                            )}
+                                            <span className="text-[10px] font-semibold text-slate-400 uppercase bg-slate-200/60 px-2 py-0.5 rounded">
+                                              {getQuestionTypeLabel(q.type)}
+                                            </span>
+                                          </div>
+                                        </div>
+
+                                        <div className="pt-1 pl-6">
+                                          {!hasAnswer ? (
+                                            <span className="text-xs text-slate-400 italic">No response provided</span>
+                                          ) : Array.isArray(rawAns) ? (
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                              {rawAns.map((item) => (
+                                                <span
+                                                  key={item}
+                                                  className="px-2.5 py-1 rounded-lg bg-[#17458F]/10 text-[#17458F] font-bold text-xs border border-[#17458F]/20"
+                                                >
+                                                  ✓ {item}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          ) : q.type === "multiple_choice" || q.type === "dropdown" ? (
+                                            <span className="px-2.5 py-1 rounded-lg bg-[#17458F]/10 text-[#17458F] font-bold text-xs border border-[#17458F]/20 inline-block">
+                                              {String(rawAns)}
+                                            </span>
+                                          ) : (
+                                            <p className="text-xs text-slate-800 font-medium whitespace-pre-line leading-relaxed bg-white p-3.5 rounded-xl border border-slate-200">
+                                              {String(rawAns)}
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : listing.customQuestions && listing.customQuestions.length > 0 ? (
                       listing.customQuestions.map((q, qIdx) => {
                         if (q.type === "note") return null;
                         const rawAnswer = currentIndividual.answers ? currentIndividual.answers[q.id] : undefined;
+                        const hasAnswer = rawAnswer !== undefined && rawAnswer !== null && rawAnswer !== "";
 
                         return (
                           <div
@@ -1529,13 +1715,24 @@ export function ListingResponsesView({
                                 <span className="text-[#E78023] font-mono text-[11px]">0{qIdx + 1}.</span>
                                 <span>{q.question}</span>
                               </span>
-                              <span className="text-[10px] font-semibold text-slate-400 uppercase bg-slate-100 px-2 py-0.5 rounded">
-                                {getQuestionTypeLabel(q.type)}
-                              </span>
+                              <div className="flex items-center gap-1.5">
+                                {hasAnswer ? (
+                                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                                    ✓ Answered
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                                    ↷ Skipped
+                                  </span>
+                                )}
+                                <span className="text-[10px] font-semibold text-slate-400 uppercase bg-slate-100 px-2 py-0.5 rounded">
+                                  {getQuestionTypeLabel(q.type)}
+                                </span>
+                              </div>
                             </div>
 
                             <div className="pt-1">
-                              {rawAnswer === undefined || rawAnswer === null || rawAnswer === "" ? (
+                              {!hasAnswer ? (
                                 <span className="text-xs text-slate-400 italic">No response provided</span>
                               ) : Array.isArray(rawAnswer) ? (
                                 <div className="flex items-center gap-1.5 flex-wrap">

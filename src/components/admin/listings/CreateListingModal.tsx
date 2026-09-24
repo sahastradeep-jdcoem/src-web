@@ -40,6 +40,7 @@ import { SrcFormsBuilder } from "@/components/admin/forms/SrcFormsBuilder";
 import { UniversalImageUploader } from "@/components/ui/UniversalImageUploader";
 import { SrcFormField, CustomQuestion } from "@/types";
 import { saveStoredListings, getStoredListings } from "@/lib/listingsStore";
+import { validateSectionGraph } from "@/lib/srcFormsHelper";
 import { cn } from "@/lib/utils";
 
 interface CreateListingModalProps {
@@ -543,6 +544,16 @@ export function CreateListingModal({
       setActiveSection("details");
       setFormError(asDraft ? "Please provide at least a Title / Headline to save as draft." : "Please provide a Title / Headline in the Details section before publishing.");
       return;
+    }
+
+    if (!asDraft && customQuestions.length > 0) {
+      const sectionIssues = validateSectionGraph(customQuestions);
+      const fatalErrors = sectionIssues.filter((i) => i.severity === "error");
+      if (fatalErrors.length > 0) {
+        setActiveSection("qa");
+        setFormError(`Section Routing Error: ${fatalErrors[0].message}`);
+        return;
+      }
     }
 
     try {

@@ -27,6 +27,7 @@ import { SrcFormsBuilder } from "@/components/admin/forms/SrcFormsBuilder";
 import { UniversalImageUploader } from "@/components/ui/UniversalImageUploader";
 import { SrcFormField } from "@/types";
 import { saveStoredSrcDispatches, getStoredSrcDispatches } from "@/lib/srcDispatchesStore";
+import { validateSectionGraph } from "@/lib/srcFormsHelper";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 
@@ -275,6 +276,14 @@ export function CreateSrcFormModal({
 
       if (formFields.length === 0) {
         setFormError("Please add at least one question in the SRC Forms Builder before publishing.");
+        setActiveSection("qa");
+        return;
+      }
+
+      const sectionIssues = validateSectionGraph(formFields);
+      const fatalErrors = sectionIssues.filter((i) => i.severity === "error");
+      if (fatalErrors.length > 0) {
+        setFormError(`Section Routing Error: ${fatalErrors[0].message}`);
         setActiveSection("qa");
         return;
       }

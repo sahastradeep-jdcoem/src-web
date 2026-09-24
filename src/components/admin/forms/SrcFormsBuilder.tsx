@@ -32,6 +32,8 @@ import {
   getFormSectionGroups, 
   getNextSectionTarget,
   validateSectionGraph,
+  getActiveRouteInfo,
+  pruneSkippedSectionAnswers,
   type FormSectionGroup,
   type SectionValidationIssue,
 } from "@/lib/srcFormsHelper";
@@ -134,6 +136,7 @@ export function SrcFormsBuilder({
   const activeFields: SrcFormField[] = fields ?? initialFields ?? questions ?? [];
 
   const [preview, setPreview] = useState<PreviewState>(PREVIEW_INIT);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [showValidation, setShowValidation] = useState(false);
 
   // Compute live section layout
@@ -401,6 +404,7 @@ export function SrcFormsBuilder({
 
   const startPreview = () => {
     if (sectionGroups.length === 0) return;
+    setPreviewError(null);
     setPreview({
       open: true,
       currentSectionId: sectionGroups[0].id,
@@ -411,11 +415,33 @@ export function SrcFormsBuilder({
   };
 
   const previewNext = () => {
+    setPreviewError(null);
     const section = sectionGroups.find((s) => s.id === preview.currentSectionId);
     if (!section) return;
-    const next = getNextSectionTarget(section, sectionGroups, preview.answers);
+
+    // Section-by-section validation: Check required fields in the active section
+    for (const field of section.fields) {
+      if (field.type === "note" || field.type === "section" || field.type === "whatsapp_link") continue;
+      if (field.required) {
+        const val = preview.answers[field.id];
+        if (
+          val === undefined ||
+          val === null ||
+          val === "" ||
+          (Array.isArray(val) && val.length === 0)
+        ) {
+          setPreviewError(`Please answer required question: "${field.question || 'Untitled Question'}"`);
+          return;
+        }
+      }
+    }
+
+    const routeInfo = getActiveRouteInfo(sectionGroups, preview.answers, preview.currentSectionId, preview.history);
+    const next = routeInfo.nextTarget;
     if (next === "submit") {
-      setPreview((p) => ({ ...p, submitted: true }));
+      const finalPath = [...preview.history, preview.currentSectionId];
+      const pruned = pruneSkippedSectionAnswers(sectionGroups, finalPath, preview.answers);
+      setPreview((p) => ({ ...p, answers: pruned, history: finalPath, submitted: true }));
     } else {
       setPreview((p) => ({
         ...p,
@@ -426,6 +452,7 @@ export function SrcFormsBuilder({
   };
 
   const previewBack = () => {
+    setPreviewError(null);
     if (preview.history.length === 0) return;
     const prev = preview.history[preview.history.length - 1];
     setPreview((p) => ({
@@ -436,11 +463,13 @@ export function SrcFormsBuilder({
   };
 
   const previewSetAnswer = (fieldId: string, value: any) => {
+    setPreviewError(null);
     setPreview((p) => ({ ...p, answers: { ...p.answers, [fieldId]: value } }));
   };
 
   const previewReset = () => {
     if (sectionGroups.length === 0) return;
+    setPreviewError(null);
     setPreview({
       open: true,
       currentSectionId: sectionGroups[0].id,
@@ -595,11 +624,15 @@ export function SrcFormsBuilder({
           <PreviewPanel
             sectionGroups={sectionGroups}
             preview={preview}
+            error={previewError}
             onNext={previewNext}
             onBack={previewBack}
             onSetAnswer={previewSetAnswer}
             onReset={previewReset}
-            onClose={() => setPreview(PREVIEW_INIT)}
+            onClose={() => {
+              setPreview(PREVIEW_INIT);
+              setPreviewError(null);
+            }}
           />
         )}
 
@@ -898,6 +931,12 @@ export function SrcFormsBuilder({
                     <span className="w-6 h-6 rounded-lg bg-slate-100 text-slate-700 font-mono font-bold text-[11px] flex items-center justify-center border border-slate-200">
                       {isNote ? "NB" : `Q${idx + 1}`}
                     </span>
+                    {hasBranching && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-100 text-purple-700 font-bold text-[10px] shrink-0 border border-purple-200">
+                        <GitBranch className="w-3 h-3 text-purple-600" />
+                        <span>🔀 Branching enabled</span>
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex-1">
@@ -1009,27 +1048,50 @@ export function SrcFormsBuilder({
                             </div>
 
                             {/* Section Destination Selector */}
-                            {hasBranching && (
-                              <div className="flex items-center gap-1.5 shrink-0 pl-6 sm:pl-0">
-                                <ArrowRight className="w-3 h-3 text-purple-400" />
-                                <select
-                                  value={targetSectionId}
-                                  onChange={(e) => {
-                                    const nextGoTo = { ...(f.goToSection || {}), [opt]: e.target.value };
-                                    updateField(f.id, { goToSection: nextGoTo });
-                                  }}
-                                  className="px-2.5 py-1 rounded-lg bg-purple-50/70 border border-purple-200 text-[11px] font-bold text-purple-900 focus:outline-none focus:border-purple-600 cursor-pointer"
-                                >
-                                  <option value="next">Continue to next section</option>
-                                  {sectionGroups.map((sec) => (
-                                    <option key={sec.id} value={sec.id}>
-                                      Go to: {sec.title}
-                                    </option>
-                                  ))}
-                                  <option value="submit">Submit form</option>
-                                </select>
-                              </div>
-                            )}
+                            {hasBranching && (() => {
+                              const isMissing = targetSectionId !== "next" && targetSectionId !== "submit" && !sectionGroups.some((s) => s.id === targetSectionId);
+                              const currentSec = getFieldSection(f.id);
+                              const isSelfLoop = targetSectionId === currentSec?.id;
+
+                              return (
+                                <div className="flex items-center gap-1.5 shrink-0 pl-6 sm:pl-0 flex-wrap">
+                                  <ArrowRight className="w-3 h-3 text-purple-400" />
+                                  <select
+                                    value={targetSectionId}
+                                    onChange={(e) => {
+                                      const nextGoTo = { ...(f.goToSection || {}), [opt]: e.target.value };
+                                      updateField(f.id, { goToSection: nextGoTo });
+                                    }}
+                                    className={cn(
+                                      "px-2.5 py-1 rounded-lg text-[11px] font-bold focus:outline-none cursor-pointer border shadow-2xs",
+                                      isMissing || isSelfLoop
+                                        ? "bg-rose-50 border-rose-300 text-rose-900 focus:border-rose-600"
+                                        : "bg-purple-50/70 border-purple-200 text-purple-900 focus:border-purple-600"
+                                    )}
+                                  >
+                                    <option value="next">Continue to next section</option>
+                                    {sectionGroups.map((sec) => (
+                                      <option key={sec.id} value={sec.id}>
+                                        Go to: {sec.title}
+                                      </option>
+                                    ))}
+                                    <option value="submit">Submit form</option>
+                                  </select>
+                                  {isMissing && (
+                                    <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200" title="Referenced section does not exist">
+                                      <AlertTriangle className="w-3 h-3 text-rose-500" />
+                                      <span>Deleted</span>
+                                    </span>
+                                  )}
+                                  {isSelfLoop && (
+                                    <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200" title="Routing to current section causes infinite loop">
+                                      <AlertTriangle className="w-3 h-3 text-rose-500" />
+                                      <span>Loop</span>
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()}
 
                             {(f.options || []).length > 1 && (
                               <button
@@ -1144,6 +1206,7 @@ export function SrcFormsBuilder({
 interface PreviewPanelProps {
   sectionGroups: FormSectionGroup[];
   preview: PreviewState;
+  error?: string | null;
   onNext: () => void;
   onBack: () => void;
   onSetAnswer: (fieldId: string, value: any) => void;
@@ -1154,6 +1217,7 @@ interface PreviewPanelProps {
 function PreviewPanel({
   sectionGroups,
   preview,
+  error,
   onNext,
   onBack,
   onSetAnswer,
@@ -1161,13 +1225,18 @@ function PreviewPanel({
   onClose,
 }: PreviewPanelProps) {
   const currentSection = sectionGroups.find((s) => s.id === preview.currentSectionId);
-  const nextTarget = currentSection
-    ? getNextSectionTarget(currentSection, sectionGroups, preview.answers)
-    : "submit";
+
+  const activeRouteInfo = useMemo(() => {
+    return getActiveRouteInfo(sectionGroups, preview.answers, preview.currentSectionId, preview.history);
+  }, [sectionGroups, preview.answers, preview.currentSectionId, preview.history]);
+
+  const isLastStep = activeRouteInfo.isLastStep;
+  const nextTarget = activeRouteInfo.nextTarget;
+  const nextTargetSec = sectionGroups.find((s) => s.id === nextTarget);
   const nextLabel =
-    nextTarget === "submit"
-      ? "Submit form"
-      : `Next: ${sectionGroups.find((s) => s.id === nextTarget)?.title || "Next Section"}`;
+    isLastStep || nextTarget === "submit"
+      ? "Submit response"
+      : `Next: ${nextTargetSec?.title || "Next Section"}`;
 
   return (
     <div className="rounded-3xl border-2 border-[#17458F] bg-gradient-to-br from-blue-50/80 via-white to-slate-50 shadow-md overflow-hidden">
@@ -1204,46 +1273,58 @@ function PreviewPanel({
             <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-6 h-6" />
             </div>
-            <p className="text-sm font-extrabold text-slate-900">Form Submitted</p>
+            <p className="text-sm font-extrabold text-slate-900">Form Response Recorded (Preview)</p>
             <p className="text-xs text-slate-500">
-              Path taken: {preview.history.map((id) => {
+              Path completed: {preview.history.map((id) => {
                 const sec = sectionGroups.find((s) => s.id === id);
                 return sec?.title || id.slice(0, 8);
               }).join(" → ")} → Submit
+            </p>
+            <p className="text-[11px] text-slate-400">
+              {Object.keys(preview.answers).length} active responses recorded (bypassed branches pruned).
             </p>
             <button
               type="button"
               onClick={onReset}
               className="px-4 py-2 rounded-xl bg-[#17458F] text-white text-xs font-bold hover:bg-[#123670] cursor-pointer"
             >
-              Try Again
+              Test Again
             </button>
           </div>
         ) : currentSection ? (
           <>
             {/* Progress & path */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-2.5 py-1 rounded-full bg-[#17458F]/10 text-[#17458F] text-[10px] font-extrabold uppercase">
-                Section {sectionGroups.findIndex((s) => s.id === currentSection.id) + 1} of {sectionGroups.length}
-              </span>
-              {preview.history.length > 0 && (
-                <span className="text-[10px] text-slate-400 font-medium">
-                  Path: {preview.history.map((id) => {
-                    const sec = sectionGroups.find((s) => s.id === id);
-                    return sec?.title || "…";
-                  }).join(" → ")} →{" "}
-                  <span className="text-slate-600 font-bold">{currentSection.title}</span>
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-50/90 via-slate-50 to-indigo-50/80 border border-blue-100 space-y-2.5 shadow-2xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg bg-[#17458F]/10 text-[#17458F]">
+                  Section {activeRouteInfo.currentStepNumber} of {activeRouteInfo.totalSteps}
                 </span>
+                <span className="text-[11px] font-semibold text-slate-500">
+                  {activeRouteInfo.progressPercent}% Completed
+                </span>
+              </div>
+              <div className="w-full h-1.5 bg-slate-200/80 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[#17458F] transition-all duration-300 rounded-full"
+                  style={{ width: `${activeRouteInfo.progressPercent}%` }}
+                />
+              </div>
+              <h4 className="font-heading font-extrabold text-base text-slate-900 pt-0.5">
+                {currentSection.title}
+              </h4>
+              {currentSection.description && (
+                <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                  {currentSection.description}
+                </p>
               )}
             </div>
 
-            {/* Section header */}
-            <div>
-              <h3 className="text-sm font-extrabold text-slate-900">{currentSection.title}</h3>
-              {currentSection.description && (
-                <p className="text-xs text-slate-500 mt-0.5">{currentSection.description}</p>
-              )}
-            </div>
+            {error && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
 
             {/* Section fields */}
             <div className="space-y-3">
@@ -1273,9 +1354,14 @@ function PreviewPanel({
               <button
                 type="button"
                 onClick={onNext}
-                className="px-3.5 py-2 rounded-xl bg-[#17458F] text-white text-xs font-bold hover:bg-[#123670] cursor-pointer"
+                className={cn(
+                  "px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-2xs",
+                  isLastStep
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                    : "bg-[#17458F] hover:bg-[#123670] text-white"
+                )}
               >
-                {nextTarget === "submit" ? "Submit →" : "Next →"}
+                {isLastStep ? "Submit →" : "Next →"}
               </button>
             </div>
           </>

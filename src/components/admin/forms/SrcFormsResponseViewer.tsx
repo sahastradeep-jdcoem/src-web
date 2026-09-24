@@ -989,12 +989,14 @@ export function SrcFormsResponseViewer({
 
                                 <div className="flex items-center gap-2">
                                   {isCompletelySkipped ? (
-                                    <span className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-slate-200/70 text-slate-600 border border-slate-300/70">
-                                      Skipped via Branching (0/{totalCount})
+                                    <span className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200 flex items-center gap-1">
+                                      <span>↷ Skipped by conditional logic</span>
+                                      <span className="text-slate-400 font-normal">(0/{totalCount})</span>
                                     </span>
                                   ) : (
-                                    <span className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                      Completed ({answeredCount}/{totalCount})
+                                    <span className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                                      <span>✓ Answered</span>
+                                      <span className="text-emerald-600/70 font-normal">({answeredCount}/{totalCount})</span>
                                     </span>
                                   )}
                                 </div>
@@ -1034,8 +1036,9 @@ export function SrcFormsResponseViewer({
                                 {eligibleFields.length === 0 && waFields.length === 0 ? (
                                   <p className="text-xs text-slate-400 italic">No questions in this section.</p>
                                 ) : isCompletelySkipped ? (
-                                  <div className="p-3 rounded-xl bg-slate-100/70 border border-dashed border-slate-200 text-xs text-slate-500 italic">
-                                    This section was bypassed based on the responder&apos;s answer branching choices.
+                                  <div className="p-3 rounded-xl bg-slate-100/70 border border-dashed border-slate-200 text-xs text-slate-500 italic flex items-center gap-2">
+                                    <span className="px-2 py-0.5 rounded-full bg-slate-200/80 text-[10px] font-bold not-italic text-slate-700">↷ Skipped by conditional logic</span>
+                                    <span>This section was bypassed based on the responder&apos;s answer branching choices.</span>
                                   </div>
                                 ) : (
                                   eligibleFields.map((q, qIdx) => {
@@ -1056,9 +1059,20 @@ export function SrcFormsResponseViewer({
                                             <span className="text-[#E78023] font-mono text-[11px]">Q{qIdx + 1}.</span>
                                             <span>{q.question}</span>
                                           </span>
-                                          <span className="text-[10px] font-semibold text-slate-400 uppercase bg-slate-200/60 px-2 py-0.5 rounded">
-                                            {q.type.replace("_", " ")}
-                                          </span>
+                                          <div className="flex items-center gap-1.5">
+                                            {hasAnswer ? (
+                                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                                                ✓ Answered
+                                              </span>
+                                            ) : (
+                                              <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                                                ↷ Skipped
+                                              </span>
+                                            )}
+                                            <span className="text-[10px] font-semibold text-slate-400 uppercase bg-slate-200/60 px-2 py-0.5 rounded">
+                                              {q.type.replace("_", " ")}
+                                            </span>
+                                          </div>
                                         </div>
                                         <p className="text-sm font-semibold text-slate-900 pl-6 break-words">
                                           {displayAns}

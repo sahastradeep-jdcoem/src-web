@@ -43,7 +43,15 @@ import {
   MessageCircle
 } from "lucide-react";
 import { WhatsAppJoinCard } from "@/components/forms/WhatsAppJoinCard";
-import { getFormSectionGroups, getNextSectionTarget, analyzeSectionResponses, getVisitedSectionPath, getWhatsAppLinkForPath } from "@/lib/srcFormsHelper";
+import { 
+  getFormSectionGroups, 
+  getNextSectionTarget, 
+  analyzeSectionResponses, 
+  getVisitedSectionPath, 
+  getWhatsAppLinkForPath,
+  getActiveRouteInfo,
+  pruneSkippedSectionAnswers
+} from "@/lib/srcFormsHelper";
 import { CancelRegistrationModal } from "@/components/registration/CancelRegistrationModal";
 import { Badge } from "@/components/ui/Badge";
 import { getDepartmentShortName, resolveCanonicalDepartmentName } from "@/lib/departmentsStore";
@@ -633,7 +641,9 @@ export default function StudentDashboardPage() {
       }
     }
 
-    const target = getNextSectionTarget(currentSection, sections, answers);
+    const history = formSectionHistories[dispatch.id] || [];
+    const routeInfo = getActiveRouteInfo(sections, answers, currentSectionId, history);
+    const target = routeInfo.nextTarget;
     if (target === "submit") {
       handleSubmitForm(dispatch);
     } else {
@@ -739,9 +749,21 @@ export default function StudentDashboardPage() {
     try {
       const existing = userDispatchResponses.find((r) => r.dispatchId === dispatch.id);
 
-      const sectionPath = dispatch.formFields && dispatch.formFields.length > 0
-        ? getVisitedSectionPath(getFormSectionGroups(dispatch.formFields), answers)
-        : undefined;
+      const history = formSectionHistories[dispatch.id] || [];
+      const currentSectionId = activeFormSectionIds[dispatch.id] || sections[0]?.id || "section-1";
+      const routeInfo = getActiveRouteInfo(sections, answers, currentSectionId, history);
+
+      const sectionPath = routeInfo.visitedPath.length > 0
+        ? routeInfo.visitedPath
+        : (dispatch.formFields && dispatch.formFields.length > 0
+            ? getVisitedSectionPath(getFormSectionGroups(dispatch.formFields), answers)
+            : undefined);
+
+      const prunedAnswers = pruneSkippedSectionAnswers(
+        sections,
+        sectionPath || [],
+        answers
+      );
 
       const record: SrcDispatchResponseRecord = {
         id: existing ? existing.id : `disp-resp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -753,7 +775,7 @@ export default function StudentDashboardPage() {
         btId: user?.btId?.toUpperCase() || "",
         department: user?.department || user?.facultyDepartment || "Engineering",
         year: user?.year || "Student",
-        answers,
+        answers: Object.keys(prunedAnswers).length > 0 ? prunedAnswers : answers,
         sectionPath,
         submittedAt: existing ? existing.submittedAt : new Date().toISOString(),
         updatedAt: existing ? new Date().toISOString() : undefined,
@@ -1871,11 +1893,10 @@ export default function StudentDashboardPage() {
                               const sections = getFormSectionGroups(item.formFields || []);
                               const currentSectionId = activeFormSectionIds[item.id] || sections[0]?.id || "section-1";
                               const currentSection = sections.find((s) => s.id === currentSectionId) || sections[0];
-                              const currentSectionIdx = sections.findIndex((s) => s.id === currentSection?.id);
                               const sectionHistory = formSectionHistories[item.id] || [];
                               const canGoBack = sectionHistory.length > 0;
-                              const nextTarget = getNextSectionTarget(currentSection, sections, currentAnswers);
-                              const isLastStep = nextTarget === "submit" || (currentSectionIdx === sections.length - 1 && sections.length > 1);
+                              const activeRouteInfo = getActiveRouteInfo(sections, currentAnswers, currentSectionId, sectionHistory);
+                              const isLastStep = activeRouteInfo.isLastStep;
 
                               return (
                                 <div className="space-y-4 pt-1">
@@ -1898,17 +1919,26 @@ export default function StudentDashboardPage() {
 
                                   {/* Section Header (if multiple sections exist) */}
                                   {sections.length > 1 && currentSection && (
-                                    <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/80 space-y-1">
+                                    <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50/50 border border-emerald-200/80 space-y-2.5 shadow-2xs">
                                       <div className="flex items-center justify-between gap-2">
-                                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-600/10 text-emerald-800">
-                                          Section {currentSection.sectionIndex} of {sections.length}
+                                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg bg-emerald-600/10 text-emerald-800">
+                                          Section {activeRouteInfo.currentStepNumber} of {activeRouteInfo.totalSteps}
+                                        </span>
+                                        <span className="text-[11px] font-semibold text-slate-500">
+                                          {activeRouteInfo.progressPercent}% Completed
                                         </span>
                                       </div>
-                                      <h4 className="font-heading font-extrabold text-sm text-slate-900">
+                                      <div className="w-full h-1.5 bg-slate-200/80 rounded-full overflow-hidden">
+                                        <div
+                                          className="h-full bg-emerald-600 transition-all duration-300 rounded-full"
+                                          style={{ width: `${activeRouteInfo.progressPercent}%` }}
+                                        />
+                                      </div>
+                                      <h4 className="font-heading font-extrabold text-sm text-slate-900 pt-0.5">
                                         {currentSection.title}
                                       </h4>
                                       {currentSection.description && (
-                                        <p className="text-xs text-slate-600 font-medium">{currentSection.description}</p>
+                                        <p className="text-xs text-slate-600 font-medium leading-relaxed">{currentSection.description}</p>
                                       )}
                                     </div>
                                   )}
