@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { 
   ShieldCheck, 
-  Sparkles, 
   Target, 
   Eye, 
   Users, 
@@ -201,10 +200,6 @@ export default function AboutPage() {
         {/* SECTION 4: PERMANENT STUDENT CREDITS */}
         <section id="credits" className="space-y-8 pt-4">
           <div className="space-y-2 text-center max-w-2xl mx-auto">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#E78023] flex items-center justify-center gap-1.5">
-              <Sparkles className="w-4 h-4" />
-              <span>Permanent Recognition</span>
-            </span>
             <h2 className="font-extrabold text-3xl sm:text-4xl text-[#0F172A] uppercase">
               CREATIVE &amp; TECHNICAL CREDITS
             </h2>
