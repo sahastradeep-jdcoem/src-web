@@ -28,10 +28,12 @@ import {
   ArrowRight,
   ExternalLink,
   LogIn,
-  MessageCircle
+  MessageCircle,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { WhatsAppJoinCard } from "@/components/forms/WhatsAppJoinCard";
-import { getFormSectionGroups, getVisitedSectionPath, getWhatsAppLinkForPath } from "@/lib/srcFormsHelper";
+import { getFormSectionGroups, getVisitedSectionPath, getWhatsAppLinkForPath, getNextSectionTarget } from "@/lib/srcFormsHelper";
 import { Button } from "@/components/ui/Button";
 import { DEFAULT_DEPARTMENTS } from "@/data/departments";
 import { 
@@ -78,6 +80,8 @@ export default function ListingDetailPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [receiptCode, setReceiptCode] = useState<string | null>(null);
   const [submittedSectionPath, setSubmittedSectionPath] = useState<string[] | undefined>(undefined);
+  const [activeSectionId, setActiveSectionId] = useState<string>("");
+  const [sectionHistory, setSectionHistory] = useState<string[]>([]);
   const [votedPolls, setVotedPolls] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -296,8 +300,82 @@ export default function ListingDetailPage() {
     }
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const formSections = useMemo(() => {
+    return getFormSectionGroups(listing?.customQuestions || []);
+  }, [listing?.customQuestions]);
+
+  const currentSectionId = activeSectionId && formSections.some((s) => s.id === activeSectionId)
+    ? activeSectionId
+    : formSections[0]?.id || "section-1";
+
+  const currentSection = formSections.find((s) => s.id === currentSectionId) || formSections[0];
+  const currentSectionIdx = formSections.findIndex((s) => s.id === currentSection?.id);
+  const isFirstSection = currentSectionIdx <= 0;
+  const canGoBack = sectionHistory.length > 0;
+  const nextTarget = currentSection ? getNextSectionTarget(currentSection, formSections, customAnswers) : "submit";
+  const isLastStep = formSections.length <= 1 || nextTarget === "submit";
+
+  const handleNextSection = () => {
+    if (!currentSection) return;
+
+    // Validate Section 1 identity info
+    if (isFirstSection) {
+      if (!candidateName.trim()) {
+        showToast("Please enter your full name.");
+        return;
+      }
+      if (!candidateEmail.trim() || !candidateEmail.includes("@")) {
+        showToast("Please enter a valid email address.");
+        return;
+      }
+      if (listing?.type === "submission" && !submissionLink.trim()) {
+        showToast("Please provide your submission drive/portfolio link.");
+        return;
+      }
+    }
+
+    // Validate required questions in current section
+    for (const q of currentSection.fields) {
+      if (q.type === "note" || q.type === "section" || q.type === "whatsapp_link") continue;
+      if (q.required) {
+        const val = customAnswers[q.id];
+        if (
+          val === undefined ||
+          val === null ||
+          val === "" ||
+          (typeof val === "string" && !val.trim()) ||
+          (Array.isArray(val) && val.length === 0)
+        ) {
+          showToast(`Please answer required question: "${q.question}"`);
+          return;
+        }
+      }
+    }
+
+    const target = getNextSectionTarget(currentSection, formSections, customAnswers);
+    if (target === "submit") {
+      handleFormSubmit();
+    } else {
+      setSectionHistory((prev) => [...prev, currentSection.id]);
+      setActiveSectionId(target);
+      if (typeof window !== "undefined") {
+        document.getElementById("hub-form-container")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+  };
+
+  const handlePrevSection = () => {
+    if (sectionHistory.length === 0) return;
+    const prevSecId = sectionHistory[sectionHistory.length - 1];
+    setSectionHistory((prev) => prev.slice(0, -1));
+    setActiveSectionId(prevSecId);
+    if (typeof window !== "undefined") {
+      document.getElementById("hub-form-container")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  const handleFormSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!listing) return;
     if (listing.status === "closed" || listing.isAcceptingResponses === false) {
       showToast("This form is no longer accepting responses.");
@@ -313,18 +391,63 @@ export default function ListingDetailPage() {
       return;
     }
 
-    // Validate required dynamic custom questions
-    if (listing.customQuestions) {
-      for (const q of listing.customQuestions) {
-        if (q.required && q.type !== "note" && q.type !== "section" && q.type !== "whatsapp_link") {
-          const val = customAnswers[q.id];
-          if (q.type === "checkboxes") {
-            if (!Array.isArray(val) || val.length === 0) {
-              showToast(`Please select at least one option for "${q.question}"`);
+    // Validate participant identity
+    if (!candidateName.trim()) {
+      showToast("Please enter your full name.");
+      return;
+    }
+    if (!candidateEmail.trim() || !candidateEmail.includes("@")) {
+      showToast("Please enter a valid email address.");
+      return;
+    }
+    if (listing.type === "submission" && !submissionLink.trim()) {
+      showToast("Please provide your submission drive/portfolio link.");
+      return;
+    }
+
+    // Validate required questions along the traversed branching path only
+    const allSections = getFormSectionGroups(listing.customQuestions || []);
+    if (allSections.length > 1) {
+      const visited = new Set<string>();
+      let curSec: typeof allSections[0] | undefined = allSections[0];
+
+      while (curSec && !visited.has(curSec.id)) {
+        visited.add(curSec.id);
+        for (const field of curSec.fields) {
+          if (field.type === "note" || field.type === "section" || field.type === "whatsapp_link") continue;
+          if (field.required) {
+            const val = customAnswers[field.id];
+            if (
+              val === undefined ||
+              val === null ||
+              val === "" ||
+              (typeof val === "string" && !val.trim()) ||
+              (Array.isArray(val) && val.length === 0)
+            ) {
+              setActiveSectionId(curSec.id);
+              showToast(`Please answer required question: "${field.question}"`);
               return;
             }
-          } else if (!val || !String(val).trim()) {
-            showToast(`Please answer "${q.question}"`);
+          }
+        }
+
+        const nextTarget = getNextSectionTarget(curSec, allSections, customAnswers);
+        if (nextTarget === "submit") break;
+        curSec = allSections.find((s) => s.id === nextTarget);
+      }
+    } else if (allSections.length === 1) {
+      for (const q of allSections[0].fields) {
+        if (q.type === "note" || q.type === "section" || q.type === "whatsapp_link") continue;
+        if (q.required) {
+          const val = customAnswers[q.id];
+          if (
+            val === undefined ||
+            val === null ||
+            val === "" ||
+            (typeof val === "string" && !val.trim()) ||
+            (Array.isArray(val) && val.length === 0)
+          ) {
+            showToast(`Please answer required question: "${q.question}"`);
             return;
           }
         }
@@ -920,7 +1043,11 @@ export default function ListingDetailPage() {
                       ) : listing.allowResponseEditing !== false ? (
                         <button
                           type="button"
-                          onClick={() => setIsEditingResponse(true)}
+                          onClick={() => {
+                            setIsEditingResponse(true);
+                            setActiveSectionId(formSections[0]?.id || "section-1");
+                            setSectionHistory([]);
+                          }}
                           className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer"
                         >
                           <Pencil className="w-3.5 h-3.5" />
@@ -993,7 +1120,18 @@ export default function ListingDetailPage() {
                     </div>
                   </div>
                 ) : (
-                  <form onSubmit={handleFormSubmit} className="space-y-4">
+                  <form
+                    id="hub-form-container"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (isLastStep) {
+                        handleFormSubmit(e);
+                      } else {
+                        handleNextSection();
+                      }
+                    }}
+                    className="space-y-5"
+                  >
                   {existingResponse && isEditingResponse && (
                     <div className="p-4 rounded-2xl bg-blue-50/90 border border-blue-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-blue-950 animate-in fade-in">
                       <div className="flex items-center gap-2.5">
@@ -1007,7 +1145,11 @@ export default function ListingDetailPage() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => setIsEditingResponse(false)}
+                        onClick={() => {
+                          setIsEditingResponse(false);
+                          setActiveSectionId(formSections[0]?.id || "section-1");
+                          setSectionHistory([]);
+                        }}
                         className="text-xs font-bold text-slate-600 hover:text-slate-900 px-3 py-1.5 rounded-lg bg-white border border-slate-200 self-start sm:self-center transition-colors cursor-pointer"
                       >
                         Cancel Editing
@@ -1015,292 +1157,344 @@ export default function ListingDetailPage() {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                        Full Name *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={candidateName}
-                        onChange={(e) => setCandidateName(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                        Email Address *
-                      </label>
-                      <input
-                        type="email"
-                        required
-                        value={candidateEmail}
-                        onChange={(e) => setCandidateEmail(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
-                        Department
-                      </label>
-                      <input
-                        type="text"
-                        list="hub-dept-list"
-                        value={candidateDept}
-                        onChange={(e) => setCandidateDept(e.target.value)}
-                        placeholder="Select or enter department"
-                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium"
-                      />
-                      <datalist id="hub-dept-list">
-                        {DEFAULT_DEPARTMENTS.map((d) => (
-                          <option key={d} value={d} />
-                        ))}
-                      </datalist>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
-                        Academic Year
-                      </label>
-                      <input
-                        type="text"
-                        value={candidateYear}
-                        onChange={(e) => setCandidateYear(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
-                        BT ID
-                      </label>
-                      <input
-                        type="text"
-                        value={candidateBtId}
-                        onChange={(e) => setCandidateBtId(e.target.value.toUpperCase())}
-                        placeholder="BT23..."
-                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold"
-                      />
-                    </div>
-                  </div>
-
-                  {listing.type === "submission" && (
-                    <div className="space-y-1 pt-2">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
-                        Submission Drive / Portfolio Link *
-                      </label>
-                      <input
-                        type="url"
-                        required
-                        value={submissionLink}
-                        onChange={(e) => setSubmissionLink(e.target.value)}
-                        placeholder="https://..."
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold"
-                      />
+                  {/* Section Progress Header for multi-section forms */}
+                  {formSections.length > 1 && currentSection && (
+                    <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-50/90 via-slate-50 to-indigo-50/80 border border-blue-100 space-y-2.5 shadow-2xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg bg-[#17458F]/10 text-[#17458F]">
+                          Section {currentSection.sectionIndex} of {formSections.length}
+                        </span>
+                        <span className="text-[11px] font-semibold text-slate-500">
+                          {Math.round(((currentSectionIdx + 1) / formSections.length) * 100)}% Completed
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-200/80 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-[#17458F] transition-all duration-300 rounded-full"
+                          style={{ width: `${Math.round(((currentSectionIdx + 1) / formSections.length) * 100)}%` }}
+                        />
+                      </div>
+                      <h4 className="font-heading font-extrabold text-base text-slate-900 pt-0.5">
+                        {currentSection.title}
+                      </h4>
+                      {currentSection.description && (
+                        <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                          {currentSection.description}
+                        </p>
+                      )}
                     </div>
                   )}
 
-                  {/* Dynamic Questions */}
-                  {listing.customQuestions?.map((q) => {
-                    if (q.type === "note") {
-                      return (
-                        <div key={q.id} className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-1 my-2">
-                          <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
-                            <AlertCircle className="w-4 h-4 text-[#E78023] shrink-0" />
-                            <span>{q.question || "Important Notice"}</span>
-                          </div>
-                          {q.noteContent && (
-                            <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-line pl-6">
-                              {q.noteContent}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    }
-
-                    if (q.type === "section") {
-                      return (
-                        <div key={q.id} className="p-3.5 rounded-2xl bg-purple-50/80 border border-purple-200/80 space-y-1 my-3">
-                          <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-purple-200/60 text-purple-900">
-                            Section Break
-                          </span>
-                          <h4 className="font-heading font-extrabold text-sm text-purple-950">
-                            {q.question}
-                          </h4>
-                          {q.description && (
-                            <p className="text-xs text-purple-800">{q.description}</p>
-                          )}
-                        </div>
-                      );
-                    }
-
-                    if (q.type === "whatsapp_link") {
-                      const waUrl = q.waGroupUrl
-                        ? (q.waGroupUrl.startsWith("http") ? q.waGroupUrl : `https://${q.waGroupUrl}`)
-                        : "";
-                      if (!waUrl) return null;
-                      return (
-                        <div key={q.id} className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-3 my-2">
-                          <div>
-                            <p className="text-xs font-bold text-emerald-950">{q.question || "Join Our WhatsApp Group"}</p>
-                            {q.description && <p className="text-[11px] text-emerald-700 mt-0.5">{q.description}</p>}
-                            {q.waGroupName && <p className="text-[11px] text-emerald-600 font-medium">{q.waGroupName}</p>}
-                          </div>
-                          <a
-                            href={waUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#25D366] text-white text-xs font-bold hover:bg-emerald-500 transition-colors"
-                          >
-                            <MessageCircle className="w-3.5 h-3.5 fill-white" />
-                            <span>Join</span>
-                          </a>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div key={q.id} className="space-y-1.5 pt-2">
-                        <div className="space-y-0.5">
-                          <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
-                            <span>{q.question}</span>
-                            {q.required && <span className="text-rose-500 font-bold">*</span>}
+                  {/* Section 1 Identity Fields (or only section if single-section) */}
+                  {(isFirstSection || formSections.length <= 1) && (
+                    <div className="space-y-4 pt-1">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                            Full Name *
                           </label>
-                          {q.description && (
-                            <p className="text-[11px] text-slate-500 font-medium leading-normal">
-                              {q.description}
-                            </p>
-                          )}
-                        </div>
-
-                        {q.type === "long_text" ? (
-                          <textarea
-                            rows={3}
-                            required={q.required}
-                            placeholder={q.placeholder || "Enter detailed response..."}
-                            value={customAnswers[q.id] || ""}
-                            onChange={(e) => setCustomAnswers({ ...customAnswers, [q.id]: e.target.value })}
-                            className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium focus:outline-none focus:border-[#17458F]"
-                          />
-                        ) : q.type === "checkboxes" ? (
-                          <div className="space-y-2 pt-1">
-                            {(q.options || []).map((opt) => {
-                              const selectedList: string[] = Array.isArray(customAnswers[q.id])
-                                ? customAnswers[q.id]
-                                : [];
-                              const isChecked = selectedList.includes(opt);
-                              return (
-                                <button
-                                  key={opt}
-                                  type="button"
-                                  onClick={() => {
-                                    const next = isChecked
-                                      ? selectedList.filter((item) => item !== opt)
-                                      : [...selectedList, opt];
-                                    setCustomAnswers({ ...customAnswers, [q.id]: next });
-                                  }}
-                                  className={cn(
-                                    "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-left text-xs font-semibold transition-all cursor-pointer",
-                                    isChecked
-                                      ? "bg-[#17458F]/5 border-[#17458F] text-[#17458F] shadow-2xs"
-                                      : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300"
-                                  )}
-                                >
-                                  <div
-                                    className={cn(
-                                      "w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition-all",
-                                      isChecked
-                                        ? "bg-[#17458F] border-[#17458F] text-white"
-                                        : "bg-white border-slate-300"
-                                    )}
-                                  >
-                                    {isChecked && <Check className="w-3 h-3 text-white stroke-[3]" />}
-                                  </div>
-                                  <span className="flex-1">{opt}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        ) : q.type === "multiple_choice" ? (
-                          <div className="space-y-2 pt-1">
-                            {(q.options || []).map((opt) => {
-                              const isSelected = customAnswers[q.id] === opt;
-                              return (
-                                <button
-                                  key={opt}
-                                  type="button"
-                                  onClick={() => setCustomAnswers({ ...customAnswers, [q.id]: opt })}
-                                  className={cn(
-                                    "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-left text-xs font-semibold transition-all cursor-pointer",
-                                    isSelected
-                                      ? "bg-[#17458F]/5 border-[#17458F] text-[#17458F] shadow-2xs"
-                                      : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300"
-                                  )}
-                                >
-                                  <div
-                                    className={cn(
-                                      "w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-all",
-                                      isSelected
-                                        ? "border-[#17458F] bg-[#17458F]"
-                                        : "border-slate-300 bg-white"
-                                    )}
-                                  >
-                                    {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                                  </div>
-                                  <span className="flex-1">{opt}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        ) : q.type === "dropdown" ? (
-                          <select
-                            required={q.required}
-                            value={customAnswers[q.id] || ""}
-                            onChange={(e) => setCustomAnswers({ ...customAnswers, [q.id]: e.target.value })}
-                            className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-none focus:border-[#17458F]"
-                          >
-                            <option value="">Select an option...</option>
-                            {q.options?.map((opt) => (
-                              <option key={opt} value={opt}>{opt}</option>
-                            ))}
-                          </select>
-                        ) : (
                           <input
                             type="text"
-                            required={q.required}
-                            placeholder={q.placeholder || "Your answer..."}
-                            value={customAnswers[q.id] || ""}
-                            onChange={(e) => setCustomAnswers({ ...customAnswers, [q.id]: e.target.value })}
-                            className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium focus:outline-none focus:border-[#17458F]"
+                            required
+                            value={candidateName}
+                            onChange={(e) => setCandidateName(e.target.value)}
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
                           />
-                        )}
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                            Email Address *
+                          </label>
+                          <input
+                            type="email"
+                            required
+                            value={candidateEmail}
+                            onChange={(e) => setCandidateEmail(e.target.value)}
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                          />
+                        </div>
                       </div>
-                    );
-                  })}
 
-                  <div className="pt-4 flex items-center justify-end gap-3">
-                    {existingResponse && isEditingResponse && (
-                      <button
-                        type="button"
-                        onClick={() => setIsEditingResponse(false)}
-                        className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                    )}
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="px-8 py-3 rounded-2xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
-                    >
-                      {isSubmitting 
-                        ? "Saving..." 
-                        : existingResponse 
-                        ? "Update Response & Save Changes" 
-                        : "Send Application & Log Ticket"}
-                    </button>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
+                            Department
+                          </label>
+                          <input
+                            type="text"
+                            list="hub-dept-list"
+                            value={candidateDept}
+                            onChange={(e) => setCandidateDept(e.target.value)}
+                            placeholder="Select or enter department"
+                            className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium"
+                          />
+                          <datalist id="hub-dept-list">
+                            {DEFAULT_DEPARTMENTS.map((d) => (
+                              <option key={d} value={d} />
+                            ))}
+                          </datalist>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
+                            Academic Year
+                          </label>
+                          <input
+                            type="text"
+                            value={candidateYear}
+                            onChange={(e) => setCandidateYear(e.target.value)}
+                            className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
+                            BT ID
+                          </label>
+                          <input
+                            type="text"
+                            value={candidateBtId}
+                            onChange={(e) => setCandidateBtId(e.target.value.toUpperCase())}
+                            placeholder="BT23..."
+                            className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold"
+                          />
+                        </div>
+                      </div>
+
+                      {listing.type === "submission" && (
+                        <div className="space-y-1 pt-1">
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
+                            Submission Drive / Portfolio Link *
+                          </label>
+                          <input
+                            type="url"
+                            required
+                            value={submissionLink}
+                            onChange={(e) => setSubmissionLink(e.target.value)}
+                            placeholder="https://..."
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Section Fields */}
+                  <div className="space-y-4 pt-1">
+                    {(currentSection ? currentSection.fields : (listing.customQuestions || [])).map((q) => {
+                      if (q.type === "note") {
+                        return (
+                          <div key={q.id} className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-1 my-2">
+                            <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                              <AlertCircle className="w-4 h-4 text-[#E78023] shrink-0" />
+                              <span>{q.question || "Important Notice"}</span>
+                            </div>
+                            {q.noteContent && (
+                              <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-line pl-6">
+                                {q.noteContent}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      if (q.type === "section") {
+                        return null;
+                      }
+
+                      if (q.type === "whatsapp_link") {
+                        return (
+                          <div key={q.id} className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200/90 flex items-center gap-3.5 my-2">
+                            <div className="w-10 h-10 rounded-xl bg-[#25D366]/15 text-[#25D366] flex items-center justify-center shrink-0">
+                              <MessageCircle className="w-5 h-5 fill-[#25D366]" />
+                            </div>
+                            <div className="space-y-0.5">
+                              <p className="text-xs font-bold text-emerald-950">
+                                {q.question || "Official WhatsApp Group"}
+                              </p>
+                              <p className="text-[11px] text-emerald-700 font-medium">
+                                {q.description || "The official WhatsApp group invite link will be provided immediately upon submitting your response."}
+                              </p>
+                              {q.waGroupName && (
+                                <p className="text-[10px] font-mono font-bold text-emerald-600 uppercase tracking-wider">
+                                  Group: {q.waGroupName}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div key={q.id} className="space-y-1.5 pt-2">
+                          <div className="space-y-0.5">
+                            <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
+                              <span>{q.question}</span>
+                              {q.required && <span className="text-rose-500 font-bold">*</span>}
+                            </label>
+                            {q.description && (
+                              <p className="text-[11px] text-slate-500 font-medium leading-normal">
+                                {q.description}
+                              </p>
+                            )}
+                          </div>
+
+                          {q.type === "long_text" ? (
+                            <textarea
+                              rows={3}
+                              required={q.required}
+                              placeholder={q.placeholder || "Enter detailed response..."}
+                              value={customAnswers[q.id] || ""}
+                              onChange={(e) => setCustomAnswers({ ...customAnswers, [q.id]: e.target.value })}
+                              className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium focus:outline-none focus:border-[#17458F]"
+                            />
+                          ) : q.type === "checkboxes" ? (
+                            <div className="space-y-2 pt-1">
+                              {(q.options || []).map((opt) => {
+                                const selectedList: string[] = Array.isArray(customAnswers[q.id])
+                                  ? customAnswers[q.id]
+                                  : [];
+                                const isChecked = selectedList.includes(opt);
+                                return (
+                                  <button
+                                    key={opt}
+                                    type="button"
+                                    onClick={() => {
+                                      const next = isChecked
+                                        ? selectedList.filter((item) => item !== opt)
+                                        : [...selectedList, opt];
+                                      setCustomAnswers({ ...customAnswers, [q.id]: next });
+                                    }}
+                                    className={cn(
+                                      "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-left text-xs font-semibold transition-all cursor-pointer",
+                                      isChecked
+                                        ? "bg-[#17458F]/5 border-[#17458F] text-[#17458F] shadow-2xs"
+                                        : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300"
+                                    )}
+                                  >
+                                    <div
+                                      className={cn(
+                                        "w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition-all",
+                                        isChecked
+                                          ? "bg-[#17458F] border-[#17458F] text-white"
+                                          : "bg-white border-slate-300"
+                                      )}
+                                    >
+                                      {isChecked && <Check className="w-3 h-3 text-white stroke-[3]" />}
+                                    </div>
+                                    <span className="flex-1">{opt}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : q.type === "multiple_choice" ? (
+                            <div className="space-y-2 pt-1">
+                              {(q.options || []).map((opt) => {
+                                const isSelected = customAnswers[q.id] === opt;
+                                return (
+                                  <button
+                                    key={opt}
+                                    type="button"
+                                    onClick={() => setCustomAnswers({ ...customAnswers, [q.id]: opt })}
+                                    className={cn(
+                                      "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-left text-xs font-semibold transition-all cursor-pointer",
+                                      isSelected
+                                        ? "bg-[#17458F]/5 border-[#17458F] text-[#17458F] shadow-2xs"
+                                        : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300"
+                                    )}
+                                  >
+                                    <div
+                                      className={cn(
+                                        "w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-all",
+                                        isSelected
+                                          ? "border-[#17458F] bg-[#17458F]"
+                                          : "border-slate-300 bg-white"
+                                      )}
+                                    >
+                                      {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                    </div>
+                                    <span className="flex-1">{opt}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : q.type === "dropdown" ? (
+                            <select
+                              required={q.required}
+                              value={customAnswers[q.id] || ""}
+                              onChange={(e) => setCustomAnswers({ ...customAnswers, [q.id]: e.target.value })}
+                              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-none focus:border-[#17458F]"
+                            >
+                              <option value="">Select an option...</option>
+                              {q.options?.map((opt) => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              required={q.required}
+                              placeholder={q.placeholder || "Your answer..."}
+                              value={customAnswers[q.id] || ""}
+                              onChange={(e) => setCustomAnswers({ ...customAnswers, [q.id]: e.target.value })}
+                              className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium focus:outline-none focus:border-[#17458F]"
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Navigation and Submit Row */}
+                  <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      {canGoBack && formSections.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={handlePrevSection}
+                          className="px-4 py-2.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-white text-slate-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                          <span>Back</span>
+                        </button>
+                      )}
+                      {existingResponse && isEditingResponse && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsEditingResponse(false);
+                            setActiveSectionId(formSections[0]?.id || "section-1");
+                            setSectionHistory([]);
+                          }}
+                          className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 ml-auto">
+                      {!isLastStep && formSections.length > 1 ? (
+                        <button
+                          type="button"
+                          onClick={handleNextSection}
+                          className="px-6 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                        >
+                          <span>Next</span>
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <button
+                          type="submit"
+                          disabled={isSubmitting}
+                          className="px-8 py-3 rounded-2xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-sm cursor-pointer disabled:opacity-50"
+                        >
+                          {isSubmitting 
+                            ? "Saving..." 
+                            : existingResponse 
+                            ? "Update Response & Save Changes" 
+                            : "Send Application & Log Ticket"}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </form>
               )}

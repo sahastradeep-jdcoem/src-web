@@ -1936,28 +1936,24 @@ export default function StudentDashboardPage() {
                                         return null;
                                       }
 
-                                      // WhatsApp Group Link inline element
+                                      // WhatsApp Group Link inline element (unlocks after submit)
                                       if (field.type === "whatsapp_link") {
-                                        const waUrl = field.waGroupUrl
-                                          ? (field.waGroupUrl.startsWith("http") ? field.waGroupUrl : `https://${field.waGroupUrl}`)
-                                          : "";
-                                        if (!waUrl) return null;
                                         return (
-                                          <div key={field.id || idx} className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-3">
-                                            <div>
-                                              <p className="text-xs font-bold text-emerald-950">{field.question || "Join Our WhatsApp Group"}</p>
-                                              {field.description && <p className="text-[11px] text-emerald-700 mt-0.5">{field.description}</p>}
-                                              {field.waGroupName && <p className="text-[11px] text-emerald-600 font-medium">{field.waGroupName}</p>}
+                                          <div key={field.id || idx} className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200/90 flex items-center gap-3.5">
+                                            <div className="w-10 h-10 rounded-xl bg-[#25D366]/15 text-[#25D366] flex items-center justify-center shrink-0">
+                                              <MessageCircle className="w-5 h-5 fill-[#25D366]" />
                                             </div>
-                                            <a
-                                              href={waUrl}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#25D366] text-white text-xs font-bold hover:bg-emerald-500 transition-colors"
-                                            >
-                                              <MessageCircle className="w-3.5 h-3.5 fill-white" />
-                                              <span>Join Group</span>
-                                            </a>
+                                            <div className="space-y-0.5">
+                                              <p className="text-xs font-bold text-emerald-950">{field.question || "Official WhatsApp Group"}</p>
+                                              <p className="text-[11px] text-emerald-700 font-medium">
+                                                {field.description || "The official WhatsApp group invite link will be provided immediately upon submitting your response."}
+                                              </p>
+                                              {field.waGroupName && (
+                                                <p className="text-[10px] font-mono font-bold text-emerald-600 uppercase tracking-wider">
+                                                  Group: {field.waGroupName}
+                                                </p>
+                                              )}
+                                            </div>
                                           </div>
                                         );
                                       }
