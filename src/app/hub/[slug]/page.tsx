@@ -902,7 +902,7 @@ export default function ListingDetailPage() {
                       const effectiveWaName = pathWa?.waGroupName || pathWa?.question || listing.whatsappGroupName || fallbackWa?.waGroupName || fallbackWa?.question || "Official WhatsApp Group";
                       if (!effectiveWaUrl) return null;
                       return (
-                        <div className="pt-2 max-w-sm mx-auto text-left">
+                        <div className="pt-2 max-w-lg mx-auto text-left">
                           <WhatsAppJoinCard
                             whatsappGroupUrl={effectiveWaUrl}
                             whatsappGroupName={effectiveWaName}
@@ -913,12 +913,15 @@ export default function ListingDetailPage() {
                         </div>
                       );
                     })()}
-                    <Link
-                      href="/dashboard"
-                      className="inline-block px-5 py-2 rounded-xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider"
-                    >
-                      Track in Student Dashboard
-                    </Link>
+                    <div className="pt-1">
+                      <Link
+                        href="/dashboard"
+                        className="inline-flex items-center gap-1.5 px-6 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-2xs"
+                      >
+                        <span>Track in Student Dashboard</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </div>
                   </div>
                 ) : existingResponse && !isEditingResponse ? (
                   /* PREVENT DUPLICATES: ALREADY SUBMITTED VIEW */
