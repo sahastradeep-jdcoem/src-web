@@ -96,9 +96,6 @@ export default function ClubsDirectoryPage() {
             <h3 className="font-extrabold text-xl text-[#17458F] uppercase font-heading">
               Chartered Clubs ({filteredClubs.length})
             </h3>
-            <span className="text-xs text-slate-500 font-medium font-sans">
-              100% Chartered under SRC
-            </span>
           </div>
 
           {isLoading && filteredClubs.length === 0 ? (
