@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -11,9 +11,39 @@ import {
   MapPin, 
   ChevronRight
 } from "lucide-react";
+import { getCurrentTenure, subscribeToTenures, syncTenuresFromFirestore } from "@/lib/tenureStore";
 
 export default function Footer() {
   const pathname = usePathname();
+  const [currentTenureLabel, setCurrentTenureLabel] = useState<string>("2025–26");
+
+  useEffect(() => {
+    const updateLabel = () => {
+      const tenure = getCurrentTenure();
+      if (tenure?.label) {
+        setCurrentTenureLabel(tenure.label.replace("-", "–"));
+      }
+    };
+
+    updateLabel();
+
+    syncTenuresFromFirestore()
+      .then(() => updateLabel())
+      .catch(() => {});
+
+    const unsubscribe = subscribeToTenures(() => updateLabel());
+
+    window.addEventListener("src_tenures_updated", updateLabel);
+    window.addEventListener("src_tenure_changed", updateLabel);
+    window.addEventListener("storage", updateLabel);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener("src_tenures_updated", updateLabel);
+      window.removeEventListener("src_tenure_changed", updateLabel);
+      window.removeEventListener("storage", updateLabel);
+    };
+  }, []);
 
   // Do not render public footer inside Admin Console
   if (pathname && pathname.startsWith("/admin")) {
@@ -214,7 +244,7 @@ export default function Footer() {
 
         {/* Bottom Strip */}
         <div className="pt-8 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-          <p>© 2025–26 SRC JDCOEM — Sahastradeep. All rights reserved.</p>
+          <p>© {currentTenureLabel} SRC JDCOEM — Sahastradeep. All rights reserved.</p>
           <div className="flex items-center gap-4 font-semibold text-slate-600">
             <span className="text-[#17458F]">Student Representative Council</span>
             <span className="text-[#E78023]">•</span>
