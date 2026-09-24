@@ -864,17 +864,21 @@ export default function ListingDetailPage() {
 
             return (
               <div id="apply" className="p-6 sm:p-8 border-t border-slate-200 space-y-6 scroll-mt-24">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="font-heading font-extrabold text-lg text-[#17458F] uppercase">
-                    {isIssue ? "Submit Confidential Inquiry" : "Participant Application"}
-                  </h3>
-                  {isClosed && (
-                    <span className="text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 inline-flex items-center gap-1 shadow-2xs">
-                      <Lock className="w-3 h-3 text-rose-600" />
-                      <span>Responses Closed</span>
-                    </span>
-                  )}
-                </div>
+                {(isIssue || isClosed) && (
+                  <div className="flex items-center justify-between gap-3">
+                    {isIssue && (
+                      <h3 className="font-heading font-extrabold text-lg text-[#17458F] uppercase">
+                        Submit Confidential Inquiry
+                      </h3>
+                    )}
+                    {isClosed && (
+                      <span className="text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 inline-flex items-center gap-1 shadow-2xs ml-auto">
+                        <Lock className="w-3 h-3 text-rose-600" />
+                        <span>Responses Closed</span>
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 {isJdcoemOnly && isExternalUser ? (
                   <div className="p-8 rounded-3xl bg-amber-50/80 border border-amber-200/80 text-center space-y-4">
