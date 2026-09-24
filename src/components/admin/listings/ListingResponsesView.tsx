@@ -219,7 +219,10 @@ export function ListingResponsesView({
   const tableFilteredResponses = useMemo(() => {
     return responses.filter((r) => {
       if (statusFilter !== "all") {
-        const itemStatus = (r.status || (listing.requiresApproval === false ? "recorded" : "pending")).toLowerCase();
+        const itemStatus = (listing.requiresApproval === false
+          ? (r.status === "rejected" ? "rejected" : "recorded")
+          : (r.status || "pending")
+        ).toLowerCase();
         if (itemStatus !== statusFilter.toLowerCase()) return false;
       }
 
@@ -1455,24 +1458,28 @@ export function ListingResponsesView({
                         )}
                         <span className={cn(
                           "text-xs font-extrabold uppercase px-3 py-1 rounded-xl shadow-xs",
-                          currentIndividual.status === "approved"
+                          currentIndividual.status === "rejected"
+                            ? "bg-rose-500 text-white"
+                            : currentIndividual.status === "approved"
                             ? "bg-emerald-500 text-white"
                             : currentIndividual.status === "resolved"
                             ? "bg-cyan-500 text-white"
-                            : currentIndividual.status === "rejected"
-                            ? "bg-rose-500 text-white"
                             : listing.requiresApproval === false
                             ? "bg-emerald-500 text-white"
+                            : currentIndividual.status === "reviewed"
+                            ? "bg-blue-500 text-white"
                             : "bg-amber-400 text-slate-900"
                         )}>
-                          {currentIndividual.status === "approved"
+                          {currentIndividual.status === "rejected"
+                            ? "REJECTED"
+                            : currentIndividual.status === "approved"
                             ? "APPROVED"
                             : currentIndividual.status === "resolved"
                             ? "RESOLVED"
-                            : currentIndividual.status === "rejected"
-                            ? "REJECTED"
                             : listing.requiresApproval === false
                             ? "RECORDED"
+                            : currentIndividual.status === "reviewed"
+                            ? "REVIEWED"
                             : "PENDING"}
                         </span>
                       </div>
@@ -1857,24 +1864,28 @@ export function ListingResponsesView({
                         <td className="py-3.5 px-4">
                           <span className={cn(
                             "text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full inline-block",
-                            r.status === "approved"
+                            r.status === "rejected"
+                              ? "bg-rose-50 text-rose-700 border border-rose-200"
+                              : r.status === "approved"
                               ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                               : r.status === "resolved"
                               ? "bg-cyan-50 text-cyan-700 border border-cyan-200"
-                              : r.status === "rejected"
-                              ? "bg-rose-50 text-rose-700 border border-rose-200"
                               : listing.requiresApproval === false
                               ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : r.status === "reviewed"
+                              ? "bg-blue-50 text-blue-700 border border-blue-200"
                               : "bg-amber-50 text-amber-700 border border-amber-200"
                           )}>
-                            {r.status === "approved"
+                            {r.status === "rejected"
+                              ? "REJECTED"
+                              : r.status === "approved"
                               ? "APPROVED"
                               : r.status === "resolved"
                               ? "RESOLVED"
-                              : r.status === "rejected"
-                              ? "REJECTED"
                               : listing.requiresApproval === false
                               ? "RECORDED"
+                              : r.status === "reviewed"
+                              ? "REVIEWED"
                               : "PENDING"}
                           </span>
                         </td>

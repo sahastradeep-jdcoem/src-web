@@ -530,7 +530,9 @@ export default function ListingDetailPage() {
       sectionPath: finalSectionPath,
       submissionLink: submissionLink || undefined,
       ticketCode,
-      status: existingResponse?.status || (listing.requiresApproval === false ? "reviewed" : "pending"),
+      status: (listing.requiresApproval === false && existingResponse?.status !== "rejected")
+        ? "approved"
+        : (existingResponse?.status || "pending"),
       createdAt: existingResponse?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

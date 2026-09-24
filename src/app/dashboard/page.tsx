@@ -1688,19 +1688,33 @@ export default function StudentDashboardPage() {
                                         </div>
 
                                         <div className="flex items-center gap-2">
-                                          <span className={`text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full ${
-                                            existingResp.status === "approved"
-                                              ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                                              : existingResp.status === "rejected"
-                                              ? "bg-rose-100 text-rose-800 border border-rose-300"
-                                              : existingResp.status === "reviewed"
-                                              ? "bg-blue-100 text-blue-800 border border-blue-300"
-                                              : "bg-amber-100 text-amber-800 border border-amber-300"
-                                          }`}>
-                                            {!existingResp.status || existingResp.status === "pending"
-                                              ? "Pending Review"
-                                              : existingResp.status.toUpperCase()}
-                                          </span>
+                                          {(() => {
+                                            const isNoApproval = item.requiresApproval === false;
+                                            const isApproved = (isNoApproval && existingResp.status !== "rejected") || existingResp.status === "approved";
+                                            return (
+                                              <span className={`text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full ${
+                                                existingResp.status === "rejected"
+                                                  ? "bg-rose-100 text-rose-800 border border-rose-300"
+                                                  : isApproved
+                                                  ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                                  : existingResp.status === "resolved"
+                                                  ? "bg-cyan-100 text-cyan-800 border border-cyan-300"
+                                                  : existingResp.status === "reviewed"
+                                                  ? "bg-blue-100 text-blue-800 border border-blue-300"
+                                                  : "bg-amber-100 text-amber-800 border border-amber-300"
+                                              }`}>
+                                                {existingResp.status === "rejected"
+                                                  ? "REJECTED"
+                                                  : isApproved
+                                                  ? "APPROVED"
+                                                  : existingResp.status === "resolved"
+                                                  ? "RESOLVED"
+                                                  : existingResp.status === "reviewed"
+                                                  ? "REVIEWED"
+                                                  : "PENDING REVIEW"}
+                                              </span>
+                                            );
+                                          })()}
 
                                           {item.allowResponseEditing !== false && item.isAcceptingResponses !== false && (
                                             <Button
@@ -2572,15 +2586,45 @@ export default function StudentDashboardPage() {
 
                     <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
                       <span className="text-slate-500 font-medium">Status:</span>
-                      <span className={`font-bold uppercase text-[10px] px-2 py-0.5 rounded ${
-                        item.status === "approved"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : item.status === "rejected"
-                          ? "bg-rose-100 text-rose-800"
-                          : "bg-amber-100 text-amber-900"
-                      }`}>
-                        {item.status || "Submitted"}
-                      </span>
+                      {(() => {
+                        const parentListing = listings.find((l) => l.id === item.listingId || l.slug === item.listingSlug);
+                        const isNoApproval = parentListing?.requiresApproval === false;
+                        const isApproved = (isNoApproval && item.status !== "rejected") || item.status === "approved";
+
+                        if (item.status === "rejected") {
+                          return (
+                            <span className="font-bold uppercase text-[10px] px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200">
+                              Rejected
+                            </span>
+                          );
+                        }
+                        if (isApproved) {
+                          return (
+                            <span className="font-bold uppercase text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              Approved
+                            </span>
+                          );
+                        }
+                        if (item.status === "resolved") {
+                          return (
+                            <span className="font-bold uppercase text-[10px] px-2.5 py-0.5 rounded-full bg-cyan-100 text-cyan-800 border border-cyan-200">
+                              Resolved
+                            </span>
+                          );
+                        }
+                        if (item.status === "reviewed") {
+                          return (
+                            <span className="font-bold uppercase text-[10px] px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                              Reviewed
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="font-bold uppercase text-[10px] px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
+                            Pending
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                 ))}
@@ -2844,7 +2888,7 @@ export default function StudentDashboardPage() {
               </h4>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
               <div>
                 <span className="text-[10px] text-slate-400 font-medium uppercase">Type</span>
                 <p className="font-bold text-slate-800 uppercase">{selectedHubSubmission.listingType}</p>
@@ -2854,6 +2898,50 @@ export default function StudentDashboardPage() {
                 <p className="font-semibold text-slate-800">
                   {new Date(selectedHubSubmission.createdAt || (selectedHubSubmission as any).submittedAt || Date.now()).toLocaleString("en-IN")}
                 </p>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 font-medium uppercase">Status</span>
+                <div className="pt-0.5">
+                  {(() => {
+                    const parentListing = listings.find((l) => l.id === selectedHubSubmission.listingId || l.slug === selectedHubSubmission.listingSlug);
+                    const isNoApproval = parentListing?.requiresApproval === false;
+                    const isApproved = (isNoApproval && selectedHubSubmission.status !== "rejected") || selectedHubSubmission.status === "approved";
+
+                    if (selectedHubSubmission.status === "rejected") {
+                      return (
+                        <span className="inline-block font-bold uppercase text-[10px] px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200">
+                          Rejected
+                        </span>
+                      );
+                    }
+                    if (isApproved) {
+                      return (
+                        <span className="inline-block font-bold uppercase text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          Approved
+                        </span>
+                      );
+                    }
+                    if (selectedHubSubmission.status === "resolved") {
+                      return (
+                        <span className="inline-block font-bold uppercase text-[10px] px-2.5 py-0.5 rounded-full bg-cyan-100 text-cyan-800 border border-cyan-200">
+                          Resolved
+                        </span>
+                      );
+                    }
+                    if (selectedHubSubmission.status === "reviewed") {
+                      return (
+                        <span className="inline-block font-bold uppercase text-[10px] px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                          Reviewed
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="inline-block font-bold uppercase text-[10px] px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
+                        Pending
+                      </span>
+                    );
+                  })()}
+                </div>
               </div>
             </div>
 
