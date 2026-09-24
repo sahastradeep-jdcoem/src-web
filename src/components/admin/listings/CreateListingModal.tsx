@@ -206,8 +206,8 @@ function getSectionsForType(type?: ListingType): ListingSectionDef[] {
         },
         {
           id: "qa",
-          label: "SRC Forms",
-          shortLabel: "SRC Forms",
+          label: "SRC Forms Builder",
+          shortLabel: "Builder",
           icon: ClipboardList,
           description: "Screening questions, portfolio prompts, and candidate intake fields with SRC Forms.",
         },
@@ -230,8 +230,8 @@ function getSectionsForType(type?: ListingType): ListingSectionDef[] {
         },
         {
           id: "qa",
-          label: "SRC Forms",
-          shortLabel: "SRC Forms",
+          label: "SRC Forms Builder",
+          shortLabel: "Builder",
           icon: ClipboardList,
           description: "Applicant questions, required intake prompts, and custom entry fields with SRC Forms.",
         },
@@ -261,8 +261,8 @@ function getSectionsForType(type?: ListingType): ListingSectionDef[] {
         },
         {
           id: "qa",
-          label: "SRC Forms",
-          shortLabel: "SRC Forms",
+          label: "SRC Forms Builder",
+          shortLabel: "Builder",
           icon: ClipboardList,
           description: "Project metadata, abstract, demo link, and custom entry questions with SRC Forms.",
         },
@@ -292,8 +292,8 @@ function getSectionsForType(type?: ListingType): ListingSectionDef[] {
         },
         {
           id: "qa",
-          label: "SRC Forms",
-          shortLabel: "SRC Forms",
+          label: "SRC Forms Builder",
+          shortLabel: "Builder",
           icon: ClipboardList,
           description: "Incident location, room number, urgency details, and inquiry fields with SRC Forms.",
         },
@@ -323,8 +323,8 @@ function getSectionsForType(type?: ListingType): ListingSectionDef[] {
         },
         {
           id: "qa",
-          label: "SRC Forms",
-          shortLabel: "SRC Forms",
+          label: "SRC Forms Builder",
+          shortLabel: "Builder",
           icon: ClipboardList,
           description: "Custom questions, surveys, and inquiry fields with SRC Forms.",
         },
@@ -857,7 +857,8 @@ export function CreateListingModal({
                   } else if (sec.id === "visuals") {
                     badge = coverImage ? "Asset Set" : "Default";
                   } else if (sec.id === "qa") {
-                    badge = customQuestions.length > 0 ? `${customQuestions.length} Qs` : "0 Qs";
+                    const qCount = customQuestions.filter(q => q.type !== "section" && q.type !== "whatsapp_link" && q.type !== "note").length;
+                    badge = qCount > 0 ? `${qCount} Qs` : "0 Qs";
                   }
 
                   return (
