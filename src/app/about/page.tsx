@@ -203,8 +203,9 @@ export default function AboutPage() {
             <h2 className="font-extrabold text-3xl sm:text-4xl text-[#0F172A] uppercase">
               CREATIVE &amp; TECHNICAL CREDITS
             </h2>
-            <p className="text-xs sm:text-sm text-slate-600">
-              Honoring the student architects behind the foundational visual identity and digital web platform of Sahastradeep.
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              Honoring the student architects behind the foundational visual identity
+              <br className="hidden sm:inline" /> and digital web platform of Sahastradeep.
             </p>
           </div>
 
