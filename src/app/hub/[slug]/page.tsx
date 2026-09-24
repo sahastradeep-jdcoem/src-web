@@ -663,55 +663,60 @@ export default function ListingDetailPage() {
             </div>
           )}
 
-          {/* Metadata Badges */}
-          <div className="px-6 sm:px-8 flex flex-wrap items-center gap-3 text-xs font-bold text-slate-500">
-            {(listing.status === "closed" || listing.isAcceptingResponses === false) ? (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border bg-rose-50 text-rose-700 border-rose-200">
-                <Lock className="w-3.5 h-3.5 text-rose-600" />
-                <span>Responses Closed</span>
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border bg-emerald-50 text-emerald-800 border-emerald-200">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Accepting Responses</span>
-              </span>
-            )}
-            <span className={cn(
-              "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border",
-              isJdcoemOnly
-                ? "bg-amber-50 text-amber-800 border-amber-200"
-                : "bg-emerald-50 text-emerald-800 border-emerald-200"
-            )}>
-              {isJdcoemOnly ? <GraduationCap className="w-3.5 h-3.5 text-amber-600" /> : <Globe className="w-3.5 h-3.5 text-emerald-600" />}
-              <span>{isJdcoemOnly ? "JDCOEM Students Only" : "Open Inter-College"}</span>
-            </span>
-            <span className="flex items-center gap-1.5 text-slate-700 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">
-              <Building className="w-4 h-4 text-[#17458F]" />
-              <span>Organized by {listing.organizer}</span>
-            </span>
-            {listing.deadline && (
-              <span className="flex items-center gap-1.5 text-slate-700 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">
-                <Clock className="w-4 h-4 text-[#E78023]" />
-                <span>Deadline: {listing.deadline}</span>
-              </span>
-            )}
-            {isIssue && (
-              <span className="flex items-center gap-1.5 text-rose-700 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-200">
-                <Lock className="w-3.5 h-3.5 text-rose-600" />
-                <span>Confidential Channel</span>
-              </span>
-            )}
-          </div>
+          {/* Metadata Badges & Overview: Displayed on the first section only */}
+          {isFirstSection && (
+            <>
+              {/* Metadata Badges */}
+              <div className="px-6 sm:px-8 flex flex-wrap items-center gap-3 text-xs font-bold text-slate-500">
+                {(listing.status === "closed" || listing.isAcceptingResponses === false) ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border bg-rose-50 text-rose-700 border-rose-200">
+                    <Lock className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Responses Closed</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border bg-emerald-50 text-emerald-800 border-emerald-200">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>Accepting Responses</span>
+                  </span>
+                )}
+                <span className={cn(
+                  "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border",
+                  isJdcoemOnly
+                    ? "bg-amber-50 text-amber-800 border-amber-200"
+                    : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                )}>
+                  {isJdcoemOnly ? <GraduationCap className="w-3.5 h-3.5 text-amber-600" /> : <Globe className="w-3.5 h-3.5 text-emerald-600" />}
+                  <span>{isJdcoemOnly ? "JDCOEM Students Only" : "Open Inter-College"}</span>
+                </span>
+                <span className="flex items-center gap-1.5 text-slate-700 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">
+                  <Building className="w-4 h-4 text-[#17458F]" />
+                  <span>Organized by {listing.organizer}</span>
+                </span>
+                {listing.deadline && (
+                  <span className="flex items-center gap-1.5 text-slate-700 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">
+                    <Clock className="w-4 h-4 text-[#E78023]" />
+                    <span>Deadline: {listing.deadline}</span>
+                  </span>
+                )}
+                {isIssue && (
+                  <span className="flex items-center gap-1.5 text-rose-700 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-200">
+                    <Lock className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Confidential Channel</span>
+                  </span>
+                )}
+              </div>
 
-          {/* Description Body */}
-          <div className="px-6 sm:px-8 space-y-4">
-            <h2 className="font-heading font-bold text-base text-slate-800 uppercase tracking-wider">
-              Overview &amp; Guidelines
-            </h2>
-            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-700 leading-relaxed font-sans whitespace-pre-line">
-              {listing.description || listing.summary}
-            </div>
-          </div>
+              {/* Description Body */}
+              <div className="px-6 sm:px-8 space-y-4">
+                <h2 className="font-heading font-bold text-base text-slate-800 uppercase tracking-wider">
+                  Overview &amp; Guidelines
+                </h2>
+                <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-700 leading-relaxed font-sans whitespace-pre-line">
+                  {listing.description || listing.summary}
+                </div>
+              </div>
+            </>
+          )}
 
           {/* LIVE POLL PARTICIPATION */}
           {isPoll && listing.pollConfig && (() => {
@@ -863,7 +868,7 @@ export default function ListingDetailPage() {
             const isClosed = listing.status === "closed" || listing.isAcceptingResponses === false;
 
             return (
-              <div id="apply" className="p-6 sm:p-8 border-t border-slate-200 space-y-6 scroll-mt-24">
+              <div id="apply" className={cn("p-6 sm:p-8 space-y-6 scroll-mt-24", isFirstSection && "border-t border-slate-200")}>
                 {(isIssue || isClosed) && (
                   <div className="flex items-center justify-between gap-3">
                     {isIssue && (
