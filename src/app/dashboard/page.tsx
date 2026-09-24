@@ -39,10 +39,11 @@ import {
   ClipboardList,
   Send,
   Edit2,
-  Power
+  Power,
+  MessageCircle
 } from "lucide-react";
 import { WhatsAppJoinCard } from "@/components/forms/WhatsAppJoinCard";
-import { getFormSectionGroups, getNextSectionTarget, analyzeSectionResponses } from "@/lib/srcFormsHelper";
+import { getFormSectionGroups, getNextSectionTarget, analyzeSectionResponses, getVisitedSectionPath } from "@/lib/srcFormsHelper";
 import { CancelRegistrationModal } from "@/components/registration/CancelRegistrationModal";
 import { Badge } from "@/components/ui/Badge";
 import { getDepartmentShortName, resolveCanonicalDepartmentName } from "@/lib/departmentsStore";
@@ -710,7 +711,7 @@ export default function StudentDashboardPage() {
       }
     } else {
       for (const field of dispatch.formFields) {
-        if (field.type === "note" || field.type === "section") continue;
+        if (field.type === "note" || field.type === "section" || field.type === "whatsapp_link") continue;
         if (field.required) {
           const val = answers[field.id];
           if (
@@ -736,6 +737,10 @@ export default function StudentDashboardPage() {
     try {
       const existing = userDispatchResponses.find((r) => r.dispatchId === dispatch.id);
 
+      const sectionPath = dispatch.formFields && dispatch.formFields.length > 0
+        ? getVisitedSectionPath(getFormSectionGroups(dispatch.formFields), answers)
+        : undefined;
+
       const record: SrcDispatchResponseRecord = {
         id: existing ? existing.id : `disp-resp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         dispatchId: dispatch.id,
@@ -747,6 +752,7 @@ export default function StudentDashboardPage() {
         department: user?.department || user?.facultyDepartment || "Engineering",
         year: user?.year || "Student",
         answers,
+        sectionPath,
         submittedAt: existing ? existing.submittedAt : new Date().toISOString(),
         updatedAt: existing ? new Date().toISOString() : undefined,
         status: existing ? existing.status : (dispatch.requiresApproval ? "pending" : "approved"),
@@ -1705,18 +1711,25 @@ export default function StudentDashboardPage() {
                                         </div>
                                       )}
 
-                                      {/* WhatsApp Group Join Card */}
-                                      {item.whatsappGroupUrl && (
-                                        <div className="pt-2">
-                                          <WhatsAppJoinCard
-                                            whatsappGroupUrl={item.whatsappGroupUrl}
-                                            whatsappGroupName={item.whatsappGroupName}
-                                            variant="card"
-                                            title="Official Council Operations WhatsApp Group"
-                                            subtitle="Connect with council leads, receive real-time circulars, and collaborate with members."
-                                          />
-                                        </div>
-                                      )}
+                                      {/* WhatsApp Group Join Card (Post-submission) */}
+                                      {(() => {
+                                        const inlineWa = item.formFields?.find((f) => f.type === "whatsapp_link" && f.waGroupUrl);
+                                        const effectiveWaUrl = item.whatsappGroupUrl || inlineWa?.waGroupUrl;
+                                        const effectiveWaName = item.whatsappGroupName || inlineWa?.waGroupName || inlineWa?.question || "Official WhatsApp Group";
+                                        if (!effectiveWaUrl) return null;
+
+                                        return (
+                                          <div className="pt-2">
+                                            <WhatsAppJoinCard
+                                              whatsappGroupUrl={effectiveWaUrl}
+                                              whatsappGroupName={effectiveWaName}
+                                              variant="card"
+                                              title="Official WhatsApp Group Join Link"
+                                              subtitle="Connect with coordinators, receive real-time circulars, and collaborate with members."
+                                            />
+                                          </div>
+                                        );
+                                      })()}
 
                                       {/* Submitted Answers Summary (Grouped By Section) */}
                                       {(() => {
@@ -1740,7 +1753,7 @@ export default function StudentDashboardPage() {
                                               <div className="space-y-3">
                                                 {analyzed.map((secInfo) => {
                                                   const { section, answeredCount, totalCount, isCompletelySkipped } = secInfo;
-                                                  const eligibleFields = section.fields.filter((f) => f.type !== "note" && f.type !== "section");
+                                                  const eligibleFields = section.fields.filter((f) => f.type !== "note" && f.type !== "section" && f.type !== "whatsapp_link");
 
                                                   return (
                                                     <div
@@ -1913,6 +1926,32 @@ export default function StudentDashboardPage() {
 
                                       if (field.type === "section") {
                                         return null;
+                                      }
+
+                                      // WhatsApp Group Link inline element
+                                      if (field.type === "whatsapp_link") {
+                                        const waUrl = field.waGroupUrl
+                                          ? (field.waGroupUrl.startsWith("http") ? field.waGroupUrl : `https://${field.waGroupUrl}`)
+                                          : "";
+                                        if (!waUrl) return null;
+                                        return (
+                                          <div key={field.id || idx} className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-3">
+                                            <div>
+                                              <p className="text-xs font-bold text-emerald-950">{field.question || "Join Our WhatsApp Group"}</p>
+                                              {field.description && <p className="text-[11px] text-emerald-700 mt-0.5">{field.description}</p>}
+                                              {field.waGroupName && <p className="text-[11px] text-emerald-600 font-medium">{field.waGroupName}</p>}
+                                            </div>
+                                            <a
+                                              href={waUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#25D366] text-white text-xs font-bold hover:bg-emerald-500 transition-colors"
+                                            >
+                                              <MessageCircle className="w-3.5 h-3.5 fill-white" />
+                                              <span>Join Group</span>
+                                            </a>
+                                          </div>
+                                        );
                                       }
 
                                       const qVal = currentAnswers[field.id];

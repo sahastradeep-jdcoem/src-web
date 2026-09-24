@@ -27,7 +27,10 @@ import {
   BarChart3,
   ListFilter,
   Power,
-  Pencil
+  Pencil,
+  MessageCircle,
+  ExternalLink,
+  GitBranch
 } from "lucide-react";
 import { SrcFormField } from "@/types";
 import { Button } from "@/components/ui/Button";
@@ -50,6 +53,7 @@ export interface SrcFormsResponseRecord {
   status?: "pending" | "approved" | "rejected" | "resolved" | "reviewed";
   adminFeedback?: string;
   answers: Record<string, any>;
+  sectionPath?: string[]; // Visited sections along the branching route
 }
 
 export interface SrcFormsResponseViewerProps {
@@ -93,9 +97,9 @@ export function SrcFormsResponseViewer({
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  // Non-note fields eligible for analysis
+  // Non-note, non-section, non-whatsapp fields eligible for analysis
   const activeQuestions = useMemo(() => {
-    return fields.filter((f) => f.type !== "note");
+    return fields.filter((f) => f.type !== "note" && f.type !== "section" && f.type !== "whatsapp_link");
   }, [fields]);
 
   // Aggregate Metrics & Demographics
@@ -242,6 +246,13 @@ export function SrcFormsResponseViewer({
         "Academic Year": sanitize(r.userYear || "—"),
         "Resolution Status": sanitize((r.status || "pending").toUpperCase()),
       };
+
+      if (formSections.length > 1) {
+        const visitedNames = r.sectionPath && r.sectionPath.length > 0
+          ? r.sectionPath.map((sId) => formSections.find((s) => s.id === sId)?.title || sId).join(" → ")
+          : "Standard Flow";
+        rowData["Visited Sections"] = sanitize(visitedNames);
+      }
 
       // Dedicated column for every form field prompt
       activeQuestions.forEach((q) => {
@@ -903,9 +914,52 @@ export function SrcFormsResponseViewer({
                       <p className="text-xs text-slate-400 italic">No questions defined in form.</p>
                     ) : formSections.length > 1 ? (
                       <div className="space-y-5">
+                        {/* Respondent Section Journey Path Tracker */}
+                        <div className="p-4 rounded-2xl bg-purple-50/70 border border-purple-200/80 space-y-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-extrabold uppercase tracking-wider text-purple-950 flex items-center gap-1.5 text-[11px]">
+                              <GitBranch className="w-3.5 h-3.5 text-purple-600" />
+                              Respondent Section Journey (Conditional Flow)
+                            </span>
+                            <span className="text-[10px] font-mono font-bold text-purple-700 bg-purple-100/90 px-2 py-0.5 rounded-full">
+                              {currentIndividual.sectionPath ? `${currentIndividual.sectionPath.length} Sections Visited` : "Flow Tracked"}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5 text-xs pt-0.5">
+                            {formSections.map((sec, sIdx) => {
+                              const wasVisited = currentIndividual.sectionPath && currentIndividual.sectionPath.length > 0
+                                ? currentIndividual.sectionPath.includes(sec.id)
+                                : (currentIndividualSections.find((s) => s.section.id === sec.id)?.answeredCount || 0) > 0 || sIdx === 0;
+                              return (
+                                <React.Fragment key={sec.id}>
+                                  <span
+                                    className={cn(
+                                      "px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-2xs",
+                                      wasVisited
+                                        ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                                        : "bg-slate-100 text-slate-400 border border-slate-200 line-through opacity-60"
+                                    )}
+                                  >
+                                    {wasVisited ? (
+                                      <Check className="w-3 h-3 text-emerald-600 stroke-[3]" />
+                                    ) : (
+                                      <X className="w-3 h-3 text-slate-400" />
+                                    )}
+                                    <span>Sec {sec.sectionIndex}: {sec.title}</span>
+                                  </span>
+                                  {sIdx < formSections.length - 1 && (
+                                    <span className="text-slate-300 font-bold text-xs">→</span>
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
+                          </div>
+                        </div>
+
                         {currentIndividualSections.map((secInfo) => {
                           const { section, answeredCount, totalCount, isCompletelySkipped } = secInfo;
-                          const eligibleFields = section.fields.filter((f) => f.type !== "note");
+                          const eligibleFields = section.fields.filter((f) => f.type !== "note" && f.type !== "section" && f.type !== "whatsapp_link");
+                          const waFields = section.fields.filter((f) => f.type === "whatsapp_link");
 
                           return (
                             <div
@@ -948,7 +1002,36 @@ export function SrcFormsResponseViewer({
 
                               {/* Section Fields */}
                               <div className="p-4 space-y-3">
-                                {eligibleFields.length === 0 ? (
+                                {waFields.length > 0 && !isCompletelySkipped && (
+                                  <div className="space-y-2">
+                                    {waFields.map((wa) => (
+                                      <div key={wa.id} className="p-3 rounded-xl bg-emerald-50/80 border border-emerald-200 flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2.5">
+                                          <div className="w-7 h-7 rounded-lg bg-[#25D366] text-white flex items-center justify-center shrink-0">
+                                            <MessageCircle className="w-4 h-4 fill-white" />
+                                          </div>
+                                          <div>
+                                            <p className="text-xs font-bold text-emerald-950">{wa.question || "WhatsApp Group Link"}</p>
+                                            {wa.waGroupName && <p className="text-[11px] text-emerald-700">{wa.waGroupName}</p>}
+                                          </div>
+                                        </div>
+                                        {wa.waGroupUrl && (
+                                          <a
+                                            href={wa.waGroupUrl.startsWith("http") ? wa.waGroupUrl : `https://${wa.waGroupUrl}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold inline-flex items-center gap-1 transition-colors"
+                                          >
+                                            <span>Group Link</span>
+                                            <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {eligibleFields.length === 0 && waFields.length === 0 ? (
                                   <p className="text-xs text-slate-400 italic">No questions in this section.</p>
                                 ) : isCompletelySkipped ? (
                                   <div className="p-3 rounded-xl bg-slate-100/70 border border-dashed border-slate-200 text-xs text-slate-500 italic">

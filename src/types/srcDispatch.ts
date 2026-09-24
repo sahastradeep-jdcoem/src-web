@@ -46,6 +46,7 @@ export interface SrcDispatchResponseRecord {
   adminFeedback?: string;
   adminNote?: string;
   answers: Record<string, any>;
+  sectionPath?: string[]; // Ordered list of section IDs the respondent visited
 }
 
 export interface SrcDispatch {

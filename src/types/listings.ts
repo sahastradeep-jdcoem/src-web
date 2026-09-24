@@ -141,6 +141,7 @@ export interface ListingResponseRecord {
 
   // Responses
   answers?: Record<string, any>;
+  sectionPath?: string[];         // Visited sections along conditional branching path
   selectedOptionIds?: string[];   // For polls
   fileUrl?: string;               // For submissions
   submissionLink?: string;        // External portfolio/repo link

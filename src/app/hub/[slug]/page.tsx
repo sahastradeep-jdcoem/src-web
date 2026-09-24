@@ -27,8 +27,11 @@ import {
   Sliders,
   ArrowRight,
   ExternalLink,
-  LogIn
+  LogIn,
+  MessageCircle
 } from "lucide-react";
+import { WhatsAppJoinCard } from "@/components/forms/WhatsAppJoinCard";
+import { getFormSectionGroups, getVisitedSectionPath } from "@/lib/srcFormsHelper";
 import { Button } from "@/components/ui/Button";
 import { DEFAULT_DEPARTMENTS } from "@/data/departments";
 import { 
@@ -312,7 +315,7 @@ export default function ListingDetailPage() {
     // Validate required dynamic custom questions
     if (listing.customQuestions) {
       for (const q of listing.customQuestions) {
-        if (q.required && q.type !== "note") {
+        if (q.required && q.type !== "note" && q.type !== "section" && q.type !== "whatsapp_link") {
           const val = customAnswers[q.id];
           if (q.type === "checkboxes") {
             if (!Array.isArray(val) || val.length === 0) {
@@ -332,6 +335,10 @@ export default function ListingDetailPage() {
     const isUpdate = Boolean(existingResponse);
     const ticketCode = existingResponse?.ticketCode || `SRC-${listing.type.toUpperCase().slice(0, 3)}-${Math.floor(10000 + Math.random() * 90000)}`;
 
+    const sectionPath = listing.customQuestions && listing.customQuestions.length > 0
+      ? getVisitedSectionPath(getFormSectionGroups(listing.customQuestions), customAnswers)
+      : undefined;
+
     const responseRecord: ListingResponseRecord = {
       id: existingResponse ? existingResponse.id : `resp-${Date.now()}`,
       listingId: listing.id,
@@ -346,6 +353,7 @@ export default function ListingDetailPage() {
       btId: candidateBtId || existingResponse?.btId || undefined,
       isAnonymous: Boolean(listing.issueConfig?.allowAnonymous),
       answers: Object.keys(customAnswers).length > 0 ? customAnswers : undefined,
+      sectionPath,
       submissionLink: submissionLink || undefined,
       ticketCode,
       status: existingResponse?.status || (listing.requiresApproval === false ? "reviewed" : "pending"),
@@ -759,6 +767,23 @@ export default function ListingDetailPage() {
                       <span className="text-[10px] uppercase font-bold text-slate-400 block">Reference ID</span>
                       <span className="font-mono font-extrabold text-lg text-[#17458F]">{receiptCode}</span>
                     </div>
+                    {(() => {
+                      const waField = listing.customQuestions?.find((q) => q.type === "whatsapp_link" && q.waGroupUrl);
+                      const effectiveWaUrl = listing.whatsappGroupUrl || waField?.waGroupUrl;
+                      const effectiveWaName = listing.whatsappGroupName || waField?.waGroupName || waField?.question || "Official WhatsApp Group";
+                      if (!effectiveWaUrl) return null;
+                      return (
+                        <div className="pt-2 max-w-sm mx-auto text-left">
+                          <WhatsAppJoinCard
+                            whatsappGroupUrl={effectiveWaUrl}
+                            whatsappGroupName={effectiveWaName}
+                            variant="card"
+                            title="Official WhatsApp Group"
+                            subtitle="Join the group for quick updates and coordinator contact."
+                          />
+                        </div>
+                      );
+                    })()}
                     <Link
                       href="/dashboard"
                       className="inline-block px-5 py-2 rounded-xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider"
@@ -840,7 +865,7 @@ export default function ListingDetailPage() {
 
                         {listing.customQuestions && listing.customQuestions.length > 0 && (
                           <div className="space-y-2.5 pt-1">
-                            {listing.customQuestions.filter(q => q.type !== "note").map((q) => {
+                            {listing.customQuestions.filter(q => q.type !== "note" && q.type !== "section" && q.type !== "whatsapp_link").map((q) => {
                               const ans = existingResponse.answers?.[q.id];
                               return (
                                 <div key={q.id} className="space-y-1">
@@ -853,6 +878,25 @@ export default function ListingDetailPage() {
                             })}
                           </div>
                         )}
+
+                        {/* WhatsApp Group Join Card for existing submission */}
+                        {(() => {
+                          const waField = listing.customQuestions?.find((q) => q.type === "whatsapp_link" && q.waGroupUrl);
+                          const effectiveWaUrl = listing.whatsappGroupUrl || waField?.waGroupUrl;
+                          const effectiveWaName = listing.whatsappGroupName || waField?.waGroupName || waField?.question || "Official WhatsApp Group";
+                          if (!effectiveWaUrl) return null;
+                          return (
+                            <div className="pt-2">
+                              <WhatsAppJoinCard
+                                whatsappGroupUrl={effectiveWaUrl}
+                                whatsappGroupName={effectiveWaName}
+                                variant="card"
+                                title="Official WhatsApp Group"
+                                subtitle="Join the group for real-time circulars, coordinator updates, and team collaboration."
+                              />
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
 
@@ -1062,6 +1106,47 @@ export default function ListingDetailPage() {
                               {q.noteContent}
                             </p>
                           )}
+                        </div>
+                      );
+                    }
+
+                    if (q.type === "section") {
+                      return (
+                        <div key={q.id} className="p-3.5 rounded-2xl bg-purple-50/80 border border-purple-200/80 space-y-1 my-3">
+                          <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-purple-200/60 text-purple-900">
+                            Section Break
+                          </span>
+                          <h4 className="font-heading font-extrabold text-sm text-purple-950">
+                            {q.question}
+                          </h4>
+                          {q.description && (
+                            <p className="text-xs text-purple-800">{q.description}</p>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    if (q.type === "whatsapp_link") {
+                      const waUrl = q.waGroupUrl
+                        ? (q.waGroupUrl.startsWith("http") ? q.waGroupUrl : `https://${q.waGroupUrl}`)
+                        : "";
+                      if (!waUrl) return null;
+                      return (
+                        <div key={q.id} className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-3 my-2">
+                          <div>
+                            <p className="text-xs font-bold text-emerald-950">{q.question || "Join Our WhatsApp Group"}</p>
+                            {q.description && <p className="text-[11px] text-emerald-700 mt-0.5">{q.description}</p>}
+                            {q.waGroupName && <p className="text-[11px] text-emerald-600 font-medium">{q.waGroupName}</p>}
+                          </div>
+                          <a
+                            href={waUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#25D366] text-white text-xs font-bold hover:bg-emerald-500 transition-colors"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5 fill-white" />
+                            <span>Join</span>
+                          </a>
                         </div>
                       );
                     }

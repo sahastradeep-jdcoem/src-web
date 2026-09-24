@@ -30,7 +30,8 @@ export type SrcFormFieldType =
   | "checkboxes" 
   | "dropdown" 
   | "note"
-  | "section";
+  | "section"
+  | "whatsapp_link";
 
 export type SrcFormQuestionType = SrcFormFieldType;
 export type CustomQuestionType = SrcFormFieldType;
@@ -47,6 +48,9 @@ export interface SrcFormField {
   sectionId?: string; // Which section this question belongs to
   goToSection?: Record<string, string>; // Option-level routing: optionValue -> targetSectionId | "next" | "submit"
   afterSection?: "next" | "submit" | string; // For section headers: where to go after this section (default: "next")
+  // WhatsApp Group Link inline element (type === "whatsapp_link")
+  waGroupUrl?: string;   // e.g. https://chat.whatsapp.com/inviteCode
+  waGroupName?: string;  // Display name shown on the join card
 }
 
 export interface SrcFormSection {

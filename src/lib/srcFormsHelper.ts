@@ -9,9 +9,17 @@ export interface FormSectionGroup {
   fields: SrcFormField[];
 }
 
+export interface SectionValidationIssue {
+  type: "orphaned_ref" | "circular" | "unreachable" | "self_loop";
+  message: string;
+  fieldId?: string;
+  sectionId?: string;
+}
+
 /**
  * Partitions flat form fields into Google Forms–style sections.
  * If no section dividers exist, returns 1 default section holding all fields.
+ * whatsapp_link fields are treated as regular fields (non-branching).
  */
 export function getFormSectionGroups(fields: SrcFormField[] = []): FormSectionGroup[] {
   const sections: FormSectionGroup[] = [];
@@ -72,7 +80,7 @@ export function getFormSectionGroups(fields: SrcFormField[] = []): FormSectionGr
 
 /**
  * Computes the next destination section ID or 'submit' based on:
- * 1. Question-level 'Go to section based on answer' branching
+ * 1. Question-level 'Go to section based on answer' branching (multiple_choice, dropdown, checkboxes)
  * 2. Section-level 'afterSection' routing rules
  */
 export function getNextSectionTarget(
@@ -86,18 +94,35 @@ export function getNextSectionTarget(
       ? allSections[currentIdx + 1].id
       : "submit";
 
-  // 1. Check for option-level branching rule on answered multiple-choice or dropdown questions
+  // 1. Check for option-level branching rule on answered multiple-choice, dropdown, or checkboxes
   for (const field of currentSection.fields) {
-    if (field.goToSection && (field.type === "multiple_choice" || field.type === "dropdown")) {
+    if (
+      field.goToSection &&
+      (field.type === "multiple_choice" ||
+        field.type === "dropdown" ||
+        field.type === "checkboxes")
+    ) {
       const selectedVal = answers[field.id];
+
       if (selectedVal && typeof selectedVal === "string") {
+        // Single value (multiple_choice or dropdown)
         const target = field.goToSection[selectedVal];
         if (target) {
           if (target === "submit") return "submit";
           if (target === "next") return nextSequentialId;
-          // Verify target section exists
           const exists = allSections.some((s) => s.id === target);
           if (exists) return target;
+        }
+      } else if (Array.isArray(selectedVal) && selectedVal.length > 0) {
+        // Checkboxes — use the first selected option's routing rule
+        for (const val of selectedVal) {
+          const target = field.goToSection[val];
+          if (target) {
+            if (target === "submit") return "submit";
+            if (target === "next") return nextSequentialId;
+            const exists = allSections.some((s) => s.id === target);
+            if (exists) return target;
+          }
         }
       }
     }
@@ -116,6 +141,39 @@ export function getNextSectionTarget(
 }
 
 /**
+ * Simulates a respondent's path through sections given a complete answers map.
+ * Returns the ordered list of section IDs the respondent would visit.
+ * Stops at "submit" or if a cycle is detected (max 50 hops).
+ */
+export function getVisitedSectionPath(
+  allSections: FormSectionGroup[],
+  answers: Record<string, any>
+): string[] {
+  if (allSections.length === 0) return [];
+
+  const visited: string[] = [];
+  const seen = new Set<string>();
+  let currentId = allSections[0].id;
+
+  let hops = 0;
+  while (hops < 50) {
+    hops++;
+    if (seen.has(currentId)) break; // Cycle guard
+    seen.add(currentId);
+
+    const section = allSections.find((s) => s.id === currentId);
+    if (!section) break;
+    visited.push(currentId);
+
+    const next = getNextSectionTarget(section, allSections, answers);
+    if (next === "submit") break;
+    currentId = next;
+  }
+
+  return visited;
+}
+
+/**
  * Determines which sections have answers recorded for response presentation.
  */
 export function analyzeSectionResponses(
@@ -124,9 +182,12 @@ export function analyzeSectionResponses(
 ) {
   return sections.map((sec) => {
     let answeredCount = 0;
-    const nonNoteFields = sec.fields.filter((f) => f.type !== "note");
+    // Exclude non-interactive fields (note, section, whatsapp_link)
+    const answerableFields = sec.fields.filter(
+      (f) => f.type !== "note" && f.type !== "whatsapp_link"
+    );
 
-    nonNoteFields.forEach((f) => {
+    answerableFields.forEach((f) => {
       const val = answers[f.id];
       if (val !== undefined && val !== null && val !== "") {
         if (Array.isArray(val) && val.length === 0) return;
@@ -137,11 +198,95 @@ export function analyzeSectionResponses(
     return {
       section: sec,
       answeredCount,
-      totalCount: nonNoteFields.length,
+      totalCount: answerableFields.length,
       isAnswered: answeredCount > 0,
-      isCompletelySkipped: answeredCount === 0 && nonNoteFields.length > 0,
+      isCompletelySkipped: answeredCount === 0 && answerableFields.length > 0,
     };
   });
+}
+
+/**
+ * Validates the section routing graph for common issues.
+ * Returns a list of issues the form builder can surface to the creator.
+ */
+export function validateSectionGraph(
+  fields: SrcFormField[]
+): SectionValidationIssue[] {
+  const sections = getFormSectionGroups(fields);
+  const issues: SectionValidationIssue[] = [];
+  const sectionIds = new Set(sections.map((s) => s.id));
+
+  for (const section of sections) {
+    // Check section-level afterSection refs
+    const rule = section.afterSection;
+    if (rule && rule !== "next" && rule !== "submit") {
+      if (!sectionIds.has(rule)) {
+        issues.push({
+          type: "orphaned_ref",
+          message: `Section "${section.title}" routes to a deleted or missing section.`,
+          sectionId: section.id,
+        });
+      }
+      if (rule === section.id) {
+        issues.push({
+          type: "self_loop",
+          message: `Section "${section.title}" routes to itself.`,
+          sectionId: section.id,
+        });
+      }
+    }
+
+    // Check field-level goToSection refs
+    for (const field of section.fields) {
+      if (!field.goToSection) continue;
+      for (const [opt, target] of Object.entries(field.goToSection)) {
+        if (target && target !== "next" && target !== "submit") {
+          if (!sectionIds.has(target)) {
+            issues.push({
+              type: "orphaned_ref",
+              message: `Option "${opt}" in question "${field.question || field.id}" routes to a deleted section.`,
+              fieldId: field.id,
+              sectionId: section.id,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Detect unreachable sections (sections that no route points to)
+  if (sections.length > 1) {
+    const reachable = new Set<string>([sections[0].id]);
+    for (const section of sections) {
+      const rule = section.afterSection;
+      if (rule && rule !== "next" && rule !== "submit" && sectionIds.has(rule)) {
+        reachable.add(rule);
+      }
+      for (const field of section.fields) {
+        if (!field.goToSection) continue;
+        for (const target of Object.values(field.goToSection)) {
+          if (target && target !== "next" && target !== "submit" && sectionIds.has(target)) {
+            reachable.add(target);
+          }
+        }
+      }
+      // Sequential fallback
+      const idx = sections.findIndex((s) => s.id === section.id);
+      if (idx < sections.length - 1) reachable.add(sections[idx + 1].id);
+    }
+
+    for (const section of sections) {
+      if (!reachable.has(section.id)) {
+        issues.push({
+          type: "unreachable",
+          message: `Section "${section.title}" may be unreachable — no route points to it.`,
+          sectionId: section.id,
+        });
+      }
+    }
+  }
+
+  return issues;
 }
 
 /**
