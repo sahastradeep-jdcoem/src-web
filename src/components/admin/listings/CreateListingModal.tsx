@@ -10,6 +10,7 @@ import {
   UploadCloud, 
   ShieldAlert, 
   ArrowRight, 
+  ArrowLeft,
   Plus, 
   Trash2, 
   CheckCircle2,
@@ -737,33 +738,113 @@ export function CreateListingModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200 modal-overlay-container">
       <div className="relative w-full max-w-4xl rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden my-auto font-sans flex flex-col modal-dialog-card">
         
-        {/* Header Strip */}
-        <div className="px-6 py-5 bg-gradient-to-r from-slate-900 to-[#17458F] text-white flex items-center justify-between border-b border-white/10 shrink-0">
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-[#E78023] text-white shadow-xs">
-                {mode === "edit" ? "EDIT ACTIVE LISTING" : "SRC ENGAGEMENT STUDIO"}
-              </span>
-              {step === "configure_form" && selectedPillarOption && (
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300">
-                  • {selectedPillarOption.title}
+        {/* Header Strip with Integrated Section Tabs */}
+        <div className="px-5 py-3.5 bg-gradient-to-r from-slate-900 to-[#17458F] text-white flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/10 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {step === "configure_form" && mode !== "edit" && (
+              <button
+                type="button"
+                onClick={handleBackToSelect}
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer shrink-0"
+                title="Choose different type"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+            )}
+            <div className="space-y-0.5 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-[#E78023] text-white shadow-xs">
+                  {mode === "edit" ? "EDIT ACTIVE" : "SRC ENGAGEMENT STUDIO"}
                 </span>
-              )}
+                {step === "configure_form" && selectedPillarOption && (
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 truncate">
+                    • {selectedPillarOption.title}
+                  </span>
+                )}
+              </div>
+              <h2 className="font-heading font-extrabold text-base sm:text-lg text-white uppercase tracking-tight truncate">
+                {mode === "edit"
+                  ? `Edit ${selectedPillarOption?.title || "Listing"}`
+                  : step === "select_type"
+                  ? "What would you like to publish?"
+                  : `Create ${selectedPillarOption?.title}`}
+              </h2>
             </div>
-            <h2 className="font-heading font-extrabold text-lg sm:text-xl text-white uppercase tracking-tight">
-              {mode === "edit"
-                ? `Edit ${selectedPillarOption?.title || "Listing"}`
-                : step === "select_type"
-                ? "What would you like to publish?"
-                : `Create ${selectedPillarOption?.title}`}
-            </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+
+          {/* Section Tabs shifted right into the blue gradient header */}
+          {step === "configure_form" && selectedPillarOption && (
+            <div className="flex items-center gap-1.5 bg-black/20 backdrop-blur-xs p-1 rounded-2xl border border-white/15 overflow-x-auto no-scrollbar shrink-0">
+              {sections.map((sec) => {
+                const Icon = sec.icon;
+                const isActive = activeSection === sec.id;
+
+                let badge = "";
+                if (sec.id === "details") {
+                  badge = title.trim() ? "Ready" : "Required";
+                } else if (sec.id === "setup") {
+                  if (selectedPillarOption.type === "poll") {
+                    badge = `${pollOptions.filter((o) => o.trim()).length} Choices`;
+                  } else if (selectedPillarOption.type === "opportunity") {
+                    badge = oppRoleType;
+                  } else if (selectedPillarOption.type === "submission") {
+                    badge = `${subAllowedTypes.length} Types`;
+                  } else if (selectedPillarOption.type === "issue") {
+                    badge = issuePriority;
+                  } else {
+                    badge = "Setup";
+                  }
+                } else if (sec.id === "visuals") {
+                  badge = coverImage ? "Asset Set" : "Default";
+                } else if (sec.id === "qa") {
+                  const qCount = customQuestions.filter(q => q.type !== "section" && q.type !== "whatsapp_link" && q.type !== "note").length;
+                  badge = qCount > 0 ? `${qCount} Qs` : "0 Qs";
+                }
+
+                return (
+                  <button
+                    key={sec.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveSection(sec.id);
+                      setFormError(null);
+                    }}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 select-none",
+                      isActive
+                        ? "bg-white text-[#17458F] shadow-sm font-extrabold"
+                        : "text-white/80 hover:text-white hover:bg-white/10"
+                    )}
+                  >
+                    <Icon className={cn("w-3.5 h-3.5", isActive ? "text-[#E78023]" : "text-white/70")} />
+                    <span>{sec.label}</span>
+                    {badge && (
+                      <span
+                        className={cn(
+                          "text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-md leading-none",
+                          isActive
+                            ? "bg-[#17458F]/10 text-[#17458F]"
+                            : "bg-white/15 text-white/90 border border-white/20"
+                        )}
+                      >
+                        {badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* STEP 1: CATEGORY PICKER */}
@@ -820,106 +901,7 @@ export function CreateListingModal({
         {step === "configure_form" && selectedPillarOption && (
           <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 text-left">
             
-            {/* Top Navigation & Segmented Tabs Strip */}
-            <div className="p-4 sm:px-6 bg-slate-50/90 border-b border-slate-200 shrink-0 space-y-3">
-              <div className="flex items-center justify-between">
-                {mode !== "edit" ? (
-                  <button
-                    type="button"
-                    onClick={handleBackToSelect}
-                    className="text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-[#17458F] flex items-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    &larr; Choose Different Type
-                  </button>
-                ) : (
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                    Editing Mode ({selectedPillarOption.title})
-                  </span>
-                )}
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#17458F]/10 text-[#17458F]">
-                    {selectedPillarOption.pillar}
-                  </span>
-                  <span className="text-xs font-bold text-[#E78023] uppercase tracking-wider hidden sm:inline">
-                    {mode === "edit" ? "Direct Cloud Update" : "Publishing to Live Hub"}
-                  </span>
-                </div>
-              </div>
 
-              {/* Segmented Section Tabs */}
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-                {sections.map((sec) => {
-                  const Icon = sec.icon;
-                  const isActive = activeSection === sec.id;
-                  
-                  // Compute dynamic micro badge
-                  let badge = "";
-                  if (sec.id === "details") {
-                    badge = title.trim() ? "Ready" : "Required";
-                  } else if (sec.id === "setup") {
-                    if (selectedPillarOption.type === "poll") {
-                      badge = `${pollOptions.filter((o) => o.trim()).length} Choices`;
-                    } else if (selectedPillarOption.type === "opportunity") {
-                      badge = oppRoleType;
-                    } else if (selectedPillarOption.type === "submission") {
-                      badge = `${subAllowedTypes.length} Types`;
-                    } else if (selectedPillarOption.type === "issue") {
-                      badge = issuePriority;
-                    } else {
-                      badge = "Setup";
-                    }
-                  } else if (sec.id === "visuals") {
-                    badge = coverImage ? "Asset Set" : "Default";
-                  } else if (sec.id === "qa") {
-                    const qCount = customQuestions.filter(q => q.type !== "section" && q.type !== "whatsapp_link" && q.type !== "note").length;
-                    badge = qCount > 0 ? `${qCount} Qs` : "0 Qs";
-                  }
-
-                  return (
-                    <button
-                      key={sec.id}
-                      type="button"
-                      onClick={() => {
-                        setActiveSection(sec.id);
-                        setFormError(null);
-                      }}
-                      className={cn(
-                        "flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 border select-none",
-                        isActive
-                          ? "bg-[#17458F] text-white border-[#17458F] shadow-sm shadow-blue-900/20"
-                          : "bg-white hover:bg-slate-100 text-slate-600 border-slate-200/90 hover:text-slate-900"
-                      )}
-                    >
-                      <Icon className={cn("w-3.5 h-3.5", isActive ? "text-[#E78023]" : "text-slate-400")} />
-                      <span>{sec.label}</span>
-                      {badge && (
-                        <span
-                          className={cn(
-                            "text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-md leading-none",
-                            isActive
-                              ? "bg-white/20 text-white"
-                              : "bg-slate-100 text-slate-700 border border-slate-200"
-                          )}
-                        >
-                          {badge}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Active Section Description Bar */}
-              <div className="flex items-center justify-between text-slate-500 text-[11px] pt-0.5">
-                <span className="font-semibold text-slate-700 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#E78023]" />
-                  {sections[currentSectionIndex]?.description}
-                </span>
-                <span className="font-mono text-[10px] text-slate-400">
-                  Section {currentSectionIndex + 1} of {sections.length}
-                </span>
-              </div>
-            </div>
 
             {/* Validation Alert */}
             {formError && (

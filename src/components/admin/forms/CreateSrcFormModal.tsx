@@ -364,32 +364,79 @@ export function CreateSrcFormModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="relative w-full max-w-5xl h-[92vh] sm:h-[88vh] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 text-left">
         
-        {/* MODAL HEADER */}
-        <div className="flex items-center justify-between p-4 sm:px-6 bg-slate-900 text-white shrink-0 border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md">
+        {/* MODAL HEADER WITH INTEGRATED TABS */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:px-6 bg-slate-900 text-white shrink-0 border-b border-slate-800">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2.5 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md shrink-0">
               <ClipboardList className="w-5 h-5" />
             </div>
-            <div>
+            <div className="space-y-0.5 min-w-0">
               <div className="flex items-center gap-2">
-                <h2 className="font-heading font-extrabold text-base sm:text-lg tracking-tight uppercase">
+                <h2 className="font-heading font-extrabold text-base sm:text-lg tracking-tight uppercase truncate">
                   {mode === "edit" ? "EDIT SRC FORM" : "CREATE NEW SRC FORM"}
                 </h2>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold uppercase tracking-wider">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold uppercase tracking-wider shrink-0">
                   SRC Operations
                 </span>
               </div>
-              <p className="text-xs text-slate-400 font-sans hidden sm:block">
-                Design custom council questionnaires, member intakes, and operational surveys.
-              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Section Tabs integrated into header */}
+          <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-xs p-1 rounded-2xl border border-white/10 overflow-x-auto no-scrollbar shrink-0">
+            {SECTIONS.map((sec) => {
+              const Icon = sec.icon;
+              const isActive = activeSection === sec.id;
+
+              let badge = "";
+              if (sec.id === "details") {
+                badge = title.trim() ? "Ready" : "Required";
+              } else if (sec.id === "visuals") {
+                badge = coverImage ? "Cover Set" : "Default";
+              } else if (sec.id === "qa") {
+                const qCount = formFields.filter(q => q.type !== "section" && q.type !== "whatsapp_link" && q.type !== "note").length;
+                badge = qCount > 0 ? `${qCount} Qs` : "0 Qs";
+              }
+
+              return (
+                <button
+                  key={sec.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveSection(sec.id);
+                    setFormError(null);
+                  }}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 select-none",
+                    isActive
+                      ? "bg-white text-slate-900 shadow-sm font-extrabold"
+                      : "text-white/80 hover:text-white hover:bg-white/10"
+                  )}
+                >
+                  <Icon className={cn("w-3.5 h-3.5", isActive ? "text-[#E78023]" : "text-white/70")} />
+                  <span>{sec.label}</span>
+                  {badge && (
+                    <span
+                      className={cn(
+                        "text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-md leading-none",
+                        isActive
+                          ? "bg-slate-100 text-slate-800"
+                          : "bg-white/15 text-white/90 border border-white/20"
+                      )}
+                    >
+                      {badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
               aria-label="Close modal"
             >
               <X className="w-5 h-5" />
@@ -399,84 +446,7 @@ export function CreateSrcFormModal({
 
         {/* STEPPER / FORM CONTENT CONTAINER */}
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 text-left">
-          
-          {/* Top Navigation & Segmented Tabs Strip */}
-          <div className="p-4 sm:px-6 bg-slate-50/90 border-b border-slate-200 shrink-0 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                {mode === "edit" ? "Editing Mode" : "Creation Studio"} (Council Form)
-              </span>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  SRC Forms Desk
-                </span>
-                <span className="text-xs font-bold text-[#E78023] uppercase tracking-wider hidden sm:inline">
-                  {mode === "edit" ? "Direct Cloud Update" : "Publishing to Council Desk"}
-                </span>
-              </div>
-            </div>
 
-            {/* Segmented Section Tabs */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-              {SECTIONS.map((sec) => {
-                const Icon = sec.icon;
-                const isActive = activeSection === sec.id;
-                
-                // Compute dynamic micro badge
-                let badge = "";
-                if (sec.id === "details") {
-                  badge = title.trim() ? "Ready" : "Required";
-                } else if (sec.id === "visuals") {
-                  badge = coverImage ? "Cover Set" : "Default";
-                } else if (sec.id === "qa") {
-                  badge = formFields.length > 0 ? `${formFields.length} Qs` : "0 Qs";
-                }
-
-                return (
-                  <button
-                    key={sec.id}
-                    type="button"
-                    onClick={() => {
-                      setActiveSection(sec.id);
-                      setFormError(null);
-                    }}
-                    className={cn(
-                      "flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 border select-none",
-                      isActive
-                        ? "bg-[#17458F] text-white border-[#17458F] shadow-sm shadow-blue-900/20"
-                        : "bg-white hover:bg-slate-100 text-slate-600 border-slate-200/90 hover:text-slate-900"
-                    )}
-                  >
-                    <Icon className={cn("w-3.5 h-3.5", isActive ? "text-[#E78023]" : "text-slate-400")} />
-                    <span>{sec.label}</span>
-                    {badge && (
-                      <span
-                        className={cn(
-                          "text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-md leading-none",
-                          isActive
-                            ? "bg-white/20 text-white"
-                            : "bg-slate-100 text-slate-700 border border-slate-200"
-                        )}
-                      >
-                        {badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Active Section Description Bar */}
-            <div className="flex items-center justify-between text-slate-500 text-[11px] pt-0.5">
-              <span className="font-semibold text-slate-700 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#E78023]" />
-                {SECTIONS[currentSectionIndex]?.description}
-              </span>
-              <span className="font-mono text-[10px] text-slate-400">
-                Section {currentSectionIndex + 1} of {SECTIONS.length}
-              </span>
-            </div>
-          </div>
 
           {/* Validation Alert */}
           {formError && (
