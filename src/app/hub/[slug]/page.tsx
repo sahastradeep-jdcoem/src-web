@@ -330,6 +330,30 @@ export default function ListingDetailPage() {
 
   const isLastStep = activeRouteInfo.isLastStep;
 
+  const scrollToFormTop = () => {
+    if (typeof window === "undefined") return;
+    const card = document.getElementById("form-card-root") || document.getElementById("apply");
+    if (card) {
+      const yOffset = -76;
+      const y = card.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+    }
+  };
+
+  const scrollToField = (fieldId: string) => {
+    if (typeof window === "undefined") return;
+    const el = document.getElementById(`field-${fieldId}`) || document.getElementById(`field-container-${fieldId}`);
+    if (el) {
+      const yOffset = -110;
+      const y = el.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+      const focusable = (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT")
+        ? el
+        : el.querySelector("input, textarea, select, button");
+      (focusable as HTMLElement)?.focus?.();
+    }
+  };
+
   const handleNextSection = () => {
     if (!currentSection) return;
 
@@ -337,14 +361,17 @@ export default function ListingDetailPage() {
     if (isFirstSection) {
       if (!candidateName.trim()) {
         showToast("Please enter your full name.");
+        scrollToField("candidateName");
         return;
       }
       if (!candidateEmail.trim() || !candidateEmail.includes("@")) {
         showToast("Please enter a valid email address.");
+        scrollToField("candidateEmail");
         return;
       }
       if (listing?.type === "submission" && !submissionLink.trim()) {
         showToast("Please provide your submission drive/portfolio link.");
+        scrollToField("submissionLink");
         return;
       }
     }
@@ -362,6 +389,7 @@ export default function ListingDetailPage() {
           (Array.isArray(val) && val.length === 0)
         ) {
           showToast(`Please answer required question: "${q.question}"`);
+          scrollToField(q.id);
           return;
         }
       }
@@ -373,9 +401,7 @@ export default function ListingDetailPage() {
     } else {
       setSectionHistory((prev) => [...prev, currentSection.id]);
       setActiveSectionId(target);
-      if (typeof window !== "undefined") {
-        document.getElementById("hub-form-container")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
+      scrollToFormTop();
     }
   };
 
@@ -384,9 +410,7 @@ export default function ListingDetailPage() {
     const prevSecId = sectionHistory[sectionHistory.length - 1];
     setSectionHistory((prev) => prev.slice(0, -1));
     setActiveSectionId(prevSecId);
-    if (typeof window !== "undefined") {
-      document.getElementById("hub-form-container")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    scrollToFormTop();
   };
 
   const handleFormSubmit = (e?: React.FormEvent) => {
@@ -409,14 +433,17 @@ export default function ListingDetailPage() {
     // Validate participant identity
     if (!candidateName.trim()) {
       showToast("Please enter your full name.");
+      scrollToField("candidateName");
       return;
     }
     if (!candidateEmail.trim() || !candidateEmail.includes("@")) {
       showToast("Please enter a valid email address.");
+      scrollToField("candidateEmail");
       return;
     }
     if (listing.type === "submission" && !submissionLink.trim()) {
       showToast("Please provide your submission drive/portfolio link.");
+      scrollToField("submissionLink");
       return;
     }
 
@@ -441,6 +468,7 @@ export default function ListingDetailPage() {
             ) {
               setActiveSectionId(curSec.id);
               showToast(`Please answer required question: "${field.question}"`);
+              setTimeout(() => scrollToField(field.id), 60);
               return;
             }
           }
@@ -463,6 +491,7 @@ export default function ListingDetailPage() {
             (Array.isArray(val) && val.length === 0)
           ) {
             showToast(`Please answer required question: "${q.question}"`);
+            scrollToField(q.id);
             return;
           }
         }
@@ -513,9 +542,11 @@ export default function ListingDetailPage() {
       if (isUpdate) {
         setIsEditingResponse(false);
         showToast("Your response has been updated successfully!");
+        scrollToFormTop();
       } else {
         setReceiptCode(ticketCode);
         setSubmittedSectionPath(finalSectionPath);
+        scrollToFormTop();
       }
       try {
         confetti({ particleCount: 90, spread: 80, origin: { y: 0.5 } });
@@ -600,7 +631,7 @@ export default function ListingDetailPage() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 space-y-8">
         
         {/* Main Card */}
-        <div className="rounded-3xl bg-white border border-slate-200 shadow-sm overflow-hidden space-y-6">
+        <div id="form-card-root" className="rounded-3xl bg-white border border-slate-200 shadow-sm overflow-hidden space-y-6 scroll-mt-24 sm:scroll-mt-28">
           
           {/* Cover Header */}
           {listing.coverImage ? (
@@ -1080,6 +1111,7 @@ export default function ListingDetailPage() {
                             setIsEditingResponse(true);
                             setActiveSectionId(formSections[0]?.id || "section-1");
                             setSectionHistory([]);
+                            scrollToFormTop();
                           }}
                           className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer"
                         >
@@ -1201,9 +1233,16 @@ export default function ListingDetailPage() {
                           {activeRouteInfo.progressPercent}% Completed
                         </span>
                       </div>
-                      <div className="w-full h-1.5 bg-slate-200/80 rounded-full overflow-hidden">
+                      <div
+                        role="progressbar"
+                        aria-valuenow={activeRouteInfo.progressPercent}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={`Form completion progress: ${activeRouteInfo.progressPercent}%`}
+                        className="w-full h-1.5 bg-slate-200/80 rounded-full overflow-hidden"
+                      >
                         <div
-                          className="h-full bg-[#17458F] transition-all duration-300 rounded-full"
+                          className="h-full bg-[#17458F] transition-all duration-500 ease-out rounded-full"
                           style={{ width: `${activeRouteInfo.progressPercent}%` }}
                         />
                       </div>
@@ -1224,44 +1263,49 @@ export default function ListingDetailPage() {
                   {(isFirstSection || formSections.length <= 1) && (
                     <div className="space-y-4 pt-1">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                            Full Name *
+                        <div id="field-container-candidateName" className="space-y-1">
+                          <label htmlFor="field-candidateName" className="text-[10px] font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
+                            <span>Full Name</span>
+                            <span className="text-rose-500 font-bold">*</span>
                           </label>
                           <input
+                            id="field-candidateName"
                             type="text"
                             required
                             value={candidateName}
                             onChange={(e) => setCandidateName(e.target.value)}
-                            className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                            className="w-full px-3.5 py-3 sm:py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-base sm:text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/15 transition-all"
                           />
                         </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                            Email Address *
+                        <div id="field-container-candidateEmail" className="space-y-1">
+                          <label htmlFor="field-candidateEmail" className="text-[10px] font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
+                            <span>Email Address</span>
+                            <span className="text-rose-500 font-bold">*</span>
                           </label>
                           <input
+                            id="field-candidateEmail"
                             type="email"
                             required
                             value={candidateEmail}
                             onChange={(e) => setCandidateEmail(e.target.value)}
-                            className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                            className="w-full px-3.5 py-3 sm:py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-base sm:text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/15 transition-all"
                           />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
+                        <div id="field-container-candidateDept">
+                          <label htmlFor="field-candidateDept" className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
                             Department
                           </label>
                           <input
+                            id="field-candidateDept"
                             type="text"
                             list="hub-dept-list"
                             value={candidateDept}
                             onChange={(e) => setCandidateDept(e.target.value)}
                             placeholder="Select or enter department"
-                            className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium"
+                            className="w-full px-3.5 py-3 sm:py-2 rounded-xl bg-slate-50 border border-slate-200 text-base sm:text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/15 transition-all"
                           />
                           <datalist id="hub-dept-list">
                             {DEFAULT_DEPARTMENTS.map((d) => (
@@ -1269,43 +1313,47 @@ export default function ListingDetailPage() {
                             ))}
                           </datalist>
                         </div>
-                        <div>
-                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
+                        <div id="field-container-candidateYear">
+                          <label htmlFor="field-candidateYear" className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
                             Academic Year
                           </label>
                           <input
+                            id="field-candidateYear"
                             type="text"
                             value={candidateYear}
                             onChange={(e) => setCandidateYear(e.target.value)}
-                            className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium"
+                            className="w-full px-3.5 py-3 sm:py-2 rounded-xl bg-slate-50 border border-slate-200 text-base sm:text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/15 transition-all"
                           />
                         </div>
-                        <div>
-                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
+                        <div id="field-container-candidateBtId">
+                          <label htmlFor="field-candidateBtId" className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
                             BT ID
                           </label>
                           <input
+                            id="field-candidateBtId"
                             type="text"
                             value={candidateBtId}
                             onChange={(e) => setCandidateBtId(e.target.value.toUpperCase())}
                             placeholder="BT23..."
-                            className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold"
+                            className="w-full px-3.5 py-3 sm:py-2 rounded-xl bg-slate-50 border border-slate-200 text-base sm:text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/15 transition-all"
                           />
                         </div>
                       </div>
 
                       {listing.type === "submission" && (
-                        <div className="space-y-1 pt-1">
-                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
-                            Submission Drive / Portfolio Link *
+                        <div id="field-container-submissionLink" className="space-y-1 pt-1">
+                          <label htmlFor="field-submissionLink" className="text-[10px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1">
+                            <span>Submission Drive / Portfolio Link</span>
+                            <span className="text-rose-500 font-bold">*</span>
                           </label>
                           <input
+                            id="field-submissionLink"
                             type="url"
                             required
                             value={submissionLink}
                             onChange={(e) => setSubmissionLink(e.target.value)}
                             placeholder="https://..."
-                            className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold"
+                            className="w-full px-3.5 py-3 sm:py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-base sm:text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/15 transition-all"
                           />
                         </div>
                       )}
@@ -1359,9 +1407,9 @@ export default function ListingDetailPage() {
                       }
 
                       return (
-                        <div key={q.id} className="space-y-1.5 pt-2">
+                        <div key={q.id} id={`field-container-${q.id}`} className="space-y-1.5 pt-2">
                           <div className="space-y-0.5">
-                            <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
+                            <label htmlFor={`field-${q.id}`} className="text-xs font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
                               <span>{q.question}</span>
                               {q.required && <span className="text-rose-500 font-bold">*</span>}
                             </label>
@@ -1374,12 +1422,13 @@ export default function ListingDetailPage() {
 
                           {q.type === "long_text" ? (
                             <textarea
+                              id={`field-${q.id}`}
                               rows={3}
                               required={q.required}
                               placeholder={q.placeholder || "Enter detailed response..."}
                               value={customAnswers[q.id] || ""}
                               onChange={(e) => setCustomAnswers({ ...customAnswers, [q.id]: e.target.value })}
-                              className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium focus:outline-none focus:border-[#17458F]"
+                              className="w-full px-3.5 py-3 sm:py-2 rounded-xl bg-slate-50 border border-slate-200 text-base sm:text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/15 transition-all resize-y min-h-[90px]"
                             />
                           ) : q.type === "checkboxes" ? (
                             <div className="space-y-2 pt-1">
@@ -1399,7 +1448,7 @@ export default function ListingDetailPage() {
                                       setCustomAnswers({ ...customAnswers, [q.id]: next });
                                     }}
                                     className={cn(
-                                      "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-left text-xs font-semibold transition-all cursor-pointer",
+                                      "w-full flex items-center gap-3.5 px-4 py-3 rounded-xl border text-left text-sm sm:text-xs font-semibold transition-all cursor-pointer min-h-[44px] active:scale-[0.99] select-none",
                                       isChecked
                                         ? "bg-[#17458F]/5 border-[#17458F] text-[#17458F] shadow-2xs"
                                         : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300"
@@ -1430,7 +1479,7 @@ export default function ListingDetailPage() {
                                     type="button"
                                     onClick={() => setCustomAnswers({ ...customAnswers, [q.id]: opt })}
                                     className={cn(
-                                      "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-left text-xs font-semibold transition-all cursor-pointer",
+                                      "w-full flex items-center gap-3.5 px-4 py-3 rounded-xl border text-left text-sm sm:text-xs font-semibold transition-all cursor-pointer min-h-[44px] active:scale-[0.99] select-none",
                                       isSelected
                                         ? "bg-[#17458F]/5 border-[#17458F] text-[#17458F] shadow-2xs"
                                         : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300"
@@ -1453,10 +1502,11 @@ export default function ListingDetailPage() {
                             </div>
                           ) : q.type === "dropdown" ? (
                             <select
+                              id={`field-${q.id}`}
                               required={q.required}
                               value={customAnswers[q.id] || ""}
                               onChange={(e) => setCustomAnswers({ ...customAnswers, [q.id]: e.target.value })}
-                              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-none focus:border-[#17458F]"
+                              className="w-full px-3.5 py-3 sm:py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-base sm:text-xs font-semibold focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/15 transition-all min-h-[44px]"
                             >
                               <option value="">Select an option...</option>
                               {q.options?.map((opt) => (
@@ -1465,12 +1515,13 @@ export default function ListingDetailPage() {
                             </select>
                           ) : (
                             <input
+                              id={`field-${q.id}`}
                               type="text"
                               required={q.required}
                               placeholder={q.placeholder || "Your answer..."}
                               value={customAnswers[q.id] || ""}
                               onChange={(e) => setCustomAnswers({ ...customAnswers, [q.id]: e.target.value })}
-                              className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium focus:outline-none focus:border-[#17458F]"
+                              className="w-full px-3.5 py-3 sm:py-2 rounded-xl bg-slate-50 border border-slate-200 text-base sm:text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/15 transition-all min-h-[44px]"
                             />
                           )}
                         </div>
@@ -1485,7 +1536,7 @@ export default function ListingDetailPage() {
                         <button
                           type="button"
                           onClick={handlePrevSection}
-                          className="px-4 py-2.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-white text-slate-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                          className="px-5 py-3 sm:py-2.5 min-h-[44px] rounded-xl border border-slate-200 hover:border-slate-300 bg-white text-slate-700 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs active:scale-[0.98]"
                         >
                           <ChevronLeft className="w-4 h-4" />
                           <span>Back</span>
@@ -1498,8 +1549,9 @@ export default function ListingDetailPage() {
                             setIsEditingResponse(false);
                             setActiveSectionId(formSections[0]?.id || "section-1");
                             setSectionHistory([]);
+                            scrollToFormTop();
                           }}
-                          className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                          className="px-4 py-3 sm:py-2.5 min-h-[44px] rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
                         >
                           Cancel
                         </button>
@@ -1511,7 +1563,7 @@ export default function ListingDetailPage() {
                         <button
                           type="button"
                           onClick={handleNextSection}
-                          className="px-6 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] active:bg-[#0e2a56] text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                          className="px-6 py-3 sm:py-2.5 min-h-[44px] rounded-xl bg-[#17458F] hover:bg-[#123670] active:bg-[#0e2a56] text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-xs cursor-pointer active:scale-[0.98]"
                         >
                           <span>Next</span>
                           <ChevronRight className="w-4 h-4" />
@@ -1520,7 +1572,7 @@ export default function ListingDetailPage() {
                         <button
                           type="submit"
                           disabled={isSubmitting}
-                          className="px-8 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold uppercase tracking-wider transition-all shadow-md hover:shadow-lg hover:shadow-emerald-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                          className="px-7 sm:px-8 py-3 min-h-[44px] rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold uppercase tracking-wider transition-all shadow-md hover:shadow-lg hover:shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.98]"
                         >
                           {isSubmitting ? (
                             <span>Submitting...</span>
