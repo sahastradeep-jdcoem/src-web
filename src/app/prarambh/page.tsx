@@ -199,8 +199,8 @@ export default function PrarambhPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             <div className="relative h-64 rounded-3xl overflow-hidden border border-slate-200 shadow-sm">
               <Image
-                src="https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=800&auto=format&fit=crop"
-                alt="Lamp Lighting"
+                src="/images/DSC_8339.jpg"
+                alt="Prarambh Ceremony - Lamp Lighting"
                 fill
                 unoptimized={true}
                 className="object-cover"
@@ -208,8 +208,8 @@ export default function PrarambhPage() {
             </div>
             <div className="relative h-64 rounded-3xl overflow-hidden border border-slate-200 shadow-sm">
               <Image
-                src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=800&auto=format&fit=crop"
-                alt="Council Oath"
+                src="/images/DSC_8204.jpg"
+                alt="Prarambh Ceremony - Council Oath"
                 fill
                 unoptimized={true}
                 className="object-cover"
@@ -217,8 +217,8 @@ export default function PrarambhPage() {
             </div>
             <div className="relative h-64 rounded-3xl overflow-hidden border border-slate-200 shadow-sm">
               <Image
-                src="https://images.unsplash.com/photo-1531482615713-2afd69097998?q=80&w=800&auto=format&fit=crop"
-                alt="Investiture Assembly"
+                src="/images/DSC_8102.jpg"
+                alt="Prarambh Ceremony - Assembly"
                 fill
                 unoptimized={true}
                 className="object-cover"
