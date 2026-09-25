@@ -265,6 +265,18 @@ export function SrcFormsResponseViewer({
     });
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
+
+    if (rows.length > 0) {
+      const colKeys = Object.keys(rows[0]);
+      worksheet["!cols"] = colKeys.map((k) => {
+        const maxLen = Math.max(
+          k.length,
+          ...rows.map((row) => String(row[k] !== undefined && row[k] !== null ? row[k] : "").length)
+        );
+        return { wch: Math.min(Math.max(maxLen + 3, 12), 48) };
+      });
+    }
+
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Form Responses");
 

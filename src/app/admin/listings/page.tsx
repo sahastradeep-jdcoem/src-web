@@ -371,76 +371,153 @@ export default function AdminListingsPage() {
       const XLSX = await import("xlsx");
       const wb = XLSX.utils.book_new();
 
-      if (inspectingListing.type === "poll" && inspectingListing.pollConfig) {
-        const { computedOptions, totalVotes } = getPollStats(inspectingListing, responses);
+      const targetListing = liveInspectingListing || inspectingListing;
+
+      const formatGoogleFormsTimestamp = (dateVal?: string | number | Date | null) => {
+        let dateObj: Date | null = null;
+        if (dateVal) {
+          dateObj = new Date(dateVal);
+        }
+        if (!dateObj || isNaN(dateObj.getTime())) {
+          dateObj = new Date();
+        }
+        const month = dateObj.getMonth() + 1;
+        const day = dateObj.getDate();
+        const year = dateObj.getFullYear();
+        const hours = String(dateObj.getHours()).padStart(2, "0");
+        const minutes = String(dateObj.getMinutes()).padStart(2, "0");
+        const seconds = String(dateObj.getSeconds()).padStart(2, "0");
+        return `${month}/${day}/${year} ${hours}:${minutes}:${seconds}`;
+      };
+
+      const sanitizeExcelCell = (val: any): any => {
+        if (typeof val === "number" || typeof val === "boolean") return val;
+        if (val === null || val === undefined) return "";
+        const str = String(val);
+        if (/^[=+\-@\t\r]/.test(str)) {
+          return `'${str}`;
+        }
+        return str;
+      };
+
+      if (targetListing.type === "poll" && targetListing.pollConfig) {
+        const { computedOptions, totalVotes } = getPollStats(targetListing, responses);
         const sortedOptions = [...computedOptions].sort((a, b) => b.votes - a.votes);
         const pollRows = sortedOptions.map((opt, idx) => {
           const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
           return {
             "Rank": idx + 1,
-            "Option Choice": opt.text,
+            "Option Choice": sanitizeExcelCell(opt.text),
             "Votes Counted": opt.votes,
             "Percentage Share": `${pct}%`,
             "Total Ballots": totalVotes,
-            "Status": (inspectingListing.status || "ACTIVE").toUpperCase(),
+            "Status": (targetListing.status || "ACTIVE").toUpperCase(),
           };
         });
         const pollWs = XLSX.utils.json_to_sheet(pollRows);
         XLSX.utils.book_append_sheet(wb, pollWs, "Poll Results");
       }
 
-      if (activeListingResponses.length > 0 || inspectingListing.type !== "poll") {
-        const isPoll = inspectingListing.type === "poll";
+      if (activeListingResponses.length > 0 || targetListing.type !== "poll") {
+        const isPoll = targetListing.type === "poll";
+
+        // Form questions strictly in defined order, excluding section headers, notes, and whatsapp links
+        const formQuestions = (targetListing.customQuestions || []).filter(
+          (q) => q.type !== "section" && q.type !== "note" && q.type !== "whatsapp_link"
+        );
+
+        // Ensure unique column headers in case identical prompts exist in form
+        const seenHeaders = new Map<string, number>();
+        const uniqueQHeaders = formQuestions.map((q, idx) => {
+          const baseTitle = q.question?.trim() || `Question ${idx + 1}`;
+          const count = seenHeaders.get(baseTitle) || 0;
+          seenHeaders.set(baseTitle, count + 1);
+          const header = count > 0 ? `${baseTitle} (${count + 1})` : baseTitle;
+          return { id: q.id, header };
+        });
+
         const exportRows = activeListingResponses.map((r) => {
           if (isPoll) {
             const votedChoice = Object.values(r.answers || {})[0] || (r.selectedOptionIds && r.selectedOptionIds[0]) || "Recorded Vote";
             return {
-              "Ballot ID": r.id,
-              "Student / Voter Name": r.userName || "Anonymous Voter",
-              "Email Address": r.userEmail || "N/A",
-              "College / BT ID": r.btId || "N/A",
-              "Department": r.userDepartment || "N/A",
-              "Academic Year": r.userYear || "N/A",
-              "Selected Option Choice": votedChoice,
-              "Ballot Status": (r.status || "APPROVED").toUpperCase(),
-              "Time Cast": r.createdAt ? new Date(r.createdAt).toLocaleString() : "N/A",
+              "Timestamp": sanitizeExcelCell(formatGoogleFormsTimestamp(r.createdAt || (r as any).submittedAt)),
+              "Ballot ID": sanitizeExcelCell(r.id),
+              "Student / Voter Name": sanitizeExcelCell(r.userName || "Anonymous Voter"),
+              "Email Address": sanitizeExcelCell(r.userEmail || "N/A"),
+              "College / BT ID": sanitizeExcelCell(r.btId || "N/A"),
+              "Department": sanitizeExcelCell(r.userDepartment || "N/A"),
+              "Academic Year": sanitizeExcelCell(r.userYear || "N/A"),
+              "Selected Option Choice": sanitizeExcelCell(votedChoice),
+              "Ballot Status": sanitizeExcelCell((r.status || "APPROVED").toUpperCase()),
             };
           }
 
+          // Non-poll form responses: Timestamp at the very start, no "Submitted Date"
           const flatRow: Record<string, any> = {
-            "Ticket / Ref ID": r.ticketCode || r.id,
-            "Candidate Name": r.userName || "Anonymous",
-            "Email Address": r.userEmail || "N/A",
-            "Department": r.userDepartment || "N/A",
-            "Year": r.userYear || "N/A",
-            "BT ID": r.btId || "N/A",
-            "Status": (r.status || "PENDING").toUpperCase(),
-            "Submission Link": r.submissionLink || "N/A",
-            "Submitted Date": r.createdAt ? new Date(r.createdAt).toLocaleDateString() : "N/A",
+            "Timestamp": sanitizeExcelCell(formatGoogleFormsTimestamp(r.createdAt || (r as any).submittedAt)),
+            "Ticket / Ref ID": sanitizeExcelCell(r.ticketCode || r.id),
+            "Candidate Name": sanitizeExcelCell(r.userName || "Anonymous"),
+            "Email Address": sanitizeExcelCell(r.userEmail || "N/A"),
+            "Department": sanitizeExcelCell(r.userDepartment || "N/A"),
+            "Year": sanitizeExcelCell(r.userYear || "N/A"),
+            "BT ID": sanitizeExcelCell(r.btId || "N/A"),
+            "Status": sanitizeExcelCell((r.status || "PENDING").toUpperCase()),
+            "Submission Link": sanitizeExcelCell(r.submissionLink || "N/A"),
           };
 
+          // Append questions strictly in their defined form order
+          uniqueQHeaders.forEach((qh) => {
+            const ansVal = r.answers ? r.answers[qh.id] : undefined;
+            flatRow[qh.header] = sanitizeExcelCell(
+              ansVal !== undefined && ansVal !== null && ansVal !== ""
+                ? (Array.isArray(ansVal)
+                    ? ansVal.join(", ")
+                    : typeof ansVal === "object"
+                    ? JSON.stringify(ansVal)
+                    : String(ansVal))
+                : "—"
+            );
+          });
+
+          // Also capture any legacy/extra question keys not in current question definition
           if (r.answers) {
             Object.entries(r.answers).forEach(([qKey, ansVal]) => {
-              const matchedQ = inspectingListing.customQuestions?.find((q) => q.id === qKey);
-              const colHeader = matchedQ ? matchedQ.question : `Q: ${qKey}`;
-              flatRow[colHeader] = Array.isArray(ansVal)
-                ? ansVal.join(", ")
-                : typeof ansVal === "object"
-                ? JSON.stringify(ansVal)
-                : String(ansVal);
+              const alreadyIncluded = uniqueQHeaders.some((qh) => qh.id === qKey);
+              if (!alreadyIncluded) {
+                const extraHeader = `Extra: ${qKey}`;
+                flatRow[extraHeader] = sanitizeExcelCell(
+                  ansVal !== undefined && ansVal !== null && ansVal !== ""
+                    ? (Array.isArray(ansVal) ? ansVal.join(", ") : String(ansVal))
+                    : "—"
+                );
+              }
             });
           }
+
           return flatRow;
         });
 
         const ws = XLSX.utils.json_to_sheet(exportRows);
-        XLSX.utils.book_append_sheet(wb, ws, inspectingListing.type === "poll" ? "Voter Log" : "Responses");
+
+        // Auto-fit column widths for crisp Excel viewing
+        if (exportRows.length > 0) {
+          const colKeys = Object.keys(exportRows[0]);
+          ws["!cols"] = colKeys.map((k) => {
+            const maxLen = Math.max(
+              k.length,
+              ...exportRows.map((row) => String(row[k] !== undefined && row[k] !== null ? row[k] : "").length)
+            );
+            return { wch: Math.min(Math.max(maxLen + 3, 12), 48) };
+          });
+        }
+
+        XLSX.utils.book_append_sheet(wb, ws, targetListing.type === "poll" ? "Voter Log" : "Responses");
       }
 
-      const cleanFileSlug = inspectingListing.title
+      const cleanFileSlug = targetListing.title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)/g, "") || inspectingListing.slug || "listing-report";
+        .replace(/(^-|-$)/g, "") || targetListing.slug || "listing-report";
       XLSX.writeFile(wb, `${cleanFileSlug}-report.xlsx`);
       showToast("Excel spreadsheet downloaded successfully.");
     } catch (err) {
