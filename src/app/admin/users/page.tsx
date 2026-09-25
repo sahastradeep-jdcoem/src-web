@@ -26,8 +26,7 @@ import {
   RefreshCw,
   Edit3,
   ArrowUpDown,
-  Calendar,
-  Award
+  Calendar
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -828,10 +827,7 @@ export default function AdminUsersPage() {
                               <span className="max-w-[140px] truncate">{u.collegeName || "Other College"}</span>
                             </span>
                             {u.city && (
-                              <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
-                                <MapPin className="w-2.5 h-2.5 text-slate-400 shrink-0" />
-                                <span>{u.city}</span>
-                              </span>
+                              <span className="block text-[10px] text-slate-400 font-medium">📍 {u.city}</span>
                             )}
                           </div>
                         ) : u.btId ? (
@@ -902,9 +898,8 @@ export default function AdminUsersPage() {
                             if (!effectiveBadge) return null;
                             return (
                               <div className="pt-0.5">
-                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-md max-w-xs truncate">
-                                  <Award className="w-3 h-3 text-[#E78023] shrink-0" />
-                                  <span className="truncate">{effectiveBadge}</span>
+                                <span className="inline-block text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-md max-w-xs truncate">
+                                  🏅 {effectiveBadge}
                                 </span>
                               </div>
                             );
@@ -1142,9 +1137,8 @@ export default function AdminUsersPage() {
                     const effectiveBadge = formatDesignationBadge((selectedUser.btId ? resolveDesignationByBtId(selectedUser.btId, selectedUser.displayName || selectedUser.name || undefined)?.designationBadge : null) || selectedUser.designationBadge);
                     if (!effectiveBadge) return null;
                     return (
-                      <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                        <Award className="w-3 h-3 text-[#E78023] shrink-0" />
-                        <span>{effectiveBadge}</span>
+                      <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-full">
+                        🏅 {effectiveBadge}
                       </span>
                     );
                   })()}
@@ -1208,10 +1202,7 @@ export default function AdminUsersPage() {
                   {isExternalUser(selectedUser) ? (selectedUser.collegeName || "Other College") : "JDCOEM Nagpur"}
                 </p>
                 {selectedUser.city && (
-                  <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                    <span>{selectedUser.city}</span>
-                  </p>
+                  <p className="text-[11px] text-slate-500 font-medium">📍 {selectedUser.city}</p>
                 )}
               </div>
 
