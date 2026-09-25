@@ -35,12 +35,13 @@ export interface ActiveRouteInfo {
  */
 export function getFormSectionGroups(fields: SrcFormField[] = []): FormSectionGroup[] {
   const sections: FormSectionGroup[] = [];
+  const sec1Explicit = fields.find((f) => (f.id === "section-1" || f.id === "sec-1") && f.type === "section");
   let currentSection: FormSectionGroup = {
-    id: "section-1",
+    id: sec1Explicit?.id || "section-1",
     sectionIndex: 1,
-    title: "Section 1",
-    description: "",
-    afterSection: "next",
+    title: sec1Explicit?.question?.trim() || "Section 1",
+    description: sec1Explicit?.description || "",
+    afterSection: sec1Explicit?.afterSection || "next",
     fields: [],
   };
 

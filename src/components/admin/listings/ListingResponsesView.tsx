@@ -94,7 +94,7 @@ export function ListingResponsesView({
 
     if (listing.customQuestions && listing.customQuestions.length > 0) {
       listing.customQuestions.forEach((q) => {
-        if (q.type !== "note") {
+        if (q.type !== "note" && q.type !== "section" && q.type !== "whatsapp_link") {
           list.push({
             id: q.id,
             title: q.question || "Custom Question",
@@ -1707,21 +1707,24 @@ export function ListingResponsesView({
                         })}
                       </div>
                     ) : listing.customQuestions && listing.customQuestions.length > 0 ? (
-                      listing.customQuestions.map((q, qIdx) => {
-                        if (q.type === "note") return null;
-                        const rawAnswer = currentIndividual.answers ? currentIndividual.answers[q.id] : undefined;
-                        const hasAnswer = rawAnswer !== undefined && rawAnswer !== null && rawAnswer !== "";
+                      listing.customQuestions
+                        .filter((q) => q.type !== "note" && q.type !== "section" && q.type !== "whatsapp_link")
+                        .map((q, qIdx) => {
+                          const rawAnswer = currentIndividual.answers ? currentIndividual.answers[q.id] : undefined;
+                          const hasAnswer = rawAnswer !== undefined && rawAnswer !== null && rawAnswer !== "";
 
-                        return (
-                          <div
-                            key={q.id}
-                            className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs font-bold text-slate-800 flex items-center gap-2">
-                                <span className="text-[#E78023] font-mono text-[11px]">0{qIdx + 1}.</span>
-                                <span>{q.question}</span>
-                              </span>
+                          return (
+                            <div
+                              key={q.id}
+                              className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                                  <span className="text-[#E78023] font-mono text-[11px]">
+                                    {qIdx + 1 < 10 ? `0${qIdx + 1}.` : `${qIdx + 1}.`}
+                                  </span>
+                                  <span>{q.question}</span>
+                                </span>
                               <div className="flex items-center gap-1.5">
                                 {hasAnswer ? (
                                   <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">

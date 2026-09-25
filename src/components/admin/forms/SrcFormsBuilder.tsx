@@ -143,6 +143,19 @@ export function SrcFormsBuilder({
   const sectionGroups = useMemo(() => getFormSectionGroups(activeFields), [activeFields]);
   const validationIssues = useMemo(() => validateSectionGraph(activeFields), [activeFields]);
 
+  // Sequential question numbering: exclude section breaks, notes, and whatsapp links
+  const questionNumberMap = useMemo(() => {
+    const map = new Map<string, number>();
+    let count = 0;
+    for (const f of activeFields) {
+      if (f.type !== "section" && f.type !== "note" && f.type !== "whatsapp_link") {
+        count++;
+        map.set(f.id, count);
+      }
+    }
+    return map;
+  }, [activeFields]);
+
   // ── CRUD helpers ────────────────────────────────────────────────────────
 
   const addField = (type: SrcFormFieldType = "short_text") => {
@@ -201,6 +214,34 @@ export function SrcFormsBuilder({
       return merged;
     });
     onChange(updated);
+  };
+
+  const updateSectionAfterRule = (sectionId: string, afterSection: string) => {
+    const existingFieldIdx = activeFields.findIndex((f) => f.id === sectionId && f.type === "section");
+
+    if (existingFieldIdx !== -1) {
+      const updated = activeFields.map((f, i) => {
+        if (i === existingFieldIdx) {
+          return { ...f, afterSection: afterSection as any };
+        }
+        return f;
+      });
+      onChange(updated);
+      return;
+    }
+
+    // If sectionId is Section 1 and no explicit section divider in activeFields yet
+    const sec1 = sectionGroups[0];
+    if (sec1 && (sec1.id === sectionId || sectionId === "section-1" || sectionId === "sec-1")) {
+      const sec1Divider: SrcFormField = {
+        id: sec1.id || "section-1",
+        type: "section",
+        question: sec1.title || "Section 1",
+        description: sec1.description || "",
+        afterSection: afterSection as any,
+      };
+      onChange([sec1Divider, ...activeFields]);
+    }
   };
 
   const deleteField = (id: string) => {
@@ -295,6 +336,17 @@ export function SrcFormsBuilder({
     }
     if (currentChunk.length > 0) {
       chunks.push(currentChunk);
+    }
+
+    // Ensure first chunk has a section divider if it didn't have one
+    if (chunks.length > 0 && chunks[0][0] && chunks[0][0].type !== "section") {
+      chunks[0].unshift({
+        id: "section-1",
+        type: "section",
+        question: "Section 1",
+        description: "",
+        afterSection: "next",
+      });
     }
 
     const chunkIdx = chunks.findIndex((c) => c[0]?.id === sectionFieldId);
@@ -662,535 +714,563 @@ export function SrcFormsBuilder({
           </div>
         </div>
       ) : (
-        <div className="space-y-3">
-          {activeFields.map((f, idx) => {
-            const isOptionBased = ["multiple_choice", "checkboxes", "dropdown"].includes(f.type);
-            const isNote = f.type === "note";
-            const isSection = f.type === "section";
-            const isWhatsapp = f.type === "whatsapp_link";
-            const hasBranching = Boolean(f.goToSection && Object.keys(f.goToSection).length > 0);
+        <div className="space-y-6">
+          {sectionGroups.map((sec, secIdx) => {
+            const isFirstSection = secIdx === 0;
+            const hasMultipleSections = sectionGroups.length > 1;
+            const sectionField = activeFields.find((x) => x.id === sec.id && x.type === "section");
 
-            // Section index for display
-            const currentSecIndex = isSection
-              ? sectionGroups.findIndex((s) => s.id === f.id) + 1
-              : 0;
-
-            // ── SECTION DIVIDER CARD ───────────────────────────────────────
-            if (isSection) {
-              return (
-                <div
-                  key={f.id}
-                  className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-purple-50 via-white to-slate-50 border-2 border-purple-300 shadow-sm space-y-3.5 relative overflow-hidden"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-100 pb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="h-7 w-7 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
-                        <Layers className="w-4 h-4" />
-                      </div>
-                      <div>
+            return (
+              <div key={sec.id} className="space-y-3">
+                {/* ── SECTION HEADER ─────────────────────────────── */}
+                {isFirstSection ? (
+                  hasMultipleSections && (
+                    <div className="flex items-center justify-between px-1 pt-1 pb-0.5">
+                      <div className="flex items-center gap-2">
+                        <div className="h-6 w-6 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs shadow-2xs">
+                          <Layers className="w-3.5 h-3.5" />
+                        </div>
                         <span className="text-[11px] font-extrabold uppercase tracking-wider text-purple-900 bg-purple-100/90 px-2.5 py-0.5 rounded-full">
-                          Section {currentSecIndex} of {sectionGroups.length}
+                          Section 1 of {sectionGroups.length}
                         </span>
                       </div>
                     </div>
+                  )
+                ) : (
+                  /* Section 2+ Header Card */
+                  <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-purple-50 via-white to-slate-50 border-2 border-purple-300 shadow-sm space-y-3.5 relative overflow-hidden">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-100 pb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="h-7 w-7 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                          <Layers className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-purple-900 bg-purple-100/90 px-2.5 py-0.5 rounded-full">
+                            Section {sec.sectionIndex} of {sectionGroups.length}
+                          </span>
+                        </div>
+                      </div>
 
-                    <div className="flex items-center gap-1 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => moveSection(f.id, "up")}
-                        disabled={currentSecIndex <= 1}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-purple-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                        title="Move Entire Section Up"
-                      >
-                        <MoveUp className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveSection(f.id, "down")}
-                        disabled={currentSecIndex >= sectionGroups.length}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-purple-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                        title="Move Entire Section Down"
-                      >
-                        <MoveDown className="w-3.5 h-3.5" />
-                      </button>
-                      <div className="h-3 w-px bg-purple-200 mx-1" />
-                      <button
-                        type="button"
-                        onClick={() => duplicateSection(f)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-purple-700 hover:bg-purple-50 transition-colors cursor-pointer"
-                        title="Duplicate Section"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => deleteField(f.id)}
-                        className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                        title="Delete Section Divider"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => moveSection(sec.id, "up")}
+                          disabled={sec.sectionIndex <= 1}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-purple-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                          title="Move Entire Section Up"
+                        >
+                          <MoveUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveSection(sec.id, "down")}
+                          disabled={sec.sectionIndex >= sectionGroups.length}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-purple-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                          title="Move Entire Section Down"
+                        >
+                          <MoveDown className="w-3.5 h-3.5" />
+                        </button>
+                        <div className="h-3 w-px bg-purple-200 mx-1" />
+                        <button
+                          type="button"
+                          onClick={() => sectionField && duplicateSection(sectionField)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-purple-700 hover:bg-purple-50 transition-colors cursor-pointer"
+                          title="Duplicate Section"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteField(sec.id)}
+                          className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          title="Delete Section Divider"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={sec.title}
+                        onChange={(e) => updateField(sec.id, { question: e.target.value })}
+                        placeholder="Section Header Title (e.g. Technical Skills & Project Preferences)..."
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-purple-200 text-sm font-extrabold text-purple-950 focus:outline-none focus:border-purple-600 shadow-2xs"
+                      />
+                      <textarea
+                        rows={2}
+                        value={sec.description || ""}
+                        onChange={(e) => updateField(sec.id, { description: e.target.value })}
+                        placeholder="Optional description / instructions for responders arriving at this section..."
+                        className="w-full px-3.5 py-1.5 rounded-xl bg-white border border-purple-200 text-xs text-slate-700 focus:outline-none focus:border-purple-600"
+                      />
                     </div>
                   </div>
+                )}
 
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      value={f.question}
-                      onChange={(e) => updateField(f.id, { question: e.target.value })}
-                      placeholder="Section Header Title (e.g. Technical Skills & Project Preferences)..."
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-purple-200 text-sm font-extrabold text-purple-950 focus:outline-none focus:border-purple-600 shadow-2xs"
-                    />
-                    <textarea
-                      rows={2}
-                      value={f.description || ""}
-                      onChange={(e) => updateField(f.id, { description: e.target.value })}
-                      placeholder="Optional description / instructions for responders arriving at this section..."
-                      className="w-full px-3.5 py-1.5 rounded-xl bg-white border border-purple-200 text-xs text-slate-700 focus:outline-none focus:border-purple-600"
-                    />
+                {/* ── SECTION FIELDS ─────────────────────────────── */}
+                {sec.fields.length === 0 ? (
+                  <div className="p-4 rounded-2xl border border-dashed border-purple-200 bg-purple-50/20 text-center text-xs text-purple-800">
+                    Section {sec.sectionIndex} is currently empty. Add questions above or move questions into this section.
                   </div>
+                ) : (
+                  <div className="space-y-3">
+                    {sec.fields.map((f) => {
+                      const fieldIdx = activeFields.findIndex((x) => x.id === f.id);
+                      const isOptionBased = ["multiple_choice", "checkboxes", "dropdown"].includes(f.type);
+                      const isNote = f.type === "note";
+                      const isWhatsapp = f.type === "whatsapp_link";
+                      const hasBranching = Boolean(f.goToSection && Object.keys(f.goToSection).length > 0);
+                      const qNumber = questionNumberMap.get(f.id) || 1;
 
-                  {/* After Section Navigation Rule */}
-                  <div className="pt-2 border-t border-purple-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                    <div className="flex items-center gap-1.5 font-bold text-purple-900">
-                      <ArrowRight className="w-3.5 h-3.5 text-purple-500" />
-                      <span>After Section {currentSecIndex} (default):</span>
+                      // ── WHATSAPP LINK CARD ──────────────────────────────────
+                      if (isWhatsapp) {
+                        const previewUrl = formatWhatsAppUrl(f.waGroupUrl);
+                        return (
+                          <div
+                            key={f.id}
+                            className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-50/80 to-teal-50/60 border border-emerald-200 shadow-2xs space-y-3"
+                          >
+                            {/* Header */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-200/60 pb-2.5">
+                              <div className="flex items-center gap-2">
+                                <div className="h-7 w-7 rounded-lg bg-[#25D366] text-white flex items-center justify-center shrink-0 shadow-xs">
+                                  <MessageCircle className="w-4 h-4 fill-white" />
+                                </div>
+                                <div>
+                                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-950">
+                                    WhatsApp Group Link
+                                  </span>
+                                  <p className="text-[10px] text-emerald-600">
+                                    Inline element — visible at this position in the form
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => moveField(fieldIdx, "up")}
+                                  disabled={fieldIdx <= 0 || (fieldIdx === 1 && activeFields[0]?.type === "section")}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-emerald-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                  title="Move Up"
+                                >
+                                  <MoveUp className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => moveField(fieldIdx, "down")}
+                                  disabled={fieldIdx >= activeFields.length - 1}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-emerald-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                  title="Move Down"
+                                >
+                                  <MoveDown className="w-3.5 h-3.5" />
+                                </button>
+                                <div className="h-3 w-px bg-emerald-300 mx-1" />
+                                <button
+                                  type="button"
+                                  onClick={() => duplicateField(f.id)}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-emerald-100 transition-colors cursor-pointer"
+                                  title="Duplicate"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteField(f.id)}
+                                  className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                  title="Delete"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                                {sectionGroups.length > 1 && (
+                                  <div className="flex items-center gap-1.5 pl-1">
+                                    <span className="text-[10px] text-emerald-800 font-bold uppercase">Section:</span>
+                                    <select
+                                      value={getFieldSection(f.id)?.id || ""}
+                                      onChange={(e) => moveFieldToSection(f.id, e.target.value)}
+                                      className="px-2 py-0.5 rounded-lg bg-white/90 border border-emerald-300 text-[10px] font-bold text-emerald-950 focus:outline-none focus:border-emerald-600 cursor-pointer shadow-2xs"
+                                      title="Move this WhatsApp link to another section"
+                                    >
+                                      {sectionGroups.map((s) => (
+                                        <option key={s.id} value={s.id}>
+                                          Sec {s.sectionIndex}: {s.title}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Display label */}
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">Card Title (optional)</label>
+                              <input
+                                type="text"
+                                value={f.question || ""}
+                                onChange={(e) => updateField(f.id, { question: e.target.value })}
+                                placeholder="Join Our WhatsApp Group"
+                                className="w-full px-3 py-2 rounded-xl bg-white border border-emerald-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">WhatsApp Group URL *</label>
+                                <input
+                                  type="text"
+                                  value={f.waGroupUrl || ""}
+                                  onChange={(e) => updateField(f.id, { waGroupUrl: e.target.value })}
+                                  placeholder="https://chat.whatsapp.com/..."
+                                  className="w-full px-3 py-2 rounded-xl bg-white border border-emerald-300 text-xs font-mono text-slate-900 focus:outline-none focus:border-emerald-600"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">Group Display Name (optional)</label>
+                                <input
+                                  type="text"
+                                  value={f.waGroupName || ""}
+                                  onChange={(e) => updateField(f.id, { waGroupName: e.target.value })}
+                                  placeholder="e.g. SRC Technical Team 2026"
+                                  className="w-full px-3 py-2 rounded-xl bg-white border border-emerald-300 text-xs text-slate-800 focus:outline-none focus:border-emerald-600"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Live preview row */}
+                            {previewUrl && (
+                              <div className="flex items-center gap-2 pt-1">
+                                <a
+                                  href={previewUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#25D366] text-white text-[11px] font-bold hover:bg-emerald-500 transition-colors"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5" />
+                                  <span>Test Link</span>
+                                  <ExternalLink className="w-3 h-3 opacity-70" />
+                                </a>
+                                <span className="text-[10px] text-emerald-700">
+                                  {f.waGroupName ? `"${f.waGroupName}"` : "Group link configured"}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      // ── STANDARD QUESTION / NOTE CARD ──────────────────────
+                      return (
+                        <div
+                          key={f.id}
+                          className={cn(
+                            "p-4 sm:p-5 rounded-2xl border transition-all space-y-3.5",
+                            isNote
+                              ? "bg-amber-50/40 border-amber-200"
+                              : "bg-white border-slate-200 shadow-2xs hover:border-slate-300"
+                          )}
+                        >
+                          {/* Top Row */}
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="w-6 h-6 rounded-lg bg-slate-100 text-slate-700 font-mono font-bold text-[11px] flex items-center justify-center border border-slate-200">
+                                {isNote ? "NB" : `Q${qNumber}`}
+                              </span>
+                              {hasBranching && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-100 text-purple-700 font-bold text-[10px] shrink-0 border border-purple-200">
+                                  <GitBranch className="w-3 h-3 text-purple-600" />
+                                  <span>🔀 Branching enabled</span>
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex-1">
+                              <input
+                                type="text"
+                                value={f.question}
+                                onChange={(e) => updateField(f.id, { question: e.target.value })}
+                                placeholder={isNote ? "Note Title / Announcement Header..." : "Enter Question Prompt / Field Label..."}
+                                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F] focus:bg-white transition-all shadow-2xs"
+                              />
+                            </div>
+
+                            {/* Type Selector */}
+                            <div className="shrink-0">
+                              <select
+                                value={f.type}
+                                onChange={(e) => updateField(f.id, { type: e.target.value as SrcFormFieldType })}
+                                className="px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                              >
+                                <option value="short_text">📝 Short Answer</option>
+                                <option value="long_text">📄 Paragraph</option>
+                                <option value="multiple_choice">🔘 Multiple Choice</option>
+                                <option value="checkboxes">☑️ Checkboxes</option>
+                                <option value="dropdown">🔽 Dropdown</option>
+                                <option value="note">⚠️ Important Note</option>
+                                <option value="section">🗂️ Section Divider</option>
+                                <option value="whatsapp_link">💬 WhatsApp Group Link</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* Description / Helper */}
+                          {!isNote && (
+                            <div className="pl-0 sm:pl-8">
+                              <input
+                                type="text"
+                                value={f.description || ""}
+                                onChange={(e) => updateField(f.id, { description: e.target.value })}
+                                placeholder="Add optional helper description or guidance for attendees..."
+                                className="w-full px-3 py-1.5 rounded-lg bg-slate-50/70 border border-slate-200/80 text-[11px] text-slate-600 focus:outline-none focus:border-[#17458F] focus:bg-white"
+                              />
+                            </div>
+                          )}
+
+                          {/* Note Content */}
+                          {isNote && (
+                            <div className="pl-0 sm:pl-8 space-y-1.5">
+                              <label className="text-[10px] font-bold uppercase tracking-wider text-amber-800 flex items-center gap-1">
+                                <Info className="w-3 h-3" />
+                                <span>Instruction / Guideline Text</span>
+                              </label>
+                              <textarea
+                                rows={2}
+                                value={f.noteContent || ""}
+                                onChange={(e) => updateField(f.id, { noteContent: e.target.value })}
+                                placeholder="e.g. Participants are requested to report 30 minutes prior to schedule."
+                                className="w-full px-3.5 py-2 rounded-xl bg-white border border-amber-200 text-xs text-slate-800 focus:outline-none focus:border-[#E78023]"
+                              />
+                            </div>
+                          )}
+
+                          {/* Option Editor */}
+                          {isOptionBased && (
+                            <div className="pl-0 sm:pl-8 space-y-2 pt-1 border-t border-slate-100">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                                  Options / Choices:
+                                </span>
+
+                                {/* Go To Section Toggle */}
+                                {(f.type === "multiple_choice" || f.type === "dropdown" || f.type === "checkboxes") &&
+                                  sectionGroups.length > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleOptionBranching(f)}
+                                      className={cn(
+                                        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer",
+                                        hasBranching
+                                          ? "bg-purple-100 text-purple-900 border border-purple-300"
+                                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                      )}
+                                      title="Route responders to specific sections based on their chosen answer"
+                                    >
+                                      <GitBranch className="w-3.5 h-3.5 text-purple-600" />
+                                      <span>{hasBranching ? "Go to section: ON" : "Go to section based on answer"}</span>
+                                    </button>
+                                  )}
+                              </div>
+
+                              <div className="space-y-2">
+                                {(f.options || []).map((opt, optIdx) => {
+                                  const targetSectionId = f.goToSection?.[opt] || "next";
+
+                                  return (
+                                    <div key={optIdx} className="flex flex-col sm:flex-row sm:items-center gap-2">
+                                      <div className="flex items-center gap-2 flex-1">
+                                        <div className="w-4 h-4 flex items-center justify-center shrink-0 text-slate-400">
+                                          {f.type === "multiple_choice" && <CircleDot className="w-3.5 h-3.5" />}
+                                          {f.type === "checkboxes" && <CheckSquare className="w-3.5 h-3.5" />}
+                                          {f.type === "dropdown" && <span className="text-[10px] font-mono">{optIdx + 1}.</span>}
+                                        </div>
+                                        <input
+                                          type="text"
+                                          value={opt}
+                                          onChange={(e) => updateOption(f.id, optIdx, e.target.value)}
+                                          placeholder={`Option ${optIdx + 1}`}
+                                          className="flex-1 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800 focus:outline-none focus:border-[#17458F]"
+                                        />
+                                      </div>
+
+                                      {/* Section Destination Selector */}
+                                      {hasBranching && (() => {
+                                        const isMissing = targetSectionId !== "next" && targetSectionId !== "submit" && !sectionGroups.some((s) => s.id === targetSectionId);
+                                        const currentSec = getFieldSection(f.id);
+                                        const isSelfLoop = targetSectionId === currentSec?.id;
+
+                                        return (
+                                          <div className="flex items-center gap-1.5 shrink-0 pl-6 sm:pl-0 flex-wrap">
+                                            <ArrowRight className="w-3 h-3 text-purple-400" />
+                                            <select
+                                              value={targetSectionId}
+                                              onChange={(e) => {
+                                                const nextGoTo = { ...(f.goToSection || {}), [opt]: e.target.value };
+                                                updateField(f.id, { goToSection: nextGoTo });
+                                              }}
+                                              className={cn(
+                                                "px-2.5 py-1 rounded-lg text-[11px] font-bold focus:outline-none cursor-pointer border shadow-2xs",
+                                                isMissing || isSelfLoop
+                                                  ? "bg-rose-50 border-rose-300 text-rose-900 focus:border-rose-600"
+                                                  : "bg-purple-50/70 border-purple-200 text-purple-900 focus:border-purple-600"
+                                              )}
+                                            >
+                                              <option value="next">Continue to next section</option>
+                                              {sectionGroups.map((s) => (
+                                                <option key={s.id} value={s.id}>
+                                                  Go to: {s.title}
+                                                </option>
+                                              ))}
+                                              <option value="submit">Submit form</option>
+                                            </select>
+                                            {isMissing && (
+                                              <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200" title="Referenced section does not exist">
+                                                <AlertTriangle className="w-3 h-3 text-rose-500" />
+                                                <span>Deleted</span>
+                                              </span>
+                                            )}
+                                            {isSelfLoop && (
+                                              <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200" title="Routing to current section causes infinite loop">
+                                                <AlertTriangle className="w-3 h-3 text-rose-500" />
+                                                <span>Loop</span>
+                                              </span>
+                                            )}
+                                          </div>
+                                        );
+                                      })()}
+
+                                      {(f.options || []).length > 1 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => removeOption(f.id, optIdx)}
+                                          className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer shrink-0 self-end sm:self-auto"
+                                          title="Remove option"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => addOption(f.id)}
+                                className="mt-1 text-xs font-bold text-[#17458F] hover:text-[#0E2F66] flex items-center gap-1 transition-colors cursor-pointer"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Add Option</span>
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Field Bottom Toolbar */}
+                          <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 text-xs">
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => moveField(fieldIdx, "up")}
+                                disabled={fieldIdx <= 0 || (fieldIdx === 1 && activeFields[0]?.type === "section")}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                title="Move Up"
+                              >
+                                <MoveUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => moveField(fieldIdx, "down")}
+                                disabled={fieldIdx >= activeFields.length - 1}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                title="Move Down"
+                              >
+                                <MoveDown className="w-3.5 h-3.5" />
+                              </button>
+                              <div className="h-3 w-px bg-slate-200 mx-1" />
+                              <button
+                                type="button"
+                                onClick={() => duplicateField(f.id)}
+                                className="px-2.5 py-1 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors flex items-center gap-1 font-semibold text-[11px] cursor-pointer"
+                              >
+                                <Copy className="w-3 h-3 text-slate-500" />
+                                <span>Duplicate</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteField(f.id)}
+                                className="px-2.5 py-1 rounded-lg text-rose-600 hover:bg-rose-50 transition-colors flex items-center gap-1 font-semibold text-[11px] cursor-pointer"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>Delete</span>
+                              </button>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              {sectionGroups.length > 1 && (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] text-slate-400 font-bold uppercase">Section:</span>
+                                  <select
+                                    value={getFieldSection(f.id)?.id || ""}
+                                    onChange={(e) => moveFieldToSection(f.id, e.target.value)}
+                                    className="px-2 py-1 rounded-lg bg-purple-50/80 border border-purple-200 text-[11px] font-bold text-purple-900 focus:outline-none focus:border-purple-600 cursor-pointer shadow-2xs"
+                                    title="Move this item to a different section"
+                                  >
+                                    {sectionGroups.map((s) => (
+                                      <option key={s.id} value={s.id}>
+                                        Sec {s.sectionIndex}: {s.title}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
+
+                              {!isNote && (
+                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                  <span className="text-[11px] font-bold text-slate-700">Required</span>
+                                  <input
+                                    type="checkbox"
+                                    checked={f.required ?? true}
+                                    onChange={(e) => updateField(f.id, { required: e.target.checked })}
+                                    className="w-4 h-4 rounded text-[#17458F] focus:ring-[#17458F] border-slate-300 cursor-pointer"
+                                  />
+                                </label>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* ── AFTER SECTION ROUTING BAR (AT BOTTOM OF SECTION) ─────────────────────────────── */}
+                {hasMultipleSections && (
+                  <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-purple-50/90 via-slate-50 to-purple-50/50 border border-purple-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-purple-600/10 text-purple-700 flex items-center justify-center shrink-0">
+                        <ArrowRight className="w-3.5 h-3.5 text-purple-600" />
+                      </div>
+                      <span className="text-xs font-extrabold text-purple-950">
+                        After Section {sec.sectionIndex} (default):
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <select
-                        value={f.afterSection || "next"}
-                        onChange={(e) => updateField(f.id, { afterSection: e.target.value })}
-                        className="px-3 py-1.5 rounded-xl bg-white border border-purple-300 text-xs font-semibold text-purple-950 focus:outline-none focus:border-purple-600 cursor-pointer shadow-2xs"
+                        value={sec.afterSection || "next"}
+                        onChange={(e) => updateSectionAfterRule(sec.id, e.target.value)}
+                        className="w-full sm:w-auto px-3.5 py-1.5 rounded-xl bg-white border border-purple-300 text-xs font-bold text-purple-950 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 cursor-pointer shadow-2xs transition-all"
                       >
                         <option value="next">Continue to next section</option>
-                        {sectionGroups
-                          .filter((sec) => sec.id !== f.id)
-                          .map((sec) => (
-                            <option key={sec.id} value={sec.id}>
-                              Go to Section {sec.sectionIndex} ({sec.title})
-                            </option>
-                          ))}
+                        {sectionGroups.map((otherSec) => (
+                          <option key={otherSec.id} value={otherSec.id}>
+                            Go to Section {otherSec.sectionIndex} ({otherSec.title})
+                          </option>
+                        ))}
                         <option value="submit">Submit form</option>
                       </select>
                     </div>
                   </div>
-                </div>
-              );
-            }
-
-            // ── WHATSAPP LINK CARD ─────────────────────────────────────────
-            if (isWhatsapp) {
-              const previewUrl = formatWhatsAppUrl(f.waGroupUrl);
-              return (
-                <div
-                  key={f.id}
-                  className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-50/80 to-teal-50/60 border border-emerald-200 shadow-2xs space-y-3"
-                >
-                  {/* Header */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-200/60 pb-2.5">
-                    <div className="flex items-center gap-2">
-                      <div className="h-7 w-7 rounded-lg bg-[#25D366] text-white flex items-center justify-center shrink-0 shadow-xs">
-                        <MessageCircle className="w-4 h-4 fill-white" />
-                      </div>
-                      <div>
-                        <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-950">
-                          WhatsApp Group Link
-                        </span>
-                        <p className="text-[10px] text-emerald-600">
-                          Inline element — visible at this position in the form
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => moveField(idx, "up")}
-                        disabled={idx === 0}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-emerald-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                        title="Move Up"
-                      >
-                        <MoveUp className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveField(idx, "down")}
-                        disabled={idx === activeFields.length - 1}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-emerald-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                        title="Move Down"
-                      >
-                        <MoveDown className="w-3.5 h-3.5" />
-                      </button>
-                      <div className="h-3 w-px bg-emerald-300 mx-1" />
-                      <button
-                        type="button"
-                        onClick={() => duplicateField(f.id)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-emerald-100 transition-colors cursor-pointer"
-                        title="Duplicate"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => deleteField(f.id)}
-                        className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                      {sectionGroups.length > 1 && (
-                        <div className="flex items-center gap-1.5 pl-1">
-                          <span className="text-[10px] text-emerald-800 font-bold uppercase">Section:</span>
-                          <select
-                            value={getFieldSection(f.id)?.id || ""}
-                            onChange={(e) => moveFieldToSection(f.id, e.target.value)}
-                            className="px-2 py-0.5 rounded-lg bg-white/90 border border-emerald-300 text-[10px] font-bold text-emerald-950 focus:outline-none focus:border-emerald-600 cursor-pointer shadow-2xs"
-                            title="Move this WhatsApp link to another section"
-                          >
-                            {sectionGroups.map((sec) => (
-                              <option key={sec.id} value={sec.id}>
-                                Sec {sec.sectionIndex}: {sec.title}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Display label */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">Card Title (optional)</label>
-                    <input
-                      type="text"
-                      value={f.question || ""}
-                      onChange={(e) => updateField(f.id, { question: e.target.value })}
-                      placeholder="Join Our WhatsApp Group"
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-emerald-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">WhatsApp Group URL *</label>
-                      <input
-                        type="text"
-                        value={f.waGroupUrl || ""}
-                        onChange={(e) => updateField(f.id, { waGroupUrl: e.target.value })}
-                        placeholder="https://chat.whatsapp.com/..."
-                        className="w-full px-3 py-2 rounded-xl bg-white border border-emerald-300 text-xs font-mono text-slate-900 focus:outline-none focus:border-emerald-600"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">Group Display Name (optional)</label>
-                      <input
-                        type="text"
-                        value={f.waGroupName || ""}
-                        onChange={(e) => updateField(f.id, { waGroupName: e.target.value })}
-                        placeholder="e.g. SRC Technical Team 2026"
-                        className="w-full px-3 py-2 rounded-xl bg-white border border-emerald-300 text-xs text-slate-800 focus:outline-none focus:border-emerald-600"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Live preview row */}
-                  {previewUrl && (
-                    <div className="flex items-center gap-2 pt-1">
-                      <a
-                        href={previewUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#25D366] text-white text-[11px] font-bold hover:bg-emerald-500 transition-colors"
-                      >
-                        <MessageCircle className="w-3.5 h-3.5" />
-                        <span>Test Link</span>
-                        <ExternalLink className="w-3 h-3 opacity-70" />
-                      </a>
-                      <span className="text-[10px] text-emerald-700">
-                        {f.waGroupName ? `"${f.waGroupName}"` : "Group link configured"}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              );
-            }
-
-            // ── STANDARD QUESTION / NOTE CARD ──────────────────────────────
-            return (
-              <div
-                key={f.id}
-                className={cn(
-                  "p-4 sm:p-5 rounded-2xl border transition-all space-y-3.5",
-                  isNote
-                    ? "bg-amber-50/40 border-amber-200"
-                    : "bg-white border-slate-200 shadow-2xs hover:border-slate-300"
                 )}
-              >
-                {/* Top Row */}
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="w-6 h-6 rounded-lg bg-slate-100 text-slate-700 font-mono font-bold text-[11px] flex items-center justify-center border border-slate-200">
-                      {isNote ? "NB" : `Q${idx + 1}`}
-                    </span>
-                    {hasBranching && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-100 text-purple-700 font-bold text-[10px] shrink-0 border border-purple-200">
-                        <GitBranch className="w-3 h-3 text-purple-600" />
-                        <span>🔀 Branching enabled</span>
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex-1">
-                    <input
-                      type="text"
-                      value={f.question}
-                      onChange={(e) => updateField(f.id, { question: e.target.value })}
-                      placeholder={isNote ? "Note Title / Announcement Header..." : "Enter Question Prompt / Field Label..."}
-                      className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#17458F] focus:bg-white transition-all shadow-2xs"
-                    />
-                  </div>
-
-                  {/* Type Selector */}
-                  <div className="shrink-0">
-                    <select
-                      value={f.type}
-                      onChange={(e) => updateField(f.id, { type: e.target.value as SrcFormFieldType })}
-                      className="px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#17458F] cursor-pointer"
-                    >
-                      <option value="short_text">📝 Short Answer</option>
-                      <option value="long_text">📄 Paragraph</option>
-                      <option value="multiple_choice">🔘 Multiple Choice</option>
-                      <option value="checkboxes">☑️ Checkboxes</option>
-                      <option value="dropdown">🔽 Dropdown</option>
-                      <option value="note">⚠️ Important Note</option>
-                      <option value="section">🗂️ Section Divider</option>
-                      <option value="whatsapp_link">💬 WhatsApp Group Link</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Description / Helper */}
-                {!isNote && (
-                  <div className="pl-0 sm:pl-8">
-                    <input
-                      type="text"
-                      value={f.description || ""}
-                      onChange={(e) => updateField(f.id, { description: e.target.value })}
-                      placeholder="Add optional helper description or guidance for attendees..."
-                      className="w-full px-3 py-1.5 rounded-lg bg-slate-50/70 border border-slate-200/80 text-[11px] text-slate-600 focus:outline-none focus:border-[#17458F] focus:bg-white"
-                    />
-                  </div>
-                )}
-
-                {/* Note Content */}
-                {isNote && (
-                  <div className="pl-0 sm:pl-8 space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-amber-800 flex items-center gap-1">
-                      <Info className="w-3 h-3" />
-                      <span>Instruction / Guideline Text</span>
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={f.noteContent || ""}
-                      onChange={(e) => updateField(f.id, { noteContent: e.target.value })}
-                      placeholder="e.g. Participants are requested to report 30 minutes prior to schedule."
-                      className="w-full px-3.5 py-2 rounded-xl bg-white border border-amber-200 text-xs text-slate-800 focus:outline-none focus:border-[#E78023]"
-                    />
-                  </div>
-                )}
-
-                {/* Option Editor */}
-                {isOptionBased && (
-                  <div className="pl-0 sm:pl-8 space-y-2 pt-1 border-t border-slate-100">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                        Options / Choices:
-                      </span>
-
-                      {/* Go To Section Toggle — enabled for MC, dropdown, AND checkboxes */}
-                      {(f.type === "multiple_choice" || f.type === "dropdown" || f.type === "checkboxes") &&
-                        sectionGroups.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => toggleOptionBranching(f)}
-                            className={cn(
-                              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer",
-                              hasBranching
-                                ? "bg-purple-100 text-purple-900 border border-purple-300"
-                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                            )}
-                            title="Route responders to specific sections based on their chosen answer"
-                          >
-                            <GitBranch className="w-3.5 h-3.5 text-purple-600" />
-                            <span>{hasBranching ? "Go to section: ON" : "Go to section based on answer"}</span>
-                          </button>
-                        )}
-                    </div>
-
-                    <div className="space-y-2">
-                      {(f.options || []).map((opt, optIdx) => {
-                        const targetSectionId = f.goToSection?.[opt] || "next";
-
-                        return (
-                          <div key={optIdx} className="flex flex-col sm:flex-row sm:items-center gap-2">
-                            <div className="flex items-center gap-2 flex-1">
-                              <div className="w-4 h-4 flex items-center justify-center shrink-0 text-slate-400">
-                                {f.type === "multiple_choice" && <CircleDot className="w-3.5 h-3.5" />}
-                                {f.type === "checkboxes" && <CheckSquare className="w-3.5 h-3.5" />}
-                                {f.type === "dropdown" && <span className="text-[10px] font-mono">{optIdx + 1}.</span>}
-                              </div>
-                              <input
-                                type="text"
-                                value={opt}
-                                onChange={(e) => updateOption(f.id, optIdx, e.target.value)}
-                                placeholder={`Option ${optIdx + 1}`}
-                                className="flex-1 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800 focus:outline-none focus:border-[#17458F]"
-                              />
-                            </div>
-
-                            {/* Section Destination Selector */}
-                            {hasBranching && (() => {
-                              const isMissing = targetSectionId !== "next" && targetSectionId !== "submit" && !sectionGroups.some((s) => s.id === targetSectionId);
-                              const currentSec = getFieldSection(f.id);
-                              const isSelfLoop = targetSectionId === currentSec?.id;
-
-                              return (
-                                <div className="flex items-center gap-1.5 shrink-0 pl-6 sm:pl-0 flex-wrap">
-                                  <ArrowRight className="w-3 h-3 text-purple-400" />
-                                  <select
-                                    value={targetSectionId}
-                                    onChange={(e) => {
-                                      const nextGoTo = { ...(f.goToSection || {}), [opt]: e.target.value };
-                                      updateField(f.id, { goToSection: nextGoTo });
-                                    }}
-                                    className={cn(
-                                      "px-2.5 py-1 rounded-lg text-[11px] font-bold focus:outline-none cursor-pointer border shadow-2xs",
-                                      isMissing || isSelfLoop
-                                        ? "bg-rose-50 border-rose-300 text-rose-900 focus:border-rose-600"
-                                        : "bg-purple-50/70 border-purple-200 text-purple-900 focus:border-purple-600"
-                                    )}
-                                  >
-                                    <option value="next">Continue to next section</option>
-                                    {sectionGroups.map((sec) => (
-                                      <option key={sec.id} value={sec.id}>
-                                        Go to: {sec.title}
-                                      </option>
-                                    ))}
-                                    <option value="submit">Submit form</option>
-                                  </select>
-                                  {isMissing && (
-                                    <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200" title="Referenced section does not exist">
-                                      <AlertTriangle className="w-3 h-3 text-rose-500" />
-                                      <span>Deleted</span>
-                                    </span>
-                                  )}
-                                  {isSelfLoop && (
-                                    <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200" title="Routing to current section causes infinite loop">
-                                      <AlertTriangle className="w-3 h-3 text-rose-500" />
-                                      <span>Loop</span>
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })()}
-
-                            {(f.options || []).length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => removeOption(f.id, optIdx)}
-                                className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer shrink-0 self-end sm:self-auto"
-                                title="Remove option"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => addOption(f.id)}
-                      className="mt-1 text-xs font-bold text-[#17458F] hover:text-[#0E2F66] flex items-center gap-1 transition-colors cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Add Option</span>
-                    </button>
-                  </div>
-                )}
-
-                {/* Field Bottom Toolbar */}
-                <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 text-xs">
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => moveField(idx, "up")}
-                      disabled={idx === 0}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                      title="Move Up"
-                    >
-                      <MoveUp className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => moveField(idx, "down")}
-                      disabled={idx === activeFields.length - 1}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                      title="Move Down"
-                    >
-                      <MoveDown className="w-3.5 h-3.5" />
-                    </button>
-                    <div className="h-3 w-px bg-slate-200 mx-1" />
-                    <button
-                      type="button"
-                      onClick={() => duplicateField(f.id)}
-                      className="px-2.5 py-1 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors flex items-center gap-1 font-semibold text-[11px] cursor-pointer"
-                    >
-                      <Copy className="w-3 h-3 text-slate-500" />
-                      <span>Duplicate</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => deleteField(f.id)}
-                      className="px-2.5 py-1 rounded-lg text-rose-600 hover:bg-rose-50 transition-colors flex items-center gap-1 font-semibold text-[11px] cursor-pointer"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                      <span>Delete</span>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    {sectionGroups.length > 1 && (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-slate-400 font-bold uppercase">Section:</span>
-                        <select
-                          value={getFieldSection(f.id)?.id || ""}
-                          onChange={(e) => moveFieldToSection(f.id, e.target.value)}
-                          className="px-2 py-1 rounded-lg bg-purple-50/80 border border-purple-200 text-[11px] font-bold text-purple-900 focus:outline-none focus:border-purple-600 cursor-pointer shadow-2xs"
-                          title="Move this item to a different section"
-                        >
-                          {sectionGroups.map((sec) => (
-                            <option key={sec.id} value={sec.id}>
-                              Sec {sec.sectionIndex}: {sec.title}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
-                    {!isNote && (
-                      <label className="flex items-center gap-2 cursor-pointer select-none">
-                        <span className="text-[11px] font-bold text-slate-700">Required</span>
-                        <input
-                          type="checkbox"
-                          checked={f.required ?? true}
-                          onChange={(e) => updateField(f.id, { required: e.target.checked })}
-                          className="w-4 h-4 rounded text-[#17458F] focus:ring-[#17458F] border-slate-300 cursor-pointer"
-                        />
-                      </label>
-                    )}
-                  </div>
-                </div>
               </div>
             );
           })}

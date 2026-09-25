@@ -692,7 +692,9 @@ export function SrcFormsResponseViewer({
                 >
                   {formSections.length > 1 ? (
                     formSections.map((sec) => {
-                      const secQuestions = sec.fields.filter((f) => f.type !== "note");
+                      const secQuestions = sec.fields.filter(
+                        (f) => f.type !== "note" && f.type !== "section" && f.type !== "whatsapp_link"
+                      );
                       if (secQuestions.length === 0) return null;
                       return (
                         <optgroup
