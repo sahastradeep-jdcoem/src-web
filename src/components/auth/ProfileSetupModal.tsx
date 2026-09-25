@@ -130,6 +130,7 @@ export function ProfileSetupModal() {
   const [showFacultyPendingNotice, setShowFacultyPendingNotice] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isChangingRole, setIsChangingRole] = useState(false);
 
   // Real-time BT ID availability and conflict state
   const [btIdAvailability, setBtIdAvailability] = useState<{
@@ -607,50 +608,122 @@ export function ProfileSetupModal() {
           </div>
         </div>
 
-        {/* 3-Way Category Selector */}
-        <div className="grid grid-cols-3 p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 text-center gap-1">
-          <button
-            type="button"
-            onClick={() => { setAccountType("JDCOEM_STUDENT"); setError(null); }}
-            className={cn(
-              "py-2 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 min-h-[38px]",
-              accountType === "JDCOEM_STUDENT"
-                ? "bg-white text-[#17458F] shadow-xs font-extrabold"
-                : "text-slate-600 hover:text-slate-900"
-            )}
-          >
-            <GraduationCap className={cn("w-3.5 h-3.5 shrink-0", accountType === "JDCOEM_STUDENT" ? "text-[#17458F]" : "text-slate-400")} />
-            <span>Student</span>
-          </button>
+        {/* Account Type Display & Change Option */}
+        {!isChangingRole ? (
+          <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200/80 text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              {accountType === "JDCOEM_STUDENT" && (
+                <>
+                  <div className="w-5 h-5 rounded-md bg-[#17458F]/10 flex items-center justify-center shrink-0">
+                    <GraduationCap className="w-3.5 h-3.5 text-[#17458F]" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="font-bold text-slate-800">JDCOEM Student</span>
+                    <span className="text-[10px] text-slate-400 font-medium ml-1.5 hidden sm:inline">(College Account)</span>
+                  </div>
+                </>
+              )}
+              {accountType === "FACULTY" && (
+                <>
+                  <div className="w-5 h-5 rounded-md bg-[#E78023]/10 flex items-center justify-center shrink-0">
+                    <School className="w-3.5 h-3.5 text-[#E78023]" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="font-bold text-slate-800">Faculty &amp; Staff</span>
+                    <span className="text-[10px] text-amber-600 font-medium ml-1.5 hidden sm:inline">(Accredited Staff)</span>
+                  </div>
+                </>
+              )}
+              {accountType === "EXTERNAL_STUDENT" && (
+                <>
+                  <div className="w-5 h-5 rounded-md bg-emerald-500/10 flex items-center justify-center shrink-0">
+                    <Globe className="w-3.5 h-3.5 text-emerald-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="font-bold text-slate-800">Other College Student</span>
+                    <span className="text-[10px] text-emerald-600 font-medium ml-1.5 hidden sm:inline">(Open Delegate)</span>
+                  </div>
+                </>
+              )}
+            </div>
+            
+            <button
+              type="button"
+              onClick={() => setIsChangingRole(true)}
+              className="text-[11px] font-bold text-[#17458F] hover:text-[#123673] hover:underline cursor-pointer transition-colors shrink-0 ml-2"
+            >
+              Change
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-1.5 p-2 rounded-xl bg-slate-100/90 border border-slate-200/80 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between px-1 text-[11px] font-semibold text-slate-500">
+              <span>Choose your account type:</span>
+              <button
+                type="button"
+                onClick={() => setIsChangingRole(false)}
+                className="text-slate-500 hover:text-slate-800 font-bold cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-1 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setAccountType("JDCOEM_STUDENT");
+                  setError(null);
+                  setIsChangingRole(false);
+                }}
+                className={cn(
+                  "py-2 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 min-h-[38px]",
+                  accountType === "JDCOEM_STUDENT"
+                    ? "bg-white text-[#17458F] shadow-xs font-extrabold"
+                    : "text-slate-600 hover:text-slate-900 bg-transparent"
+                )}
+              >
+                <GraduationCap className={cn("w-3.5 h-3.5 shrink-0", accountType === "JDCOEM_STUDENT" ? "text-[#17458F]" : "text-slate-400")} />
+                <span>Student</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={() => { setAccountType("FACULTY"); setError(null); }}
-            className={cn(
-              "py-2 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 min-h-[38px]",
-              accountType === "FACULTY"
-                ? "bg-white text-[#17458F] shadow-xs font-extrabold"
-                : "text-slate-600 hover:text-slate-900"
-            )}
-          >
-            <School className={cn("w-3.5 h-3.5 shrink-0", accountType === "FACULTY" ? "text-[#E78023]" : "text-slate-400")} />
-            <span className="truncate">Faculty / Staff</span>
-          </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAccountType("FACULTY");
+                  setError(null);
+                  setIsChangingRole(false);
+                }}
+                className={cn(
+                  "py-2 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 min-h-[38px]",
+                  accountType === "FACULTY"
+                    ? "bg-white text-[#17458F] shadow-xs font-extrabold"
+                    : "text-slate-600 hover:text-slate-900 bg-transparent"
+                )}
+              >
+                <School className={cn("w-3.5 h-3.5 shrink-0", accountType === "FACULTY" ? "text-[#E78023]" : "text-slate-400")} />
+                <span className="truncate">Faculty</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={() => { setAccountType("EXTERNAL_STUDENT"); setError(null); }}
-            className={cn(
-              "py-2 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 min-h-[38px]",
-              accountType === "EXTERNAL_STUDENT"
-                ? "bg-white text-[#17458F] shadow-xs font-extrabold"
-                : "text-slate-600 hover:text-slate-900"
-            )}
-          >
-            <Globe className={cn("w-3.5 h-3.5 shrink-0", accountType === "EXTERNAL_STUDENT" ? "text-emerald-600" : "text-slate-400")} />
-            <span className="truncate">Other College</span>
-          </button>
-        </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setAccountType("EXTERNAL_STUDENT");
+                  setError(null);
+                  setIsChangingRole(false);
+                }}
+                className={cn(
+                  "py-2 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 min-h-[38px]",
+                  accountType === "EXTERNAL_STUDENT"
+                    ? "bg-white text-[#17458F] shadow-xs font-extrabold"
+                    : "text-slate-600 hover:text-slate-900 bg-transparent"
+                )}
+              >
+                <Globe className={cn("w-3.5 h-3.5 shrink-0", accountType === "EXTERNAL_STUDENT" ? "text-emerald-600" : "text-slate-400")} />
+                <span className="truncate">Other College</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Account Deletion Confirmation Dialog */}
         {showDeleteConfirm ? (
