@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { 
   Search, 
   Download, 
   FileSpreadsheet,
+  PieChart,
   Eye, 
   ShieldCheck, 
   ShieldAlert, 
@@ -462,6 +464,16 @@ export default function AdminUsersPage() {
             <span className="hidden sm:inline">Export Users Excel</span>
             <span className="sm:hidden">Export Excel</span>
           </button>
+
+          <Link
+            href="/admin/users/summary"
+            className="h-9 px-3 sm:px-3.5 rounded-xl border border-indigo-200 bg-indigo-50/90 hover:bg-indigo-100 text-indigo-900 text-xs font-medium tracking-normal transition-all duration-200 shadow-2xs active:scale-[0.98] cursor-pointer inline-flex items-center justify-center gap-2"
+            title="Open Academic Year & Department visual pie charts and analytics"
+          >
+            <PieChart className="w-3.5 h-3.5 text-indigo-600" />
+            <span className="hidden sm:inline">Roster Summary</span>
+            <span className="sm:hidden">Summary</span>
+          </Link>
         </div>
       </div>
 

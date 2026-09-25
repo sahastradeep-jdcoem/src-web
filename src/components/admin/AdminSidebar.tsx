@@ -75,7 +75,7 @@ export function AdminSidebar() {
         {/* Navigation Links */}
         <nav className="space-y-1">
           {ADMIN_NAV.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href + "/"));
             const Icon = item.icon;
 
             return (
