@@ -4,7 +4,6 @@ import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { 
   ArrowLeft, 
-  PieChart as PieChartIcon, 
   GraduationCap, 
   Building2, 
   Users, 
@@ -448,15 +447,14 @@ export default function AdminUsersSummaryPage() {
             Active Users
           </Link>
           <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-          <span className="text-[#17458F] font-bold">Roster Demographics &amp; Summary</span>
+          <span className="text-[#17458F] font-bold">Roster Summary</span>
         </div>
 
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#0F172A] uppercase tracking-tight flex items-center gap-2.5">
-                <PieChartIcon className="w-7 h-7 text-[#17458F]" />
-                <span>USER ROSTER DEMOGRAPHICS &amp; SUMMARY</span>
+              <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#0F172A] uppercase tracking-tight">
+                USER ROSTER SUMMARY
               </h1>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-50 border border-slate-200 shadow-2xs">
                 <span className="relative flex h-2 w-2">
