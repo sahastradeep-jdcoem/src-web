@@ -19,7 +19,148 @@ export const USERS_STORAGE_KEY = "src_registered_users";
 
 export interface RegisteredUserRecord extends UserProfile {
   lastActive?: string;
-  createdAt?: string;
+  createdAt?: string | any;
+}
+
+/**
+ * Safely parse any representation of a date/timestamp from a user record into epoch milliseconds.
+ * Resilient against Firestore Timestamps ({ seconds, nanoseconds }), .toDate(), ISO strings, numbers, and missing values.
+ */
+export function parseUserDate(user?: Partial<RegisteredUserRecord> | null): number {
+  if (!user) return 0;
+  const raw = user.createdAt || (user as any).registeredAt || user.lastActive || (user as any).updatedAt;
+  if (!raw) {
+    if (user.uid && user.uid.startsWith("student-")) {
+      const parsed = parseInt(user.uid.replace("student-", "").trim(), 10);
+      if (!isNaN(parsed) && parsed > 1600000000000 && parsed < 2500000000000) return parsed;
+    }
+    return 0;
+  }
+
+  // Firestore Timestamp with toDate() method
+  if (typeof (raw as any).toDate === "function") {
+    try {
+      const d = (raw as any).toDate();
+      if (d instanceof Date && !isNaN(d.getTime())) return d.getTime();
+    } catch {}
+  }
+
+  // Firestore Timestamp object { seconds, nanoseconds }
+  if (typeof (raw as any).seconds === "number") {
+    return (raw as any).seconds * 1000;
+  }
+
+  // Node/Admin Firestore Timestamp { _seconds, _nanoseconds }
+  if (typeof (raw as any)._seconds === "number") {
+    return (raw as any)._seconds * 1000;
+  }
+
+  // Epoch number
+  if (typeof raw === "number") {
+    return raw > 1000000000000 ? raw : raw * 1000;
+  }
+
+  // Date instance
+  if (raw instanceof Date) {
+    const t = raw.getTime();
+    return isNaN(t) ? 0 : t;
+  }
+
+  // String (ISO or locale date)
+  if (typeof raw === "string") {
+    const t = new Date(raw).getTime();
+    if (!isNaN(t)) return t;
+  }
+
+  return 0;
+}
+
+/**
+ * Normalizes any timestamp value into a clean, ISO-8601 string for reliable storage in JSON and Firestore.
+ */
+export function normalizeUserIsoDate(val: any, fallbackIso?: string): string {
+  const defaultIso = fallbackIso || new Date().toISOString();
+  if (!val) return defaultIso;
+  if (typeof val?.toDate === "function") {
+    try {
+      const d = val.toDate();
+      if (d instanceof Date && !isNaN(d.getTime())) return d.toISOString();
+    } catch {}
+  }
+  if (typeof val?.seconds === "number") {
+    const d = new Date(val.seconds * 1000);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+  if (typeof val?._seconds === "number") {
+    const d = new Date(val._seconds * 1000);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+  if (val instanceof Date) {
+    return isNaN(val.getTime()) ? defaultIso : val.toISOString();
+  }
+  if (typeof val === "number") {
+    const ms = val > 1000000000000 ? val : val * 1000;
+    const d = new Date(ms);
+    return isNaN(d.getTime()) ? defaultIso : d.toISOString();
+  }
+  if (typeof val === "string") {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+  return defaultIso;
+}
+
+/**
+ * Format a user's registration date for clean UI display (e.g. "25 Sep 2026, 04:30 PM")
+ */
+export function formatUserRegistrationDate(val: any): string {
+  if (!val) return "Date unavailable";
+  const ms = parseUserDate({ createdAt: val });
+  if (!ms || ms === 0) return "Date unavailable";
+  const d = new Date(ms);
+  return d.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+/**
+ * Format a user's registration date as relative time (e.g. "Just now", "5m ago", "2h ago", "3d ago")
+ */
+export function formatUserRelativeTime(val: any): string {
+  if (!val) return "";
+  const ms = parseUserDate({ createdAt: val });
+  if (!ms || ms === 0) return "";
+  const diffSec = Math.floor((Date.now() - ms) / 1000);
+  if (diffSec < 60) return "Just now";
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+  if (diffSec < 604800) return `${Math.floor(diffSec / 86400)}d ago`;
+  const d = new Date(ms);
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
+/**
+ * Deterministic user sort comparator:
+ * 1. Primary: Registration timestamp (newest first)
+ * 2. Secondary tie-breaker: Display name (A-Z)
+ * 3. Tertiary tie-breaker: UID
+ */
+export function compareUsersNewestFirst(a: RegisteredUserRecord, b: RegisteredUserRecord): number {
+  const timeA = parseUserDate(a);
+  const timeB = parseUserDate(b);
+  if (timeB !== timeA) {
+    return timeB - timeA;
+  }
+  const nameA = (a.displayName || a.name || a.email || "").toLowerCase();
+  const nameB = (b.displayName || b.name || b.email || "").toLowerCase();
+  const nameComp = nameA.localeCompare(nameB);
+  if (nameComp !== 0) return nameComp;
+  return (a.uid || "").localeCompare(b.uid || "");
 }
 
 /**
@@ -685,18 +826,20 @@ export function getStoredUsers(): RegisteredUserRecord[] {
   }
 
   // Dynamically resolve designation badge & council status from live rosters
-  return list.map((user) => {
-    const cleanBtId = user.btId ? user.btId.trim().toUpperCase() : "";
-    const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId, user.name || user.email) : null;
-    return {
-      ...user,
-      btId: cleanBtId,
-      designationBadge: designationInfo 
-        ? designationInfo.designationBadge 
-        : (cleanBtId ? undefined : (formatDesignationBadge(user.designationBadge) || undefined)),
-      isCouncilOfficer: designationInfo ? designationInfo.isCouncilOfficer : (cleanBtId ? false : Boolean(user.isCouncilOfficer)),
-    };
-  });
+  return list
+    .map((user) => {
+      const cleanBtId = user.btId ? user.btId.trim().toUpperCase() : "";
+      const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId, user.name || user.email) : null;
+      return {
+        ...user,
+        btId: cleanBtId,
+        designationBadge: designationInfo 
+          ? designationInfo.designationBadge 
+          : (cleanBtId ? undefined : (formatDesignationBadge(user.designationBadge) || undefined)),
+        isCouncilOfficer: designationInfo ? designationInfo.isCouncilOfficer : (cleanBtId ? false : Boolean(user.isCouncilOfficer)),
+      };
+    })
+    .sort(compareUsersNewestFirst);
 }
 
 /**
@@ -783,7 +926,10 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
         deletedAt: r.deletedAt || localMatch?.deletedAt,
         status: r.status || localMatch?.status || (r.isDeleted ? "deleted" : "active"),
         lastActive: r.lastActive || localMatch?.lastActive || new Date().toISOString(),
-        createdAt: r.createdAt || localMatch?.createdAt || new Date().toISOString(),
+        createdAt: normalizeUserIsoDate(
+          r.createdAt || localMatch?.createdAt,
+          localMatch?.lastActive || (typeof r.lastActive === "string" ? r.lastActive : undefined) || new Date().toISOString()
+        ),
       };
 
       // Auto-repair in Firestore if remote user has a valid BT ID but was miscategorized as EXTERNAL_STUDENT or Other College
@@ -825,9 +971,7 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
       }
     }
 
-    const mergedList = Array.from(map.values()).sort(
-      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-    );
+    const mergedList = Array.from(map.values()).sort(compareUsersNewestFirst);
 
     localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(mergedList));
     window.dispatchEvent(new CustomEvent("src_users_updated", { detail: mergedList }));
@@ -935,7 +1079,7 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
       status: user.status || existing?.status || (user.isDeleted ? "deleted" : "active"),
 
       lastActive: now,
-      createdAt: existing?.createdAt || now,
+      createdAt: normalizeUserIsoDate(user.createdAt || existing?.createdAt, now),
     };
 
     let updated: RegisteredUserRecord[];
@@ -944,6 +1088,7 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
     } else {
       updated = [record, ...current];
     }
+    updated.sort(compareUsersNewestFirst);
 
     localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
     window.dispatchEvent(new CustomEvent("src_users_updated", { detail: updated }));
@@ -1192,11 +1337,12 @@ export async function reconcileAllUserDesignations(): Promise<RegisteredUserReco
   });
 
   if (changedCount > 0 && typeof window !== "undefined") {
+    updated.sort(compareUsersNewestFirst);
     try {
       localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
     } catch {}
     window.dispatchEvent(new CustomEvent("src_users_updated", { detail: updated }));
   }
 
-  return updated;
+  return updated.sort(compareUsersNewestFirst);
 }

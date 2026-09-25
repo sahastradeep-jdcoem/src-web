@@ -24,7 +24,9 @@ import {
   Inbox,
   UserPlus,
   RefreshCw,
-  Edit3
+  Edit3,
+  ArrowUpDown,
+  Calendar
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -43,7 +45,11 @@ import {
   resolveDesignationByBtId, 
   formatDesignationBadge,
   isExternalUser,
-  RegisteredUserRecord 
+  RegisteredUserRecord,
+  parseUserDate,
+  formatUserRegistrationDate,
+  formatUserRelativeTime,
+  compareUsersNewestFirst
 } from "@/lib/usersStore";
 import { subscribeToUsersFromFirestore } from "@/lib/firebase/firestore";
 import { getStoredDepartments, getDepartmentShortName, resolveCanonicalDepartmentName, syncDepartmentsFromFirestore } from "@/lib/departmentsStore";
@@ -63,6 +69,9 @@ export default function AdminUsersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<"All" | "PENDING_FACULTY" | "VERIFIED_FACULTY" | "JDCOEM_STUDENTS" | "EXTERNAL_STUDENTS" | "COUNCIL_ADMIN" | "DELETED_ACCOUNTS">("All");
   const [deptFilter, setDeptFilter] = useState("All");
+  const [sortBy, setSortBy] = useState<
+    "newest" | "oldest" | "name_asc" | "name_desc" | "bt_asc" | "bt_desc" | "dept_asc"
+  >("newest");
   const [selectedUser, setSelectedUser] = useState<RegisteredUserRecord | null>(null);
   const [userToEdit, setUserToEdit] = useState<RegisteredUserRecord | null>(null);
   const [userToDelete, setUserToDelete] = useState<RegisteredUserRecord | null>(null);
@@ -335,7 +344,7 @@ export default function AdminUsersPage() {
   }, [users]);
 
   const filteredUsers = useMemo(() => {
-    return users.filter((u) => {
+    const list = users.filter((u) => {
       const name = (u.displayName || "").toLowerCase();
       const email = (u.email || "").toLowerCase();
       const btId = (u.btId || "").toLowerCase();
@@ -372,7 +381,52 @@ export default function AdminUsersPage() {
 
       return matchesSearch && matchesCategory && matchesDept;
     });
-  }, [users, searchQuery, categoryFilter, deptFilter]);
+
+    return [...list].sort((a, b) => {
+      if (sortBy === "newest") {
+        return compareUsersNewestFirst(a, b);
+      }
+      if (sortBy === "oldest") {
+        const timeA = parseUserDate(a);
+        const timeB = parseUserDate(b);
+        if (timeA !== timeB) return timeA - timeB;
+        const nameA = (a.displayName || a.name || a.email || "").toLowerCase();
+        const nameB = (b.displayName || b.name || b.email || "").toLowerCase();
+        return nameA.localeCompare(nameB);
+      }
+      if (sortBy === "name_asc") {
+        const nameA = (a.displayName || a.name || a.email || "").toLowerCase();
+        const nameB = (b.displayName || b.name || b.email || "").toLowerCase();
+        const comp = nameA.localeCompare(nameB);
+        return comp !== 0 ? comp : compareUsersNewestFirst(a, b);
+      }
+      if (sortBy === "name_desc") {
+        const nameA = (a.displayName || a.name || a.email || "").toLowerCase();
+        const nameB = (b.displayName || b.name || b.email || "").toLowerCase();
+        const comp = nameB.localeCompare(nameA);
+        return comp !== 0 ? comp : compareUsersNewestFirst(a, b);
+      }
+      if (sortBy === "bt_asc") {
+        const btA = (a.btId || "ZZZZZZ").toUpperCase();
+        const btB = (b.btId || "ZZZZZZ").toUpperCase();
+        const comp = btA.localeCompare(btB);
+        return comp !== 0 ? comp : compareUsersNewestFirst(a, b);
+      }
+      if (sortBy === "bt_desc") {
+        const btA = (a.btId || "").toUpperCase();
+        const btB = (b.btId || "").toUpperCase();
+        const comp = btB.localeCompare(btA);
+        return comp !== 0 ? comp : compareUsersNewestFirst(a, b);
+      }
+      if (sortBy === "dept_asc") {
+        const deptA = (a.department || a.facultyDepartment || "").toLowerCase();
+        const deptB = (b.department || b.facultyDepartment || "").toLowerCase();
+        const comp = deptA.localeCompare(deptB);
+        return comp !== 0 ? comp : compareUsersNewestFirst(a, b);
+      }
+      return 0;
+    });
+  }, [users, searchQuery, categoryFilter, deptFilter, sortBy]);
 
   const handleExportExcel = async () => {
     if (filteredUsers.length === 0) {
@@ -395,7 +449,7 @@ export default function AdminUsersPage() {
       "WhatsApp Contact": u.phone || "",
       "Access Role": u.role,
       "Profile Completed": u.profileCompleted ? "YES" : "NO",
-      "Registration Date": u.createdAt || "",
+      "Registration Date": formatUserRegistrationDate(u.createdAt),
     }));
 
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -604,7 +658,26 @@ export default function AdminUsersPage() {
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex items-center gap-2.5 w-full sm:w-auto flex-wrap">
+          {/* Sort Selector */}
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200">
+            <ArrowUpDown className="w-3.5 h-3.5 text-[#17458F] shrink-0" />
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider hidden md:inline">Sort:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer pr-1"
+            >
+              <option value="newest">🕒 Newest Registered</option>
+              <option value="oldest">⏳ Oldest Registered</option>
+              <option value="name_asc">🔤 Name (A → Z)</option>
+              <option value="name_desc">🔤 Name (Z → A)</option>
+              <option value="bt_asc">🆔 BT ID (A → Z)</option>
+              <option value="bt_desc">🆔 BT ID (Z → A)</option>
+              <option value="dept_asc">🏢 Department (A → Z)</option>
+            </select>
+          </div>
+
           {/* Department Filter */}
           <select
             value={deptFilter}
@@ -644,10 +717,47 @@ export default function AdminUsersPage() {
             <table className="w-full text-left text-xs border-collapse">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] tracking-wider font-bold">
                 <tr>
-                  <th className="py-4 px-6">User / Delegate</th>
-                  <th className="py-4 px-6">Affiliation / BT ID</th>
-                  <th className="py-4 px-6">Department &amp; Specialization</th>
+                  <th 
+                    onClick={() => setSortBy(sortBy === "name_asc" ? "name_desc" : "name_asc")}
+                    className="py-4 px-6 cursor-pointer select-none hover:text-[#17458F] transition-colors"
+                    title="Click to sort by Full Name"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>User / Delegate</span>
+                      <ArrowUpDown className={`w-3 h-3 ${sortBy === "name_asc" || sortBy === "name_desc" ? "text-[#17458F]" : "text-slate-300"}`} />
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => setSortBy(sortBy === "bt_asc" ? "bt_desc" : "bt_asc")}
+                    className="py-4 px-6 cursor-pointer select-none hover:text-[#17458F] transition-colors"
+                    title="Click to sort by College BT ID"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Affiliation / BT ID</span>
+                      <ArrowUpDown className={`w-3 h-3 ${sortBy === "bt_asc" || sortBy === "bt_desc" ? "text-[#17458F]" : "text-slate-300"}`} />
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => setSortBy(sortBy === "dept_asc" ? "newest" : "dept_asc")}
+                    className="py-4 px-6 cursor-pointer select-none hover:text-[#17458F] transition-colors"
+                    title="Click to sort by Department"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Department &amp; Specialization</span>
+                      <ArrowUpDown className={`w-3 h-3 ${sortBy === "dept_asc" ? "text-[#17458F]" : "text-slate-300"}`} />
+                    </div>
+                  </th>
                   <th className="py-4 px-6">Account Category</th>
+                  <th 
+                    onClick={() => setSortBy(sortBy === "newest" ? "oldest" : "newest")}
+                    className="py-4 px-6 cursor-pointer select-none hover:text-[#17458F] transition-colors"
+                    title="Click to toggle Newest / Oldest Registered"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Registered</span>
+                      <ArrowUpDown className={`w-3 h-3 ${sortBy === "newest" || sortBy === "oldest" ? "text-[#17458F]" : "text-slate-300"}`} />
+                    </div>
+                  </th>
                   <th className="py-4 px-6">Verification Status</th>
                   <th className="py-4 px-6 text-right">Actions</th>
                 </tr>
@@ -794,6 +904,20 @@ export default function AdminUsersPage() {
                               </div>
                             );
                           })()}
+                        </div>
+                      </td>
+
+                      {/* Registered Date */}
+                      <td className="py-4 px-6 whitespace-nowrap">
+                        <div className="space-y-0.5">
+                          <span className="font-semibold text-slate-800 block text-xs tabular-nums">
+                            {formatUserRegistrationDate(u.createdAt)}
+                          </span>
+                          {formatUserRelativeTime(u.createdAt) ? (
+                            <span className="inline-block text-[10px] text-slate-400 font-medium">
+                              {formatUserRelativeTime(u.createdAt)}
+                            </span>
+                          ) : null}
                         </div>
                       </td>
 
@@ -1115,9 +1239,18 @@ export default function AdminUsersPage() {
               </div>
 
               {/* Box 5: Contact */}
-              <div className="p-3.5 rounded-xl bg-slate-50 space-y-1 border border-slate-100 sm:col-span-2">
+              <div className="p-3.5 rounded-xl bg-slate-50 space-y-1 border border-slate-100">
                 <span className="text-slate-400 uppercase text-[10px] font-bold">WhatsApp Contact Phone</span>
-                <p className="font-mono text-slate-800 font-semibold">{selectedUser.phone || "Not provided"}</p>
+                <p className="font-mono text-slate-800 font-semibold text-xs">{selectedUser.phone || "Not provided"}</p>
+              </div>
+
+              {/* Box 6: Registration Date */}
+              <div className="p-3.5 rounded-xl bg-slate-50 space-y-1 border border-slate-100">
+                <span className="text-slate-400 uppercase text-[10px] font-bold">Registration Timestamp</span>
+                <p className="font-mono text-slate-800 font-semibold text-xs">
+                  {formatUserRegistrationDate(selectedUser.createdAt)}
+                  {formatUserRelativeTime(selectedUser.createdAt) ? ` (${formatUserRelativeTime(selectedUser.createdAt)})` : ""}
+                </p>
               </div>
             </div>
 

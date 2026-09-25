@@ -43,6 +43,12 @@ export interface UserProfile {
   isDeleted?: boolean;
   deletedAt?: string;
   status?: "active" | "deleted" | "pending";
+
+  // Timestamps
+  createdAt?: string | any;
+  updatedAt?: string | any;
+  registeredAt?: string;
+  lastActive?: string;
 }
 
 export type AuthUser = UserProfile;
