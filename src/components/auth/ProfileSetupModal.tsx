@@ -27,7 +27,8 @@ import {
   Trash2,
   ChevronDown,
   Check,
-  Search
+  Search,
+  LogOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +42,7 @@ import {
 } from "@/lib/departmentsStore";
 import { 
   checkBtIdAvailability, 
+  checkBtIdAvailabilityAsync,
   resolveDesignationByBtId, 
   maskEmail,
   isExternalUser 
@@ -128,6 +130,24 @@ export function ProfileSetupModal() {
   const [showFacultyPendingNotice, setShowFacultyPendingNotice] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Real-time BT ID availability and conflict state
+  const [btIdAvailability, setBtIdAvailability] = useState<{
+    checking: boolean;
+    available: boolean;
+    linkedEmail?: string;
+    linkedName?: string;
+    isCouncilOwnerMismatch?: boolean;
+  }>({ checking: false, available: true });
+  const checkTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (checkTimeoutRef.current) {
+        clearTimeout(checkTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Close custom click-to-unveil dropdowns on outside click
   useEffect(() => {
@@ -230,22 +250,99 @@ export function ProfileSetupModal() {
     }
   }, [user]);
 
-  // Live check on BT ID change for designation
+  // Live check on BT ID change for uniqueness and council designation
   const handleBtIdChange = (val: string) => {
     const clean = val.toUpperCase().trim();
     setBtId(clean);
     setError(null);
 
-    if (clean.length >= 3) {
-      const currentName = `${firstName} ${lastName}`.trim() || user?.displayName || user?.name || user?.email;
-      const match = resolveDesignationByBtId(clean, currentName);
-      if (match) {
-        setDetectedDesignation(match.designationBadge);
+    if (checkTimeoutRef.current) {
+      clearTimeout(checkTimeoutRef.current);
+    }
+
+    if (clean.length < 3) {
+      setBtIdAvailability({ checking: false, available: true });
+      setDetectedDesignation(null);
+      return;
+    }
+
+    // 1. Instant synchronous check (checks canonical council, local cache, hardcoded defaults)
+    const syncCheck = checkBtIdAvailability(clean, user?.uid, user?.email);
+    if (!syncCheck.available) {
+      setBtIdAvailability({
+        checking: false,
+        available: false,
+        linkedEmail: syncCheck.linkedEmail,
+        linkedName: syncCheck.linkedName,
+        isCouncilOwnerMismatch: syncCheck.isCouncilOwnerMismatch,
+      });
+      setDetectedDesignation(null);
+      return;
+    }
+
+    // 2. Debounced asynchronous check querying Cloud Firestore in real time
+    setBtIdAvailability((prev) => ({ ...prev, checking: true }));
+
+    checkTimeoutRef.current = setTimeout(async () => {
+      try {
+        const asyncCheck = await checkBtIdAvailabilityAsync(clean, user?.uid, user?.email);
+        setBtIdAvailability({
+          checking: false,
+          available: asyncCheck.available,
+          linkedEmail: asyncCheck.linkedEmail,
+          linkedName: asyncCheck.linkedName,
+          isCouncilOwnerMismatch: asyncCheck.isCouncilOwnerMismatch,
+        });
+
+        if (asyncCheck.available) {
+          const currentName = `${firstName} ${lastName}`.trim() || user?.displayName || user?.name || user?.email;
+          const match = resolveDesignationByBtId(clean, currentName);
+          if (match) {
+            setDetectedDesignation(match.designationBadge);
+          } else {
+            setDetectedDesignation(null);
+          }
+        } else {
+          setDetectedDesignation(null);
+        }
+      } catch (e) {
+        setBtIdAvailability((prev) => ({ ...prev, checking: false }));
+      }
+    }, 400);
+  };
+
+  const handleBtIdBlur = async () => {
+    const clean = btId.toUpperCase().trim();
+    if (clean.length < 3) return;
+
+    if (checkTimeoutRef.current) {
+      clearTimeout(checkTimeoutRef.current);
+    }
+
+    setBtIdAvailability((prev) => ({ ...prev, checking: true }));
+    try {
+      const asyncCheck = await checkBtIdAvailabilityAsync(clean, user?.uid, user?.email);
+      setBtIdAvailability({
+        checking: false,
+        available: asyncCheck.available,
+        linkedEmail: asyncCheck.linkedEmail,
+        linkedName: asyncCheck.linkedName,
+        isCouncilOwnerMismatch: asyncCheck.isCouncilOwnerMismatch,
+      });
+
+      if (asyncCheck.available) {
+        const currentName = `${firstName} ${lastName}`.trim() || user?.displayName || user?.name || user?.email;
+        const match = resolveDesignationByBtId(clean, currentName);
+        if (match) {
+          setDetectedDesignation(match.designationBadge);
+        } else {
+          setDetectedDesignation(null);
+        }
       } else {
         setDetectedDesignation(null);
       }
-    } else {
-      setDetectedDesignation(null);
+    } catch (e) {
+      setBtIdAvailability((prev) => ({ ...prev, checking: false }));
     }
   };
 
@@ -255,6 +352,8 @@ export function ProfileSetupModal() {
     lastName.trim() &&
     phone.trim() &&
     btId.trim().length >= 3 &&
+    btIdAvailability.available &&
+    !btIdAvailability.checking &&
     department.trim() &&
     year.trim()
   );
@@ -323,19 +422,28 @@ export function ProfileSetupModal() {
         return;
       }
 
-      // Check BT ID Uniqueness
-      const availability = checkBtIdAvailability(cleanBtId, user?.uid);
+      // Check BT ID Uniqueness against Cloud Firestore and local data
+      setIsSubmitting(true);
+      const availability = await checkBtIdAvailabilityAsync(cleanBtId, user?.uid, user?.email);
       if (!availability.available) {
+        setIsSubmitting(false);
+        setBtIdAvailability({
+          checking: false,
+          available: false,
+          linkedEmail: availability.linkedEmail,
+          linkedName: availability.linkedName,
+          isCouncilOwnerMismatch: availability.isCouncilOwnerMismatch,
+        });
         const masked = maskEmail(availability.linkedEmail || "");
         setError(
-          `This BT ID (${cleanBtId}) is already linked to ${masked}. If this is your BT ID, please sign in with that Google account or contact the Student Council.`
+          availability.isCouncilOwnerMismatch
+            ? `College ID (${cleanBtId}) is assigned to Student Council official (${availability.linkedName || "Council Officer"}). It can only be activated with their official email (${masked}).`
+            : `College ID (${cleanBtId}) is already linked to another account (${masked}). Each student BT ID can only be bound to one Google account.`
         );
         return;
       }
 
       const designationInfo = resolveDesignationByBtId(cleanBtId, `${cleanFirst} ${cleanLast}`);
-
-      setIsSubmitting(true);
       try {
         await updateUserProfile({
           firstName: cleanFirst,
@@ -638,7 +746,7 @@ export function ProfileSetupModal() {
             )}
 
             {/* Live Detected Council Designation Banner for JDCOEM Students */}
-            {accountType === "JDCOEM_STUDENT" && detectedDesignation && (
+            {accountType === "JDCOEM_STUDENT" && detectedDesignation && btIdAvailability.available && (
               <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold flex items-center gap-2.5 shadow-xs animate-in fade-in">
                 <Award className="w-5 h-5 text-[#E78023] shrink-0" />
                 <div>
@@ -721,7 +829,21 @@ export function ProfileSetupModal() {
                         <Hash className="w-3.5 h-3.5 text-[#17458F]" />
                         <span>JDCOEM BT ID (College ID) <span className="text-rose-500">*</span></span>
                       </label>
-                      <span className="text-[10px] text-slate-400 font-mono">Format: BT22CSE045</span>
+                      <div className="flex items-center gap-2">
+                        {btIdAvailability.checking && (
+                          <span className="text-[10px] text-amber-600 font-medium flex items-center gap-1 animate-pulse">
+                            <Clock className="w-3 h-3 text-[#E78023]" />
+                            <span>Checking...</span>
+                          </span>
+                        )}
+                        {!btIdAvailability.checking && btId.trim().length >= 3 && btIdAvailability.available && (
+                          <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                            <Check className="w-3 h-3 text-emerald-600" />
+                            <span>Available</span>
+                          </span>
+                        )}
+                        <span className="text-[10px] text-slate-400 font-mono">Format: BT22CSE045</span>
+                      </div>
                     </div>
                     <input
                       type="text"
@@ -729,8 +851,56 @@ export function ProfileSetupModal() {
                       placeholder="e.g. BT22CSE045"
                       value={btId}
                       onChange={(e) => handleBtIdChange(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold text-[#E78023] uppercase tracking-wider focus:outline-none focus:border-[#17458F]"
+                      onBlur={handleBtIdBlur}
+                      className={cn(
+                        "w-full px-3.5 py-2.5 rounded-xl border text-xs font-mono font-bold uppercase tracking-wider focus:outline-none transition-all",
+                        !btIdAvailability.available
+                          ? "bg-rose-50/50 border-rose-300 text-rose-700 focus:border-rose-500 ring-2 ring-rose-500/10"
+                          : "bg-slate-50 border-slate-200 text-[#E78023] focus:border-[#17458F]"
+                      )}
                     />
+
+                    {/* Conflict card if BT ID already linked to another Google account */}
+                    {!btIdAvailability.available && (
+                      <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 space-y-2 animate-in fade-in">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                          <div className="text-xs space-y-0.5">
+                            <p className="font-bold text-rose-800">College ID Already Linked</p>
+                            <p className="text-[11px] leading-relaxed text-rose-700">
+                              {btIdAvailability.isCouncilOwnerMismatch ? (
+                                <>
+                                  College ID <strong className="font-mono">{btId}</strong> is reserved for Student Council official{" "}
+                                  <strong>{btIdAvailability.linkedName || "Council Officer"}</strong>. It can only be activated with their official email{" "}
+                                  <strong className="font-mono">{maskEmail(btIdAvailability.linkedEmail || "")}</strong>.
+                                </>
+                              ) : (
+                                <>
+                                  College ID <strong className="font-mono">{btId}</strong> is already linked to another account (
+                                  <strong className="font-mono">{maskEmail(btIdAvailability.linkedEmail || "")}</strong>).
+                                  Each student BT ID can only be bound to one Google account.
+                                </>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between pt-1 border-t border-rose-200/60 text-[11px]">
+                          <span className="text-rose-700 font-medium">Wrong Google account?</span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await logout();
+                              closeProfileModal();
+                            }}
+                            className="inline-flex items-center gap-1 font-bold text-rose-700 hover:text-rose-900 hover:underline cursor-pointer"
+                          >
+                            <LogOut className="w-3 h-3" />
+                            <span>Sign Out &amp; Switch Account</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     <p className="text-[10px] text-slate-400">
                       Bound permanently to your Google account for student council ballots and voting.
                     </p>
@@ -1147,7 +1317,11 @@ export function ProfileSetupModal() {
                   <p className="text-[11px] text-amber-800 bg-amber-50/90 border border-amber-200/80 rounded-xl px-3 py-2 font-medium text-center flex items-center justify-center gap-1.5 animate-in fade-in">
                     <AlertCircle className="w-3.5 h-3.5 text-[#E78023] shrink-0" />
                     <span>
-                      {accountType === "JDCOEM_STUDENT"
+                      {accountType === "JDCOEM_STUDENT" && !btIdAvailability.available
+                        ? "This College BT ID is already bound to another Google account. Please switch to your original account."
+                        : accountType === "JDCOEM_STUDENT" && btIdAvailability.checking
+                        ? "Verifying College BT ID availability..."
+                        : accountType === "JDCOEM_STUDENT"
                         ? "Please fill in all required fields (Name, BT ID, Department, Year, and WhatsApp) to save."
                         : "Please complete all required fields above to proceed."}
                     </span>

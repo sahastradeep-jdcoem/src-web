@@ -270,6 +270,32 @@ export async function getAllUsersFromFirestore(): Promise<UserProfile[]> {
 }
 
 /**
+ * Query Firestore to find if a student record exists with a matching BT ID
+ */
+export async function findUserByBtIdInFirestore(btId: string): Promise<UserProfile | null> {
+  if (!db || !btId || !btId.trim() || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    return null;
+  }
+  const cleanBtId = btId.trim().toUpperCase();
+  try {
+    const usersRef = collection(db, USERS_COLLECTION);
+    const q = query(usersRef, where("btId", "==", cleanBtId));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      for (const d of snapshot.docs) {
+        const data = d.data() as UserProfile;
+        if (!data.isDeleted && data.status !== "deleted") {
+          return { ...data, uid: data.uid || d.id };
+        }
+      }
+    }
+  } catch (error) {
+    console.warn("Could not query user by BT ID in Firestore:", error);
+  }
+  return null;
+}
+
+/**
  * Subscribe to real-time updates of all registered student users in Firestore
  */
 export function subscribeToUsersFromFirestore(callback: (users: UserProfile[]) => void): () => void {

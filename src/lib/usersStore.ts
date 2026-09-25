@@ -4,7 +4,8 @@ import {
   getAllUsersFromFirestore, 
   saveUserProfileToFirestore,
   saveAdminRecordToFirestore,
-  removeAdminRecordFromFirestore
+  removeAdminRecordFromFirestore,
+  findUserByBtIdInFirestore
 } from "./firebase/firestore";
 import { 
   getStoredCouncilMembers, 
@@ -176,27 +177,132 @@ export function maskEmail(email: string): string {
   return `${maskedLocal}@${domain}`;
 }
 
+export interface BtIdAvailabilityResult {
+  available: boolean;
+  linkedEmail?: string;
+  linkedName?: string;
+  isCouncilOwnerMismatch?: boolean;
+}
+
 /**
- * Check if a BT ID is uniquely available or already linked to another Google account
- */
+  * Check if a BT ID is uniquely available or already linked to another Google account.
+  * Checks council rosters, canonical records, and local user database.
+  */
 export function checkBtIdAvailability(
   btId: string, 
-  currentUid?: string
-): { available: boolean; linkedEmail?: string; linkedName?: string } {
+  currentUid?: string | null,
+  currentEmail?: string | null
+): BtIdAvailabilityResult {
   if (!btId || !btId.trim()) return { available: true };
   const cleanBtId = btId.trim().toUpperCase();
+  const cleanEmail = currentEmail ? currentEmail.trim().toLowerCase() : "";
+
+  // 1. Check Canonical Council and official club leaders for email-owner linkage
+  const council = getStoredCouncilMembers();
+  const hosting = getStoredHostingCommittee();
+  const spokes = getStoredSpokespersons();
+  const founders = getStoredFoundingMembers();
+  const clubs = getStoredClubs();
+
+  const allOfficials: Array<{ btId?: string; email?: string; name: string; role?: string }> = [
+    ...council,
+    ...hosting,
+    ...spokes,
+    ...founders,
+  ];
+
+  for (const c of clubs) {
+    const leaders = getClubLeaders(c);
+    for (const l of leaders) {
+      allOfficials.push({ btId: l.btId, email: l.email, name: l.name, role: l.role });
+    }
+  }
+
+  // Also check canonicalCouncil.json directly
+  try {
+    const canonical = require("@/data/canonicalCouncil.json");
+    if (Array.isArray(canonical)) {
+      for (const c of canonical) {
+        allOfficials.push({ btId: c.btId, email: c.email, name: c.name, role: c.role });
+      }
+    }
+  } catch {}
+
+  // If this BT ID is assigned to an official in the council roster:
+  const matchedOfficial = allOfficials.find(
+    (o) => o.btId && o.btId.trim().toUpperCase() === cleanBtId && o.email
+  );
+
+  if (matchedOfficial && matchedOfficial.email) {
+    const officialEmail = matchedOfficial.email.trim().toLowerCase();
+    // If current logged-in email does not match official's email:
+    if (cleanEmail && cleanEmail !== officialEmail) {
+      return {
+        available: false,
+        linkedEmail: officialEmail,
+        linkedName: matchedOfficial.name,
+        isCouncilOwnerMismatch: true,
+      };
+    }
+  }
+
+  // 2. Check local users store
   const currentUsers = getStoredUsers();
 
-  const linkedUser = currentUsers.find(
-    (u) => u.btId && u.btId.trim().toUpperCase() === cleanBtId && u.uid !== currentUid
-  );
+  const linkedUser = currentUsers.find((u) => {
+    if (!u.btId || u.btId.trim().toUpperCase() !== cleanBtId) return false;
+    if (u.isDeleted || u.status === "deleted") return false;
+    // If it's the same user by UID or by email, it's allowed
+    if (currentUid && u.uid === currentUid) return false;
+    if (cleanEmail && u.email && u.email.trim().toLowerCase() === cleanEmail) return false;
+    return true;
+  });
 
   if (linkedUser) {
     return {
       available: false,
       linkedEmail: linkedUser.email || "another Google account",
-      linkedName: linkedUser.displayName || "Verified Student",
+      linkedName: linkedUser.displayName || `${linkedUser.firstName || ""} ${linkedUser.lastName || ""}`.trim() || "Verified Student",
     };
+  }
+
+  return { available: true };
+}
+
+/**
+ * Asynchronously checks BT ID availability against Cloud Firestore AND local store.
+ */
+export async function checkBtIdAvailabilityAsync(
+  btId: string,
+  currentUid?: string | null,
+  currentEmail?: string | null
+): Promise<BtIdAvailabilityResult> {
+  // First do the instant synchronous check
+  const syncCheck = checkBtIdAvailability(btId, currentUid, currentEmail);
+  if (!syncCheck.available) {
+    return syncCheck;
+  }
+
+  if (!btId || !btId.trim()) return { available: true };
+  const cleanBtId = btId.trim().toUpperCase();
+  const cleanEmail = currentEmail ? currentEmail.trim().toLowerCase() : "";
+
+  // Query Cloud Firestore
+  try {
+    const remoteUser = await findUserByBtIdInFirestore(cleanBtId);
+    if (remoteUser) {
+      const isSameUid = Boolean(currentUid && remoteUser.uid === currentUid);
+      const isSameEmail = Boolean(cleanEmail && remoteUser.email && remoteUser.email.trim().toLowerCase() === cleanEmail);
+      if (!isSameUid && !isSameEmail) {
+        return {
+          available: false,
+          linkedEmail: remoteUser.email || "another Google account",
+          linkedName: remoteUser.displayName || remoteUser.name || "Verified Student",
+        };
+      }
+    }
+  } catch (error) {
+    console.warn("Firestore BT ID check notice:", error);
   }
 
   return { available: true };
