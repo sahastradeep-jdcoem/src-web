@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Image from "next/image";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -24,7 +24,10 @@ import {
   Clock, 
   Globe, 
   HelpCircle,
-  Trash2
+  Trash2,
+  ChevronDown,
+  Check,
+  Search
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -33,7 +36,8 @@ import {
   DEFAULT_DEPARTMENTS,
   syncDepartmentsFromFirestore,
   subscribeToDepartments,
-  resolveCanonicalDepartmentName
+  resolveCanonicalDepartmentName,
+  getDepartmentShortName
 } from "@/lib/departmentsStore";
 import { 
   checkBtIdAvailability, 
@@ -92,11 +96,19 @@ export function ProfileSetupModal() {
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
   
-  // JDCOEM Student Fields
+  // JDCOEM Student Fields (Not prefilled - user must click to unveil)
   const [btId, setBtId] = useState("");
-  const [department, setDepartment] = useState(DEFAULT_DEPARTMENTS[1]);
-  const [year, setYear] = useState(STUDY_YEARS[2]);
-  
+  const [department, setDepartment] = useState("");
+  const [year, setYear] = useState("");
+
+  // Dropdown unveil & search states for JDCOEM student
+  const [isDeptDropdownOpen, setIsDeptDropdownOpen] = useState(false);
+  const [deptSearchTerm, setDeptSearchTerm] = useState("");
+  const deptDropdownRef = useRef<HTMLDivElement>(null);
+
+  const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
+  const yearDropdownRef = useRef<HTMLDivElement>(null);
+
   // Faculty Fields
   const [title, setTitle] = useState(FACULTY_TITLES[0]);
   const [facultyDesignation, setFacultyDesignation] = useState(FACULTY_DESIGNATIONS[0]);
@@ -108,7 +120,7 @@ export function ProfileSetupModal() {
   const [city, setCity] = useState("");
   const [degree, setDegree] = useState("");
   const [customBranch, setCustomBranch] = useState("");
-  const [externalYear, setExternalYear] = useState(STUDY_YEARS[2]);
+  const [externalYear, setExternalYear] = useState("");
 
   const [error, setError] = useState<string | null>(null);
   const [detectedDesignation, setDetectedDesignation] = useState<string | null>(null);
@@ -116,6 +128,29 @@ export function ProfileSetupModal() {
   const [showFacultyPendingNotice, setShowFacultyPendingNotice] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Close custom click-to-unveil dropdowns on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (deptDropdownRef.current && !deptDropdownRef.current.contains(e.target as Node)) {
+        setIsDeptDropdownOpen(false);
+      }
+      if (yearDropdownRef.current && !yearDropdownRef.current.contains(e.target as Node)) {
+        setIsYearDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredDepartments = useMemo(() => {
+    const query = deptSearchTerm.toLowerCase().trim();
+    if (!query) return departmentsList;
+    return departmentsList.filter((dept) => {
+      const short = getDepartmentShortName(dept).toLowerCase();
+      return dept.toLowerCase().includes(query) || short.includes(query);
+    });
+  }, [departmentsList, deptSearchTerm]);
 
   useEffect(() => {
     setDepartmentsList(getStoredDepartments());
@@ -163,15 +198,24 @@ export function ProfileSetupModal() {
         setBtId(user.btId);
         const match = resolveDesignationByBtId(user.btId, user.displayName || user.name || user.email);
         if (match) setDetectedDesignation(match.designationBadge);
+      } else {
+        setBtId("");
+        setDetectedDesignation(null);
       }
       if (user.department) {
         const canonical = resolveCanonicalDepartmentName(user.department, departmentsList);
         setDepartment(canonical);
         setFacultyDepartment(canonical);
+      } else {
+        setDepartment("");
+        setFacultyDepartment(departmentsList[1] || DEFAULT_DEPARTMENTS[1]);
       }
       if (user.year) {
         setYear(user.year);
         setExternalYear(user.year);
+      } else {
+        setYear("");
+        setExternalYear("");
       }
       if (user.phone) setPhone(user.phone);
       if (user.title) setTitle(user.title);
@@ -205,6 +249,40 @@ export function ProfileSetupModal() {
     }
   };
 
+  // Form validity across all roles - all required fields must be filled
+  const isJdcoemStudentValid = Boolean(
+    firstName.trim() &&
+    lastName.trim() &&
+    phone.trim() &&
+    btId.trim().length >= 3 &&
+    department.trim() &&
+    year.trim()
+  );
+
+  const isFacultyValid = Boolean(
+    firstName.trim() &&
+    lastName.trim() &&
+    phone.trim() &&
+    title.trim() &&
+    facultyDesignation.trim() &&
+    facultyDepartment.trim()
+  );
+
+  const isExternalValid = Boolean(
+    firstName.trim() &&
+    lastName.trim() &&
+    phone.trim() &&
+    collegeName.trim() &&
+    city.trim() &&
+    (degree.trim() || customBranch.trim()) &&
+    externalYear.trim()
+  );
+
+  const isFormValid = 
+    accountType === "JDCOEM_STUDENT" ? isJdcoemStudentValid :
+    accountType === "FACULTY" ? isFacultyValid :
+    isExternalValid;
+
   if (!isProfileModalOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -230,8 +308,18 @@ export function ProfileSetupModal() {
     // -------------------------------------------------------------
     if (accountType === "JDCOEM_STUDENT") {
       const cleanBtId = btId.trim().toUpperCase();
-      if (!cleanBtId) {
+      if (!cleanBtId || cleanBtId.length < 3) {
         setError("Please enter your official College BT ID (e.g. BT22CSE045).");
+        return;
+      }
+
+      if (!department || !department.trim()) {
+        setError("Please click to unveil and select your JDCOEM Department.");
+        return;
+      }
+
+      if (!year || !year.trim()) {
+        setError("Please click to unveil and select your Year of Study.");
         return;
       }
 
@@ -648,42 +736,219 @@ export function ProfileSetupModal() {
                     </p>
                   </div>
 
-                  {/* Department */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                      <Building2 className="w-3.5 h-3.5 text-[#E78023]" />
-                      <span>JDCOEM Department <span className="text-rose-500">*</span></span>
-                    </label>
-                    <select
-                      value={resolveCanonicalDepartmentName(department, departmentsList)}
-                      onChange={(e) => setDepartment(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                  {/* Department (Click to unveil options) */}
+                  <div ref={deptDropdownRef} className="space-y-1.5 relative">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-[#E78023]" />
+                        <span>JDCOEM Department <span className="text-rose-500">*</span></span>
+                      </label>
+                      {!department ? (
+                        <span className="text-[10px] text-amber-600 font-semibold flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 text-[#E78023]" />
+                          <span>Click to unveil</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                          <Check className="w-3 h-3 text-emerald-600" />
+                          <span>Selected</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Clickable Trigger Box */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsDeptDropdownOpen(!isDeptDropdownOpen);
+                        setIsYearDropdownOpen(false);
+                      }}
+                      className={cn(
+                        "w-full px-3.5 py-2.5 rounded-xl border text-left text-xs font-semibold transition-all flex items-center justify-between gap-2 cursor-pointer shadow-2xs",
+                        isDeptDropdownOpen
+                          ? "bg-white border-[#17458F] ring-2 ring-[#17458F]/15"
+                          : department
+                          ? "bg-slate-50 border-slate-300 text-slate-900 hover:border-slate-400"
+                          : "bg-amber-50/40 border-amber-300/80 text-slate-500 hover:border-amber-400 hover:bg-amber-50/70"
+                      )}
+                      aria-haspopup="listbox"
+                      aria-expanded={isDeptDropdownOpen}
                     >
-                      {departmentsList.map((dept) => (
-                        <option key={dept} value={dept}>
-                          {dept}
-                        </option>
-                      ))}
-                    </select>
+                      <div className="flex items-center gap-2 truncate">
+                        {department ? (
+                          <>
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-[#17458F]/10 text-[#17458F] shrink-0">
+                              {getDepartmentShortName(department) || "DEPT"}
+                            </span>
+                            <span className="text-slate-900 font-bold truncate">{department}</span>
+                          </>
+                        ) : (
+                          <span className="text-slate-500 font-medium flex items-center gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
+                            <span>Click to unveil &amp; select department...</span>
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {department && (
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        )}
+                        <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform duration-200", isDeptDropdownOpen && "rotate-180 text-[#17458F]")} />
+                      </div>
+                    </button>
+
+                    {/* Unveiled Dropdown Menu */}
+                    {isDeptDropdownOpen && (
+                      <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                        <div className="p-2 border-b border-slate-100 bg-slate-50/80">
+                          <div className="relative">
+                            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                            <input
+                              type="text"
+                              placeholder="Search department (e.g. Data Science, AI, CSE)..."
+                              value={deptSearchTerm}
+                              onChange={(e) => setDeptSearchTerm(e.target.value)}
+                              className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-medium text-slate-800 focus:outline-none focus:border-[#17458F]"
+                              autoFocus
+                            />
+                          </div>
+                        </div>
+
+                        <div className="max-h-56 overflow-y-auto p-1.5 space-y-1" role="listbox">
+                          {filteredDepartments.length === 0 ? (
+                            <p className="p-3 text-center text-xs text-slate-400">No departments matching &quot;{deptSearchTerm}&quot;</p>
+                          ) : (
+                            filteredDepartments.map((dept) => {
+                              const isSelected = department === dept;
+                              const shortCode = getDepartmentShortName(dept);
+                              return (
+                                <button
+                                  key={dept}
+                                  type="button"
+                                  role="option"
+                                  aria-selected={isSelected}
+                                  onClick={() => {
+                                    setDepartment(dept);
+                                    setIsDeptDropdownOpen(false);
+                                    setDeptSearchTerm("");
+                                    setError(null);
+                                  }}
+                                  className={cn(
+                                    "w-full px-3 py-2 rounded-xl text-left text-xs font-semibold transition-all flex items-center justify-between gap-2 cursor-pointer",
+                                    isSelected
+                                      ? "bg-[#17458F] text-white shadow-xs"
+                                      : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                                  )}
+                                >
+                                  <div className="flex items-center gap-2 truncate">
+                                    <span className={cn(
+                                      "px-1.5 py-0.5 rounded text-[10px] font-extrabold shrink-0",
+                                      isSelected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"
+                                    )}>
+                                      {shortCode || "DEPT"}
+                                    </span>
+                                    <span className="truncate">{dept}</span>
+                                  </div>
+                                  {isSelected && (
+                                    <Check className="w-3.5 h-3.5 text-white shrink-0" />
+                                  )}
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Year of Study */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                      <GraduationCap className="w-3.5 h-3.5 text-[#17458F]" />
-                      <span>Year of Study <span className="text-rose-500">*</span></span>
-                    </label>
-                    <select
-                      value={year}
-                      onChange={(e) => setYear(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                  {/* Year of Study (Click to unveil options) */}
+                  <div ref={yearDropdownRef} className="space-y-1.5 relative">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                        <GraduationCap className="w-3.5 h-3.5 text-[#17458F]" />
+                        <span>Year of Study <span className="text-rose-500">*</span></span>
+                      </label>
+                      {!year ? (
+                        <span className="text-[10px] text-amber-600 font-semibold flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 text-[#17458F]" />
+                          <span>Click to unveil</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                          <Check className="w-3 h-3 text-emerald-600" />
+                          <span>Selected</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Clickable Trigger Box */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsYearDropdownOpen(!isYearDropdownOpen);
+                        setIsDeptDropdownOpen(false);
+                      }}
+                      className={cn(
+                        "w-full px-3.5 py-2.5 rounded-xl border text-left text-xs font-semibold transition-all flex items-center justify-between gap-2 cursor-pointer shadow-2xs",
+                        isYearDropdownOpen
+                          ? "bg-white border-[#17458F] ring-2 ring-[#17458F]/15"
+                          : year
+                          ? "bg-slate-50 border-slate-300 text-slate-900 hover:border-slate-400"
+                          : "bg-amber-50/40 border-amber-300/80 text-slate-500 hover:border-amber-400 hover:bg-amber-50/70"
+                      )}
+                      aria-haspopup="listbox"
+                      aria-expanded={isYearDropdownOpen}
                     >
-                      {STUDY_YEARS.map((yr) => (
-                        <option key={yr} value={yr}>
-                          {yr}
-                        </option>
-                      ))}
-                    </select>
+                      <div className="flex items-center gap-2 truncate">
+                        {year ? (
+                          <span className="text-slate-900 font-bold truncate">{year}</span>
+                        ) : (
+                          <span className="text-slate-500 font-medium flex items-center gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5 text-[#17458F]" />
+                            <span>Click to unveil &amp; select academic year...</span>
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {year && (
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        )}
+                        <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform duration-200", isYearDropdownOpen && "rotate-180 text-[#17458F]")} />
+                      </div>
+                    </button>
+
+                    {/* Unveiled Dropdown Menu */}
+                    {isYearDropdownOpen && (
+                      <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 p-1.5 space-y-1" role="listbox">
+                        {STUDY_YEARS.map((yr) => {
+                          const isSelected = year === yr;
+                          return (
+                            <button
+                              key={yr}
+                              type="button"
+                              role="option"
+                              aria-selected={isSelected}
+                              onClick={() => {
+                                setYear(yr);
+                                setIsYearDropdownOpen(false);
+                                setError(null);
+                              }}
+                              className={cn(
+                                "w-full px-3 py-2 rounded-xl text-left text-xs font-semibold transition-all flex items-center justify-between gap-2 cursor-pointer",
+                                isSelected
+                                  ? "bg-[#17458F] text-white shadow-xs"
+                                  : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                              )}
+                            >
+                              <span className="truncate">{yr}</span>
+                              {isSelected && (
+                                <Check className="w-3.5 h-3.5 text-white shrink-0" />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </>
               )}
@@ -822,6 +1087,7 @@ export function ProfileSetupModal() {
                       onChange={(e) => setExternalYear(e.target.value)}
                       className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
                     >
+                      <option value="" disabled>-- Click to select current year of study --</option>
                       {STUDY_YEARS.map((yr) => (
                         <option key={yr} value={yr}>
                           {yr}
@@ -854,13 +1120,18 @@ export function ProfileSetupModal() {
               </div>
 
               {/* Submit Button */}
-              <div className="pt-2">
+              <div className="pt-2 space-y-2">
                 <Button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={!isFormValid || isSubmitting}
                   variant="primary"
                   size="md"
-                  className="w-full justify-center gap-2 cursor-pointer shadow-md shadow-[#E78023]/25"
+                  className={cn(
+                    "w-full justify-center gap-2 shadow-md transition-all",
+                    !isFormValid || isSubmitting
+                      ? "opacity-50 cursor-not-allowed shadow-none"
+                      : "cursor-pointer shadow-[#E78023]/25 hover:shadow-lg hover:shadow-[#E78023]/35"
+                  )}
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   <span>
@@ -871,6 +1142,17 @@ export function ProfileSetupModal() {
                       : "Save & Complete Profile"}
                   </span>
                 </Button>
+
+                {!isFormValid && (
+                  <p className="text-[11px] text-amber-800 bg-amber-50/90 border border-amber-200/80 rounded-xl px-3 py-2 font-medium text-center flex items-center justify-center gap-1.5 animate-in fade-in">
+                    <AlertCircle className="w-3.5 h-3.5 text-[#E78023] shrink-0" />
+                    <span>
+                      {accountType === "JDCOEM_STUDENT"
+                        ? "Please fill in all required fields (Name, BT ID, Department, Year, and WhatsApp) to save."
+                        : "Please complete all required fields above to proceed."}
+                    </span>
+                  </p>
+                )}
               </div>
 
               {!user?.profileCompleted ? (

@@ -125,8 +125,8 @@ export default function AdminUsersPage() {
     displayName: "",
     email: "",
     btId: "",
-    department: "CSE(Data Science)",
-    year: "3rd Year",
+    department: "",
+    year: "",
     role: "STUDENT" as "STUDENT" | "COUNCIL_ADMIN",
   });
 
@@ -188,8 +188,8 @@ export default function AdminUsersPage() {
 
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUserForm.email.trim() || !newUserForm.displayName.trim()) {
-      alert("Please provide both full name and email.");
+    if (!newUserForm.email.trim() || !newUserForm.displayName.trim() || !newUserForm.department.trim() || !newUserForm.year.trim()) {
+      alert("Please fill in all fields (Full Name, Email, Department, and Academic Year).");
       return;
     }
 
@@ -210,7 +210,7 @@ export default function AdminUsersPage() {
       department: newUserForm.department,
       year: newUserForm.year,
       phone: "",
-      profileCompleted: Boolean(cleanBt),
+      profileCompleted: Boolean(cleanBt && newUserForm.department && newUserForm.year),
       lastActive: new Date().toISOString(),
       createdAt: new Date().toISOString(),
     };
@@ -222,8 +222,8 @@ export default function AdminUsersPage() {
       displayName: "",
       email: "",
       btId: "",
-      department: "CSE(Data Science)",
-      year: "3rd Year",
+      department: "",
+      year: "",
       role: "STUDENT",
     });
   };
@@ -1258,13 +1258,15 @@ export default function AdminUsersPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  Department / Branch
+                  Department / Branch <span className="text-rose-500">*</span>
                 </label>
                 <select
                   value={newUserForm.department}
                   onChange={(e) => setNewUserForm({ ...newUserForm, department: e.target.value })}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                  required
                 >
+                  <option value="" disabled>-- Click to select department --</option>
                   {departments.map((dept) => (
                     <option key={dept} value={dept}>
                       {dept}
@@ -1275,13 +1277,15 @@ export default function AdminUsersPage() {
 
               <div>
                 <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  Year of Study
+                  Year of Study <span className="text-rose-500">*</span>
                 </label>
                 <select
                   value={newUserForm.year}
                   onChange={(e) => setNewUserForm({ ...newUserForm, year: e.target.value })}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                  required
                 >
+                  <option value="" disabled>-- Click to select year of study --</option>
                   <option value="1st Year">1st Year</option>
                   <option value="2nd Year">2nd Year</option>
                   <option value="3rd Year">3rd Year</option>
@@ -1301,6 +1305,7 @@ export default function AdminUsersPage() {
               </Button>
               <Button
                 type="submit"
+                disabled={!newUserForm.displayName.trim() || !newUserForm.email.trim() || !newUserForm.department.trim() || !newUserForm.year.trim()}
                 variant="primary"
                 size="sm"
               >

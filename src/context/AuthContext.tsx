@@ -212,9 +212,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           lastName: storedProfile?.lastName || localProfile?.lastName || registeredUser?.lastName || (fbUser.displayName ? fbUser.displayName.split(" ").slice(1).join(" ") : ""),
           btId: cleanBt,
           department: isJdcoem || resolvedUserType === "JDCOEM_STUDENT" || resolvedUserType === "COUNCIL_ADMIN"
-            ? resolveCanonicalDepartmentName(storedProfile?.department || localProfile?.department || registeredUser?.department || "Computer Science and Engineering")
-            : (storedProfile?.degree || localProfile?.degree || storedProfile?.department || "Undergraduate"),
-          year: storedProfile?.year || localProfile?.year || registeredUser?.year || "3rd Year",
+            ? ((storedProfile?.department || localProfile?.department || registeredUser?.department) ? resolveCanonicalDepartmentName(storedProfile?.department || localProfile?.department || registeredUser?.department) : "")
+            : (storedProfile?.degree || localProfile?.degree || storedProfile?.department || ""),
+          year: storedProfile?.year || localProfile?.year || registeredUser?.year || "",
           phone: storedProfile?.phone || localProfile?.phone || registeredUser?.phone || "",
           collegeName: resolvedCollegeName,
           city: isJdcoem ? (storedProfile?.city || localProfile?.city || "Nagpur") : (storedProfile?.city || localProfile?.city || registeredUser?.city || ""),
@@ -398,9 +398,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           lastName: storedProfile?.lastName || localProfile?.lastName || registeredUser?.lastName || (fbUser.displayName ? fbUser.displayName.split(" ").slice(1).join(" ") : ""),
           btId: cleanBt,
           department: isJdcoem || resolvedUserType === "JDCOEM_STUDENT" || resolvedUserType === "COUNCIL_ADMIN"
-            ? resolveCanonicalDepartmentName(storedProfile?.department || localProfile?.department || registeredUser?.department || "Computer Science and Engineering")
-            : (storedProfile?.degree || localProfile?.degree || storedProfile?.department || "Undergraduate"),
-          year: storedProfile?.year || localProfile?.year || registeredUser?.year || (resolvedUserType === "JDCOEM_STUDENT" ? "3rd Year" : ""),
+            ? ((storedProfile?.department || localProfile?.department || registeredUser?.department) ? resolveCanonicalDepartmentName(storedProfile?.department || localProfile?.department || registeredUser?.department) : "")
+            : (storedProfile?.degree || localProfile?.degree || storedProfile?.department || ""),
+          year: storedProfile?.year || localProfile?.year || registeredUser?.year || "",
           phone: storedProfile?.phone || localProfile?.phone || registeredUser?.phone || "",
           collegeName: resolvedCollegeName,
           city: isJdcoem ? (storedProfile?.city || localProfile?.city || "Nagpur") : (storedProfile?.city || localProfile?.city || registeredUser?.city || ""),
