@@ -576,108 +576,95 @@ export function ProfileSetupModal() {
     <Modal
       isOpen={isProfileModalOpen}
       onClose={user?.profileCompleted ? closeProfileModal : () => {}}
-      maxWidth="md"
+      maxWidth="2xl"
       title=""
       closeOnBackdropClick={Boolean(user?.profileCompleted)}
       closeOnEscape={Boolean(user?.profileCompleted)}
       showCloseButton={Boolean(user?.profileCompleted)}
+      contentClassName="p-4 sm:p-6"
+      dialogClassName="sm:max-w-xl md:max-w-2xl rounded-2xl sm:rounded-3xl shadow-2xl border-slate-200/90"
     >
-      <div className="space-y-5 text-[#0F172A] py-1">
+      <div className="space-y-3.5 sm:space-y-4 text-slate-800">
         
-        {/* Header Banner */}
-        <div className="text-center space-y-1.5 pb-2 border-b border-slate-100">
-          <div className="relative mx-auto h-12 w-12 rounded-2xl bg-white p-1.5 border border-slate-200 shadow-sm flex items-center justify-center">
+        {/* Header */}
+        <div className="text-center space-y-1">
+          <div className="relative mx-auto h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-white p-1.5 border border-slate-200/80 shadow-xs flex items-center justify-center">
             <Image
               src="/assets/SRC Logo.png"
-              alt="SRC Emblem"
+              alt="SRC Logo"
               fill
               className="object-contain p-0.5"
             />
           </div>
           
           <div className="space-y-0.5">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-[#E78023] flex items-center justify-center gap-1">
-              <Sparkles className="w-3 h-3" />
-              <span>COLLEGIATE ACCREDITATION</span>
-            </span>
-            <h3 className="font-heading font-extrabold text-xl text-[#0F172A]">
+            <h3 className="font-heading font-extrabold text-lg sm:text-xl text-slate-900 tracking-tight">
               Complete Your Profile
             </h3>
-            <p className="text-xs text-slate-500 font-medium max-w-sm mx-auto">
-              Select your academic role to unlock verified event passes and access.
+            <p className="text-xs text-slate-500 font-medium">
+              Complete your details to access the SRC portal.
             </p>
           </div>
         </div>
 
         {/* 3-Way Category Selector */}
-        <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 text-center">
+        <div className="grid grid-cols-3 p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 text-center gap-1">
           <button
             type="button"
             onClick={() => { setAccountType("JDCOEM_STUDENT"); setError(null); }}
             className={cn(
-              "py-2 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex flex-col items-center gap-0.5",
+              "py-2 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 min-h-[38px]",
               accountType === "JDCOEM_STUDENT"
-                ? "bg-white text-[#17458F] shadow-sm font-extrabold"
+                ? "bg-white text-[#17458F] shadow-xs font-extrabold"
                 : "text-slate-600 hover:text-slate-900"
             )}
           >
-            <GraduationCap className="w-4 h-4 text-[#17458F]" />
-            <span className="leading-tight">JDCOEM Student</span>
+            <GraduationCap className={cn("w-3.5 h-3.5 shrink-0", accountType === "JDCOEM_STUDENT" ? "text-[#17458F]" : "text-slate-400")} />
+            <span>Student</span>
           </button>
 
           <button
             type="button"
             onClick={() => { setAccountType("FACULTY"); setError(null); }}
             className={cn(
-              "py-2 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex flex-col items-center gap-0.5",
+              "py-2 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 min-h-[38px]",
               accountType === "FACULTY"
-                ? "bg-white text-[#17458F] shadow-sm font-extrabold"
+                ? "bg-white text-[#17458F] shadow-xs font-extrabold"
                 : "text-slate-600 hover:text-slate-900"
             )}
           >
-            <School className="w-4 h-4 text-[#E78023]" />
-            <span className="leading-tight">Faculty / Staff</span>
+            <School className={cn("w-3.5 h-3.5 shrink-0", accountType === "FACULTY" ? "text-[#E78023]" : "text-slate-400")} />
+            <span className="truncate">Faculty / Staff</span>
           </button>
 
           <button
             type="button"
             onClick={() => { setAccountType("EXTERNAL_STUDENT"); setError(null); }}
             className={cn(
-              "py-2 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex flex-col items-center gap-0.5",
+              "py-2 px-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 min-h-[38px]",
               accountType === "EXTERNAL_STUDENT"
-                ? "bg-white text-[#17458F] shadow-sm font-extrabold"
+                ? "bg-white text-[#17458F] shadow-xs font-extrabold"
                 : "text-slate-600 hover:text-slate-900"
             )}
           >
-            <Globe className="w-4 h-4 text-emerald-600" />
-            <span className="leading-tight">Other College</span>
+            <Globe className={cn("w-3.5 h-3.5 shrink-0", accountType === "EXTERNAL_STUDENT" ? "text-emerald-600" : "text-slate-400")} />
+            <span className="truncate">Other College</span>
           </button>
         </div>
 
         {/* Account Deletion Confirmation Dialog */}
         {showDeleteConfirm ? (
-          <div className="p-5 rounded-3xl bg-rose-50/90 border-2 border-rose-200 space-y-4 animate-in fade-in">
-            <div className="h-12 w-12 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center mx-auto">
-              <AlertCircle className="w-6 h-6" />
+          <div className="p-5 rounded-2xl bg-rose-50/90 border border-rose-200 space-y-4 animate-in fade-in">
+            <div className="h-10 w-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center mx-auto">
+              <AlertCircle className="w-5 h-5" />
             </div>
             <div className="space-y-1 text-center">
-              <h4 className="font-heading font-extrabold text-lg text-rose-950">
+              <h4 className="font-heading font-extrabold text-base text-rose-950">
                 Permanently Delete Account?
               </h4>
-              <p className="text-xs text-rose-700 font-medium leading-relaxed max-w-sm mx-auto">
+              <p className="text-xs text-rose-700 font-medium max-w-sm mx-auto">
                 Are you sure you want to permanently delete your account (<strong>{user?.email}</strong>)? This action cannot be reversed.
               </p>
-            </div>
-            <div className="p-3.5 rounded-xl bg-white border border-rose-200 text-[11px] text-rose-900 space-y-1.5 font-medium text-left">
-              <div className="font-bold flex items-center gap-1.5 text-rose-800">
-                <ShieldCheck className="w-4 h-4 text-rose-600 shrink-0" />
-                <span>What happens when you delete your account:</span>
-              </div>
-              <ul className="list-disc pl-4 text-slate-600 space-y-0.5 pt-0.5">
-                <li>All your verified festival passes and ticket QR codes will be deactivated.</li>
-                <li>In the SRC admin console, your account will be displayed with a prominent <strong>DELETED ACCOUNT</strong> status.</li>
-                <li>You will be signed out immediately across all devices.</li>
-              </ul>
             </div>
             <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
               <button
@@ -700,25 +687,16 @@ export function ProfileSetupModal() {
             </div>
           </div>
         ) : showFacultyPendingNotice ? (
-          <div className="p-6 rounded-3xl bg-amber-50/80 border border-amber-200 text-center space-y-4 animate-in fade-in">
-            <div className="h-12 w-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto">
-              <Clock className="w-6 h-6 animate-pulse" />
+          <div className="p-5 rounded-2xl bg-amber-50/80 border border-amber-200 text-center space-y-3.5 animate-in fade-in">
+            <div className="h-10 w-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto">
+              <Clock className="w-5 h-5 animate-pulse" />
             </div>
             <div className="space-y-1">
-              <h4 className="font-heading font-extrabold text-lg text-slate-900">
+              <h4 className="font-heading font-extrabold text-base text-slate-900">
                 Verification Request Sent
               </h4>
               <p className="text-xs text-slate-600 font-medium leading-relaxed max-w-sm mx-auto">
                 Thank you, <strong>{title} {firstName} {lastName}</strong>. Your faculty profile has been created and submitted to the <strong>SRC Admin Council</strong> for verification.
-              </p>
-            </div>
-            <div className="p-3 rounded-xl bg-white border border-amber-200 text-[11px] text-amber-900 font-semibold text-left space-y-1">
-              <div className="flex items-center gap-1.5 font-bold">
-                <ShieldCheck className="w-4 h-4 text-[#E78023]" />
-                <span>Next Steps:</span>
-              </div>
-              <p className="text-slate-600 leading-snug">
-                You can browse public events and fests immediately. Once approved by the council administrator, your verified Faculty VIP accreditation will be activated.
               </p>
             </div>
             <Button
@@ -736,98 +714,65 @@ export function ProfileSetupModal() {
         ) : (
           <>
             {error && (
-              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs font-semibold flex items-start gap-2 shadow-xs">
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs font-semibold flex items-start gap-2 shadow-xs">
                 <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <p className="font-bold text-rose-800">Verification Notice</p>
-                  <p className="text-[11px] leading-relaxed text-rose-700">{error}</p>
-                </div>
+                <p className="text-[11px] leading-relaxed text-rose-700">{error}</p>
               </div>
             )}
 
             {/* Live Detected Council Designation Banner for JDCOEM Students */}
             {accountType === "JDCOEM_STUDENT" && detectedDesignation && btIdAvailability.available && (
-              <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold flex items-center gap-2.5 shadow-xs animate-in fade-in">
-                <Award className="w-5 h-5 text-[#E78023] shrink-0" />
-                <div>
-                  <p className="text-[10px] uppercase font-bold text-[#E78023] tracking-wider">Council Appointment Recognized</p>
-                  <p className="font-bold text-slate-900">{detectedDesignation}</p>
-                </div>
+              <div className="p-2.5 rounded-xl bg-amber-50/90 border border-amber-200/90 text-amber-900 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+                <Award className="w-4 h-4 text-[#E78023] shrink-0" />
+                <span className="truncate">
+                  <strong className="text-[#E78023]">Council Appointment:</strong> {detectedDesignation}
+                </span>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-3.5">
+            <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-3.5">
               
-              {/* Faculty Title (Only for Faculty) */}
-              {accountType === "FACULTY" && (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-700">
-                    Academic Title <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {FACULTY_TITLES.map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setTitle(t)}
-                        className={cn(
-                          "px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer",
-                          title === t
-                            ? "bg-[#17458F] text-white shadow-xs"
-                            : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                        )}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* First & Last Name (All Roles) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5 text-[#E78023]" />
-                    <span>First Name <span className="text-rose-500">*</span></span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Harsh"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5 text-[#E78023]" />
-                    <span>Last Name <span className="text-rose-500">*</span></span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Shende"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
-                  />
-                </div>
-              </div>
-
               {/* -------------------------------------------------------- */}
               {/* SECTION A: JDCOEM STUDENT SPECIFIC FIELDS               */}
               {/* -------------------------------------------------------- */}
               {accountType === "JDCOEM_STUDENT" && (
                 <>
-                  {/* BT ID */}
-                  <div className="space-y-1.5">
+                  {/* First & Last Name (2 cols on desktop, 1 on mobile) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-700">
+                        First Name <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Harsh"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-700">
+                        Last Name <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Shende"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* College BT ID (Full width) */}
+                  <div className="space-y-1">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                        <Hash className="w-3.5 h-3.5 text-[#17458F]" />
-                        <span>JDCOEM BT ID (College ID) <span className="text-rose-500">*</span></span>
+                      <label className="text-xs font-semibold text-slate-700">
+                        College BT ID <span className="text-rose-500">*</span>
                       </label>
                       <div className="flex items-center gap-2">
                         {btIdAvailability.checking && (
@@ -853,10 +798,10 @@ export function ProfileSetupModal() {
                       onChange={(e) => handleBtIdChange(e.target.value)}
                       onBlur={handleBtIdBlur}
                       className={cn(
-                        "w-full px-3.5 py-2.5 rounded-xl border text-xs font-mono font-bold uppercase tracking-wider focus:outline-none transition-all",
+                        "w-full px-3.5 py-2.5 rounded-xl border text-xs font-mono font-bold uppercase tracking-wider focus:outline-none transition-all min-h-[44px]",
                         !btIdAvailability.available
                           ? "bg-rose-50/50 border-rose-300 text-rose-700 focus:border-rose-500 ring-2 ring-rose-500/10"
-                          : "bg-slate-50 border-slate-200 text-[#E78023] focus:border-[#17458F]"
+                          : "bg-slate-50/80 border-slate-200 text-[#E78023] focus:bg-white focus:border-[#17458F]"
                       )}
                     />
 
@@ -900,225 +845,195 @@ export function ProfileSetupModal() {
                         </div>
                       </div>
                     )}
-
-                    <p className="text-[10px] text-slate-400">
-                      Bound permanently to your Google account for student council ballots and voting.
-                    </p>
                   </div>
 
-                  {/* Department (Click to unveil options) */}
-                  <div ref={deptDropdownRef} className="space-y-1.5 relative">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                        <Building2 className="w-3.5 h-3.5 text-[#E78023]" />
-                        <span>JDCOEM Department <span className="text-rose-500">*</span></span>
+                  {/* Department & Year (2 cols on desktop, 1 on mobile) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
+                    {/* Department Selector */}
+                    <div ref={deptDropdownRef} className="space-y-1 relative">
+                      <label className="text-xs font-semibold text-slate-700">
+                        Department <span className="text-rose-500">*</span>
                       </label>
-                      {!department ? (
-                        <span className="text-[10px] text-amber-600 font-semibold flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 text-[#E78023]" />
-                          <span>Click to unveil</span>
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
-                          <Check className="w-3 h-3 text-emerald-600" />
-                          <span>Selected</span>
-                        </span>
-                      )}
-                    </div>
 
-                    {/* Clickable Trigger Box */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsDeptDropdownOpen(!isDeptDropdownOpen);
-                        setIsYearDropdownOpen(false);
-                      }}
-                      className={cn(
-                        "w-full px-3.5 py-2.5 rounded-xl border text-left text-xs font-semibold transition-all flex items-center justify-between gap-2 cursor-pointer shadow-2xs",
-                        isDeptDropdownOpen
-                          ? "bg-white border-[#17458F] ring-2 ring-[#17458F]/15"
-                          : department
-                          ? "bg-slate-50 border-slate-300 text-slate-900 hover:border-slate-400"
-                          : "bg-amber-50/40 border-amber-300/80 text-slate-500 hover:border-amber-400 hover:bg-amber-50/70"
-                      )}
-                      aria-haspopup="listbox"
-                      aria-expanded={isDeptDropdownOpen}
-                    >
-                      <div className="flex items-center gap-2 truncate">
-                        {department ? (
-                          <>
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-[#17458F]/10 text-[#17458F] shrink-0">
-                              {getDepartmentShortName(department) || "DEPT"}
-                            </span>
-                            <span className="text-slate-900 font-bold truncate">{department}</span>
-                          </>
-                        ) : (
-                          <span className="text-slate-500 font-medium flex items-center gap-1.5">
-                            <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
-                            <span>Click to unveil &amp; select department...</span>
-                          </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsDeptDropdownOpen(!isDeptDropdownOpen);
+                          setIsYearDropdownOpen(false);
+                        }}
+                        className={cn(
+                          "w-full px-3.5 py-2.5 rounded-xl border text-left text-xs font-semibold transition-all flex items-center justify-between gap-2 cursor-pointer min-h-[44px]",
+                          isDeptDropdownOpen
+                            ? "bg-white border-[#17458F] ring-2 ring-[#17458F]/15"
+                            : department
+                            ? "bg-slate-50/80 border-slate-300 text-slate-900 hover:border-slate-400"
+                            : "bg-slate-50/80 border-slate-200 text-slate-400 hover:border-slate-300 hover:bg-white"
                         )}
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {department && (
-                          <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        )}
-                        <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform duration-200", isDeptDropdownOpen && "rotate-180 text-[#17458F]")} />
-                      </div>
-                    </button>
-
-                    {/* Unveiled Dropdown Menu */}
-                    {isDeptDropdownOpen && (
-                      <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-                        <div className="p-2 border-b border-slate-100 bg-slate-50/80">
-                          <div className="relative">
-                            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                            <input
-                              type="text"
-                              placeholder="Search department (e.g. Data Science, AI, CSE)..."
-                              value={deptSearchTerm}
-                              onChange={(e) => setDeptSearchTerm(e.target.value)}
-                              className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-medium text-slate-800 focus:outline-none focus:border-[#17458F]"
-                              autoFocus
-                            />
-                          </div>
-                        </div>
-
-                        <div className="max-h-56 overflow-y-auto p-1.5 space-y-1" role="listbox">
-                          {filteredDepartments.length === 0 ? (
-                            <p className="p-3 text-center text-xs text-slate-400">No departments matching &quot;{deptSearchTerm}&quot;</p>
+                        aria-haspopup="listbox"
+                        aria-expanded={isDeptDropdownOpen}
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          {department ? (
+                            <>
+                              {/* Mobile: Short code as primary */}
+                              <span className="sm:hidden font-extrabold text-slate-900 text-xs">
+                                {getDepartmentShortName(department) || department}
+                              </span>
+                              {/* Desktop: Full Department name */}
+                              <span className="hidden sm:inline font-semibold text-slate-900 truncate">
+                                {department}
+                              </span>
+                            </>
                           ) : (
-                            filteredDepartments.map((dept) => {
-                              const isSelected = department === dept;
-                              const shortCode = getDepartmentShortName(dept);
-                              return (
-                                <button
-                                  key={dept}
-                                  type="button"
-                                  role="option"
-                                  aria-selected={isSelected}
-                                  onClick={() => {
-                                    setDepartment(dept);
-                                    setIsDeptDropdownOpen(false);
-                                    setDeptSearchTerm("");
-                                    setError(null);
-                                  }}
-                                  className={cn(
-                                    "w-full px-3 py-2 rounded-xl text-left text-xs font-semibold transition-all flex items-center justify-between gap-2 cursor-pointer",
-                                    isSelected
-                                      ? "bg-[#17458F] text-white shadow-xs"
-                                      : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
-                                  )}
-                                >
-                                  <div className="flex items-center gap-2 truncate">
-                                    <span className={cn(
-                                      "px-1.5 py-0.5 rounded text-[10px] font-extrabold shrink-0",
-                                      isSelected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"
-                                    )}>
-                                      {shortCode || "DEPT"}
-                                    </span>
-                                    <span className="truncate">{dept}</span>
-                                  </div>
-                                  {isSelected && (
-                                    <Check className="w-3.5 h-3.5 text-white shrink-0" />
-                                  )}
-                                </button>
-                              );
-                            })
+                            <span className="text-slate-400 font-normal">Select Department...</span>
                           )}
                         </div>
-                      </div>
-                    )}
-                  </div>
+                        <ChevronDown className={cn("w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200", isDeptDropdownOpen && "rotate-180 text-[#17458F]")} />
+                      </button>
 
-                  {/* Year of Study (Click to unveil options) */}
-                  <div ref={yearDropdownRef} className="space-y-1.5 relative">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                        <GraduationCap className="w-3.5 h-3.5 text-[#17458F]" />
-                        <span>Year of Study <span className="text-rose-500">*</span></span>
-                      </label>
-                      {!year ? (
-                        <span className="text-[10px] text-amber-600 font-semibold flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 text-[#17458F]" />
-                          <span>Click to unveil</span>
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
-                          <Check className="w-3 h-3 text-emerald-600" />
-                          <span>Selected</span>
-                        </span>
+                      {isDeptDropdownOpen && (
+                        <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                          <div className="p-2 border-b border-slate-100 bg-slate-50/80">
+                            <div className="relative">
+                              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                              <input
+                                type="text"
+                                placeholder="Search (e.g. CSE, AI, IT)..."
+                                value={deptSearchTerm}
+                                onChange={(e) => setDeptSearchTerm(e.target.value)}
+                                className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-medium text-slate-800 focus:outline-none focus:border-[#17458F]"
+                                autoFocus
+                              />
+                            </div>
+                          </div>
+
+                          <div className="max-h-52 overflow-y-auto p-1.5 space-y-0.5" role="listbox">
+                            {filteredDepartments.length === 0 ? (
+                              <p className="p-3 text-center text-xs text-slate-400">No departments matching &quot;{deptSearchTerm}&quot;</p>
+                            ) : (
+                              filteredDepartments.map((dept) => {
+                                const isSelected = department === dept;
+                                const shortCode = getDepartmentShortName(dept);
+                                return (
+                                  <button
+                                    key={dept}
+                                    type="button"
+                                    role="option"
+                                    aria-selected={isSelected}
+                                    onClick={() => {
+                                      setDepartment(dept);
+                                      setIsDeptDropdownOpen(false);
+                                      setDeptSearchTerm("");
+                                      setError(null);
+                                    }}
+                                    className={cn(
+                                      "w-full px-2.5 py-2 rounded-xl text-left text-xs font-medium transition-all flex items-center justify-between gap-2 cursor-pointer",
+                                      isSelected
+                                        ? "bg-[#17458F] text-white shadow-xs font-semibold"
+                                        : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className={cn(
+                                        "px-1.5 py-0.5 rounded text-[10px] font-extrabold shrink-0",
+                                        isSelected ? "bg-white/20 text-white" : "bg-slate-100 text-[#17458F]"
+                                      )}>
+                                        {shortCode || "DEPT"}
+                                      </span>
+                                      <span className="truncate">{dept}</span>
+                                    </div>
+                                    {isSelected && (
+                                      <Check className="w-3.5 h-3.5 text-white shrink-0" />
+                                    )}
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
                       )}
                     </div>
 
-                    {/* Clickable Trigger Box */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsYearDropdownOpen(!isYearDropdownOpen);
-                        setIsDeptDropdownOpen(false);
-                      }}
-                      className={cn(
-                        "w-full px-3.5 py-2.5 rounded-xl border text-left text-xs font-semibold transition-all flex items-center justify-between gap-2 cursor-pointer shadow-2xs",
-                        isYearDropdownOpen
-                          ? "bg-white border-[#17458F] ring-2 ring-[#17458F]/15"
-                          : year
-                          ? "bg-slate-50 border-slate-300 text-slate-900 hover:border-slate-400"
-                          : "bg-amber-50/40 border-amber-300/80 text-slate-500 hover:border-amber-400 hover:bg-amber-50/70"
-                      )}
-                      aria-haspopup="listbox"
-                      aria-expanded={isYearDropdownOpen}
-                    >
-                      <div className="flex items-center gap-2 truncate">
-                        {year ? (
-                          <span className="text-slate-900 font-bold truncate">{year}</span>
-                        ) : (
-                          <span className="text-slate-500 font-medium flex items-center gap-1.5">
-                            <Sparkles className="w-3.5 h-3.5 text-[#17458F]" />
-                            <span>Click to unveil &amp; select academic year...</span>
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {year && (
-                          <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        )}
-                        <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform duration-200", isYearDropdownOpen && "rotate-180 text-[#17458F]")} />
-                      </div>
-                    </button>
+                    {/* Year Selector */}
+                    <div ref={yearDropdownRef} className="space-y-1 relative">
+                      <label className="text-xs font-semibold text-slate-700">
+                        <span className="sm:hidden">Year</span>
+                        <span className="hidden sm:inline">Year of Study</span>
+                        {" "}<span className="text-rose-500">*</span>
+                      </label>
 
-                    {/* Unveiled Dropdown Menu */}
-                    {isYearDropdownOpen && (
-                      <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 p-1.5 space-y-1" role="listbox">
-                        {STUDY_YEARS.map((yr) => {
-                          const isSelected = year === yr;
-                          return (
-                            <button
-                              key={yr}
-                              type="button"
-                              role="option"
-                              aria-selected={isSelected}
-                              onClick={() => {
-                                setYear(yr);
-                                setIsYearDropdownOpen(false);
-                                setError(null);
-                              }}
-                              className={cn(
-                                "w-full px-3 py-2 rounded-xl text-left text-xs font-semibold transition-all flex items-center justify-between gap-2 cursor-pointer",
-                                isSelected
-                                  ? "bg-[#17458F] text-white shadow-xs"
-                                  : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
-                              )}
-                            >
-                              <span className="truncate">{yr}</span>
-                              {isSelected && (
-                                <Check className="w-3.5 h-3.5 text-white shrink-0" />
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsYearDropdownOpen(!isYearDropdownOpen);
+                          setIsDeptDropdownOpen(false);
+                        }}
+                        className={cn(
+                          "w-full px-3.5 py-2.5 rounded-xl border text-left text-xs font-semibold transition-all flex items-center justify-between gap-2 cursor-pointer min-h-[44px]",
+                          isYearDropdownOpen
+                            ? "bg-white border-[#17458F] ring-2 ring-[#17458F]/15"
+                            : year
+                            ? "bg-slate-50/80 border-slate-300 text-slate-900 hover:border-slate-400"
+                            : "bg-slate-50/80 border-slate-200 text-slate-400 hover:border-slate-300 hover:bg-white"
+                        )}
+                        aria-haspopup="listbox"
+                        aria-expanded={isYearDropdownOpen}
+                      >
+                        <span className={year ? "font-semibold text-slate-900 truncate" : "text-slate-400 font-normal"}>
+                          {year || "Select Year..."}
+                        </span>
+                        <ChevronDown className={cn("w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200", isYearDropdownOpen && "rotate-180 text-[#17458F]")} />
+                      </button>
+
+                      {isYearDropdownOpen && (
+                        <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 p-1.5 space-y-0.5 max-h-52 overflow-y-auto" role="listbox">
+                          {STUDY_YEARS.map((yr) => {
+                            const isSelected = year === yr;
+                            return (
+                              <button
+                                key={yr}
+                                type="button"
+                                role="option"
+                                aria-selected={isSelected}
+                                onClick={() => {
+                                  setYear(yr);
+                                  setIsYearDropdownOpen(false);
+                                  setError(null);
+                                }}
+                                className={cn(
+                                  "w-full px-2.5 py-2 rounded-xl text-left text-xs font-medium transition-all flex items-center justify-between gap-2 cursor-pointer",
+                                  isSelected
+                                    ? "bg-[#17458F] text-white shadow-xs font-semibold"
+                                    : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                                )}
+                              >
+                                <span className="truncate">{yr}</span>
+                                {isSelected && (
+                                  <Check className="w-3.5 h-3.5 text-white shrink-0" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* WhatsApp Contact Number */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-700">
+                      WhatsApp Number <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      required
+                      placeholder="e.g. 9823011223"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ""))}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
+                    />
                   </div>
                 </>
               )}
@@ -1127,243 +1042,323 @@ export function ProfileSetupModal() {
               {/* SECTION B: FACULTY / STAFF SPECIFIC FIELDS             */}
               {/* -------------------------------------------------------- */}
               {accountType === "FACULTY" && (
-                <>
-                  {/* Academic Designation */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                      <Briefcase className="w-3.5 h-3.5 text-[#E78023]" />
-                      <span>Academic Designation <span className="text-rose-500">*</span></span>
+                <div className="space-y-3">
+                  {/* Academic Title */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-700">
+                      Academic Title <span className="text-rose-500">*</span>
                     </label>
-                    <select
-                      value={facultyDesignation}
-                      onChange={(e) => setFacultyDesignation(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
-                    >
-                      {FACULTY_DESIGNATIONS.map((desig) => (
-                        <option key={desig} value={desig}>
-                          {desig}
-                        </option>
+                    <div className="flex flex-wrap gap-1.5">
+                      {FACULTY_TITLES.map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setTitle(t)}
+                          className={cn(
+                            "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                            title === t
+                              ? "bg-[#17458F] text-white shadow-xs"
+                              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                          )}
+                        >
+                          {t}
+                        </button>
                       ))}
-                    </select>
-                  </div>
-
-                  {/* Faculty Department */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                      <Building2 className="w-3.5 h-3.5 text-[#17458F]" />
-                      <span>Faculty Department / School <span className="text-rose-500">*</span></span>
-                    </label>
-                    <select
-                      value={facultyDepartment}
-                      onChange={(e) => setFacultyDepartment(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
-                    >
-                      {departmentsList.map((dept) => (
-                        <option key={dept} value={dept}>
-                          {dept}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Staff / Employee ID (Optional) */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                        <Hash className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Employee / Staff ID (Optional)</span>
-                      </label>
-                      <span className="text-[10px] text-slate-400">No BT ID Required</span>
                     </div>
-                    <input
-                      type="text"
-                      placeholder="e.g. EMP-1024 or JDC-FAC-04"
-                      value={employeeId}
-                      onChange={(e) => setEmployeeId(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
-                    />
                   </div>
 
-                  {/* Admin Approval Notice Banner */}
-                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 font-medium flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-[#E78023] shrink-0" />
-                    <span>Faculty registrations are sent to the SRC Admin Console for verification.</span>
+                  {/* First & Last Name (2 cols on desktop) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-700">
+                        First Name <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Rajesh"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-700">
+                        Last Name <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Sharma"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
+                      />
+                    </div>
                   </div>
-                </>
+
+                  {/* Designation & Department (2 cols on desktop) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-700">
+                        Designation <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={facultyDesignation}
+                        onChange={(e) => setFacultyDesignation(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:border-[#17458F] min-h-[44px]"
+                      >
+                        {FACULTY_DESIGNATIONS.map((desig) => (
+                          <option key={desig} value={desig}>
+                            {desig}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-700">
+                        Department <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={facultyDepartment}
+                        onChange={(e) => setFacultyDepartment(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:border-[#17458F] min-h-[44px]"
+                      >
+                        {departmentsList.map((dept) => (
+                          <option key={dept} value={dept}>
+                            {dept}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Staff ID & WhatsApp Number (2 cols on desktop) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-700">
+                        Staff / Employee ID <span className="text-slate-400 font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. EMP-1024"
+                        value={employeeId}
+                        onChange={(e) => setEmployeeId(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-700">
+                        WhatsApp Number <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        required
+                        placeholder="e.g. 9823011223"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ""))}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
+                      />
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-amber-700 bg-amber-50/80 border border-amber-200/70 rounded-xl px-3 py-2 font-medium flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-[#E78023] shrink-0" />
+                    <span>Faculty registrations are reviewed by the SRC Admin Council.</span>
+                  </p>
+                </div>
               )}
 
               {/* -------------------------------------------------------- */}
               {/* SECTION C: EXTERNAL / OTHER COLLEGE STUDENT FIELDS     */}
               {/* -------------------------------------------------------- */}
               {accountType === "EXTERNAL_STUDENT" && (
-                <>
-                  {/* College Name */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                      <School className="w-3.5 h-3.5 text-[#17458F]" />
-                      <span>College / University Name <span className="text-rose-500">*</span></span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. VNIT Nagpur, RCOEM, GHRCE, YCCE..."
-                      value={collegeName}
-                      onChange={(e) => setCollegeName(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
-                    />
-                  </div>
-
-                  {/* City */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-[#E78023]" />
-                      <span>City / Location <span className="text-rose-500">*</span></span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Nagpur, Pune, Mumbai"
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
-                    />
-                  </div>
-
-                  {/* Degree Searchable Dropdown */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                        <GraduationCap className="w-3.5 h-3.5 text-[#17458F]" />
-                        <span>Degree <span className="text-rose-500">*</span></span>
+                <div className="space-y-3">
+                  {/* First & Last Name (2 cols on desktop) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-700">
+                        First Name <span className="text-rose-500">*</span>
                       </label>
-                      <span className="text-[10px] text-slate-400">All India Recognized Degrees</span>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Ananya"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
+                      />
                     </div>
-                    <SearchableDegreeSelect
-                      value={degree}
-                      onChange={setDegree}
-                      placeholder="Search degree (e.g. B.Tech, BCA, MBA, B.Sc, MBBS, LL.B...)"
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-700">
+                        Last Name <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Verma"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* College Name & City (2 cols on desktop) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-700">
+                        College / University <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. VNIT, RCOEM, GHRCE..."
+                        value={collegeName}
+                        onChange={(e) => setCollegeName(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-700">
+                        City <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Nagpur"
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Degree & Year (2 cols on desktop) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-700">
+                        Degree / Course <span className="text-rose-500">*</span>
+                      </label>
+                      <SearchableDegreeSelect
+                        value={degree}
+                        onChange={setDegree}
+                        placeholder="Search degree..."
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-700">
+                        Year of Study <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={externalYear}
+                        onChange={(e) => setExternalYear(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:border-[#17458F] min-h-[44px]"
+                      >
+                        <option value="">Select Year...</option>
+                        {STUDY_YEARS.map((yr) => (
+                          <option key={yr} value={yr}>
+                            {yr}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* WhatsApp Number (Full width) */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-700">
+                      WhatsApp Number <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       required
+                      placeholder="e.g. 9823011223"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ""))}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
                     />
                   </div>
-
-                  {/* Year of Study */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                      <GraduationCap className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Current Year of Study <span className="text-rose-500">*</span></span>
-                    </label>
-                    <select
-                      value={externalYear}
-                      onChange={(e) => setExternalYear(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
-                    >
-                      <option value="" disabled>-- Click to select current year of study --</option>
-                      {STUDY_YEARS.map((yr) => (
-                        <option key={yr} value={yr}>
-                          {yr}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-900 font-medium flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Instant accreditation: Register for open competitions, hackathons, and cultural fests without BT ID.</span>
-                  </div>
-                </>
+                </div>
               )}
 
-              {/* WhatsApp Contact Number (All Roles) */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
-                  <span>WhatsApp Contact Number</span>
-                  <span className="text-rose-500 font-bold">*</span>
-                </label>
-                <input
-                  type="tel"
-                  required
-                  placeholder="e.g. 9823011223"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
-                />
-              </div>
-
               {/* Submit Button */}
-              <div className="pt-2 space-y-2">
+              <div className="pt-1.5 space-y-1.5">
                 <Button
                   type="submit"
                   disabled={!isFormValid || isSubmitting}
                   variant="primary"
                   size="md"
                   className={cn(
-                    "w-full justify-center gap-2 shadow-md transition-all",
+                    "w-full justify-center gap-2 font-bold min-h-[44px] transition-all",
                     !isFormValid || isSubmitting
                       ? "opacity-50 cursor-not-allowed shadow-none"
-                      : "cursor-pointer shadow-[#E78023]/25 hover:shadow-lg hover:shadow-[#E78023]/35"
+                      : "cursor-pointer bg-[#17458F] hover:bg-[#123673] text-white shadow-md shadow-[#17458F]/20"
                   )}
                 >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>
-                    {isSubmitting
-                      ? "Saving Profile..."
-                      : accountType === "FACULTY"
-                      ? "Submit Faculty Request"
-                      : "Save & Complete Profile"}
-                  </span>
+                  {isSubmitting ? (
+                    <>
+                      <Clock className="w-4 h-4 animate-spin" />
+                      <span>Saving Profile...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>
+                        {accountType === "FACULTY" ? "Submit Faculty Request" : "Complete Profile"}
+                      </span>
+                    </>
+                  )}
                 </Button>
 
-                {!isFormValid && (
-                  <p className="text-[11px] text-amber-800 bg-amber-50/90 border border-amber-200/80 rounded-xl px-3 py-2 font-medium text-center flex items-center justify-center gap-1.5 animate-in fade-in">
-                    <AlertCircle className="w-3.5 h-3.5 text-[#E78023] shrink-0" />
-                    <span>
-                      {accountType === "JDCOEM_STUDENT" && !btIdAvailability.available
-                        ? "This College BT ID is already bound to another Google account. Please switch to your original account."
-                        : accountType === "JDCOEM_STUDENT" && btIdAvailability.checking
-                        ? "Verifying College BT ID availability..."
-                        : accountType === "JDCOEM_STUDENT"
-                        ? "Please fill in all required fields (Name, BT ID, Department, Year, and WhatsApp) to save."
-                        : "Please complete all required fields above to proceed."}
-                    </span>
+                {accountType === "JDCOEM_STUDENT" && !btIdAvailability.available && (
+                  <p className="text-[11px] text-rose-600 font-medium text-center">
+                    This College BT ID is already bound to another Google account.
                   </p>
                 )}
               </div>
 
+              {/* Subtle footer */}
               {!user?.profileCompleted ? (
-                <div className="pt-3 text-center border-t border-slate-100 space-y-1.5">
-                  <p className="text-[11px] text-slate-400 font-medium">
-                    Profile details must be completed to access the portal and event passes.
-                  </p>
+                <div className="pt-2 text-center">
                   <button
                     type="button"
                     onClick={async () => {
                       await logout();
                       closeProfileModal();
                     }}
-                    className="text-xs text-rose-600 hover:text-rose-700 font-bold hover:underline cursor-pointer inline-flex items-center gap-1"
+                    className="text-[11px] text-slate-400 hover:text-rose-600 font-medium transition-colors cursor-pointer"
                   >
-                    <span>Sign Out &amp; Exit</span>
+                    Sign Out
                   </button>
                 </div>
               ) : (
-                <div className="space-y-3 pt-3 border-t border-slate-100">
-                  <div className="flex items-center justify-between text-xs">
-                    <button
-                      type="button"
-                      onClick={closeProfileModal}
-                      className="text-slate-500 hover:text-slate-700 font-medium cursor-pointer"
-                    >
-                      Close without changes
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowDeleteConfirm(true)}
-                      className="text-rose-600 hover:text-rose-700 font-bold hover:underline cursor-pointer flex items-center gap-1"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Delete Account Permanently</span>
-                    </button>
-                  </div>
+                <div className="pt-2 flex items-center justify-between text-xs border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={closeProfileModal}
+                    className="text-slate-500 hover:text-slate-700 font-medium cursor-pointer"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="text-rose-600 hover:text-rose-700 font-semibold cursor-pointer flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Delete Account</span>
+                  </button>
                 </div>
               )}
 
