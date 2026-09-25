@@ -303,7 +303,7 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {displayMembers.map((member, idx) => {
                 const studentInfo = findStudentByBtId(member.btId);
-                const displayName = member.name || studentInfo?.name || member.btId;
+                const displayName = member.name || studentInfo?.name || "Student Member";
                 const displayDept = member.department || studentInfo?.department;
                 const displayYear = member.year || studentInfo?.year;
 
@@ -319,23 +319,23 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
                       <h4 className="font-bold text-sm text-[#0F172A] truncate" title={displayName}>
                         {displayName}
                       </h4>
-                      <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-slate-500 font-medium truncate">
-                        <span className="font-mono text-[10px] text-[#E78023] font-bold">
-                          {member.btId}
-                        </span>
-                        {displayDept && (
-                          <>
-                            <span>•</span>
+                      {(displayDept || displayYear) ? (
+                        <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-slate-500 font-medium truncate">
+                          {displayDept && (
                             <span className="truncate">{getDepartmentShortName(displayDept)}</span>
-                          </>
-                        )}
-                        {displayYear && (
-                          <>
+                          )}
+                          {displayDept && displayYear && (
                             <span>•</span>
+                          )}
+                          {displayYear && (
                             <span>{displayYear}</span>
-                          </>
-                        )}
-                      </div>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-slate-400 font-medium">
+                          Inducted Member
+                        </p>
+                      )}
                     </div>
                   </div>
                 );
