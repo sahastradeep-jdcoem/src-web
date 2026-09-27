@@ -28,7 +28,9 @@ import {
   ChevronDown,
   Check,
   Search,
-  LogOut
+  LogOut,
+  UserCheck,
+  Info
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -79,6 +81,15 @@ export const FACULTY_DESIGNATIONS = [
   "Administrative Staff",
 ];
 
+function toTitleCase(str: string): string {
+  if (!str) return "";
+  return str
+    .trim()
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
 export function ProfileSetupModal() {
   const { 
     user, 
@@ -90,6 +101,9 @@ export function ProfileSetupModal() {
     pendingUserType 
   } = useAuth();
   
+  // Name Formatting Instruction Dialog state for new accounts
+  const [showNameInstructionDialog, setShowNameInstructionDialog] = useState(false);
+
   // Category Switcher: JDCOEM_STUDENT | FACULTY | EXTERNAL_STUDENT
   const [accountType, setAccountType] = useState<"JDCOEM_STUDENT" | "FACULTY" | "EXTERNAL_STUDENT">("JDCOEM_STUDENT");
 
@@ -196,12 +210,22 @@ export function ProfileSetupModal() {
   useEffect(() => {
     if (user) {
       if (user.firstName && user.lastName) {
-        setFirstName(user.firstName);
-        setLastName(user.lastName);
+        setFirstName(toTitleCase(user.firstName));
+        setLastName(toTitleCase(user.lastName));
       } else if (user.displayName) {
-        const parts = user.displayName.trim().split(" ");
-        setFirstName(parts[0] || "");
-        setLastName(parts.slice(1).join(" ") || "");
+        const rawParts = user.displayName.trim().split(/\s+/).map((w) => 
+          w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+        );
+        if (rawParts.length === 1) {
+          setFirstName(rawParts[0] || "");
+          setLastName("");
+        } else if (rawParts.length === 2) {
+          setFirstName(rawParts[0] || "");
+          setLastName(rawParts[1] || "");
+        } else if (rawParts.length >= 3) {
+          setFirstName(rawParts[0] || "");
+          setLastName(rawParts[rawParts.length - 1] || "");
+        }
       }
 
       // Infer account type from pending selection or existing user attributes
@@ -250,6 +274,23 @@ export function ProfileSetupModal() {
       }
     }
   }, [user]);
+
+  // Prompt name formatting instruction dialogue box for new accounts
+  useEffect(() => {
+    if (isProfileModalOpen && !user?.profileCompleted) {
+      const hasSeen = typeof window !== "undefined" ? sessionStorage.getItem("src_has_seen_name_rules") : null;
+      if (!hasSeen) {
+        setShowNameInstructionDialog(true);
+      }
+    }
+  }, [isProfileModalOpen, user?.profileCompleted]);
+
+  const handleAcknowledgeNameRules = () => {
+    try {
+      sessionStorage.setItem("src_has_seen_name_rules", "true");
+    } catch {}
+    setShowNameInstructionDialog(false);
+  };
 
   // Live check on BT ID change for uniqueness and council designation
   const handleBtIdChange = (val: string) => {
@@ -395,6 +436,21 @@ export function ProfileSetupModal() {
 
     if (!cleanFirst || !cleanLast) {
       setError("Please enter both your First Name and Last Name.");
+      return;
+    }
+
+    if (cleanFirst.includes(" ") || cleanLast.includes(" ")) {
+      setError("Please enter only your First Name and Surname (no middle names or initials).");
+      return;
+    }
+
+    const isAllUpperFirst = cleanFirst.length > 1 && cleanFirst === cleanFirst.toUpperCase();
+    const isAllUpperLast = cleanLast.length > 1 && cleanLast === cleanLast.toUpperCase();
+    const isAllLowerFirst = cleanFirst === cleanFirst.toLowerCase();
+    const isAllLowerLast = cleanLast === cleanLast.toLowerCase();
+
+    if (isAllUpperFirst || isAllUpperLast || isAllLowerFirst || isAllLowerLast) {
+      setError("Please format your name in Title Case (e.g. Aarav Mehta), with only the first letter capitalized.");
       return;
     }
 
@@ -574,18 +630,112 @@ export function ProfileSetupModal() {
   };
 
   return (
-    <Modal
-      isOpen={isProfileModalOpen}
-      onClose={user?.profileCompleted ? closeProfileModal : () => {}}
-      maxWidth="2xl"
-      title=""
-      closeOnBackdropClick={Boolean(user?.profileCompleted)}
-      closeOnEscape={Boolean(user?.profileCompleted)}
-      showCloseButton={Boolean(user?.profileCompleted)}
-      contentClassName="p-4 sm:p-6"
-      dialogClassName="sm:max-w-xl md:max-w-2xl rounded-2xl sm:rounded-3xl shadow-2xl border-slate-200/90"
-    >
-      <div className="space-y-3.5 sm:space-y-4 text-slate-800">
+    <>
+      {/* Name Formatting Instruction Dialogue Box for New Accounts */}
+      {showNameInstructionDialog && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="w-full max-w-md max-h-[92vh] overflow-y-auto bg-white rounded-3xl p-5 sm:p-6 shadow-2xl border border-slate-100 space-y-4 animate-in zoom-in-95 duration-200">
+            
+            {/* Header Icon & Title */}
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-200 text-[#17458F] flex items-center justify-center mx-auto shadow-xs">
+                <UserCheck className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-heading font-extrabold text-lg sm:text-xl text-slate-900 tracking-tight">
+                  Name Format Guidelines
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  Enter your name accurately for event passes and certificates.
+                </p>
+              </div>
+            </div>
+
+            {/* Concise Rules */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+              <div className="flex items-start gap-2.5">
+                <div className="w-5 h-5 rounded-full bg-[#17458F]/10 text-[#17458F] flex items-center justify-center shrink-0 mt-0.5 text-[11px] font-bold">
+                  1
+                </div>
+                <p className="text-xs text-slate-700">
+                  <strong className="text-slate-900">First Name + Surname only:</strong> Do not include your middle name or initials.
+                </p>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <div className="w-5 h-5 rounded-full bg-[#17458F]/10 text-[#17458F] flex items-center justify-center shrink-0 mt-0.5 text-[11px] font-bold">
+                  2
+                </div>
+                <p className="text-xs text-slate-700">
+                  <strong className="text-slate-900">Title Case format:</strong> Capitalize only the first letter of each name. All other letters lowercase.
+                </p>
+              </div>
+            </div>
+
+            {/* Clean Examples Card */}
+            <div className="space-y-2">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                Format Comparison
+              </span>
+
+              {/* Correct */}
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50/90 border border-emerald-200 text-emerald-950 font-bold">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span className="font-sans text-xs sm:text-sm">Aarav Mehta</span>
+                </div>
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-md">
+                  Accepted
+                </span>
+              </div>
+
+              {/* Incorrect list */}
+              <div className="p-3 rounded-xl bg-rose-50/70 border border-rose-200/80 text-rose-950 space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-600 line-through">Aarav Raj Mehta</span>
+                  <span className="text-[10px] font-medium text-rose-600">No middle name</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-600 line-through">AARAV MEHTA</span>
+                  <span className="text-[10px] font-medium text-rose-600">No ALL CAPS</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-600 line-through">aarav mehta</span>
+                  <span className="text-[10px] font-medium text-rose-600">Must be Title Case</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-600 line-through">Aarav R. Mehta</span>
+                  <span className="text-[10px] font-medium text-rose-600">No initials</span>
+                </div>
+              </div>
+            </div>
+
+            {/* OK Button */}
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={handleAcknowledgeNameRules}
+                className="w-full py-3 px-4 rounded-xl bg-[#17458F] hover:bg-[#123670] active:scale-[0.99] text-white font-bold text-xs sm:text-sm tracking-wide shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 min-h-[44px]"
+              >
+                <span>OK, Continue</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Modal
+        isOpen={isProfileModalOpen}
+        onClose={user?.profileCompleted ? closeProfileModal : () => {}}
+        maxWidth="2xl"
+        title=""
+        closeOnBackdropClick={Boolean(user?.profileCompleted)}
+        closeOnEscape={Boolean(user?.profileCompleted)}
+        showCloseButton={Boolean(user?.profileCompleted)}
+        contentClassName="p-4 sm:p-6"
+        dialogClassName="sm:max-w-xl md:max-w-2xl rounded-2xl sm:rounded-3xl shadow-2xl border-slate-200/90"
+      >
+        <div className="space-y-3.5 sm:space-y-4 text-slate-800">
         
         {/* Header */}
         <div className="text-center space-y-1">
@@ -811,34 +961,55 @@ export function ProfileSetupModal() {
               {accountType === "JDCOEM_STUDENT" && (
                 <>
                   {/* First & Last Name (2 cols on desktop, 1 on mobile) */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold text-slate-700">
-                        First Name <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. Harsh"
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
-                      />
-                    </div>
+                  <div className="space-y-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-semibold text-slate-700">
+                            First Name <span className="text-rose-500">*</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setShowNameInstructionDialog(true)}
+                            className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#17458F] hover:text-[#0F172A] hover:underline cursor-pointer"
+                          >
+                            <Info className="w-3 h-3 text-[#17458F]" />
+                            <span>Name Rules</span>
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Aarav"
+                          value={firstName}
+                          onChange={(e) => setFirstName(e.target.value)}
+                          onBlur={() => {
+                            if (firstName.trim()) setFirstName(toTitleCase(firstName));
+                          }}
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
+                        />
+                      </div>
 
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold text-slate-700">
-                        Last Name <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. Shende"
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
-                      />
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-slate-700">
+                          Last Name / Surname <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Mehta"
+                          value={lastName}
+                          onChange={(e) => setLastName(e.target.value)}
+                          onBlur={() => {
+                            if (lastName.trim()) setLastName(toTitleCase(lastName));
+                          }}
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
+                        />
+                      </div>
                     </div>
+                    <p className="text-[10px] text-slate-400 font-medium">
+                      First Name &amp; Surname only in Title Case (e.g. <strong>Aarav Mehta</strong>). No middle names.
+                    </p>
                   </div>
 
                   {/* College BT ID (Full width) */}
@@ -1141,33 +1312,54 @@ export function ProfileSetupModal() {
                   </div>
 
                   {/* First & Last Name (2 cols on desktop) */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold text-slate-700">
-                        First Name <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. Rajesh"
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
-                      />
+                  <div className="space-y-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-semibold text-slate-700">
+                            First Name <span className="text-rose-500">*</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setShowNameInstructionDialog(true)}
+                            className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#17458F] hover:text-[#0F172A] hover:underline cursor-pointer"
+                          >
+                            <Info className="w-3 h-3 text-[#17458F]" />
+                            <span>Name Rules</span>
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Rajesh"
+                          value={firstName}
+                          onChange={(e) => setFirstName(e.target.value)}
+                          onBlur={() => {
+                            if (firstName.trim()) setFirstName(toTitleCase(firstName));
+                          }}
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-slate-700">
+                          Last Name / Surname <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Sharma"
+                          value={lastName}
+                          onChange={(e) => setLastName(e.target.value)}
+                          onBlur={() => {
+                            if (lastName.trim()) setLastName(toTitleCase(lastName));
+                          }}
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold text-slate-700">
-                        Last Name <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. Sharma"
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
-                      />
-                    </div>
+                    <p className="text-[10px] text-slate-400 font-medium">
+                      First Name &amp; Surname only in Title Case (e.g. <strong>Rajesh Sharma</strong>). No middle names.
+                    </p>
                   </div>
 
                   {/* Designation & Department (2 cols on desktop) */}
@@ -1252,34 +1444,55 @@ export function ProfileSetupModal() {
               {accountType === "EXTERNAL_STUDENT" && (
                 <div className="space-y-3">
                   {/* First & Last Name (2 cols on desktop) */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold text-slate-700">
-                        First Name <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. Ananya"
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
-                      />
-                    </div>
+                  <div className="space-y-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-semibold text-slate-700">
+                            First Name <span className="text-rose-500">*</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setShowNameInstructionDialog(true)}
+                            className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#17458F] hover:text-[#0F172A] hover:underline cursor-pointer"
+                          >
+                            <Info className="w-3 h-3 text-[#17458F]" />
+                            <span>Name Rules</span>
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Ananya"
+                          value={firstName}
+                          onChange={(e) => setFirstName(e.target.value)}
+                          onBlur={() => {
+                            if (firstName.trim()) setFirstName(toTitleCase(firstName));
+                          }}
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
+                        />
+                      </div>
 
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold text-slate-700">
-                        Last Name <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. Verma"
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
-                      />
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-slate-700">
+                          Last Name / Surname <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Verma"
+                          value={lastName}
+                          onChange={(e) => setLastName(e.target.value)}
+                          onBlur={() => {
+                            if (lastName.trim()) setLastName(toTitleCase(lastName));
+                          }}
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-[#17458F] transition-all min-h-[44px]"
+                        />
+                      </div>
                     </div>
+                    <p className="text-[10px] text-slate-400 font-medium">
+                      First Name &amp; Surname only in Title Case (e.g. <strong>Ananya Verma</strong>). No middle names.
+                    </p>
                   </div>
 
                   {/* College Name & City (2 cols on desktop) */}
@@ -1441,6 +1654,7 @@ export function ProfileSetupModal() {
 
       </div>
     </Modal>
+  </>
   );
 }
 
