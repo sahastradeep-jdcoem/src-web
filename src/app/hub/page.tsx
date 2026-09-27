@@ -189,34 +189,45 @@ export default function StudentHubPage() {
   };
 
   const filteredListings = useMemo(() => {
-    return listings
-      .filter((item) => item.isLive !== false && item.status !== "draft")
-      .filter((item) => {
-        if (selectedPillar !== "all" && item.pillar !== selectedPillar) return false;
-        if (deferredSearch.trim()) {
-          const q = deferredSearch.toLowerCase();
-          return (
-            item.title.toLowerCase().includes(q) ||
-            item.summary.toLowerCase().includes(q) ||
-            item.organizer.toLowerCase().includes(q)
-          );
-        }
-        return true;
-      });
+    const q = deferredSearch.trim().toLowerCase();
+    return listings.filter((item) => {
+      if (item.isLive === false || item.status === "draft") return false;
+      if (selectedPillar !== "all" && item.pillar !== selectedPillar) return false;
+      if (q) {
+        return (
+          item.title.toLowerCase().includes(q) ||
+          item.summary.toLowerCase().includes(q) ||
+          item.organizer.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
   }, [listings, selectedPillar, deferredSearch]);
 
-  // Pillar counts for filter badges
+  // Pillar counts for filter badges in single O(N) pass
   const pillarCounts = useMemo(() => {
-    const active = listings.filter((item) => item.isLive !== false && item.status !== "draft");
-    return {
-      all: active.length,
-      voice: active.filter((item) => item.pillar === "voice").length,
-      opportunities: active.filter((item) => item.pillar === "opportunities").length,
-      applications: active.filter((item) => item.pillar === "applications").length,
-      submissions: active.filter((item) => item.pillar === "submissions").length,
-      community: active.filter((item) => item.pillar === "community").length,
-    };
+    const counts = { all: 0, voice: 0, opportunities: 0, applications: 0, submissions: 0, community: 0 };
+    for (const item of listings) {
+      if (item.isLive === false || item.status === "draft") continue;
+      counts.all++;
+      if (item.pillar in counts) {
+        (counts as any)[item.pillar]++;
+      }
+    }
+    return counts;
   }, [listings]);
+
+  // Pre-calculate poll stats map to avoid repetitive O(N) calculations in the card render loop
+  const pollStatsMap = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof getPollStats>>();
+    for (const item of listings) {
+      if (item.type === "poll" && item.pollConfig) {
+        const userVotedOptionId = user ? (votedPolls[item.id] || (user as any).votedPolls?.[item.id]) : null;
+        map.set(item.id, getPollStats(item, responses, user?.uid, userVotedOptionId));
+      }
+    }
+    return map;
+  }, [listings, responses, user, votedPolls]);
 
   const filterTabs = [
     { id: "all", label: "All Engagements", icon: Sparkles },
@@ -303,7 +314,7 @@ export default function StudentHubPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search polls, opportunities, challenges, or applications..."
-                className="w-full pl-11 pr-4 py-2.5 sm:py-3 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 text-white text-xs sm:text-sm font-medium placeholder:text-slate-300 focus:outline-none focus:bg-white focus:text-slate-900 transition-all shadow-inner"
+                className="w-full pl-11 pr-4 py-2.5 sm:py-3 rounded-2xl bg-white/15 border border-white/20 text-white text-xs sm:text-sm font-medium placeholder:text-slate-300 focus:outline-none focus:bg-white focus:text-slate-900 transition-colors shadow-inner"
               />
             </div>
           </div>
@@ -362,7 +373,7 @@ export default function StudentHubPage() {
             ))}
           </div>
         ) : filteredListings.length > 0 ? (
-          <StaggerGrid className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" staggerDelay={0.05}>
+          <StaggerGrid className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" staggerDelay={0.02}>
             {filteredListings.map((item) => {
               const isPoll = item.type === "poll";
               const isOpp = item.type === "opportunity";
@@ -370,9 +381,9 @@ export default function StudentHubPage() {
               const isSub = item.type === "submission";
 
               return (
-                <StaggerItem key={item.id} className="h-full">
+                <StaggerItem key={item.id} className="h-full [content-visibility:auto] [contain-intrinsic-size:0_450px]">
                   <div
-                    className="group rounded-3xl bg-white border border-slate-200 p-6 flex flex-col justify-between hover:border-[#17458F] hover:shadow-xl transition-all space-y-5 h-full"
+                    className="group rounded-3xl bg-white border border-slate-200 p-6 flex flex-col justify-between hover:border-[#17458F] hover:shadow-xl transition-[border-color,box-shadow] duration-200 space-y-5 h-full"
                   >
                 <div className="space-y-4">
                   {/* Top Badges */}
@@ -473,7 +484,7 @@ export default function StudentHubPage() {
                     const isOptionValid = Boolean(item.pollConfig?.options.some((o) => o.id === userVotedOptionId));
                     const hasVoted = Boolean(user) && Boolean(userVotedOptionId) && isOptionValid;
                     const isClosed = item.status === "closed" || item.isAcceptingResponses === false;
-                    const pollStats = getPollStats(item, responses, user?.uid, userVotedOptionId);
+                    const pollStats = pollStatsMap.get(item.id) || getPollStats(item, responses, user?.uid, userVotedOptionId);
 
                     return (
                       <div className="space-y-3 pt-2 border-t border-slate-100">

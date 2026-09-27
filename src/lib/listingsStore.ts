@@ -229,7 +229,7 @@ export function getPollStats(
     };
   }
 
-  const allResponses = responses && responses.length > 0 ? responses : getStoredListingResponses();
+  const allResponses = Array.isArray(responses) ? responses : getStoredListingResponses();
   const pollResponses = allResponses.filter(
     (r) => r.listingId === listing.id || r.listingSlug === listing.slug
   );
@@ -469,10 +469,24 @@ export function voteOnListingPoll(
  * to strictly use their profile department and year, healing any legacy form submissions
  * that were saved with the hardcoded "Computer Science & Engineering" fallback.
  */
+let cachedUsersLightweight: { timestamp: number; users: RegisteredUserRecord[] } | null = null;
+
 export function findApplicantUserProfile(record: { userId?: string; userEmail?: string; btId?: string }): RegisteredUserRecord | undefined {
   if (typeof window === "undefined") return undefined;
   try {
-    const users = getStoredUsers();
+    const now = Date.now();
+    let users = cachedUsersLightweight && (now - cachedUsersLightweight.timestamp < 3000)
+      ? cachedUsersLightweight.users
+      : null;
+
+    if (!users) {
+      const raw = localStorage.getItem("src_registered_users");
+      users = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(users)) {
+        cachedUsersLightweight = { timestamp: now, users };
+      }
+    }
+
     if (!Array.isArray(users) || users.length === 0) return undefined;
 
     const uId = record.userId?.trim();
@@ -646,7 +660,7 @@ export function getStoredListingResponses(): ListingResponseRecord[] {
   try {
     const raw = localStorage.getItem(RESPONSES_STORAGE_KEY);
     const parsed: ListingResponseRecord[] = raw ? JSON.parse(raw) : [];
-    return parsed.map(resolveResponseWithUserProfile);
+    return parsed;
   } catch (err) {
     console.warn("Failed to load listing responses from localStorage:", err);
     return [];

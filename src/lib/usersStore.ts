@@ -515,7 +515,19 @@ export function findStudentByBtId(btId: string): StudentDetails | null {
  * 4. Co-Heads (Club Co-Heads) -> isCouncilOfficer: true
  * 5. Members (Club Members) -> isCouncilOfficer: false (Designation: "<Club Name> Member")
  */
-export function resolveDesignationByBtId(btId: string, userName?: string | null): { 
+export interface RosterCache {
+  council?: any[];
+  hosting?: any[];
+  spokes?: any[];
+  clubs?: any[];
+  founders?: any[];
+}
+
+export function resolveDesignationByBtId(
+  btId: string, 
+  userName?: string | null,
+  rosterCache?: RosterCache
+): { 
   designationBadge: string; 
   isCouncilOfficer: boolean; 
   category?: string;
@@ -524,7 +536,7 @@ export function resolveDesignationByBtId(btId: string, userName?: string | null)
   const cleanBtId = btId.trim().toUpperCase();
 
   // Tier 1: Check Admin Council (Admins)
-  const council = getStoredCouncilMembers();
+  const council = rosterCache?.council || getStoredCouncilMembers();
   const matchedCouncil = council.find((m) => {
     if (!m.btId || m.btId.trim().toUpperCase() !== cleanBtId) return false;
     // Mentors and advisors must not hold student BT IDs
@@ -550,7 +562,7 @@ export function resolveDesignationByBtId(btId: string, userName?: string | null)
   }
 
   // Tier 2: Check Hosting Committee & Spokespersons (Spokespersons)
-  const hosting = getStoredHostingCommittee();
+  const hosting = rosterCache?.hosting || getStoredHostingCommittee();
   const matchedHosting = hosting.find((m) => {
     if (!m.btId || m.btId.trim().toUpperCase() !== cleanBtId) return false;
     if (userName && m.name) {
@@ -570,7 +582,7 @@ export function resolveDesignationByBtId(btId: string, userName?: string | null)
     };
   }
 
-  const spokes = getStoredSpokespersons();
+  const spokes = rosterCache?.spokes || getStoredSpokespersons();
   const matchedSpokes = spokes.find((m) => {
     if (!m.btId || m.btId.trim().toUpperCase() !== cleanBtId) return false;
     if (userName && m.name) {
@@ -591,7 +603,7 @@ export function resolveDesignationByBtId(btId: string, userName?: string | null)
   }
 
   // Tier 3 & 4: Check Chartered Clubs (Head / Co-Head)
-  const clubs = getStoredClubs();
+  const clubs = rosterCache?.clubs || getStoredClubs();
   const matchedClubRoles: { clubName: string; leader: ClubLeader }[] = [];
   for (const club of clubs) {
     const leaders = getClubLeaders(club);
@@ -671,7 +683,7 @@ export function resolveDesignationByBtId(btId: string, userName?: string | null)
   }
 
   // Legacy Check: Founding Members
-  const founders = getStoredFoundingMembers();
+  const founders = rosterCache?.founders || getStoredFoundingMembers();
   const matchedFounder = founders.find((m) => {
     if (!m.btId || m.btId.trim().toUpperCase() !== cleanBtId) return false;
     if (/mentor/i.test(m.role || "") || (m.name && /sarvashree|munesh/i.test(m.name))) {
@@ -932,10 +944,18 @@ export function getStoredUsers(): RegisteredUserRecord[] {
   }
 
   // Dynamically resolve designation badge & council status from live rosters
+  const rosterCache: RosterCache = {
+    council: getStoredCouncilMembers(),
+    hosting: getStoredHostingCommittee(),
+    spokes: getStoredSpokespersons(),
+    clubs: getStoredClubs(),
+    founders: getStoredFoundingMembers(),
+  };
+
   return list
     .map((user) => {
       const cleanBtId = user.btId ? user.btId.trim().toUpperCase() : "";
-      const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId, user.name || user.email) : null;
+      const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId, user.name || user.email, rosterCache) : null;
       return {
         ...user,
         btId: cleanBtId,
@@ -963,13 +983,20 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
     }
 
     const map = new Map<string, RegisteredUserRecord>();
+    const rosterCache: RosterCache = {
+      council: getStoredCouncilMembers(),
+      hosting: getStoredHostingCommittee(),
+      spokes: getStoredSpokespersons(),
+      clubs: getStoredClubs(),
+      founders: getStoredFoundingMembers(),
+    };
 
     // Process remote users as authoritative
     for (const r of remoteUsers) {
       if (!r || (!r.uid && !r.email)) continue;
       const localMatch = (r.uid ? localMap.get(r.uid) : null) || (r.email ? localMap.get(r.email.toLowerCase()) : null);
       const cleanBtId = (r.btId || localMatch?.btId || "").trim().toUpperCase();
-      const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId, r.name || localMatch?.name || r.email) : null;
+      const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId, r.name || localMatch?.name || r.email, rosterCache) : null;
       const assignedRole = r.role || localMatch?.role || "STUDENT";
       // Dynamic roster resolution takes precedence for linked BT IDs to prevent stale cloud badges
       const assignedBadge = designationInfo 
