@@ -30,7 +30,8 @@ import {
   Search,
   LogOut,
   UserCheck,
-  Info
+  Info,
+  XCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -633,93 +634,229 @@ export function ProfileSetupModal() {
     <>
       {/* Name Formatting Instruction Dialogue Box for New Accounts */}
       {showNameInstructionDialog && (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="w-full max-w-md max-h-[92vh] overflow-y-auto bg-white rounded-3xl p-5 sm:p-6 shadow-2xl border border-slate-100 space-y-4 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/75 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="w-full max-w-full sm:max-w-2xl lg:max-w-3xl rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh] animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200">
             
-            {/* Header Icon & Title */}
-            <div className="text-center space-y-2">
-              <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-200 text-[#17458F] flex items-center justify-center mx-auto shadow-xs">
-                <UserCheck className="w-6 h-6" />
+            {/* ------------------------------------------------------------- */}
+            {/* MOBILE PRESENTATION: Bottom Sheet with Sticky Thumb Action    */}
+            {/* ------------------------------------------------------------- */}
+            <div className="flex flex-col sm:hidden overflow-hidden flex-1">
+              {/* Drag Pill */}
+              <div className="pt-3 pb-1 flex justify-center shrink-0">
+                <div className="w-10 h-1 bg-slate-200 rounded-full" />
               </div>
-              <div className="space-y-1">
-                <h3 className="font-heading font-extrabold text-lg sm:text-xl text-slate-900 tracking-tight">
-                  Name Format Guidelines
-                </h3>
-                <p className="text-xs text-slate-500 font-medium">
-                  Enter your name accurately for event passes and certificates.
-                </p>
+
+              {/* Scrollable Content Area */}
+              <div className="px-5 pt-2 pb-3 space-y-3.5 overflow-y-auto overscroll-contain flex-1">
+                {/* Header */}
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-200 text-[#17458F] flex items-center justify-center shrink-0 shadow-2xs">
+                    <UserCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-heading font-extrabold text-base text-slate-900 leading-tight">
+                      Name Format Guidelines
+                    </h3>
+                    <p className="text-[11px] text-slate-500 font-medium">
+                      Required for certificates and event passes
+                    </p>
+                  </div>
+                </div>
+
+                {/* 2 Core Rules */}
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <span className="w-4 h-4 rounded-full bg-[#17458F] text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">1</span>
+                    <span className="text-xs font-semibold text-slate-800">
+                      <strong>First Name + Surname only:</strong> No middle names or initials.
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="w-4 h-4 rounded-full bg-[#17458F] text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">2</span>
+                    <span className="text-xs font-semibold text-slate-800">
+                      <strong>Title Case format:</strong> Capitalize first letter only (e.g. <em>Aarav Mehta</em>).
+                    </span>
+                  </div>
+                </div>
+
+                {/* Format Comparison */}
+                <div className="space-y-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Format Comparison
+                  </span>
+
+                  {/* Accepted */}
+                  <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span className="font-bold text-xs text-emerald-950 font-sans">Aarav Mehta</span>
+                    </div>
+                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-800 bg-emerald-200/70 px-2 py-0.5 rounded">
+                      Accepted
+                    </span>
+                  </div>
+
+                  {/* Not Allowed */}
+                  <div className="p-2.5 rounded-xl bg-rose-50/70 border border-rose-200/80 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-600 line-through text-[11px]">Aarav Raj Mehta</span>
+                      <span className="text-[10px] font-semibold text-rose-600">No middle name</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-600 line-through text-[11px]">AARAV MEHTA</span>
+                      <span className="text-[10px] font-semibold text-rose-600">No ALL CAPS</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-600 line-through text-[11px]">aarav mehta</span>
+                      <span className="text-[10px] font-semibold text-rose-600">Must be Title Case</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-600 line-through text-[11px]">Aarav R. Mehta</span>
+                      <span className="text-[10px] font-semibold text-rose-600">No initials</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mobile Sticky Thumb Action */}
+              <div className="p-4 bg-white/95 backdrop-blur-md border-t border-slate-100 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleAcknowledgeNameRules}
+                  className="w-full h-12 rounded-xl bg-[#17458F] active:bg-[#123670] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all active:scale-[0.98]"
+                >
+                  <span>OK, Continue</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
               </div>
             </div>
 
-            {/* Concise Rules */}
-            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
-              <div className="flex items-start gap-2.5">
-                <div className="w-5 h-5 rounded-full bg-[#17458F]/10 text-[#17458F] flex items-center justify-center shrink-0 mt-0.5 text-[11px] font-bold">
-                  1
+            {/* ------------------------------------------------------------- */}
+            {/* DESKTOP PRESENTATION: Spacious 2-Column Split Dashboard Card  */}
+            {/* ------------------------------------------------------------- */}
+            <div className="hidden sm:flex sm:flex-col overflow-hidden">
+              {/* Header Bar */}
+              <div className="p-6 pb-4 border-b border-slate-100 flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-200 text-[#17458F] flex items-center justify-center shrink-0 shadow-xs">
+                  <UserCheck className="w-6 h-6" />
                 </div>
-                <p className="text-xs text-slate-700">
-                  <strong className="text-slate-900">First Name + Surname only:</strong> Do not include your middle name or initials.
-                </p>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-[#17458F] bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      Required Format
+                    </span>
+                    <span className="text-xs text-slate-400 font-medium">
+                      JDCOEM Central Student Portal
+                    </span>
+                  </div>
+                  <h3 className="font-heading font-extrabold text-xl text-slate-900 tracking-tight">
+                    Name Formatting Guidelines
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Your registered name is automatically printed on official event passes, QR delegate credentials, and participation certificates.
+                  </p>
+                </div>
               </div>
-              <div className="flex items-start gap-2.5">
-                <div className="w-5 h-5 rounded-full bg-[#17458F]/10 text-[#17458F] flex items-center justify-center shrink-0 mt-0.5 text-[11px] font-bold">
-                  2
+
+              {/* 2-Column Grid */}
+              <div className="p-6 grid grid-cols-2 gap-5 overflow-y-auto">
+                {/* Left Column: Rules & Accepted Example */}
+                <div className="space-y-3">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Official Rules
+                  </span>
+                  
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-3.5">
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 rounded-lg bg-[#17458F] text-white flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                        1
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900">First Name + Surname Only</h4>
+                        <p className="text-[11px] text-slate-500 leading-relaxed mt-0.5">
+                          Do not include middle names, father&apos;s name, or abbreviations.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-3 pt-3 border-t border-slate-200/70">
+                      <div className="w-6 h-6 rounded-lg bg-[#17458F] text-white flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                        2
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900">Title Case Capitalization</h4>
+                        <p className="text-[11px] text-slate-500 leading-relaxed mt-0.5">
+                          Only the first letter of First Name and Surname must be capitalized. All other letters lowercase.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Accepted Format Banner */}
+                  <div className="p-3.5 rounded-2xl bg-emerald-50/90 border border-emerald-200/90 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">
+                        Accepted Example
+                      </span>
+                      <p className="font-heading font-extrabold text-base text-emerald-950 font-sans">
+                        Aarav Mehta
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-white/90 border border-emerald-300 px-3 py-1.5 rounded-xl shadow-2xs">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span>Compliant</span>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-xs text-slate-700">
-                  <strong className="text-slate-900">Title Case format:</strong> Capitalize only the first letter of each name. All other letters lowercase.
-                </p>
+
+                {/* Right Column: Common Mistakes & Disallowed Examples */}
+                <div className="space-y-3">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Formats Not Permitted
+                  </span>
+
+                  <div className="p-3.5 rounded-2xl bg-rose-50/70 border border-rose-200/80 space-y-2">
+                    <div className="p-2.5 rounded-xl bg-white/90 border border-rose-100 flex items-center justify-between text-xs">
+                      <span className="font-mono text-slate-600 line-through">Aarav Raj Mehta</span>
+                      <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded">No Middle Name</span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-white/90 border border-rose-100 flex items-center justify-between text-xs">
+                      <span className="font-mono text-slate-600 line-through">AARAV MEHTA</span>
+                      <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded">No ALL CAPS</span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-white/90 border border-rose-100 flex items-center justify-between text-xs">
+                      <span className="font-mono text-slate-600 line-through">aarav mehta</span>
+                      <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded">Must Capitalize Initial</span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-white/90 border border-rose-100 flex items-center justify-between text-xs">
+                      <span className="font-mono text-slate-600 line-through">Aarav R. Mehta</span>
+                      <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded">No Initials</span>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 font-medium bg-slate-50 p-2.5 rounded-xl border border-slate-200/60 flex items-center gap-1.5">
+                    <Info className="w-3.5 h-3.5 text-[#17458F] shrink-0" />
+                    <span>You can re-open these guidelines anytime via the <strong>Name Rules</strong> button on the form.</span>
+                  </p>
+                </div>
               </div>
-            </div>
 
-            {/* Clean Examples Card */}
-            <div className="space-y-2">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                Format Comparison
-              </span>
-
-              {/* Correct */}
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50/90 border border-emerald-200 text-emerald-950 font-bold">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span className="font-sans text-xs sm:text-sm">Aarav Mehta</span>
-                </div>
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-md">
-                  Accepted
+              {/* Desktop Footer Action Bar */}
+              <div className="p-4 sm:px-6 border-t border-slate-100 bg-slate-50/70 flex items-center justify-between">
+                <span className="text-xs text-slate-500 font-medium">
+                  Please review the format before proceeding to the profile registration form.
                 </span>
-              </div>
-
-              {/* Incorrect list */}
-              <div className="p-3 rounded-xl bg-rose-50/70 border border-rose-200/80 text-rose-950 space-y-1.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-600 line-through">Aarav Raj Mehta</span>
-                  <span className="text-[10px] font-medium text-rose-600">No middle name</span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-600 line-through">AARAV MEHTA</span>
-                  <span className="text-[10px] font-medium text-rose-600">No ALL CAPS</span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-600 line-through">aarav mehta</span>
-                  <span className="text-[10px] font-medium text-rose-600">Must be Title Case</span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-600 line-through">Aarav R. Mehta</span>
-                  <span className="text-[10px] font-medium text-rose-600">No initials</span>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleAcknowledgeNameRules}
+                  className="px-6 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] active:scale-[0.98] text-white font-bold text-xs tracking-wide shadow-md transition-all cursor-pointer flex items-center gap-2 min-h-[42px]"
+                >
+                  <span>OK, Continue</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
               </div>
             </div>
 
-            {/* OK Button */}
-            <div className="pt-1">
-              <button
-                type="button"
-                onClick={handleAcknowledgeNameRules}
-                className="w-full py-3 px-4 rounded-xl bg-[#17458F] hover:bg-[#123670] active:scale-[0.99] text-white font-bold text-xs sm:text-sm tracking-wide shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 min-h-[44px]"
-              >
-                <span>OK, Continue</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
           </div>
         </div>
       )}
