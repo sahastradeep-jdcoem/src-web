@@ -85,6 +85,8 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
             src={eventImage}
             alt={event.name || "Event Image"}
             fill
+            priority={featuredLayout}
+            sizes="(max-width: 1024px) 100vw, 60vw"
             unoptimized={true}
             className="object-cover transition-transform duration-500 group-hover:scale-[1.02]"
           />
@@ -233,6 +235,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
           src={eventImage}
           alt={event.name || "Event Image"}
           fill
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           unoptimized={true}
           className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
         />

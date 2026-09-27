@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from "react";
 import Link from "next/link";
 import { 
   Search, 
@@ -32,11 +32,42 @@ import {
 import { EventItem } from "@/types";
 
 export default function EventsPage() {
-  const [eventsList, setEventsList] = useState<EventItem[]>([]);
-  const [tenuresList, setTenuresList] = useState<CouncilTenure[]>([]);
-  const [currentTenureLabel, setCurrentTenureLabel] = useState("2025–26");
+  const [eventsList, setEventsList] = useState<EventItem[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = getStoredEvents();
+        if (cached && cached.length > 0) return cached;
+      } catch {}
+    }
+    return [];
+  });
+  const [tenuresList, setTenuresList] = useState<CouncilTenure[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return getPublicTenures();
+      } catch {}
+    }
+    return [];
+  });
+  const [currentTenureLabel, setCurrentTenureLabel] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const curr = getCurrentTenure();
+        if (curr?.label) return curr.label;
+      } catch {}
+    }
+    return "2025–26";
+  });
   const [searchQuery, setSearchQuery] = useState("");
-  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
+  const deferredSearch = useDeferredValue(searchQuery);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return getStoredEvents().length === 0;
+      } catch {}
+    }
+    return true;
+  });
   const hasSynced = useRef(false);
 
   const refreshTenures = () => {
@@ -161,7 +192,7 @@ export default function EventsPage() {
           !e.parentEventSlug
       )
       .filter((event) => {
-        const q = searchQuery.toLowerCase();
+        const q = deferredSearch.toLowerCase();
         const matchesSearch =
           (event.name || "").toLowerCase().includes(q) ||
           (event.description || "").toLowerCase().includes(q) ||
@@ -172,7 +203,7 @@ export default function EventsPage() {
       });
 
     return sortEventsByDate(filtered);
-  }, [eventsList, searchQuery]);
+  }, [eventsList, deferredSearch]);
 
   // Active / Upcoming Events in the live calendar
   // Current tenure completed events stay here — they only move to Past Tenure

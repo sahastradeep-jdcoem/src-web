@@ -122,6 +122,7 @@ export default function Navbar() {
                 <Link
                   key={link.name}
                   href={link.href}
+                  prefetch={true}
                   className={cn(
                     "px-4 py-1.5 rounded-full text-xs font-medium uppercase tracking-wider transition-all duration-200 font-sans",
                     isActive
@@ -255,6 +256,7 @@ export default function Navbar() {
             {/* Explore Events CTA */}
             <Link
               href="/events"
+              prefetch={true}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-semibold uppercase tracking-wider transition-all duration-200 shadow-md shadow-[#E78023]/25 group cursor-pointer font-sans"
             >
               <span>Explore Events</span>
@@ -348,6 +350,7 @@ export default function Navbar() {
                 <Link
                   key={link.name}
                   href={link.href}
+                  prefetch={true}
                   onClick={() => setMobileMenuOpen(false)}
                   className="px-4 py-3 min-h-[44px] rounded-xl bg-slate-50 border border-slate-200/80 text-xs font-bold uppercase tracking-wider text-slate-700 hover:bg-[#E78023] hover:text-white transition-all flex items-center justify-center text-center"
                 >

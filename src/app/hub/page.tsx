@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useDeferredValue } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { 
@@ -38,20 +38,42 @@ import { ListingItem, ListingPillar, ListingResponseRecord } from "@/types/listi
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { isExternalUser as checkIsExternalUser } from "@/lib/usersStore";
-import confetti from "canvas-confetti";
 import { StaggerGrid, StaggerItem } from "@/components/ui/StaggerContainer";
 import { ListingCardSkeleton } from "@/components/ui/SkeletonCard";
 
 export default function StudentHubPage() {
   const { user, openAuthModal } = useAuth();
   const isExternalUser = checkIsExternalUser(user);
-  const [listings, setListings] = useState<ListingItem[]>([]);
-  const [responses, setResponses] = useState<ListingResponseRecord[]>([]);
+  const [listings, setListings] = useState<ListingItem[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = getStoredListings();
+        if (cached && cached.length > 0) return cached;
+      } catch {}
+    }
+    return [];
+  });
+  const [responses, setResponses] = useState<ListingResponseRecord[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return getStoredListingResponses();
+      } catch {}
+    }
+    return [];
+  });
   const [selectedPillar, setSelectedPillar] = useState<ListingPillar | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearch = useDeferredValue(searchQuery);
   const [votedPolls, setVotedPolls] = useState<Record<string, string>>({});
   const [feedbackNotice, setFeedbackNotice] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return getStoredListings().length === 0;
+      } catch {}
+    }
+    return true;
+  });
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -180,8 +202,8 @@ export default function StudentHubPage() {
       .filter((item) => item.isLive !== false && item.status !== "draft")
       .filter((item) => {
         if (selectedPillar !== "all" && item.pillar !== selectedPillar) return false;
-        if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase();
+        if (deferredSearch.trim()) {
+          const q = deferredSearch.toLowerCase();
           return (
             item.title.toLowerCase().includes(q) ||
             item.summary.toLowerCase().includes(q) ||
@@ -190,7 +212,7 @@ export default function StudentHubPage() {
         }
         return true;
       });
-  }, [listings, selectedPillar, searchQuery]);
+  }, [listings, selectedPillar, deferredSearch]);
 
   // Pillar counts for filter badges
   const pillarCounts = useMemo(() => {
@@ -247,9 +269,12 @@ export default function StudentHubPage() {
       setResponses(getStoredListingResponses());
       setVotedPolls(getStoredVotedPolls(user.uid));
       showToast("Your vote has been cast successfully!");
-      try {
-        confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
-      } catch {}
+      import("canvas-confetti")
+        .then((m) => {
+          const confetti = m.default;
+          confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
+        })
+        .catch(() => {});
     } else {
       showToast(res.error || "Failed to submit vote.");
     }
@@ -414,6 +439,7 @@ export default function StudentHubPage() {
                           src={item.coverImage}
                           alt={item.title}
                           fill
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                           unoptimized={true}
                           className="object-cover"
                         />
@@ -424,6 +450,7 @@ export default function StudentHubPage() {
                           src={item.coverImage}
                           alt={item.title}
                           fill
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                           unoptimized={true}
                           className="object-cover group-hover:scale-105 transition-transform duration-500"
                         />
