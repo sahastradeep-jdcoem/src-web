@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useDeferredValue } from "react";
 import Image from "next/image";
 import { 
   Maximize2, 
@@ -19,11 +19,27 @@ import { GalleryPhoto } from "@/types";
 import { cn } from "@/lib/utils";
 
 export default function GalleryPage() {
-  const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
+  const [photos, setPhotos] = useState<GalleryPhoto[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = getStoredGalleryPhotos();
+        if (cached && cached.length > 0) return cached;
+      } catch {}
+    }
+    return [];
+  });
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearch = useDeferredValue(searchQuery);
   const [activePhotoIndex, setActivePhotoIndex] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return getStoredGalleryPhotos().length === 0;
+      } catch {}
+    }
+    return true;
+  });
 
   const categories = useMemo(() => {
     const existing = Array.from(new Set(photos.map((p) => p.category).filter(Boolean)));
@@ -81,7 +97,7 @@ export default function GalleryPage() {
   const filteredPhotos = useMemo(() => {
     return photos.filter((p) => {
       const matchesCategory = selectedCategory === "All" || p.category === selectedCategory;
-      const q = searchQuery.trim().toLowerCase();
+      const q = deferredSearch.trim().toLowerCase();
       const matchesSearch =
         !q ||
         p.title.toLowerCase().includes(q) ||
@@ -91,7 +107,7 @@ export default function GalleryPage() {
 
       return matchesCategory && matchesSearch;
     });
-  }, [photos, selectedCategory, searchQuery]);
+  }, [photos, selectedCategory, deferredSearch]);
 
   const activePhoto = activePhotoIndex !== null ? filteredPhotos[activePhotoIndex] : null;
 
@@ -232,6 +248,7 @@ export default function GalleryPage() {
                       src={photo.imageUrl}
                       alt={photo.title}
                       fill
+                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                       unoptimized={true}
                       className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
                     />

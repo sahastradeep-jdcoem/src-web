@@ -39,13 +39,56 @@ import { StaggerGrid, StaggerItem } from "@/components/ui/StaggerContainer";
 import { MemberCardSkeleton } from "@/components/ui/SkeletonCard";
 
 export default function TeamPage() {
-  const [councilMembers, setCouncilMembers] = useState<TeamMember[]>([]);
-  const [hostingMembers, setHostingMembers] = useState<TeamMember[]>([]);
-  const [spokespersons, setSpokespersons] = useState<TeamMember[]>([]);
-  const [clubs, setClubs] = useState<ClubItem[]>([]);
+  const [councilMembers, setCouncilMembers] = useState<TeamMember[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = getStoredCouncilMembers();
+        if (cached && cached.length > 0) return cached;
+      } catch {}
+    }
+    return [];
+  });
+  const [hostingMembers, setHostingMembers] = useState<TeamMember[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return getStoredHostingCommittee();
+      } catch {}
+    }
+    return [];
+  });
+  const [spokespersons, setSpokespersons] = useState<TeamMember[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return getStoredSpokespersons();
+      } catch {}
+    }
+    return [];
+  });
+  const [clubs, setClubs] = useState<ClubItem[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return getStoredClubs();
+      } catch {}
+    }
+    return [];
+  });
   const [activeFilter, setActiveFilter] = useState<string>("All");
-  const [currentTenure, setCurrentTenure] = useState<CouncilTenure | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [currentTenure, setCurrentTenure] = useState<CouncilTenure | null>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return getCurrentTenure();
+      } catch {}
+    }
+    return null;
+  });
+  const [isLoading, setIsLoading] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return getStoredCouncilMembers().length === 0 && getStoredClubs().length === 0;
+      } catch {}
+    }
+    return true;
+  });
 
   useEffect(() => {
     const initialTenure = getCurrentTenure();

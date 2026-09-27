@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useDeferredValue } from "react";
 import { Search, Filter, Sparkles, Users } from "lucide-react";
 import { getStoredClubs, syncClubsFromFirestore, subscribeToClubs } from "@/lib/councilStore";
 import { ClubItem } from "@/types";
@@ -11,9 +11,25 @@ import { StaggerGrid, StaggerItem } from "@/components/ui/StaggerContainer";
 import { ClubCardSkeleton } from "@/components/ui/SkeletonCard";
 
 export default function ClubsDirectoryPage() {
-  const [clubs, setClubs] = useState<ClubItem[]>([]);
+  const [clubs, setClubs] = useState<ClubItem[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = getStoredClubs();
+        if (cached && cached.length > 0) return cached;
+      } catch {}
+    }
+    return [];
+  });
   const [searchQuery, setSearchQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  const deferredSearch = useDeferredValue(searchQuery);
+  const [isLoading, setIsLoading] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return getStoredClubs().length === 0;
+      } catch {}
+    }
+    return true;
+  });
 
   useEffect(() => {
     const cached = getStoredClubs();
@@ -50,15 +66,16 @@ export default function ClubsDirectoryPage() {
 
   const filteredClubs = useMemo(() => {
     return clubs.filter(c => c.isLive !== false).filter((club) => {
+      const q = deferredSearch.toLowerCase();
       const matchesSearch =
-        club.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        club.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        club.tagline.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        club.category.toLowerCase().includes(searchQuery.toLowerCase());
+        club.name.toLowerCase().includes(q) ||
+        club.description.toLowerCase().includes(q) ||
+        club.tagline.toLowerCase().includes(q) ||
+        club.category.toLowerCase().includes(q);
 
       return matchesSearch;
     });
-  }, [clubs, searchQuery]);
+  }, [clubs, deferredSearch]);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] py-12 px-4 sm:px-6 lg:px-8 space-y-12 text-[#0F172A]">
