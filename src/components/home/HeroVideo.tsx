@@ -39,6 +39,8 @@ export function HeroVideo({ className = "" }: HeroVideoProps) {
         <video
           ref={videoRef}
           src="/assets/0830.mp4"
+          poster="/assets/hero-video-poster.png"
+          preload="auto"
           autoPlay
           loop
           muted

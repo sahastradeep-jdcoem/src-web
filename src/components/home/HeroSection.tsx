@@ -149,13 +149,19 @@ export default function HeroSection() {
 
         {/* 3D Animated Logo Reveal Video Container */}
         <div className="relative w-64 h-64 sm:w-80 sm:h-80 md:w-[380px] md:h-[380px] lg:w-[430px] lg:h-[430px] flex items-center justify-center overflow-hidden mix-blend-multiply">
-          {/* Static fallback frame for reduced motion */}
-          <div className="absolute inset-0 hidden motion-reduce:block">
+          {/* Instant static frame displayed while video buffers / for reduced motion */}
+          <div className={cn("absolute inset-0 transition-opacity duration-700", isVideoLoaded ? "opacity-0 pointer-events-none" : "opacity-100")}>
             <Image
-              src="/assets/SRC Logo.png"
+              src="/assets/hero-video-poster.png"
               alt="SRC Seal"
               fill
-              className="object-contain p-8"
+              priority
+              sizes="(max-width: 640px) 256px, (max-width: 768px) 320px, 430px"
+              className="object-cover rounded-full mix-blend-multiply"
+              style={{
+                WebkitMaskImage: "radial-gradient(circle at 50% 50%, black 46%, rgba(0,0,0,0.85) 54%, transparent 64%)",
+                maskImage: "radial-gradient(circle at 50% 50%, black 46%, rgba(0,0,0,0.85) 54%, transparent 64%)",
+              }}
             />
           </div>
 
@@ -163,6 +169,8 @@ export default function HeroSection() {
           <video
             ref={videoRef}
             src="/assets/0830.mp4"
+            poster="/assets/hero-video-poster.png"
+            preload="auto"
             autoPlay
             loop
             muted

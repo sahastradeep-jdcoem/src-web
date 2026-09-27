@@ -9,7 +9,18 @@ import {
 } from "./firebase/firestore";
 import { enqueueCloudWrite } from "./dataSyncEngine";
 import { db } from "./firebase/config";
-import { doc, setDoc, getDocs, collection, serverTimestamp, deleteDoc, onSnapshot } from "firebase/firestore";
+import { 
+  doc, 
+  setDoc, 
+  getDocs, 
+  collection, 
+  serverTimestamp, 
+  deleteDoc, 
+  onSnapshot,
+  query,
+  where,
+  documentId 
+} from "firebase/firestore";
 import { getStoredUsers, RegisteredUserRecord } from "./usersStore";
 
 export const LISTINGS_STORAGE_KEY = "src_listings_v1";
@@ -780,12 +791,17 @@ export async function syncListingResponsesFromFirestore(): Promise<ListingRespon
     const local = getStoredListingResponses();
     const fromRegistrations: ListingResponseRecord[] = [];
 
-    // CRITICAL: Query registrations collection for hub_poll_* and hub_sub_* records
-    // so submissions and ballots by non-admin students are immediately synchronized
+    // CRITICAL: Query registrations collection specifically for hub_poll_* and hub_sub_* records
+    // so submissions and ballots by non-admin students are immediately synchronized without downloading all event tickets
     const firestoreDb = db;
     if (firestoreDb && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       try {
-        const regSnap = await getDocs(collection(firestoreDb, "registrations"));
+        const hubRegsQuery = query(
+          collection(firestoreDb, "registrations"),
+          where(documentId(), ">=", "hub_"),
+          where(documentId(), "<=", "hub_\uf8ff")
+        );
+        const regSnap = await getDocs(hubRegsQuery);
 
         regSnap.docs.forEach((d) => {
           const parsed = parseRegistrationToResponseRecord(d.id, d.data());
@@ -829,13 +845,18 @@ export function subscribeToListingResponses(
     }
   });
 
-  // 2. Listen to real-time registrations collection snapshots (hub_poll_* and hub_sub_*)
+  // 2. Listen to real-time registrations collection snapshots specifically for hub_poll_* and hub_sub_*
   let unsubRegistrations: (() => void) | null = null;
   const firestoreDb = db;
   if (firestoreDb && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
     try {
-      unsubRegistrations = onSnapshot(
+      const hubRegsQuery = query(
         collection(firestoreDb, "registrations"),
+        where(documentId(), ">=", "hub_"),
+        where(documentId(), "<=", "hub_\uf8ff")
+      );
+      unsubRegistrations = onSnapshot(
+        hubRegsQuery,
         (snap) => {
           const fromRegs: ListingResponseRecord[] = [];
           snap.docs.forEach((d) => {

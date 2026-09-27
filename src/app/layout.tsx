@@ -69,6 +69,7 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&family=Sora:wght@400;500;600;700;800&display=swap"
           rel="stylesheet"
         />
+        <link rel="preload" href="/assets/hero-video-poster.png" as="image" type="image/png" />
       </head>
       <body className="min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans flex flex-col justify-between selection:bg-[#E78023] selection:text-white">
         <Suspense fallback={null}>

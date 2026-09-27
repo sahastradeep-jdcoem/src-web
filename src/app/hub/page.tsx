@@ -84,35 +84,13 @@ export default function StudentHubPage() {
       } catch {}
     }
 
-    // 2. Load user-specific voting ledger
+    // Load user-specific voting ledger
     if (user?.uid) {
       const initialMap = {
         ...getStoredVotedPolls(user.uid),
         ...((user as any)?.votedPolls || {}),
       };
       setVotedPolls(initialMap);
-
-      syncListingResponsesFromFirestore().then((res) => {
-        if (res && Array.isArray(res)) {
-          const userVotes = res.filter(
-            (r) => r.listingType === "poll" && (r.userId === user.uid || (r.userEmail && r.userEmail === user.email))
-          );
-          if (userVotes.length > 0) {
-            const map: Record<string, string> = {
-              ...initialMap,
-            };
-            userVotes.forEach((r) => {
-              if (r.listingId && r.selectedOptionIds?.[0]) {
-                map[r.listingId] = r.selectedOptionIds[0];
-              }
-            });
-            setVotedPolls(map);
-            try {
-              localStorage.setItem(`src_voted_polls_${user.uid}`, JSON.stringify(map));
-            } catch {}
-          }
-        }
-      });
     } else {
       // Unauthenticated: Strictly clear all voted state
       setVotedPolls({});
@@ -125,7 +103,7 @@ export default function StudentHubPage() {
     setResponses(getStoredListingResponses());
     if (cachedListings.length > 0) setIsLoading(false);
 
-    // CRITICAL: Fetch fresh from Firestore on mount
+    // 1. Fetch fresh listings from Firestore on mount
     syncListingsFromFirestore().then((remote) => {
       if (remote && Array.isArray(remote)) {
         setListings(remote);
@@ -135,19 +113,32 @@ export default function StudentHubPage() {
       setIsLoading(false);
     });
 
+    // 2. Fetch fresh hub responses in parallel without blocking UI
     syncListingResponsesFromFirestore().then((res) => {
       if (res && Array.isArray(res)) {
         setResponses(res);
+        if (user?.uid) {
+          const userVotes = res.filter(
+            (r) => r.listingType === "poll" && (r.userId === user.uid || (r.userEmail && r.userEmail === user.email))
+          );
+          if (userVotes.length > 0) {
+            const map: Record<string, string> = { ...getStoredVotedPolls(user.uid) };
+            userVotes.forEach((r) => {
+              if (r.listingId && r.selectedOptionIds?.[0]) {
+                map[r.listingId] = r.selectedOptionIds[0];
+              }
+            });
+            setVotedPolls(map);
+          }
+        }
       }
     });
 
+    // 3. Real-time subscriptions
     const unsubListings = subscribeToListings((updated) => {
       if (updated && Array.isArray(updated)) {
         setListings(updated);
         setIsLoading(false);
-        if (user?.uid) {
-          setVotedPolls(getStoredVotedPolls(user.uid));
-        }
       }
     });
 
@@ -161,7 +152,7 @@ export default function StudentHubPage() {
       unsubListings();
       unsubResponses();
     };
-  }, [user]);
+  }, []);
 
   const showToast = (msg: string) => {
     setFeedbackNotice(msg);
