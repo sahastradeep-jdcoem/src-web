@@ -59,6 +59,7 @@ import {
   deleteActiveCheckoutSessionsForEvent
 } from "@/lib/firebase/firestore";
 import { purgePendingQueueFor } from "@/lib/dataSyncEngine";
+import { getCurrentTenure } from "@/lib/tenureStore";
 
 export default function AdminEventsPage() {
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
@@ -275,6 +276,8 @@ export default function AdminEventsPage() {
               phone: (formData.coordinatorContact.phone || "").trim(),
             }
           : undefined,
+      tenureId: getCurrentTenure()?.id,
+      tenureLabel: getCurrentTenure()?.label,
     };
 
     const updated = created.isFeatured
@@ -504,6 +507,8 @@ export default function AdminEventsPage() {
               phone: (formData.coordinatorContact.phone || "").trim(),
             }
           : undefined,
+      tenureId: editingEvent.tenureId || getCurrentTenure()?.id,
+      tenureLabel: editingEvent.tenureLabel || getCurrentTenure()?.label,
     };
 
     const hasItem = eventsList.some(targetMatch);
@@ -538,6 +543,8 @@ export default function AdminEventsPage() {
       id: `evt-${Date.now()}-${randSuffix}`,
       name: `${evt.name} (Copy)`,
       slug: `${evt.slug}-copy-${randSuffix}`,
+      tenureId: evt.tenureId || getCurrentTenure()?.id,
+      tenureLabel: evt.tenureLabel || getCurrentTenure()?.label,
     };
     const updated = [duplicated, ...eventsList];
     setEventsList(updated);

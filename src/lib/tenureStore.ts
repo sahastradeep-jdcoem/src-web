@@ -645,7 +645,11 @@ export async function switchActiveTenure(targetTenureId: string, tenureBeginDate
         hostingCommittee: currentActiveHosting,
         foundingMembers: currentActiveFounders,
         clubs: currentActiveClubs,
-        events: currentActiveEvents,
+        events: currentActiveEvents.map((e) => ({
+          ...e,
+          tenureId: e.tenureId || tenure.id,
+          tenureLabel: e.tenureLabel || tenure.label,
+        })),
       };
     }
     return tenure;

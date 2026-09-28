@@ -122,6 +122,11 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
                 {statusLabel}
               </Badge>
             )}
+            {event.tenureLabel && (
+              <span className="text-[10px] font-sans font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-slate-900/85 text-white shadow-md backdrop-blur-xs flex items-center gap-1">
+                <span>Session {event.tenureLabel}</span>
+              </span>
+            )}
           </div>
 
           {/* Floating Share Button on Featured Banner */}
@@ -269,6 +274,11 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
             <Badge variant={statusVariant} size="sm">
               {statusLabel}
             </Badge>
+          )}
+          {event.tenureLabel && (
+            <span className="text-[10px] font-sans font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-900/85 text-white shadow-xs backdrop-blur-xs flex items-center gap-1">
+              <span>Session {event.tenureLabel}</span>
+            </span>
           )}
         </div>
 

@@ -20,7 +20,8 @@ import {
   syncEventsFromFirestore, 
   subscribeToEvents, 
   sortEventsByDate,
-  isEventCompletedByDate
+  isEventCompletedByDate,
+  getMainCalendarEvents
 } from "@/lib/eventsStore";
 import { 
   getPublicTenures, 
@@ -178,9 +179,18 @@ export default function EventsPage() {
     };
   }, []);
 
+  // Derive calendar events: automatically includes older events if current tenure has < 3 completed events
+  const { 
+    events: baseCalendarEvents, 
+    isShowingOlderEvents, 
+    currentTenureCompletedCount 
+  } = useMemo(() => {
+    return getMainCalendarEvents(eventsList, tenuresList);
+  }, [eventsList, tenuresList]);
+
   // Filter events for the live calendar
   const filteredEvents = useMemo(() => {
-    const filtered = eventsList
+    const filtered = baseCalendarEvents
       .filter(
         (e) =>
           Boolean(e?.name && typeof e.name === "string" && e.name.trim().length > 0) &&
@@ -197,23 +207,22 @@ export default function EventsPage() {
           (event.name || "").toLowerCase().includes(q) ||
           (event.description || "").toLowerCase().includes(q) ||
           (event.category || "").toLowerCase().includes(q) ||
-          (event.tagline && event.tagline.toLowerCase().includes(q));
+          (event.tagline && event.tagline.toLowerCase().includes(q)) ||
+          (event.tenureLabel && event.tenureLabel.toLowerCase().includes(q));
 
         return matchesSearch;
       });
 
     return sortEventsByDate(filtered);
-  }, [eventsList, deferredSearch]);
+  }, [baseCalendarEvents, deferredSearch]);
 
   // Active / Upcoming Events in the live calendar
-  // Current tenure completed events stay here — they only move to Past Tenure
-  // after an explicit tenure change is marked by administrators.
   const activeUpcomingEvents = useMemo(() => {
     return filteredEvents;
   }, [filteredEvents]);
 
   // Featured Flagship Event
-  const featuredEvent = eventsList.find(
+  const featuredEvent = baseCalendarEvents.find(
     (e) =>
       Boolean(e?.name && typeof e.name === "string" && e.name.trim().length > 0) &&
       Boolean(e.isFeatured) &&
@@ -284,6 +293,32 @@ export default function EventsPage() {
 
         {/* Live / Upcoming Events Grid */}
         <div className="space-y-6">
+          {/* New Tenure Transition Notice: Keeping older events visible until 3 events complete */}
+          {isShowingOlderEvents && !searchQuery && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-950 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0 text-amber-700">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-amber-800">
+                    Council Session {currentTenureLabel} Underway ({currentTenureCompletedCount}/3 Events Completed)
+                  </p>
+                  <p className="text-xs text-amber-900/80 mt-0.5">
+                    Displaying standout highlights and events from previous sessions alongside new calendar announcements.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/events/past"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-600/15 hover:bg-amber-600/25 text-amber-900 text-xs font-semibold shrink-0 transition-colors w-fit"
+              >
+                <span>Full Past Archives</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          )}
+
           {searchQuery && (
             <div className="border-b border-slate-200 pb-4">
               <h3 className="font-extrabold text-xl sm:text-2xl text-[#17458F] uppercase tracking-tight">

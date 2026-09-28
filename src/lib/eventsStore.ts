@@ -1,4 +1,5 @@
 import { EventItem } from "@/types";
+import type { CouncilTenure } from "./tenureStore";
 import { 
   saveEventToFirestore,
   deleteEventFromFirestore,
@@ -50,6 +51,8 @@ export function sanitizeEventItem(event: EventItem): EventItem {
 
   return {
     ...event,
+    tenureId: event.tenureId || undefined,
+    tenureLabel: event.tenureLabel || undefined,
     status: effectiveStatus,
     organizer: organizerVal,
     organizerClubSlug: event.organizerClubSlug || (organizerVal === "SRC JDCOEM" || organizerVal.toLowerCase().includes("council") ? "src-council" : undefined),
@@ -445,6 +448,141 @@ export function sanitizeEventsList(events: EventItem[]): EventItem[] {
   ));
   const sanitized = valid.map(sanitizeEventItem);
   return sortEventsByDate(sanitized);
+}
+
+/**
+ * Resolves events to show on the main public calendar (/events).
+ * Invariant: Until a new tenure completes at least 3 events, older events from
+ * past/archived tenures remain visible on the main events page so the page does
+ * not appear empty. Once 3 or more events are completed by the active tenure,
+ * past events gracefully retire exclusively to /events/past.
+ */
+export function getMainCalendarEvents(
+  eventsList: EventItem[],
+  tenuresList?: CouncilTenure[]
+): {
+  events: EventItem[];
+  isShowingOlderEvents: boolean;
+  currentTenureCompletedCount: number;
+} {
+  const validEvents = sanitizeEventsList(eventsList || []);
+  const validTenures = Array.isArray(tenuresList) ? tenuresList.filter((t) => !t.isDraft) : [];
+
+  if (validTenures.length === 0) {
+    const currentCompleted = validEvents.filter(
+      (e) =>
+        e.isLive !== false &&
+        e.status !== "draft" &&
+        !e.isCancelled &&
+        e.status !== "Cancelled" &&
+        !e.parentEventId &&
+        !e.parentEventSlug &&
+        (e.status === "Completed" || isEventCompletedByDate(e))
+    );
+    return {
+      events: validEvents,
+      isShowingOlderEvents: false,
+      currentTenureCompletedCount: currentCompleted.length,
+    };
+  }
+
+  const currentTenure = validTenures.find((t) => t.isCurrent) || validTenures[0];
+  const archivedTenures = validTenures.filter((t) => !t.isCurrent && (t.status === "archived" || !t.isDraft));
+
+  // Determine which events in validEvents belong to the current tenure vs older tenures
+  const currentTenureEvents: EventItem[] = [];
+  const olderEventsFromStore: EventItem[] = [];
+
+  for (const evt of validEvents) {
+    const hasCurrentTag = (evt.tenureId && evt.tenureId === currentTenure.id) ||
+      (evt.tenureLabel && evt.tenureLabel === currentTenure.label);
+
+    const hasOtherTag = (evt.tenureId && evt.tenureId !== currentTenure.id) ||
+      (evt.tenureLabel && evt.tenureLabel !== currentTenure.label);
+
+    if (hasCurrentTag) {
+      currentTenureEvents.push(evt);
+    } else if (hasOtherTag) {
+      olderEventsFromStore.push(evt);
+    } else {
+      // Untagged event: check if it belongs to any archived tenure snapshot
+      const inArchived = archivedTenures.some(
+        (at) => Array.isArray(at.events) && at.events.some((ae) => ae.id === evt.id || ae.slug === evt.slug)
+      );
+      if (inArchived) {
+        olderEventsFromStore.push(evt);
+      } else {
+        currentTenureEvents.push({
+          ...evt,
+          tenureId: evt.tenureId || currentTenure.id,
+          tenureLabel: evt.tenureLabel || currentTenure.label,
+        });
+      }
+    }
+  }
+
+  // Count completed events in current tenure (top-level, live, non-cancelled)
+  const currentTenureCompleted = currentTenureEvents.filter(
+    (e) =>
+      e.isLive !== false &&
+      e.status !== "draft" &&
+      !e.isCancelled &&
+      e.status !== "Cancelled" &&
+      !e.parentEventId &&
+      !e.parentEventSlug &&
+      (e.status === "Completed" || isEventCompletedByDate(e))
+  );
+  const currentTenureCompletedCount = currentTenureCompleted.length;
+
+  // Rule: Until a new tenure completes at least 3 events, keep older events visible
+  const shouldIncludeOlderEvents = currentTenureCompletedCount < 3 && (archivedTenures.length > 0 || olderEventsFromStore.length > 0);
+
+  if (!shouldIncludeOlderEvents) {
+    return {
+      events: sortEventsByDate(currentTenureEvents),
+      isShowingOlderEvents: false,
+      currentTenureCompletedCount,
+    };
+  }
+
+  // Gather older events from archived tenures and older tagged events
+  const olderEventsMap = new Map<string, EventItem>();
+
+  // 1. From archived tenures
+  for (const at of archivedTenures) {
+    if (Array.isArray(at.events)) {
+      for (const rawEvt of at.events) {
+        if (rawEvt && (rawEvt.id || rawEvt.slug)) {
+          const sanitized = sanitizeEventItem(rawEvt);
+          const key = sanitized.id || sanitized.slug;
+          olderEventsMap.set(key, {
+            ...sanitized,
+            tenureLabel: sanitized.tenureLabel || at.label,
+            tenureId: sanitized.tenureId || at.id,
+          });
+        }
+      }
+    }
+  }
+
+  // 2. From older events found in events store
+  for (const evt of olderEventsFromStore) {
+    const key = evt.id || evt.slug;
+    if (!olderEventsMap.has(key)) {
+      olderEventsMap.set(key, evt);
+    }
+  }
+
+  // Deduplicate: current tenure events always take priority over older events
+  const currentKeys = new Set(currentTenureEvents.map((e) => e.id || e.slug));
+  const olderEventsToInclude = Array.from(olderEventsMap.values()).filter((e) => !currentKeys.has(e.id || e.slug));
+
+  const combined = [...currentTenureEvents, ...olderEventsToInclude];
+  return {
+    events: sortEventsByDate(combined),
+    isShowingOlderEvents: olderEventsToInclude.length > 0,
+    currentTenureCompletedCount,
+  };
 }
 
 let inMemoryEvents: EventItem[] | null = null;

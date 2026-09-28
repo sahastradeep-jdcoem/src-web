@@ -33,6 +33,7 @@ import {
   isRegistrationDeadlinePassed,
   isEventCompletedByDate
 } from "@/lib/eventsStore";
+import { getPublicTenures } from "@/lib/tenureStore";
 import { EventItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Accordion } from "@/components/ui/Accordion";
@@ -114,7 +115,25 @@ export default function EventDetailPage() {
 
     // 1. Check local stored events
     const stored = getStoredEvents();
-    const match = findEvent(stored, slug);
+    let match = findEvent(stored, slug);
+
+    // If not found in primary store, search archived tenures
+    if (!match) {
+      const publicTenures = getPublicTenures();
+      for (const t of publicTenures) {
+        if (Array.isArray(t.events)) {
+          const tenureMatch = findEvent(t.events, slug);
+          if (tenureMatch) {
+            match = {
+              ...tenureMatch,
+              tenureLabel: tenureMatch.tenureLabel || t.label,
+              tenureId: tenureMatch.tenureId || t.id,
+            };
+            break;
+          }
+        }
+      }
+    }
 
     if (match) {
       const cleanMatch = sanitizeEventItem(match);
@@ -126,7 +145,24 @@ export default function EventDetailPage() {
     // 2. Fetch latest from Firestore in case event was just created on another device
     syncEventsFromFirestore().then((remote) => {
       if (remote) {
-        const remoteMatch = findEvent(remote, slug);
+        let remoteMatch = findEvent(remote, slug);
+        if (!remoteMatch) {
+          const publicTenures = getPublicTenures();
+          for (const t of publicTenures) {
+            if (Array.isArray(t.events)) {
+              const tenureMatch = findEvent(t.events, slug);
+              if (tenureMatch) {
+                remoteMatch = {
+                  ...tenureMatch,
+                  tenureLabel: tenureMatch.tenureLabel || t.label,
+                  tenureId: tenureMatch.tenureId || t.id,
+                };
+                break;
+              }
+            }
+          }
+        }
+
         if (remoteMatch) {
           const cleanRemoteMatch = sanitizeEventItem(remoteMatch);
           setEvent(cleanRemoteMatch);
@@ -138,7 +174,24 @@ export default function EventDetailPage() {
 
     const unsub = subscribeToEvents((remoteEvents) => {
       if (remoteEvents) {
-        const streamMatch = findEvent(remoteEvents, slug);
+        let streamMatch = findEvent(remoteEvents, slug);
+        if (!streamMatch) {
+          const publicTenures = getPublicTenures();
+          for (const t of publicTenures) {
+            if (Array.isArray(t.events)) {
+              const tenureMatch = findEvent(t.events, slug);
+              if (tenureMatch) {
+                streamMatch = {
+                  ...tenureMatch,
+                  tenureLabel: tenureMatch.tenureLabel || t.label,
+                  tenureId: tenureMatch.tenureId || t.id,
+                };
+                break;
+              }
+            }
+          }
+        }
+
         if (streamMatch) {
           const cleanStreamMatch = sanitizeEventItem(streamMatch);
           setEvent(cleanStreamMatch);

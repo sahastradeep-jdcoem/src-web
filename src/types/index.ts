@@ -129,6 +129,8 @@ export interface EventItem {
   isCancelled?: boolean;
   cancelledAt?: string;
   cancellationNotice?: string;
+  tenureId?: string;
+  tenureLabel?: string;
 }
 
 export interface ClubLeader {
