@@ -108,20 +108,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Subscribe to Auth listener
     const unsubscribe = subscribeToAuth(async (fbUser) => {
       if (fbUser && fbUser.email) {
-        const storedProfile = await getUserProfileFromFirestore(fbUser.uid);
+        let storedProfile = await getUserProfileFromFirestore(fbUser.uid);
 
-        if (storedProfile?.isDeleted === true) {
-          // Account was permanently deleted, revoke active session
+        if (storedProfile?.isDeleted === true || storedProfile?.status === "deleted") {
+          // If the user authenticated with Google for a previously deleted account, auto-reactivate
+          // so accidental deletion never permanently locks them out of their single college email.
           try {
-            await firebaseSignOut();
-          } catch {}
-          setUser(null);
-          try {
-            localStorage.removeItem("src_auth_user");
-            sessionStorage.removeItem("src_pending_user_type");
-          } catch {}
-          setIsLoading(false);
-          return;
+            await saveUserProfileToFirestore(fbUser.uid, {
+              isDeleted: false,
+              status: "active",
+              deletedAt: null as any,
+              profileCompleted: false,
+            });
+            storedProfile = {
+              ...storedProfile,
+              isDeleted: false,
+              status: "active",
+              deletedAt: undefined,
+              profileCompleted: false,
+            };
+          } catch (reactivateErr) {
+            console.warn("Auto-reactivate error in auth subscriber:", reactivateErr);
+          }
         }
 
         const isAdminUser = await checkIsAdminInFirestore(fbUser.email, fbUser.uid);
@@ -303,15 +311,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       const fbUser = await firebaseGoogleSignIn();
       if (fbUser) {
-        const storedProfile = await getUserProfileFromFirestore(fbUser.uid);
+        let storedProfile = await getUserProfileFromFirestore(fbUser.uid);
         if (storedProfile?.isDeleted || storedProfile?.status === "deleted") {
-          await firebaseSignOut();
-          setUser(null);
+          // If the user previously deleted their account, authenticating via Google auto-reactivates
+          // their account so they can smoothly re-onboard without being locked out.
           try {
-            localStorage.removeItem("src_auth_user");
-            sessionStorage.removeItem("src_pending_user_type");
-          } catch {}
-          throw new Error("This account has been permanently deleted. Please contact administration or register with a new account.");
+            await saveUserProfileToFirestore(fbUser.uid, {
+              isDeleted: false,
+              status: "active",
+              deletedAt: null as any,
+              profileCompleted: false,
+            });
+            storedProfile = {
+              ...storedProfile,
+              isDeleted: false,
+              status: "active",
+              deletedAt: undefined,
+              profileCompleted: false,
+            };
+          } catch (reactivateErr) {
+            console.warn("Auto-reactivate error during Google login:", reactivateErr);
+          }
         }
 
         const isAdminUser = await checkIsAdminInFirestore(fbUser.email || "", fbUser.uid);

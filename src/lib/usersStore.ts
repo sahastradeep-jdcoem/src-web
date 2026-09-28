@@ -3,6 +3,7 @@ import { ClubLeader, ClubMember } from "@/types";
 import { 
   getAllUsersFromFirestore, 
   saveUserProfileToFirestore,
+  deleteUserProfileFromFirestore,
   saveAdminRecordToFirestore,
   removeAdminRecordFromFirestore,
   findUserByBtIdInFirestore
@@ -1357,7 +1358,7 @@ export function deleteRegisteredUser(uid: string): RegisteredUserRecord[] {
 }
 
 /**
- * Completely purge a user record from localStorage (admin hard-delete)
+ * Completely purge a user record from localStorage and Cloud Firestore (admin hard-delete)
  */
 export function purgeRegisteredUser(uid: string): RegisteredUserRecord[] {
   const current = getStoredUsers();
@@ -1367,6 +1368,42 @@ export function purgeRegisteredUser(uid: string): RegisteredUserRecord[] {
       localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
     } catch {}
     window.dispatchEvent(new CustomEvent("src_users_updated", { detail: updated }));
+    // Rule 3 & 9: Instantly sync hard deletion to Cloud Firestore
+    deleteUserProfileFromFirestore(uid).catch((err) =>
+      console.warn("Failed to delete user profile from Firestore:", err)
+    );
+  }
+  return updated;
+}
+
+/**
+ * Reactivate a previously deleted user account (clears isDeleted flag and sets status to active)
+ */
+export function reactivateUserAccount(uid: string): RegisteredUserRecord[] {
+  const current = getStoredUsers();
+  const updated = current.map((u) => {
+    if (u.uid === uid) {
+      const { deletedAt, ...rest } = u;
+      return {
+        ...rest,
+        isDeleted: false,
+        status: "active" as const,
+        profileCompleted: false, // Ensure user can review and re-complete onboarding if needed
+      };
+    }
+    return u;
+  });
+
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
+    } catch {}
+    window.dispatchEvent(new CustomEvent("src_users_updated", { detail: updated }));
+    saveUserProfileToFirestore(uid, {
+      isDeleted: false,
+      status: "active",
+      deletedAt: null as any,
+    }).catch((err) => console.warn("Failed to reactivate user in Firestore:", err));
   }
   return updated;
 }

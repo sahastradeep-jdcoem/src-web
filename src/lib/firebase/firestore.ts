@@ -247,6 +247,21 @@ export async function saveUserProfileToFirestore(
 }
 
 /**
+ * Permanently delete a user profile document from Firestore `/users/{uid}`
+ */
+export async function deleteUserProfileFromFirestore(uid: string): Promise<boolean> {
+  if (!uid || !db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return false;
+  try {
+    const docRef = doc(db, USERS_COLLECTION, uid);
+    await deleteDoc(docRef);
+    return true;
+  } catch (error) {
+    console.error("Firestore user profile delete error:", error);
+    return false;
+  }
+}
+
+/**
  * Fetch all registered student users from Firestore
  */
 export async function getAllUsersFromFirestore(): Promise<UserProfile[]> {

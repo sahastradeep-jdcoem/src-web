@@ -24,6 +24,7 @@ import {
   Inbox,
   UserPlus,
   RefreshCw,
+  RotateCcw,
   Edit3,
   ArrowUpDown,
   Calendar
@@ -36,6 +37,7 @@ import {
   saveRegisteredUser, 
   deleteRegisteredUser, 
   purgeRegisteredUser,
+  reactivateUserAccount,
   changeUserRole, 
   approveFacultyUser,
   rejectFacultyUser,
@@ -291,6 +293,14 @@ export default function AdminUsersPage() {
     const actionName = newRole === "COUNCIL_ADMIN" ? "Promoted to Admin" : "Demoted to Student";
     changeUserRole(user.uid, newRole);
     showNotice(`${actionName}: ${user.displayName} (${user.email})`);
+  };
+
+  const handleReactivateUser = (user: RegisteredUserRecord) => {
+    reactivateUserAccount(user.uid);
+    showNotice(`Account reactivated for ${user.displayName || user.email}. They can now sign in.`);
+    if (selectedUser?.uid === user.uid) {
+      setSelectedUser((prev) => prev ? { ...prev, isDeleted: false, status: "active", deletedAt: undefined } : null);
+    }
   };
 
   const confirmDelete = () => {
@@ -969,6 +979,13 @@ export default function AdminUsersPage() {
                           {isDeleted ? (
                             <>
                               <button
+                                onClick={() => handleReactivateUser(u)}
+                                className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition-colors cursor-pointer"
+                                title="Reactivate User Account"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                              </button>
+                              <button
                                 onClick={() => setSelectedUser(u)}
                                 className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-[#17458F] transition-colors cursor-pointer"
                                 title="Inspect Deleted User Record"
@@ -1074,18 +1091,30 @@ export default function AdminUsersPage() {
         >
           <div className="space-y-5 pt-2 text-[#0F172A]">
             {(selectedUser.isDeleted || selectedUser.status === "deleted") && (
-              <div className="p-4 rounded-2xl bg-rose-50 border-2 border-rose-200 flex items-start gap-3">
-                <div className="p-2 rounded-xl bg-rose-100 text-rose-700 shrink-0">
-                  <AlertCircle className="w-5 h-5" />
+              <div className="p-4 rounded-2xl bg-rose-50 border-2 border-rose-200 flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-xl bg-rose-100 text-rose-700 shrink-0">
+                    <AlertCircle className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-0.5">
+                    <h4 className="font-heading font-extrabold text-sm text-rose-950">
+                      Account Permanently Deactivated
+                    </h4>
+                    <p className="text-xs text-rose-700 font-medium">
+                      This account was deleted on {selectedUser.deletedAt ? new Date(selectedUser.deletedAt).toLocaleString() : "record"}.
+                    </p>
+                  </div>
                 </div>
-                <div className="space-y-0.5">
-                  <h4 className="font-heading font-extrabold text-sm text-rose-950">
-                    Account Permanently Deactivated
-                  </h4>
-                  <p className="text-xs text-rose-700 font-medium">
-                    This account was permanently deleted by the user on {selectedUser.deletedAt ? new Date(selectedUser.deletedAt).toLocaleString() : "record"}. Verified passes and portal rights have been revoked.
-                  </p>
-                </div>
+                <Button
+                  type="button"
+                  onClick={() => handleReactivateUser(selectedUser)}
+                  variant="primary"
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 text-xs font-bold"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                  Reactivate
+                </Button>
               </div>
             )}
 
@@ -1263,17 +1292,32 @@ export default function AdminUsersPage() {
               >
                 Close
               </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  handleRoleToggle(selectedUser);
-                  setSelectedUser(null);
-                }}
-                variant="primary"
-                size="sm"
-              >
-                {selectedUser.role === "COUNCIL_ADMIN" ? "Demote to Student" : "Promote to Admin"}
-              </Button>
+              {selectedUser.isDeleted || selectedUser.status === "deleted" ? (
+                <Button
+                  type="button"
+                  onClick={() => {
+                    handleReactivateUser(selectedUser);
+                  }}
+                  variant="primary"
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                >
+                  <RotateCcw className="w-4 h-4 mr-1.5" />
+                  Reactivate Account
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => {
+                    handleRoleToggle(selectedUser);
+                    setSelectedUser(null);
+                  }}
+                  variant="primary"
+                  size="sm"
+                >
+                  {selectedUser.role === "COUNCIL_ADMIN" ? "Demote to Student" : "Promote to Admin"}
+                </Button>
+              )}
             </div>
           </div>
         </Modal>
