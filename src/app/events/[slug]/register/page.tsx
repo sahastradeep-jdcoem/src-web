@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { 
   ArrowLeft, 
   AlertCircle, 
@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import { isExternalUser } from "@/lib/usersStore";
 
 export default function EventRegisterPage() {
+  const router = useRouter();
   const params = useParams();
   const slug = params?.slug as string;
   const { user, openAuthModal } = useAuth();
@@ -37,6 +38,12 @@ export default function EventRegisterPage() {
   const [subEvents, setSubEvents] = useState<EventItem[]>([]);
   const [selectedSubEvent, setSelectedSubEvent] = useState<EventItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (event && (event.isParentFest || subEvents.length > 0)) {
+      router.replace(`/events/${event.slug}#competitions`);
+    }
+  }, [event, subEvents, router]);
 
   const findEvent = (allEvents: EventItem[], targetSlug: string): EventItem | null => {
     if (!targetSlug) return null;
@@ -154,6 +161,48 @@ export default function EventRegisterPage() {
         >
           &larr; Browse Available Events
         </Link>
+      </div>
+    );
+  }
+
+  if (event.isParentFest || subEvents.length > 0) {
+    return (
+      <div className="min-h-[70vh] bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center space-y-6">
+        <div className="p-4 rounded-3xl bg-blue-50 border border-blue-200 text-[#17458F]">
+          <Layers className="w-10 h-10 mx-auto text-[#17458F]" />
+        </div>
+        <div className="space-y-3 max-w-lg">
+          <Badge variant="navy" size="md">Umbrella Event Lineup</Badge>
+          <h1 className="font-heading font-extrabold text-2xl text-[#0F172A] uppercase">
+            {event.name}
+          </h1>
+          <div className="p-4 rounded-2xl bg-white border border-blue-200 text-left space-y-1.5 shadow-xs">
+            <span className="text-[10px] font-bold text-[#17458F] uppercase tracking-widest block font-sans">
+              Registration Notice:
+            </span>
+            <p className="text-xs text-slate-700 leading-relaxed font-medium">
+              <strong>{event.name}</strong> is an umbrella event hosting {subEvents.length} specialized event{subEvents.length === 1 ? "" : "s"} &amp; competition{subEvents.length === 1 ? "" : "s"}. Registrations are completed under each specific event rather than the umbrella festival itself.
+            </p>
+          </div>
+          <p className="text-xs text-slate-500 leading-relaxed font-sans">
+            Please choose a competition or event from the festival lineup to register.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Link
+            href={`/events/${event.slug}#competitions`}
+            className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-[#E78023] to-[#D26E17] text-white text-xs font-bold uppercase tracking-wider transition-all hover:brightness-105 shadow-md shadow-[#E78023]/20 flex items-center gap-2"
+          >
+            <span>Choose Event / Competition to Register</span>
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+          <Link
+            href={`/events/${event.slug}`}
+            className="px-6 py-3.5 rounded-2xl bg-slate-100 text-slate-700 text-xs font-bold uppercase tracking-wider transition-all hover:bg-slate-200 border border-slate-200"
+          >
+            Back to Event Overview
+          </Link>
+        </div>
       </div>
     );
   }

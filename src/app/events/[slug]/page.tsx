@@ -521,10 +521,10 @@ export default function EventDetailPage() {
                     <span>Festival Lineup &amp; Segments</span>
                   </span>
                   <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase">
-                    Competitions Under {event.name}
+                    Events Under {event.name}
                   </h2>
                   <p className="text-xs sm:text-sm text-slate-500 font-medium">
-                    Explore specialized competitions, pageants, and tournaments happening under {event.name}. Each competition features dedicated prizes and rules.
+                    Explore specialized events, competitions, and segments happening under {event.name}. Each event features dedicated prizes and rules.
                   </p>
                 </div>
 
@@ -781,17 +781,17 @@ export default function EventDetailPage() {
                   </div>
 
                   <h3 className="font-heading font-extrabold text-2xl text-[#0F172A] tracking-tight">
-                    Festival Competitions
+                    {event.name}
                   </h3>
                   <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                    {event.name} hosts <strong className="text-slate-800 font-semibold">{subEvents.length} specialized competition{subEvents.length === 1 ? "" : "s"}</strong>. Choose a competition to configure your category and official delegate entry.
+                    {event.name} hosts <strong className="text-slate-800 font-semibold">{subEvents.length} specialized event/competition{subEvents.length === 1 ? "" : "s"}</strong>. Choose a event/competition to configure your category and official delegate entry.
                   </p>
                 </div>
 
                 {/* Specs Breakdown */}
                 <div className="space-y-2.5 pt-4 border-t border-slate-100 text-xs">
                   <div className="flex justify-between items-center py-1 border-b border-slate-100/80">
-                    <span className="text-slate-500 font-medium">Active Competitions</span>
+                    <span className="text-slate-500 font-medium">Active Events / Competitions</span>
                     <span className="font-bold text-[#17458F] font-mono px-2 py-0.5 rounded-md bg-blue-50 border border-blue-100/80">
                       {subEvents.length} {subEvents.length === 1 ? "Segment" : "Segments"}
                     </span>
@@ -881,9 +881,9 @@ export default function EventDetailPage() {
                   </div>
                 ) : subEvents.length > 0 ? (
                   <div className="space-y-2.5 pt-1">
-                    {/* Primary High-Impact CTA: Choose Competition & Register */}
-                    <Link
-                      href={`/events/${event.slug}/register`}
+                    {/* Primary High-Impact CTA: Choose Event / Competition & Register */}
+                    <a
+                      href="#competitions"
                       className="group relative w-full py-4 px-5 rounded-2xl bg-gradient-to-r from-[#E78023] via-[#F28E2B] to-[#D26E17] hover:brightness-105 active:scale-[0.98] text-white text-xs sm:text-sm font-bold uppercase tracking-wider text-center transition-all shadow-lg shadow-[#E78023]/25 hover:shadow-xl hover:shadow-[#E78023]/35 flex items-center justify-between cursor-pointer overflow-hidden"
                     >
                       {/* Interactive shimmer sweep on hover */}
@@ -895,7 +895,7 @@ export default function EventDetailPage() {
                         </div>
                         <div>
                           <div className="font-extrabold text-white leading-tight tracking-wide text-xs sm:text-sm">
-                            Register for Competition
+                            Register for an Event / Competition
                           </div>
                           <div className="text-[10px] text-white/85 font-medium lowercase tracking-normal">
                             select from {subEvents.length} active {subEvents.length === 1 ? "event" : "events"}
@@ -904,9 +904,9 @@ export default function EventDetailPage() {
                       </div>
 
                       <div className="w-8 h-8 rounded-xl bg-white/20 group-hover:bg-white/30 flex items-center justify-center shrink-0 transition-all relative z-10">
-                        <ArrowRight className="w-4 h-4 text-white transition-transform group-hover:translate-x-0.5" />
+                        <ArrowDown className="w-4 h-4 text-white transition-transform group-hover:translate-y-0.5" />
                       </div>
-                    </Link>
+                    </a>
 
                     {/* Secondary Clean CTA: Quick Jump to Lineup & Details */}
                     <a
@@ -1173,7 +1173,26 @@ export default function EventDetailPage() {
 
       {/* Mobile Sticky Action Bar */}
       <div className="md:hidden fixed bottom-0 inset-x-0 z-40 p-3 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-2xl flex items-center justify-between gap-3 animate-in slide-in-from-bottom-2 duration-200">
-        {!event.noRegistrationRequired && isRegistrationOpen && !(isJdcoemOnly && isExternalStudent) ? (
+        {event.isParentFest || subEvents.length > 0 ? (
+          <div className="w-full flex items-center gap-2">
+            <a
+              href="#competitions"
+              className="flex-1 py-3 px-4 rounded-xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2 shadow-md shadow-[#E78023]/25 min-h-[44px]"
+            >
+              <Layers className="w-4 h-4" />
+              <span>CHOOSE EVENT / COMPETITION</span>
+              <ArrowDown className="w-4 h-4" />
+            </a>
+            <button
+              type="button"
+              onClick={handleShare}
+              className="p-3 rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-[#17458F] text-xs font-bold flex items-center justify-center min-h-[44px] min-w-[44px] cursor-pointer shadow-2xs"
+              aria-label="Share event"
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
+          </div>
+        ) : !event.noRegistrationRequired && isRegistrationOpen && !(isJdcoemOnly && isExternalStudent) ? (
           <>
             <div className="pl-1">
               <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Registration Fee</span>
