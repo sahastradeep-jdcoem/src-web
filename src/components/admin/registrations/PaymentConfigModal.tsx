@@ -58,8 +58,8 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
   }, [isOpen]);
 
   const webhookUrl = typeof window !== "undefined"
-    ? `${window.location.origin}/api/upi/webhook`
-    : "https://srcjdcoem.in/api/upi/webhook";
+    ? `${window.location.origin.replace("://srcjdcoem.in", "://www.srcjdcoem.in")}/api/upi/webhook`
+    : "https://www.srcjdcoem.in/api/upi/webhook";
 
   const webhookSecret = config.webhookSecret || "SRC_UPI_2026_GATEWAY";
 
@@ -465,6 +465,9 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                       <div className="mt-0.5">
                         <span className="text-slate-900 bg-white px-2 py-1 rounded border border-slate-200 break-all select-all font-mono text-[10px] font-bold block">
                           {webhookUrl}?secret={webhookSecret}
+                        </span>
+                        <span className="text-[9.5px] text-amber-800 font-medium block mt-0.5">
+                          ⚠️ Notice: Must include <strong>www.srcjdcoem.in</strong>. Without &quot;www&quot;, Android cancels POST redirects.
                         </span>
                       </div>
                     </li>
