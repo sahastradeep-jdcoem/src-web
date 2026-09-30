@@ -21,7 +21,8 @@ import {
   subscribeToEvents, 
   sortEventsByDate,
   isEventCompletedByDate,
-  getMainCalendarEvents
+  getMainCalendarEvents,
+  getEventEffectiveStatus
 } from "@/lib/eventsStore";
 import { 
   getPublicTenures, 
@@ -230,8 +231,7 @@ export default function EventsPage() {
       e.status !== "draft" &&
       !e.isCancelled &&
       e.status !== "Cancelled" &&
-      e.status !== "Completed" &&
-      !isEventCompletedByDate(e) &&
+      getEventEffectiveStatus(e) !== "Completed" &&
       !e.parentEventId &&
       !e.parentEventSlug
   );

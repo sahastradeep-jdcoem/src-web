@@ -68,7 +68,7 @@ import {
   PaymentConfig 
 } from "@/lib/paymentConfigStore";
 import { getCurrentTenure } from "@/lib/tenureStore";
-import { isRegistrationDeadlinePassed, isEventCompletedByDate } from "@/lib/eventsStore";
+import { isRegistrationDeadlinePassed, isEventCompletedByDate, getEventEffectiveStatus } from "@/lib/eventsStore";
 
 interface RegistrationWizardProps {
   event: EventItem;
@@ -540,17 +540,18 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   };
 
   const handleProceedToStep2 = async () => {
-    const isCompleted = event.status === "Completed" || event.status?.toLowerCase() === "completed" || isEventCompletedByDate(event);
+    const effectiveStatus = getEventEffectiveStatus(event);
+    const isCompleted = effectiveStatus === "Completed";
     const isDeadlinePassed = isRegistrationDeadlinePassed(event);
-    if (isCompleted || isDeadlinePassed || (event.status && event.status !== "Registration Open")) {
-      if (event.status === "Coming Soon") {
+    if (isCompleted || isDeadlinePassed || effectiveStatus !== "Registration Open") {
+      if (effectiveStatus === "Coming Soon") {
         alert("This event is coming soon. Registrations have not opened yet.");
-      } else if (event.status === "Upcoming") {
+      } else if (effectiveStatus === "Upcoming") {
         alert("Registrations for this event have not opened yet. Please check back soon!");
       } else if (isDeadlinePassed) {
         alert(`The registration deadline for this event has passed (${event.registrationDeadline || "Closed"}).`);
       } else {
-        alert(`Registrations are closed for this event (${event.status}). Registration cannot happen.`);
+        alert(`Registrations are closed for this event (${effectiveStatus}). Registration cannot happen.`);
       }
       return;
     }
@@ -779,17 +780,18 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
   const handleConfirmRegistration = async () => {
     if (isSubmitting) return;
-    const isCompleted = event.status === "Completed" || event.status?.toLowerCase() === "completed" || isEventCompletedByDate(event);
+    const effectiveStatus = getEventEffectiveStatus(event);
+    const isCompleted = effectiveStatus === "Completed";
     const isDeadlinePassed = isRegistrationDeadlinePassed(event);
-    if (isCompleted || isDeadlinePassed || (event.status && event.status !== "Registration Open")) {
-      if (event.status === "Coming Soon") {
+    if (isCompleted || isDeadlinePassed || effectiveStatus !== "Registration Open") {
+      if (effectiveStatus === "Coming Soon") {
         alert("This event is coming soon. Registrations have not opened yet.");
-      } else if (event.status === "Upcoming") {
+      } else if (effectiveStatus === "Upcoming") {
         alert("Registrations for this event have not opened yet. Please check back soon!");
       } else if (isDeadlinePassed) {
         alert(`The registration deadline for this event has passed (${event.registrationDeadline || "Closed"}).`);
       } else {
-        alert(`Registrations are closed for this event (${event.status}). Registration cannot happen.`);
+        alert(`Registrations are closed for this event (${effectiveStatus}). Registration cannot happen.`);
       }
       return;
     }
@@ -1144,7 +1146,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     );
   }
 
-  const isWizardCompleted = event.status === "Completed" || event.status?.toLowerCase() === "completed" || isEventCompletedByDate(event);
+  const isWizardCompleted = getEventEffectiveStatus(event) === "Completed";
   if (isWizardCompleted) {
     return (
       <div className="max-w-xl mx-auto p-8 rounded-3xl bg-white border border-slate-200 text-center space-y-5 shadow-sm">

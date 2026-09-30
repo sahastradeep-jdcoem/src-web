@@ -31,7 +31,8 @@ import {
   subscribeToEvents, 
   sanitizeEventItem,
   isRegistrationDeadlinePassed,
-  isEventCompletedByDate
+  isEventCompletedByDate,
+  getEventEffectiveStatus
 } from "@/lib/eventsStore";
 import { getPublicTenures } from "@/lib/tenureStore";
 import { EventItem } from "@/types";
@@ -286,11 +287,12 @@ export default function EventDetailPage() {
     );
   }
 
-  const isComingSoon = event.status === "Coming Soon";
-  const isUpcoming = event.status === "Upcoming";
-  const isCompleted = event.status === "Completed" || event.status?.toLowerCase() === "completed" || isEventCompletedByDate(event);
+  const effectiveStatus = getEventEffectiveStatus(event);
+  const isComingSoon = effectiveStatus === "Coming Soon";
+  const isUpcoming = effectiveStatus === "Upcoming";
+  const isCompleted = effectiveStatus === "Completed";
   const isDeadlinePassed = isRegistrationDeadlinePassed(event);
-  const isRegistrationOpen = event.status === "Registration Open" && !isDeadlinePassed && !isCompleted;
+  const isRegistrationOpen = effectiveStatus === "Registration Open" && !isDeadlinePassed && !isCompleted;
   const isDateComingSoon = isComingSoon || Boolean(
     !event.date ||
     /\b(coming soon|to be announced|tba|to be decided|tbd)\b/i.test(event.date)
@@ -597,7 +599,7 @@ export default function EventDetailPage() {
                             >
                               Details
                             </Link>
-                            {sub.status === "Completed" || sub.status?.toLowerCase() === "completed" || event.status === "Completed" || event.status?.toLowerCase() === "completed" || isEventCompletedByDate(sub) ? (
+                            {getEventEffectiveStatus(sub) === "Completed" || effectiveStatus === "Completed" ? (
                               <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 text-xs font-bold uppercase tracking-wider">
                                 <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
                                 <span>Completed</span>

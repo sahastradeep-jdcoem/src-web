@@ -45,15 +45,35 @@ export function sanitizeEventItem(event: EventItem): EventItem {
 
   const organizerVal = (event.organizer || "").trim();
 
-  // Shift status to "Completed" if event date has passed (next day of event date)
+  // Shift status to "Completed" if event date has passed (next day of event date),
+  // OR auto-revert from "Completed" back to active if event was rescheduled to a future date.
   const isAutoCompleted = isEventCompletedByDate(event);
-  const effectiveStatus = isAutoCompleted ? "Completed" : (event.status || "Upcoming");
+  let effectiveStatus: EventItem["status"] = event.status || "Upcoming";
+  if (isAutoCompleted) {
+    effectiveStatus = "Completed";
+  } else if (event.status === "Completed" || event.status?.toLowerCase() === "completed") {
+    effectiveStatus = isNoReg ? "Upcoming" : "Registration Open";
+  }
+
+  // Auto-heal registrationDeadline if event was rescheduled to a future date
+  // and deadline is in the past (outdated past deadline from before rescheduling)
+  let effectiveRegDeadline = event.registrationDeadline;
+  if (!isNoReg && effectiveRegDeadline && effectiveRegDeadline !== "Not Required") {
+    const deadlineTs = parseDateStringToTimestamp(effectiveRegDeadline, true);
+    const targetDateStr = event.rawDate || event.date;
+    const eventDateTs = targetDateStr ? parseDateStringToTimestamp(targetDateStr, true) : null;
+    if (eventDateTs && eventDateTs >= Date.now() && deadlineTs && deadlineTs < Date.now()) {
+      // Outdated deadline that passed before the future event date: heal to the event date
+      effectiveRegDeadline = event.date || (event.rawDate ? event.rawDate : effectiveRegDeadline);
+    }
+  }
 
   return {
     ...event,
     tenureId: event.tenureId || undefined,
     tenureLabel: event.tenureLabel || undefined,
     status: effectiveStatus,
+    registrationDeadline: isNoReg ? "Not Required" : effectiveRegDeadline,
     organizer: organizerVal,
     organizerClubSlug: event.organizerClubSlug || (organizerVal === "SRC JDCOEM" || organizerVal.toLowerCase().includes("council") ? "src-council" : undefined),
     isPaid: isPaidVal,
@@ -262,49 +282,99 @@ export function parseDateStringToTimestamp(dateStr?: string, defaultToEndOfDay: 
 }
 
 /**
+ * Helper to convert any valid date string or timestamp into HTML input YYYY-MM-DD format
+ */
+export function formatDateToInput(dateStr?: string): string {
+  if (!dateStr || typeof dateStr !== "string") return "";
+  const trimmed = dateStr.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const ts = parseDateStringToTimestamp(trimmed, false);
+  if (!ts) return "";
+  const d = new Date(ts);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * Automatically determine if registrations have closed based on registrationDeadline.
  * Registration closes at the end of the registrationDeadline day (23:59:59.999) or specified deadline time.
  */
 export function isRegistrationDeadlinePassed(event: Partial<EventItem> | null | undefined): boolean {
   if (!event) return false;
   if (event.noRegistrationRequired) return false;
-  if (!event.registrationDeadline) return false;
+  if (!event.registrationDeadline || event.registrationDeadline === "Not Required") return false;
   const deadlineTs = parseDateStringToTimestamp(event.registrationDeadline, true);
   if (!deadlineTs) return false;
+
+  // If the event date is today or in the future, an outdated past deadline (leftover from before rescheduling)
+  // should not lock out registrations if the event status is open.
+  const targetDateStr = event.rawDate || event.date;
+  const eventDateTs = targetDateStr ? parseDateStringToTimestamp(targetDateStr, true) : null;
+  if (eventDateTs && eventDateTs >= Date.now() && deadlineTs < Date.now()) {
+    return false;
+  }
+
   return Date.now() > deadlineTs;
 }
 
 /**
  * Automatically shift event status to "Completed" on the next day of the event date (or end date).
  * Once the event day finishes (after 23:59:59.999), on the next day, it resolves to completed.
+ * CRITICAL INVARIANT: If the event date is today or in the future, it is NEVER completed by date!
  */
 export function isEventCompletedByDate(event: Partial<EventItem> | null | undefined): boolean {
   if (!event) return false;
-  if (event.status === "Completed" || event.status?.toLowerCase() === "completed") return true;
   if (event.status === "Cancelled" || event.isCancelled) return false;
   if (event.status === "draft") return false;
   if (event.status === "Coming Soon") return false;
 
   const targetDateStr = event.rawEndDate || event.rawDate || event.endDate || event.date;
-  if (!targetDateStr) return false;
+  if (targetDateStr) {
+    if (/\b(coming soon|tba|to be announced|tbd)\b/i.test(targetDateStr)) return false;
 
-  if (/\b(coming soon|tba|to be announced|tbd)\b/i.test(targetDateStr)) return false;
+    const endOfDayTs = parseDateStringToTimestamp(targetDateStr, true);
+    if (endOfDayTs) {
+      // If the event date is today or in the future, it is strictly NOT completed
+      if (Date.now() <= endOfDayTs) {
+        return false;
+      }
+      // If the event date has passed (it is strictly after the end of the event day), it is completed
+      return true;
+    }
+  }
 
-  const endOfDayTs = parseDateStringToTimestamp(targetDateStr, true);
-  if (!endOfDayTs) return false;
+  // Only if no date could be parsed, check if explicitly marked Completed
+  if (event.status === "Completed" || event.status?.toLowerCase() === "completed") return true;
 
-  return Date.now() > endOfDayTs;
+  return false;
 }
 
 /**
- * Resolves the effective status of an event taking into account automatic completion.
+ * Resolves the effective status of an event taking into account automatic completion and future rescheduling.
  */
 export function getEventEffectiveStatus(event: Partial<EventItem> | null | undefined): EventItem["status"] {
   if (!event) return "Upcoming";
   if (event.isCancelled || event.status === "Cancelled") return "Cancelled";
   if (event.status === "draft") return "draft";
   if (event.status === "Coming Soon") return "Coming Soon";
-  if (isEventCompletedByDate(event)) return "Completed";
+
+  const targetDateStr = event.rawEndDate || event.rawDate || event.endDate || event.date;
+  const isCompleted = isEventCompletedByDate(event);
+  if (isCompleted) return "Completed";
+
+  // If status is marked "Completed" in raw data, but the event date is today or in the future:
+  // Admin rescheduled the event to a future date! Auto-shift status back to active.
+  if (event.status === "Completed" || event.status?.toLowerCase() === "completed") {
+    if (targetDateStr) {
+      const endOfDayTs = parseDateStringToTimestamp(targetDateStr, true);
+      if (endOfDayTs && Date.now() <= endOfDayTs) {
+        return event.noRegistrationRequired ? "Upcoming" : "Registration Open";
+      }
+    }
+  }
+
   return event.status || "Upcoming";
 }
 
@@ -399,7 +469,7 @@ export function sortEventsByDate<T extends Partial<EventItem>>(events: T[], refe
   ).getTime();
 
   const isPast = (e: Partial<EventItem>) => {
-    if (e.status === "Completed" || e.status?.toLowerCase() === "completed" || isEventCompletedByDate(e)) return true;
+    if (getEventEffectiveStatus(e) === "Completed") return true;
     const ts = getEventDateTimestamp(e);
     if (ts === Number.MAX_SAFE_INTEGER) return false;
     return ts < startOfToday;
@@ -477,7 +547,7 @@ export function getMainCalendarEvents(
         e.status !== "Cancelled" &&
         !e.parentEventId &&
         !e.parentEventSlug &&
-        (e.status === "Completed" || isEventCompletedByDate(e))
+        getEventEffectiveStatus(e) === "Completed"
     );
     return {
       events: validEvents,
@@ -530,7 +600,7 @@ export function getMainCalendarEvents(
       e.status !== "Cancelled" &&
       !e.parentEventId &&
       !e.parentEventSlug &&
-      (e.status === "Completed" || isEventCompletedByDate(e))
+      getEventEffectiveStatus(e) === "Completed"
   );
   const currentTenureCompletedCount = currentTenureCompleted.length;
 

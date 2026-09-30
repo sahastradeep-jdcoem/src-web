@@ -19,7 +19,7 @@ import {
   CheckCircle2,
   Clock
 } from "lucide-react";
-import { getStoredEvents, syncEventsFromFirestore, isRegistrationDeadlinePassed, isEventCompletedByDate } from "@/lib/eventsStore";
+import { getStoredEvents, syncEventsFromFirestore, isRegistrationDeadlinePassed, isEventCompletedByDate, getEventEffectiveStatus } from "@/lib/eventsStore";
 import { EventItem } from "@/types";
 import { RegistrationWizard } from "@/components/registration/RegistrationWizard";
 import { Badge } from "@/components/ui/Badge";
@@ -324,7 +324,7 @@ export default function EventRegisterPage() {
     );
   }
 
-  const isEventCompleted = event.status === "Completed" || event.status?.toLowerCase() === "completed" || isEventCompletedByDate(event);
+  const isEventCompleted = getEventEffectiveStatus(event) === "Completed";
   if (isEventCompleted) {
     return (
       <div className="min-h-[70vh] bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center space-y-6">

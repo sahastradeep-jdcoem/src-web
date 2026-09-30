@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toastStore";
 import { useSocialShare } from "@/context/SocialShareContext";
-import { isRegistrationDeadlinePassed } from "@/lib/eventsStore";
+import { isRegistrationDeadlinePassed, getEventEffectiveStatus } from "@/lib/eventsStore";
 
 interface EventCardProps {
   event: EventItem;
@@ -19,12 +19,13 @@ interface EventCardProps {
 const DEFAULT_EVENT_IMAGE = "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=1200&auto=format&fit=crop";
 
 export function EventCard({ event, featuredLayout = false }: EventCardProps) {
-  const isComingSoon = event.status === "Coming Soon";
-  const isUpcoming = event.status === "Upcoming";
-  const isCompleted = event.status === "Completed";
+  const effectiveStatus = getEventEffectiveStatus(event);
+  const isComingSoon = effectiveStatus === "Coming Soon";
+  const isUpcoming = effectiveStatus === "Upcoming";
+  const isCompleted = effectiveStatus === "Completed";
   const isDeadlinePassed = isRegistrationDeadlinePassed(event);
-  const isRegistrationOpen = event.status === "Registration Open" && !isDeadlinePassed && !isCompleted;
-  const isRegistrationClosed = (event.status === "Registration Open" && isDeadlinePassed) || isCompleted;
+  const isRegistrationOpen = effectiveStatus === "Registration Open" && !isDeadlinePassed && !isCompleted;
+  const isRegistrationClosed = (effectiveStatus === "Registration Open" && isDeadlinePassed) || isCompleted;
 
   const statusVariant = isComingSoon
     ? "warning"
@@ -44,7 +45,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
     ? "Completed"
     : isDeadlinePassed
     ? "Registration Closed"
-    : event.status;
+    : effectiveStatus;
 
   const eventImage = event.cardImage || event.poster || DEFAULT_EVENT_IMAGE;
   const [copied, setCopied] = useState(false);

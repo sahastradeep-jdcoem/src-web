@@ -41,6 +41,7 @@ import { UniversalImageUploader } from "@/components/ui/UniversalImageUploader";
 import { SrcFormsBuilder } from "@/components/admin/forms/SrcFormsBuilder";
 import { EventItem, ClubItem, SrcFormField, CustomQuestion, TargetAudience, EventScheduleItem, EventPrize } from "@/types";
 import { cn } from "@/lib/utils";
+import { parseDateStringToTimestamp } from "@/lib/eventsStore";
 
 export type EventModalSection = "details" | "schedule" | "registration" | "participation" | "visuals" | "qa";
 
@@ -146,6 +147,14 @@ export function parseToIsoDate(dateStr?: string): string {
   const trimmed = dateStr.trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
     return trimmed;
+  }
+  const ts = parseDateStringToTimestamp(trimmed, false);
+  if (ts) {
+    const parsed = new Date(ts);
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, "0");
+    const day = String(parsed.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   }
   try {
     const parsed = new Date(trimmed);
@@ -298,7 +307,7 @@ export function EventFormModal({
     maxTeamSize: initialData?.maxTeamSize || 4,
     noRegistrationRequired: Boolean(initialData?.noRegistrationRequired),
     registrationStartDate: initialData?.registrationStartDate || defaultRawDate,
-    registrationDeadline: initialData?.registrationDeadline || "",
+    registrationDeadline: parseToIsoDate(initialData?.registrationDeadline) || initialData?.registrationDeadline || "",
     isPaid: initialData?.isPaid || false,
     feeAmount: initialData?.feeAmount ?? 100,
     feePricingModel: initialData?.feePricingModel || "per_person",
@@ -329,6 +338,25 @@ export function EventFormModal({
 
       const isMulti = initialData.isMultiDay || (Boolean(initialData.rawEndDate) && initialData.rawEndDate !== initialData.rawDate) || false;
       const endVal = initialData.rawEndDate || initialData.rawDate || form.rawDate;
+      const rawDateVal = initialData.rawDate || form.rawDate;
+
+      // Check if event date is today or in the future
+      const eventTs = parseDateStringToTimestamp(rawDateVal, true);
+      const isFuture = eventTs ? eventTs >= Date.now() : false;
+
+      // Auto-recover status if currently "Completed" but event date is in the future
+      let initialStatus = initialData.status || "Registration Open";
+      if (initialStatus === "Completed" && isFuture) {
+        initialStatus = initialData.noRegistrationRequired ? "Upcoming" : "Registration Open";
+      }
+
+      // Convert registrationDeadline to YYYY-MM-DD for HTML date input, and auto-heal if outdated in past
+      let initialRegDeadline = parseToIsoDate(initialData.registrationDeadline) || initialData.registrationDeadline || "";
+      const deadlineTs = initialRegDeadline ? parseDateStringToTimestamp(initialRegDeadline, true) : null;
+      if (isFuture && (!initialRegDeadline || (deadlineTs && deadlineTs < Date.now()))) {
+        initialRegDeadline = rawDateVal;
+      }
+
       setForm((prev) => ({
         ...prev,
         ...initialData,
@@ -337,6 +365,8 @@ export function EventFormModal({
         date: initialData.date || (isMulti ? formatDateRangeToReadable(initialData.rawDate || form.rawDate, endVal) : formatDateToReadable(initialData.rawDate || form.rawDate)),
         endDate: initialData.endDate || (isMulti ? formatDateToReadable(endVal) : ""),
         time: initialData.time || prev.time || "10:00 AM IST",
+        status: initialStatus,
+        registrationDeadline: initialRegDeadline,
         noRegistrationRequired: Boolean(initialData.noRegistrationRequired),
         collaboratingClubs: initialData.collaboratingClubs || [],
         coordinatorContact: {
@@ -385,12 +415,35 @@ export function EventFormModal({
       const formatted = isMulti
         ? formatDateRangeToReadable(val, endVal)
         : formatDateToReadable(val);
+
+      const newDateTs = parseDateStringToTimestamp(val, true);
+      const isFuture = newDateTs ? newDateTs >= Date.now() : true;
+
+      // Auto-recover status if currently "Completed" and rescheduled to today/future
+      let newStatus = prev.status;
+      if (prev.status === "Completed" && isFuture) {
+        newStatus = prev.noRegistrationRequired ? "Upcoming" : "Registration Open";
+      }
+
+      // Auto-update registration deadline if empty, tied to old date, or currently in the past
+      let newDeadline = prev.registrationDeadline;
+      const currentDeadlineTs = prev.registrationDeadline ? parseDateStringToTimestamp(prev.registrationDeadline, true) : null;
+      if (
+        !newDeadline ||
+        newDeadline === prev.rawDate ||
+        (currentDeadlineTs && currentDeadlineTs < Date.now() && isFuture)
+      ) {
+        newDeadline = val;
+      }
+
       return {
         ...prev,
         rawDate: val,
         rawEndDate: isMulti ? endVal : val,
         date: formatted || val,
         endDate: isMulti ? formatDateToReadable(endVal) : "",
+        status: newStatus,
+        registrationDeadline: newDeadline,
       };
     });
   };

@@ -48,7 +48,9 @@ import {
   syncEventsFromFirestore,
   subscribeToEvents,
   sortEventsByDate,
-  isRegistrationDeadlinePassed
+  isRegistrationDeadlinePassed,
+  parseDateStringToTimestamp,
+  getEventEffectiveStatus
 } from "@/lib/eventsStore";
 import { getStoredClubs } from "@/lib/councilStore";
 import { 
@@ -344,7 +346,20 @@ export default function AdminEventsPage() {
     const rawStartDate = editingEvent.rawDate || parseToIsoDate(editingEvent.date);
     const rawEndDate = editingEvent.rawEndDate || parseToIsoDate(editingEvent.endDate) || rawStartDate;
     const parsedStartDate = parseToIsoDate(editingEvent.registrationStartDate) || new Date().toISOString().split("T")[0];
-    const parsedDeadline = parseToIsoDate(editingEvent.registrationDeadline) || rawStartDate;
+
+    const eventTs = parseDateStringToTimestamp(rawStartDate, true);
+    const isFuture = eventTs ? eventTs >= Date.now() : false;
+
+    let initialStatus = editingEvent.status as any;
+    if (initialStatus === "Completed" && isFuture) {
+      initialStatus = editingEvent.noRegistrationRequired ? "Upcoming" : "Registration Open";
+    }
+
+    let parsedDeadline = parseToIsoDate(editingEvent.registrationDeadline) || rawStartDate;
+    const deadlineTs = parsedDeadline ? parseDateStringToTimestamp(parsedDeadline, true) : null;
+    if (isFuture && (!parsedDeadline || (deadlineTs && deadlineTs < Date.now()))) {
+      parsedDeadline = rawStartDate;
+    }
 
     return {
       name: editingEvent.name,
@@ -359,7 +374,7 @@ export default function AdminEventsPage() {
       organizer: editingEvent.organizer || "",
       organizerClubSlug: editingEvent.organizerClubSlug || (editingEvent.organizer === "SRC JDCOEM" || editingEvent.organizer?.toLowerCase().includes("council") ? "src-council" : ""),
       collaboratingClubs: editingEvent.collaboratingClubs ? JSON.parse(JSON.stringify(editingEvent.collaboratingClubs)) : [],
-      status: editingEvent.status as any,
+      status: initialStatus,
       poster: editingEvent.poster || "",
       cardImage: editingEvent.cardImage || "",
       posterImage: editingEvent.posterImage || "",
@@ -430,10 +445,31 @@ export default function AdminEventsPage() {
     const cleanWhatToExpect = isUmbrella ? [] : Array.from(new Set(formData.whatToExpect.map((s) => s.trim()).filter(Boolean)));
     const cleanRules = isUmbrella ? [] : Array.from(new Set(formData.rules.map((s) => s.trim()).filter(Boolean)));
     const isNoReg = isUmbrella || Boolean(formData.noRegistrationRequired);
+
+    // Reconcile future event dates with status and registration deadline
+    const eventDateTs = parseDateStringToTimestamp(formData.rawDate || formData.date, true);
+    const isFutureEvent = eventDateTs ? eventDateTs >= Date.now() : false;
+
+    let reconciledStatus = formData.status;
+    if (isFutureEvent && (reconciledStatus === "Completed" || reconciledStatus?.toLowerCase() === "completed")) {
+      reconciledStatus = isNoReg ? "Upcoming" : "Registration Open";
+    }
+    if (isNoReg && reconciledStatus === "Registration Open") {
+      reconciledStatus = "Upcoming";
+    }
+
+    let rawRegDeadline = formData.registrationDeadline;
+    if (!isNoReg && isFutureEvent) {
+      const deadlineTs = rawRegDeadline ? parseDateStringToTimestamp(rawRegDeadline, true) : null;
+      if (!rawRegDeadline || (deadlineTs && deadlineTs < Date.now())) {
+        rawRegDeadline = formData.rawDate || formData.date;
+      }
+    }
+
     const regDeadlineFormatted = isNoReg
       ? "Not Required"
-      : formData.registrationDeadline
-      ? formatDateToReadable(formData.registrationDeadline)
+      : rawRegDeadline
+      ? formatDateToReadable(rawRegDeadline)
       : undefined;
 
     const entryFeeText = isNoReg
@@ -465,7 +501,7 @@ export default function AdminEventsPage() {
       organizerClubSlug: formData.organizerClubSlug || editingEvent.organizerClubSlug || (formData.organizer === "SRC JDCOEM" || formData.organizer?.toLowerCase().includes("council") ? "src-council" : ""),
       collaboratingClubs: formData.collaboratingClubs && formData.collaboratingClubs.length > 0 ? formData.collaboratingClubs : undefined,
       coOrganizers: formData.collaboratingClubs && formData.collaboratingClubs.length > 0 ? formData.collaboratingClubs.map((c) => c.name) : undefined,
-      status: isNoReg && formData.status === "Registration Open" ? "Upcoming" : formData.status,
+      status: reconciledStatus,
       poster: primaryPoster,
       cardImage: formData.cardImage || editingEvent.cardImage || primaryPoster,
       posterImage: formData.posterImage || editingEvent.posterImage || "",
