@@ -506,19 +506,34 @@ export async function checkInStudentPass(id: string): Promise<boolean> {
 }
 
 /**
- * Helper to identify test, dummy, or debug registration passes (e.g. test_ping, test_rule_check)
+ * Helper to identify synthetic probe or smoke-test registration passes (e.g. test_ping, test_rule_check)
  */
 export function isTestPassRecord(r: any): boolean {
   if (!r) return true;
+  if (r._isTestProbe === true || r.isMockProbe === true) return true;
   const id = String(typeof r === "string" ? r : (r.id || "")).toLowerCase().trim();
   const code = String(r.ticketCode || r.registrationCode || "").toLowerCase().trim();
-  const title = String(r.eventTitle || r.eventName || "").toLowerCase().trim();
-  const name = String(r.participantName || r.leaderName || "").toLowerCase().trim();
 
-  if (id.startsWith("test_") || id.startsWith("test-") || id === "test" || id.includes("test_ping") || id.includes("test_rule")) return true;
-  if (code.startsWith("test_") || code.startsWith("test-") || code.includes("test_ping") || code.includes("test_rule")) return true;
-  if (title === "test" || (title.startsWith("test ") && !title.includes("contest"))) return true;
-  if (name.startsWith("test_") || name === "test user" || name === "test student") return true;
+  // Strictly target synthetic smoke-test / health-check probe documents created by test scripts
+  if (
+    id === "test" ||
+    id.startsWith("test_ping") ||
+    id.startsWith("test_rule") ||
+    id.startsWith("smoke_test_") ||
+    id.startsWith("health_check_") ||
+    id === "test_probe"
+  ) {
+    return true;
+  }
+  if (
+    code.startsWith("test_ping") ||
+    code.startsWith("test_rule") ||
+    code.startsWith("smoke_test_") ||
+    code.startsWith("health_check_")
+  ) {
+    return true;
+  }
+
   return false;
 }
 

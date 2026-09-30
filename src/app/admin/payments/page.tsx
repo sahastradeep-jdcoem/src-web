@@ -186,6 +186,9 @@ export default function AdminPaymentsPage() {
           eventId: r.eventId || "",
           eventSlug: r.eventSlug || r.eventId || "general-event",
           eventName: r.eventTitle || r.eventName || "Event Delegate Pass",
+          parentEventName: r.parentEventName,
+          parentEventId: r.parentEventId,
+          subEventBadge: r.subEventBadge,
           participantName: r.leaderName || r.participantName || "Delegate",
           email: r.email || "",
           phone: r.phone || "",
@@ -342,15 +345,18 @@ export default function AdminPaymentsPage() {
     const selectedEvt = eventsList.find((e) => (e.slug && e.slug.toLowerCase() === selectedEventSlug.toLowerCase()) || (e.name && e.name.toLowerCase() === selectedEventSlug.toLowerCase()) || e.id === selectedEventSlug);
     
     const childNames = new Set<string>();
+    const childSlugs = new Set<string>();
+    const childIds = new Set<string>();
     if (selectedEvt && selectedEvt.isParentFest) {
       eventsList.forEach((e) => {
         if (
           (e.parentEventId && (e.parentEventId === selectedEvt.id || e.parentEventId === selectedEvt.slug)) ||
-          (e.parentEventSlug && (e.parentEventSlug === selectedEvt.slug || e.parentEventSlug === selectedEvt.id))
+          (e.parentEventSlug && (e.parentEventSlug === selectedEvt.slug || e.parentEventSlug === selectedEvt.id)) ||
+          (e.parentEventName && e.parentEventName.toLowerCase().trim() === selectedEvt.name.toLowerCase().trim())
         ) {
           if (e.name) childNames.add(e.name.toLowerCase());
-          if (e.slug) childNames.add(e.slug.toLowerCase());
-          if (e.id) childNames.add(e.id.toLowerCase());
+          if (e.slug) childSlugs.add(e.slug.toLowerCase());
+          if (e.id) childIds.add(e.id.toLowerCase());
         }
       });
     }
@@ -359,6 +365,8 @@ export default function AdminPaymentsPage() {
       const rName = (r.eventName || "").toLowerCase();
       const rSlug = (r.eventSlug || "").toLowerCase();
       const rId = (r.eventId || "").toLowerCase();
+      const rParentId = (r.parentEventId || "").toLowerCase();
+      const rParentName = (r.parentEventName || "").toLowerCase();
 
       const matchesDirect =
         rName === selectedEventSlug.toLowerCase() ||
@@ -370,7 +378,17 @@ export default function AdminPaymentsPage() {
           rId === selectedEvt.id.toLowerCase()
         ));
 
-      const matchesChild = childNames.has(rName) || childNames.has(rSlug) || childNames.has(rId);
+      const matchesChild =
+        childNames.has(rName) ||
+        childSlugs.has(rSlug) ||
+        childIds.has(rId) ||
+        childSlugs.has(rId) ||
+        childIds.has(rSlug) ||
+        (selectedEvt && (
+          rParentId === selectedEvt.id.toLowerCase() ||
+          rParentId === selectedEvt.slug.toLowerCase() ||
+          (rParentName && rParentName === selectedEvt.name.toLowerCase())
+        ));
 
       return matchesDirect || matchesChild;
     });

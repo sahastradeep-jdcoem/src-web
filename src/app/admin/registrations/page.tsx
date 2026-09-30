@@ -266,8 +266,12 @@ export default function AdminRegistrationsPage() {
         ...r,
         id: r.id,
         registrationId: r.id,
-        eventSlug: r.eventId || r.eventSlug || "",
+        eventId: r.eventId || "",
+        eventSlug: r.eventSlug || r.eventId || "",
         eventName: r.eventTitle || r.eventName || "Event Delegate Pass",
+        parentEventName: r.parentEventName,
+        parentEventId: r.parentEventId,
+        subEventBadge: r.subEventBadge,
         participantName: r.leaderName || r.participantName || "Delegate",
         email: r.email,
         phone: r.phone,
@@ -383,20 +387,67 @@ export default function AdminRegistrationsPage() {
       isAll: true,
     };
 
-    const eventOptions = filteredDropdownEvents.map((evt) => ({
-      slug: evt.slug,
-      name: evt.parentEventName ? `${evt.name} (Part of ${evt.parentEventName})` : evt.name,
-      category: evt.isParentFest ? "Umbrella Event" : (evt.category || "Event"),
-      count: registrations.filter(
-        (r) =>
-          r.eventName.toLowerCase() === evt.name.toLowerCase() ||
-          (r.eventSlug && r.eventSlug.toLowerCase() === evt.slug.toLowerCase())
-      ).length,
-      isAll: false,
-    }));
+    const eventOptions = filteredDropdownEvents.map((evt) => {
+      // Find all child events if this is an umbrella parent fest
+      const childEvents = evt.isParentFest
+        ? eventsList.filter(
+            (e) =>
+              (e.parentEventId && (e.parentEventId === evt.id || e.parentEventId === evt.slug)) ||
+              (e.parentEventSlug && (e.parentEventSlug === evt.slug || e.parentEventSlug === evt.id)) ||
+              (e.parentEventName && e.parentEventName.toLowerCase().trim() === evt.name.toLowerCase().trim())
+          )
+        : [];
+      const childSlugs = new Set(childEvents.map((c) => (c.slug || "").toLowerCase()));
+      const childIds = new Set(childEvents.map((c) => (c.id || "").toLowerCase()));
+      const childNames = new Set(childEvents.map((c) => (c.name || "").toLowerCase()));
+
+      const count = registrations.filter((r) => {
+        const rName = (r.eventName || "").toLowerCase();
+        const rSlug = (r.eventSlug || "").toLowerCase();
+        const rId = (r.eventId || "").toLowerCase();
+        const rParentId = (r.parentEventId || "").toLowerCase();
+        const rParentName = (r.parentEventName || "").toLowerCase();
+
+        // Direct match
+        if (
+          rName === evt.name.toLowerCase() ||
+          rSlug === evt.slug.toLowerCase() ||
+          rId === evt.id.toLowerCase() ||
+          rId === evt.slug.toLowerCase() ||
+          rSlug === evt.id.toLowerCase()
+        ) {
+          return true;
+        }
+
+        // Umbrella aggregation: if this is a parent fest, count all sub-competition registrations
+        if (evt.isParentFest) {
+          if (
+            childNames.has(rName) ||
+            childSlugs.has(rSlug) ||
+            childIds.has(rId) ||
+            childSlugs.has(rId) ||
+            childIds.has(rSlug) ||
+            rParentId === evt.id.toLowerCase() ||
+            rParentId === evt.slug.toLowerCase() ||
+            (rParentName && rParentName === evt.name.toLowerCase())
+          ) {
+            return true;
+          }
+        }
+        return false;
+      }).length;
+
+      return {
+        slug: evt.slug,
+        name: evt.parentEventName ? `${evt.name} (Part of ${evt.parentEventName})` : evt.name,
+        category: evt.isParentFest ? "Umbrella Event" : (evt.category || "Event"),
+        count,
+        isAll: false,
+      };
+    });
 
     return [allOption, ...eventOptions];
-  }, [filteredDropdownEvents, registrations]);
+  }, [filteredDropdownEvents, registrations, eventsList]);
 
   // Keep highlighted index in sync when search changes
   useEffect(() => {
@@ -553,27 +604,51 @@ export default function AdminRegistrationsPage() {
     // Filter by event
     if (selectedEventSlug !== "all") {
       const childNames = new Set<string>();
+      const childSlugs = new Set<string>();
+      const childIds = new Set<string>();
+
       if (currentSelectedEventObj && currentSelectedEventObj.isParentFest) {
         eventsList.forEach((e) => {
           if (
             (e.parentEventId && (e.parentEventId === currentSelectedEventObj.id || e.parentEventId === currentSelectedEventObj.slug)) ||
-            (e.parentEventSlug && (e.parentEventSlug === currentSelectedEventObj.slug || e.parentEventSlug === currentSelectedEventObj.id))
+            (e.parentEventSlug && (e.parentEventSlug === currentSelectedEventObj.slug || e.parentEventSlug === currentSelectedEventObj.id)) ||
+            (e.parentEventName && e.parentEventName.toLowerCase().trim() === currentSelectedEventObj.name.toLowerCase().trim())
           ) {
-            childNames.add(e.name.toLowerCase());
-            childNames.add(e.slug.toLowerCase());
+            if (e.name) childNames.add(e.name.toLowerCase());
+            if (e.slug) childSlugs.add(e.slug.toLowerCase());
+            if (e.id) childIds.add(e.id.toLowerCase());
           }
         });
       }
 
       list = list.filter((r) => {
-        const rName = r.eventName.toLowerCase();
+        const rName = (r.eventName || "").toLowerCase();
         const rSlug = (r.eventSlug || "").toLowerCase();
+        const rId = (r.eventId || "").toLowerCase();
+        const rParentId = (r.parentEventId || "").toLowerCase();
+        const rParentName = (r.parentEventName || "").toLowerCase();
+
         const matchesDirect =
           rName === selectedEventSlug.toLowerCase() ||
           rSlug === selectedEventSlug.toLowerCase() ||
-          (currentSelectedEventObj && rName === currentSelectedEventObj.name.toLowerCase());
+          rId === selectedEventSlug.toLowerCase() ||
+          (currentSelectedEventObj && (
+            rName === currentSelectedEventObj.name.toLowerCase() ||
+            rSlug === currentSelectedEventObj.slug.toLowerCase() ||
+            rId === currentSelectedEventObj.id.toLowerCase()
+          ));
 
-        const matchesChild = childNames.has(rName) || childNames.has(rSlug);
+        const matchesChild =
+          childNames.has(rName) ||
+          childSlugs.has(rSlug) ||
+          childIds.has(rId) ||
+          childSlugs.has(rId) ||
+          childIds.has(rSlug) ||
+          (currentSelectedEventObj && (
+            rParentId === currentSelectedEventObj.id.toLowerCase() ||
+            rParentId === currentSelectedEventObj.slug.toLowerCase() ||
+            (rParentName && rParentName === currentSelectedEventObj.name.toLowerCase())
+          ));
 
         return matchesDirect || matchesChild;
       });
