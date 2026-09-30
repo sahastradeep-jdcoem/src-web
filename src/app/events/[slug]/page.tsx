@@ -881,37 +881,9 @@ export default function EventDetailPage() {
                   </div>
                 ) : subEvents.length > 0 ? (
                   <div className="space-y-2.5 pt-1">
-                    {/* Primary High-Impact CTA: Choose Event / Competition & Register */}
                     <a
                       href="#competitions"
-                      className="group relative w-full py-4 px-5 rounded-2xl bg-gradient-to-r from-[#E78023] via-[#F28E2B] to-[#D26E17] hover:brightness-105 active:scale-[0.98] text-white text-xs sm:text-sm font-bold uppercase tracking-wider text-center transition-all shadow-lg shadow-[#E78023]/25 hover:shadow-xl hover:shadow-[#E78023]/35 flex items-center justify-between cursor-pointer overflow-hidden"
-                    >
-                      {/* Interactive shimmer sweep on hover */}
-                      <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-white/0 via-white/20 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out pointer-events-none" />
-                      
-                      <div className="flex items-center gap-3 text-left relative z-10">
-                        <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center shrink-0 shadow-inner">
-                          <Sparkles className="w-4 h-4 text-amber-100" />
-                        </div>
-                        <div>
-                          <div className="font-extrabold text-white leading-tight tracking-wide text-xs sm:text-sm">
-                            Register for an Event / Competition
-                          </div>
-                          <div className="text-[10px] text-white/85 font-medium lowercase tracking-normal">
-                            select from {subEvents.length} active {subEvents.length === 1 ? "event" : "events"}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="w-8 h-8 rounded-xl bg-white/20 group-hover:bg-white/30 flex items-center justify-center shrink-0 transition-all relative z-10">
-                        <ArrowDown className="w-4 h-4 text-white transition-transform group-hover:translate-y-0.5" />
-                      </div>
-                    </a>
-
-                    {/* Secondary Clean CTA: Quick Jump to Lineup & Details */}
-                    <a
-                      href="#competitions"
-                      className="w-full py-3 px-4 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200/80 border border-slate-200 text-[#17458F] text-xs font-bold uppercase tracking-wider text-center transition-all flex items-center justify-center gap-2 group cursor-pointer"
+                      className="w-full py-3.5 px-4 rounded-2xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200/80 border border-slate-200 text-[#17458F] text-xs font-bold uppercase tracking-wider text-center transition-all flex items-center justify-center gap-2 group cursor-pointer shadow-xs"
                     >
                       <Layers className="w-3.5 h-3.5 text-[#17458F]" />
                       <span>Explore Lineup &amp; Prizes ({subEvents.length})</span>
@@ -1177,10 +1149,10 @@ export default function EventDetailPage() {
           <div className="w-full flex items-center gap-2">
             <a
               href="#competitions"
-              className="flex-1 py-3 px-4 rounded-xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2 shadow-md shadow-[#E78023]/25 min-h-[44px]"
+              className="flex-1 py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#17458F] text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2 border border-slate-200 min-h-[44px]"
             >
-              <Layers className="w-4 h-4" />
-              <span>CHOOSE EVENT / COMPETITION</span>
+              <Layers className="w-4 h-4 text-[#17458F]" />
+              <span>EXPLORE LINEUP &amp; EVENTS ({subEvents.length})</span>
               <ArrowDown className="w-4 h-4" />
             </a>
             <button
