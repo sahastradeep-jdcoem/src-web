@@ -197,6 +197,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     paymentId?: string;
     orderId?: string;
   } | null>(null);
+  const pendingRegistrationDraftRef = useRef<{ regId: string; tkCode: string; payload: any } | null>(null);
 
   // Realtime synchronization of Payment Gateway and Treasurer UPI settings
   useEffect(() => {
@@ -669,19 +670,12 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     }
   }
 
-  const completeRegistration = async (paymentDetails?: {
+  const buildRegistrationPayload = (regId: string, tkCode: string, paymentDetails?: {
     paymentStatus: "FREE" | "PAID" | "PENDING";
     paymentId?: string;
     orderId?: string;
     amountPaid?: number;
   }) => {
-    if (!user) {
-      openAuthModal();
-      return;
-    }
-    const regId = `SRC-${event.slug.slice(0, 3).toUpperCase()}-26-${Math.floor(10000 + Math.random() * 90000)}`;
-    const tkCode = `${event.slug.slice(0, 3).toUpperCase()}26-TK-${Math.floor(1000 + Math.random() * 9000)}`;
-
     // Build structured custom answers preserving human-readable question titles
     const structuredAnswers: Record<string, any> = {};
     if (event.customQuestions && event.customQuestions.length > 0) {
@@ -704,42 +698,60 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       }
     });
 
+    return {
+      id: regId,
+      eventId: event.id,
+      eventTitle: event.name,
+      parentEventName: event.parentEventName,
+      parentEventId: event.parentEventId,
+      subEventBadge: event.subEventBadge,
+      leaderName: formData.fullName,
+      email: formData.email,
+      phone: formData.phone,
+      college: isExternal ? (formData.collegeName || user?.collegeName || "Other College") : "JD College of Engineering & Management",
+      collegeName: isExternal ? (formData.collegeName || user?.collegeName || "Other College") : undefined,
+      city: isExternal ? (formData.city || user?.city || "Nagpur") : undefined,
+      customBranch: isExternal ? (formData.department || user?.customBranch) : undefined,
+      userType: isExternal ? "EXTERNAL_STUDENT" : isFaculty ? "FACULTY" : "JDCOEM_STUDENT",
+      isCollegeStudent: !isExternal,
+      department: formData.department,
+      year: formData.year,
+      btId: isExternal ? undefined : formData.btId,
+      teamSize: formData.teamType === "Team" ? teamMembers.length : 1,
+      teamName: formData.teamType === "Team" ? formData.teamName : undefined,
+      teamMembers: formData.teamType === "Team" ? teamMembers : undefined,
+      qrPayload: isExternal 
+        ? `SRC:EXTERNAL:${regId}:${tkCode}:${event.id}:${user?.uid || "EXT"}`
+        : `SRC:JDCOEM:${regId}:${tkCode}:${event.id}:${formData.btId}`,
+      paymentStatus: paymentDetails?.paymentStatus || "FREE",
+      paymentId: paymentDetails?.paymentId,
+      orderId: paymentDetails?.orderId,
+      amountPaid: paymentDetails?.amountPaid || 0,
+      currency: "INR",
+      paidAt: paymentDetails?.paymentStatus === "PAID" ? new Date().toISOString() : undefined,
+      registeredAt: new Date().toISOString(),
+      tenureId: getCurrentTenure()?.id || "tenure-2025-26",
+      customAnswers: Object.keys(structuredAnswers).length > 0 ? structuredAnswers : undefined,
+    };
+  };
+
+  const completeRegistration = async (paymentDetails?: {
+    paymentStatus: "FREE" | "PAID" | "PENDING";
+    paymentId?: string;
+    orderId?: string;
+    amountPaid?: number;
+  }) => {
+    if (!user) {
+      openAuthModal();
+      return;
+    }
+    const regId = pendingRegistrationDraftRef.current?.regId || `SRC-${event.slug.slice(0, 3).toUpperCase()}-26-${Math.floor(10000 + Math.random() * 90000)}`;
+    const tkCode = pendingRegistrationDraftRef.current?.tkCode || `${event.slug.slice(0, 3).toUpperCase()}26-TK-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const registrationPayload = buildRegistrationPayload(regId, tkCode, paymentDetails);
+
     try {
-      await saveRegistrationToFirestore({
-        id: regId,
-        eventId: event.id,
-        eventTitle: event.name,
-        parentEventName: event.parentEventName,
-        parentEventId: event.parentEventId,
-        subEventBadge: event.subEventBadge,
-        leaderName: formData.fullName,
-        email: formData.email,
-        phone: formData.phone,
-        college: isExternal ? (formData.collegeName || user?.collegeName || "Other College") : "JD College of Engineering & Management",
-        collegeName: isExternal ? (formData.collegeName || user?.collegeName || "Other College") : undefined,
-        city: isExternal ? (formData.city || user?.city || "Nagpur") : undefined,
-        customBranch: isExternal ? (formData.department || user?.customBranch) : undefined,
-        userType: isExternal ? "EXTERNAL_STUDENT" : isFaculty ? "FACULTY" : "JDCOEM_STUDENT",
-        isCollegeStudent: !isExternal,
-        department: formData.department,
-        year: formData.year,
-        btId: isExternal ? undefined : formData.btId,
-        teamSize: formData.teamType === "Team" ? teamMembers.length : 1,
-        teamName: formData.teamType === "Team" ? formData.teamName : undefined,
-        teamMembers: formData.teamType === "Team" ? teamMembers : undefined,
-        qrPayload: isExternal 
-          ? `SRC:EXTERNAL:${regId}:${tkCode}:${event.id}:${user?.uid || "EXT"}`
-          : `SRC:JDCOEM:${regId}:${tkCode}:${event.id}:${formData.btId}`,
-        paymentStatus: paymentDetails?.paymentStatus || "FREE",
-        paymentId: paymentDetails?.paymentId,
-        orderId: paymentDetails?.orderId,
-        amountPaid: paymentDetails?.amountPaid || 0,
-        currency: "INR",
-        paidAt: paymentDetails?.paymentStatus === "PAID" ? new Date().toISOString() : undefined,
-        registeredAt: new Date().toISOString(),
-        tenureId: getCurrentTenure()?.id || "tenure-2025-26",
-        customAnswers: Object.keys(structuredAnswers).length > 0 ? structuredAnswers : undefined,
-      });
+      await saveRegistrationToFirestore(registrationPayload);
     } catch (e) {
       console.warn("Firestore registration save fallback handled", e);
     }
@@ -814,6 +826,14 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     }
 
     // 2. Paid Event Paytm for Business Gateway Flow
+    const draftRegId = `SRC-${event.slug.slice(0, 3).toUpperCase()}-26-${Math.floor(10000 + Math.random() * 90000)}`;
+    const draftTkCode = `${event.slug.slice(0, 3).toUpperCase()}26-TK-${Math.floor(1000 + Math.random() * 9000)}`;
+    const draftPayload = buildRegistrationPayload(draftRegId, draftTkCode, {
+      paymentStatus: "PENDING",
+      amountPaid: totalPayableAmount,
+    });
+    pendingRegistrationDraftRef.current = { regId: draftRegId, tkCode: draftTkCode, payload: draftPayload };
+
     try {
       const orderRes = await fetch("/api/paytm/initiate-transaction", {
         method: "POST",
@@ -832,6 +852,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           upiId: paymentConfig.upiId,
           payeeName: paymentConfig.payeeName,
           paytmMid: paymentConfig.paytmMid,
+          registrationId: draftRegId,
+          registrationData: draftPayload,
         }),
       });
 
@@ -864,26 +886,6 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         expiresAt: orderData.expiresAt,
       });
 
-      if (db && orderData.orderId) {
-        try {
-          await setDoc(doc(db, "active_checkout_sessions", orderData.orderId), {
-            orderId: orderData.orderId,
-            amount: Number(orderData.amount),
-            baseAmount: Number(orderData.baseAmount || orderData.amount),
-            microPaisaOffset: orderData.microPaisaOffset || 0,
-            eventId: event.id,
-            eventName: event.name,
-            participantName: formData.fullName || user?.displayName || user?.name || "Student",
-            email: formData.email || user?.email || "",
-            phone: formData.phone || user?.phone || "",
-            status: "WAITING",
-            createdAt: new Date().toISOString(),
-            expiresAt: orderData.expiresAt,
-          }, { merge: true });
-        } catch (e) {
-          console.warn("Client active_checkout_sessions mirror notice:", e);
-        }
-      }
       setIsSubmitting(false);
     } catch (err: any) {
       console.error("Payment initialization error:", err);
@@ -916,6 +918,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           upiId: paymentConfig.upiId,
           payeeName: paymentConfig.payeeName,
           paytmMid: paymentConfig.paytmMid,
+          registrationId: pendingRegistrationDraftRef.current?.regId,
+          registrationData: pendingRegistrationDraftRef.current?.payload,
         }),
       });
 
@@ -947,27 +951,6 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         upiId: orderData.upiId || paymentConfig.upiId,
         expiresAt: orderData.expiresAt,
       });
-
-      if (db && orderData.orderId) {
-        try {
-          await setDoc(doc(db, "active_checkout_sessions", orderData.orderId), {
-            orderId: orderData.orderId,
-            amount: Number(orderData.amount),
-            baseAmount: Number(orderData.baseAmount || orderData.amount),
-            microPaisaOffset: orderData.microPaisaOffset || 0,
-            eventId: event.id,
-            eventName: event.name,
-            participantName: formData.fullName || user?.displayName || user?.name || "Student",
-            email: formData.email || user?.email || "",
-            phone: formData.phone || user?.phone || "",
-            status: "WAITING",
-            createdAt: new Date().toISOString(),
-            expiresAt: orderData.expiresAt,
-          }, { merge: true });
-        } catch (e) {
-          console.warn("Client active_checkout_sessions mirror notice:", e);
-        }
-      }
     } catch (err: any) {
       console.error("Payment QR regeneration error:", err);
       alert(err?.message || "Failed to refresh payment QR code. Please check your connection.");
@@ -1059,10 +1042,21 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         const sessionDocRef = doc(db, "active_checkout_sessions", currentOrderId);
         unsubscribeSnapshot = onSnapshot(
           sessionDocRef,
-          (snap) => {
+          async (snap) => {
             if (snap.exists()) {
               const data = snap.data();
               if (data?.status === "COMPLETED" && !autoDetectCompletedRef.current) {
+                try {
+                  const res = await fetch(`/api/upi/check-status?orderId=${encodeURIComponent(currentOrderId)}`);
+                  if (res.ok) {
+                    const verifiedData = await res.json();
+                    if (verifiedData?.status === "PAID" && !autoDetectCompletedRef.current) {
+                      handleAutoSuccess(verifiedData.utr || data.utr || "");
+                      return;
+                    }
+                  }
+                } catch {}
+                // Fallback in case of local offline notification
                 handleAutoSuccess(data.utr || "");
               }
             }

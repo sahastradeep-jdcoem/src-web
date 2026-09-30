@@ -19,7 +19,9 @@ export async function POST(req: NextRequest) {
       tenureId,
       upiId: clientUpiId,
       payeeName: clientPayeeName,
-      paytmMid: clientMid
+      paytmMid: clientMid,
+      registrationId,
+      registrationData
     } = body;
 
     if (!amount || Number(amount) <= 0) {
@@ -106,13 +108,21 @@ export async function POST(req: NextRequest) {
           const snap = await getDocs(activeSessionsQuery);
           const usedOffsets = new Set<number>();
 
+          const nowMs = Date.now();
           snap.docs.forEach((d) => {
             const sData = d.data();
-            const sAmt = Number(sData.amount || 0);
-            if (Math.floor(sAmt) === baseInt) {
-              const diffPaise = Math.round((sAmt - baseInt) * 100);
-              if (diffPaise >= 1 && diffPaise <= 99) {
-                usedOffsets.add(diffPaise);
+            const expMs = sData.expiresAt 
+              ? new Date(sData.expiresAt).getTime() 
+              : (sData.createdAt ? new Date(sData.createdAt).getTime() + 5 * 60 * 1000 : 0);
+
+            // Only reserve offsets for active, unexpired sessions (< 5 minutes old)
+            if (expMs > nowMs) {
+              const sAmt = Number(sData.amount || 0);
+              if (Math.floor(sAmt) === baseInt) {
+                const diffPaise = Math.round((sAmt - baseInt) * 100);
+                if (diffPaise >= 1 && diffPaise <= 99) {
+                  usedOffsets.add(diffPaise);
+                }
               }
             }
           });
@@ -220,6 +230,9 @@ export async function POST(req: NextRequest) {
           participantName: participantName || "",
           email: email || "",
           phone: phone || "",
+          btId: btId || "",
+          registrationId: registrationId || null,
+          registrationData: registrationData || null,
           status: "WAITING",
           createdAt: new Date().toISOString(),
           expiresAt,

@@ -141,11 +141,6 @@ function isAuthorized(req: NextRequest, body: any): boolean {
     return true;
   }
 
-  // Check 5: Auto-allow if default secret matches
-  if (!process.env.UPI_WEBHOOK_SECRET) {
-    return true;
-  }
-
   return false;
 }
 
@@ -510,6 +505,42 @@ export async function POST(req: NextRequest) {
             verifiedBy: "Paytm Auto-Gateway (MacroDroid Webhook)",
             verifiedAt: now,
           });
+        } else if (matchedOrderId) {
+          // Self-Healing Invariant: If student closed browser, auto-create their registration from session draft!
+          try {
+            const sessSnap = await getDoc(doc(db, "active_checkout_sessions", matchedOrderId));
+            if (sessSnap.exists()) {
+              const sData = sessSnap.data();
+              if (sData?.registrationData && typeof sData.registrationData === "object") {
+                const draft = sData.registrationData;
+                const regId = sData.registrationId || draft.id || `SRC-${String(sData.eventId || "EVT").slice(0, 3).toUpperCase()}-26-${Math.floor(10000 + Math.random() * 90000)}`;
+                const tkCode = draft.ticketCode || `${String(sData.eventId || "EVT").slice(0, 3).toUpperCase()}26-TK-${Math.floor(1000 + Math.random() * 9000)}`;
+
+                const newRecord = {
+                  ...draft,
+                  id: regId,
+                  orderId: matchedOrderId,
+                  paymentStatus: "PAID",
+                  status: "CONFIRMED",
+                  paymentId: utr,
+                  amountPaid: Number(amount || sData.amount || draft.amountPaid || 0),
+                  ticketCode: tkCode,
+                  qrPayload: draft.qrPayload || `SRC:PASS:${regId}:${tkCode}:${sData.eventId}`,
+                  paidAt: now,
+                  registeredAt: draft.registeredAt || now,
+                  createdAt: now,
+                  verifiedBy: "Paytm Auto-Gateway (MacroDroid Webhook)",
+                  verifiedAt: now,
+                };
+
+                await setDoc(doc(db, "registrations", regId), newRecord, { merge: true });
+                matchedRegistrationId = regId;
+                matchedStudentName = newRecord.leaderName || newRecord.participantName || matchedStudentName || "Student";
+              }
+            }
+          } catch (autoCreateErr) {
+            console.warn("Notice: webhook auto-creation of registration record warning:", autoCreateErr);
+          }
         }
       } catch (regErr) {
         console.warn("Notice: registrations update warning:", regErr);

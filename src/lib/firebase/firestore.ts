@@ -447,12 +447,33 @@ export async function checkExistingStudentRegistration(
     }
   } catch {}
 
-  // Check Firestore
+  // Check Firestore with targeted query instead of full collection scan
   try {
-    const all = await getAllRegistrationsFromFirestore();
-    const match = all.find(matchesRecord);
-    if (match) return match;
-  } catch {}
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      const colRef = collection(db, REGISTRATIONS_COLLECTION);
+      const q = query(colRef, where("eventId", "==", eventId));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const found = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as StudentRegistrationRecord))
+          .find(matchesRecord);
+        if (found) return found;
+      }
+
+      if (eventSlug && eventSlug !== eventId) {
+        const qSlug = query(colRef, where("eventId", "==", eventSlug));
+        const snapSlug = await getDocs(qSlug);
+        if (!snapSlug.empty) {
+          const foundSlug = snapSlug.docs
+            .map((d) => ({ id: d.id, ...d.data() } as StudentRegistrationRecord))
+            .find(matchesRecord);
+          if (foundSlug) return foundSlug;
+        }
+      }
+    }
+  } catch (error) {
+    console.warn("Targeted Firestore registration check notice:", error);
+  }
 
   return null;
 }
