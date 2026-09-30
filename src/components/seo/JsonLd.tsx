@@ -124,8 +124,9 @@ export function JsonLd({ type = "Organization", leadershipData, eventData }: Jso
       url: "https://jdcoem.ac.in",
     },
     sameAs: [
-      "https://www.instagram.com/src_jdcoem",
-      "https://www.linkedin.com/school/jd-college-of-engineering-management",
+      "https://www.instagram.com/jdcoem.src",
+      "https://www.linkedin.com/company/src-jdcoem/",
+      "https://www.youtube.com/@srcjdcoem",
     ],
   };
 

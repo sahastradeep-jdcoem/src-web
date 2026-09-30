@@ -20,6 +20,23 @@ import { Accordion } from "@/components/ui/Accordion";
 import { submitContactFormToFirestore, cleanUndefined } from "@/lib/firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
 
+function YoutubeIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17" />
+      <polygon points="10 15 15 12 10 9 10 15" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export default function ContactPage() {
   const { user } = useAuth();
   const [submitted, setSubmitted] = useState(false);
@@ -217,6 +234,15 @@ export default function ContactPage() {
                   aria-label="LinkedIn"
                 >
                   <Linkedin className="w-4 h-4" />
+                </a>
+                <a
+                  href="https://www.youtube.com/@srcjdcoem"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-3 rounded-xl bg-slate-50 hover:bg-[#DC2626] text-slate-600 hover:text-white border border-slate-200 transition-colors shadow-xs"
+                  aria-label="YouTube Channel"
+                >
+                  <YoutubeIcon className="w-4 h-4" />
                 </a>
                 <a
                   href="mailto:srcjdcoem@gmail.com"

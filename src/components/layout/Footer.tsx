@@ -13,6 +13,23 @@ import {
 } from "lucide-react";
 import { getCurrentTenure, subscribeToTenures, syncTenuresFromFirestore } from "@/lib/tenureStore";
 
+function YoutubeIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17" />
+      <polygon points="10 15 15 12 10 9 10 15" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export default function Footer() {
   const pathname = usePathname();
   const [currentTenureLabel, setCurrentTenureLabel] = useState<string>("2025–26");
@@ -137,6 +154,15 @@ export default function Footer() {
                 aria-label="LinkedIn"
               >
                 <Linkedin className="w-4 h-4" />
+              </a>
+              <a
+                href="https://www.youtube.com/@srcjdcoem"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:text-[#DC2626] hover:border-[#DC2626]/40 shadow-sm transition-colors"
+                aria-label="YouTube Channel"
+              >
+                <YoutubeIcon className="w-4 h-4" />
               </a>
               <a
                 href="mailto:srcjdcoem@gmail.com"
