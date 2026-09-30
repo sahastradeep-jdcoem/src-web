@@ -39,6 +39,7 @@ import {
   XCircle,
   Clock,
   Lock,
+  Pencil,
   ChevronRight,
   X
 } from "lucide-react";
@@ -86,7 +87,7 @@ export interface TeamMemberEntry {
 }
 
 export function RegistrationWizard({ event }: RegistrationWizardProps) {
-  const { user, openAuthModal, updateUserProfile } = useAuth();
+  const { user, openAuthModal, openProfileModal, updateUserProfile } = useAuth();
   const [departmentsList, setDepartmentsList] = useState<string[]>(DEFAULT_DEPARTMENTS);
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
   const stepContainerRef = useRef<HTMLDivElement>(null);
@@ -371,17 +372,33 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         city: leaderCity,
       }));
 
-      // Initialize team leader in roster
-      setTeamMembers([
-        {
-          name: leaderName,
-          btId: userIsExternal ? (leaderCollege || "External Delegate") : (leaderBtId || "Leader"),
-          department: userIsExternal ? `${leaderCollege} • ${leaderDept}` : leaderDept,
-          year: leaderYear,
-          email: leaderEmail,
-          isLeader: true,
-        },
-      ]);
+      // Initialize or sync team leader in roster
+      setTeamMembers((prev) => {
+        if (prev.length === 0) {
+          return [
+            {
+              name: leaderName,
+              btId: userIsExternal ? (leaderCollege || "External Delegate") : (leaderBtId || "Leader"),
+              department: userIsExternal ? `${leaderCollege} • ${leaderDept}` : leaderDept,
+              year: leaderYear,
+              email: leaderEmail,
+              isLeader: true,
+            },
+          ];
+        }
+        return prev.map((m) =>
+          m.isLeader
+            ? {
+                ...m,
+                name: leaderName,
+                btId: userIsExternal ? (leaderCollege || "External Delegate") : (leaderBtId || "Leader"),
+                department: userIsExternal ? `${leaderCollege} • ${leaderDept}` : leaderDept,
+                year: leaderYear,
+                email: leaderEmail,
+              }
+            : m
+        );
+      });
 
       if (userIsExternal) {
         setTeamAddMode("external");
@@ -545,12 +562,14 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     const isNonBtIdUser = user?.role === "FACULTY" || user?.userType === "FACULTY" || isExternalUser(user);
 
     if (!isNonBtIdUser && !formData.btId.trim()) {
-      alert("Please ensure your College BT ID is saved in your profile.");
+      alert("Your official College BT ID is missing from your profile. Please update your profile to proceed with registration.");
+      openProfileModal();
       return;
     }
-    const cleanPhone = formData.phone.replace(/[^0-9]/g, "");
+    const cleanPhone = (formData.phone || "").replace(/[^0-9]/g, "");
     if (cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
-      alert("Please provide a valid 10-digit Indian mobile / WhatsApp number (e.g. 9876543210).");
+      alert("A valid 10-digit WhatsApp contact number is required on your profile. Please update your profile to proceed with registration.");
+      openProfileModal();
       return;
     }
 
@@ -566,16 +585,6 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       setExistingRegistration(dup);
       alert(`You are already registered for this event (Registration ID: ${dup.id}). Duplicate registrations for the same participant are not permitted.`);
       return;
-    }
-
-    // If user edited their phone or dept in step 1, persist to profile
-    if (updateUserProfile) {
-      updateUserProfile({
-        phone: cleanPhone,
-        department: formData.department,
-        year: formData.year,
-        ...(formData.btId ? { btId: formData.btId } : {}),
-      });
     }
 
     if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
@@ -1264,10 +1273,21 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             </div>
 
             {user && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold uppercase tracking-wider">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>Verified Profile</span>
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={openProfileModal}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                  title="Update your student profile"
+                >
+                  <Pencil className="w-3 h-3 text-[#17458F]" />
+                  <span>Edit Profile</span>
+                </button>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold uppercase tracking-wider">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>Verified Profile</span>
+                </span>
+              </div>
             )}
           </div>
 
@@ -1418,55 +1438,96 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
               {!existingRegistration && (
                 <>
-                  <div className="p-5 rounded-2xl bg-blue-50/50 border border-[#17458F]/20 flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-[#17458F] text-white flex items-center justify-center shrink-0 shadow-xs">
-                      <ShieldCheck className="w-5 h-5 text-[#E78023]" />
+                  <div className="p-5 rounded-2xl bg-blue-50/50 border border-[#17458F]/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-start gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-[#17458F] text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <ShieldCheck className="w-5 h-5 text-[#E78023]" />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="font-bold text-sm text-[#17458F]">
+                          {isFaculty
+                            ? "Faculty / Staff Accreditation Details"
+                            : isExternal
+                            ? "Inter-Collegiate Visiting Delegate Profile"
+                            : "Authenticated JDCOEM Student Profile"}
+                        </h4>
+                        <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                          {isFaculty
+                            ? "Your institutional academic designation and department are verified and synced from your profile."
+                            : isExternal
+                            ? `Registered as an external visiting delegate from ${formData.collegeName || "Other College"}. Credentials are synced from your profile.`
+                            : "Participant details are locked and verified directly from your JDCOEM student profile."}
+                        </p>
+                      </div>
                     </div>
-                    <div className="space-y-1">
-                      <h4 className="font-bold text-sm text-[#17458F]">
-                        {isFaculty
-                          ? "Faculty / Staff Accreditation Details"
-                          : isExternal
-                          ? "Inter-Collegiate Visiting Delegate Profile"
-                          : "Authenticated JDCOEM Student Profile"}
-                      </h4>
-                      <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                        {isFaculty
-                          ? "Your institutional academic designation and department will be attached to your delegate pass."
-                          : isExternal
-                          ? `Registered as an external visiting delegate from ${formData.collegeName || "Other College"}. No JDCOEM BT ID is required.`
-                          : "Your official college BT ID, department, and credentials will be encoded into your digital delegate entry pass."}
-                      </p>
-                    </div>
+
+                    <button
+                      type="button"
+                      onClick={openProfileModal}
+                      className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 border border-[#17458F]/30 text-[#17458F] text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-[#E78023]" />
+                      <span>Edit Profile</span>
+                    </button>
                   </div>
+
+                  {(!formData.phone || (!isExternal && !isFaculty && !formData.btId)) && (
+                    <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>
+                          Your profile is missing {!formData.phone && (!isExternal && !isFaculty && !formData.btId) ? "College BT ID and Phone Number" : !formData.phone ? "WhatsApp Phone Number" : "College BT ID"}. Please complete your profile to continue.
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={openProfileModal}
+                        className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shrink-0 cursor-pointer shadow-xs"
+                      >
+                        Complete Profile
+                      </button>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     
                     {/* Full Name */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                        <User className="w-3.5 h-3.5 text-[#E78023]" />
-                        <span>Full Name *</span>
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <User className="w-3.5 h-3.5 text-[#E78023]" />
+                          <span>Full Name *</span>
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                          <Lock className="w-2.5 h-2.5 text-slate-400" /> Profile Synced
+                        </span>
                       </label>
                       <input
                         type="text"
                         disabled
+                        readOnly
                         value={formData.fullName}
-                        className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-900 text-sm font-semibold cursor-not-allowed"
+                        className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-900 text-sm font-semibold cursor-not-allowed select-none"
                       />
                     </div>
 
                     {/* Email */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                        <Mail className="w-3.5 h-3.5 text-[#E78023]" />
-                        <span>Email Address *</span>
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Mail className="w-3.5 h-3.5 text-[#E78023]" />
+                          <span>Email Address *</span>
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                          <Lock className="w-2.5 h-2.5 text-slate-400" /> Profile Synced
+                        </span>
                       </label>
                       <input
                         type="email"
                         disabled
+                        readOnly
                         value={formData.email}
-                        className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-900 text-sm font-medium cursor-not-allowed"
+                        className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-900 text-sm font-medium cursor-not-allowed select-none"
                       />
                     </div>
 
@@ -1474,47 +1535,59 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                     {isExternal ? (
                       <>
                         <div className="space-y-1.5">
-                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                            <Building2 className="w-3.5 h-3.5 text-[#17458F]" />
-                            <span>College / University Name *</span>
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              <Building2 className="w-3.5 h-3.5 text-[#17458F]" />
+                              <span>College / University Name *</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                              <Lock className="w-2.5 h-2.5 text-slate-400" /> Profile Synced
+                            </span>
                           </label>
                           <input
                             type="text"
-                            required
-                            value={formData.collegeName}
-                            onChange={(e) => setFormData({ ...formData, collegeName: e.target.value })}
-                            placeholder="e.g. VNIT Nagpur or Raisoni College"
-                            className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F]"
+                            disabled
+                            readOnly
+                            value={formData.collegeName || user?.collegeName || "—"}
+                            className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-900 text-sm font-semibold cursor-not-allowed select-none"
                           />
                         </div>
 
                         <div className="space-y-1.5">
-                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                            <Building2 className="w-3.5 h-3.5 text-[#E78023]" />
-                            <span>City / Location *</span>
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              <Building2 className="w-3.5 h-3.5 text-[#E78023]" />
+                              <span>City / Location *</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                              <Lock className="w-2.5 h-2.5 text-slate-400" /> Profile Synced
+                            </span>
                           </label>
                           <input
                             type="text"
-                            required
-                            value={formData.city}
-                            onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                            placeholder="e.g. Nagpur, Pune, Mumbai"
-                            className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F]"
+                            disabled
+                            readOnly
+                            value={formData.city || user?.city || "—"}
+                            className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-900 text-sm font-semibold cursor-not-allowed select-none"
                           />
                         </div>
 
                         <div className="space-y-1.5">
-                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                            <GraduationCap className="w-3.5 h-3.5 text-[#17458F]" />
-                            <span>Degree *</span>
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              <GraduationCap className="w-3.5 h-3.5 text-[#17458F]" />
+                              <span>Degree *</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                              <Lock className="w-2.5 h-2.5 text-slate-400" /> Profile Synced
+                            </span>
                           </label>
                           <input
                             type="text"
-                            required
-                            value={formData.department}
-                            onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                            placeholder="e.g. B.Tech, BCA, MBA, B.Sc..."
-                            className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F]"
+                            disabled
+                            readOnly
+                            value={formData.department || user?.degree || user?.customBranch || "—"}
+                            className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-900 text-sm font-semibold cursor-not-allowed select-none"
                           />
                         </div>
                       </>
@@ -1522,70 +1595,83 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                       /* FACULTY SPECIFIC FIELDS */
                       <>
                         <div className="space-y-1.5">
-                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                            <GraduationCap className="w-3.5 h-3.5 text-[#E78023]" />
-                            <span>Academic Designation *</span>
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              <GraduationCap className="w-3.5 h-3.5 text-[#E78023]" />
+                              <span>Academic Designation *</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                              <Lock className="w-2.5 h-2.5 text-slate-400" /> Profile Synced
+                            </span>
                           </label>
                           <input
                             type="text"
-                            value={formData.year}
-                            onChange={(e) => setFormData({ ...formData, year: e.target.value })}
-                            className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
+                            disabled
+                            readOnly
+                            value={formData.year || user?.facultyDesignation || "Faculty Member"}
+                            className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-900 text-sm font-medium cursor-not-allowed select-none"
                           />
                         </div>
 
                         <div className="space-y-1.5">
-                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                            <Building2 className="w-3.5 h-3.5 text-[#17458F]" />
-                            <span>Academic Department *</span>
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              <Building2 className="w-3.5 h-3.5 text-[#17458F]" />
+                              <span>Academic Department *</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                              <Lock className="w-2.5 h-2.5 text-slate-400" /> Profile Synced
+                            </span>
                           </label>
-                          <select
+                          <input
+                            type="text"
+                            disabled
+                            readOnly
                             value={resolveCanonicalDepartmentName(formData.department, departmentsList)}
-                            onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                            className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
-                          >
-                            {departmentsList.map((dept) => (
-                              <option key={dept} value={dept} className="bg-white text-slate-900">
-                                {dept}
-                              </option>
-                            ))}
-                          </select>
+                            className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-900 text-sm font-medium cursor-not-allowed select-none"
+                          />
                         </div>
                       </>
                     ) : (
                       /* JDCOEM STUDENT SPECIFIC FIELDS (Requires BT ID) */
                       <>
                         <div className="space-y-1.5">
-                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                            <Hash className="w-3.5 h-3.5 text-[#17458F]" />
-                            <span>College BT ID *</span>
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              <Hash className="w-3.5 h-3.5 text-[#17458F]" />
+                              <span>College BT ID *</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                              <Lock className="w-2.5 h-2.5 text-slate-400" /> Profile Synced
+                            </span>
                           </label>
                           <input
                             type="text"
-                            required
+                            disabled
+                            readOnly
                             value={formData.btId}
-                            onChange={(e) => setFormData({ ...formData, btId: e.target.value.toUpperCase() })}
-                            placeholder="e.g. BT230036CS"
-                            className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-mono font-bold uppercase focus:outline-none focus:border-[#17458F]"
+                            placeholder="Not set in profile"
+                            className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-900 text-sm font-mono font-bold uppercase cursor-not-allowed select-none"
                           />
                         </div>
 
                         <div className="space-y-1.5">
-                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                            <Building2 className="w-3.5 h-3.5 text-[#17458F]" />
-                            <span>Department / Branch *</span>
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              <Building2 className="w-3.5 h-3.5 text-[#17458F]" />
+                              <span>Department / Branch *</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                              <Lock className="w-2.5 h-2.5 text-slate-400" /> Profile Synced
+                            </span>
                           </label>
-                          <select
+                          <input
+                            type="text"
+                            disabled
+                            readOnly
                             value={resolveCanonicalDepartmentName(formData.department, departmentsList)}
-                            onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                            className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
-                          >
-                            {departmentsList.map((dept) => (
-                              <option key={dept} value={dept} className="bg-white text-slate-900">
-                                {dept}
-                              </option>
-                            ))}
-                          </select>
+                            className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-900 text-sm font-medium cursor-not-allowed select-none"
+                          />
                         </div>
                       </>
                     )}
@@ -1593,37 +1679,43 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                     {/* Academic Year (For Students) */}
                     {!isFaculty && (
                       <div className="space-y-1.5">
-                        <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                          <GraduationCap className="w-3.5 h-3.5 text-[#E78023]" />
-                          <span>Academic Year *</span>
+                        <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <GraduationCap className="w-3.5 h-3.5 text-[#E78023]" />
+                            <span>Academic Year *</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                            <Lock className="w-2.5 h-2.5 text-slate-400" /> Profile Synced
+                          </span>
                         </label>
-                        <select
-                          value={formData.year}
-                          onChange={(e) => setFormData({ ...formData, year: e.target.value })}
-                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
-                        >
-                          {YEARS.map((yr) => (
-                            <option key={yr} value={yr} className="bg-white text-slate-900">
-                              {yr}
-                            </option>
-                          ))}
-                        </select>
+                        <input
+                          type="text"
+                          disabled
+                          readOnly
+                          value={formData.year || user?.year || "—"}
+                          className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-900 text-sm font-medium cursor-not-allowed select-none"
+                        />
                       </div>
                     )}
 
                     {/* WhatsApp Phone */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                        <Phone className="w-3.5 h-3.5 text-[#E78023]" />
-                        <span>WhatsApp Contact Phone *</span>
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Phone className="w-3.5 h-3.5 text-[#E78023]" />
+                          <span>WhatsApp Contact Phone *</span>
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                          <Lock className="w-2.5 h-2.5 text-slate-400" /> Profile Synced
+                        </span>
                       </label>
                       <input
                         type="tel"
-                        required
+                        disabled
+                        readOnly
                         value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        placeholder="e.g. 9823011223"
-                        className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-medium focus:outline-none focus:border-[#17458F]"
+                        placeholder="Not set in profile"
+                        className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-900 text-sm font-medium cursor-not-allowed select-none"
                       />
                     </div>
 
