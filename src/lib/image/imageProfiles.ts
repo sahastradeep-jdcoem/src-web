@@ -82,16 +82,16 @@ const AVATAR_PROFILE: ImageProfile = {
  */
 const LOGO_PROFILE: ImageProfile = {
   label: "Club Logo / Insignia",
-  maxWidth: 800,
-  maxHeight: 800,
-  quality: 0.95,
+  maxWidth: 512,
+  maxHeight: 512,
+  quality: 0.90,
   format: "image/webp",
   preserveTransparency: true,
   defaultAspectRatio: "1:1",
   allowedAspectRatios: ["1:1"],
   lockAspectRatio: true,
   circularMask: true,
-  targetSizeHint: "Ultra-Sharp Alpha WebP/PNG",
+  targetSizeHint: "Ultra-Sharp Alpha WebP",
   maxInlineBytes: 120_000,
 };
 
@@ -222,10 +222,8 @@ export function getEffectiveFormat(
   purpose: ImagePurpose,
   sourceMimeType?: string
 ): "image/webp" | "image/png" {
-  const profile = getImageProfile(purpose);
-  if (profile.preserveTransparency && sourceMimeType?.includes("png")) {
-    return "image/png";
-  }
+  // WebP natively supports 32-bit RGBA alpha transparency across all modern browsers.
+  // Using WebP delivers crystal-clear alpha transparency at ~10% the size of uncompressed PNG.
   return "image/webp";
 }
 

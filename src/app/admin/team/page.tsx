@@ -65,7 +65,6 @@ import {
   getStoredTenures, 
   saveStoredTenures, 
   getCurrentTenure, 
-  switchActiveTenure, 
   updateTenureRoster,
   syncTenuresFromFirestore,
   getStoredDraftCouncil,
@@ -1490,13 +1489,6 @@ export default function AdminTeamPage() {
                   <Copy className="w-3.5 h-3.5 text-[#E78023]" />
                   <span>Copy Positions from Past Tenure</span>
                 </button>
-
-                <Link
-                  href="/admin/tenures"
-                  className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs transition-colors shadow-xs hover:shadow-sm cursor-pointer flex items-center gap-1"
-                >
-                  <span>Activate Tenure &rarr;</span>
-                </Link>
               </div>
             </div>
 

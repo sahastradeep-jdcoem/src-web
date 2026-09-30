@@ -186,13 +186,15 @@ export default function AdminClubsPage() {
       } else if (selectedTenure) {
         // DRAFT SESSION: Strictly isolated to draft tenure! NEVER touch live stores!
         await saveStoredDraftClubs(selectedTenure.id, updated);
-        updateTenureRoster(selectedTenure.id, { clubs: updated });
+        // skipActiveStoreSync=true: saveStoredDraftClubs above already persisted to draft_clubs store
+        updateTenureRoster(selectedTenure.id, { clubs: updated }, true);
       }
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save clubs:", error);
-      alert("⚠️ Cloud Save Error: Could not save changes to cloud database. Please check your internet connection and try again.");
+      const errMsg = error?.message || String(error);
+      alert(`⚠️ Cloud Save Error: ${errMsg || "Could not save changes to cloud database. Please check your internet connection and try again."}`);
       throw error;
     } finally {
       setIsSavingList(false);
@@ -374,7 +376,7 @@ export default function AdminClubsPage() {
           updateTenureRoster(selectedTenure.id, { clubs: resequenced }, true);
         } else if (selectedTenure) {
           await saveStoredDraftClubs(selectedTenure.id, resequenced);
-          updateTenureRoster(selectedTenure.id, { clubs: resequenced });
+          updateTenureRoster(selectedTenure.id, { clubs: resequenced }, true);
         }
         setIsSaved(true);
         setTimeout(() => setIsSaved(false), 3000);

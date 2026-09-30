@@ -534,53 +534,11 @@ export function getMainCalendarEvents(
   );
   const currentTenureCompletedCount = currentTenureCompleted.length;
 
-  // Rule: Until a new tenure completes at least 3 events, keep older events visible
-  const shouldIncludeOlderEvents = currentTenureCompletedCount < 3 && (archivedTenures.length > 0 || olderEventsFromStore.length > 0);
-
-  if (!shouldIncludeOlderEvents) {
-    return {
-      events: sortEventsByDate(currentTenureEvents),
-      isShowingOlderEvents: false,
-      currentTenureCompletedCount,
-    };
-  }
-
-  // Gather older events from archived tenures and older tagged events
-  const olderEventsMap = new Map<string, EventItem>();
-
-  // 1. From archived tenures
-  for (const at of archivedTenures) {
-    if (Array.isArray(at.events)) {
-      for (const rawEvt of at.events) {
-        if (rawEvt && (rawEvt.id || rawEvt.slug)) {
-          const sanitized = sanitizeEventItem(rawEvt);
-          const key = sanitized.id || sanitized.slug;
-          olderEventsMap.set(key, {
-            ...sanitized,
-            tenureLabel: sanitized.tenureLabel || at.label,
-            tenureId: sanitized.tenureId || at.id,
-          });
-        }
-      }
-    }
-  }
-
-  // 2. From older events found in events store
-  for (const evt of olderEventsFromStore) {
-    const key = evt.id || evt.slug;
-    if (!olderEventsMap.has(key)) {
-      olderEventsMap.set(key, evt);
-    }
-  }
-
-  // Deduplicate: current tenure events always take priority over older events
-  const currentKeys = new Set(currentTenureEvents.map((e) => e.id || e.slug));
-  const olderEventsToInclude = Array.from(olderEventsMap.values()).filter((e) => !currentKeys.has(e.id || e.slug));
-
-  const combined = [...currentTenureEvents, ...olderEventsToInclude];
+  // Past events are displayed exclusively on /events/past and /archive.
+  // The main events page displays only the current active session's events.
   return {
-    events: sortEventsByDate(combined),
-    isShowingOlderEvents: olderEventsToInclude.length > 0,
+    events: sortEventsByDate(currentTenureEvents),
+    isShowingOlderEvents: false,
     currentTenureCompletedCount,
   };
 }

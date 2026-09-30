@@ -25,6 +25,7 @@ import {
 import {
   getEventDateTimestamp,
   sanitizeEventItem,
+  getStoredEvents,
 } from "@/lib/eventsStore";
 import { EventItem } from "@/types";
 
@@ -91,6 +92,32 @@ export default function PastTenureEventsPage() {
             });
           }
         });
+      }
+    });
+
+    // Also aggregate from stored events where tenureId or tenureLabel belongs to an archived tenure
+    const storedEvents = getStoredEvents();
+    storedEvents.forEach((evt) => {
+      const matchingTenure = archivedTenures.find(
+        (at) => (evt.tenureId && evt.tenureId === at.id) || (evt.tenureLabel && evt.tenureLabel === at.label)
+      );
+      if (matchingTenure) {
+        const sanitized = sanitizeEventItem(evt);
+        const key = sanitized.id || sanitized.slug;
+        if (!map.has(key)) {
+          map.set(key, {
+            ...sanitized,
+            id: sanitized.id || key,
+            name: sanitized.name || "Event",
+            category: sanitized.category || "Event",
+            status: sanitized.status || "Completed",
+            date: sanitized.date || "Past Session",
+            venue: sanitized.venue || "Campus",
+            tenureLabel: matchingTenure.label,
+            tenureNumber: matchingTenure.tenureNumber,
+            tenureId: matchingTenure.id,
+          });
+        }
       }
     });
 
