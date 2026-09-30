@@ -1420,28 +1420,6 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
               {!existingRegistration && (
                 <>
-                  <div className="p-5 rounded-2xl bg-blue-50/50 border border-[#17458F]/20 flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-[#17458F] text-white flex items-center justify-center shrink-0 shadow-xs">
-                      <ShieldCheck className="w-5 h-5 text-[#E78023]" />
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="font-bold text-sm text-[#17458F]">
-                        {isFaculty
-                          ? "Faculty / Staff Accreditation Details"
-                          : isExternal
-                          ? "Inter-Collegiate Visiting Delegate Profile"
-                          : "Authenticated JDCOEM Student Profile"}
-                      </h4>
-                      <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                        {isFaculty
-                          ? "Your institutional academic designation and department will be attached to your delegate pass."
-                          : isExternal
-                          ? `Registered as an external visiting delegate from ${formData.collegeName || "Other College"}. No JDCOEM BT ID is required.`
-                          : "Your official college BT ID, department, and credentials will be encoded into your digital delegate entry pass."}
-                      </p>
-                    </div>
-                  </div>
-
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     
                     {/* Full Name */}
