@@ -23,8 +23,7 @@ import {
   GraduationCap,
   Globe,
   Share2,
-  Check,
-  HelpCircle
+  Check
 } from "lucide-react";
 import { 
   getStoredEvents, 
@@ -54,7 +53,6 @@ export default function EventDetailPage() {
 
   const [event, setEvent] = useState<EventItem | null>(null);
   const [subEvents, setSubEvents] = useState<EventItem[]>([]);
-  const [relatedEvents, setRelatedEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [copiedLink, setCopiedLink] = useState(false);
 
@@ -113,19 +111,6 @@ export default function EventDetailPage() {
       );
   };
 
-  const findRelatedEvents = (allEvents: EventItem[], current: EventItem): EventItem[] => {
-    return allEvents
-      .filter((e) => e.isLive !== false && e.status !== "draft" && !e.isCancelled && e.status !== "Cancelled")
-      .filter(
-        (e) =>
-          e.id !== current.id &&
-          e.slug !== current.slug &&
-          !e.parentEventId &&
-          !e.parentEventSlug
-      )
-      .slice(0, 2);
-  };
-
   useEffect(() => {
     if (!slug) return;
 
@@ -155,7 +140,6 @@ export default function EventDetailPage() {
       const cleanMatch = sanitizeEventItem(match);
       setEvent(cleanMatch);
       setSubEvents(findSubEvents(stored, cleanMatch));
-      setRelatedEvents(findRelatedEvents(stored, cleanMatch));
       setIsLoading(false);
     }
 
@@ -184,7 +168,6 @@ export default function EventDetailPage() {
           const cleanRemoteMatch = sanitizeEventItem(remoteMatch);
           setEvent(cleanRemoteMatch);
           setSubEvents(findSubEvents(remote, cleanRemoteMatch));
-          setRelatedEvents(findRelatedEvents(remote, cleanRemoteMatch));
         }
       }
       setIsLoading(false);
@@ -214,7 +197,6 @@ export default function EventDetailPage() {
           const cleanStreamMatch = sanitizeEventItem(streamMatch);
           setEvent(cleanStreamMatch);
           setSubEvents(findSubEvents(remoteEvents, cleanStreamMatch));
-          setRelatedEvents(findRelatedEvents(remoteEvents, cleanStreamMatch));
         }
       }
     });
@@ -452,7 +434,7 @@ export default function EventDetailPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 items-start">
           
           {/* Left 2 Columns: Detailed Sections */}
-          <div className="lg:col-span-2 space-y-16 lg:min-h-[1450px]">
+          <div className="lg:col-span-2 space-y-16">
             
             {/* ABOUT */}
             <section className="space-y-4">
@@ -707,185 +689,6 @@ export default function EventDetailPage() {
             {/* RULES & GUIDELINES SECTION */}
             {displayRules && displayRules.length > 0 && !event.isParentFest && (
               <EventRulesSection rules={displayRules} />
-            )}
-
-            {/* VENUE & ARRIVAL GUIDE */}
-            <section className="space-y-6 pt-2">
-              <div className="space-y-1">
-                <span className="text-xs font-bold uppercase tracking-wider text-[#E78023] flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4" />
-                  <span>Venue &amp; Campus Access</span>
-                </span>
-                <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase">
-                  LOCATION &amp; ARRIVAL GUIDE
-                </h2>
-                <p className="text-xs sm:text-sm text-slate-500 font-medium">
-                  Official reporting directives and on-campus venue details for attending delegates.
-                </p>
-              </div>
-
-              <div className="p-6 sm:p-7 rounded-3xl bg-white border border-slate-200/90 shadow-2xs space-y-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-1.5">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-[#E78023]" />
-                      <span>On-Campus Venue</span>
-                    </span>
-                    <p className="font-heading font-extrabold text-base text-slate-900">
-                      {event.venue || "JDCOEM Campus"}
-                    </p>
-                    <p className="text-xs text-slate-500 font-medium">
-                      JD College of Engineering &amp; Management, Katol Road, Nagpur
-                    </p>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-1.5">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-[#17458F]" />
-                      <span>Reporting Protocol</span>
-                    </span>
-                    <p className="font-heading font-extrabold text-base text-slate-900">
-                      15–20 Mins Prior to Start
-                    </p>
-                    <p className="text-xs text-slate-500 font-medium">
-                      {isDateComingSoon ? "Scheduled timings will be announced soon" : `Scheduled for ${event.date} • ${event.time || "10:00 AM IST"}`}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Carry your college ID &amp; digital pass QR for fast-track entry check-in</span>
-                  </div>
-                  <span className="text-slate-400 font-mono text-[11px]">Gate 1 &bull; Delegate Helpdesk</span>
-                </div>
-              </div>
-            </section>
-
-            {/* FREQUENTLY ASKED QUESTIONS */}
-            <section className="space-y-6 pt-2">
-              <div className="space-y-1">
-                <span className="text-xs font-bold uppercase tracking-wider text-[#E78023] flex items-center gap-1.5">
-                  <HelpCircle className="w-4 h-4" />
-                  <span>Delegate Queries</span>
-                </span>
-                <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase">
-                  FREQUENTLY ASKED QUESTIONS
-                </h2>
-                <p className="text-xs sm:text-sm text-slate-500 font-medium">
-                  Answers to common questions regarding delegate participation, passes, and campus entry.
-                </p>
-              </div>
-
-              <div className="space-y-3.5">
-                <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1.5">
-                  <h4 className="text-sm font-bold text-slate-900">
-                    How do I access my entry pass after registering?
-                  </h4>
-                  <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                    Your official pass with a verified QR ticket is instantly generated and stored in your{" "}
-                    <Link href="/dashboard" className="text-[#17458F] font-bold underline hover:text-[#E78023]">
-                      Student Dashboard
-                    </Link>
-                    . You can present it directly on your mobile device at the venue check-in desk.
-                  </p>
-                </div>
-
-                <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1.5">
-                  <h4 className="text-sm font-bold text-slate-900">
-                    Who is eligible to participate in this event?
-                  </h4>
-                  <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                    {isJdcoemOnly
-                      ? "This event is exclusive to currently enrolled JDCOEM students across all academic branches and years."
-                      : "This event is open to students and delegates from JDCOEM as well as other recognized colleges and universities."}
-                  </p>
-                </div>
-
-                <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1.5">
-                  <h4 className="text-sm font-bold text-slate-900">
-                    Will registered participants receive certificates?
-                  </h4>
-                  <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                    Yes! All attending delegates receive an official verifiable digital Certificate of Participation endorsed by the Student Representative Council (SRC) and JDCOEM authorities.
-                  </p>
-                </div>
-
-                <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-1.5">
-                  <h4 className="text-sm font-bold text-slate-900">
-                    What should I do if I need on-ground support during the event?
-                  </h4>
-                  <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                    You can contact the official event coordinators listed in the Event Helpdesk section on the right, or approach any Student Representative Council (SRC) volunteer on campus.
-                  </p>
-                </div>
-              </div>
-            </section>
-
-            {/* EXPLORE OTHER EVENTS */}
-            {relatedEvents.length > 0 && (
-              <section className="space-y-6 pt-4 border-t border-slate-200">
-                <div className="space-y-1">
-                  <span className="text-xs font-bold uppercase tracking-wider text-[#E78023] flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4" />
-                    <span>Campus Lineup</span>
-                  </span>
-                  <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase">
-                    EXPLORE OTHER EVENTS
-                  </h2>
-                  <p className="text-xs sm:text-sm text-slate-500 font-medium">
-                    Discover other technical, cultural, and sports competitions happening across JDCOEM.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {relatedEvents.map((rel) => (
-                    <div
-                      key={rel.id}
-                      className="group rounded-2xl bg-white border border-slate-200 p-4 hover:border-[#17458F] hover:shadow-md transition-all flex flex-col justify-between"
-                    >
-                      <div className="space-y-3">
-                        <div className="relative h-32 rounded-xl overflow-hidden bg-slate-100">
-                          <Image
-                            src={rel.cardImage || rel.poster || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=600&auto=format&fit=crop"}
-                            alt={rel.name}
-                            fill
-                            unoptimized={true}
-                            className="object-cover group-hover:scale-105 transition-transform duration-500"
-                          />
-                          <div className="absolute top-2 left-2">
-                            <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-[#E78023] text-white shadow-xs">
-                              {rel.category}
-                            </span>
-                          </div>
-                        </div>
-                        <div>
-                          <h4 className="font-heading font-bold text-sm text-[#0F172A] line-clamp-1 group-hover:text-[#17458F] transition-colors">
-                            {rel.name}
-                          </h4>
-                          <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-medium">
-                            {rel.tagline || rel.description}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-bold text-slate-600">
-                          {rel.date}
-                        </span>
-                        <Link
-                          href={`/events/${rel.slug}`}
-                          className="px-3 py-1 rounded-lg bg-slate-100 hover:bg-[#17458F] hover:text-white text-slate-700 text-[11px] font-bold uppercase tracking-wider transition-colors inline-flex items-center gap-1"
-                        >
-                          <span>Explore</span>
-                          <ArrowRight className="w-3 h-3" />
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
             )}
 
           </div>
