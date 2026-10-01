@@ -173,6 +173,8 @@ export function sanitizeEventItem(event: EventItem): EventItem {
             perks: Array.isArray(p.perks)
               ? Array.from(new Set(p.perks.map((k) => (typeof k === "string" ? k.trim() : "")).filter(Boolean)))
               : [],
+            tierType: p.tierType || (p.position && !/^(1st|2nd|3rd|winner|runner|first|second|third)/i.test(p.position.trim()) ? "title" : "podium"),
+            customLabel: (p.customLabel || "").trim(),
           }))
       : [],
     isFeatured:

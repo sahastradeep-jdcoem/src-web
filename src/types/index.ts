@@ -21,6 +21,8 @@ export interface EventPrize {
   position: "Winner" | "Runner Up" | "Second Runner Up" | string;
   amount: string;
   perks: string[];
+  tierType?: "podium" | "title" | "special";
+  customLabel?: string;
 }
 
 export type SrcFormFieldType = 

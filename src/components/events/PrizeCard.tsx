@@ -11,13 +11,35 @@ interface PrizeCardProps {
 }
 
 export function PrizeCard({ prize, index, totalCount, isSpanFull = false }: PrizeCardProps) {
-  const isWinner = index === 0;
-  const isRunnerUp = index === 1;
-  const isThird = index === 2;
+  const isExplicitRank =
+    prize.tierType === "podium" ||
+    (!prize.tierType && /^(1st|2nd|3rd|winner|champion|runner\s*up|second\s*runner\s*up|first\s*place|second\s*place|third\s*place|rank)/i.test((prize.position || "").trim()));
+
+  const isTitleAward = prize.tierType === "title" || (!isExplicitRank && prize.tierType !== "special" && Boolean(prize.position && prize.position.trim().length > 0) && !/^(consolation|honorable|participation)/i.test((prize.position || "").trim()));
+  const isSpecialRecognition = prize.tierType === "special" || (!isExplicitRank && !isTitleAward && Boolean(prize.position) && /^(consolation|honorable|participation)/i.test((prize.position || "").trim()));
+
+  const isWinner = isExplicitRank && index === 0;
+  const isRunnerUp = isExplicitRank && index === 1;
+  const isThird = isExplicitRank && index === 2;
 
   // Extract rank prefix and award title if combined (e.g., "1st Place - Champion")
   const parsePosition = () => {
     const raw = (prize.position || "").trim();
+
+    if (isTitleAward) {
+      return {
+        rankText: prize.customLabel ? prize.customLabel.toUpperCase() : "TITLE AWARD",
+        title: raw || "Special Title Award",
+      };
+    }
+
+    if (isSpecialRecognition) {
+      return {
+        rankText: prize.customLabel ? prize.customLabel.toUpperCase() : "RECOGNITION",
+        title: raw || "Special Recognition",
+      };
+    }
+
     if (!raw) {
       if (isWinner) return { rankText: "1st Place", title: "Champion" };
       if (isRunnerUp) return { rankText: "2nd Place", title: "First Runner-up" };
@@ -68,6 +90,38 @@ export function PrizeCard({ prize, index, totalCount, isSpanFull = false }: Priz
 
   // Podium tier styles configuration
   const getTierTheme = () => {
+    if (isTitleAward) {
+      return {
+        badgeLabel: prize.customLabel || "Title Award",
+        badgeIcon: Sparkles,
+        badgeClass: "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-2xs shadow-indigo-500/20",
+        containerClass:
+          "bg-gradient-to-b from-indigo-500/[0.06] via-white to-purple-50/[0.15] border-indigo-300/80 shadow-[0_4px_18px_rgba(99,102,241,0.08)] ring-1 ring-indigo-300/30",
+        accentLine: "bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600",
+        iconBoxClass:
+          "bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-xs shadow-indigo-500/25 ring-2 ring-indigo-100",
+        icon: Award,
+        amountColor: "text-indigo-600",
+        accentBg: "bg-indigo-500/[0.08] border-indigo-500/20 text-indigo-900",
+      };
+    }
+
+    if (isSpecialRecognition) {
+      return {
+        badgeLabel: prize.customLabel || "Special Recognition",
+        badgeIcon: Award,
+        badgeClass: "bg-teal-700 text-white shadow-2xs",
+        containerClass:
+          "bg-gradient-to-b from-teal-500/[0.05] via-white to-slate-50/40 border-teal-300/70 shadow-[0_4px_18px_rgba(20,184,166,0.06)] ring-1 ring-teal-200/50",
+        accentLine: "bg-teal-600",
+        iconBoxClass:
+          "bg-gradient-to-br from-teal-600 to-teal-800 text-white shadow-xs shadow-teal-700/20 ring-2 ring-teal-100",
+        icon: Award,
+        amountColor: "text-teal-700",
+        accentBg: "bg-teal-50 border-teal-200 text-teal-900",
+      };
+    }
+
     if (isWinner) {
       return {
         badgeLabel: "Champion",
