@@ -540,8 +540,8 @@ export function resolveDesignationByBtId(
   const council = rosterCache?.council || getStoredCouncilMembers();
   const matchedCouncil = council.find((m) => {
     if (!m.btId || m.btId.trim().toUpperCase() !== cleanBtId) return false;
-    // Mentors and advisors must not hold student BT IDs
-    if (/mentor/i.test(m.role || "") || (m.name && /sarvashree|munesh/i.test(m.name))) {
+    // Exclude honorary external mentors without real student BT IDs
+    if (m.name && /sarvashree|munesh/i.test(m.name)) {
       return false;
     }
     // If userName is provided, verify match to prevent identity collision
@@ -687,7 +687,7 @@ export function resolveDesignationByBtId(
   const founders = rosterCache?.founders || getStoredFoundingMembers();
   const matchedFounder = founders.find((m) => {
     if (!m.btId || m.btId.trim().toUpperCase() !== cleanBtId) return false;
-    if (/mentor/i.test(m.role || "") || (m.name && /sarvashree|munesh/i.test(m.name))) {
+    if (m.name && /sarvashree|munesh/i.test(m.name)) {
       return false;
     }
     if (userName && m.name) {
@@ -738,7 +738,7 @@ export function checkBtIdPositionConflict(
   const council = getStoredCouncilMembers();
   const matchedCouncil = council.find((m) => {
     if (!m.btId || m.btId.trim().toUpperCase() !== cleanBtId) return false;
-    if (/mentor/i.test(m.role || "") || (m.name && /sarvashree|munesh/i.test(m.name))) {
+    if (m.name && /sarvashree|munesh/i.test(m.name)) {
       return false;
     }
     return true;
@@ -826,7 +826,7 @@ export function checkBtIdPositionConflict(
   const founders = getStoredFoundingMembers();
   const matchedFounder = founders.find((m) => {
     if (!m.btId || m.btId.trim().toUpperCase() !== cleanBtId) return false;
-    if (/mentor/i.test(m.role || "") || (m.name && /sarvashree|munesh/i.test(m.name))) {
+    if (m.name && /sarvashree|munesh/i.test(m.name)) {
       return false;
     }
     return true;

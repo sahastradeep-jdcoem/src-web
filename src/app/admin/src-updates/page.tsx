@@ -255,8 +255,8 @@ export default function AdminSrcUpdatesPage() {
     const registerMember = (btId?: string, name?: string, role?: string, defaultTier: "admin" | "spokesperson" | "head" | "cohead" | "member" = "member") => {
       if (!btId || !btId.trim()) return;
       const cleanBt = btId.trim().toUpperCase();
-      // Exclude mentors or test keys without real student BT IDs
-      if (/mentor/i.test(role || "") || (name && /sarvashree|munesh/i.test(name))) {
+      // Exclude honorary non-student test keys without real student BT IDs
+      if (name && /sarvashree|munesh/i.test(name)) {
         return;
       }
 
@@ -264,7 +264,7 @@ export default function AdminSrcUpdatesPage() {
       const rLower = (role || "").toLowerCase();
       if (rLower.includes("co-head") || rLower.includes("colead") || rLower.includes("co-lead")) {
         tier = "cohead";
-      } else if (rLower.includes("head") || rLower.includes("lead") || rLower.includes("president") || rLower.includes("secretary") || rLower.includes("coordinator")) {
+      } else if (rLower.includes("head") || rLower.includes("lead") || rLower.includes("president") || rLower.includes("secretary") || rLower.includes("coordinator") || rLower.includes("mentor")) {
         tier = defaultTier === "spokesperson" ? "spokesperson" : defaultTier === "admin" ? "admin" : "head";
       }
 
@@ -729,7 +729,7 @@ export default function AdminSrcUpdatesPage() {
               </span>
             </div>
             <p className="text-xs text-slate-600 leading-relaxed">
-              <strong className="text-slate-900 font-semibold">{councilAdoption.onboardedCount} SRC members</strong> (admins, spokespersons, club heads, co-heads &amp; members) have active portal accounts linked by BT ID in this tenure.
+              <strong className="text-slate-900 font-semibold">{councilAdoption.onboardedCount} SRC members</strong> (admins, mentors, spokespersons, club heads, co-heads &amp; members) have active portal accounts linked by BT ID in this tenure.
             </p>
           </div>
         </div>

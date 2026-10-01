@@ -231,8 +231,8 @@ export function getAllSavedSrcMembers(): SavedSrcMemberRecord[] {
   ) => {
     if (!btId || !btId.trim()) return;
     const cleanBt = clean(btId);
-    // Exclude mentors or test keys without real student ID
-    if (/mentor/i.test(designation || "") || (name && /sarvashree|munesh/i.test(name))) {
+    // Exclude honorary external mentors without real student ID
+    if (name && /sarvashree|munesh/i.test(name)) {
       return;
     }
     if (!memberMap.has(cleanBt)) {

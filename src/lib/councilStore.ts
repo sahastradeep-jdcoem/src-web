@@ -701,9 +701,9 @@ export function repairCouncilSwapIfNeeded(members: TeamMember[], isFounding = fa
   const repairedList = members.map((m) => {
     let copy = { ...m };
 
-    // Strip leaked student BT ID from mentors
+    // Strip leaked student BT ID from honorary non-student mentors
     if (
-      (/mentor/i.test(copy.role || "") || (copy.name && /sarvashree|munesh/i.test(copy.name))) &&
+      (copy.name && /sarvashree|munesh/i.test(copy.name)) &&
       (copy.btId === "BT240115DS" || copy.btId === "BT000000CS")
     ) {
       copy.btId = "";
@@ -1435,7 +1435,7 @@ export function syncCouncilAdminsToFounding(councilList?: TeamMember[], persist 
     const foundingRole = formatAdminRoleToFounding(admin.role);
 
     let cleanBt = admin.btId || existing?.btId || "";
-    if ((/mentor/i.test(admin.role || "") || (admin.name && /sarvashree|munesh/i.test(admin.name))) && (cleanBt === "BT240115DS" || cleanBt === "BT000000CS")) {
+    if ((admin.name && /sarvashree|munesh/i.test(admin.name)) && (cleanBt === "BT240115DS" || cleanBt === "BT000000CS")) {
       cleanBt = "";
     }
 
@@ -1480,7 +1480,7 @@ export function syncFoundingToCouncilAdmins(foundingList?: TeamMember[], persist
     const adminRole = formatFoundingRoleToAdmin(founder.role);
 
     let cleanBt = founder.btId || existing?.btId || "";
-    if ((/mentor/i.test(founder.role || "") || (founder.name && /sarvashree|munesh/i.test(founder.name))) && (cleanBt === "BT240115DS" || cleanBt === "BT000000CS")) {
+    if ((founder.name && /sarvashree|munesh/i.test(founder.name)) && (cleanBt === "BT240115DS" || cleanBt === "BT000000CS")) {
       cleanBt = "";
     }
 
