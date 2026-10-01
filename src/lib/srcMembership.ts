@@ -32,6 +32,7 @@ export interface SavedSrcMemberRecord {
   department?: string;
   year?: string;
   avatar?: string;
+  email?: string;
 }
 
 /**
@@ -227,7 +228,8 @@ export function getAllSavedSrcMembers(): SavedSrcMemberRecord[] {
     level?: string,
     dept?: string,
     year?: string,
-    avatar?: string
+    avatar?: string,
+    email?: string
   ) => {
     if (!btId || !btId.trim()) return;
     const cleanBt = clean(btId);
@@ -244,20 +246,21 @@ export function getAllSavedSrcMembers(): SavedSrcMemberRecord[] {
         department: dept,
         year: year,
         avatar: avatar,
+        email: email,
       });
     }
   };
 
   // 1. Admin Council
   const council = getStoredCouncilMembers().length > 0 ? getStoredCouncilMembers() : adminCouncilMembers;
-  council.forEach((m) => register(m.btId, m.name, m.role, "Admin Council", m.department, m.year, m.avatar));
+  council.forEach((m) => register(m.btId, m.name, m.role, "Admin Council", m.department, m.year, m.avatar, m.email));
 
   // 2. Hosting & Spokespersons
   const hosting = getStoredHostingCommittee().length > 0 ? getStoredHostingCommittee() : hostingCommitteeMembers;
-  hosting.forEach((m) => register(m.btId, m.name, m.role, "Hosting Committee", m.department, m.year, m.avatar));
+  hosting.forEach((m) => register(m.btId, m.name, m.role, "Hosting Committee", m.department, m.year, m.avatar, m.email));
 
   const spokespersons = getStoredSpokespersons().length > 0 ? getStoredSpokespersons() : spokespersonMembers;
-  spokespersons.forEach((m) => register(m.btId, m.name, m.role, "Spokesperson", m.department, m.year, m.avatar));
+  spokespersons.forEach((m) => register(m.btId, m.name, m.role, "Spokesperson", m.department, m.year, m.avatar, m.email));
 
   // 3. Clubs
   const clubs = getStoredClubs().length > 0 ? getStoredClubs() : mockClubs;

@@ -71,6 +71,7 @@ import {
 } from "@/lib/usersStore";
 import { getStoredCouncilMembers } from "@/lib/councilStore";
 import { getCurrentTenure, CouncilTenure } from "@/lib/tenureStore";
+import { subscribeToUsersFromFirestore } from "@/lib/firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import Link from "next/link";
@@ -99,6 +100,11 @@ export default function AdminSrcUpdatesPage() {
   // SRC Form Studio Modal State (Mirroring Engagement Hub CreateListingModal)
   const [isSrcFormModalOpen, setIsSrcFormModalOpen] = useState(false);
   const [editingSrcFormDispatch, setEditingSrcFormDispatch] = useState<SrcDispatch | null>(null);
+
+  // Council Adoption Modal State
+  const [isAdoptionModalOpen, setIsAdoptionModalOpen] = useState(false);
+  const [adoptionSearchQuery, setAdoptionSearchQuery] = useState("");
+  const [adoptionFilterTab, setAdoptionFilterTab] = useState<"ALL" | "LINKED" | "UNLINKED">("ALL");
 
   // Form State
   const [formData, setFormData] = useState<{
@@ -193,6 +199,12 @@ export default function AdminSrcUpdatesPage() {
       }
     });
 
+    const unsubUsersFirestore = subscribeToUsersFromFirestore((remoteUsers) => {
+      if (Array.isArray(remoteUsers) && remoteUsers.length > 0) {
+        setUsers(remoteUsers);
+      }
+    });
+
     const unsubDispatches = subscribeToSrcDispatches((updated) => {
       setDispatches(updated);
     });
@@ -217,6 +229,7 @@ export default function AdminSrcUpdatesPage() {
     return () => {
       unsubDispatches();
       unsubResponses();
+      unsubUsersFirestore();
       window.removeEventListener("src_users_updated", handleUsersUpdate);
       window.removeEventListener("src_tenures_updated", () => {});
     };
@@ -228,33 +241,62 @@ export default function AdminSrcUpdatesPage() {
     const currentTenure: CouncilTenure = getCurrentTenure();
     const tenureLabel = currentTenure?.label || "2025-26";
 
-    // 2. Active registered users set of normalized BT IDs and emails
-    const registeredBtIds = new Set<string>();
+    // Normalization helpers
+    const normBt = (raw?: string | null) => (raw || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const normName = (raw?: string | null) => (raw || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+
+    // 2. Active registered users set of normalized BT IDs, emails, and names
+    const registeredNormBtIds = new Set<string>();
     const registeredEmails = new Set<string>();
+    const registeredUserNames = new Set<string>();
+    const userLookupByBt = new Map<string, RegisteredUserRecord>();
+    const userLookupByEmail = new Map<string, RegisteredUserRecord>();
+    const userLookupByName = new Map<string, RegisteredUserRecord>();
 
     users.forEach((u) => {
       if (!u.isDeleted && u.status !== "deleted") {
-        if (u.btId && u.btId.trim()) {
-          registeredBtIds.add(u.btId.trim().toUpperCase());
+        const uBt = normBt(u.btId);
+        if (uBt) {
+          registeredNormBtIds.add(uBt);
+          userLookupByBt.set(uBt, u);
         }
         if (u.email && u.email.trim()) {
-          registeredEmails.add(u.email.trim().toLowerCase());
+          const em = u.email.trim().toLowerCase();
+          registeredEmails.add(em);
+          userLookupByEmail.set(em, u);
+        }
+        const uName = normName(u.displayName || u.name);
+        if (uName && uName.length >= 3) {
+          registeredUserNames.add(uName);
+          userLookupByName.set(uName, u);
         }
       }
     });
 
     // 3. Map of all unique student SRC positions in this active tenure by BT ID
-    // Tiers: Admin Council, Hosting Committee, Spokespersons, Club Leaders (Heads/Co-Heads), and Club Members
     const tenureMemberMap = new Map<string, {
       btId: string;
+      normBt: string;
       name: string;
       role: string;
+      email?: string;
+      department?: string;
+      avatar?: string;
       tier: "admin" | "spokesperson" | "head" | "cohead" | "member";
     }>();
 
-    const registerMember = (btId?: string, name?: string, role?: string, defaultTier: "admin" | "spokesperson" | "head" | "cohead" | "member" = "member") => {
+    const registerMember = (
+      btId?: string, 
+      name?: string, 
+      role?: string, 
+      defaultTier: "admin" | "spokesperson" | "head" | "cohead" | "member" = "member",
+      email?: string,
+      department?: string,
+      avatar?: string
+    ) => {
       if (!btId || !btId.trim()) return;
       const cleanBt = btId.trim().toUpperCase();
+      const nBt = normBt(btId);
       // Exclude honorary non-student test keys without real student BT IDs
       if (name && /sarvashree|munesh/i.test(name)) {
         return;
@@ -268,11 +310,16 @@ export default function AdminSrcUpdatesPage() {
         tier = defaultTier === "spokesperson" ? "spokesperson" : defaultTier === "admin" ? "admin" : "head";
       }
 
-      if (!tenureMemberMap.has(cleanBt)) {
-        tenureMemberMap.set(cleanBt, {
+      const key = nBt || cleanBt;
+      if (!tenureMemberMap.has(key)) {
+        tenureMemberMap.set(key, {
           btId: cleanBt,
+          normBt: nBt,
           name: name?.trim() || "Council Member",
           role: role?.trim() || "Council Member",
+          email: email?.trim(),
+          department: department?.trim(),
+          avatar: avatar || "",
           tier,
         });
       }
@@ -280,17 +327,16 @@ export default function AdminSrcUpdatesPage() {
 
     // A. Admin Council from current tenure
     (currentTenure.adminCouncil || []).forEach((m) => {
-      registerMember(m.btId, m.name, m.role, "admin");
+      registerMember(m.btId, m.name, m.role, "admin", m.email, m.department, m.avatar);
     });
 
     // B. Hosting Committee & Spokespersons from current tenure
     (currentTenure.hostingCommittee || []).forEach((m) => {
-      registerMember(m.btId, m.name, m.role, "spokesperson");
+      registerMember(m.btId, m.name, m.role, "spokesperson", m.email, m.department, m.avatar);
     });
 
     // C. Chartered Clubs: Leaders (Heads & Co-Heads) and Regular Members
     (currentTenure.clubs || []).forEach((club) => {
-      // Leaders
       const leaders = [
         ...(club.leaders || []),
         ...(club.lead ? [club.lead] : []),
@@ -299,26 +345,26 @@ export default function AdminSrcUpdatesPage() {
       ];
       leaders.forEach((l) => {
         const isCoHead = l.roleType === "coLead" || (l.role && l.role.toLowerCase().includes("co-head"));
-        registerMember(l.btId, l.name, `${club.name} ${isCoHead ? "Co-Head" : "Head"}`, isCoHead ? "cohead" : "head");
+        registerMember(l.btId, l.name, `${club.name} ${isCoHead ? "Co-Head" : "Head"}`, isCoHead ? "cohead" : "head", l.email, l.department, l.avatar);
       });
 
-      // Club Members
       if (Array.isArray(club.members)) {
         club.members.forEach((m) => {
-          registerMember(m.btId, m.name, `${club.name} Member`, "member");
+          registerMember(m.btId, m.name, `${club.name} Member`, "member", undefined, m.department);
         });
       }
     });
 
     // D. In case savedMembers has additional active council/club entries with valid BT IDs for this tenure
     savedMembers.forEach((sm) => {
-      if (sm.btId && !tenureMemberMap.has(sm.btId.trim().toUpperCase())) {
+      const nBt = normBt(sm.btId);
+      if (sm.btId && !tenureMemberMap.has(nBt) && !tenureMemberMap.has(sm.btId.trim().toUpperCase())) {
         const isCoHead = sm.designation?.toLowerCase().includes("co-head");
         const isHead = sm.designation?.toLowerCase().includes("head") || sm.level === "Club Leadership";
         const isSpokes = sm.level === "Hosting Committee" || sm.level === "Spokesperson";
         const isAdmin = sm.level === "Admin Council";
         const tier = isCoHead ? "cohead" : isHead ? "head" : isSpokes ? "spokesperson" : isAdmin ? "admin" : "member";
-        registerMember(sm.btId, sm.name, sm.designation, tier);
+        registerMember(sm.btId, sm.name, sm.designation, tier, sm.email, sm.department, sm.avatar);
       }
     });
 
@@ -326,10 +372,11 @@ export default function AdminSrcUpdatesPage() {
     users.forEach((u) => {
       if (!u.isDeleted && u.status !== "deleted" && u.btId && u.btId.trim()) {
         const cleanBt = u.btId.trim().toUpperCase();
-        if (!tenureMemberMap.has(cleanBt)) {
+        const nBt = normBt(u.btId);
+        if (!tenureMemberMap.has(nBt) && !tenureMemberMap.has(cleanBt)) {
           const designation = resolveDesignationByBtId(cleanBt, u.displayName || u.name || undefined);
           if (designation && designation.designationBadge) {
-            registerMember(cleanBt, u.displayName || u.name || "Student", designation.designationBadge, designation.isCouncilOfficer ? "admin" : "member");
+            registerMember(cleanBt, u.displayName || u.name || "Student", designation.designationBadge, designation.isCouncilOfficer ? "admin" : "member", u.email || undefined, u.department, u.photoURL || undefined);
           }
         }
       }
@@ -338,11 +385,59 @@ export default function AdminSrcUpdatesPage() {
     const allTenureMembersList = Array.from(tenureMemberMap.values());
     const totalTenureMembers = allTenureMembersList.length;
 
-    // Filter members that have an active registered account on the portal
-    const onboardedMembers = allTenureMembersList.filter((m) => registeredBtIds.has(m.btId));
+    // Check if each member is linked via BT ID, Email, or Name
+    const membersList = allTenureMembersList.map((m) => {
+      let isLinked = false;
+      let matchedBy: "BT ID" | "Email" | "Name" | null = null;
+      let matchedAccount: RegisteredUserRecord | undefined = undefined;
+
+      // 1. Check BT ID (exact or normalized alphanumeric)
+      if (m.normBt && registeredNormBtIds.has(m.normBt)) {
+        isLinked = true;
+        matchedBy = "BT ID";
+        matchedAccount = userLookupByBt.get(m.normBt);
+      }
+
+      // 2. Fallback: Match by email (if email was provided in council roster or Google Sign-In)
+      if (!isLinked && m.email && registeredEmails.has(m.email.toLowerCase().trim())) {
+        isLinked = true;
+        matchedBy = "Email";
+        matchedAccount = userLookupByEmail.get(m.email.toLowerCase().trim());
+      }
+
+      // 3. Fallback: Match by student name
+      if (!isLinked && m.name) {
+        const cName = normName(m.name);
+        if (cName && cName.length >= 4) {
+          if (registeredUserNames.has(cName)) {
+            isLinked = true;
+            matchedBy = "Name";
+            matchedAccount = userLookupByName.get(cName);
+          } else {
+            for (const regName of registeredUserNames) {
+              if (regName.includes(cName) || cName.includes(regName)) {
+                isLinked = true;
+                matchedBy = "Name";
+                matchedAccount = userLookupByName.get(regName);
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      return {
+        ...m,
+        isLinked,
+        matchedBy,
+        matchedUserEmail: matchedAccount?.email || null,
+        matchedUserName: matchedAccount?.displayName || matchedAccount?.name || null,
+      };
+    });
+
+    const onboardedMembers = membersList.filter((m) => m.isLinked);
     const onboardedCount = onboardedMembers.length;
 
-    // Breakdown counts of members using the portal
     const onboardedAdmins = onboardedMembers.filter((m) => m.tier === "admin").length;
     const onboardedSpokespersons = onboardedMembers.filter((m) => m.tier === "spokesperson").length;
     const onboardedHeads = onboardedMembers.filter((m) => m.tier === "head").length;
@@ -361,6 +456,7 @@ export default function AdminSrcUpdatesPage() {
       onboardedHeads,
       onboardedCoHeads,
       onboardedRegularMembers,
+      membersList,
     };
   }, [users, savedMembers]);
 
@@ -724,9 +820,15 @@ export default function AdminSrcUpdatesPage() {
                 <span className="w-1.5 h-1.5 rounded-full bg-[#17458F] animate-pulse"></span>
                 Tenure {councilAdoption.tenureLabel}
               </span>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                {councilAdoption.onboardedCount} of {councilAdoption.totalTenureMembers} Linked ({councilAdoption.percent}%)
-              </span>
+              <button
+                type="button"
+                onClick={() => setIsAdoptionModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-[0.98]"
+                title="Click to view detailed council adoption breakdown"
+              >
+                <span>{councilAdoption.onboardedCount} of {councilAdoption.totalTenureMembers} Linked ({councilAdoption.percent}%)</span>
+                <span className="text-[10px] text-emerald-600 underline font-medium">Details →</span>
+              </button>
             </div>
             <p className="text-xs text-slate-600 leading-relaxed">
               <strong className="text-slate-900 font-semibold">{councilAdoption.onboardedCount} SRC members</strong> (admins, mentors, spokespersons, club heads, co-heads &amp; members) have active portal accounts linked by BT ID in this tenure.
@@ -735,6 +837,14 @@ export default function AdminSrcUpdatesPage() {
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0 self-end md:self-center">
+          <button
+            type="button"
+            onClick={() => setIsAdoptionModalOpen(true)}
+            className="h-8 px-3 rounded-lg border border-[#17458F]/20 bg-white hover:bg-blue-50/60 text-[#17458F] text-xs font-semibold tracking-normal inline-flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+          >
+            <Users className="w-3.5 h-3.5 text-[#17458F]" />
+            <span>Adoption Breakdown</span>
+          </button>
           <Link
             href="/admin/users"
             className="h-8 px-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-[#17458F] text-xs font-semibold tracking-normal inline-flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
@@ -1628,6 +1738,151 @@ export default function AdminSrcUpdatesPage() {
         initialData={editingSrcFormDispatch}
         savedMembers={savedMembers}
       />
+
+      {/* COUNCIL ADOPTION BREAKDOWN MODAL */}
+      <Modal
+        isOpen={isAdoptionModalOpen}
+        onClose={() => setIsAdoptionModalOpen(false)}
+        title={`Council Portal Adoption Roster • Tenure ${councilAdoption.tenureLabel}`}
+        maxWidth="2xl"
+      >
+        <div className="space-y-4 pt-1">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div>
+              <p className="text-xs text-slate-500">
+                Official council officers and their portal account linking status for this tenure.
+              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs font-bold text-slate-800">
+                  {councilAdoption.onboardedCount} of {councilAdoption.totalTenureMembers} Linked ({councilAdoption.percent}%)
+                </span>
+                <span className="text-xs text-slate-400">•</span>
+                <span className="text-xs text-emerald-600 font-semibold">
+                  {councilAdoption.onboardedAdmins} Admins Active
+                </span>
+              </div>
+            </div>
+
+            {/* Filter buttons */}
+            <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 self-start sm:self-auto shrink-0">
+              <button
+                type="button"
+                onClick={() => setAdoptionFilterTab("ALL")}
+                className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer ${
+                  adoptionFilterTab === "ALL" ? "bg-white text-slate-900 shadow-2xs font-bold" : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                All ({councilAdoption.totalTenureMembers})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdoptionFilterTab("LINKED")}
+                className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer ${
+                  adoptionFilterTab === "LINKED" ? "bg-emerald-50 text-emerald-700 font-bold" : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Linked ({councilAdoption.onboardedCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdoptionFilterTab("UNLINKED")}
+                className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer ${
+                  adoptionFilterTab === "UNLINKED" ? "bg-amber-50 text-amber-700 font-bold" : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Unlinked ({Math.max(councilAdoption.totalTenureMembers - councilAdoption.onboardedCount, 0)})
+              </button>
+            </div>
+          </div>
+
+          {/* Search box */}
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={adoptionSearchQuery}
+              onChange={(e) => setAdoptionSearchQuery(e.target.value)}
+              placeholder="Search member name, BT ID, or role..."
+              className="w-full h-9 pl-9 pr-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#17458F]/20 focus:border-[#17458F]"
+            />
+          </div>
+
+          {/* Members list */}
+          <div className="max-h-[380px] overflow-y-auto space-y-2 pr-1 divide-y divide-slate-100">
+            {councilAdoption.membersList
+              .filter((m) => {
+                if (adoptionFilterTab === "LINKED" && !m.isLinked) return false;
+                if (adoptionFilterTab === "UNLINKED" && m.isLinked) return false;
+                if (adoptionSearchQuery.trim()) {
+                  const q = adoptionSearchQuery.toLowerCase();
+                  return (
+                    m.name.toLowerCase().includes(q) ||
+                    m.btId.toLowerCase().includes(q) ||
+                    m.role.toLowerCase().includes(q) ||
+                    (m.email && m.email.toLowerCase().includes(q))
+                  );
+                }
+                return true;
+              })
+              .map((m, idx) => (
+                <div key={`${m.btId}-${idx}`} className="pt-2 pb-2 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 font-bold text-xs text-slate-600">
+                      {m.name.charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-xs text-slate-900 truncate">{m.name}</span>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-[#17458F] border border-blue-200">
+                          {m.role}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] text-slate-500 font-mono mt-0.5 flex-wrap">
+                        <span>{m.btId}</span>
+                        {m.department && <span className="font-sans text-slate-400">• {m.department}</span>}
+                        {m.matchedUserEmail && (
+                          <span className="font-sans text-emerald-600 text-[10px]">({m.matchedUserEmail})</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 flex items-center gap-2">
+                    {m.isLinked ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        <span>Linked</span>
+                        {m.matchedBy && <span className="text-[9px] text-emerald-600/80 font-normal">({m.matchedBy})</span>}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title="No active portal account matched this BT ID or email">
+                        <AlertCircle className="w-3 h-3 text-amber-600" />
+                        <span>No Account Linked</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+          </div>
+
+          <div className="pt-3 border-t border-slate-200 flex items-center justify-between">
+            <Link
+              href="/admin/users"
+              className="text-xs text-[#17458F] hover:underline font-semibold inline-flex items-center gap-1"
+            >
+              <span>Manage User Roster in User Management →</span>
+            </Link>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsAdoptionModalOpen(false)}
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
