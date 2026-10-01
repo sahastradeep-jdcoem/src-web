@@ -49,7 +49,7 @@ import { RegistrationRecord, EventItem, SrcFormField, CustomQuestion } from "@/t
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { getStoredEvents, syncEventsFromFirestore } from "@/lib/eventsStore";
+import { getStoredEvents, syncEventsFromFirestore, resolveTenureForEvent } from "@/lib/eventsStore";
 import { 
   getDepartmentShortName, 
   resolveCanonicalDepartmentName, 
@@ -57,7 +57,7 @@ import {
   subscribeToDepartments, 
   syncDepartmentsFromFirestore 
 } from "@/lib/departmentsStore";
-import { getStoredTenures, syncTenuresFromFirestore, subscribeToTenures, CouncilTenure } from "@/lib/tenureStore";
+import { getStoredTenures, syncTenuresFromFirestore, subscribeToTenures, getCurrentTenure, CouncilTenure } from "@/lib/tenureStore";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { db } from "@/lib/firebase/config";
 import { doc, updateDoc } from "firebase/firestore";
@@ -84,9 +84,26 @@ type ActiveTab = "summary" | "question" | "individual" | "table";
 export default function AdminRegistrationsPage() {
   const [registrations, setRegistrations] = useState<RegistrationRecord[]>([]);
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
-  const [tenuresList, setTenuresList] = useState<CouncilTenure[]>([]);
+  const [tenuresList, setTenuresList] = useState<CouncilTenure[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return getStoredTenures();
+      } catch {}
+    }
+    return [];
+  });
   const [departmentsList, setDepartmentsList] = useState<string[]>([]);
-  const [selectedTenureId, setSelectedTenureId] = useState<string>("all");
+  const [userSelectedTenure, setUserSelectedTenure] = useState(false);
+  const [selectedTenureId, setSelectedTenureId] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = getStoredTenures();
+        const curr = stored.find((t) => t.isCurrent) || stored.find((t) => t.status === "active") || stored[0];
+        if (curr) return curr.id;
+      } catch {}
+    }
+    return "tenure-2026-27";
+  });
   const [activeTab, setActiveTab] = useState<ActiveTab>("summary");
   const [selectedEventSlug, setSelectedEventSlug] = useState<string>("all");
   
@@ -137,9 +154,21 @@ export default function AdminRegistrationsPage() {
       if (evts && evts.length > 0) setEventsList(evts);
     });
 
-    setTenuresList(getStoredTenures());
+    const initialTenures = getStoredTenures();
+    setTenuresList(initialTenures);
+    if (!userSelectedTenure && initialTenures.length > 0) {
+      const active = initialTenures.find((t) => t.isCurrent) || initialTenures.find((t) => t.status === "active") || initialTenures[0];
+      if (active) setSelectedTenureId(active.id);
+    }
+
     syncTenuresFromFirestore().then((res) => {
-      if (res && res.length > 0) setTenuresList(res);
+      if (res && res.length > 0) {
+        setTenuresList(res);
+        if (!userSelectedTenure) {
+          const active = res.find((t) => t.isCurrent) || res.find((t) => t.status === "active") || res[0];
+          if (active) setSelectedTenureId(active.id);
+        }
+      }
     });
 
     setDepartmentsList(getStoredDepartments());
@@ -156,6 +185,10 @@ export default function AdminRegistrationsPage() {
     const unsubscribeTenures = subscribeToTenures((cloudTenures) => {
       if (cloudTenures && Array.isArray(cloudTenures) && cloudTenures.length > 0) {
         setTenuresList(cloudTenures);
+        if (!userSelectedTenure) {
+          const active = cloudTenures.find((t) => t.isCurrent) || cloudTenures.find((t) => t.status === "active") || cloudTenures[0];
+          if (active) setSelectedTenureId(active.id);
+        }
       }
     });
 
@@ -358,11 +391,33 @@ export default function AdminRegistrationsPage() {
   const tenureFilteredEvents = useMemo(() => {
     if (selectedTenureId === "all") return eventsList;
     const matchedTenure = tenuresList.find((t) => t.id === selectedTenureId);
-    if (!matchedTenure) return eventsList;
-    if (matchedTenure.isCurrent || matchedTenure.status === "active") {
-      return eventsList;
+    if (!matchedTenure) {
+      return eventsList.filter((e) => {
+        const resolved = resolveTenureForEvent(e, tenuresList);
+        return resolved ? resolved.id === selectedTenureId : e.tenureId === selectedTenureId;
+      });
     }
-    return matchedTenure.events || [];
+
+    if (matchedTenure.isCurrent || matchedTenure.status === "active") {
+      // By default, in the search list show current tenure events only!
+      return eventsList.filter((e) => {
+        const resolved = resolveTenureForEvent(e, tenuresList);
+        return resolved ? resolved.id === matchedTenure.id : (e.tenureId === matchedTenure.id || !e.tenureId);
+      });
+    }
+
+    // Past tenure: load past tenure events only when user changes the filter manually
+    const snapshotEvents = Array.isArray(matchedTenure.events) ? matchedTenure.events : [];
+    const pastFromStore = eventsList.filter((e) => {
+      const resolved = resolveTenureForEvent(e, tenuresList);
+      return resolved ? resolved.id === matchedTenure.id : e.tenureId === matchedTenure.id;
+    });
+
+    const map = new Map<string, EventItem>();
+    [...snapshotEvents, ...pastFromStore].forEach((ev) => {
+      if (ev && (ev.id || ev.slug)) map.set(ev.id || ev.slug, ev);
+    });
+    return Array.from(map.values());
   }, [eventsList, selectedTenureId, tenuresList]);
 
   // Autocomplete / search filtered events for dropdown
@@ -533,7 +588,7 @@ export default function AdminRegistrationsPage() {
         return list.filter((r: any) => r.tenureId === selectedTenureId);
       }
 
-      const tenureEvents = currentTenure.events || [];
+      const tenureEvents = tenureFilteredEvents;
       const tenureEventSlugs = new Set(tenureEvents.map((e) => (e.slug || "").toLowerCase()));
       const tenureEventNames = new Set(tenureEvents.map((e) => (e.name || "").toLowerCase()));
       const tenureEventIds = new Set(tenureEvents.map((e) => (e.id || "").toLowerCase()));
@@ -560,9 +615,10 @@ export default function AdminRegistrationsPage() {
           ) {
             return true;
           }
+          return false;
         }
 
-        // 2. Match via event association
+        // 2. Match via event association with this tenure's events
         const rSlug = (r.eventSlug || "").toLowerCase();
         const rId = (r.eventId || "").toLowerCase();
         const rName = (r.eventName || "").toLowerCase();
@@ -575,24 +631,18 @@ export default function AdminRegistrationsPage() {
           return true;
         }
 
-        // 3. Current live tenure matches all active events in eventsList
-        if (isActiveTenure) {
-          const matchesCurrentEvent = eventsList.some((e) =>
-            (e.id && (e.id === r.eventId || e.id === r.eventSlug)) ||
-            (e.slug && (e.slug === r.eventSlug || e.slug === r.eventId)) ||
-            (e.name && e.name.toLowerCase() === rName)
-          );
-          if (matchesCurrentEvent) return true;
-          if (!r.tenureId) return true;
-        }
-
-        // 4. Historical archived tenure boundary check (only when both startDate and endDate exist)
-        if (!isNaN(tenureStartMs) && !isNaN(tenureEndMs) && !isActiveTenure) {
+        // 3. Fallback timestamp check within tenure boundaries (only if event couldn't be matched)
+        if (!isNaN(tenureStartMs)) {
           const targetTime = r.paidAt || r.registeredAt || r.createdAt || r.timestamp;
           if (targetTime) {
             const t = new Date(targetTime).getTime();
-            if (!isNaN(t) && t >= tenureStartMs && t <= tenureEndMs) {
-              return true;
+            if (!isNaN(t)) {
+              if (isActiveTenure && t >= tenureStartMs) {
+                return true;
+              }
+              if (!isActiveTenure && !isNaN(tenureEndMs) && t >= tenureStartMs && t <= tenureEndMs) {
+                return true;
+              }
             }
           }
         }
@@ -655,7 +705,7 @@ export default function AdminRegistrationsPage() {
     }
 
     return list;
-  }, [registrations, selectedEventSlug, selectedTenureId, currentSelectedEventObj, eventsList, tenuresList]);
+  }, [registrations, selectedEventSlug, selectedTenureId, currentSelectedEventObj, eventsList, tenuresList, tenureFilteredEvents]);
 
   // Export Excel button is enabled only after selecting a specific event filter
   const isExportDisabled = selectedEventSlug === "all" || eventRegistrations.length === 0;
@@ -1531,7 +1581,9 @@ export default function AdminRegistrationsPage() {
               <select
                 value={selectedTenureId}
                 onChange={(e) => {
+                  setUserSelectedTenure(true);
                   setSelectedTenureId(e.target.value);
+                  setSelectedEventSlug("all");
                   setIndividualIndex(0);
                 }}
                 className="w-full pl-9 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:outline-none focus:border-[#17458F] cursor-pointer appearance-none shadow-2xs"
