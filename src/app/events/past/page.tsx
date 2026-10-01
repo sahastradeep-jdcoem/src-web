@@ -77,6 +77,11 @@ export default function PastTenureEventsPage() {
       if (Array.isArray(t.events)) {
         t.events.forEach((rawEvt, idx) => {
           if (rawEvt) {
+            // Strictly exclude any event that belongs to the current live tenure by date
+            const resolved = resolveTenureForEvent(rawEvt, tenuresList);
+            if (resolved && resolved.isCurrent) {
+              return;
+            }
             const sanitized = sanitizeEventItem(rawEvt);
             const key = sanitized.id || sanitized.slug || `archive-${t.id}-${idx}`;
             map.set(key, {
@@ -87,9 +92,9 @@ export default function PastTenureEventsPage() {
               status: sanitized.status || "Completed",
               date: sanitized.date || "Past Session",
               venue: sanitized.venue || "Campus",
-              tenureLabel: t.label,
-              tenureNumber: t.tenureNumber,
-              tenureId: t.id,
+              tenureLabel: resolved?.label || t.label,
+              tenureNumber: resolved?.tenureNumber || t.tenureNumber,
+              tenureId: resolved?.id || t.id,
             });
           }
         });
@@ -100,11 +105,17 @@ export default function PastTenureEventsPage() {
     const storedEvents = getStoredEvents();
     storedEvents.forEach((evt) => {
       const resolved = resolveTenureForEvent(evt, tenuresList);
+      // Strictly exclude any event that belongs to current live tenure
+      if (resolved && resolved.isCurrent) {
+        return;
+      }
       const matchingTenure = resolved && !resolved.isCurrent && !resolved.isDraft
         ? resolved
-        : archivedTenures.find(
-            (at) => (evt.tenureId && evt.tenureId === at.id) || (evt.tenureLabel && evt.tenureLabel === at.label)
-          );
+        : (evt.tenureId || evt.tenureLabel)
+          ? archivedTenures.find(
+              (at) => (evt.tenureId && evt.tenureId === at.id) || (evt.tenureLabel && evt.tenureLabel === at.label)
+            )
+          : null;
       if (matchingTenure) {
         const sanitized = sanitizeEventItem(evt);
         const key = sanitized.id || sanitized.slug;

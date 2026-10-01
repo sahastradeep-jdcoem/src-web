@@ -13,7 +13,7 @@ import {
   stripCategoryAndLevel,
   hydrateClubAvatars
 } from "./councilStore";
-import { getStoredEvents, saveStoredEvents } from "./eventsStore";
+import { getStoredEvents, saveStoredEvents, parseDateStringToTimestamp } from "./eventsStore";
 import { 
   getSiteContentFromFirestore, 
   saveSiteContentToFirestore,
@@ -450,7 +450,22 @@ export function getStoredTenures(): CouncilTenure[] {
 
     let resolvedFounders = stripCategoryAndLevel(isFirstTenure ? (t.foundingMembers || activeFounders) : []);
 
-    const cleanEvents = Array.isArray(t.events) ? t.events : [];
+    const currentTenureItem = list.find((item, i) => hasCurrent ? item.isCurrent : i === 0);
+    const currentStartTs = currentTenureItem?.startDate ? parseDateStringToTimestamp(currentTenureItem.startDate) : null;
+
+    const rawEvents = Array.isArray(t.events) ? t.events : [];
+    const cleanEvents = isArchived && currentStartTs
+      ? rawEvents.filter((e) => {
+          const dStr = e.rawDate || e.date;
+          if (dStr) {
+            const evTs = parseDateStringToTimestamp(dStr);
+            if (evTs !== null && evTs >= currentStartTs) {
+              return false; // Belongs to current live tenure, exclude from past tenure archive
+            }
+          }
+          return true;
+        })
+      : rawEvents;
 
     return {
       ...t,
@@ -652,7 +667,8 @@ export async function switchActiveTenure(targetTenureId: string, tenureBeginDate
   const beginIso = tenureBeginDate 
     ? new Date(tenureBeginDate).toISOString() 
     : new Date().toISOString();
-  const endIso = new Date().toISOString();
+  const beginTs = new Date(beginIso).getTime();
+  const endIso = beginIso;
 
   // Find currently active tenure to know its ID and preserve for Undo capability
   const currentlyActive = tenures.find((t) => t.isCurrent);
@@ -666,14 +682,36 @@ export async function switchActiveTenure(targetTenureId: string, tenureBeginDate
   const currentActiveClubs = getStoredClubs();
   const currentActiveEvents = getStoredEvents();
 
-  // Tag all active events with outgoing tenure ID and label so they permanently belong to that past tenure
+  // Segregate events:
+  // Outgoing past events: events with date strictly before beginTs
+  // Incoming / continuing events: events with date >= beginTs (or scheduled for target tenure)
   const outgoingTenureId = currentlyActive?.id || "tenure-2025-26";
   const outgoingTenureLabel = currentlyActive?.label || "2025-26";
-  const stampedPastEvents = currentActiveEvents.map((e) => ({
-    ...e,
-    tenureId: e.tenureId || outgoingTenureId,
-    tenureLabel: e.tenureLabel || outgoingTenureLabel,
-  }));
+  const targetTenureLabel = targetOriginal?.label || "2026-27";
+
+  const pastEventsForArchive: EventItem[] = [];
+  const futureOrCurrentEventsForTarget: EventItem[] = [];
+
+  for (const e of currentActiveEvents) {
+    const targetDateStr = e.rawDate || e.date;
+    const evTs = targetDateStr ? parseDateStringToTimestamp(targetDateStr) : null;
+
+    if (evTs !== null && evTs >= beginTs) {
+      // Belongs to the new active tenure!
+      futureOrCurrentEventsForTarget.push({
+        ...e,
+        tenureId: targetTenureId,
+        tenureLabel: targetTenureLabel,
+      });
+    } else {
+      // Historical event that took place in the outgoing tenure
+      pastEventsForArchive.push({
+        ...e,
+        tenureId: e.tenureId || outgoingTenureId,
+        tenureLabel: e.tenureLabel || outgoingTenureLabel,
+      });
+    }
+  }
 
   // Stash outgoing tenure draft stores so nothing is lost
   if (currentlyActive) {
@@ -701,12 +739,12 @@ export async function switchActiveTenure(targetTenureId: string, tenureBeginDate
         isCurrent: false,
         isDraft: false,
         status: "archived" as const,
-        endDate: tenure.endDate || endIso,
+        endDate: beginIso,
         adminCouncil: currentActiveTeam,
         hostingCommittee: currentActiveHosting,
         foundingMembers: currentActiveFounders,
         clubs: currentActiveClubs,
-        events: stampedPastEvents,
+        events: pastEventsForArchive,
       };
     }
     return tenure;
@@ -784,14 +822,24 @@ export async function switchActiveTenure(targetTenureId: string, tenureBeginDate
 
   await saveStoredClubs(clubsToActivate);
 
-  // Target tenure's own events:
-  const newTenureEvents = Array.isArray(targetTenure.events)
+  // Target tenure's own events: combine ongoing/future events with pre-configured events
+  const targetExistingEvents = Array.isArray(targetTenure.events)
     ? targetTenure.events.map((e) => ({
         ...e,
         tenureId: targetTenure.id,
         tenureLabel: targetTenure.label,
       }))
     : [];
+
+  const dedupedTargetEventsMap = new Map<string, EventItem>();
+  for (const e of [...futureOrCurrentEventsForTarget, ...targetExistingEvents]) {
+    dedupedTargetEventsMap.set(e.id || e.slug, {
+      ...e,
+      tenureId: targetTenure.id,
+      tenureLabel: targetTenure.label,
+    });
+  }
+  const newTenureEvents = Array.from(dedupedTargetEventsMap.values());
 
   targetTenure.adminCouncil = councilToActivate;
   targetTenure.hostingCommittee = targetHosting || [];
@@ -802,8 +850,8 @@ export async function switchActiveTenure(targetTenureId: string, tenureBeginDate
   // Persist updated tenures
   await saveStoredTenures(updatedTenures);
 
-  // Persist events: all past events stamped with outgoing tenure, plus target tenure events
-  const combinedEvents = [...stampedPastEvents, ...newTenureEvents];
+  // Persist events: past events stamped with outgoing tenure, plus target tenure events
+  const combinedEvents = [...pastEventsForArchive, ...newTenureEvents];
   const dedupedEventsMap = new Map<string, EventItem>();
   for (const e of combinedEvents) {
     dedupedEventsMap.set(e.id || e.slug, e);

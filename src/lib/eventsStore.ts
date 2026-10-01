@@ -551,12 +551,23 @@ export function resolveTenureForEvent(
   };
 
   const getTenureEndTs = (t: CouncilTenure): number => {
+    if (t.isCurrent) {
+      return Number.MAX_SAFE_INTEGER;
+    }
+    // Calculate based on next tenure start date if available
+    const tStart = getTenureStartTs(t);
+    const subsequentTenures = tenuresList
+      .filter((other) => other.id !== t.id && getTenureStartTs(other) > tStart)
+      .sort((a, b) => getTenureStartTs(a) - getTenureStartTs(b));
+    if (subsequentTenures.length > 0) {
+      const nextStart = getTenureStartTs(subsequentTenures[0]);
+      if (nextStart > tStart) {
+        return nextStart - 1; // Ends strictly before next tenure begins
+      }
+    }
     if (t.endDate) {
       const ts = parseDateStringToTimestamp(t.endDate, true);
       if (ts) return ts;
-    }
-    if (t.isCurrent) {
-      return Number.MAX_SAFE_INTEGER;
     }
     const match = (t.label || t.academicYear || "").match(/\d{4}\s*[-–/]\s*(\d{2,4})/);
     if (match) {
@@ -572,29 +583,19 @@ export function resolveTenureForEvent(
   if (targetDateStr && !/\b(coming soon|tba|to be announced|tbd)\b/i.test(targetDateStr)) {
     const eventTs = parseDateStringToTimestamp(targetDateStr);
     if (eventTs) {
-      const nonDraftTenures = tenuresList.filter((t) => !t.isDraft || t.isCurrent);
-      const candidates = nonDraftTenures.length > 0 ? nonDraftTenures : tenuresList;
-
-      // Check past/archived tenures with closed intervals first
-      for (const t of candidates) {
-        if (!t.isCurrent) {
-          const s = getTenureStartTs(t);
-          const e = getTenureEndTs(t);
-          if (eventTs >= s && eventTs <= e) {
-            return t;
-          }
-        }
-      }
-
-      // Check current active tenure
       const currentStart = getTenureStartTs(currentTenure);
-      const currentEnd = getTenureEndTs(currentTenure);
-      if (eventTs >= currentStart && eventTs <= currentEnd) {
+
+      // Rule A: If event date is on or after current active tenure's start date,
+      // it DEFINITIVELY belongs to the current active tenure!
+      if (eventTs >= currentStart) {
         return currentTenure;
       }
 
-      // Check any tenure whose interval covers the event
-      for (const t of tenuresList) {
+      // Rule B: If event happened before current tenure start, resolve to appropriate past/archived tenure
+      const nonDraftTenures = tenuresList.filter((t) => !t.isDraft && !t.isCurrent);
+      const candidates = nonDraftTenures.length > 0 ? nonDraftTenures : tenuresList.filter((t) => !t.isCurrent);
+
+      for (const t of candidates) {
         const s = getTenureStartTs(t);
         const e = getTenureEndTs(t);
         if (eventTs >= s && eventTs <= e) {
@@ -602,23 +603,17 @@ export function resolveTenureForEvent(
         }
       }
 
-      // If event happened in the past before current tenure start, map to the closest past tenure
-      if (eventTs < currentStart) {
-        const pastTenures = candidates.filter((t) => !t.isCurrent);
-        if (pastTenures.length > 0) {
-          pastTenures.sort((a, b) => getTenureStartTs(b) - getTenureStartTs(a));
-          return pastTenures[0];
-        }
+      // If event happened before current tenure start, map to closest past tenure
+      if (candidates.length > 0) {
+        const pastSorted = [...candidates].sort((a, b) => getTenureStartTs(b) - getTenureStartTs(a));
+        return pastSorted[0];
       }
 
-      // If event is after current tenure start, it belongs to the current tenure
-      if (eventTs >= currentStart) {
-        return currentTenure;
-      }
+      return currentTenure;
     }
   }
 
-  // 2. Secondary Fallback: Use explicit tags if event has no parseable date
+  // 2. Secondary Fallback: Use explicit tags only if event has no parseable date
   if (event.tenureId) {
     const byId = tenuresList.find((t) => t.id === event.tenureId);
     if (byId) return byId;
@@ -634,6 +629,7 @@ export function resolveTenureForEvent(
 /**
  * Resolves events to show on the main public calendar (/events).
  * Uses Tenure Active Date as the authoritative factor to segregate current vs older tenure events.
+ * Past tenure events are strictly isolated to /events/past as per user directives.
  */
 export function getMainCalendarEvents(
   eventsList: EventItem[],
@@ -666,9 +662,8 @@ export function getMainCalendarEvents(
 
   const currentTenure = validTenures.find((t) => t.isCurrent) || validTenures[0];
 
-  // Determine which events belong to the current tenure vs older tenures based on TENURE ACTIVE DATE
+  // Determine which events belong to the current tenure based on TENURE ACTIVE DATE
   const currentTenureEvents: EventItem[] = [];
-  const olderEventsFromStore: EventItem[] = [];
 
   for (const evt of validEvents) {
     const resolvedTenure = resolveTenureForEvent(evt, validTenures);
@@ -679,12 +674,6 @@ export function getMainCalendarEvents(
         ...evt,
         tenureId: currentTenure.id,
         tenureLabel: currentTenure.label,
-      });
-    } else {
-      olderEventsFromStore.push({
-        ...evt,
-        tenureId: resolvedTenure ? resolvedTenure.id : evt.tenureId,
-        tenureLabel: resolvedTenure ? resolvedTenure.label : evt.tenureLabel,
       });
     }
   }
@@ -700,81 +689,13 @@ export function getMainCalendarEvents(
       !e.parentEventSlug &&
       getEventEffectiveStatus(e) === "Completed"
   );
-  const currentTenureCompletedCount = currentTenureCompleted.length;
 
-  // Rule: Until a new tenure completes at least 3 events, keep older events visible
-  // so that the events page does not look empty.
-  const archivedTenures = validTenures.filter((t) => !t.isCurrent && (t.status === "archived" || !t.isDraft));
-  const shouldIncludeOlderEvents =
-    currentTenureCompletedCount < 3 && (archivedTenures.length > 0 || olderEventsFromStore.length > 0);
-
-  if (!shouldIncludeOlderEvents) {
-    return {
-      events: sortEventsByDate(currentTenureEvents),
-      isShowingOlderEvents: false,
-      currentTenureCompletedCount,
-    };
-  }
-
-  // Gather older events from archived tenures and older tagged events
-  const olderEventsMap = new Map<string, EventItem>();
-
-  // 1. From archived tenures snapshots
-  for (const at of archivedTenures) {
-    if (Array.isArray(at.events)) {
-      for (const rawEvt of at.events) {
-        if (rawEvt && (rawEvt.id || rawEvt.slug)) {
-          const sanitized = sanitizeEventItem(rawEvt);
-          const key = sanitized.id || sanitized.slug;
-          olderEventsMap.set(key, {
-            ...sanitized,
-            tenureLabel: sanitized.tenureLabel || at.label,
-            tenureId: sanitized.tenureId || at.id,
-          });
-        }
-      }
-    }
-  }
-
-  // 2. From older events found in events store / validEvents
-  for (const evt of olderEventsFromStore) {
-    const key = evt.id || evt.slug;
-    if (!olderEventsMap.has(key)) {
-      olderEventsMap.set(key, evt);
-    }
-  }
-
-  // 3. Fallback: Also check stored events if olderEventsMap is still empty
-  if (olderEventsMap.size === 0 && typeof window !== "undefined") {
-    try {
-      const stored = getStoredEvents();
-      for (const evt of stored) {
-        const resolved = resolveTenureForEvent(evt, validTenures);
-        if (resolved && resolved.id !== currentTenure.id) {
-          const key = evt.id || evt.slug;
-          if (!olderEventsMap.has(key)) {
-            olderEventsMap.set(key, {
-              ...evt,
-              tenureLabel: resolved.label,
-              tenureId: resolved.id,
-            });
-          }
-        }
-      }
-    } catch {}
-  }
-
-  // Deduplicate: current tenure events always take priority over older events
-  const currentKeys = new Set(currentTenureEvents.map((e) => e.id || e.slug));
-  const olderEventsToInclude = Array.from(olderEventsMap.values()).filter(
-    (e) => !currentKeys.has(e.id || e.slug)
-  );
-
-  const combined = [...currentTenureEvents, ...olderEventsToInclude];
+  // Past tenure events are strictly isolated to /events/past as requested by user.
+  // The main calendar (/events) displays strictly current tenure events.
   return {
-    events: sortEventsByDate(combined),
-    isShowingOlderEvents: olderEventsToInclude.length > 0,
-    currentTenureCompletedCount,
+    events: sortEventsByDate(currentTenureEvents),
+    isShowingOlderEvents: false,
+    currentTenureCompletedCount: currentTenureCompleted.length,
   };
 }
 
