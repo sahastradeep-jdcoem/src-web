@@ -841,35 +841,28 @@ export default function AdminTeamPage() {
   };
 
   const handleSyncToFounding = () => {
-    const listToSync = councilMembers.length > 0 ? councilMembers : getStoredCouncilMembers();
+    const isFirst = selectedTenure?.id === "tenure-2025-26" || selectedTenure?.label?.includes("2025") || selectedTenure?.tenureNumber?.includes("1st");
+    const firstTenure = tenures.find((t) => t.id === "tenure-2025-26" || t.label?.includes("2025") || t.tenureNumber?.includes("1st"));
+    const listToSync = (isFirst && councilMembers.length > 0)
+      ? councilMembers
+      : (Array.isArray(firstTenure?.adminCouncil) && firstTenure.adminCouncil.length > 0
+          ? firstTenure.adminCouncil
+          : adminCouncilMembers);
     if (!Array.isArray(listToSync) || listToSync.length === 0) {
-      alert("No council members found to sync.");
+      alert("No 1st tenure council members found to sync.");
       return;
     }
     const synced = syncCouncilAdminsToFounding(listToSync, true);
     setFoundingMembersList(synced);
-    if (selectedTenure) {
-      updateTenureRoster(selectedTenure.id, { foundingMembers: synced }, true);
-      setTenures((prev) => prev.map((t) => t.id === selectedTenure.id ? { ...t, foundingMembers: synced } : t));
-    }
+    const targetTenureId = firstTenure?.id || selectedTenure?.id || "tenure-2025-26";
+    updateTenureRoster(targetTenureId, { foundingMembers: synced }, true);
+    setTenures((prev) => prev.map((t) => t.id === targetTenureId ? { ...t, foundingMembers: synced } : t));
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
   };
 
   const handleSyncFromAdmins = () => {
-    const listToSync = councilMembers.length > 0 ? councilMembers : getStoredCouncilMembers();
-    if (!Array.isArray(listToSync) || listToSync.length === 0) {
-      alert("No council members found to sync.");
-      return;
-    }
-    const synced = syncCouncilAdminsToFounding(listToSync, true);
-    setFoundingMembersList(synced);
-    if (selectedTenure) {
-      updateTenureRoster(selectedTenure.id, { foundingMembers: synced }, true);
-      setTenures((prev) => prev.map((t) => t.id === selectedTenure.id ? { ...t, foundingMembers: synced } : t));
-    }
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+    handleSyncToFounding();
   };
 
   const handleMoveMember = (memberId: string, direction: "up" | "down") => {

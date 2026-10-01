@@ -824,7 +824,9 @@ export async function switchActiveTenure(targetTenureId: string, tenureBeginDate
   const targetFounders = isTargetFirstTenure
     ? (targetTenure.foundingMembers && targetTenure.foundingMembers.length > 0 ? targetTenure.foundingMembers : foundingMembers)
     : [];
-  await saveStoredFoundingMembers(targetFounders);
+  if (isTargetFirstTenure) {
+    await saveStoredFoundingMembers(targetFounders, false);
+  }
 
   // Clubs:
   const draftClubs = getStoredDraftClubs(targetTenureId);

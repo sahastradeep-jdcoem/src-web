@@ -16,6 +16,7 @@ import {
   syncFoundingMembersFromFirestore,
   subscribeToFoundingMembers
 } from "@/lib/councilStore";
+import { foundingMembers as initialFoundingMembers } from "@/data/team";
 import { TeamMember } from "@/types";
 import { CouncilMemberCard } from "@/components/team/CouncilMemberCard";
 import { Badge } from "@/components/ui/Badge";
@@ -24,28 +25,33 @@ export default function PrarambhPage() {
   const [foundingMembers, setFoundingMembers] = useState<TeamMember[]>([]);
 
   const refreshMembers = () => {
-    setFoundingMembers(getStoredFoundingMembers());
+    const list = getStoredFoundingMembers();
+    setFoundingMembers(list.length > 0 ? list : initialFoundingMembers);
   };
 
   useEffect(() => {
     refreshMembers();
 
     syncFoundingMembersFromFirestore().then((res) => {
-      if (res) setFoundingMembers(res);
+      if (res && res.length > 0) setFoundingMembers(res);
     });
 
-    const unsubFounding = subscribeToFoundingMembers((members) => setFoundingMembers(members));
+    const unsubFounding = subscribeToFoundingMembers((members) => {
+      if (members && members.length > 0) setFoundingMembers(members);
+    });
 
     const handleUpdate = () => {
       refreshMembers();
     };
 
     window.addEventListener("src_founding_members_updated", handleUpdate);
+    window.addEventListener("src_tenures_updated", handleUpdate);
     window.addEventListener("storage", handleUpdate);
 
     return () => {
       unsubFounding();
       window.removeEventListener("src_founding_members_updated", handleUpdate);
+      window.removeEventListener("src_tenures_updated", handleUpdate);
       window.removeEventListener("storage", handleUpdate);
     };
   }, []);

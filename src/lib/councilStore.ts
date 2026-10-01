@@ -774,7 +774,7 @@ export function getStoredCouncilMembers(): TeamMember[] {
   return deduplicateTeamMembers(stripCategoryAndLevel(initialAdminCouncil));
 }
 
-export async function saveStoredCouncilMembers(members: TeamMember[], autoSyncToFounding = true): Promise<void> {
+export async function saveStoredCouncilMembers(members: TeamMember[], autoSyncToFounding = false): Promise<void> {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(deduplicateTeamMembers(stripCategoryAndLevel(members)));
@@ -799,8 +799,23 @@ export async function saveStoredCouncilMembers(members: TeamMember[], autoSyncTo
     }
     enqueueCloudWrite("council_team", sanitized, `Council Leadership (${members.length} Members)`);
 
+    // Invariant: Founding members belong strictly to the 1st Founding Tenure (2025-26).
+    // NEVER sync 2nd or later tenure admins into founding members!
     if (autoSyncToFounding && Array.isArray(sanitized)) {
-      syncCouncilAdminsToFounding(sanitized, true);
+      let isFirstActive = true;
+      try {
+        const storedTenures = localStorage.getItem("src_council_tenures");
+        if (storedTenures) {
+          const parsed = JSON.parse(storedTenures);
+          const current = parsed.find((t: any) => t.isCurrent);
+          if (current) {
+            isFirstActive = current.id === "tenure-2025-26" || current.label?.includes("2025") || current.tenureNumber?.includes("1st");
+          }
+        }
+      } catch {}
+      if (isFirstActive) {
+        syncCouncilAdminsToFounding(sanitized, true);
+      }
     }
 
     if (cloudWriteError) {
@@ -1510,6 +1525,25 @@ export function syncFoundingToCouncilAdmins(foundingList?: TeamMember[], persist
 export function reconcileCouncilAndFoundingSync(): TeamMember[] {
   if (typeof window === "undefined") return getStoredFoundingMembers();
   try {
+    // Only reconcile if 1st tenure is currently active!
+    let isFirstActive = true;
+    try {
+      const storedTenures = localStorage.getItem("src_council_tenures");
+      if (storedTenures) {
+        const parsed = JSON.parse(storedTenures);
+        const current = parsed.find((t: any) => t.isCurrent);
+        if (current) {
+          isFirstActive = current.id === "tenure-2025-26" || current.label?.includes("2025") || current.tenureNumber?.includes("1st");
+        }
+      }
+    } catch {}
+
+    // Invariant: Founding members are strictly 1st Tenure (2025-26).
+    // Never reconcile or sync against later tenure councils!
+    if (!isFirstActive) {
+      return getStoredFoundingMembers();
+    }
+
     let council = getStoredCouncilMembers();
     if (!Array.isArray(council) || council.length === 0) return getStoredFoundingMembers();
 
@@ -1562,6 +1596,48 @@ export function reconcileCouncilAndFoundingSync(): TeamMember[] {
   return getStoredFoundingMembers();
 }
 
+export function isCorruptedFoundingList(members?: TeamMember[] | null): boolean {
+  if (!Array.isArray(members) || members.length === 0) return true;
+  // If Sanskruti Tidke has role containing "President" or Harsh Shende / Nisarg / Lavanya has role containing "Mentor":
+  // These are 2nd tenure roles! They indicate 2nd tenure admins were mistakenly synced into founding members.
+  return members.some((m) => {
+    const n = (m.name || "").toLowerCase();
+    const r = (m.role || m.designation || "").toLowerCase();
+    if (n.includes("sanskruti") && r.includes("president")) return true;
+    if (n.includes("harsh") && r.includes("mentor")) return true;
+    if (n.includes("nisarg") && r.includes("mentor")) return true;
+    if (n.includes("lavanya") && r.includes("mentor")) return true;
+    return false;
+  });
+}
+
+export function getCleanFoundingMembersFallback(): TeamMember[] {
+  // 1. Try 1st tenure record from tenures store
+  if (typeof window !== "undefined") {
+    try {
+      const rawTenures = localStorage.getItem("src_council_tenures");
+      if (rawTenures) {
+        const tenures = JSON.parse(rawTenures);
+        if (Array.isArray(tenures)) {
+          const first = tenures.find((t: any) => t.id === "tenure-2025-26" || t.label?.includes("2025") || t.tenureNumber?.includes("1st"));
+          if (first && Array.isArray(first.foundingMembers) && first.foundingMembers.length > 0 && !isCorruptedFoundingList(first.foundingMembers)) {
+            return deduplicateTeamMembers(stripCategoryAndLevel(first.foundingMembers));
+          }
+          if (first && Array.isArray(first.adminCouncil) && first.adminCouncil.length > 0) {
+            const isFirstCouncil = first.adminCouncil.some((m: any) =>
+              m.name?.toLowerCase().includes("lavanya") && m.role?.toLowerCase().includes("president")
+            );
+            if (isFirstCouncil) {
+              return syncCouncilAdminsToFounding(first.adminCouncil, false);
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+  return deduplicateTeamMembers(stripCategoryAndLevel(initialFoundingMembers));
+}
+
 // Founding Members Store
 export function getStoredFoundingMembers(): TeamMember[] {
   if (typeof window === "undefined") return deduplicateTeamMembers(stripCategoryAndLevel(initialFoundingMembers));
@@ -1569,7 +1645,7 @@ export function getStoredFoundingMembers(): TeamMember[] {
     const stored = localStorage.getItem("src_founding_members");
     if (stored !== null) {
       const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed)) {
+      if (Array.isArray(parsed) && parsed.length > 0 && !isCorruptedFoundingList(parsed)) {
         let { repaired, members } = repairCouncilSwapIfNeeded(stripCategoryAndLevel(parsed), true);
         members = deduplicateTeamMembers(members);
         if (repaired && typeof window !== "undefined") {
@@ -1583,10 +1659,20 @@ export function getStoredFoundingMembers(): TeamMember[] {
   } catch (e) {
     console.warn("Could not read founding members from storage", e);
   }
-  return deduplicateTeamMembers(stripCategoryAndLevel(initialFoundingMembers));
+
+  // Auto-heal if missing or corrupted by 2nd tenure overwrite
+  const clean = getCleanFoundingMembersFallback();
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("src_founding_members", JSON.stringify(clean));
+      saveSiteContentToFirestore("founding_members", clean).catch(() => {});
+      enqueueCloudWrite("founding_members", clean, `Founding Members (${clean.length} Members)`);
+    } catch {}
+  }
+  return clean;
 }
 
-export async function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCouncil = true): Promise<void> {
+export async function saveStoredFoundingMembers(members: TeamMember[], autoSyncToCouncil = false): Promise<void> {
   if (typeof window === "undefined") return;
   try {
     const sanitized = cleanUndefined(deduplicateTeamMembers(stripCategoryAndLevel(members)));
@@ -1610,8 +1696,22 @@ export async function saveStoredFoundingMembers(members: TeamMember[], autoSyncT
     }
     enqueueCloudWrite("founding_members", sanitized, `Founding Members (${members.length} Members)`);
 
+    // Invariant: Only sync to council if 1st tenure is currently active!
     if (autoSyncToCouncil && Array.isArray(sanitized)) {
-      syncFoundingToCouncilAdmins(sanitized, true);
+      let isFirstActive = true;
+      try {
+        const storedTenures = localStorage.getItem("src_council_tenures");
+        if (storedTenures) {
+          const parsed = JSON.parse(storedTenures);
+          const current = parsed.find((t: any) => t.isCurrent);
+          if (current) {
+            isFirstActive = current.id === "tenure-2025-26" || current.label?.includes("2025") || current.tenureNumber?.includes("1st");
+          }
+        }
+      } catch {}
+      if (isFirstActive) {
+        syncFoundingToCouncilAdmins(sanitized, true);
+      }
     }
 
     if (cloudWriteError) {
@@ -1637,19 +1737,26 @@ export async function syncFoundingMembersFromFirestore(): Promise<TeamMember[]> 
       return getStoredFoundingMembers();
     }
     if (remote !== null && Array.isArray(remote)) {
+      if (isCorruptedFoundingList(remote)) {
+        // Discard corrupted remote data! Heal with clean 1st tenure founding members
+        const clean = getCleanFoundingMembersFallback();
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem("src_founding_members", JSON.stringify(clean));
+          } catch {}
+          saveSiteContentToFirestore("founding_members", clean).catch(() => {});
+          enqueueCloudWrite("founding_members", clean, `Founding Members (${clean.length} Members)`);
+          window.dispatchEvent(new CustomEvent("src_founding_members_updated", { detail: clean }));
+        }
+        return clean;
+      }
+
       const current = getStoredFoundingMembers();
       let merged = deduplicateTeamMembers(stripCategoryAndLevel(reconcileArrayDatasets(current, remote)));
       const { repaired, members } = repairCouncilSwapIfNeeded(merged, true);
       if (repaired) {
         merged = deduplicateTeamMembers(members);
       }
-      // If council has members and remote founding members count is out of sync, auto-heal from council (1st tenure 1:1)
-      const currentCouncil = getStoredCouncilMembers();
-      if (currentCouncil.length > 0 && merged.length !== currentCouncil.length) {
-        merged = syncCouncilAdminsToFounding(currentCouncil, true);
-        return merged;
-      }
-
 
       if (typeof window !== "undefined") {
         try {
@@ -1668,26 +1775,22 @@ export function subscribeToFoundingMembers(callback: (members: TeamMember[]) => 
   return subscribeToSiteContent<TeamMember[]>("founding_members", (remote) => {
     if (remote !== null && Array.isArray(remote)) {
       if (hasPendingWritesFor("founding_members")) return;
+      if (isCorruptedFoundingList(remote)) {
+        // Discard corrupted remote data from subscription
+        return;
+      }
       const current = getStoredFoundingMembers();
       let merged = deduplicateTeamMembers(stripCategoryAndLevel(reconcileArrayDatasets(current, remote)));
       const { repaired, members } = repairCouncilSwapIfNeeded(merged, true);
       if (repaired) {
         merged = deduplicateTeamMembers(members);
-        saveStoredFoundingMembers(merged, true);
-      } else {
-        const currentCouncil = getStoredCouncilMembers();
-        if (currentCouncil.length > 0 && merged.length !== currentCouncil.length) {
-          merged = syncCouncilAdminsToFounding(currentCouncil, true);
-          callback(merged);
-          return;
-        }
-        if (typeof window !== "undefined") {
-          try {
-            localStorage.setItem("src_founding_members", JSON.stringify(merged));
-          } catch {}
-          window.dispatchEvent(new CustomEvent("src_founding_members_updated", { detail: merged }));
-          window.dispatchEvent(new CustomEvent("src_users_updated"));
-        }
+      }
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("src_founding_members", JSON.stringify(merged));
+        } catch {}
+        window.dispatchEvent(new CustomEvent("src_founding_members_updated", { detail: merged }));
+        window.dispatchEvent(new CustomEvent("src_users_updated"));
       }
       callback(merged);
     }
