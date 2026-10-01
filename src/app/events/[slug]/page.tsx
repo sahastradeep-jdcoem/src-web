@@ -346,62 +346,30 @@ export default function EventDetailPage() {
           </div>
 
           <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-[#E78023] text-white shadow-xs">
-                {event.category}
-              </span>
-              <span className={cn(
-                "text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full shadow-xs flex items-center gap-1.5",
-                isJdcoemOnly
-                  ? "bg-amber-500 text-white"
-                  : "bg-teal-600 text-white"
-              )}>
-                {isJdcoemOnly ? (
-                  <>
-                    <GraduationCap className="w-3.5 h-3.5" />
-                    <span>JDCOEM Students Only</span>
-                  </>
-                ) : (
-                  <>
-                    <Globe className="w-3.5 h-3.5" />
-                    <span>Inter-College (Open to All)</span>
-                  </>
+            {(event.parentEventName || event.subEventBadge || event.tagline) && (
+              <div className="flex flex-wrap items-center gap-2">
+                {event.parentEventName && (
+                  <Link
+                    href={`/events/${event.parentEventSlug || event.parentEventId}`}
+                    className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 text-white border border-white/30 backdrop-blur-xs transition-colors shadow-xs"
+                  >
+                    <Layers className="w-3.5 h-3.5 text-[#E78023]" />
+                    <span>Part of {event.parentEventName}</span>
+                    <ArrowRight className="w-3 h-3 text-white/70" />
+                  </Link>
                 )}
-              </span>
-              <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/90 text-slate-900 shadow-xs">
-                {isComingSoon
-                  ? "Coming Soon"
-                  : isUpcoming
-                  ? "Upcoming"
-                  : isRegistrationOpen
-                  ? "Registration Open"
-                  : isCompleted
-                  ? "Completed"
-                  : isDeadlinePassed
-                  ? "Registration Closed"
-                  : event.status}
-              </span>
-              {event.parentEventName && (
-                <Link
-                  href={`/events/${event.parentEventSlug || event.parentEventId}`}
-                  className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 text-white border border-white/30 backdrop-blur-xs transition-colors shadow-xs"
-                >
-                  <Layers className="w-3.5 h-3.5 text-[#E78023]" />
-                  <span>Part of {event.parentEventName}</span>
-                  <ArrowRight className="w-3 h-3 text-white/70" />
-                </Link>
-              )}
-              {event.subEventBadge && (
-                <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-slate-900/80 text-white border border-white/20 shadow-xs">
-                  {event.subEventBadge}
-                </span>
-              )}
-              {event.tagline && (
-                <span className="text-xs font-extrabold uppercase tracking-widest text-[#E78023] ml-2">
-                  • {event.tagline}
-                </span>
-              )}
-            </div>
+                {event.subEventBadge && (
+                  <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-slate-900/80 text-white border border-white/20 shadow-xs">
+                    {event.subEventBadge}
+                  </span>
+                )}
+                {event.tagline && (
+                  <span className="text-xs font-extrabold uppercase tracking-widest text-[#E78023]">
+                    • {event.tagline}
+                  </span>
+                )}
+              </div>
+            )}
 
             <h1 className="font-heading font-extrabold text-4xl sm:text-6xl text-white tracking-tight uppercase">
               {event.name}
