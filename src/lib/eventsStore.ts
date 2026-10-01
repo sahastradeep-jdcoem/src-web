@@ -661,9 +661,11 @@ export function getMainCalendarEvents(
   }
 
   const currentTenure = validTenures.find((t) => t.isCurrent) || validTenures[0];
+  const archivedTenures = validTenures.filter((t) => !t.isCurrent && (t.status === "archived" || !t.isDraft));
 
-  // Determine which events belong to the current tenure based on TENURE ACTIVE DATE
+  // Determine which events belong to current tenure vs older tenures based on TENURE ACTIVE DATE
   const currentTenureEvents: EventItem[] = [];
+  const olderEventsFromStore: EventItem[] = [];
 
   for (const evt of validEvents) {
     const resolvedTenure = resolveTenureForEvent(evt, validTenures);
@@ -674,6 +676,12 @@ export function getMainCalendarEvents(
         ...evt,
         tenureId: currentTenure.id,
         tenureLabel: currentTenure.label,
+      });
+    } else {
+      olderEventsFromStore.push({
+        ...evt,
+        tenureId: resolvedTenure ? resolvedTenure.id : evt.tenureId,
+        tenureLabel: resolvedTenure ? resolvedTenure.label : evt.tenureLabel,
       });
     }
   }
@@ -689,13 +697,79 @@ export function getMainCalendarEvents(
       !e.parentEventSlug &&
       getEventEffectiveStatus(e) === "Completed"
   );
+  const currentTenureCompletedCount = currentTenureCompleted.length;
 
-  // Past tenure events are strictly isolated to /events/past as requested by user.
-  // The main calendar (/events) displays strictly current tenure events.
+  // Invariant: Until a new tenure completes at least 3 events, keep older events visible
+  // on the main events page too, so that the page does not look empty.
+  const shouldIncludeOlderEvents = currentTenureCompletedCount < 3;
+
+  if (!shouldIncludeOlderEvents) {
+    return {
+      events: sortEventsByDate(currentTenureEvents),
+      isShowingOlderEvents: false,
+      currentTenureCompletedCount,
+    };
+  }
+
+  // Gather older events from archived tenures and older tagged events
+  const olderEventsMap = new Map<string, EventItem>();
+
+  // 1. From archived tenures snapshots
+  for (const at of archivedTenures) {
+    if (Array.isArray(at.events)) {
+      for (const rawEvt of at.events) {
+        if (rawEvt && (rawEvt.id || rawEvt.slug)) {
+          const sanitized = sanitizeEventItem(rawEvt);
+          const key = sanitized.id || sanitized.slug;
+          olderEventsMap.set(key, {
+            ...sanitized,
+            tenureLabel: sanitized.tenureLabel || at.label,
+            tenureId: sanitized.tenureId || at.id,
+          });
+        }
+      }
+    }
+  }
+
+  // 2. From older events found in events store / validEvents
+  for (const evt of olderEventsFromStore) {
+    const key = evt.id || evt.slug;
+    if (!olderEventsMap.has(key)) {
+      olderEventsMap.set(key, evt);
+    }
+  }
+
+  // 3. Fallback: Also check stored events if olderEventsMap is still empty
+  if (olderEventsMap.size === 0 && typeof window !== "undefined") {
+    try {
+      const stored = getStoredEvents();
+      for (const evt of stored) {
+        const resolved = resolveTenureForEvent(evt, validTenures);
+        if (resolved && resolved.id !== currentTenure.id) {
+          const key = evt.id || evt.slug;
+          if (!olderEventsMap.has(key)) {
+            olderEventsMap.set(key, {
+              ...evt,
+              tenureLabel: resolved.label,
+              tenureId: resolved.id,
+            });
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // Deduplicate: current tenure events always take priority over older events
+  const currentKeys = new Set(currentTenureEvents.map((e) => e.id || e.slug));
+  const olderEventsToInclude = Array.from(olderEventsMap.values()).filter(
+    (e) => !currentKeys.has(e.id || e.slug)
+  );
+
+  const combined = [...currentTenureEvents, ...olderEventsToInclude];
   return {
-    events: sortEventsByDate(currentTenureEvents),
-    isShowingOlderEvents: false,
-    currentTenureCompletedCount: currentTenureCompleted.length,
+    events: sortEventsByDate(combined),
+    isShowingOlderEvents: olderEventsToInclude.length > 0,
+    currentTenureCompletedCount,
   };
 }
 
