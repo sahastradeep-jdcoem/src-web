@@ -57,7 +57,7 @@ import {
   subscribeToDepartments, 
   syncDepartmentsFromFirestore 
 } from "@/lib/departmentsStore";
-import { getStoredTenures, syncTenuresFromFirestore, subscribeToTenures, getCurrentTenure, CouncilTenure } from "@/lib/tenureStore";
+import { getStoredTenures, syncTenuresFromFirestore, subscribeToTenures, getCurrentTenure, getLatestAvailableTenure, CouncilTenure } from "@/lib/tenureStore";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { db } from "@/lib/firebase/config";
 import { doc, updateDoc } from "firebase/firestore";
@@ -98,8 +98,8 @@ export default function AdminRegistrationsPage() {
     if (typeof window !== "undefined") {
       try {
         const stored = getStoredTenures();
-        const curr = stored.find((t) => t.isCurrent) || stored.find((t) => t.status === "active") || stored[0];
-        if (curr) return curr.id;
+        const latest = getLatestAvailableTenure(stored);
+        if (latest) return latest.id;
       } catch {}
     }
     return "tenure-2026-27";
@@ -157,16 +157,16 @@ export default function AdminRegistrationsPage() {
     const initialTenures = getStoredTenures();
     setTenuresList(initialTenures);
     if (!userSelectedTenure && initialTenures.length > 0) {
-      const active = initialTenures.find((t) => t.isCurrent) || initialTenures.find((t) => t.status === "active") || initialTenures[0];
-      if (active) setSelectedTenureId(active.id);
+      const latest = getLatestAvailableTenure(initialTenures);
+      if (latest) setSelectedTenureId(latest.id);
     }
 
     syncTenuresFromFirestore().then((res) => {
       if (res && res.length > 0) {
         setTenuresList(res);
         if (!userSelectedTenure) {
-          const active = res.find((t) => t.isCurrent) || res.find((t) => t.status === "active") || res[0];
-          if (active) setSelectedTenureId(active.id);
+          const latest = getLatestAvailableTenure(res);
+          if (latest) setSelectedTenureId(latest.id);
         }
       }
     });
@@ -186,8 +186,8 @@ export default function AdminRegistrationsPage() {
       if (cloudTenures && Array.isArray(cloudTenures) && cloudTenures.length > 0) {
         setTenuresList(cloudTenures);
         if (!userSelectedTenure) {
-          const active = cloudTenures.find((t) => t.isCurrent) || cloudTenures.find((t) => t.status === "active") || cloudTenures[0];
-          if (active) setSelectedTenureId(active.id);
+          const latest = getLatestAvailableTenure(cloudTenures);
+          if (latest) setSelectedTenureId(latest.id);
         }
       }
     });
@@ -583,11 +583,6 @@ export default function AdminRegistrationsPage() {
       const currentTenure = tenuresList.find((t) => t.id === selectedTenureId);
       if (!currentTenure) return list;
 
-      // Draft tenures should never capture live registrations unless explicitly assigned
-      if (currentTenure.isDraft || currentTenure.status === "draft") {
-        return list.filter((r: any) => r.tenureId === selectedTenureId);
-      }
-
       const tenureEvents = tenureFilteredEvents;
       const tenureEventSlugs = new Set(tenureEvents.map((e) => (e.slug || "").toLowerCase()));
       const tenureEventNames = new Set(tenureEvents.map((e) => (e.name || "").toLowerCase()));
@@ -602,7 +597,39 @@ export default function AdminRegistrationsPage() {
       const isActiveTenure = !!(currentTenure.isCurrent || currentTenure.status === "active");
 
       list = list.filter((r: any) => {
-        // 1. Direct match on explicit tenureId
+        const rSlug = (r.eventSlug || "").toLowerCase();
+        const rId = (r.eventId || "").toLowerCase();
+        const rName = (r.eventName || "").toLowerCase();
+
+        // 1. Authoritative Event Match:
+        // Find the event object and resolve its actual tenure using resolveTenureForEvent
+        const matchedEvent = eventsList.find((e) =>
+          (e.id && (e.id.toLowerCase() === rId || e.id.toLowerCase() === rSlug)) ||
+          (e.slug && (e.slug.toLowerCase() === rSlug || e.slug.toLowerCase() === rId)) ||
+          (e.name && e.name.toLowerCase() === rName)
+        ) || (Array.isArray(currentTenure.events) ? currentTenure.events.find((e) =>
+          (e.id && (e.id.toLowerCase() === rId || e.id.toLowerCase() === rSlug)) ||
+          (e.slug && (e.slug.toLowerCase() === rSlug || e.slug.toLowerCase() === rId)) ||
+          (e.name && e.name.toLowerCase() === rName)
+        ) : undefined);
+
+        if (matchedEvent) {
+          const evTenure = resolveTenureForEvent(matchedEvent, tenuresList);
+          if (evTenure) {
+            return evTenure.id === selectedTenureId;
+          }
+        }
+
+        // 2. Direct membership in this tenure's event set
+        if (
+          (rSlug && (tenureEventSlugs.has(rSlug) || tenureEventIds.has(rSlug))) ||
+          (rId && (tenureEventIds.has(rId) || tenureEventSlugs.has(rId))) ||
+          (rName && tenureEventNames.has(rName))
+        ) {
+          return true;
+        }
+
+        // 3. Fallback: Direct match on explicit tenureId (only when event cannot be resolved)
         if (r.tenureId) {
           const cleanTid = r.tenureId.toLowerCase().trim();
           const rYearDigits = cleanTid.replace(/[^0-9]/g, "");
@@ -618,20 +645,7 @@ export default function AdminRegistrationsPage() {
           return false;
         }
 
-        // 2. Match via event association with this tenure's events
-        const rSlug = (r.eventSlug || "").toLowerCase();
-        const rId = (r.eventId || "").toLowerCase();
-        const rName = (r.eventName || "").toLowerCase();
-
-        if (
-          (rSlug && (tenureEventSlugs.has(rSlug) || tenureEventIds.has(rSlug))) ||
-          (rId && (tenureEventIds.has(rId) || tenureEventSlugs.has(rId))) ||
-          (rName && tenureEventNames.has(rName))
-        ) {
-          return true;
-        }
-
-        // 3. Fallback timestamp check within tenure boundaries (only if event couldn't be matched)
+        // 4. Fallback timestamp check within tenure boundaries
         if (!isNaN(tenureStartMs)) {
           const targetTime = r.paidAt || r.registeredAt || r.createdAt || r.timestamp;
           if (targetTime) {

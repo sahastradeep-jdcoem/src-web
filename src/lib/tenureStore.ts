@@ -593,6 +593,31 @@ export function getCurrentTenure(): CouncilTenure {
   return tenures.find((t) => t.isCurrent) || tenures[0] || initialDefaultTenures[0];
 }
 
+export function getLatestAvailableTenure(tenuresList?: CouncilTenure[]): CouncilTenure {
+  const list = Array.isArray(tenuresList) && tenuresList.length > 0 ? tenuresList : getStoredTenures();
+  if (!list || list.length === 0) return initialDefaultTenures[0];
+
+  const sorted = [...list].sort((a, b) => {
+    const getYear = (t: CouncilTenure) => {
+      if (t.startDate) {
+        const d = new Date(t.startDate);
+        if (!isNaN(d.getFullYear())) return d.getFullYear();
+      }
+      const match = (t.label || t.academicYear || "").match(/\d{4}/);
+      return match ? parseInt(match[0], 10) : 0;
+    };
+    const yrA = getYear(a);
+    const yrB = getYear(b);
+    if (yrA !== yrB) return yrB - yrA;
+
+    const numA = parseInt((a.tenureNumber || "").replace(/\D/g, "") || "0", 10);
+    const numB = parseInt((b.tenureNumber || "").replace(/\D/g, "") || "0", 10);
+    return numB - numA;
+  });
+
+  return sorted[0] || list[0] || initialDefaultTenures[0];
+}
+
 export function getTenureById(id: string): CouncilTenure | null {
   const tenures = getStoredTenures();
   return tenures.find((t) => t.id === id) || null;

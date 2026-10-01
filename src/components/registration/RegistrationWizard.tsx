@@ -67,8 +67,8 @@ import {
   subscribeToPaymentConfig,
   PaymentConfig 
 } from "@/lib/paymentConfigStore";
-import { getCurrentTenure } from "@/lib/tenureStore";
-import { isRegistrationDeadlinePassed, isEventCompletedByDate, getEventEffectiveStatus } from "@/lib/eventsStore";
+import { getCurrentTenure, getStoredTenures } from "@/lib/tenureStore";
+import { isRegistrationDeadlinePassed, isEventCompletedByDate, getEventEffectiveStatus, resolveTenureForEvent } from "@/lib/eventsStore";
 
 interface RegistrationWizardProps {
   event: EventItem;
@@ -728,7 +728,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       currency: "INR",
       paidAt: paymentDetails?.paymentStatus === "PAID" ? new Date().toISOString() : undefined,
       registeredAt: new Date().toISOString(),
-      tenureId: getCurrentTenure()?.id || "tenure-2025-26",
+      tenureId: event.tenureId || resolveTenureForEvent(event, getStoredTenures())?.id || getCurrentTenure()?.id || "tenure-2026-27",
       customAnswers: Object.keys(structuredAnswers).length > 0 ? structuredAnswers : undefined,
     };
   };

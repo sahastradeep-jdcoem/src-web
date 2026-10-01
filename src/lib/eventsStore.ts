@@ -534,8 +534,6 @@ export function resolveTenureForEvent(
 ): CouncilTenure | null {
   if (!event || !Array.isArray(tenuresList) || tenuresList.length === 0) return null;
 
-  const currentTenure = tenuresList.find((t) => t.isCurrent) || tenuresList[0];
-
   // Helper to extract timestamp from tenure date or label
   const getTenureStartTs = (t: CouncilTenure): number => {
     if (t.startDate) {
@@ -550,19 +548,15 @@ export function resolveTenureForEvent(
     return 0;
   };
 
-  const getTenureEndTs = (t: CouncilTenure): number => {
-    if (t.isCurrent) {
-      return Number.MAX_SAFE_INTEGER;
-    }
-    // Calculate based on next tenure start date if available
-    const tStart = getTenureStartTs(t);
-    const subsequentTenures = tenuresList
-      .filter((other) => other.id !== t.id && getTenureStartTs(other) > tStart)
-      .sort((a, b) => getTenureStartTs(a) - getTenureStartTs(b));
-    if (subsequentTenures.length > 0) {
-      const nextStart = getTenureStartTs(subsequentTenures[0]);
-      if (nextStart > tStart) {
-        return nextStart - 1; // Ends strictly before next tenure begins
+  // Sort all tenures chronologically by their start date / academic year
+  const sortedTenures = [...tenuresList].sort((a, b) => getTenureStartTs(a) - getTenureStartTs(b));
+
+  const getTenureEndTs = (t: CouncilTenure, idx: number): number => {
+    // If a subsequent tenure exists, this tenure ends strictly before the next tenure begins
+    if (idx < sortedTenures.length - 1) {
+      const nextStart = getTenureStartTs(sortedTenures[idx + 1]);
+      if (nextStart > getTenureStartTs(t)) {
+        return nextStart - 1;
       }
     }
     if (t.endDate) {
@@ -583,33 +577,25 @@ export function resolveTenureForEvent(
   if (targetDateStr && !/\b(coming soon|tba|to be announced|tbd)\b/i.test(targetDateStr)) {
     const eventTs = parseDateStringToTimestamp(targetDateStr);
     if (eventTs) {
-      const currentStart = getTenureStartTs(currentTenure);
-
-      // Rule A: If event date is on or after current active tenure's start date,
-      // it DEFINITIVELY belongs to the current active tenure!
-      if (eventTs >= currentStart) {
-        return currentTenure;
-      }
-
-      // Rule B: If event happened before current tenure start, resolve to appropriate past/archived tenure
-      const nonDraftTenures = tenuresList.filter((t) => !t.isDraft && !t.isCurrent);
-      const candidates = nonDraftTenures.length > 0 ? nonDraftTenures : tenuresList.filter((t) => !t.isCurrent);
-
-      for (const t of candidates) {
+      // Find the specific tenure whose active window [startTs, endTs] encompasses eventTs
+      for (let i = 0; i < sortedTenures.length; i++) {
+        const t = sortedTenures[i];
         const s = getTenureStartTs(t);
-        const e = getTenureEndTs(t);
+        const e = getTenureEndTs(t, i);
         if (eventTs >= s && eventTs <= e) {
           return t;
         }
       }
 
-      // If event happened before current tenure start, map to closest past tenure
-      if (candidates.length > 0) {
-        const pastSorted = [...candidates].sort((a, b) => getTenureStartTs(b) - getTenureStartTs(a));
-        return pastSorted[0];
+      // If event happened before the earliest tenure, assign to earliest tenure
+      if (eventTs < getTenureStartTs(sortedTenures[0])) {
+        return sortedTenures[0];
       }
 
-      return currentTenure;
+      // If event happened on or after the latest tenure's start, assign to latest tenure
+      if (eventTs >= getTenureStartTs(sortedTenures[sortedTenures.length - 1])) {
+        return sortedTenures[sortedTenures.length - 1];
+      }
     }
   }
 
@@ -623,6 +609,7 @@ export function resolveTenureForEvent(
     if (byLabel) return byLabel;
   }
 
+  const currentTenure = tenuresList.find((t) => t.isCurrent) || sortedTenures[sortedTenures.length - 1];
   return currentTenure;
 }
 

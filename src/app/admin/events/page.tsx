@@ -67,7 +67,8 @@ import {
   getStoredTenures, 
   CouncilTenure, 
   syncTenuresFromFirestore, 
-  subscribeToTenures 
+  subscribeToTenures,
+  getLatestAvailableTenure 
 } from "@/lib/tenureStore";
 
 export default function AdminEventsPage() {
@@ -86,8 +87,8 @@ export default function AdminEventsPage() {
     if (typeof window !== "undefined") {
       try {
         const stored = getStoredTenures();
-        const curr = stored.find((t) => t.isCurrent) || stored.find((t) => t.status === "active") || stored[0];
-        if (curr) return curr.id;
+        const latest = getLatestAvailableTenure(stored);
+        if (latest) return latest.id;
       } catch {}
     }
     return "tenure-2026-27";
@@ -152,16 +153,16 @@ export default function AdminEventsPage() {
     const initialTenures = getStoredTenures();
     setTenuresList(initialTenures);
     if (!userSelectedTenure && initialTenures.length > 0) {
-      const active = initialTenures.find((t) => t.isCurrent) || initialTenures.find((t) => t.status === "active") || initialTenures[0];
-      if (active) setSelectedTenureId(active.id);
+      const latest = getLatestAvailableTenure(initialTenures);
+      if (latest) setSelectedTenureId(latest.id);
     }
 
     syncTenuresFromFirestore().then((res) => {
       if (res && res.length > 0) {
         setTenuresList(res);
         if (!userSelectedTenure) {
-          const active = res.find((t) => t.isCurrent) || res.find((t) => t.status === "active") || res[0];
-          if (active) setSelectedTenureId(active.id);
+          const latest = getLatestAvailableTenure(res);
+          if (latest) setSelectedTenureId(latest.id);
         }
       }
     });
@@ -176,8 +177,8 @@ export default function AdminEventsPage() {
       if (cloudTenures && Array.isArray(cloudTenures) && cloudTenures.length > 0) {
         setTenuresList(cloudTenures);
         if (!userSelectedTenure) {
-          const active = cloudTenures.find((t) => t.isCurrent) || cloudTenures.find((t) => t.status === "active") || cloudTenures[0];
-          if (active) setSelectedTenureId(active.id);
+          const latest = getLatestAvailableTenure(cloudTenures);
+          if (latest) setSelectedTenureId(latest.id);
         }
       }
     });
