@@ -65,12 +65,15 @@ import {
 import { 
   getStoredUsers, 
   syncUsersFromFirestore, 
-  RegisteredUserRecord,
-  resolveDesignationByBtId,
-  formatDesignationBadge
+  RegisteredUserRecord 
 } from "@/lib/usersStore";
-import { getStoredCouncilMembers } from "@/lib/councilStore";
-import { getCurrentTenure, CouncilTenure } from "@/lib/tenureStore";
+import { 
+  getCurrentTenure, 
+  getStoredTenures, 
+  syncTenuresFromFirestore, 
+  subscribeToTenures, 
+  CouncilTenure 
+} from "@/lib/tenureStore";
 import { subscribeToUsersFromFirestore } from "@/lib/firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
@@ -83,6 +86,8 @@ export default function AdminSrcUpdatesPage() {
   const [inspectingDispatch, setInspectingDispatch] = useState<SrcDispatch | null>(null);
   const [savedMembers, setSavedMembers] = useState<SavedSrcMemberRecord[]>([]);
   const [users, setUsers] = useState<RegisteredUserRecord[]>([]);
+  const [availableTenures, setAvailableTenures] = useState<CouncilTenure[]>([]);
+  const [selectedTenureId, setSelectedTenureId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Filters
@@ -182,6 +187,13 @@ export default function AdminSrcUpdatesPage() {
     const allMembers = getAllSavedSrcMembers();
     setSavedMembers(allMembers);
     setUsers(getStoredUsers());
+
+    const initialTenures = getStoredTenures();
+    setAvailableTenures(initialTenures);
+    const liveTenure = initialTenures.find((t) => t.isCurrent) || initialTenures[0];
+    if (liveTenure) {
+      setSelectedTenureId(liveTenure.id);
+    }
     setIsLoading(false);
 
     // 2. Cloud fetch & real-time sync
@@ -199,9 +211,25 @@ export default function AdminSrcUpdatesPage() {
       }
     });
 
+    syncTenuresFromFirestore().then((cloudTenures) => {
+      if (Array.isArray(cloudTenures) && cloudTenures.length > 0) {
+        setAvailableTenures(cloudTenures);
+        const live = cloudTenures.find((t) => t.isCurrent) || cloudTenures[0];
+        if (live && !selectedTenureId) {
+          setSelectedTenureId(live.id);
+        }
+      }
+    });
+
     const unsubUsersFirestore = subscribeToUsersFromFirestore((remoteUsers) => {
       if (Array.isArray(remoteUsers) && remoteUsers.length > 0) {
         setUsers(remoteUsers);
+      }
+    });
+
+    const unsubTenures = subscribeToTenures((updatedTenures) => {
+      if (Array.isArray(updatedTenures) && updatedTenures.length > 0) {
+        setAvailableTenures(updatedTenures);
       }
     });
 
@@ -221,25 +249,34 @@ export default function AdminSrcUpdatesPage() {
       }
     };
 
-    window.addEventListener("src_users_updated", handleUsersUpdate);
-    window.addEventListener("src_tenures_updated", () => {
+    const handleTenuresUpdate = () => {
+      const updatedTenures = getStoredTenures();
+      setAvailableTenures(updatedTenures);
       setSavedMembers(getAllSavedSrcMembers());
-    });
+    };
+
+    window.addEventListener("src_users_updated", handleUsersUpdate);
+    window.addEventListener("src_tenures_updated", handleTenuresUpdate);
 
     return () => {
       unsubDispatches();
       unsubResponses();
       unsubUsersFirestore();
+      unsubTenures();
       window.removeEventListener("src_users_updated", handleUsersUpdate);
-      window.removeEventListener("src_tenures_updated", () => {});
+      window.removeEventListener("src_tenures_updated", handleTenuresUpdate);
     };
   }, []);
 
   // Council portal adoption statistics (Tenure-wise across all SRC tiers: Admins, Spokespersons, Heads, Co-Heads, Members)
   const councilAdoption = useMemo(() => {
-    // 1. Get current active tenure
-    const currentTenure: CouncilTenure = getCurrentTenure();
-    const tenureLabel = currentTenure?.label || "2025-26";
+    // 1. Get user-selected tenure or current active live tenure
+    const currentTenure: CouncilTenure = 
+      (selectedTenureId && availableTenures.find((t) => t.id === selectedTenureId))
+      || availableTenures.find((t) => t.isCurrent)
+      || getCurrentTenure();
+    const tenureLabel = currentTenure?.label || "2026-27";
+    const isFirstTenure = currentTenure?.id === "tenure-2025-26" || Boolean(currentTenure?.label && currentTenure.label.includes("2025"));
 
     // Normalization helpers
     const normBt = (raw?: string | null) => (raw || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -273,7 +310,7 @@ export default function AdminSrcUpdatesPage() {
       }
     });
 
-    // 3. Map of all unique student SRC positions in this active tenure by BT ID
+    // 3. Map of all unique student SRC positions strictly belonging to this tenure by BT ID
     const tenureMemberMap = new Map<string, {
       btId: string;
       normBt: string;
@@ -325,17 +362,17 @@ export default function AdminSrcUpdatesPage() {
       }
     };
 
-    // A. Admin Council from current tenure
+    // A. Admin Council from this tenure
     (currentTenure.adminCouncil || []).forEach((m) => {
       registerMember(m.btId, m.name, m.role, "admin", m.email, m.department, m.avatar);
     });
 
-    // B. Hosting Committee & Spokespersons from current tenure
+    // B. Hosting Committee & Spokespersons from this tenure
     (currentTenure.hostingCommittee || []).forEach((m) => {
       registerMember(m.btId, m.name, m.role, "spokesperson", m.email, m.department, m.avatar);
     });
 
-    // C. Chartered Clubs: Leaders (Heads & Co-Heads) and Regular Members
+    // C. Chartered Clubs from this tenure: Leaders (Heads & Co-Heads) and Regular Members
     (currentTenure.clubs || []).forEach((club) => {
       const leaders = [
         ...(club.leaders || []),
@@ -355,32 +392,12 @@ export default function AdminSrcUpdatesPage() {
       }
     });
 
-    // D. In case savedMembers has additional active council/club entries with valid BT IDs for this tenure
-    savedMembers.forEach((sm) => {
-      const nBt = normBt(sm.btId);
-      if (sm.btId && !tenureMemberMap.has(nBt) && !tenureMemberMap.has(sm.btId.trim().toUpperCase())) {
-        const isCoHead = sm.designation?.toLowerCase().includes("co-head");
-        const isHead = sm.designation?.toLowerCase().includes("head") || sm.level === "Club Leadership";
-        const isSpokes = sm.level === "Hosting Committee" || sm.level === "Spokesperson";
-        const isAdmin = sm.level === "Admin Council";
-        const tier = isCoHead ? "cohead" : isHead ? "head" : isSpokes ? "spokesperson" : isAdmin ? "admin" : "member";
-        registerMember(sm.btId, sm.name, sm.designation, tier, sm.email, sm.department, sm.avatar);
-      }
-    });
-
-    // Also include any active registered users who have already been awarded an SRC designation badge
-    users.forEach((u) => {
-      if (!u.isDeleted && u.status !== "deleted" && u.btId && u.btId.trim()) {
-        const cleanBt = u.btId.trim().toUpperCase();
-        const nBt = normBt(u.btId);
-        if (!tenureMemberMap.has(nBt) && !tenureMemberMap.has(cleanBt)) {
-          const designation = resolveDesignationByBtId(cleanBt, u.displayName || u.name || undefined);
-          if (designation && designation.designationBadge) {
-            registerMember(cleanBt, u.displayName || u.name || "Student", designation.designationBadge, designation.isCouncilOfficer ? "admin" : "member", u.email || undefined, u.department, u.photoURL || undefined);
-          }
-        }
-      }
-    });
+    // D. Founding Members: STRICTLY registered ONLY if inspecting the 1st Founding Tenure (2025-26)
+    if (isFirstTenure) {
+      (currentTenure.foundingMembers || []).forEach((m) => {
+        registerMember(m.btId, m.name, m.role || "Founding Member", "member", m.email, m.department, m.avatar);
+      });
+    }
 
     const allTenureMembersList = Array.from(tenureMemberMap.values());
     const totalTenureMembers = allTenureMembersList.length;
@@ -458,7 +475,7 @@ export default function AdminSrcUpdatesPage() {
       onboardedRegularMembers,
       membersList,
     };
-  }, [users, savedMembers]);
+  }, [users, availableTenures, selectedTenureId]);
 
   // Filtered dispatches
   const filteredDispatches = useMemo(() => {
@@ -816,10 +833,36 @@ export default function AdminSrcUpdatesPage() {
               <span className="font-heading font-bold text-sm sm:text-base text-slate-900">
                 Council Portal Adoption
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#17458F]/10 text-[#17458F] border border-[#17458F]/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#17458F] animate-pulse"></span>
-                Tenure {councilAdoption.tenureLabel}
-              </span>
+              
+              {/* Tenure Switcher Pills */}
+              {availableTenures.length > 1 && (
+                <div className="inline-flex items-center gap-1 p-0.5 rounded-lg bg-slate-200/80 border border-slate-300">
+                  {availableTenures.map((t) => {
+                    const isSelected = (selectedTenureId && selectedTenureId === t.id) || (!selectedTenureId && t.isCurrent);
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setSelectedTenureId(t.id)}
+                        className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                          isSelected
+                            ? "bg-[#17458F] text-white shadow-2xs"
+                            : "text-slate-600 hover:text-slate-900 hover:bg-white/70"
+                        }`}
+                        title={`Switch to Tenure ${t.label}`}
+                      >
+                        <span>{t.label}</span>
+                        {t.isCurrent && (
+                          <span className={`ml-1 text-[9px] uppercase px-1 py-0.2 rounded font-extrabold ${isSelected ? "bg-white/20 text-white" : "bg-blue-100 text-[#17458F]"}`}>
+                            LIVE
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={() => setIsAdoptionModalOpen(true)}
@@ -1749,9 +1792,37 @@ export default function AdminSrcUpdatesPage() {
         <div className="space-y-4 pt-1">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
             <div>
-              <p className="text-xs text-slate-500">
-                Official council officers and their portal account linking status for this tenure.
-              </p>
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <p className="text-xs text-slate-500">
+                  Council officer account linking status:
+                </p>
+                {availableTenures.length > 1 && (
+                  <div className="inline-flex items-center gap-1 p-0.5 rounded-lg bg-slate-100 border border-slate-200">
+                    {availableTenures.map((t) => {
+                      const isSelected = (selectedTenureId && selectedTenureId === t.id) || (!selectedTenureId && t.isCurrent);
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => setSelectedTenureId(t.id)}
+                          className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                            isSelected
+                              ? "bg-[#17458F] text-white shadow-2xs"
+                              : "text-slate-600 hover:text-slate-900 hover:bg-white"
+                          }`}
+                        >
+                          <span>{t.label}</span>
+                          {t.isCurrent && (
+                            <span className={`ml-1 text-[9px] uppercase px-1 py-0.2 rounded font-extrabold ${isSelected ? "bg-white/20 text-white" : "bg-blue-100 text-[#17458F]"}`}>
+                              LIVE
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-xs font-bold text-slate-800">
                   {councilAdoption.onboardedCount} of {councilAdoption.totalTenureMembers} Linked ({councilAdoption.percent}%)
