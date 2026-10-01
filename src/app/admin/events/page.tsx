@@ -62,11 +62,36 @@ import {
   deleteActiveCheckoutSessionsForEvent
 } from "@/lib/firebase/firestore";
 import { purgePendingQueueFor } from "@/lib/dataSyncEngine";
-import { getCurrentTenure, getStoredTenures } from "@/lib/tenureStore";
+import { 
+  getCurrentTenure, 
+  getStoredTenures, 
+  CouncilTenure, 
+  syncTenuresFromFirestore, 
+  subscribeToTenures 
+} from "@/lib/tenureStore";
 
 export default function AdminEventsPage() {
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
   const [clubsList, setClubsList] = useState<ClubItem[]>([]);
+  const [tenuresList, setTenuresList] = useState<CouncilTenure[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return getStoredTenures();
+      } catch {}
+    }
+    return [];
+  });
+  const [userSelectedTenure, setUserSelectedTenure] = useState(false);
+  const [selectedTenureId, setSelectedTenureId] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = getStoredTenures();
+        const curr = stored.find((t) => t.isCurrent) || stored.find((t) => t.status === "active") || stored[0];
+        if (curr) return curr.id;
+      } catch {}
+    }
+    return "tenure-2026-27";
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -124,9 +149,36 @@ export default function AdminEventsPage() {
   useEffect(() => {
     loadData();
 
-    const unsubscribe = subscribeToEvents((remoteEvents) => {
+    const initialTenures = getStoredTenures();
+    setTenuresList(initialTenures);
+    if (!userSelectedTenure && initialTenures.length > 0) {
+      const active = initialTenures.find((t) => t.isCurrent) || initialTenures.find((t) => t.status === "active") || initialTenures[0];
+      if (active) setSelectedTenureId(active.id);
+    }
+
+    syncTenuresFromFirestore().then((res) => {
+      if (res && res.length > 0) {
+        setTenuresList(res);
+        if (!userSelectedTenure) {
+          const active = res.find((t) => t.isCurrent) || res.find((t) => t.status === "active") || res[0];
+          if (active) setSelectedTenureId(active.id);
+        }
+      }
+    });
+
+    const unsubscribeEvents = subscribeToEvents((remoteEvents) => {
       if (Array.isArray(remoteEvents)) {
         setEventsList(remoteEvents);
+      }
+    });
+
+    const unsubscribeTenures = subscribeToTenures((cloudTenures) => {
+      if (cloudTenures && Array.isArray(cloudTenures) && cloudTenures.length > 0) {
+        setTenuresList(cloudTenures);
+        if (!userSelectedTenure) {
+          const active = cloudTenures.find((t) => t.isCurrent) || cloudTenures.find((t) => t.status === "active") || cloudTenures[0];
+          if (active) setSelectedTenureId(active.id);
+        }
       }
     });
 
@@ -139,21 +191,68 @@ export default function AdminEventsPage() {
       setClubsList(getStoredClubs());
     };
 
+    const handleTenureUpdate = (e?: any) => {
+      const tenures = getStoredTenures();
+      setTenuresList(tenures);
+      if (!userSelectedTenure && tenures.length > 0) {
+        const active = tenures.find((t) => t.isCurrent) || tenures.find((t) => t.status === "active") || tenures[0];
+        if (active) setSelectedTenureId(active.id);
+      }
+    };
+
     window.addEventListener("src_events_updated", handleUpdate);
     window.addEventListener("src_tenure_changed", handleUpdate);
+    window.addEventListener("src_tenure_changed", handleTenureUpdate);
+    window.addEventListener("src_tenures_updated", handleTenureUpdate);
     window.addEventListener("storage", handleUpdate);
 
     return () => {
-      unsubscribe();
+      unsubscribeEvents();
+      unsubscribeTenures();
       window.removeEventListener("src_events_updated", handleUpdate);
       window.removeEventListener("src_tenure_changed", handleUpdate);
+      window.removeEventListener("src_tenure_changed", handleTenureUpdate);
+      window.removeEventListener("src_tenures_updated", handleTenureUpdate);
       window.removeEventListener("storage", handleUpdate);
     };
-  }, []);
+  }, [userSelectedTenure]);
+
+  // Events available in selected tenure
+  const tenureFilteredEvents = useMemo(() => {
+    if (selectedTenureId === "all") return eventsList;
+    const matchedTenure = tenuresList.find((t) => t.id === selectedTenureId);
+    if (!matchedTenure) {
+      return eventsList.filter((e) => {
+        const resolved = resolveTenureForEvent(e, tenuresList);
+        return resolved ? resolved.id === selectedTenureId : e.tenureId === selectedTenureId;
+      });
+    }
+
+    if (matchedTenure.isCurrent || matchedTenure.status === "active") {
+      // By default, in the list show current tenure events only!
+      return eventsList.filter((e) => {
+        const resolved = resolveTenureForEvent(e, tenuresList);
+        return resolved ? resolved.id === matchedTenure.id : (e.tenureId === matchedTenure.id || !e.tenureId);
+      });
+    }
+
+    // Past tenure: load past tenure events only when user changes the filter manually
+    const snapshotEvents = Array.isArray(matchedTenure.events) ? matchedTenure.events : [];
+    const pastFromStore = eventsList.filter((e) => {
+      const resolved = resolveTenureForEvent(e, tenuresList);
+      return resolved ? resolved.id === matchedTenure.id : e.tenureId === matchedTenure.id;
+    });
+
+    const map = new Map<string, EventItem>();
+    [...snapshotEvents, ...pastFromStore].forEach((ev) => {
+      if (ev && (ev.id || ev.slug)) map.set(ev.id || ev.slug, ev);
+    });
+    return Array.from(map.values());
+  }, [eventsList, selectedTenureId, tenuresList]);
 
   const filteredEvents = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    const filtered = eventsList.filter((e) => {
+    const filtered = tenureFilteredEvents.filter((e) => {
       // Search matching
       const matchesSearch = !q || (
         e.name.toLowerCase().includes(q) ||
@@ -199,7 +298,7 @@ export default function AdminEventsPage() {
       return true;
     });
     return sortEventsByDate(filtered);
-  }, [eventsList, searchQuery, selectedStatus, selectedCategory, selectedAudience]);
+  }, [tenureFilteredEvents, searchQuery, selectedStatus, selectedCategory, selectedAudience]);
 
   const handleCreateSubmit = async (formData: EventFormData) => {
     const isUmbrella = Boolean(formData.isParentFest);
@@ -746,7 +845,7 @@ export default function AdminEventsPage() {
             </h1>
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-[#17458F] border border-blue-100">
               <span className="h-1.5 w-1.5 rounded-full bg-blue-600"></span>
-              <span className="tabular-nums font-bold">{eventsList.length}</span> Events
+              <span className="tabular-nums font-bold">{tenureFilteredEvents.length}</span> Events
             </span>
           </div>
           <p className="text-xs text-slate-500 font-medium">
@@ -837,7 +936,27 @@ export default function AdminEventsPage() {
           </div>
 
           {/* Dropdown Filters */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Tenure Dropdown Filter */}
+            <div className="relative">
+              <select
+                value={selectedTenureId}
+                onChange={(e) => {
+                  setUserSelectedTenure(true);
+                  setSelectedTenureId(e.target.value);
+                }}
+                className="h-8 pl-2.5 pr-7 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none focus:border-[#17458F] transition-colors cursor-pointer appearance-none shadow-2xs"
+              >
+                <option value="all">All Tenures</option>
+                {tenuresList.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.tenureNumber} ({t.label})
+                  </option>
+                ))}
+              </select>
+              <CalendarIcon className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
@@ -868,36 +987,36 @@ export default function AdminEventsPage() {
         {/* Status Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 pt-1 border-t border-slate-100 no-scrollbar">
           {[
-            { id: "all", label: "All Events", count: eventsList.length },
+            { id: "all", label: "All Events", count: tenureFilteredEvents.length },
             { 
               id: "open", 
               label: "Registration Open", 
-              count: eventsList.filter((e) => !e.isCancelled && e.status === "Registration Open" && !e.noRegistrationRequired && !isRegistrationDeadlinePassed(e)).length 
+              count: tenureFilteredEvents.filter((e) => !e.isCancelled && e.status === "Registration Open" && !e.noRegistrationRequired && !isRegistrationDeadlinePassed(e)).length 
             },
             { 
               id: "walkin", 
               label: "Open Walk-in", 
-              count: eventsList.filter((e) => e.noRegistrationRequired).length 
+              count: tenureFilteredEvents.filter((e) => e.noRegistrationRequired).length 
             },
             { 
               id: "upcoming", 
               label: "Upcoming", 
-              count: eventsList.filter((e) => !e.isCancelled && e.status === "Upcoming").length 
+              count: tenureFilteredEvents.filter((e) => !e.isCancelled && e.status === "Upcoming").length 
             },
             { 
               id: "coming_soon", 
               label: "Coming Soon", 
-              count: eventsList.filter((e) => !e.isCancelled && e.status === "Coming Soon").length 
+              count: tenureFilteredEvents.filter((e) => !e.isCancelled && e.status === "Coming Soon").length 
             },
             { 
               id: "completed", 
               label: "Completed", 
-              count: eventsList.filter((e) => e.status === "Completed").length 
+              count: tenureFilteredEvents.filter((e) => e.status === "Completed").length 
             },
             { 
               id: "cancelled", 
               label: "Cancelled", 
-              count: eventsList.filter((e) => e.isCancelled || e.status === "Cancelled").length 
+              count: tenureFilteredEvents.filter((e) => e.isCancelled || e.status === "Cancelled").length 
             },
           ].map((tab) => {
             const isActive = selectedStatus === tab.id;
@@ -924,7 +1043,7 @@ export default function AdminEventsPage() {
           })}
 
           <div className="ml-auto pl-2 text-[11px] text-slate-400 font-medium whitespace-nowrap hidden sm:block">
-            Showing <strong className="text-slate-700">{filteredEvents.length}</strong> of {eventsList.length}
+            Showing <strong className="text-slate-700">{filteredEvents.length}</strong> of {tenureFilteredEvents.length}
           </div>
         </div>
       </div>
@@ -940,13 +1059,13 @@ export default function AdminEventsPage() {
               No Events Found
             </h3>
             <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              {eventsList.length === 0
-                ? "No events are currently scheduled. Use the button below to publish your first campus event."
+              {tenureFilteredEvents.length === 0
+                ? "No events are currently scheduled for this tenure period. Use the button below to publish your first campus event."
                 : "No events match your current filter and search criteria."}
             </p>
           </div>
           <div className="flex items-center justify-center gap-3 pt-2">
-            {eventsList.length > 0 && (
+            {tenureFilteredEvents.length > 0 && (
               <Button
                 onClick={() => {
                   setSearchQuery("");
