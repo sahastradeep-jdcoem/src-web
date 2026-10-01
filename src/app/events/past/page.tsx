@@ -26,6 +26,7 @@ import {
   getEventDateTimestamp,
   sanitizeEventItem,
   getStoredEvents,
+  resolveTenureForEvent,
 } from "@/lib/eventsStore";
 import { EventItem } from "@/types";
 
@@ -95,12 +96,15 @@ export default function PastTenureEventsPage() {
       }
     });
 
-    // Also aggregate from stored events where tenureId or tenureLabel belongs to an archived tenure
+    // Also aggregate from stored events where tenure active date belongs to an archived tenure
     const storedEvents = getStoredEvents();
     storedEvents.forEach((evt) => {
-      const matchingTenure = archivedTenures.find(
-        (at) => (evt.tenureId && evt.tenureId === at.id) || (evt.tenureLabel && evt.tenureLabel === at.label)
-      );
+      const resolved = resolveTenureForEvent(evt, tenuresList);
+      const matchingTenure = resolved && !resolved.isCurrent && !resolved.isDraft
+        ? resolved
+        : archivedTenures.find(
+            (at) => (evt.tenureId && evt.tenureId === at.id) || (evt.tenureLabel && evt.tenureLabel === at.label)
+          );
       if (matchingTenure) {
         const sanitized = sanitizeEventItem(evt);
         const key = sanitized.id || sanitized.slug;

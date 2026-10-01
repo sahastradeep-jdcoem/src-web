@@ -521,11 +521,119 @@ export function sanitizeEventsList(events: EventItem[]): EventItem[] {
 }
 
 /**
+ * Resolves which tenure an event belongs to based primarily on TENURE ACTIVE DATE.
+ * 
+ * Invariant: Tenure Active Date is the authoritative factor for event segregation.
+ * 1. Event Date Timestamp: extracted from event.rawDate or event.date.
+ * 2. Compares against each tenure's [startDate, endDate] active window.
+ * 3. Fallback to event.tenureId / event.tenureLabel only if event date is TBA/absent.
+ */
+export function resolveTenureForEvent(
+  event?: Partial<EventItem> | { date?: string; rawDate?: string; tenureId?: string; tenureLabel?: string; [key: string]: any } | null,
+  tenuresList?: CouncilTenure[]
+): CouncilTenure | null {
+  if (!event || !Array.isArray(tenuresList) || tenuresList.length === 0) return null;
+
+  const currentTenure = tenuresList.find((t) => t.isCurrent) || tenuresList[0];
+
+  // Helper to extract timestamp from tenure date or label
+  const getTenureStartTs = (t: CouncilTenure): number => {
+    if (t.startDate) {
+      const ts = parseDateStringToTimestamp(t.startDate);
+      if (ts) return ts;
+    }
+    const match = (t.label || t.academicYear || "").match(/(\d{4})/);
+    if (match) {
+      const year = parseInt(match[1], 10);
+      return new Date(year, 5, 1).getTime(); // June 1 of year
+    }
+    return 0;
+  };
+
+  const getTenureEndTs = (t: CouncilTenure): number => {
+    if (t.endDate) {
+      const ts = parseDateStringToTimestamp(t.endDate, true);
+      if (ts) return ts;
+    }
+    if (t.isCurrent) {
+      return Number.MAX_SAFE_INTEGER;
+    }
+    const match = (t.label || t.academicYear || "").match(/\d{4}\s*[-–/]\s*(\d{2,4})/);
+    if (match) {
+      let year = parseInt(match[1], 10);
+      if (year < 100) year += 2000;
+      return new Date(year, 5, 30, 23, 59, 59, 999).getTime(); // June 30 of ending year
+    }
+    return Number.MAX_SAFE_INTEGER;
+  };
+
+  // 1. Primary: Resolve by Event Date vs Tenure Active Window
+  const targetDateStr = event.rawDate || event.date;
+  if (targetDateStr && !/\b(coming soon|tba|to be announced|tbd)\b/i.test(targetDateStr)) {
+    const eventTs = parseDateStringToTimestamp(targetDateStr);
+    if (eventTs) {
+      const nonDraftTenures = tenuresList.filter((t) => !t.isDraft || t.isCurrent);
+      const candidates = nonDraftTenures.length > 0 ? nonDraftTenures : tenuresList;
+
+      // Check past/archived tenures with closed intervals first
+      for (const t of candidates) {
+        if (!t.isCurrent) {
+          const s = getTenureStartTs(t);
+          const e = getTenureEndTs(t);
+          if (eventTs >= s && eventTs <= e) {
+            return t;
+          }
+        }
+      }
+
+      // Check current active tenure
+      const currentStart = getTenureStartTs(currentTenure);
+      const currentEnd = getTenureEndTs(currentTenure);
+      if (eventTs >= currentStart && eventTs <= currentEnd) {
+        return currentTenure;
+      }
+
+      // Check any tenure whose interval covers the event
+      for (const t of tenuresList) {
+        const s = getTenureStartTs(t);
+        const e = getTenureEndTs(t);
+        if (eventTs >= s && eventTs <= e) {
+          return t;
+        }
+      }
+
+      // If event happened in the past before current tenure start, map to the closest past tenure
+      if (eventTs < currentStart) {
+        const pastTenures = candidates.filter((t) => !t.isCurrent);
+        if (pastTenures.length > 0) {
+          pastTenures.sort((a, b) => getTenureStartTs(b) - getTenureStartTs(a));
+          return pastTenures[0];
+        }
+      }
+
+      // If event is after current tenure start, it belongs to the current tenure
+      if (eventTs >= currentStart) {
+        return currentTenure;
+      }
+    }
+  }
+
+  // 2. Secondary Fallback: Use explicit tags if event has no parseable date
+  if (event.tenureId) {
+    const byId = tenuresList.find((t) => t.id === event.tenureId);
+    if (byId) return byId;
+  }
+  if (event.tenureLabel) {
+    const byLabel = tenuresList.find((t) => t.label === event.tenureLabel);
+    if (byLabel) return byLabel;
+  }
+
+  return currentTenure;
+}
+
+/**
  * Resolves events to show on the main public calendar (/events).
- * Invariant: Until a new tenure completes at least 3 events, older events from
- * past/archived tenures remain visible on the main events page so the page does
- * not appear empty. Once 3 or more events are completed by the active tenure,
- * past events gracefully retire exclusively to /events/past.
+ * Uses Tenure Active Date as the authoritative factor to segregate current vs older tenure events.
  */
 export function getMainCalendarEvents(
   eventsList: EventItem[],
@@ -557,37 +665,27 @@ export function getMainCalendarEvents(
   }
 
   const currentTenure = validTenures.find((t) => t.isCurrent) || validTenures[0];
-  const archivedTenures = validTenures.filter((t) => !t.isCurrent && (t.status === "archived" || !t.isDraft));
 
-  // Determine which events in validEvents belong to the current tenure vs older tenures
+  // Determine which events belong to the current tenure vs older tenures based on TENURE ACTIVE DATE
   const currentTenureEvents: EventItem[] = [];
   const olderEventsFromStore: EventItem[] = [];
 
   for (const evt of validEvents) {
-    const hasCurrentTag = (evt.tenureId && evt.tenureId === currentTenure.id) ||
-      (evt.tenureLabel && evt.tenureLabel === currentTenure.label);
+    const resolvedTenure = resolveTenureForEvent(evt, validTenures);
+    const isForCurrent = resolvedTenure ? resolvedTenure.id === currentTenure.id : true;
 
-    const hasOtherTag = (evt.tenureId && evt.tenureId !== currentTenure.id) ||
-      (evt.tenureLabel && evt.tenureLabel !== currentTenure.label);
-
-    if (hasCurrentTag) {
-      currentTenureEvents.push(evt);
-    } else if (hasOtherTag) {
-      olderEventsFromStore.push(evt);
+    if (isForCurrent) {
+      currentTenureEvents.push({
+        ...evt,
+        tenureId: currentTenure.id,
+        tenureLabel: currentTenure.label,
+      });
     } else {
-      // Untagged event: check if it belongs to any archived tenure snapshot
-      const inArchived = archivedTenures.some(
-        (at) => Array.isArray(at.events) && at.events.some((ae) => ae.id === evt.id || ae.slug === evt.slug)
-      );
-      if (inArchived) {
-        olderEventsFromStore.push(evt);
-      } else {
-        currentTenureEvents.push({
-          ...evt,
-          tenureId: evt.tenureId || currentTenure.id,
-          tenureLabel: evt.tenureLabel || currentTenure.label,
-        });
-      }
+      olderEventsFromStore.push({
+        ...evt,
+        tenureId: resolvedTenure ? resolvedTenure.id : evt.tenureId,
+        tenureLabel: resolvedTenure ? resolvedTenure.label : evt.tenureLabel,
+      });
     }
   }
 

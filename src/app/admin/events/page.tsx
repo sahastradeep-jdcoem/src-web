@@ -50,7 +50,8 @@ import {
   sortEventsByDate,
   isRegistrationDeadlinePassed,
   parseDateStringToTimestamp,
-  getEventEffectiveStatus
+  getEventEffectiveStatus,
+  resolveTenureForEvent
 } from "@/lib/eventsStore";
 import { getStoredClubs } from "@/lib/councilStore";
 import { 
@@ -61,7 +62,7 @@ import {
   deleteActiveCheckoutSessionsForEvent
 } from "@/lib/firebase/firestore";
 import { purgePendingQueueFor } from "@/lib/dataSyncEngine";
-import { getCurrentTenure } from "@/lib/tenureStore";
+import { getCurrentTenure, getStoredTenures } from "@/lib/tenureStore";
 
 export default function AdminEventsPage() {
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
@@ -220,6 +221,8 @@ export default function AdminEventsPage() {
       : "Free Entry";
 
     const randSuffix = Math.random().toString(36).substring(2, 6);
+    const tenures = getStoredTenures();
+    const resolvedTenure = resolveTenureForEvent(formData, tenures);
     const created: EventItem = {
       id: `evt-${Date.now()}-${randSuffix}`,
       slug: `${formData.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${randSuffix}`,
@@ -278,8 +281,8 @@ export default function AdminEventsPage() {
               phone: (formData.coordinatorContact.phone || "").trim(),
             }
           : undefined,
-      tenureId: getCurrentTenure()?.id,
-      tenureLabel: getCurrentTenure()?.label,
+      tenureId: resolvedTenure?.id || getCurrentTenure()?.id,
+      tenureLabel: resolvedTenure?.label || getCurrentTenure()?.label,
     };
 
     const updated = created.isFeatured
@@ -486,6 +489,9 @@ export default function AdminEventsPage() {
     const targetMatch = (item: EventItem) =>
       item.id === editingEvent.id || (Boolean(editingEvent.slug) && item.slug === editingEvent.slug);
 
+    const tenures = getStoredTenures();
+    const resolvedTenure = resolveTenureForEvent(formData, tenures);
+
     const editedItem: EventItem = {
       ...editingEvent,
       name: formData.name,
@@ -543,8 +549,8 @@ export default function AdminEventsPage() {
               phone: (formData.coordinatorContact.phone || "").trim(),
             }
           : undefined,
-      tenureId: editingEvent.tenureId || getCurrentTenure()?.id,
-      tenureLabel: editingEvent.tenureLabel || getCurrentTenure()?.label,
+      tenureId: resolvedTenure?.id || editingEvent.tenureId || getCurrentTenure()?.id,
+      tenureLabel: resolvedTenure?.label || editingEvent.tenureLabel || getCurrentTenure()?.label,
     };
 
     const hasItem = eventsList.some(targetMatch);
@@ -574,13 +580,15 @@ export default function AdminEventsPage() {
 
   const handleDuplicate = (evt: EventItem) => {
     const randSuffix = Math.random().toString(36).substring(2, 6);
+    const tenures = getStoredTenures();
+    const resolvedTenure = resolveTenureForEvent(evt, tenures);
     const duplicated: EventItem = {
       ...evt,
       id: `evt-${Date.now()}-${randSuffix}`,
       name: `${evt.name} (Copy)`,
       slug: `${evt.slug}-copy-${randSuffix}`,
-      tenureId: evt.tenureId || getCurrentTenure()?.id,
-      tenureLabel: evt.tenureLabel || getCurrentTenure()?.label,
+      tenureId: resolvedTenure?.id || evt.tenureId || getCurrentTenure()?.id,
+      tenureLabel: resolvedTenure?.label || evt.tenureLabel || getCurrentTenure()?.label,
     };
     const updated = [duplicated, ...eventsList];
     setEventsList(updated);
