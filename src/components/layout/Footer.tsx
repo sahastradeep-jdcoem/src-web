@@ -125,9 +125,9 @@ export default function Footer() {
         </div>
 
         {/* Links Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 py-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-8 py-12">
           
-          <div className="lg:col-span-2 space-y-4">
+          <div className="sm:col-span-2 lg:col-span-2 space-y-4">
             <h3 className="font-extrabold text-lg text-[#17458F] tracking-wide flex items-center gap-2">
               <span>SAHASTRADEEP</span>
               <span className="text-[#E78023] text-sm font-normal">सहस्रदीप</span>
@@ -195,7 +195,7 @@ export default function Footer() {
               <li>
                 <Link href="/team" className="hover:text-[#17458F] transition-colors flex items-center gap-1.5 font-medium">
                   <ChevronRight className="w-3 h-3 text-[#17458F]" />
-                  <span>Council Officers & Leads</span>
+                  <span>Council Officers</span>
                 </Link>
               </li>
               <li>
@@ -226,9 +226,9 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/events/prarambh/register" className="hover:text-[#17458F] transition-colors flex items-center gap-1.5 font-medium">
+                <Link href="/hub" className="hover:text-[#17458F] transition-colors flex items-center gap-1.5 font-medium">
                   <ChevronRight className="w-3 h-3 text-[#17458F]" />
-                  <span>Ticket Registration</span>
+                  <span>Opportunities Hub</span>
                 </Link>
               </li>
               <li>
@@ -246,7 +246,40 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Location */}
+          {/* Legal & Policies */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-extrabold uppercase tracking-widest text-[#E78023]">
+              Policies & Legal
+            </h4>
+            <ul className="space-y-2 text-xs">
+              <li>
+                <Link href="/terms" className="hover:text-[#17458F] transition-colors flex items-center gap-1.5 font-medium">
+                  <ChevronRight className="w-3 h-3 text-[#17458F]" />
+                  <span>Terms & Conditions</span>
+                </Link>
+              </li>
+              <li>
+                <Link href="/privacy" className="hover:text-[#17458F] transition-colors flex items-center gap-1.5 font-medium">
+                  <ChevronRight className="w-3 h-3 text-[#17458F]" />
+                  <span>Privacy Policy</span>
+                </Link>
+              </li>
+              <li>
+                <Link href="/refund-policy" className="hover:text-[#17458F] transition-colors flex items-center gap-1.5 font-medium">
+                  <ChevronRight className="w-3 h-3 text-[#17458F]" />
+                  <span>Refund & Cancellation</span>
+                </Link>
+              </li>
+              <li>
+                <Link href="/contact" className="hover:text-[#17458F] transition-colors flex items-center gap-1.5 font-medium">
+                  <ChevronRight className="w-3 h-3 text-[#17458F]" />
+                  <span>Help & Grievances</span>
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Secretariat */}
           <div className="space-y-3">
             <h4 className="text-xs font-extrabold uppercase tracking-widest text-[#E78023]">
               Secretariat
@@ -263,6 +296,16 @@ export default function Footer() {
                   srcjdcoem@gmail.com
                 </a>
               </p>
+
+              <div className="pt-2">
+                <Link 
+                  href="/contact" 
+                  className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#17458F] hover:text-[#E78023] transition-colors"
+                >
+                  <span>Contact Council Officers</span>
+                  <ChevronRight className="w-3 h-3" />
+                </Link>
+              </div>
             </div>
           </div>
 
@@ -304,10 +347,16 @@ export default function Footer() {
               </a>
             </div>
           </div>
-          <div className="flex items-center gap-4 font-semibold text-slate-600 shrink-0">
-            <span className="text-[#17458F]">Student Representative Council</span>
-            <span className="text-[#E78023]">•</span>
-            <span>JDCOEM Nagpur</span>
+          
+          {/* Quick Legal Strip */}
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-slate-500 font-medium">
+            <Link href="/terms" className="hover:text-[#17458F] transition-colors">Terms of Service</Link>
+            <span>•</span>
+            <Link href="/privacy" className="hover:text-[#17458F] transition-colors">Privacy Policy</Link>
+            <span>•</span>
+            <Link href="/refund-policy" className="hover:text-[#17458F] transition-colors">Refund & Cancellation</Link>
+            <span>•</span>
+            <Link href="/contact" className="hover:text-[#17458F] transition-colors">Contact Us</Link>
           </div>
         </div>
 

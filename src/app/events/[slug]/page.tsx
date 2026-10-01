@@ -920,6 +920,36 @@ export default function EventDetailPage() {
                     <span>{copiedLink ? "Festival Link Copied!" : "Share this Festival"}</span>
                   </button>
                 </div>
+
+                {/* Official Compliance & Delegate Trust Box */}
+                <div className="pt-3 border-t border-slate-100">
+                  <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1 rounded-md bg-[#17458F]/10 text-[#17458F]">
+                        <ShieldCheck className="w-4 h-4" />
+                      </div>
+                      <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
+                        Official Delegate Assurance
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      All event passes &amp; entry receipts are officially issued by the Student Representative Council (SRC) under JDCOEM oversight.
+                    </p>
+                    <div className="pt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-semibold text-slate-600">
+                      <Link href="/refund-policy" className="text-[#17458F] hover:text-[#E78023] underline decoration-slate-300 underline-offset-2 transition-colors">
+                        Refund Policy
+                      </Link>
+                      <span className="text-slate-300">•</span>
+                      <Link href="/terms" className="text-[#17458F] hover:text-[#E78023] underline decoration-slate-300 underline-offset-2 transition-colors">
+                        Terms of Entry
+                      </Link>
+                      <span className="text-slate-300">•</span>
+                      <Link href="/privacy" className="text-[#17458F] hover:text-[#E78023] underline decoration-slate-300 underline-offset-2 transition-colors">
+                        Privacy Charter
+                      </Link>
+                    </div>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-6">
@@ -1105,6 +1135,36 @@ export default function EventDetailPage() {
                     {copiedLink ? <Check className="w-4 h-4 text-emerald-600" /> : <Share2 className="w-4 h-4 text-[#17458F]" />}
                     <span>{copiedLink ? "Event Link Copied!" : "Share this Event"}</span>
                   </button>
+                </div>
+
+                {/* Official Compliance & Delegate Trust Box */}
+                <div className="pt-3 border-t border-slate-100">
+                  <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1 rounded-md bg-[#17458F]/10 text-[#17458F]">
+                        <ShieldCheck className="w-4 h-4" />
+                      </div>
+                      <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
+                        Official Delegate Assurance
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      All event passes &amp; entry receipts are officially issued by the Student Representative Council (SRC) under JDCOEM oversight.
+                    </p>
+                    <div className="pt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-semibold text-slate-600">
+                      <Link href="/refund-policy" className="text-[#17458F] hover:text-[#E78023] underline decoration-slate-300 underline-offset-2 transition-colors">
+                        Refund Policy
+                      </Link>
+                      <span className="text-slate-300">•</span>
+                      <Link href="/terms" className="text-[#17458F] hover:text-[#E78023] underline decoration-slate-300 underline-offset-2 transition-colors">
+                        Terms of Entry
+                      </Link>
+                      <span className="text-slate-300">•</span>
+                      <Link href="/privacy" className="text-[#17458F] hover:text-[#E78023] underline decoration-slate-300 underline-offset-2 transition-colors">
+                        Privacy Charter
+                      </Link>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
