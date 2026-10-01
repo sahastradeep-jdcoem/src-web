@@ -182,9 +182,7 @@ export default function EventsPage() {
 
   // Derive calendar events: automatically includes older events if current tenure has < 3 completed events
   const { 
-    events: baseCalendarEvents, 
-    isShowingOlderEvents, 
-    currentTenureCompletedCount 
+    events: baseCalendarEvents 
   } = useMemo(() => {
     return getMainCalendarEvents(eventsList, tenuresList);
   }, [eventsList, tenuresList]);
@@ -293,31 +291,6 @@ export default function EventsPage() {
 
         {/* Live / Upcoming Events Grid */}
         <div className="space-y-6">
-          {/* New Tenure Transition Notice: Keeping older events visible until 3 events complete */}
-          {isShowingOlderEvents && !searchQuery && (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-950 shadow-xs">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0 text-amber-700">
-                  <Sparkles className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-amber-800">
-                    Council Session {currentTenureLabel} Underway ({currentTenureCompletedCount}/3 Events Completed)
-                  </p>
-                  <p className="text-xs text-amber-900/80 mt-0.5">
-                    Displaying standout highlights and events from previous sessions alongside new calendar announcements.
-                  </p>
-                </div>
-              </div>
-              <Link
-                href="/events/past"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-600/15 hover:bg-amber-600/25 text-amber-900 text-xs font-semibold shrink-0 transition-colors w-fit"
-              >
-                <span>Full Past Archives</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-          )}
 
           {searchQuery && (
             <div className="border-b border-slate-200 pb-4">
