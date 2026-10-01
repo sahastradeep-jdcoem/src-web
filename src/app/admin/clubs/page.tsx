@@ -158,7 +158,9 @@ export default function AdminClubsPage() {
   }, [selectedTenureId]);
 
   const selectedTenure = tenures.find((t) => t.id === selectedTenureId) || tenures.find((t) => t.isCurrent) || tenures[0];
-  const isDraftTenure = selectedTenure && !selectedTenure.isCurrent;
+  const isCurrentTenure = Boolean(selectedTenure?.isCurrent);
+  const isDraftTenure = Boolean(selectedTenure && !selectedTenure.isCurrent && (selectedTenure.isDraft || selectedTenure.status === "draft"));
+  const isArchivedTenure = Boolean(selectedTenure && !selectedTenure.isCurrent && !isDraftTenure);
 
   const handleSelectTenure = (tId: string) => {
     setSelectedTenureId(tId);
@@ -452,7 +454,7 @@ export default function AdminClubsPage() {
         <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between shadow-xs animate-in fade-in duration-300">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>Clubs directory updated successfully! {isDraftTenure ? `(Saved to draft session ${selectedTenure?.label})` : "(Published live across platform)"}</span>
+            <span>Clubs directory updated successfully! {isDraftTenure ? `(Saved to draft session ${selectedTenure?.label})` : isArchivedTenure ? `(Saved to past tenure archive ${selectedTenure?.label})` : "(Published live across platform)"}</span>
           </div>
           <Link href="/clubs" target="_blank" className="text-emerald-700 underline font-bold uppercase tracking-wider">
             View Public Clubs Directory &rarr;
@@ -468,7 +470,7 @@ export default function AdminClubsPage() {
               TENURE SESSION:
             </span>
             <span className="text-[11px] text-slate-500 font-medium">
-              (Assign Club Heads &amp; Co-Heads for upcoming or live tenure)
+              (Assign Club Heads &amp; Co-Heads for live, past, or upcoming tenure)
             </span>
           </div>
         </div>
@@ -477,6 +479,10 @@ export default function AdminClubsPage() {
         <div className="flex flex-wrap items-center gap-2">
           {tenures.map((t) => {
             const isSelected = t.id === selectedTenureId;
+            const isLive = t.isCurrent;
+            const isArchived = !t.isCurrent && (t.status === "archived" || (!t.isDraft && t.status !== "draft"));
+            const isDraft = !t.isCurrent && !isArchived;
+
             return (
               <button
                 key={t.id}
@@ -484,18 +490,26 @@ export default function AdminClubsPage() {
                 onClick={() => handleSelectTenure(t.id)}
                 className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border ${
                   isSelected
-                    ? t.isCurrent
+                    ? isLive
                       ? "bg-[#17458F] text-white border-[#17458F] shadow-sm"
+                      : isArchived
+                      ? "bg-slate-700 text-white border-slate-700 shadow-sm"
                       : "bg-[#E78023] text-white border-[#E78023] shadow-sm"
                     : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
                 }`}
               >
                 <span>Tenure {t.label}</span>
-                {t.isCurrent ? (
+                {isLive ? (
                   <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase ${
                     isSelected ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"
                   }`}>
                     ● LIVE
+                  </span>
+                ) : isArchived ? (
+                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase ${
+                    isSelected ? "bg-white/20 text-white" : "bg-slate-200 text-slate-800"
+                  }`}>
+                    PAST
                   </span>
                 ) : (
                   <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase ${
@@ -515,6 +529,15 @@ export default function AdminClubsPage() {
               Draft Mode: Pre-configuring Club Heads &amp; Co-Heads for Upcoming Tenure {selectedTenure.label}
             </span>
             Any leadership updates saved here are linked to Tenure {selectedTenure.label} and will go live automatically when this tenure is activated!
+          </div>
+        )}
+
+        {isArchivedTenure && selectedTenure && (
+          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-800 text-[11px] leading-relaxed">
+            <span className="font-bold block text-slate-900 mb-0.5">
+              Past Tenure Archive: Viewing Club Leadership for Tenure {selectedTenure.label}
+            </span>
+            These club leads and co-heads are preserved in the public council archive for Tenure {selectedTenure.label}.
           </div>
         )}
       </div>

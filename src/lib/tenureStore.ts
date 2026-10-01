@@ -432,11 +432,21 @@ export function getStoredTenures(): CouncilTenure[] {
       resolvedClubs = activeClubs;
     }
 
-    // Determine if it's a draft or an archived past session:
-    // If it has never been marked as live, has no startDate, or explicitly has isDraft / status === "draft"
-    const isDraft = t.isDraft !== undefined
-      ? t.isDraft
-      : (t.status === "draft" || (!t.startDate && t.id !== "tenure-2025-26" && !t.label.includes("2025")));
+    // Determine if it's an archived past session or an upcoming draft session:
+    const isArchived = !isCurrent && (
+      t.status === "archived" ||
+      Boolean(t.endDate) ||
+      (t.isDraft === false && t.status !== "draft") ||
+      (isFirstTenure && !isCurrent)
+    );
+
+    const isDraft = !isCurrent && !isArchived && (t.isDraft === true || t.status === "draft" || (!t.startDate && !isFirstTenure));
+
+    const finalStatus: "active" | "archived" | "draft" = isCurrent
+      ? "active"
+      : isArchived
+      ? "archived"
+      : "draft";
 
     let resolvedFounders = stripCategoryAndLevel(isFirstTenure ? (t.foundingMembers || activeFounders) : []);
 
@@ -444,8 +454,9 @@ export function getStoredTenures(): CouncilTenure[] {
 
     return {
       ...t,
+      isCurrent,
       isDraft,
-      status: isDraft ? ("draft" as const) : ("archived" as const),
+      status: finalStatus,
       tenureNumber: tenureNum,
       adminCouncil: resolvedCouncil,
       hostingCommittee: resolvedHosting,

@@ -325,52 +325,9 @@ export default function PastTenureEventsPage() {
               ))}
             </StaggerGrid>
 
-            {/* ---- Google-Style Pagination ---- */}
+            {/* ---- Pagination ---- */}
             {totalPages > 1 && (
               <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-xs flex flex-col items-center justify-center space-y-6">
-
-                {/* Google wordmark with clickable 'o' letters */}
-                <div
-                  className="flex items-center justify-center tracking-tight text-3xl sm:text-4xl font-extrabold font-heading select-none"
-                  aria-label={`Page ${page} of ${totalPages}`}
-                >
-                  <span className="text-[#4285F4]">G</span>
-                  {visiblePages.map((pageNum) => {
-                    const isActive = pageNum === page;
-                    const colorIndex = (pageNum - 1) % 4;
-                    const letterColor = isActive
-                      ? "text-[#EA4335]"
-                      : colorIndex === 0
-                      ? "text-[#EA4335]"
-                      : colorIndex === 1
-                      ? "text-[#FBBC05]"
-                      : colorIndex === 2
-                      ? "text-[#4285F4]"
-                      : "text-[#34A853]";
-                    return (
-                      <button
-                        key={pageNum}
-                        onClick={() => handlePageChange(pageNum)}
-                        className="px-0.5 sm:px-1 transition-transform hover:scale-125 focus:outline-none"
-                        title={`Go to page ${pageNum}`}
-                      >
-                        <span
-                          className={cn(
-                            "inline-block font-extrabold transition-all duration-200",
-                            letterColor,
-                            isActive ? "scale-125 underline decoration-2 underline-offset-4" : "opacity-80 hover:opacity-100"
-                          )}
-                        >
-                          o
-                        </span>
-                      </button>
-                    );
-                  })}
-                  <span className="text-[#4285F4]">g</span>
-                  <span className="text-[#34A853]">l</span>
-                  <span className="text-[#EA4335]">e</span>
-                </div>
-
                 {/* Numbered navigation */}
                 <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-center">
                   <button
