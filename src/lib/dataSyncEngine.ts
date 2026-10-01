@@ -314,6 +314,21 @@ export function markLocalWrite(docId: string): void {
 }
 
 /**
+ * Clear local write timestamps for a docId after a successful DELETE operation.
+ * This allows the real-time subscription to immediately accept the empty remote state
+ * without being blocked by the "recent local write" guard.
+ * Called after a successful Firestore delete to prevent resurrection of deleted items.
+ */
+export function markLocalDelete(docId: string): void {
+  if (typeof window === "undefined") return;
+  localWriteTimestamps.delete(docId);
+  try {
+    localStorage.removeItem(`src_last_write_${docId}`);
+    sessionStorage.removeItem(`src_last_write_${docId}`);
+  } catch {}
+}
+
+/**
  * Get the timestamp (in ms) of the most recent local write for a docId.
  */
 export function getLastLocalWriteTime(docId: string): number {

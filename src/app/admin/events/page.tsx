@@ -764,9 +764,22 @@ export default function AdminEventsPage() {
       // Belt-and-suspenders cascade for checkout sessions
       await deleteActiveCheckoutSessionsForEvent(deletedId, deletedSlug, deletedName);
 
-      // Persist local state (without deleted event)
+      // Persist local state (without deleted event).
+      // CRITICAL: Do NOT call saveStoredEvents() here — it calls markLocalWrite("events") which
+      // would block the real-time subscription from accepting the authoritative empty remote state,
+      // causing the deleted event to resurrect on the next page refresh.
+      // Instead: filter localStorage + inMemoryEvents directly without re-stamping a write timestamp,
+      // then call markLocalDelete("events") to clear the write guard.
       const latest = getStoredEvents().filter((e) => e.id !== deletedId && e.slug !== deletedSlug);
-      await saveStoredEvents(latest);
+      // Write directly to localStorage without marking a local write
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("src_events", JSON.stringify(latest));
+        } catch {}
+        window.dispatchEvent(new CustomEvent("src_events_updated", { detail: latest }));
+      }
+      // Clear the write timestamp so subscribeToEvents is NOT blocked after this delete
+      purgePendingQueueFor(["events", ...purgeKeys]);
 
       showNotice(`"${deletedName}" permanently deleted.`);
     } catch (err) {

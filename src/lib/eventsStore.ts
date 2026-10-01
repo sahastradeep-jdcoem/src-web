@@ -15,6 +15,7 @@ import {
   reconcileArrayDatasets, 
   hasPendingWritesFor, 
   markLocalWrite,
+  markLocalDelete,
   getLastLocalWriteTime,
   compactEventDataset,
   purgePendingQueueFor
@@ -1049,10 +1050,16 @@ export async function syncEventsFromFirestore(): Promise<EventItem[]> {
     }
     if (remote !== null && Array.isArray(remote)) {
       const current = getStoredEvents();
-      // If remote is empty but local has items (e.g. temporary network blip or initial load),
-      // avoid destructive wipe of local storage.
+      // If remote is empty but local has items, only preserve local data if a write was recent.
+      // If the write timestamp was cleared by markLocalDelete, the admin intentionally deleted all
+      // events — let the authoritative empty remote state apply (Directive #9: Zero Deletion Resurrection).
       if (remote.length === 0 && current.length > 0) {
-        return current;
+        const hasRecentLocalWrite = getLastLocalWriteTime("events") > 0 &&
+          (Date.now() - getLastLocalWriteTime("events") < 30000);
+        if (hasRecentLocalWrite) {
+          return current;
+        }
+        // Write timestamp cleared — allow empty remote (all events were intentionally deleted)
       }
       // Remote Firestore state is strictly authoritative for items & deletions (Directive #9)
       const rawMerged = reconcileArrayDatasets(current, remote);
@@ -1086,9 +1093,15 @@ export function subscribeToEvents(callback: (events: EventItem[]) => void): () =
       const current = getStoredEvents();
 
       // Guard: If remote is empty [] but local has items, do not destructively wipe local items
-      // on initial snapshot transitions. Matches syncEventsFromFirestore guard.
+      // on initial snapshot transitions (e.g. Firestore offline, cache-first snapshot).
+      // EXCEPTION: If the last local write timestamp has been cleared by markLocalDelete,
+      // it means the admin intentionally deleted all events — let the empty remote state apply.
       if (remote.length === 0 && current.length > 0) {
-        return;
+        const hasRecentLocalWrite = getLastLocalWriteTime("events") > 0 &&
+          (Date.now() - getLastLocalWriteTime("events") < 30000);
+        if (hasRecentLocalWrite) return;
+        // No recent local write timestamp means the delete path cleared it — allow the empty state.
+        // Fall through to apply the authoritative empty remote list.
       }
 
       // Remote Firestore state is strictly authoritative (Directive #9)
@@ -1127,7 +1140,12 @@ export function deleteStoredEvent(idOrSlug: string, slug?: string, name?: string
     window.dispatchEvent(new CustomEvent("src_events_updated", { detail: updated }));
   }
 
-  // 2. Purge any pending queue writes for this event so they can never re-create it
+  // 2. Clear the local write timestamp so the real-time subscription is NOT blocked
+  // by the "recent write" guard after a delete. This allows the Firestore subscription
+  // to immediately accept the authoritative remote state (which won't have this event).
+  markLocalDelete("events");
+
+  // 3. Purge any pending queue writes for this event so they can never re-create it
   const purgeKeys = [
     resolvedId,
     resolvedSlug,
