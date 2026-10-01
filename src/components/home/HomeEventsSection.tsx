@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Flame, ArrowRight, Calendar, Inbox } from "lucide-react";
 import { EventCard } from "@/components/events/EventCard";
 import { EventItem } from "@/types";
-import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, sortEventsByDate } from "@/lib/eventsStore";
+import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, sortEventsByDate, isSubEvent } from "@/lib/eventsStore";
 import { StaggerGrid, StaggerItem } from "@/components/ui/StaggerContainer";
 import LeadershipSpotlightSection from "./LeadershipSpotlightSection";
 
@@ -61,8 +61,7 @@ export default function HomeEventsSection() {
         e.status !== "draft" &&
         !e.isCancelled &&
         e.status !== "Cancelled" &&
-        !e.parentEventId &&
-        !e.parentEventSlug
+        !isSubEvent(e, eventsList)
     )
   );
   const featuredEvent = liveEvents.find((e) => Boolean(e.isFeatured) && e.status !== "Completed") || null;

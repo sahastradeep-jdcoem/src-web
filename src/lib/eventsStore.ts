@@ -618,30 +618,96 @@ export function resolveTenureForEvent(
  * Uses Tenure Active Date as the authoritative factor to segregate current vs older tenure events.
  * Past tenure events are strictly isolated to /events/past as per user directives.
  */
+/**
+ * Authoritatively determines whether an event is a sub-event / sub-competition
+ * under an umbrella festival (e.g. Robo Rage under Vibrance 2026).
+ * Sub-events must never appear as standalone cards on the main calendar or past archives.
+ */
+export function isSubEvent(
+  event?: Partial<EventItem> | null,
+  allEvents?: EventItem[]
+): boolean {
+  if (!event) return false;
+  // If explicitly designated as an umbrella festival, it is an umbrella parent, not a sub-event
+  if (event.isParentFest) return false;
+
+  // 1. Direct parent fields on the event itself
+  const pId = (event.parentEventId || "").trim();
+  const pSlug = (event.parentEventSlug || "").trim();
+  const pName = (event.parentEventName || "").trim();
+
+  if (pId.length > 0 && pId.toLowerCase() !== "none") return true;
+  if (pSlug.length > 0 && pSlug.toLowerCase() !== "none") return true;
+  if (pName.length > 0 && pName.toLowerCase() !== "none") return true;
+
+  // 2. Dynamic association with any umbrella festival in allEvents
+  if (Array.isArray(allEvents) && allEvents.length > 0) {
+    const eId = (event.id || "").toLowerCase().trim();
+    const eSlug = (event.slug || "").toLowerCase().trim();
+    const eName = (event.name || "").toLowerCase().trim();
+
+    for (const parent of allEvents) {
+      if (!parent.isParentFest || parent.id === event.id || parent.slug === event.slug) continue;
+      const parentId = (parent.id || "").toLowerCase().trim();
+      const parentSlug = (parent.slug || "").toLowerCase().trim();
+      const parentName = (parent.name || "").toLowerCase().trim();
+
+      // Check if event refers to this umbrella event
+      if (
+        (pId && (pId.toLowerCase() === parentId || pId.toLowerCase() === parentSlug)) ||
+        (pSlug && (pSlug.toLowerCase() === parentSlug || pSlug.toLowerCase() === parentId)) ||
+        (pName && pName.toLowerCase() === parentName)
+      ) {
+        return true;
+      }
+
+      // Check if umbrella parent event has subEvents or competitions referencing this event
+      const subList = (parent as any).subEvents || (parent as any).competitions || (parent as any).subEventIds;
+      if (Array.isArray(subList)) {
+        const found = subList.some((sub: any) => {
+          if (typeof sub === "string") {
+            const clean = sub.toLowerCase().trim();
+            return clean === eId || clean === eSlug || (eName && clean === eName);
+          }
+          if (sub && typeof sub === "object") {
+            const sId = (sub.id || "").toLowerCase().trim();
+            const sSlug = (sub.slug || "").toLowerCase().trim();
+            const sName = (sub.name || "").toLowerCase().trim();
+            return (sId && sId === eId) || (sSlug && sSlug === eSlug) || (sName && sName === eName);
+          }
+          return false;
+        });
+        if (found) return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 export function getMainCalendarEvents(
   eventsList: EventItem[],
-  tenuresList?: CouncilTenure[]
+  tenuresList: CouncilTenure[]
 ): {
   events: EventItem[];
   isShowingOlderEvents: boolean;
   currentTenureCompletedCount: number;
 } {
-  const validEvents = sanitizeEventsList(eventsList || []);
+  const validEvents = sanitizeEventsList(Array.isArray(eventsList) ? eventsList : []);
   const validTenures = Array.isArray(tenuresList) ? tenuresList.filter((t) => !t.isDraft) : [];
 
   if (validTenures.length === 0) {
-    const currentCompleted = validEvents.filter(
+    const standaloneEvents = validEvents.filter((e) => !isSubEvent(e, validEvents));
+    const currentCompleted = standaloneEvents.filter(
       (e) =>
         e.isLive !== false &&
         e.status !== "draft" &&
         !e.isCancelled &&
         e.status !== "Cancelled" &&
-        !e.parentEventId &&
-        !e.parentEventSlug &&
         getEventEffectiveStatus(e) === "Completed"
     );
     return {
-      events: validEvents,
+      events: standaloneEvents,
       isShowingOlderEvents: false,
       currentTenureCompletedCount: currentCompleted.length,
     };
@@ -651,10 +717,16 @@ export function getMainCalendarEvents(
   const archivedTenures = validTenures.filter((t) => !t.isCurrent && (t.status === "archived" || !t.isDraft));
 
   // Determine which events belong to current tenure vs older tenures based on TENURE ACTIVE DATE
+  // Standalone and umbrella events only: Sub-events are strictly excluded from top-level calendar!
   const currentTenureEvents: EventItem[] = [];
   const olderEventsFromStore: EventItem[] = [];
 
   for (const evt of validEvents) {
+    // If it is a sub-event of an umbrella festival, it must NEVER appear on the main calendar
+    if (isSubEvent(evt, validEvents)) {
+      continue;
+    }
+
     const resolvedTenure = resolveTenureForEvent(evt, validTenures);
     const isForCurrent = resolvedTenure ? resolvedTenure.id === currentTenure.id : true;
 
@@ -680,8 +752,7 @@ export function getMainCalendarEvents(
       e.status !== "draft" &&
       !e.isCancelled &&
       e.status !== "Cancelled" &&
-      !e.parentEventId &&
-      !e.parentEventSlug &&
+      !isSubEvent(e, validEvents) &&
       getEventEffectiveStatus(e) === "Completed"
   );
   const currentTenureCompletedCount = currentTenureCompleted.length;
@@ -698,31 +769,40 @@ export function getMainCalendarEvents(
     };
   }
 
-  // Gather older events from archived tenures and older tagged events
+  // Gather older events: LIVE store events ALWAYS take precedence over frozen archive snapshots!
   const olderEventsMap = new Map<string, EventItem>();
 
-  // 1. From archived tenures snapshots
+  // 1. From live events store / validEvents (Authoritative)
+  for (const evt of olderEventsFromStore) {
+    if (!isSubEvent(evt, validEvents)) {
+      const key = evt.id || evt.slug;
+      if (key) {
+        olderEventsMap.set(key, evt);
+      }
+    }
+  }
+
+  // 2. From archived tenures snapshots (fallback only for events not already in live store)
   for (const at of archivedTenures) {
     if (Array.isArray(at.events)) {
       for (const rawEvt of at.events) {
         if (rawEvt && (rawEvt.id || rawEvt.slug)) {
           const sanitized = sanitizeEventItem(rawEvt);
           const key = sanitized.id || sanitized.slug;
-          olderEventsMap.set(key, {
-            ...sanitized,
-            tenureLabel: sanitized.tenureLabel || at.label,
-            tenureId: sanitized.tenureId || at.id,
-          });
+          // Check if live store has updated this event
+          const liveVersion = validEvents.find((e) => (e.id && e.id === sanitized.id) || (e.slug && e.slug === sanitized.slug));
+          const effectiveEvent = liveVersion || sanitized;
+          if (!isSubEvent(effectiveEvent, validEvents)) {
+            if (key && !olderEventsMap.has(key)) {
+              olderEventsMap.set(key, {
+                ...sanitized,
+                tenureLabel: sanitized.tenureLabel || at.label,
+                tenureId: sanitized.tenureId || at.id,
+              });
+            }
+          }
         }
       }
-    }
-  }
-
-  // 2. From older events found in events store / validEvents
-  for (const evt of olderEventsFromStore) {
-    const key = evt.id || evt.slug;
-    if (!olderEventsMap.has(key)) {
-      olderEventsMap.set(key, evt);
     }
   }
 
@@ -731,15 +811,17 @@ export function getMainCalendarEvents(
     try {
       const stored = getStoredEvents();
       for (const evt of stored) {
-        const resolved = resolveTenureForEvent(evt, validTenures);
-        if (resolved && resolved.id !== currentTenure.id) {
-          const key = evt.id || evt.slug;
-          if (!olderEventsMap.has(key)) {
-            olderEventsMap.set(key, {
-              ...evt,
-              tenureLabel: resolved.label,
-              tenureId: resolved.id,
-            });
+        if (!isSubEvent(evt, stored)) {
+          const resolved = resolveTenureForEvent(evt, validTenures);
+          if (resolved && resolved.id !== currentTenure.id) {
+            const key = evt.id || evt.slug;
+            if (key && !olderEventsMap.has(key)) {
+              olderEventsMap.set(key, {
+                ...evt,
+                tenureLabel: resolved.label,
+                tenureId: resolved.id,
+              });
+            }
           }
         }
       }
@@ -749,7 +831,7 @@ export function getMainCalendarEvents(
   // Deduplicate: current tenure events always take priority over older events
   const currentKeys = new Set(currentTenureEvents.map((e) => e.id || e.slug));
   const olderEventsToInclude = Array.from(olderEventsMap.values()).filter(
-    (e) => !currentKeys.has(e.id || e.slug)
+    (e) => !currentKeys.has(e.id || e.slug) && !isSubEvent(e, validEvents)
   );
 
   const combined = [...currentTenureEvents, ...olderEventsToInclude];

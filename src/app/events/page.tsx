@@ -22,7 +22,8 @@ import {
   sortEventsByDate,
   isEventCompletedByDate,
   getMainCalendarEvents,
-  getEventEffectiveStatus
+  getEventEffectiveStatus,
+  isSubEvent
 } from "@/lib/eventsStore";
 import { 
   getPublicTenures, 
@@ -197,8 +198,7 @@ export default function EventsPage() {
           e.status !== "draft" &&
           !e.isCancelled &&
           e.status !== "Cancelled" &&
-          !e.parentEventId &&
-          !e.parentEventSlug
+          !isSubEvent(e, eventsList)
       )
       .filter((event) => {
         const q = deferredSearch.toLowerCase();
@@ -213,7 +213,7 @@ export default function EventsPage() {
       });
 
     return sortEventsByDate(filtered);
-  }, [baseCalendarEvents, deferredSearch]);
+  }, [baseCalendarEvents, deferredSearch, eventsList]);
 
   // Active / Upcoming Events in the live calendar
   const activeUpcomingEvents = useMemo(() => {
@@ -230,8 +230,7 @@ export default function EventsPage() {
       !e.isCancelled &&
       e.status !== "Cancelled" &&
       getEventEffectiveStatus(e) !== "Completed" &&
-      !e.parentEventId &&
-      !e.parentEventSlug
+      !isSubEvent(e, eventsList)
   );
 
   return (

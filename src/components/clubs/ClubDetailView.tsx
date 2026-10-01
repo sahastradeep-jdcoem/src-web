@@ -16,7 +16,7 @@ import {
   Image as ImageIcon 
 } from "lucide-react";
 import { getStoredClubs, syncClubsFromFirestore, subscribeToClubs, getClubLeaders, findClub } from "@/lib/councilStore";
-import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
+import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, isSubEvent } from "@/lib/eventsStore";
 import { findStudentByBtId, checkBtIdPositionConflict } from "@/lib/usersStore";
 import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { ClubItem, EventItem } from "@/types";
@@ -85,8 +85,7 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
     const applyEvents = (list: EventItem[]) => {
       const filtered = list.filter(
         (e) =>
-          !e.parentEventId &&
-          !e.parentEventSlug &&
+          !isSubEvent(e, list) &&
           (e.organizerClubSlug === club.slug ||
           (club.slug === "agentic-ai" && (e.organizerClubSlug === "robotics" || e.organizerClubSlug === "club-robotics")) ||
           (club.slug === "robotics" && (e.organizerClubSlug === "agentic-ai" || e.organizerClubSlug === "club-1788779206223")) ||

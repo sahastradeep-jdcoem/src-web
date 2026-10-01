@@ -27,6 +27,7 @@ import {
   sanitizeEventItem,
   getStoredEvents,
   resolveTenureForEvent,
+  isSubEvent,
 } from "@/lib/eventsStore";
 import { EventItem } from "@/types";
 
@@ -71,18 +72,30 @@ export default function PastTenureEventsPage() {
   // Aggregate ALL past tenure events from archived tenures
   const allPastEvents = useMemo(() => {
     const map = new Map<string, EventItem & { tenureLabel?: string; tenureNumber?: string; tenureId?: string }>();
+    const storedEvents = getStoredEvents();
 
     const archivedTenures = tenuresList.filter((t) => !t.isDraft && !t.isCurrent);
     archivedTenures.forEach((t) => {
       if (Array.isArray(t.events)) {
         t.events.forEach((rawEvt, idx) => {
           if (rawEvt) {
+            // Check if latest stored event has parent/sub-event status
+            const liveVersion = storedEvents.find(
+              (e) => (e.id && e.id === rawEvt.id) || (e.slug && e.slug === rawEvt.slug)
+            );
+            const effective = liveVersion || rawEvt;
+
+            // Strictly exclude any sub-events of an umbrella festival
+            if (isSubEvent(effective, storedEvents)) {
+              return;
+            }
+
             // Strictly exclude any event that belongs to the current live tenure by date
-            const resolved = resolveTenureForEvent(rawEvt, tenuresList);
+            const resolved = resolveTenureForEvent(effective, tenuresList);
             if (resolved && resolved.isCurrent) {
               return;
             }
-            const sanitized = sanitizeEventItem(rawEvt);
+            const sanitized = sanitizeEventItem(effective);
             const key = sanitized.id || sanitized.slug || `archive-${t.id}-${idx}`;
             map.set(key, {
               ...sanitized,
@@ -102,8 +115,10 @@ export default function PastTenureEventsPage() {
     });
 
     // Also aggregate from stored events where tenure active date belongs to an archived tenure
-    const storedEvents = getStoredEvents();
     storedEvents.forEach((evt) => {
+      if (isSubEvent(evt, storedEvents)) {
+        return;
+      }
       const resolved = resolveTenureForEvent(evt, tenuresList);
       // Strictly exclude any event that belongs to current live tenure
       if (resolved && resolved.isCurrent) {
