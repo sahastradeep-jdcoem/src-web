@@ -37,9 +37,9 @@ import {
 import { getPublicTenures } from "@/lib/tenureStore";
 import { EventItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
-import { Accordion } from "@/components/ui/Accordion";
 import { ScheduleTimeline } from "@/components/events/ScheduleTimeline";
 import { PrizeCard } from "@/components/events/PrizeCard";
+import { EventRulesSection } from "@/components/events/EventRulesSection";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { isExternalUser } from "@/lib/usersStore";
@@ -302,12 +302,6 @@ export default function EventDetailPage() {
   const displayRules = Array.from(
     new Set((event.rules || []).map((s) => (typeof s === "string" ? s.trim() : s)).filter(Boolean))
   );
-
-  const ruleAccordionItems = displayRules.map((rule, idx) => ({
-    id: `rule-${idx}`,
-    title: `Regulation 0${idx + 1}: ${rule.slice(0, 45)}...`,
-    content: rule,
-  }));
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] pb-28 md:pb-20 font-sans">
@@ -692,19 +686,9 @@ export default function EventDetailPage() {
               </section>
             )}
 
-            {/* RULES & GUIDELINES ACCORDION */}
-            {ruleAccordionItems && ruleAccordionItems.length > 0 && !event.isParentFest && (
-              <section className="space-y-6">
-                <div className="space-y-1">
-                  <span className="text-xs font-bold uppercase tracking-wider text-[#E78023]">
-                    Official Code of Conduct
-                  </span>
-                  <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#17458F] uppercase">
-                    RULES &amp; GUIDELINES
-                  </h2>
-                </div>
-                <Accordion items={ruleAccordionItems} />
-              </section>
+            {/* RULES & GUIDELINES SECTION */}
+            {displayRules && displayRules.length > 0 && !event.isParentFest && (
+              <EventRulesSection rules={displayRules} />
             )}
 
           </div>
