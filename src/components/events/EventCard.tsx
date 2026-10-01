@@ -114,7 +114,13 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
             )}>
               {event.targetAudience === "jdcoem_only" || event.isInterCollege === false ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
             </span>
-            {event.noRegistrationRequired ? (
+            {event.isParentFest ? (
+              (isCompleted || isComingSoon || effectiveStatus === "Cancelled") ? (
+                <Badge variant={statusVariant} size="sm">
+                  {statusLabel}
+                </Badge>
+              ) : null
+            ) : event.noRegistrationRequired ? (
               <span className="text-[10px] font-sans font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-600 text-white shadow-md">
                 Open Walk-in
               </span>
@@ -211,15 +217,6 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
             >
               Details
             </Link>
-
-            {event.isParentFest && (
-              <Link
-                href={`/events/${event.slug}#competitions`}
-                className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-[#17458F] to-[#0f2d5c] hover:from-[#123670] hover:to-[#0a2244] text-white text-xs font-sans font-bold uppercase tracking-wider text-center transition-all shadow-md shadow-[#17458F]/20 flex items-center justify-center cursor-pointer"
-              >
-                <span>Explore</span>
-              </Link>
-            )}
           </div>
         </div>
 
@@ -262,7 +259,13 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
           )}>
             {event.targetAudience === "jdcoem_only" || event.isInterCollege === false ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
           </span>
-          {event.noRegistrationRequired ? (
+          {event.isParentFest ? (
+            (isCompleted || isComingSoon || effectiveStatus === "Cancelled") ? (
+              <Badge variant={statusVariant} size="sm">
+                {statusLabel}
+              </Badge>
+            ) : null
+          ) : event.noRegistrationRequired ? (
             <span className="text-[10px] font-sans font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-600 text-white shadow-xs">
               Open Walk-in
             </span>
@@ -354,15 +357,6 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
           >
             Details
           </Link>
-
-          {event.isParentFest && (
-            <Link
-              href={`/events/${event.slug}#competitions`}
-              className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#17458F] to-[#0f2d5c] hover:from-[#123670] hover:to-[#0a2244] text-white text-xs font-sans font-bold uppercase tracking-wider text-center transition-all shadow-xs hover:shadow-md flex items-center justify-center cursor-pointer"
-            >
-              <span>Explore</span>
-            </Link>
-          )}
         </div>
       </div>
 
