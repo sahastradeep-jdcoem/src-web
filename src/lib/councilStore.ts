@@ -540,12 +540,17 @@ export function normalizePhoneticMemberName(name?: string): string {
 
 export const KNOWN_RECOVERED_AVATARS: Record<string, string> = {
   lavanyamankar: "https://firebasestorage.googleapis.com/v0/b/src-jdcoem.firebasestorage.app/o/team%2Fmembers%2F1790756880854_15.webp?alt=media&token=aa4ec220-eae8-43f2-ad06-7feb3b8775a2",
+  harshshende: "https://firebasestorage.googleapis.com/v0/b/src-jdcoem.firebasestorage.app/o/team%2Fmembers%2F1790757549475_10.webp?alt=media&token=b7cf1ec7-6c5b-4aec-ae46-a4dc22f578ab",
   harssende: "https://firebasestorage.googleapis.com/v0/b/src-jdcoem.firebasestorage.app/o/team%2Fmembers%2F1790757549475_10.webp?alt=media&token=b7cf1ec7-6c5b-4aec-ae46-a4dc22f578ab",
   nisargjambulkar: "https://firebasestorage.googleapis.com/v0/b/src-jdcoem.firebasestorage.app/o/team%2Fmembers%2F1790757478993_11.webp?alt=media&token=39d6ff30-ed84-4ba0-9dde-f5550db7260b",
+  nisargjambhulkar: "https://firebasestorage.googleapis.com/v0/b/src-jdcoem.firebasestorage.app/o/team%2Fmembers%2F1790757478993_11.webp?alt=media&token=39d6ff30-ed84-4ba0-9dde-f5550db7260b",
   sanskrutitidke: "https://firebasestorage.googleapis.com/v0/b/src-jdcoem.firebasestorage.app/o/clubs%2Fleads%2F1790759574711_event_2.webp?alt=media&token=7756138f-7bc8-4bc8-9a55-27f92959c7f2",
+  parthgahane: "https://firebasestorage.googleapis.com/v0/b/src-jdcoem.firebasestorage.app/o/clubs%2Fleads%2F1790761046249_fitness.webp?alt=media&token=6d0cbf95-982d-4ecf-87a9-4c370479740b",
   partgahane: "https://firebasestorage.googleapis.com/v0/b/src-jdcoem.firebasestorage.app/o/clubs%2Fleads%2F1790761046249_fitness.webp?alt=media&token=6d0cbf95-982d-4ecf-87a9-4c370479740b",
+  abhaykamble: "https://firebasestorage.googleapis.com/v0/b/src-jdcoem.firebasestorage.app/o/clubs%2Fleads%2F1790786289555_robotics.webp?alt=media&token=5d96a8b3-6f14-4fe2-ac5b-f0bbb2a17c2b",
   abaykamble: "https://firebasestorage.googleapis.com/v0/b/src-jdcoem.firebasestorage.app/o/clubs%2Fleads%2F1790786289555_robotics.webp?alt=media&token=5d96a8b3-6f14-4fe2-ac5b-f0bbb2a17c2b",
   gokulpawar: "https://firebasestorage.googleapis.com/v0/b/src-jdcoem.firebasestorage.app/o/clubs%2Fleads%2F1790760905320_vac.webp?alt=media&token=edc1aad9-2fbf-4985-9238-38fb445dc8e2",
+  tanvisanghani: "https://firebasestorage.googleapis.com/v0/b/src-jdcoem.firebasestorage.app/o/clubs%2Fleads%2F1790759792422_dance_2.webp?alt=media&token=6b26f073-53f9-454c-92d7-196b82d45a8d",
   tanvisangani: "https://firebasestorage.googleapis.com/v0/b/src-jdcoem.firebasestorage.app/o/clubs%2Fleads%2F1790759792422_dance_2.webp?alt=media&token=6b26f073-53f9-454c-92d7-196b82d45a8d",
   nehalzade: "https://firebasestorage.googleapis.com/v0/b/src-jdcoem.firebasestorage.app/o/clubs%2Fleads%2F1790761383332_fitness_3.webp?alt=media&token=f066c071-cf22-4d5c-9332-7ebd7dc2f6eb"
 };
@@ -559,16 +564,18 @@ export function sanitizeTeamMember(m: TeamMember): TeamMember {
     copy.bio = "";
   }
   // Auto-heal active portraits from live verified storage assets
-   if (copy.name) {
-     const key = normalizeMemberName(copy.name);
-    if (KNOWN_RECOVERED_AVATARS[key]) {
+  if (copy.name) {
+    const key = normalizeMemberName(copy.name);
+    const phoneticKey = normalizePhoneticMemberName(copy.name);
+    const recoveredUrl = KNOWN_RECOVERED_AVATARS[key] || KNOWN_RECOVERED_AVATARS[phoneticKey];
+    if (recoveredUrl) {
       const isDeadPurgedUrl =
         !copy.avatar ||
         copy.avatar.includes("team%2Fmembers%2F179071") ||
         copy.avatar.includes("team/members/179071") ||
         copy.avatar.includes("1789942527717");
       if (isDeadPurgedUrl) {
-        copy.avatar = KNOWN_RECOVERED_AVATARS[key];
+        copy.avatar = recoveredUrl;
       }
     }
   }
