@@ -10,7 +10,7 @@ interface ModalProps {
   title?: string;
   subtitle?: string;
   children: React.ReactNode;
-  maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "5xl";
+  maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "5xl" | "6xl" | "full";
   closeOnBackdropClick?: boolean;
   closeOnEscape?: boolean;
   showCloseButton?: boolean;
@@ -201,6 +201,8 @@ export function Modal({
     "3xl": "max-w-3xl",
     "4xl": "max-w-4xl",
     "5xl": "max-w-5xl",
+    "6xl": "max-w-6xl",
+    "full": "max-w-[calc(100vw-3rem)]",
   };
 
   return (

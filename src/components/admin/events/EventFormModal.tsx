@@ -887,78 +887,74 @@ export function EventFormModal({
           ? "Publish an official festival, competition, or workshop."
           : `Editing: ${form.name || "Event"}`
       }
-      maxWidth="4xl"
+      maxWidth="6xl"
+      contentClassName="!p-0 !overflow-y-hidden"
     >
-      <form onSubmit={handleSubmit} noValidate className="space-y-6">
-        
-        {/* Sticky Tactile Section Navigation Bar - solid bg to eliminate GPU compositing lag */}
-        <div className="sticky -top-5 sm:-top-7 z-20 bg-white pt-1 pb-3 border-b border-slate-200/80 -mx-5 sm:-mx-7 px-5 sm:px-7 space-y-2">
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
-            {visibleSections.map((section) => {
+      <form onSubmit={handleSubmit} noValidate className="flex flex-col min-h-0" style={{ height: 'calc(86vh - 80px)' }}>
+        <div className="flex flex-1 min-h-0">
+          {/* Vertical Section Sidebar */}
+          <nav className="w-52 shrink-0 border-r border-slate-200 bg-slate-50/50 py-4 px-2.5 flex flex-col gap-1 overflow-y-auto">
+            {visibleSections.map((section, idx) => {
               const Icon = section.icon;
               const isActive = activeSection === section.id;
               const badge = getSectionBadge(section.id);
-
               return (
                 <button
                   key={section.id}
                   type="button"
-                  onClick={() => {
-                    setActiveSection(section.id);
-                    setFormError(null);
-                  }}
+                  onClick={() => { setActiveSection(section.id); setFormError(null); }}
                   className={cn(
-                    "flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 border select-none",
+                    "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer text-left",
                     isActive
-                      ? "bg-[#17458F] text-white border-[#17458F] shadow-sm shadow-blue-900/20"
-                      : "bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200/90 hover:text-slate-900"
+                      ? "bg-[#17458F] text-white shadow-sm shadow-blue-900/20"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                   )}
                 >
-                  <Icon className={cn("w-3.5 h-3.5", isActive ? "text-[#E78023]" : "text-slate-400")} />
-                  <span>{section.label}</span>
+                  <Icon className={cn("w-4 h-4 shrink-0", isActive ? "text-[#E78023]" : "text-slate-400")} />
+                  <span className="flex-1 truncate">{section.label}</span>
                   {badge && (
-                    <span
-                      className={cn(
-                        "text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-md leading-none",
-                        isActive
-                          ? "bg-white/20 text-white"
-                          : "bg-slate-200/80 text-slate-700"
-                      )}
-                    >
+                    <span className={cn(
+                      "text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-md leading-none shrink-0",
+                      isActive ? "bg-white/20 text-white" : "bg-slate-200/80 text-slate-600"
+                    )}>
                       {badge}
                     </span>
                   )}
                 </button>
               );
             })}
-          </div>
+            <div className="mt-auto pt-3 border-t border-slate-200 px-3">
+              <span className="text-[10px] font-mono text-slate-400">
+                Section {currentSectionIndex + 1} of {visibleSections.length}
+              </span>
+            </div>
+          </nav>
 
-          {/* Section Micro-Header */}
-          <div className="flex items-center justify-between text-slate-500 text-[11px] pt-1">
-            <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+          {/* Scrollable Content Area */}
+          <div className="flex-1 overflow-y-auto p-6 min-h-0">
+            {/* Section Micro-Header */}
+            <div className="flex items-center gap-2 text-slate-500 text-[11px] mb-5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#E78023]" />
-              {visibleSections[currentSectionIndex]?.description}
-            </span>
-            <span className="font-mono text-[10px] text-slate-400">
-              Section {currentSectionIndex + 1} of {visibleSections.length}
-            </span>
-          </div>
-        </div>
+              <span className="font-semibold text-slate-700">
+                {visibleSections[currentSectionIndex]?.description}
+              </span>
+            </div>
 
-        {formError && (
-          <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2 animate-in fade-in">
-            <Info className="w-4 h-4 text-rose-600 shrink-0" />
-            <span>{formError}</span>
-          </div>
-        )}
+            {formError && (
+              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2 animate-in fade-in mb-5">
+                <Info className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{formError}</span>
+              </div>
+            )}
 
-        {/* ========================================================= */}
-        {/* 1. EVENT DETAILS SECTION                                   */}
-        {/* ========================================================= */}
-        {activeSection === "details" && (
-          <div className="space-y-5 animate-in fade-in duration-200">
+            {/* ========================================================= */}
+            {/* 1. EVENT DETAILS SECTION                                   */}
+            {/* ========================================================= */}
+            {activeSection === "details" && (
+              <div className="space-y-5 animate-in fade-in duration-200">
             
-            {/* Event Title */}
+            <div className="grid grid-cols-2 gap-4">
+{/* Event Title */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
                 Event Title *
@@ -975,6 +971,8 @@ export function EventFormModal({
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F]"
               />
             </div>
+
+</div>
 
             {/* Organized By */}
             <div className="space-y-1.5">
@@ -1227,7 +1225,9 @@ export function EventFormModal({
               )}
             </div>
 
-            {/* Flagship Highlight Spotlight Toggle */}
+            <div className="grid grid-cols-2 gap-4">
+
+{/* Flagship Highlight Spotlight Toggle */}
             <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
@@ -1250,6 +1250,7 @@ export function EventFormModal({
                 </label>
               </div>
             </div>
+</div>
 
             {/* Target Audience & Eligibility Toggle Switch */}
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
@@ -1440,7 +1441,7 @@ export function EventFormModal({
                 </div>
               ) : (
                 <div className="space-y-3 pt-1">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
                         Start Date *
@@ -1468,7 +1469,7 @@ export function EventFormModal({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                         <Clock className="w-3.5 h-3.5 text-[#E78023]" />
@@ -2707,7 +2708,7 @@ export function EventFormModal({
             ) : (
               <>
                 {/* Registration Dates */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                       <Clock className="w-3.5 h-3.5 text-[#E78023]" />
@@ -2819,7 +2820,7 @@ export function EventFormModal({
                         </div>
                       )}
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div className="grid grid-cols-2 gap-4 pt-1">
                         <div className="space-y-1">
                           <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
                             {form.feePricingModel === "per_team" && form.teamType !== "Individual"
@@ -3068,7 +3069,7 @@ export function EventFormModal({
               </div>
 
               {form.teamType !== "Individual" && (
-                <div className="grid grid-cols-2 gap-4 pt-2">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                       Min Team Size
@@ -3208,7 +3209,7 @@ export function EventFormModal({
         {/* ========================================================= */}
         {activeSection === "visuals" && (
           <div className="space-y-5 animate-in fade-in duration-200">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-6">
               {/* 1. Event Card Thumbnail (16:9) */}
               <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
                 <UniversalImageUploader
@@ -3285,43 +3286,37 @@ export function EventFormModal({
           </div>
         )}
 
-        {/* ========================================================= */}
-        {/* MODAL FOOTER & STEPPED NAVIGATION CONTROLS                */}
-        {/* ========================================================= */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-5 border-t border-slate-200">
+                </div>
+        </div>
+        
+        {/* Fixed Footer */}
+        <div className="flex items-center justify-between gap-4 px-6 py-4 border-t border-slate-200 bg-white shrink-0">
           <Button
             type="button"
-            onClick={onClose}
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="w-full sm:w-auto order-3 sm:order-1"
+            onClick={onClose}
+            className="gap-1.5"
           >
-            Cancel
+            <X className="w-3.5 h-3.5" />
+            <span>Cancel</span>
           </Button>
 
-          {/* Stepper Navigation */}
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-center order-2">
+          <div className="flex items-center gap-2">
             {prevSection && (
               <button
                 type="button"
-                onClick={() => {
-                  setActiveSection(prevSection.id);
-                  setFormError(null);
-                }}
+                onClick={() => { setActiveSection(prevSection.id); setFormError(null); }}
                 className="px-3 py-1.5 rounded-xl border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-900 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
                 <span>{prevSection.shortLabel}</span>
               </button>
             )}
-
             {nextSection && (
               <button
                 type="button"
-                onClick={() => {
-                  setActiveSection(nextSection.id);
-                  setFormError(null);
-                }}
+                onClick={() => { setActiveSection(nextSection.id); setFormError(null); }}
                 className="px-3 py-1.5 rounded-xl border border-slate-200 hover:border-[#17458F] text-slate-700 hover:text-[#17458F] text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
               >
                 <span>Next: {nextSection.shortLabel}</span>
@@ -3330,24 +3325,17 @@ export function EventFormModal({
             )}
           </div>
 
-          {/* Primary Save Button (Accessible from any section) */}
           <Button
             type="submit"
             variant="primary"
             size="sm"
             disabled={pendingUploads > 0 || isSubmitting}
-            className="w-full sm:w-auto order-1 sm:order-3 disabled:opacity-50 disabled:cursor-not-allowed gap-2"
+            className="disabled:opacity-50 disabled:cursor-not-allowed gap-2"
           >
             {isSubmitting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin text-white" />
-                <span>Saving to Cloud Database...</span>
-              </>
+              <><Loader2 className="w-4 h-4 animate-spin text-white" /><span>Saving to Cloud Database...</span></>
             ) : pendingUploads > 0 ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin text-white" />
-                <span>Uploading ({pendingUploads})...</span>
-              </>
+              <><Loader2 className="w-4 h-4 animate-spin text-white" /><span>Uploading ({pendingUploads})...</span></>
             ) : mode === "create" ? (
               <span>Save &amp; Publish Event</span>
             ) : (
@@ -3355,7 +3343,6 @@ export function EventFormModal({
             )}
           </Button>
         </div>
-
       </form>
     </Modal>
   );

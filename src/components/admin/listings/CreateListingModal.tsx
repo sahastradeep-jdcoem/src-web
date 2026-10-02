@@ -749,7 +749,7 @@ export function CreateListingModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200 modal-overlay-container">
-      <div className="relative w-full max-w-5xl h-[92vh] sm:h-[88vh] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 text-left modal-dialog-card">
+      <div className="relative w-full max-w-6xl h-[92vh] sm:h-[88vh] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 text-left modal-dialog-card">
         
         {/* MODAL HEADER WITH INTEGRATED TABS */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:px-6 bg-slate-900 text-white shrink-0 border-b border-slate-800">
@@ -786,70 +786,6 @@ export function CreateListingModal({
             </div>
           </div>
 
-          {/* Section Tabs integrated into header */}
-          {step === "configure_form" && selectedPillarOption && (
-            <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-xs p-1 rounded-2xl border border-white/10 overflow-x-auto no-scrollbar shrink-0">
-              {sections.map((sec) => {
-                const Icon = sec.icon;
-                const isActive = activeSection === sec.id;
-
-                let badge = "";
-                if (sec.id === "details") {
-                  badge = title.trim() ? "Ready" : "Required";
-                } else if (sec.id === "setup") {
-                  if (selectedPillarOption.type === "poll") {
-                    badge = `${pollOptions.filter((o) => o.trim()).length} Choices`;
-                  } else if (selectedPillarOption.type === "opportunity") {
-                    badge = oppRoleType;
-                  } else if (selectedPillarOption.type === "submission") {
-                    badge = `${subAllowedTypes.length} Types`;
-                  } else if (selectedPillarOption.type === "issue") {
-                    badge = issuePriority;
-                  } else {
-                    badge = "Setup";
-                  }
-                } else if (sec.id === "visuals") {
-                  badge = coverImage ? "Cover Set" : "Default";
-                } else if (sec.id === "qa") {
-                  const qCount = customQuestions.filter(q => q.type !== "section" && q.type !== "whatsapp_link" && q.type !== "note").length;
-                  badge = qCount > 0 ? `${qCount} Qs` : "0 Qs";
-                }
-
-                return (
-                  <button
-                    key={sec.id}
-                    type="button"
-                    onClick={() => {
-                      setActiveSection(sec.id);
-                      setFormError(null);
-                    }}
-                    className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 select-none",
-                      isActive
-                        ? "bg-white text-slate-900 shadow-sm font-extrabold"
-                        : "text-white/80 hover:text-white hover:bg-white/10"
-                    )}
-                  >
-                    <Icon className={cn("w-3.5 h-3.5", isActive ? "text-[#E78023]" : "text-white/70")} />
-                    <span>{sec.label}</span>
-                    {badge && (
-                      <span
-                        className={cn(
-                          "text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-md leading-none",
-                          isActive
-                            ? "bg-slate-100 text-slate-800"
-                            : "bg-white/15 text-white/90 border border-white/20"
-                        )}
-                      >
-                        {badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={onClose}
@@ -870,7 +806,7 @@ export function CreateListingModal({
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               {PILLAR_OPTIONS.map((opt) => {
                 const IconComponent = opt.icon;
                 return (
@@ -914,22 +850,84 @@ export function CreateListingModal({
         {/* STEP 2: MULTI-SECTION DYNAMIC STUDIO FORM */}
         {step === "configure_form" && selectedPillarOption && (
           <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 text-left">
-            
+            <div className="flex flex-1 min-h-0">
+              <nav className="w-52 shrink-0 border-r border-slate-200 bg-slate-50/50 py-4 px-2.5 flex flex-col gap-1 overflow-y-auto">
+                {sections.map((sec) => {
+                  const Icon = sec.icon;
+                  const isActive = activeSection === sec.id;
 
+                  let badge = "";
+                  if (sec.id === "details") {
+                    badge = title.trim() ? "Ready" : "Required";
+                  } else if (sec.id === "setup") {
+                    if (selectedPillarOption.type === "poll") {
+                      badge = `${pollOptions.filter((o) => o.trim()).length} Choices`;
+                    } else if (selectedPillarOption.type === "opportunity") {
+                      badge = oppRoleType;
+                    } else if (selectedPillarOption.type === "submission") {
+                      badge = `${subAllowedTypes.length} Types`;
+                    } else if (selectedPillarOption.type === "issue") {
+                      badge = issuePriority;
+                    } else {
+                      badge = "Setup";
+                    }
+                  } else if (sec.id === "visuals") {
+                    badge = coverImage ? "Cover Set" : "Default";
+                  } else if (sec.id === "qa") {
+                    const qCount = customQuestions.filter(q => q.type !== "section" && q.type !== "whatsapp_link" && q.type !== "note").length;
+                    badge = qCount > 0 ? `${qCount} Qs` : "0 Qs";
+                  }
 
-            {/* Validation Alert */}
-            {formError && (
-              <div className="mx-6 mt-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2 animate-in fade-in">
-                <Info className="w-4 h-4 text-rose-600 shrink-0" />
-                <span>{formError}</span>
-              </div>
-            )}
+                  return (
+                    <button
+                      key={sec.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveSection(sec.id);
+                        setFormError(null);
+                      }}
+                      className={cn(
+                        "flex flex-col items-start gap-2 p-3 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 select-none",
+                        isActive
+                          ? "bg-white text-[#17458F] shadow-sm border border-slate-200 font-extrabold"
+                          : "text-slate-600 hover:bg-slate-200/50 hover:text-slate-900 border border-transparent"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Icon className={cn("w-4 h-4", isActive ? "text-[#E78023]" : "text-slate-400")} />
+                        <span>{sec.label}</span>
+                      </div>
+                      {badge && (
+                        <span
+                          className={cn(
+                            "text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md leading-none self-start",
+                            isActive
+                              ? "bg-slate-100 text-slate-800"
+                              : "bg-slate-200/70 text-slate-500"
+                          )}
+                        >
+                          {badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </nav>
 
-            {/* Scrollable Form Body */}
-            <div className={cn(
-              "overflow-y-auto flex-1",
-              activeSection === "qa" ? "p-0" : "p-6 sm:p-8 space-y-6"
-            )}>
+              <div className="flex-1 overflow-y-auto min-h-0 flex flex-col relative">
+                {/* Validation Alert */}
+                {formError && (
+                  <div className="m-6 mb-0 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2 animate-in fade-in shrink-0">
+                    <Info className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{formError}</span>
+                  </div>
+                )}
+
+                {/* Scrollable Form Body */}
+                <div className={cn(
+                  "flex-1 overflow-y-auto",
+                  activeSection === "qa" ? "p-0" : "p-6 sm:p-8 space-y-6"
+                )}>
               
               {/* ========================================================= */}
               {/* 1. DETAILS SECTION                                        */}
@@ -964,7 +962,7 @@ export function CreateListingModal({
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                         <Building2 className="w-3.5 h-3.5 text-[#17458F]" />
@@ -1282,7 +1280,7 @@ export function CreateListingModal({
                         <Briefcase className="w-4 h-4 text-emerald-600" />
                         <span>Opportunity Parameters</span>
                       </span>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-3 gap-3">
                         <div>
                           <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
                             Type
@@ -1325,7 +1323,7 @@ export function CreateListingModal({
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                      <div className="grid grid-cols-2 gap-3 pt-2">
                         <div>
                           <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
                             Location
@@ -1382,7 +1380,7 @@ export function CreateListingModal({
                         <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700 block mb-2">
                           Allowed File &amp; Deliverable Formats *
                         </label>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div className="grid grid-cols-4 gap-2">
                           {[
                             { key: "image" as const, label: "Images (JPG/PNG)", icon: ImageIcon },
                             { key: "pdf" as const, label: "PDF Documents", icon: FileText },
@@ -1411,7 +1409,7 @@ export function CreateListingModal({
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                      <div className="grid grid-cols-2 gap-3 pt-2">
                         <div>
                           <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
                             Max File Size Limit (MB)
@@ -1449,7 +1447,7 @@ export function CreateListingModal({
                         <span>Grievance Desk Security &amp; SLA Setup</span>
                       </span>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
                             Target Administrative Wing
@@ -1479,7 +1477,7 @@ export function CreateListingModal({
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                      <div className="grid grid-cols-2 gap-3 pt-2">
                         <label className="p-3 rounded-xl bg-white border border-rose-200 flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 select-none">
                           <input
                             type="checkbox"
@@ -1534,7 +1532,7 @@ export function CreateListingModal({
                       <span>Or Pick a Quick Preset Cover</span>
                       <span className="text-[10px] text-slate-400 font-normal">Click to apply instantly</span>
                     </label>
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-5 gap-3">
                       {PRESET_COVERS.map((preset) => {
                         const isSelected = coverImage === preset.url;
                         return (
@@ -1592,20 +1590,24 @@ export function CreateListingModal({
                 </div>
               )}
 
+                </div>
+              </div>
             </div>
 
             {/* Sticky Stepper Footer */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 sm:px-6 bg-slate-50 border-t border-slate-200 shrink-0">
-              <button
-                type="button"
-                onClick={onClose}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:text-slate-900 text-xs font-bold uppercase tracking-wider hover:bg-slate-100 transition-colors cursor-pointer order-3 sm:order-1"
-              >
-                Cancel
-              </button>
+            <div className="flex items-center justify-between gap-3 p-4 px-6 bg-slate-50 border-t border-slate-200 shrink-0">
+              <div className="flex-1">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:text-slate-900 text-xs font-bold uppercase tracking-wider hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
 
               {/* Stepper Navigation */}
-              <div className="flex items-center gap-2 w-full sm:w-auto justify-center order-2">
+              <div className="flex items-center gap-2 justify-center">
                 {prevSection && (
                   <button
                     type="button"
@@ -1630,7 +1632,7 @@ export function CreateListingModal({
               </div>
 
               {/* Right Action Buttons: Save Draft vs Publish */}
-              <div className="flex items-center gap-2 w-full sm:w-auto justify-end order-1 sm:order-3">
+              <div className="flex items-center gap-2 justify-end flex-1">
                 <button
                   type="button"
                   onClick={() => handleSaveOrPublish(true)}
