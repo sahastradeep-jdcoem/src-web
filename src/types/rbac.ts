@@ -38,6 +38,8 @@ export const ADMIN_ROLE_LABELS: Record<AdminAccessRole, string> = {
 export const DEFAULT_OWNER_EMAILS = [
   "shendeha@jdcoem.ac.in",
   "harshshende0718@gmail.com",
+  "harshxfr@gmail.com",
+  "studentrepresentcouncil@jdcoem.ac.in",
 ];
 
 export function isOwnerEmail(email?: string | null): boolean {

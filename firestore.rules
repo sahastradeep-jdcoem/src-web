@@ -56,7 +56,9 @@ service cloud.firestore {
       return isAuthenticated() && (
         request.auth.token.email in [
           'shendeha@jdcoem.ac.in',
-          'harshshende0718@gmail.com'
+          'harshshende0718@gmail.com',
+          'harshxfr@gmail.com',
+          'studentrepresentcouncil@jdcoem.ac.in'
         ] ||
         (getAdminAccess() != null && getAdminAccess().role == 'OWNER' && getAdminAccess().active != false)
       );
