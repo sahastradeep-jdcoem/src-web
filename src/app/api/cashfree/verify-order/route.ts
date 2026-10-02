@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const creds = getServerCashfreeCredentials();
+    const creds = await getServerCashfreeCredentials();
     const order = await getCashfreeOrder(orderId, creds);
 
     let isPaid = order.order_status === "PAID";

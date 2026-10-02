@@ -101,21 +101,36 @@ export interface CashfreeRefundResponse {
 }
 
 /**
- * Resolve server credentials from environment variables with safe defaults
+ * Resolve server credentials from environment variables with Firestore document fallback
  */
-export function getServerCashfreeCredentials(): CashfreeCredentials {
-  const appId =
+export async function getServerCashfreeCredentials(): Promise<CashfreeCredentials> {
+  let appId =
     process.env.CASHFREE_APP_ID ||
     process.env.NEXT_PUBLIC_CASHFREE_APP_ID ||
     "";
 
-  const secretKey =
+  let secretKey =
     process.env.CASHFREE_SECRET_KEY ||
     "";
 
-  const environment =
+  let environment =
     ((process.env.CASHFREE_ENVIRONMENT ||
       process.env.NEXT_PUBLIC_CASHFREE_ENV) as "TEST" | "PROD") || "TEST";
+
+  // Fallback to Firestore payment_config document if secretKey or appId is missing
+  if (!secretKey || !appId) {
+    try {
+      const { getSiteContentFromFirestore } = await import("./firebase/firestore");
+      const remote = await getSiteContentFromFirestore<any>("payment_config");
+      if (remote) {
+        if (!appId && remote.cashfreeAppId) appId = remote.cashfreeAppId;
+        if (!secretKey && remote.cashfreeSecretKey) secretKey = remote.cashfreeSecretKey;
+        if (remote.cashfreeEnvironment) environment = remote.cashfreeEnvironment;
+      }
+    } catch (e) {
+      console.warn("Could not load Cashfree credentials from Firestore:", e);
+    }
+  }
 
   return { appId: appId.trim(), secretKey: secretKey.trim(), environment };
 }
@@ -148,7 +163,12 @@ export async function createCashfreeOrder(
   params: CreateCashfreeOrderParams,
   customCredentials?: CashfreeCredentials
 ): Promise<CashfreeOrderResponse> {
-  const creds = customCredentials || getServerCashfreeCredentials();
+  const creds = customCredentials || (await getServerCashfreeCredentials());
+  if (!creds.appId || !creds.secretKey) {
+    throw new Error(
+      "Cashfree credentials not configured. Please set CASHFREE_APP_ID and CASHFREE_SECRET_KEY in Vercel settings or in Admin Console > Registrations > Payment Settings."
+    );
+  }
   const baseUrl = getCashfreeBaseUrl(creds.environment);
 
   // Normalize phone number (must be 10 digits for Indian standard)
@@ -198,7 +218,10 @@ export async function getCashfreeOrder(
   orderId: string,
   customCredentials?: CashfreeCredentials
 ): Promise<CashfreeOrderResponse> {
-  const creds = customCredentials || getServerCashfreeCredentials();
+  const creds = customCredentials || (await getServerCashfreeCredentials());
+  if (!creds.appId || !creds.secretKey) {
+    throw new Error("Cashfree credentials not configured.");
+  }
   const baseUrl = getCashfreeBaseUrl(creds.environment);
 
   const response = await fetch(`${baseUrl}/orders/${orderId}`, {
@@ -223,7 +246,10 @@ export async function getCashfreeOrderPayments(
   orderId: string,
   customCredentials?: CashfreeCredentials
 ): Promise<CashfreePaymentItem[]> {
-  const creds = customCredentials || getServerCashfreeCredentials();
+  const creds = customCredentials || (await getServerCashfreeCredentials());
+  if (!creds.appId || !creds.secretKey) {
+    throw new Error("Cashfree credentials not configured.");
+  }
   const baseUrl = getCashfreeBaseUrl(creds.environment);
 
   const response = await fetch(`${baseUrl}/orders/${orderId}/payments`, {
@@ -251,7 +277,10 @@ export async function createCashfreeRefund(
   refundNote: string = "Refund by SRC JDCOEM Secretariat",
   customCredentials?: CashfreeCredentials
 ): Promise<CashfreeRefundResponse> {
-  const creds = customCredentials || getServerCashfreeCredentials();
+  const creds = customCredentials || (await getServerCashfreeCredentials());
+  if (!creds.appId || !creds.secretKey) {
+    throw new Error("Cashfree credentials not configured.");
+  }
   const baseUrl = getCashfreeBaseUrl(creds.environment);
 
   const payload = {

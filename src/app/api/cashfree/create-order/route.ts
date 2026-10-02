@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const creds = getServerCashfreeCredentials();
+    const creds = await getServerCashfreeCredentials();
 
     // Unique order ID (Alphanumeric, max 45 chars for Cashfree standard)
     const cleanRegPrefix = (registrationId || "REG")

@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const creds = getServerCashfreeCredentials();
+    const creds = await getServerCashfreeCredentials();
     const generatedRefundId = refundId || `ref_${Date.now()}`;
 
     const refundRes = await createCashfreeRefund(
