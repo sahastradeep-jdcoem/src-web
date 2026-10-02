@@ -63,9 +63,12 @@ export function getStoredPaymentConfig(): PaymentConfig {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object") {
+        // Automatically migrate legacy "paytm" gateway setting to "cashfree"
+        const gateway = parsed.gateway === "paytm" || !parsed.gateway ? "cashfree" : parsed.gateway;
         return {
           ...DEFAULT_PAYMENT_CONFIG,
           ...parsed,
+          gateway,
           // Always ensure env fallback if not set in storage
           cashfreeAppId: parsed.cashfreeAppId || process.env.NEXT_PUBLIC_CASHFREE_APP_ID || process.env.CASHFREE_APP_ID || DEFAULT_PAYMENT_CONFIG.cashfreeAppId,
           cashfreeSecretKey: parsed.cashfreeSecretKey || process.env.CASHFREE_SECRET_KEY || DEFAULT_PAYMENT_CONFIG.cashfreeSecretKey,
@@ -133,9 +136,11 @@ export async function syncPaymentConfigFromFirestore(): Promise<PaymentConfig> {
   try {
     const remote = await getSiteContentFromFirestore<PaymentConfig>(PAYMENT_CONFIG_DOC_ID);
     if (remote && typeof remote === "object") {
+      const gateway = remote.gateway === "paytm" || !remote.gateway ? "cashfree" : remote.gateway;
       const merged: PaymentConfig = {
         ...DEFAULT_PAYMENT_CONFIG,
         ...remote,
+        gateway,
       };
       saveStoredPaymentConfig(merged);
       return merged;
@@ -169,9 +174,11 @@ export function subscribeToPaymentConfig(
     PAYMENT_CONFIG_DOC_ID,
     (remoteData) => {
       if (remoteData && typeof remoteData === "object") {
+        const gateway = remoteData.gateway === "paytm" || !remoteData.gateway ? "cashfree" : remoteData.gateway;
         const merged: PaymentConfig = {
           ...DEFAULT_PAYMENT_CONFIG,
           ...remoteData,
+          gateway,
         };
         saveStoredPaymentConfig(merged);
         callback(merged);

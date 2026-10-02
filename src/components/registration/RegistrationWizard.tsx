@@ -835,7 +835,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     pendingRegistrationDraftRef.current = { regId: draftRegId, tkCode: draftTkCode, payload: draftPayload };
 
     // 2A. Cashfree Payment Gateway Flow (Instant Auto-Checkout Modal)
-    if (paymentConfig.gateway === "cashfree") {
+    const isCashfree = paymentConfig.gateway === "cashfree" || paymentConfig.gateway === "paytm" || !paymentConfig.gateway;
+    if (isCashfree) {
       try {
         const orderRes = await fetch("/api/cashfree/create-order", {
           method: "POST",
