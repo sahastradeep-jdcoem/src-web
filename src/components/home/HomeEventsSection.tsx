@@ -2,10 +2,17 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { Flame, ArrowRight, Calendar, Inbox } from "lucide-react";
+import { Flame, ArrowRight, Calendar, Sparkles } from "lucide-react";
 import { EventCard } from "@/components/events/EventCard";
 import { EventItem } from "@/types";
-import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, sortEventsByDate, isSubEvent } from "@/lib/eventsStore";
+import { 
+  getStoredEvents, 
+  syncEventsFromFirestore, 
+  subscribeToEvents, 
+  sortEventsByDate, 
+  isSubEvent,
+  isEventCompletedByDate 
+} from "@/lib/eventsStore";
 import { StaggerGrid, StaggerItem } from "@/components/ui/StaggerContainer";
 import LeadershipSpotlightSection from "./LeadershipSpotlightSection";
 
@@ -53,7 +60,7 @@ export default function HomeEventsSection() {
     };
   }, []);
 
-  const liveEvents = sortEventsByDate(
+  const allLiveEvents = sortEventsByDate(
     eventsList.filter(
       (e) =>
         Boolean(e?.name && typeof e.name === "string" && e.name.trim().length > 0) &&
@@ -64,12 +71,33 @@ export default function HomeEventsSection() {
         !isSubEvent(e, eventsList)
     )
   );
-  const featuredEvent = liveEvents.find((e) => Boolean(e.isFeatured) && e.status !== "Completed") || null;
-  const otherEvents = featuredEvent
-    ? liveEvents.filter((e) => (e.id || e.slug) !== (featuredEvent.id || featuredEvent.slug))
-    : liveEvents;
 
-  if (liveEvents.length === 0) {
+  // 1. Separate upcoming active events from completed ones
+  const upcomingEvents = allLiveEvents.filter(
+    (e) => !isEventCompletedByDate(e) && e.status !== "Completed" && e.status?.toLowerCase() !== "completed"
+  );
+  const completedEvents = allLiveEvents.filter(
+    (e) => isEventCompletedByDate(e) || e.status === "Completed" || e.status?.toLowerCase() === "completed"
+  );
+
+  const hasUpcoming = upcomingEvents.length > 0;
+  // If upcoming events exist, prioritize them. Otherwise, fall back to recent completed highlights.
+  const activePool = hasUpcoming ? upcomingEvents : completedEvents;
+
+  // 2. Featured Event:
+  // Priority: event with isFeatured flag, else earliest in the active pool
+  const featuredEvent = activePool.find((e) => Boolean(e.isFeatured)) || activePool[0] || null;
+
+  // 3. Supporting Grid: Exactly top 3 events (excluding the featured one)
+  const curatedOtherEvents = activePool
+    .filter((e) => (e.id || e.slug) !== (featuredEvent?.id || featuredEvent?.slug))
+    .slice(0, 3);
+
+  const totalLiveCount = allLiveEvents.length;
+  const displayedCount = (featuredEvent ? 1 : 0) + curatedOtherEvents.length;
+  const remainingCount = Math.max(0, totalLiveCount - displayedCount);
+
+  if (allLiveEvents.length === 0) {
     if (isSyncing) {
       return (
         <section className="py-20 px-4 sm:px-6 lg:px-8 border-b border-slate-200 bg-[#F8FAFC]">
@@ -105,7 +133,7 @@ export default function HomeEventsSection() {
             <div className="inline-flex items-center gap-2">
               <Flame className="w-4 h-4 text-[#E78023]" />
               <span className="text-xs font-sans font-semibold uppercase tracking-wider text-[#E78023]">
-                Flagship Council Showcase
+                {hasUpcoming ? "Flagship Council Showcase" : "Past Event Highlights"}
               </span>
             </div>
             <h2 className="font-section text-3xl sm:text-4xl text-[#0F172A] tracking-tight uppercase">
@@ -113,7 +141,9 @@ export default function HomeEventsSection() {
             </h2>
             <p className="text-sm text-slate-600 max-w-xl font-sans font-normal">
               {featuredEvent 
-                ? `Experience ${featuredEvent.name} and upcoming flagship showcases hosted by the Student Representative Council.`
+                ? (hasUpcoming 
+                    ? `Experience ${featuredEvent.name} and upcoming flagship showcases hosted by the Student Representative Council.`
+                    : `Explore highlights from ${featuredEvent.name} and council milestones across campus.`)
                 : "Experience campus fests and upcoming flagship events hosted by the Student Representative Council."}
             </p>
           </div>
@@ -122,7 +152,7 @@ export default function HomeEventsSection() {
             href="/events"
             className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-sans font-semibold uppercase tracking-wider text-[#17458F] hover:text-[#E78023] transition-colors"
           >
-            <span>Explore All Events</span>
+            <span>Explore All Events ({totalLiveCount})</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
@@ -132,15 +162,41 @@ export default function HomeEventsSection() {
           <EventCard event={featuredEvent} featuredLayout={true} />
         )}
 
-        {/* Supporting Grid with Staggered Entrance */}
-        {otherEvents.length > 0 && (
-          <StaggerGrid className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2" staggerDelay={0.06}>
-            {otherEvents.map((evt) => (
+        {/* Supporting Grid with Staggered Entrance (Top 3) */}
+        {curatedOtherEvents.length > 0 && (
+          <StaggerGrid className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2" staggerDelay={0.04}>
+            {curatedOtherEvents.map((evt) => (
               <StaggerItem key={evt.id || evt.slug}>
                 <EventCard event={evt} />
               </StaggerItem>
             ))}
           </StaggerGrid>
+        )}
+
+        {/* Discovery CTA Banner to explore full calendar */}
+        {remainingCount > 0 && (
+          <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-[#17458F] to-slate-900 text-white p-6 sm:p-8 lg:p-10 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6 border border-slate-800">
+            <div className="space-y-2 max-w-xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-[#E78023] text-[11px] font-sans font-bold uppercase tracking-wider border border-white/10">
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Academic Calendar &amp; Archive</span>
+              </div>
+              <h3 className="font-heading font-extrabold text-xl sm:text-2xl text-white tracking-tight uppercase">
+                Looking for more events?
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-sans font-medium">
+                {`Discover all ${totalLiveCount} collegiate festivals, departmental competitions, and archived editions on the dedicated events portal.`}
+              </p>
+            </div>
+
+            <Link
+              href="/events"
+              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-[#E78023] hover:bg-[#d67217] text-white text-xs font-sans font-bold uppercase tracking-wider transition-all shadow-md hover:shadow-lg hover:shadow-[#E78023]/20 shrink-0 group cursor-pointer"
+            >
+              <span>View All Events ({totalLiveCount})</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </Link>
+          </div>
         )}
 
       </div>
