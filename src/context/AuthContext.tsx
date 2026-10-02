@@ -16,9 +16,12 @@ import { auth } from "@/lib/firebase/config";
 import { 
   checkIsAdminInFirestore, 
   getUserProfileFromFirestore, 
-  saveUserProfileToFirestore 
+  saveUserProfileToFirestore,
+  getAdminAccessFromFirestore,
+  subscribeToAdminAccessForUser
 } from "@/lib/firebase/firestore";
 import { UserProfile, AuthUser, AuthContextType } from "@/types/auth";
+import { AdminAccessAssignment, isOwnerEmail } from "@/types/rbac";
 import { 
   saveRegisteredUser, 
   getStoredUsers, 
@@ -93,6 +96,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (parsed.department && parsed.userType !== "EXTERNAL_STUDENT") {
             parsed.department = resolveCanonicalDepartmentName(parsed.department);
           }
+          // Cached identity is for UX only; never grant an admin scope before Firebase revalidation.
+          if (!isOwnerEmail(parsed.email)) {
+            parsed.role = "STUDENT";
+            parsed.adminAccess = undefined;
+            parsed.adminAccessManaged = false;
+          }
           const isComplete = determineProfileCompletion(parsed, parsed.userType, cleanBt);
           parsed.profileCompleted = isComplete;
           setUser(parsed);
@@ -111,6 +120,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         let storedProfile = await getUserProfileFromFirestore(fbUser.uid);
 
         const isAdminUser = await checkIsAdminInFirestore(fbUser.email, fbUser.uid);
+        const firestoreAdminAccess = await getAdminAccessFromFirestore(fbUser.uid);
+        const adminAccess: AdminAccessAssignment | null = firestoreAdminAccess || (isOwnerEmail(fbUser.email)
+          ? {
+              uid: fbUser.uid,
+              btId: (storedProfile?.btId || "").trim().toUpperCase(),
+              role: "OWNER",
+              active: true,
+              grantedBy: "system",
+              grantedAt: new Date(0).toISOString(),
+              updatedAt: new Date().toISOString(),
+            }
+          : null);
 
         let localProfile: Partial<UserProfile> = {};
         try {
@@ -140,6 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const isAppointedOrHardcodedAdmin = 
           isAdminUser || 
+          Boolean(adminAccess?.active) ||
           storedProfile?.role === "COUNCIL_ADMIN" || 
           localProfile?.role === "COUNCIL_ADMIN" || 
           registeredUser?.role === "COUNCIL_ADMIN";
@@ -214,6 +236,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           profileCompleted: isCompleted,
           designationBadge: assignedBadge,
           isCouncilOfficer: isOfficer,
+          adminAccess: adminAccess || undefined,
+          adminAccessManaged: Boolean(adminAccess),
         };
 
         setUser(merged);
@@ -234,6 +258,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    const unsubscribe = subscribeToAdminAccessForUser(user.uid, (assignment) => {
+      setUser((current) => {
+        if (!current) return current;
+        const revokedManagedAccess = !assignment && current.adminAccessManaged && !isOwnerEmail(current.email);
+        return {
+          ...current,
+          adminAccess: assignment || undefined,
+          role: revokedManagedAccess ? "STUDENT" : current.role,
+          adminAccessManaged: Boolean(assignment),
+        };
+      });
+    });
+    return () => unsubscribe();
+  }, [user?.uid]);
 
   useEffect(() => {
     const handleUsersChange = () => {
@@ -260,7 +301,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               prev.designationBadge !== parsed.designationBadge ||
               prev.isCouncilOfficer !== parsed.isCouncilOfficer
             ) {
-              return { ...prev, ...parsed };
+              // Profile cache may refresh display fields, but never overwrite Firestore-authoritative RBAC.
+              return {
+                ...prev,
+                ...parsed,
+                role: prev.role,
+                adminAccess: prev.adminAccess,
+                adminAccessManaged: prev.adminAccessManaged,
+              };
             }
             return prev;
           });
@@ -291,6 +339,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (fbUser) {
         let storedProfile = await getUserProfileFromFirestore(fbUser.uid);
         const isAdminUser = await checkIsAdminInFirestore(fbUser.email || "", fbUser.uid);
+        const firestoreAdminAccess = await getAdminAccessFromFirestore(fbUser.uid);
+        const adminAccess: AdminAccessAssignment | null = firestoreAdminAccess || (isOwnerEmail(fbUser.email)
+          ? {
+              uid: fbUser.uid,
+              btId: (storedProfile?.btId || "").trim().toUpperCase(),
+              role: "OWNER",
+              active: true,
+              grantedBy: "system",
+              grantedAt: new Date(0).toISOString(),
+              updatedAt: new Date().toISOString(),
+            }
+          : null);
 
         let localProfile: Partial<UserProfile> = {};
         try {
@@ -320,6 +380,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const isAppointedOrHardcodedAdmin = 
           isAdminUser || 
+          Boolean(adminAccess?.active) ||
           storedProfile?.role === "COUNCIL_ADMIN" || 
           localProfile?.role === "COUNCIL_ADMIN" || 
           registeredUser?.role === "COUNCIL_ADMIN";
@@ -390,6 +451,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           profileCompleted: isCompleted,
           designationBadge: assignedBadge,
           isCouncilOfficer: isOfficer,
+          adminAccess: adminAccess || undefined,
+          adminAccessManaged: Boolean(adminAccess),
         };
 
         setUser(merged);
@@ -551,7 +614,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         isLoading,
-        isAdmin: user?.role === "COUNCIL_ADMIN",
+        isAdmin: user?.role === "COUNCIL_ADMIN" || user?.adminAccess?.active === true,
+        isOwner: isOwnerEmail(user?.email) || user?.adminAccess?.role === "OWNER",
+        adminAccess: user?.adminAccess || null,
         isAuthModalOpen,
         openAuthModal: () => setIsAuthModalOpen(true),
         closeAuthModal: () => setIsAuthModalOpen(false),

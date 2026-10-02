@@ -53,8 +53,11 @@ import { EventItem } from "@/types";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { useAuth } from "@/context/AuthContext";
 
 export default function AdminListingsPage() {
+  const { adminAccess } = useAuth();
+  const isClubOwner = adminAccess?.role === "CLUB_OWNER" && adminAccess.active !== false;
   const [listings, setListings] = useState<ListingItem[]>([]);
   const [responses, setResponses] = useState<ListingResponseRecord[]>([]);
   const [selectedPillar, setSelectedPillar] = useState<ListingPillar | "all">("all");
@@ -65,6 +68,10 @@ export default function AdminListingsPage() {
   const [clubsList, setClubsList] = useState<any[]>([]);
   const [pendingUploads, setPendingUploads] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
+
+  const clubOwnerScope = isClubOwner && adminAccess?.clubSlug && adminAccess?.clubName
+    ? { slug: adminAccess.clubSlug, name: adminAccess.clubName }
+    : undefined;
 
   // Inspection Modal for Responses (Applications / Submissions / Grievances / Polls)
   const [inspectingListing, setInspectingListing] = useState<ListingItem | null>(null);
@@ -149,6 +156,10 @@ export default function AdminListingsPage() {
   };
 
   const handleCreateEventSubmit = (formData: EventFormData) => {
+    if (isClubOwner && formData.organizerClubSlug !== adminAccess?.clubSlug) {
+      showToast("Club Owners can only create events under their assigned club.");
+      return;
+    }
     const cleanWhatToExpect = Array.from(new Set(formData.whatToExpect.map((s) => s.trim()).filter(Boolean)));
     const cleanRules = Array.from(new Set(formData.rules.map((s) => s.trim()).filter(Boolean)));
     const regDeadlineFormatted = formData.registrationDeadline
@@ -240,6 +251,7 @@ export default function AdminListingsPage() {
 
   const filteredListings = useMemo(() => {
     return listings.filter((item) => {
+      if (isClubOwner && item.organizerClubSlug !== adminAccess?.clubSlug) return false;
       if (selectedPillar !== "all" && item.pillar !== selectedPillar) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -251,7 +263,7 @@ export default function AdminListingsPage() {
       }
       return true;
     });
-  }, [listings, selectedPillar, searchQuery]);
+  }, [listings, selectedPillar, searchQuery, isClubOwner, adminAccess?.clubSlug]);
 
   // Responses belonging to the actively inspected listing
   const activeListingResponses = useMemo(() => {
@@ -876,6 +888,7 @@ export default function AdminListingsPage() {
             setListings([item, ...listings]);
             showToast(`Published "${item.title}" successfully.`);
           }}
+          clubOwnerScope={clubOwnerScope}
         />
       )}
 
@@ -895,6 +908,7 @@ export default function AdminListingsPage() {
             setIsEditModalOpen(false);
             setEditingListing(null);
           }}
+          clubOwnerScope={clubOwnerScope}
         />
       )}
 
@@ -905,7 +919,7 @@ export default function AdminListingsPage() {
           onClose={() => setIsCreateEventOpen(false)}
           mode="create"
           eventsList={eventsList}
-          clubsList={clubsList}
+          clubsList={isClubOwner ? clubsList.filter((club) => club.slug === adminAccess?.clubSlug || club.id === adminAccess?.clubId) : clubsList}
           onSubmit={handleCreateEventSubmit}
           pendingUploads={pendingUploads}
           onUploadStateChange={handleUploadStateChange}

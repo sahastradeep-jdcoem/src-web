@@ -52,6 +52,7 @@ import {
   PaymentConfig 
 } from "@/lib/paymentConfigStore";
 import { EventItem, RegistrationRecord } from "@/types";
+import { useAuth } from "@/context/AuthContext";
 
 type PaymentTabFilter = "all" | "completed" | "pending" | "refunded" | "cancelled";
 
@@ -82,6 +83,8 @@ function formatTimestamp(val: any): string {
 }
 
 export default function AdminPaymentsPage() {
+  const { adminAccess } = useAuth();
+  const isClubOwner = adminAccess?.role === "CLUB_OWNER" && adminAccess.active !== false;
   const [registrations, setRegistrations] = useState<RegistrationRecord[]>([]);
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
   const [tenuresList, setTenuresList] = useState<CouncilTenure[]>([]);
@@ -267,9 +270,15 @@ export default function AdminPaymentsPage() {
 
   // Filter Payments by Tenure & Event
   const filteredByTenure = useMemo(() => {
-    if (selectedTenureId === "all") return registrations;
+    const scopedRegistrations = isClubOwner
+      ? registrations.filter((registration) => {
+          const event = eventsList.find((item) => item.id === registration.eventId || item.slug === registration.eventSlug || item.name === registration.eventName);
+          return event?.organizerClubSlug === adminAccess?.clubSlug;
+        })
+      : registrations;
+    if (selectedTenureId === "all") return scopedRegistrations;
     const currentTenure = tenuresList.find((t) => t.id === selectedTenureId);
-    if (!currentTenure) return registrations;
+    if (!currentTenure) return scopedRegistrations;
 
     const tenureEvents = currentTenure.events || [];
     const tenureEventSlugs = new Set(tenureEvents.map((e) => (e.slug || "").toLowerCase()));
@@ -283,7 +292,7 @@ export default function AdminPaymentsPage() {
     const tenureStartMs = currentTenure.startDate ? new Date(currentTenure.startDate).getTime() : NaN;
     const tenureEndMs = currentTenure.endDate ? new Date(currentTenure.endDate).getTime() : NaN;
 
-    return registrations.filter((r) => {
+    return scopedRegistrations.filter((r) => {
       // 1. Direct match on explicit tenureId
       if (r.tenureId) {
         const cleanTid = r.tenureId.toLowerCase().trim();
@@ -338,7 +347,7 @@ export default function AdminPaymentsPage() {
 
       return false;
     });
-  }, [registrations, selectedTenureId, tenuresList, eventsList]);
+  }, [registrations, selectedTenureId, tenuresList, eventsList, isClubOwner, adminAccess?.clubSlug]);
 
   const filteredByEvent = useMemo(() => {
     if (selectedEventSlug === "all") return filteredByTenure;

@@ -49,6 +49,10 @@ export interface UserProfile {
   updatedAt?: string | any;
   registeredAt?: string;
   lastActive?: string;
+
+  /** Firestore-authoritative admin scope. Never derive authorization from localStorage. */
+  adminAccess?: import("@/types/rbac").AdminAccessAssignment;
+  adminAccessManaged?: boolean;
 }
 
 export type AuthUser = UserProfile;
@@ -57,6 +61,8 @@ export interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
   isAdmin: boolean;
+  isOwner: boolean;
+  adminAccess: import("@/types/rbac").AdminAccessAssignment | null;
   isAuthModalOpen: boolean;
   openAuthModal: () => void;
   closeAuthModal: () => void;

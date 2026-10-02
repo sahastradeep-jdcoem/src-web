@@ -45,8 +45,11 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ClubFormModal } from "@/components/admin/clubs/ClubFormModal";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
 
 export default function AdminClubsPage() {
+  const { adminAccess } = useAuth();
+  const isClubOwner = adminAccess?.role === "CLUB_OWNER" && adminAccess.active !== false;
   const [clubs, setClubs] = useState<ClubItem[]>([]);
   const [tenures, setTenures] = useState<CouncilTenure[]>([]);
   const [selectedTenureId, setSelectedTenureId] = useState<string>("");
@@ -208,6 +211,7 @@ export default function AdminClubsPage() {
   const filteredClubs = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return clubs.filter((club) => {
+      if (isClubOwner && club.slug !== adminAccess?.clubSlug && club.id !== adminAccess?.clubId) return false;
       const leaders = getClubLeaders(club);
       const matchesLeader = leaders.some((l) => l.name?.toLowerCase().includes(q) || l.department?.toLowerCase().includes(q));
       const matchesSearch =
@@ -218,11 +222,12 @@ export default function AdminClubsPage() {
       const matchesDomain = selectedDomain === "All" || club.category === selectedDomain;
       return matchesSearch && matchesDomain;
     });
-  }, [clubs, searchQuery, selectedDomain]);
+  }, [clubs, searchQuery, selectedDomain, isClubOwner, adminAccess?.clubId, adminAccess?.clubSlug]);
 
   const isFiltering = !!searchQuery.trim() || selectedDomain !== "All";
 
   const handleOpenAddModal = () => {
+    if (isClubOwner) return;
     setIsCreatingNew(true);
     const rand = Math.random().toString(36).substring(2, 7);
     setEditingClub({
@@ -264,6 +269,10 @@ export default function AdminClubsPage() {
     if (e?.preventDefault) e.preventDefault();
     const club = clubOverride || editingClub;
     if (!club) return;
+    if (isClubOwner && club.slug !== adminAccess?.clubSlug && club.id !== adminAccess?.clubId) {
+      alert("Club Owners can only change their assigned club details.");
+      return;
+    }
 
     if (!club.name.trim()) {
       alert("Please provide a Club Name.");
@@ -308,6 +317,7 @@ export default function AdminClubsPage() {
   };
 
   const handleDeleteClub = (id: string, name: string) => {
+    if (isClubOwner && id !== adminAccess?.clubId) return;
     const isDraft = selectedTenure && !selectedTenure.isCurrent;
     const confirmMsg = isDraft
       ? `Are you sure you want to remove "${name || "this club"}" from DRAFT session "${selectedTenure.label}"?\n\nAll associated Club Heads and Co-Heads will also be removed.\n(Note: The live platform and current tenure will NOT be affected.)`
@@ -346,6 +356,7 @@ export default function AdminClubsPage() {
   };
 
   const handleMoveClub = (clubId: string, direction: "up" | "down") => {
+    if (isClubOwner && clubId !== adminAccess?.clubId) return;
     const currentIndex = clubs.findIndex((c) => c.id === clubId);
     if (currentIndex === -1) return;
 

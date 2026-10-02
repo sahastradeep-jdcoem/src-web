@@ -71,8 +71,11 @@ import {
   subscribeToTenures,
   getLatestAvailableTenure 
 } from "@/lib/tenureStore";
+import { useAuth } from "@/context/AuthContext";
 
 export default function AdminEventsPage() {
+  const { adminAccess } = useAuth();
+  const isClubOwner = adminAccess?.role === "CLUB_OWNER" && adminAccess.active !== false;
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
   const [clubsList, setClubsList] = useState<ClubItem[]>([]);
   const [tenuresList, setTenuresList] = useState<CouncilTenure[]>(() => {
@@ -109,6 +112,10 @@ export default function AdminEventsPage() {
   const [isDeletingEvent, setIsDeletingEvent] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [pendingUploads, setPendingUploads] = useState(0);
+
+  const scopedClubsList = useMemo(() => isClubOwner
+    ? clubsList.filter((club) => club.slug === adminAccess?.clubSlug || club.id === adminAccess?.clubId)
+    : clubsList, [clubsList, isClubOwner, adminAccess?.clubId, adminAccess?.clubSlug]);
 
   // Undo-delete state: the event is soft-removed from UI immediately;
   // real Firestore deletion fires only after the 10-second undo window expires.
@@ -221,36 +228,37 @@ export default function AdminEventsPage() {
 
   // Events available in selected tenure
   const tenureFilteredEvents = useMemo(() => {
-    if (selectedTenureId === "all") return eventsList;
+    const scope = (items: EventItem[]) => isClubOwner ? items.filter((event) => event.organizerClubSlug === adminAccess?.clubSlug) : items;
+    if (selectedTenureId === "all") return scope(eventsList);
     const matchedTenure = tenuresList.find((t) => t.id === selectedTenureId);
     if (!matchedTenure) {
-      return eventsList.filter((e) => {
+      return scope(eventsList.filter((e) => {
         const resolved = resolveTenureForEvent(e, tenuresList);
         return resolved ? resolved.id === selectedTenureId : e.tenureId === selectedTenureId;
-      });
+      }));
     }
 
     if (matchedTenure.isCurrent || matchedTenure.status === "active") {
       // By default, in the list show current tenure events only!
-      return eventsList.filter((e) => {
+      return scope(eventsList.filter((e) => {
         const resolved = resolveTenureForEvent(e, tenuresList);
         return resolved ? resolved.id === matchedTenure.id : (e.tenureId === matchedTenure.id || !e.tenureId);
-      });
+      }));
     }
 
     // Past tenure: load past tenure events only when user changes the filter manually
     const snapshotEvents = Array.isArray(matchedTenure.events) ? matchedTenure.events : [];
-    const pastFromStore = eventsList.filter((e) => {
+    const pastFromStore = scope(eventsList.filter((e) => {
       const resolved = resolveTenureForEvent(e, tenuresList);
       return resolved ? resolved.id === matchedTenure.id : e.tenureId === matchedTenure.id;
-    });
+    }));
 
     const map = new Map<string, EventItem>();
     [...snapshotEvents, ...pastFromStore].forEach((ev) => {
       if (ev && (ev.id || ev.slug)) map.set(ev.id || ev.slug, ev);
     });
     return Array.from(map.values());
-  }, [eventsList, selectedTenureId, tenuresList]);
+  }, [eventsList, selectedTenureId, tenuresList, isClubOwner, adminAccess?.clubSlug]);
 
   const filteredEvents = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -305,6 +313,10 @@ export default function AdminEventsPage() {
   }, [tenureFilteredEvents, searchQuery, selectedStatus, selectedCategory, selectedAudience]);
 
   const handleCreateSubmit = async (formData: EventFormData, asDraft?: boolean) => {
+    if (isClubOwner && formData.organizerClubSlug !== adminAccess?.clubSlug) {
+      showNotice("Club Owners can only create events under their assigned club.");
+      return;
+    }
     const isUmbrella = Boolean(formData.isParentFest);
     const cleanWhatToExpect = isUmbrella ? [] : Array.from(new Set(formData.whatToExpect.map((s) => s.trim()).filter(Boolean)));
     const cleanRules = isUmbrella ? [] : Array.from(new Set(formData.rules.map((s) => s.trim()).filter(Boolean)));
@@ -578,6 +590,10 @@ export default function AdminEventsPage() {
 
   const handleEditSubmit = async (formData: EventFormData, asDraft?: boolean) => {
     if (!editingEvent) return;
+    if (isClubOwner && editingEvent.organizerClubSlug !== adminAccess?.clubSlug) {
+      showNotice("Club Owners can only edit events owned by their assigned club.");
+      return;
+    }
 
     const isUmbrella = Boolean(formData.isParentFest);
     const cleanWhatToExpect = isUmbrella ? [] : Array.from(new Set(formData.whatToExpect.map((s) => s.trim()).filter(Boolean)));
@@ -1603,7 +1619,7 @@ export default function AdminEventsPage() {
           onClose={() => setIsCreateOpen(false)}
           mode="create"
           eventsList={eventsList}
-          clubsList={clubsList}
+          clubsList={scopedClubsList}
           onSubmit={handleCreateSubmit}
           pendingUploads={pendingUploads}
           onUploadStateChange={handleUploadStateChange}
@@ -1618,7 +1634,7 @@ export default function AdminEventsPage() {
           mode="edit"
           initialData={editingInitialData}
           eventsList={eventsList}
-          clubsList={clubsList}
+          clubsList={scopedClubsList}
           editingEventId={editingEvent.id}
           onSubmit={handleEditSubmit}
           pendingUploads={pendingUploads}

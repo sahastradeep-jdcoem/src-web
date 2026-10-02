@@ -78,10 +78,13 @@ import {
   subscribeToPaymentConfig, 
   PaymentConfig 
 } from "@/lib/paymentConfigStore";
+import { useAuth } from "@/context/AuthContext";
 
 type ActiveTab = "summary" | "question" | "individual" | "table";
 
 export default function AdminRegistrationsPage() {
+  const { adminAccess } = useAuth();
+  const isClubOwner = adminAccess?.role === "CLUB_OWNER" && adminAccess.active !== false;
   const [registrations, setRegistrations] = useState<RegistrationRecord[]>([]);
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
   const [tenuresList, setTenuresList] = useState<CouncilTenure[]>(() => {
@@ -389,10 +392,11 @@ export default function AdminRegistrationsPage() {
 
   // Events available in selected tenure
   const tenureFilteredEvents = useMemo(() => {
-    if (selectedTenureId === "all") return eventsList;
+    const scopedEvents = isClubOwner ? eventsList.filter((event) => event.organizerClubSlug === adminAccess?.clubSlug) : eventsList;
+    if (selectedTenureId === "all") return scopedEvents;
     const matchedTenure = tenuresList.find((t) => t.id === selectedTenureId);
     if (!matchedTenure) {
-      return eventsList.filter((e) => {
+      return scopedEvents.filter((e) => {
         const resolved = resolveTenureForEvent(e, tenuresList);
         return resolved ? resolved.id === selectedTenureId : e.tenureId === selectedTenureId;
       });
@@ -400,7 +404,7 @@ export default function AdminRegistrationsPage() {
 
     if (matchedTenure.isCurrent || matchedTenure.status === "active") {
       // By default, in the search list show current tenure events only!
-      return eventsList.filter((e) => {
+      return scopedEvents.filter((e) => {
         const resolved = resolveTenureForEvent(e, tenuresList);
         return resolved ? resolved.id === matchedTenure.id : (e.tenureId === matchedTenure.id || !e.tenureId);
       });
@@ -408,7 +412,7 @@ export default function AdminRegistrationsPage() {
 
     // Past tenure: load past tenure events only when user changes the filter manually
     const snapshotEvents = Array.isArray(matchedTenure.events) ? matchedTenure.events : [];
-    const pastFromStore = eventsList.filter((e) => {
+    const pastFromStore = scopedEvents.filter((e) => {
       const resolved = resolveTenureForEvent(e, tenuresList);
       return resolved ? resolved.id === matchedTenure.id : e.tenureId === matchedTenure.id;
     });
@@ -418,7 +422,7 @@ export default function AdminRegistrationsPage() {
       if (ev && (ev.id || ev.slug)) map.set(ev.id || ev.slug, ev);
     });
     return Array.from(map.values());
-  }, [eventsList, selectedTenureId, tenuresList]);
+  }, [eventsList, selectedTenureId, tenuresList, isClubOwner, adminAccess?.clubSlug]);
 
   // Autocomplete / search filtered events for dropdown
   const filteredDropdownEvents = useMemo(() => {
@@ -576,7 +580,12 @@ export default function AdminRegistrationsPage() {
 
   // Filter registrations by currently selected tenure & event (including umbrella event aggregation)
   const eventRegistrations = useMemo(() => {
-    let list = registrations;
+    let list = isClubOwner
+      ? registrations.filter((registration) => {
+          const event = eventsList.find((item) => item.id === registration.eventId || item.slug === registration.eventSlug || item.name === registration.eventName);
+          return event?.organizerClubSlug === adminAccess?.clubSlug;
+        })
+      : registrations;
 
     // Filter by tenure
     if (selectedTenureId !== "all") {
@@ -719,7 +728,7 @@ export default function AdminRegistrationsPage() {
     }
 
     return list;
-  }, [registrations, selectedEventSlug, selectedTenureId, currentSelectedEventObj, eventsList, tenuresList, tenureFilteredEvents]);
+  }, [registrations, selectedEventSlug, selectedTenureId, currentSelectedEventObj, eventsList, tenuresList, tenureFilteredEvents, isClubOwner, adminAccess?.clubSlug]);
 
   // Export Excel button is enabled only after selecting a specific event filter
   const isExportDisabled = selectedEventSlug === "all" || eventRegistrations.length === 0;

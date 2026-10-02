@@ -19,13 +19,18 @@ import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/context/AuthContext";
+import { usePathname } from "next/navigation";
+import { adminRouteCapabilities, hasAdminCapability } from "@/types/rbac";
 
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { user, isLoading, isAdmin, openAuthModal } = useAuth();
+  const { user, isLoading, isAdmin, isOwner, adminAccess, openAuthModal } = useAuth();
+  const pathname = usePathname();
+  const routeAccess = adminRouteCapabilities(pathname);
+  const hasRouteAccess = !adminAccess || isOwner || routeAccess.some((capability) => hasAdminCapability(adminAccess, capability));
 
   // 1. Loading State
   if (isLoading) {
@@ -198,6 +203,19 @@ export default function AdminLayout({
         {/* Footer */}
         <div className="relative z-10 pt-4 border-t border-slate-800 text-center text-[10px] text-slate-500">
           SRC Central Administration • JD College of Engineering & Management
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasRouteAccess) {
+    return (
+      <div className="min-h-screen bg-[#0F172A] text-white flex items-center justify-center p-6">
+        <div className="max-w-md rounded-3xl border border-rose-500/30 bg-slate-900 p-8 text-center shadow-2xl">
+          <ShieldAlert className="mx-auto mb-4 h-12 w-12 text-rose-400" />
+          <h1 className="font-heading text-xl font-extrabold uppercase">Access Restricted</h1>
+          <p className="mt-2 text-sm text-slate-300">Your assigned admin role does not include this console surface.</p>
+          <Link href="/admin" className="mt-6 inline-flex rounded-xl bg-[#E78023] px-4 py-2 text-xs font-bold uppercase">Return to dashboard</Link>
         </div>
       </div>
     );

@@ -15,6 +15,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./config";
 import { UserProfile } from "@/types/auth";
+import { AdminAccessAssignment, AdminAccessRole, normalizeBtId } from "@/types/rbac";
 import { EventItem } from "@/types";
 import { safeStorageSet } from "@/lib/safeStorage";
 
@@ -81,6 +82,89 @@ export interface StudentRegistrationRecord {
 const REGISTRATIONS_COLLECTION = "registrations";
 const ADMINS_COLLECTION = "admins";
 const USERS_COLLECTION = "users";
+export const ADMIN_ACCESS_COLLECTION = "admin_access";
+
+export async function getAdminAccessFromFirestore(uid: string): Promise<AdminAccessAssignment | null> {
+  if (!uid || !db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return null;
+  try {
+    const snapshot = await getDoc(doc(db, ADMIN_ACCESS_COLLECTION, uid));
+    return snapshot.exists() ? ({ uid: snapshot.id, ...snapshot.data() } as AdminAccessAssignment) : null;
+  } catch (error) {
+    console.warn("Firestore admin access fetch notice", error);
+    return null;
+  }
+}
+
+export async function getAllAdminAccessFromFirestore(): Promise<AdminAccessAssignment[]> {
+  if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return [];
+  try {
+    const snapshot = await getDocs(collection(db, ADMIN_ACCESS_COLLECTION));
+    return snapshot.docs.map((item) => ({ uid: item.id, ...item.data() } as AdminAccessAssignment));
+  } catch (error) {
+    console.warn("Firestore admin access list notice", error);
+    return [];
+  }
+}
+
+export function subscribeToAdminAccessFromFirestore(
+  callback: (assignments: AdminAccessAssignment[]) => void
+): () => void {
+  if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return () => {};
+  try {
+    return onSnapshot(
+      collection(db, ADMIN_ACCESS_COLLECTION),
+      (snapshot) => callback(snapshot.docs.map((item) => ({ uid: item.id, ...item.data() } as AdminAccessAssignment))),
+      (error) => console.warn("Firestore live admin access notice", error)
+    );
+  } catch (error) {
+    console.warn("Firestore admin access subscription error", error);
+    return () => {};
+  }
+}
+
+export function subscribeToAdminAccessForUser(
+  uid: string,
+  callback: (assignment: AdminAccessAssignment | null) => void
+): () => void {
+  if (!uid || !db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return () => {};
+  try {
+    return onSnapshot(
+      doc(db, ADMIN_ACCESS_COLLECTION, uid),
+      (snapshot) => callback(snapshot.exists() ? ({ uid: snapshot.id, ...snapshot.data() } as AdminAccessAssignment) : null),
+      (error) => console.warn("Firestore live user admin access notice", error)
+    );
+  } catch (error) {
+    console.warn("Firestore user admin access subscription error", error);
+    return () => {};
+  }
+}
+
+export async function saveAdminAccessToFirestore(
+  assignment: Omit<AdminAccessAssignment, "grantedAt" | "updatedAt"> & Partial<Pick<AdminAccessAssignment, "grantedAt" | "updatedAt">>
+): Promise<void> {
+  if (!assignment.uid || !db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return;
+  const now = new Date().toISOString();
+  await setDoc(
+    doc(db, ADMIN_ACCESS_COLLECTION, assignment.uid),
+    cleanUndefined({
+      ...assignment,
+      btId: normalizeBtId(assignment.btId),
+      active: assignment.active !== false,
+      grantedAt: assignment.grantedAt || now,
+      updatedAt: now,
+    }),
+    { merge: true }
+  );
+}
+
+export async function revokeAdminAccessFromFirestore(uid: string, revokedBy: string): Promise<void> {
+  if (!uid || !db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return;
+  await setDoc(doc(db, ADMIN_ACCESS_COLLECTION, uid), {
+    active: false,
+    revokedBy,
+    updatedAt: new Date().toISOString(),
+  }, { merge: true });
+}
 
 /**
  * Check if an email or user UID has Council Admin privileges.

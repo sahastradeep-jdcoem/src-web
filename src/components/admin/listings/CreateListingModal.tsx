@@ -50,6 +50,7 @@ interface CreateListingModalProps {
   onSuccess?: (item: ListingItem) => void;
   mode?: "create" | "edit";
   initialData?: ListingItem | null;
+  clubOwnerScope?: { slug: string; name: string };
 }
 
 interface PillarOption {
@@ -343,6 +344,7 @@ export function CreateListingModal({
   onSuccess,
   mode = "create",
   initialData,
+  clubOwnerScope,
 }: CreateListingModalProps) {
   const [step, setStep] = useState<"select_type" | "configure_form">("select_type");
   const [selectedPillarOption, setSelectedPillarOption] = useState<PillarOption | null>(null);
@@ -355,7 +357,7 @@ export function CreateListingModal({
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
   const [description, setDescription] = useState("");
-  const [organizer, setOrganizer] = useState("SRC JDCOEM");
+  const [organizer, setOrganizer] = useState(clubOwnerScope?.name || "SRC JDCOEM");
   const [deadline, setDeadline] = useState("");
   const [targetAudience, setTargetAudience] = useState<TargetAudience>("inter_college");
 
@@ -405,7 +407,7 @@ export function CreateListingModal({
       setTitle(initialData.title || "");
       setSummary(initialData.summary || "");
       setDescription(initialData.description || "");
-      setOrganizer(initialData.organizer || "SRC JDCOEM");
+      setOrganizer(initialData.organizer || clubOwnerScope?.name || "SRC JDCOEM");
       setDeadline(initialData.deadline || "");
       setTargetAudience(initialData.targetAudience || (initialData.isInterCollege ? "inter_college" : "jdcoem_only"));
       setCoverImage(initialData.coverImage || PRESET_COVERS[0].url);
@@ -586,7 +588,8 @@ export function CreateListingModal({
           publishedAt: asDraft ? initialData.publishedAt : (initialData.publishedAt || new Date().toISOString()),
           summary: summary.trim() || title.trim(),
           description: description.trim() || summary.trim() || title.trim(),
-          organizer: organizer.trim() || "SRC JDCOEM",
+           organizer: organizer.trim() || clubOwnerScope?.name || "SRC JDCOEM",
+           organizerClubSlug: clubOwnerScope?.slug || initialData.organizerClubSlug,
           coverImage: coverImage || PRESET_COVERS[0].url,
           deadline: deadline || undefined,
           allowResponseEditing: selectedPillarOption.type === "poll" ? false : allowResponseEditing,
@@ -680,7 +683,8 @@ export function CreateListingModal({
         isInterCollege: targetAudience === "inter_college",
         summary: summary.trim() || title.trim(),
         description: description.trim() || summary.trim() || title.trim(),
-        organizer: organizer.trim() || "SRC JDCOEM",
+         organizer: organizer.trim() || clubOwnerScope?.name || "SRC JDCOEM",
+         organizerClubSlug: clubOwnerScope?.slug,
         coverImage: coverImage || PRESET_COVERS[0].url,
         deadline: deadline || undefined,
         allowResponseEditing: selectedPillarOption.type === "poll" ? false : allowResponseEditing,
@@ -1678,4 +1682,3 @@ export function CreateListingModal({
     </div>
   );
 }
-

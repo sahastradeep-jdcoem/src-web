@@ -24,6 +24,8 @@ import {
   BellRing
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
+import { adminRouteCapabilities, hasAdminCapability } from "@/types/rbac";
 
 const ADMIN_NAV = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
@@ -39,10 +41,12 @@ const ADMIN_NAV = [
   { name: "Team Members", href: "/admin/team", icon: Users },
   { name: "Gallery", href: "/admin/gallery", icon: ImageIcon },
   { name: "Tenures & Archive", href: "/admin/tenures", icon: Trophy },
+  { name: "Roles", href: "/admin/roles", icon: ShieldCheck, ownerOnly: true },
 ];
 
 export function AdminSidebar() {
   const pathname = usePathname();
+  const { isOwner, adminAccess } = useAuth();
 
   return (
     <aside className="fixed top-16 left-0 bottom-0 w-64 bg-white border-r border-slate-200 flex flex-col justify-between p-4 z-30 overflow-y-auto shadow-xs">
@@ -74,7 +78,11 @@ export function AdminSidebar() {
 
         {/* Navigation Links */}
         <nav className="space-y-1">
-          {ADMIN_NAV.map((item) => {
+          {ADMIN_NAV.filter((item) => {
+            if (item.ownerOnly) return isOwner;
+            if (!adminAccess || isOwner) return true;
+            return adminRouteCapabilities(item.href).some((capability) => hasAdminCapability(adminAccess, capability));
+          }).map((item) => {
             const isActive = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href + "/"));
             const Icon = item.icon;
 
