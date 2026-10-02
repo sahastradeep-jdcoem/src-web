@@ -42,16 +42,18 @@ import { AdminAccessAssignment, AdminAccessRole, ADMIN_ROLE_LABELS, normalizeBtI
 import { ClubItem, TeamMember } from "@/types";
 
 interface LeaderCandidate {
+  id: string;
   name: string;
   role: string;
   detectedBtId: string;
   currentBtId: string;
+  slotKey: string;
+  roleType?: "lead" | "coLead" | "co-lead" | "core";
 }
 
 interface ClubCandidateGroup {
   club: ClubItem;
-  head: LeaderCandidate | null;
-  coHead: LeaderCandidate | null;
+  leaders: LeaderCandidate[];
 }
 
 interface OfficerCandidate {
@@ -127,41 +129,53 @@ export default function AdminRolesPage() {
     return map;
   }, [assignments]);
 
-  // Compute club candidate groups (Club-wise Head & Co-Head)
+  // Compute club candidate groups (Supports any number of leaders per club)
   const clubCandidateGroups = useMemo<ClubCandidateGroup[]>(() => {
     return clubs.map((club) => {
-      const leaders = getClubLeaders(club);
-      
-      // Club Head: roleType lead or role includes head (and not co-head)
-      const headLeader = leaders.find((l) => 
-        (l.roleType === "lead" || /head/i.test(l.role || "")) && !/co-?head|vice|joint/i.test(l.role || "")
-      ) || leaders[0] || null;
+      const rawLeaders = getClubLeaders(club);
 
-      // Club Co-Head: role includes co-head, vice, or second leader
-      const coHeadLeader = leaders.find((l) => 
-        /co-?head|vice|joint/i.test(l.role || "")
-      ) || (leaders.length > 1 && leaders[1] !== headLeader ? leaders[1] : null);
+      // If club has defined leaders in roster, map all of them
+      const leadersList: LeaderCandidate[] = rawLeaders.map((leader, idx) => {
+        const slotKey = `club:${club.id}:leader:${idx}`;
+        const detectedBt = normalizeBtId(leader.btId);
+        return {
+          id: leader.id || `leader-${idx}`,
+          name: leader.name,
+          role: leader.role || (idx === 0 ? "Club Head" : "Club Co-Head"),
+          detectedBtId: detectedBt,
+          currentBtId: btIdOverrides[slotKey] !== undefined ? btIdOverrides[slotKey] : detectedBt,
+          slotKey,
+          roleType: leader.roleType,
+        };
+      });
 
-      const headSlotKey = `club:${club.id}:head`;
-      const coHeadSlotKey = `club:${club.id}:cohead`;
-
-      const headDetectedBt = normalizeBtId(headLeader?.btId);
-      const coHeadDetectedBt = normalizeBtId(coHeadLeader?.btId);
+      // If no leaders are found in club roster, provide fallback Head and Co-Head placeholder slots
+      if (leadersList.length === 0) {
+        const headSlot = `club:${club.id}:leader:0`;
+        const coHeadSlot = `club:${club.id}:leader:1`;
+        leadersList.push({
+          id: "fallback-head",
+          name: "Club Head (Unspecified)",
+          role: "Club Head",
+          detectedBtId: "",
+          currentBtId: btIdOverrides[headSlot] || "",
+          slotKey: headSlot,
+          roleType: "lead",
+        });
+        leadersList.push({
+          id: "fallback-cohead",
+          name: "Club Co-Head (Unspecified)",
+          role: "Club Co-Head",
+          detectedBtId: "",
+          currentBtId: btIdOverrides[coHeadSlot] || "",
+          slotKey: coHeadSlot,
+          roleType: "co-lead",
+        });
+      }
 
       return {
         club,
-        head: headLeader ? {
-          name: headLeader.name,
-          role: headLeader.role || "Club Head",
-          detectedBtId: headDetectedBt,
-          currentBtId: btIdOverrides[headSlotKey] !== undefined ? btIdOverrides[headSlotKey] : headDetectedBt,
-        } : null,
-        coHead: coHeadLeader ? {
-          name: coHeadLeader.name,
-          role: coHeadLeader.role || "Club Co-Head",
-          detectedBtId: coHeadDetectedBt,
-          currentBtId: btIdOverrides[coHeadSlotKey] !== undefined ? btIdOverrides[coHeadSlotKey] : coHeadDetectedBt,
-        } : null,
+        leaders: leadersList,
       };
     });
   }, [clubs, btIdOverrides]);
@@ -319,45 +333,27 @@ export default function AdminRolesPage() {
     const now = new Date().toISOString();
 
     try {
-      // 1. Grant club heads & co-heads
+      // 1. Grant all club leaders dynamically
       for (const group of clubCandidateGroups) {
-        if (group.head?.currentBtId) {
-          const cleanBt = normalizeBtId(group.head.currentBtId);
-          if (cleanBt) {
-            const matched = findRegisteredUserByBtId(cleanBt);
-            await saveAdminAccessToFirestore({
-              btId: cleanBt,
-              uid: matched?.uid || cleanBt,
-              role: "CLUB_OWNER",
-              clubId: group.club.id,
-              clubSlug: group.club.slug,
-              clubName: group.club.name,
-              active: true,
-              grantedBy: user?.email || "owner",
-              grantedAt: now,
-              updatedAt: now,
-            });
-            count++;
-          }
-        }
-
-        if (group.coHead?.currentBtId) {
-          const cleanBt = normalizeBtId(group.coHead.currentBtId);
-          if (cleanBt) {
-            const matched = findRegisteredUserByBtId(cleanBt);
-            await saveAdminAccessToFirestore({
-              btId: cleanBt,
-              uid: matched?.uid || cleanBt,
-              role: "CLUB_OWNER",
-              clubId: group.club.id,
-              clubSlug: group.club.slug,
-              clubName: group.club.name,
-              active: true,
-              grantedBy: user?.email || "owner",
-              grantedAt: now,
-              updatedAt: now,
-            });
-            count++;
+        for (const leader of group.leaders) {
+          if (leader.currentBtId) {
+            const cleanBt = normalizeBtId(leader.currentBtId);
+            if (cleanBt) {
+              const matched = findRegisteredUserByBtId(cleanBt);
+              await saveAdminAccessToFirestore({
+                btId: cleanBt,
+                uid: matched?.uid || cleanBt,
+                role: "CLUB_OWNER",
+                clubId: group.club.id,
+                clubSlug: group.club.slug,
+                clubName: group.club.name,
+                active: true,
+                grantedBy: user?.email || "owner",
+                grantedAt: now,
+                updatedAt: now,
+              });
+              count++;
+            }
           }
         }
       }
@@ -401,10 +397,12 @@ export default function AdminRolesPage() {
     return clubCandidateGroups.filter((g) => 
       g.club.name.toLowerCase().includes(q) ||
       g.club.category.toLowerCase().includes(q) ||
-      g.head?.name.toLowerCase().includes(q) ||
-      g.head?.currentBtId.toLowerCase().includes(q) ||
-      g.coHead?.name.toLowerCase().includes(q) ||
-      g.coHead?.currentBtId.toLowerCase().includes(q)
+      g.leaders.some(
+        (l) =>
+          l.name.toLowerCase().includes(q) ||
+          l.currentBtId.toLowerCase().includes(q) ||
+          l.role.toLowerCase().includes(q)
+      )
     );
   }, [clubCandidateGroups, searchQuery]);
 
@@ -645,29 +643,21 @@ export default function AdminRolesPage() {
 
         <div className="grid gap-5 lg:grid-cols-2">
           {filteredClubGroups.map((group) => {
-            const headSlotKey = `club:${group.club.id}:head`;
-            const coHeadSlotKey = `club:${group.club.id}:cohead`;
-
-            const headBt = group.head ? normalizeBtId(group.head.currentBtId) : "";
-            const coHeadBt = group.coHead ? normalizeBtId(group.coHead.currentBtId) : "";
-
-            const headActiveGrant = headBt ? activeAssignmentsByBtId.get(headBt) : null;
-            const coHeadActiveGrant = coHeadBt ? activeAssignmentsByBtId.get(coHeadBt) : null;
-
-            const isHeadActive = headActiveGrant && headActiveGrant.role === "CLUB_OWNER" && headActiveGrant.clubId === group.club.id;
-            const isCoHeadActive = coHeadActiveGrant && coHeadActiveGrant.role === "CLUB_OWNER" && coHeadActiveGrant.clubId === group.club.id;
+            const validLeaderBts = group.leaders
+              .map((l) => normalizeBtId(l.currentBtId))
+              .filter(Boolean);
 
             const isClubBusy = busyKey === `club:${group.club.id}:all`;
 
-            // 1-Click Grant for this entire club (both head & cohead)
+            // 1-Click Grant for this entire club (all detected/assigned leaders)
             const handleGrantWholeClub = async () => {
               setBusyKey(`club:${group.club.id}:all`);
               try {
-                if (headBt) {
-                  await grantAccess(headBt, "CLUB_OWNER", group.club, headSlotKey);
-                }
-                if (coHeadBt) {
-                  await grantAccess(coHeadBt, "CLUB_OWNER", group.club, coHeadSlotKey);
+                for (const leader of group.leaders) {
+                  const cleanBt = normalizeBtId(leader.currentBtId);
+                  if (cleanBt) {
+                    await grantAccess(cleanBt, "CLUB_OWNER", group.club, leader.slotKey);
+                  }
                 }
               } finally {
                 setBusyKey(null);
@@ -686,14 +676,19 @@ export default function AdminRolesPage() {
                       <Building2 className="h-4 w-4" />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="font-bold text-sm text-slate-900 truncate">{group.club.name}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-sm text-slate-900 truncate">{group.club.name}</h3>
+                        <span className="text-[10px] font-semibold text-slate-400">
+                          ({group.leaders.length} {group.leaders.length === 1 ? "leader" : "leaders"})
+                        </span>
+                      </div>
                       <p className="text-[10px] text-slate-500 font-medium">{group.club.category}</p>
                     </div>
                   </div>
 
                   <Button
                     onClick={handleGrantWholeClub}
-                    disabled={isClubBusy || (!headBt && !coHeadBt)}
+                    disabled={isClubBusy || validLeaderBts.length === 0}
                     size="sm"
                     variant="outline"
                     className="text-xs font-bold text-[#17458F] border-[#17458F]/30 hover:bg-blue-50 cursor-pointer"
@@ -702,123 +697,82 @@ export default function AdminRolesPage() {
                   </Button>
                 </div>
 
-                {/* Leaders Section */}
-                <div className="space-y-4">
-                  {/* 1. Club Head */}
-                  <div className="rounded-xl bg-white p-3.5 border border-slate-200/70 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5">
-                        <UserRound className="h-3.5 w-3.5 text-[#17458F]" />
-                        <span className="text-xs font-bold text-slate-800">
-                          {group.head?.name || "Club Head Unspecified"}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-medium">(Head)</span>
-                      </div>
+                {/* Leaders Section - dynamically renders 1, 2, 3+ leaders */}
+                <div className="space-y-3">
+                  {group.leaders.map((leader, lIdx) => {
+                    const cleanBt = normalizeBtId(leader.currentBtId);
+                    const activeGrant = cleanBt ? activeAssignmentsByBtId.get(cleanBt) : null;
+                    const isActive = Boolean(
+                      activeGrant && 
+                      activeGrant.role === "CLUB_OWNER" && 
+                      activeGrant.clubId === group.club.id
+                    );
+                    const isLeaderBusy = busyKey === leader.slotKey;
 
-                      <span
-                        className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full border ${
-                          isHeadActive
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            : "bg-slate-100 text-slate-500 border-slate-200"
-                        }`}
+                    return (
+                      <div 
+                        key={leader.id || leader.slotKey} 
+                        className="rounded-xl bg-white p-3.5 border border-slate-200/70 space-y-2"
                       >
-                        {isHeadActive ? "Active" : "Unassigned"}
-                      </span>
-                    </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <UserRound className={`h-3.5 w-3.5 shrink-0 ${lIdx === 0 ? "text-[#17458F]" : "text-[#E78023]"}`} />
+                            <span className="text-xs font-bold text-slate-800 truncate">
+                              {leader.name}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-medium shrink-0">
+                              ({leader.role})
+                            </span>
+                          </div>
 
-                    <div className="flex items-center gap-2 pt-1">
-                      <input
-                        type="text"
-                        value={group.head?.currentBtId || ""}
-                        onChange={(e) => {
-                          const val = e.target.value.toUpperCase();
-                          setBtIdOverrides((prev) => ({ ...prev, [headSlotKey]: val }));
-                        }}
-                        placeholder="BT ID (e.g. BT22CSE001)"
-                        className="flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 font-mono text-xs font-bold uppercase text-slate-800 focus:border-[#17458F] focus:outline-hidden"
-                      />
+                          <span
+                            className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full border shrink-0 ${
+                              isActive
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : "bg-slate-100 text-slate-500 border-slate-200"
+                            }`}
+                          >
+                            {isActive ? "Active" : "Unassigned"}
+                          </span>
+                        </div>
 
-                      {isHeadActive ? (
-                        <Button
-                          onClick={() => revokeAccess(headBt, headActiveGrant?.uid, headSlotKey)}
-                          disabled={busyKey === headSlotKey}
-                          size="sm"
-                          variant="danger"
-                          className="h-8 px-2.5 text-xs cursor-pointer"
-                        >
-                          Revoke
-                        </Button>
-                      ) : (
-                        <Button
-                          onClick={() => grantAccess(headBt, "CLUB_OWNER", group.club, headSlotKey)}
-                          disabled={busyKey === headSlotKey || !headBt}
-                          size="sm"
-                          variant="primary"
-                          className="h-8 px-2.5 text-xs font-bold cursor-pointer"
-                        >
-                          {busyKey === headSlotKey ? "Saving…" : "Grant"}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
+                        <div className="flex items-center gap-2 pt-1">
+                          <input
+                            type="text"
+                            value={leader.currentBtId}
+                            onChange={(e) => {
+                              const val = e.target.value.toUpperCase();
+                              setBtIdOverrides((prev) => ({ ...prev, [leader.slotKey]: val }));
+                            }}
+                            placeholder="BT ID (e.g. BT22CSE001)"
+                            className="flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 font-mono text-xs font-bold uppercase text-slate-800 focus:border-[#17458F] focus:outline-hidden"
+                          />
 
-                  {/* 2. Club Co-Head */}
-                  <div className="rounded-xl bg-white p-3.5 border border-slate-200/70 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5">
-                        <UserRound className="h-3.5 w-3.5 text-[#E78023]" />
-                        <span className="text-xs font-bold text-slate-800">
-                          {group.coHead?.name || "Club Co-Head Unspecified"}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-medium">(Co-Head)</span>
+                          {isActive ? (
+                            <Button
+                              onClick={() => revokeAccess(cleanBt, activeGrant?.uid, leader.slotKey)}
+                              disabled={isLeaderBusy}
+                              size="sm"
+                              variant="danger"
+                              className="h-8 px-2.5 text-xs cursor-pointer"
+                            >
+                              Revoke
+                            </Button>
+                          ) : (
+                            <Button
+                              onClick={() => grantAccess(cleanBt, "CLUB_OWNER", group.club, leader.slotKey)}
+                              disabled={isLeaderBusy || !cleanBt}
+                              size="sm"
+                              variant="primary"
+                              className="h-8 px-2.5 text-xs font-bold cursor-pointer"
+                            >
+                              {isLeaderBusy ? "Saving…" : "Grant"}
+                            </Button>
+                          )}
+                        </div>
                       </div>
-
-                      <span
-                        className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full border ${
-                          isCoHeadActive
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            : "bg-slate-100 text-slate-500 border-slate-200"
-                        }`}
-                      >
-                        {isCoHeadActive ? "Active" : "Unassigned"}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-1">
-                      <input
-                        type="text"
-                        value={group.coHead?.currentBtId || ""}
-                        onChange={(e) => {
-                          const val = e.target.value.toUpperCase();
-                          setBtIdOverrides((prev) => ({ ...prev, [coHeadSlotKey]: val }));
-                        }}
-                        placeholder="BT ID (e.g. BT22CSE002)"
-                        className="flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 font-mono text-xs font-bold uppercase text-slate-800 focus:border-[#17458F] focus:outline-hidden"
-                      />
-
-                      {isCoHeadActive ? (
-                        <Button
-                          onClick={() => revokeAccess(coHeadBt, coHeadActiveGrant?.uid, coHeadSlotKey)}
-                          disabled={busyKey === coHeadSlotKey}
-                          size="sm"
-                          variant="danger"
-                          className="h-8 px-2.5 text-xs cursor-pointer"
-                        >
-                          Revoke
-                        </Button>
-                      ) : (
-                        <Button
-                          onClick={() => grantAccess(coHeadBt, "CLUB_OWNER", group.club, coHeadSlotKey)}
-                          disabled={busyKey === coHeadSlotKey || !coHeadBt}
-                          size="sm"
-                          variant="primary"
-                          className="h-8 px-2.5 text-xs font-bold cursor-pointer"
-                        >
-                          {busyKey === coHeadSlotKey ? "Saving…" : "Grant"}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
+                    );
+                  })}
                 </div>
               </div>
             );
