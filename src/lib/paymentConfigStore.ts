@@ -6,11 +6,17 @@ import {
 import { enqueueCloudWrite } from "./dataSyncEngine";
 
 export interface PaymentConfig {
-  gateway: "paytm" | "upi";
+  gateway: "cashfree" | "paytm" | "upi";
+  // Cashfree PG Settings
+  cashfreeAppId: string;
+  cashfreeSecretKey: string;
+  cashfreeEnvironment: "TEST" | "PROD";
+  // Paytm PG Settings
   paytmMid: string;
   paytmMerchantKey: string;
   paytmWebsite: string;
   paytmEnvironment: "PROD" | "STAGE";
+  // Direct UPI & General Settings
   upiId: string;
   payeeName: string;
   isGatewayActive: boolean;
@@ -26,7 +32,10 @@ export const PAYMENT_CONFIG_DOC_ID = "payment_config";
 export const PAYMENT_CONFIG_CHANGE_EVENT = "src_payment_config_changed";
 
 export const DEFAULT_PAYMENT_CONFIG: PaymentConfig = {
-  gateway: "paytm",
+  gateway: "cashfree",
+  cashfreeAppId: process.env.NEXT_PUBLIC_CASHFREE_APP_ID || process.env.CASHFREE_APP_ID || "",
+  cashfreeSecretKey: process.env.CASHFREE_SECRET_KEY || "",
+  cashfreeEnvironment: (process.env.CASHFREE_ENVIRONMENT as "TEST" | "PROD") || "TEST",
   paytmMid: process.env.NEXT_PUBLIC_PAYTM_MID || "",
   paytmMerchantKey: "",
   paytmWebsite: process.env.PAYTM_WEBSITE || "DEFAULT",
@@ -36,7 +45,7 @@ export const DEFAULT_PAYMENT_CONFIG: PaymentConfig = {
   isGatewayActive: true,
   webhookSecret: "SRC_UPI_2026_GATEWAY",
   isWebhookActive: true,
-  instructions: "Scan QR or tap to open UPI App. Amount is pre-locked for this event.",
+  instructions: "Instant online checkout powered by Cashfree (UPI, Cards, Netbanking).",
   updatedAt: new Date().toISOString(),
   updatedBy: "System",
 };
@@ -58,6 +67,9 @@ export function getStoredPaymentConfig(): PaymentConfig {
           ...DEFAULT_PAYMENT_CONFIG,
           ...parsed,
           // Always ensure env fallback if not set in storage
+          cashfreeAppId: parsed.cashfreeAppId || process.env.NEXT_PUBLIC_CASHFREE_APP_ID || process.env.CASHFREE_APP_ID || DEFAULT_PAYMENT_CONFIG.cashfreeAppId,
+          cashfreeSecretKey: parsed.cashfreeSecretKey || process.env.CASHFREE_SECRET_KEY || DEFAULT_PAYMENT_CONFIG.cashfreeSecretKey,
+          cashfreeEnvironment: parsed.cashfreeEnvironment || DEFAULT_PAYMENT_CONFIG.cashfreeEnvironment,
           paytmMid: parsed.paytmMid || process.env.NEXT_PUBLIC_PAYTM_MID || "",
         };
       }

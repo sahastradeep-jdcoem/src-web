@@ -69,6 +69,7 @@ import {
 } from "@/lib/paymentConfigStore";
 import { getCurrentTenure, getStoredTenures } from "@/lib/tenureStore";
 import { isRegistrationDeadlinePassed, isEventCompletedByDate, getEventEffectiveStatus, resolveTenureForEvent } from "@/lib/eventsStore";
+import { loadCashfreeSDK } from "@/lib/cashfreeClient";
 
 interface RegistrationWizardProps {
   event: EventItem;
@@ -824,7 +825,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       return;
     }
 
-    // 2. Paid Event Paytm for Business Gateway Flow
+    // 2. Paid Event Flow
     const draftRegId = `SRC-${event.slug.slice(0, 3).toUpperCase()}-26-${Math.floor(10000 + Math.random() * 90000)}`;
     const draftTkCode = `${event.slug.slice(0, 3).toUpperCase()}26-TK-${Math.floor(1000 + Math.random() * 9000)}`;
     const draftPayload = buildRegistrationPayload(draftRegId, draftTkCode, {
@@ -833,6 +834,112 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     });
     pendingRegistrationDraftRef.current = { regId: draftRegId, tkCode: draftTkCode, payload: draftPayload };
 
+    // 2A. Cashfree Payment Gateway Flow (Instant Auto-Checkout Modal)
+    if (paymentConfig.gateway === "cashfree") {
+      try {
+        const orderRes = await fetch("/api/cashfree/create-order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: totalPayableAmount,
+            eventId: event.id,
+            eventName: event.name,
+            participantName: formData.fullName,
+            email: formData.email,
+            phone: formData.phone,
+            btId: formData.btId,
+            registrationId: draftRegId,
+          }),
+        });
+
+        if (!orderRes.ok) {
+          const errData = await orderRes.json().catch(() => ({}));
+          throw new Error(errData.error || "Failed to initialize Cashfree checkout order.");
+        }
+
+        const orderData = await orderRes.json();
+        if (!orderData.success || !orderData.paymentSessionId) {
+          throw new Error(orderData.error || "Could not retrieve Cashfree payment session.");
+        }
+
+        // Initialize Cashfree checkout SDK
+        const CashfreeSDK = await loadCashfreeSDK();
+        const cashfreeInstance = CashfreeSDK({
+          mode: orderData.environment === "PROD" ? "production" : "sandbox",
+        });
+
+        // Set up active polling so even if modal closes or user pays via UPI app, it auto-detects
+        let isPolledAndCompleted = false;
+        const pollInterval = setInterval(async () => {
+          if (isPolledAndCompleted) return;
+          try {
+            const verifyCheck = await fetch("/api/cashfree/verify-order", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ orderId: orderData.orderId }),
+            });
+            const vData = await verifyCheck.json();
+            if (vData.isPaid) {
+              isPolledAndCompleted = true;
+              clearInterval(pollInterval);
+              await completeRegistration({
+                paymentStatus: "PAID",
+                paymentId: vData.payment?.utr || `CF_${orderData.orderId}`,
+                orderId: orderData.orderId,
+                amountPaid: totalPayableAmount,
+              });
+            }
+          } catch (e) {
+            // Ignore polling errors
+          }
+        }, 2500);
+
+        // Auto-clear polling after 5 minutes
+        setTimeout(() => clearInterval(pollInterval), 300000);
+
+        setIsSubmitting(false);
+
+        // Open official Cashfree checkout dropin modal
+        await cashfreeInstance.checkout({
+          paymentSessionId: orderData.paymentSessionId,
+          redirectTarget: "_modal",
+        });
+
+        // Check verification after modal interaction
+        setTimeout(async () => {
+          if (isPolledAndCompleted) return;
+          try {
+            const finalCheck = await fetch("/api/cashfree/verify-order", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ orderId: orderData.orderId }),
+            });
+            const fData = await finalCheck.json();
+            if (fData.isPaid) {
+              isPolledAndCompleted = true;
+              clearInterval(pollInterval);
+              await completeRegistration({
+                paymentStatus: "PAID",
+                paymentId: fData.payment?.utr || `CF_${orderData.orderId}`,
+                orderId: orderData.orderId,
+                amountPaid: totalPayableAmount,
+              });
+            }
+          } catch (e) {
+            console.warn("Post-modal verification notice:", e);
+          }
+        }, 1500);
+
+        return;
+      } catch (cfErr: any) {
+        console.error("Cashfree checkout error:", cfErr);
+        alert(cfErr.message || "Failed to launch Cashfree checkout. Please try again.");
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
+    // 2B. Paytm for Business / UPI Gateway Flow
     try {
       const orderRes = await fetch("/api/paytm/initiate-transaction", {
         method: "POST",

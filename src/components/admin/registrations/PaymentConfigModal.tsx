@@ -16,7 +16,9 @@ import {
   Clock,
   Send,
   Smartphone,
-  Zap
+  Zap,
+  Eye,
+  EyeOff
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -38,8 +40,13 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
   const [config, setConfig] = useState<PaymentConfig>(getStoredPaymentConfig());
   const [isSaving, setIsSaving] = useState(false);
   const [showSavedToast, setShowSavedToast] = useState(false);
-  const [activeTab, setActiveTab] = useState<"credentials" | "webhook" | "preview">("credentials");
+  const [activeTab, setActiveTab] = useState<"cashfree" | "credentials" | "webhook" | "preview">("cashfree");
   
+  // Cashfree Testing State
+  const [isTestingCashfree, setIsTestingCashfree] = useState(false);
+  const [cashfreeTestResult, setCashfreeTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [showSecretKey, setShowSecretKey] = useState(false);
+
   // Webhook Testing & Copy State
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
@@ -118,6 +125,45 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
     }
   };
 
+  const handleTestCashfree = async () => {
+    setIsTestingCashfree(true);
+    setCashfreeTestResult(null);
+    try {
+      const res = await fetch("/api/cashfree/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: 1,
+          eventName: "Admin Gateway Test Order",
+          participantName: "SRC Admin Verification",
+          email: "srcjdcoem@gmail.com",
+          phone: "9529441964",
+          registrationId: "TEST-VERIFY",
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCashfreeTestResult({
+          success: true,
+          message: `Success! Connected to Cashfree ${data.environment} mode. Active Session: ${data.orderId}`,
+        });
+      } else {
+        setCashfreeTestResult({
+          success: false,
+          message: `Cashfree Error: ${data.error || "Authentication failed"}`,
+        });
+      }
+    } catch (err: any) {
+      setCashfreeTestResult({
+        success: false,
+        message: `Network Error: ${err.message || "Could not reach Cashfree endpoint"}`,
+      });
+    } finally {
+      setIsTestingCashfree(false);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -139,33 +185,58 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Payment Gateway & Treasurer UPI Settings"
-      subtitle="Manage Paytm for Business credentials, active Treasurer UPI account, and self-hosted automated webhook."
+      title="Payment Gateway & Settlement Settings"
+      subtitle="Configure Cashfree Payment Gateway, Paytm for Business, or Treasurer UPI."
       maxWidth="lg"
     >
       <div className="space-y-6">
         {/* Header Mode Status */}
         <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#002970] text-white flex items-center justify-center font-bold text-sm shadow-sm">
-              Paytm
+            <div className="w-10 h-10 rounded-xl bg-[#17458F] text-white flex items-center justify-center font-bold text-xs shadow-sm uppercase">
+              {config.gateway === "cashfree" ? "CF" : config.gateway === "paytm" ? "PAYTM" : "UPI"}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h4 className="font-heading font-extrabold text-sm text-slate-900">
-                  Paytm for Business Gateway
+                  {config.gateway === "cashfree"
+                    ? "Cashfree Payment Gateway"
+                    : config.gateway === "paytm"
+                    ? "Paytm for Business Gateway"
+                    : "Direct Treasurer UPI"}
                 </h4>
                 <Badge variant={config.isGatewayActive ? "success" : "slate"} size="sm">
                   {config.isGatewayActive ? "ACTIVE" : "PAUSED"}
                 </Badge>
+                {config.gateway === "cashfree" && (
+                  <Badge variant={config.cashfreeEnvironment === "PROD" ? "orange" : "navy"} size="sm">
+                    {config.cashfreeEnvironment === "PROD" ? "PRODUCTION LIVE" : "TEST SANDBOX"}
+                  </Badge>
+                )}
               </div>
               <p className="text-xs text-slate-500">
-                Direct bank settlement with 0% UPI transaction fees
+                {config.gateway === "cashfree"
+                  ? "Auto-verified UPI, Cards, Netbanking with Instant Settlement"
+                  : "Direct bank settlement with 0% UPI transaction fees"}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setActiveTab("cashfree")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === "cashfree"
+                  ? "bg-white text-[#17458F] shadow-sm border border-blue-200"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <span>Cashfree</span>
+              <span className="px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 text-[9px] font-bold">
+                AUTO
+              </span>
+            </button>
             <button
               type="button"
               onClick={() => setActiveTab("credentials")}
@@ -175,7 +246,7 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              Credentials
+              Paytm / UPI
             </button>
             <button
               type="button"
@@ -203,7 +274,214 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
           </div>
         </div>
 
-        {activeTab === "credentials" ? (
+        {activeTab === "cashfree" ? (
+          /* ========================================================================= */
+          /* CASHFREE PAYMENT GATEWAY TAB */
+          /* ========================================================================= */
+          <form onSubmit={handleSave} className="space-y-4">
+            {/* Active Gateway Selection */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                Active Checkout Engine *
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setConfig({ ...config, gateway: "cashfree" })}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    config.gateway === "cashfree"
+                      ? "border-[#17458F] bg-blue-50/60 ring-2 ring-[#17458F]/20"
+                      : "border-slate-200 hover:border-slate-300 bg-white"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-bold text-xs text-slate-900">Cashfree PG</span>
+                    {config.gateway === "cashfree" && <Check className="w-3.5 h-3.5 text-[#17458F]" />}
+                  </div>
+                  <p className="text-[11px] text-slate-500">Auto-popups, UPI & Cards (Recommended)</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setConfig({ ...config, gateway: "paytm" })}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    config.gateway === "paytm"
+                      ? "border-blue-900 bg-blue-50/60 ring-2 ring-blue-900/20"
+                      : "border-slate-200 hover:border-slate-300 bg-white"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-bold text-xs text-slate-900">Paytm for Biz</span>
+                    {config.gateway === "paytm" && <Check className="w-3.5 h-3.5 text-blue-900" />}
+                  </div>
+                  <p className="text-[11px] text-slate-500">MID and direct merchant dynamic QR</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setConfig({ ...config, gateway: "upi" })}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    config.gateway === "upi"
+                      ? "border-amber-600 bg-amber-50/60 ring-2 ring-amber-600/20"
+                      : "border-slate-200 hover:border-slate-300 bg-white"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-bold text-xs text-slate-900">Direct UPI</span>
+                    {config.gateway === "upi" && <Check className="w-3.5 h-3.5 text-amber-600" />}
+                  </div>
+                  <p className="text-[11px] text-slate-500">Treasurer VPA with UTR verification</p>
+                </button>
+              </div>
+            </div>
+
+            {/* Cashfree App ID */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                Cashfree App ID (Client ID) *
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. TEST11275390ec5beb3e152dea3063d009357211"
+                value={config.cashfreeAppId}
+                onChange={(e) => setConfig({ ...config, cashfreeAppId: e.target.value.trim() })}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#17458F]/30 focus:border-[#17458F]"
+              />
+              <p className="text-[11px] text-slate-500 mt-1">
+                Found on your Cashfree Dashboard under Developers → API Keys.
+              </p>
+            </div>
+
+            {/* Cashfree Secret Key */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                Cashfree Secret Key *
+              </label>
+              <div className="relative">
+                <input
+                  type={showSecretKey ? "text" : "password"}
+                  required
+                  placeholder="e.g. Secret Key from Cashfree Dashboard"
+                  value={config.cashfreeSecretKey}
+                  onChange={(e) => setConfig({ ...config, cashfreeSecretKey: e.target.value.trim() })}
+                  className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-slate-300 text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#17458F]/30 focus:border-[#17458F]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSecretKey(!showSecretKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showSecretKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Server-only secret key used for signing order and refund requests.
+              </p>
+            </div>
+
+            {/* Environment & Gateway Status Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Cashfree Environment
+                </label>
+                <select
+                  value={config.cashfreeEnvironment}
+                  onChange={(e) =>
+                    setConfig({
+                      ...config,
+                      cashfreeEnvironment: e.target.value as "TEST" | "PROD",
+                    })
+                  }
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#17458F]/30 focus:border-[#17458F]"
+                >
+                  <option value="TEST">TEST / Sandbox (Simulated Payments)</option>
+                  <option value="PROD">PROD / Production (Live Bank Settlements)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Online Registration Status
+                </label>
+                <div className="h-[42px] px-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">
+                    {config.isGatewayActive ? "Registrations Open" : "Registrations Paused"}
+                  </span>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={config.isGatewayActive}
+                      onChange={(e) => setConfig({ ...config, isGatewayActive: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#17458F]"></div>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Test Connection Button & Result Box */}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <span className="text-xs font-bold text-slate-800 block">
+                    Verify Cashfree Integration
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    Creates a test order on Cashfree to verify your App ID &amp; Secret Key.
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTestCashfree}
+                  isLoading={isTestingCashfree}
+                  className="shrink-0"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 mr-1" />
+                  <span>Test Connection</span>
+                </Button>
+              </div>
+
+              {cashfreeTestResult && (
+                <div
+                  className={`p-3 rounded-lg text-xs leading-relaxed flex items-start gap-2 ${
+                    cashfreeTestResult.success
+                      ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                      : "bg-red-50 text-red-800 border border-red-200"
+                  }`}
+                >
+                  {cashfreeTestResult.success ? (
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  )}
+                  <span>{cashfreeTestResult.message}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="flex items-center justify-between pt-4 border-t border-slate-200">
+              <span className="text-[11px] text-slate-400">
+                Mode: {config.gateway.toUpperCase()} • {config.cashfreeEnvironment}
+              </span>
+
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={onClose}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary" size="sm" isLoading={isSaving}>
+                  <Check className="w-4 h-4 mr-1" />
+                  Save Settings
+                </Button>
+              </div>
+            </div>
+          </form>
+        ) : activeTab === "credentials" ? (
           <form onSubmit={handleSave} className="space-y-4">
             {/* Active Treasurer UPI ID */}
             <div>
