@@ -27,6 +27,7 @@ import {
   ClipboardList,
   FileSpreadsheet,
   Eye,
+  EyeOff,
   BarChart3,
   Power
 } from "lucide-react";
@@ -1230,20 +1231,37 @@ export default function AdminSrcUpdatesPage() {
                             <span>Publish Live</span>
                           </Button>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleToggleDispatchAcceptingResponses(item.id, item.isAcceptingResponses === false)}
-                            className={cn(
-                              "flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border w-full sm:w-auto",
-                              item.isAcceptingResponses !== false
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
-                                : "bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100"
-                            )}
-                            title="Click to toggle accepting responses"
-                          >
-                            <Power className="w-3.5 h-3.5" />
-                            <span>{item.isAcceptingResponses !== false ? "Active" : "Closed"}</span>
-                          </button>
+                          <div className="flex flex-col items-center gap-1 w-full sm:w-auto">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleDispatchAcceptingResponses(item.id, item.isAcceptingResponses === false)}
+                              className={cn(
+                                "flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border w-full sm:w-auto",
+                                item.isAcceptingResponses !== false
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
+                                  : "bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100"
+                              )}
+                              title="Click to toggle accepting responses"
+                            >
+                              <Power className="w-3.5 h-3.5" />
+                              <span>{item.isAcceptingResponses !== false ? "Active" : "Closed"}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const updated = dispatches.map((d) =>
+                                  d.id === item.id ? { ...d, isLive: false, status: "draft" as const } : d
+                                );
+                                await saveStoredSrcDispatches(updated);
+                                showToast(`"${item.title}" unlisted from public view.`);
+                              }}
+                              className="flex items-center justify-center gap-1 text-[9px] font-semibold text-slate-400 hover:text-amber-600 transition-colors cursor-pointer"
+                              title="Remove from public view (keeps all data intact)"
+                            >
+                              <EyeOff className="w-3 h-3" />
+                              <span>Unlist</span>
+                            </button>
+                          </div>
                         )}
                         <Button
                           onClick={() => setInspectingDispatch(item)}

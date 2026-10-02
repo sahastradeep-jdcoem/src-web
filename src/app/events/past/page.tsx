@@ -90,6 +90,11 @@ export default function PastTenureEventsPage() {
               return;
             }
 
+            // Draft Isolation Invariant (Directive #6)
+            if (effective.isLive === false || effective.status === "draft") {
+              return;
+            }
+
             // Strictly exclude any event that belongs to the current live tenure by date
             const resolved = resolveTenureForEvent(effective, tenuresList);
             if (resolved && resolved.isCurrent) {

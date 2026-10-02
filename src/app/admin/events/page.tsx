@@ -6,6 +6,7 @@ import {
   Plus, 
   Search, 
   Eye, 
+  EyeOff,
   Edit3, 
   Copy, 
   Trash2, 
@@ -30,7 +31,7 @@ import {
   Ticket,
   Undo2
 } from "lucide-react";
-import { EventItem, ClubItem, SrcFormField, CustomQuestion, TargetAudience } from "@/types";
+import { EventItem, ClubItem, SrcFormField, CustomQuestion, TargetAudience, EventStatus } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -264,7 +265,9 @@ export default function AdminEventsPage() {
       if (!matchesSearch) return false;
 
       // Status matching
-      if (selectedStatus === "open") {
+      if (selectedStatus === "draft") {
+        if (e.isLive !== false && e.status !== "draft") return false;
+      } else if (selectedStatus === "open") {
         if (e.isCancelled || e.status !== "Registration Open" || e.noRegistrationRequired || isRegistrationDeadlinePassed(e)) return false;
       } else if (selectedStatus === "walkin") {
         if (!e.noRegistrationRequired) return false;
@@ -301,7 +304,7 @@ export default function AdminEventsPage() {
     return sortEventsByDate(filtered);
   }, [tenureFilteredEvents, searchQuery, selectedStatus, selectedCategory, selectedAudience]);
 
-  const handleCreateSubmit = async (formData: EventFormData) => {
+  const handleCreateSubmit = async (formData: EventFormData, asDraft?: boolean) => {
     const isUmbrella = Boolean(formData.isParentFest);
     const cleanWhatToExpect = isUmbrella ? [] : Array.from(new Set(formData.whatToExpect.map((s) => s.trim()).filter(Boolean)));
     const cleanRules = isUmbrella ? [] : Array.from(new Set(formData.rules.map((s) => s.trim()).filter(Boolean)));
@@ -327,6 +330,7 @@ export default function AdminEventsPage() {
       id: `evt-${Date.now()}-${randSuffix}`,
       slug: `${formData.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${randSuffix}`,
       name: formData.name,
+      isLive: !asDraft,
       category: formData.category as any,
       date: formData.date || "TBD 2026",
       rawDate: formData.rawDate || undefined,
@@ -339,7 +343,7 @@ export default function AdminEventsPage() {
       organizerClubSlug: formData.organizerClubSlug || (formData.organizer === "SRC JDCOEM" || formData.organizer?.toLowerCase().includes("council") ? "src-council" : undefined),
       collaboratingClubs: formData.collaboratingClubs && formData.collaboratingClubs.length > 0 ? formData.collaboratingClubs : undefined,
       coOrganizers: formData.collaboratingClubs && formData.collaboratingClubs.length > 0 ? formData.collaboratingClubs.map((c) => c.name) : undefined,
-      status: isNoReg && formData.status === "Registration Open" ? "Upcoming" : formData.status,
+      status: asDraft ? "draft" : (isNoReg && formData.status === "Registration Open" ? "Upcoming" : formData.status),
       poster: formData.poster || formData.cardImage || formData.posterImage || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
       cardImage: formData.cardImage || formData.poster,
       posterImage: formData.posterImage || "",
@@ -392,7 +396,11 @@ export default function AdminEventsPage() {
     try {
       await saveStoredEvents(updated);
       setIsCreateOpen(false);
-      showNotice(`Event "${created.name}" published by "${created.organizer}".`);
+      showNotice(
+        asDraft
+          ? `Event "${created.name}" saved as draft.`
+          : `Event "${created.name}" published by "${created.organizer}".`
+      );
     } catch (saveErr: any) {
       console.error("Cloud save failed for event:", saveErr);
       throw saveErr;
@@ -444,6 +452,32 @@ export default function AdminEventsPage() {
     }
   };
 
+  const handleToggleLive = async (evt: EventItem) => {
+    const nextLive = evt.isLive === false; // false → true, undefined/true → false
+    const updatedEvent: EventItem = {
+      ...evt,
+      isLive: nextLive,
+      status: !nextLive
+        ? "draft"
+        : (evt.status === "draft" ? "Upcoming" : evt.status),
+    };
+    const updated = eventsList.map((e) =>
+      (e.id === evt.id || e.slug === evt.slug) ? updatedEvent : e
+    );
+    setEventsList(updated);
+    try {
+      await saveStoredEvents(updated);
+      showNotice(
+        nextLive
+          ? `"${evt.name}" is now live and visible to students.`
+          : `"${evt.name}" has been unlisted from public view.`
+      );
+    } catch (err: any) {
+      console.error("Cloud save failed for live toggle:", err);
+      showNotice("Failed to update visibility in cloud.");
+    }
+  };
+
   const editingInitialData: Partial<EventFormData> | undefined = useMemo(() => {
     if (!editingEvent) return undefined;
     const rawStartDate = editingEvent.rawDate || parseToIsoDate(editingEvent.date);
@@ -465,6 +499,7 @@ export default function AdminEventsPage() {
     }
 
     return {
+      isLive: editingEvent.isLive,
       name: editingEvent.name,
       category: editingEvent.category,
       rawDate: rawStartDate,
@@ -541,7 +576,7 @@ export default function AdminEventsPage() {
     }
   };
 
-  const handleEditSubmit = async (formData: EventFormData) => {
+  const handleEditSubmit = async (formData: EventFormData, asDraft?: boolean) => {
     if (!editingEvent) return;
 
     const isUmbrella = Boolean(formData.isParentFest);
@@ -592,6 +627,18 @@ export default function AdminEventsPage() {
     const tenures = getStoredTenures();
     const resolvedTenure = resolveTenureForEvent(formData, tenures);
 
+    const finalLive = asDraft === true 
+      ? false 
+      : asDraft === false 
+      ? true 
+      : (formData.isLive !== undefined ? formData.isLive : (editingEvent.isLive !== undefined ? editingEvent.isLive : true));
+
+    let finalStatus: EventStatus = asDraft === true
+      ? "draft"
+      : asDraft === false && (reconciledStatus === "draft" || editingEvent.status === "draft")
+      ? (isNoReg ? "Upcoming" : "Registration Open")
+      : (finalLive === false ? "draft" : (reconciledStatus === "draft" ? "Upcoming" : (reconciledStatus as EventStatus)));
+
     const editedItem: EventItem = {
       ...editingEvent,
       name: formData.name,
@@ -607,7 +654,8 @@ export default function AdminEventsPage() {
       organizerClubSlug: formData.organizerClubSlug || editingEvent.organizerClubSlug || (formData.organizer === "SRC JDCOEM" || formData.organizer?.toLowerCase().includes("council") ? "src-council" : ""),
       collaboratingClubs: formData.collaboratingClubs && formData.collaboratingClubs.length > 0 ? formData.collaboratingClubs : undefined,
       coOrganizers: formData.collaboratingClubs && formData.collaboratingClubs.length > 0 ? formData.collaboratingClubs.map((c) => c.name) : undefined,
-      status: reconciledStatus,
+      status: finalStatus,
+      isLive: finalLive,
       poster: primaryPoster,
       cardImage: formData.cardImage || editingEvent.cardImage || primaryPoster,
       posterImage: formData.posterImage || editingEvent.posterImage || "",
@@ -671,7 +719,13 @@ export default function AdminEventsPage() {
     try {
       await saveStoredEvents(updated);
       setEditingEvent(null);
-      showNotice(`Changes saved for "${formData.name}".`);
+      showNotice(
+        asDraft === true
+          ? `Changes saved for "${formData.name}" (Draft).`
+          : finalLive && (editingEvent.isLive === false || editingEvent.status === "draft")
+          ? `Event "${formData.name}" published live.`
+          : `Changes saved for "${formData.name}".`
+      );
     } catch (saveErr: any) {
       console.error("Cloud save failed for event edit:", saveErr);
       throw saveErr;
@@ -687,6 +741,7 @@ export default function AdminEventsPage() {
       id: `evt-${Date.now()}-${randSuffix}`,
       name: `${evt.name} (Copy)`,
       slug: `${evt.slug}-copy-${randSuffix}`,
+      isLive: evt.isLive,
       tenureId: resolvedTenure?.id || evt.tenureId || getCurrentTenure()?.id,
       tenureLabel: resolvedTenure?.label || evt.tenureLabel || getCurrentTenure()?.label,
     };
@@ -1002,6 +1057,11 @@ export default function AdminEventsPage() {
         <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 pt-1 border-t border-slate-100 no-scrollbar">
           {[
             { id: "all", label: "All Events", count: tenureFilteredEvents.length },
+            {
+              id: "draft",
+              label: "Drafts",
+              count: tenureFilteredEvents.filter((e) => e.isLive === false || e.status === "draft").length
+            },
             { 
               id: "open", 
               label: "Registration Open", 
@@ -1156,7 +1216,12 @@ export default function AdminEventsPage() {
             return (
               <div
                 key={evt.id || evt.slug}
-                className="group bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between"
+                className={cn(
+                  "group bg-white rounded-2xl border overflow-hidden shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between",
+                  evt.isLive === false || evt.status === "draft"
+                    ? "opacity-70 border-amber-200"
+                    : "border-slate-200/80"
+                )}
               >
                 {/* Visual Banner Header with Event Storage Image */}
                 <div className="relative h-48 w-full bg-slate-900 overflow-hidden">
@@ -1295,7 +1360,21 @@ export default function AdminEventsPage() {
                   {/* Status & Fee Bar */}
                   <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                     <div>
-                      {isWalkIn ? (
+                      {evt.isLive === false || evt.status === "draft" ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-300">
+                            📝 Draft
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleLive({ ...evt, isLive: false })}
+                            className="px-2 py-0.5 rounded-md bg-[#17458F] hover:bg-[#123670] text-white text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                            title="Publish this event live now"
+                          >
+                            Publish Live
+                          </button>
+                        </div>
+                      ) : isWalkIn ? (
                         <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1">
                           <Ticket className="w-3 h-3 text-emerald-600" />
                           <span>Walk-in Entry</span>
@@ -1365,6 +1444,23 @@ export default function AdminEventsPage() {
                   <div className="flex items-center gap-1">
                     {!isCancelled && (
                       <>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleLive(evt)}
+                          className={cn(
+                            "h-8 w-8 rounded-lg border transition-all inline-flex items-center justify-center cursor-pointer shadow-2xs",
+                            evt.isLive === false || evt.status === "draft"
+                              ? "bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200"
+                              : "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200"
+                          )}
+                          title={evt.isLive === false || evt.status === "draft" ? "Event is unlisted — click to publish live" : "Event is live — click to unlist from public view"}
+                        >
+                          {evt.isLive === false || evt.status === "draft" ? (
+                            <EyeOff className="w-3.5 h-3.5" />
+                          ) : (
+                            <Eye className="w-3.5 h-3.5" />
+                          )}
+                        </button>
                         <button
                           onClick={() => handleStartEdit(evt)}
                           className="h-8 w-8 rounded-lg bg-white hover:bg-slate-100 text-slate-700 hover:text-[#17458F] border border-slate-200 transition-all inline-flex items-center justify-center cursor-pointer shadow-2xs"

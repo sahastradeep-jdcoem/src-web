@@ -117,6 +117,10 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
       const filtered = list.filter(
         (e) =>
           !isSubEvent(e, list) &&
+          e.isLive !== false &&
+          e.status !== "draft" &&
+          !e.isCancelled &&
+          e.status !== "Cancelled" &&
           (e.organizerClubSlug === club.slug ||
           (club.slug === "agentic-ai" && (e.organizerClubSlug === "robotics" || e.organizerClubSlug === "club-robotics")) ||
           (club.slug === "robotics" && (e.organizerClubSlug === "agentic-ai" || e.organizerClubSlug === "club-1788779206223")) ||

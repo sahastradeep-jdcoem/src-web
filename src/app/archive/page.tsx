@@ -213,12 +213,12 @@ export default function ArchivePage() {
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold uppercase tracking-wider text-[#17458F] flex items-center gap-1.5 font-sans">
                       <Calendar className="w-4 h-4 text-[#E78023]" />
-                      <span>Events &amp; Milestones ({tenure.events.length})</span>
+                      <span>Events &amp; Milestones ({tenure.events.filter((e: any) => e.isLive !== false && e.status !== "draft").length})</span>
                     </span>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {tenure.events.map((evt) => (
+                    {tenure.events.filter((evt) => evt.isLive !== false && evt.status !== "draft").map((evt) => (
                       <div
                         key={evt.id}
                         className="rounded-2xl bg-slate-50 border border-slate-200 hover:border-[#17458F]/30 transition-all overflow-hidden flex flex-col justify-between"

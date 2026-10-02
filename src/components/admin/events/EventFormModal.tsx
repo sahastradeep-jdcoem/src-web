@@ -47,6 +47,7 @@ import { parseDateStringToTimestamp } from "@/lib/eventsStore";
 export type EventModalSection = "details" | "schedule" | "registration" | "participation" | "visuals" | "qa";
 
 export interface EventFormData {
+  isLive?: boolean;
   name: string;
   category: string;
   rawDate: string;
@@ -59,7 +60,7 @@ export interface EventFormData {
   organizer: string;
   organizerClubSlug: string;
   collaboratingClubs?: { id?: string; name: string; slug: string }[];
-  status: "Registration Open" | "Upcoming" | "Coming Soon" | "Completed" | "Cancelled";
+  status: "Registration Open" | "Upcoming" | "Coming Soon" | "Completed" | "Cancelled" | "draft";
   poster: string;
   cardImage: string;
   posterImage: string;
@@ -179,7 +180,7 @@ interface EventFormModalProps {
   eventsList: EventItem[];
   clubsList: ClubItem[];
   editingEventId?: string;
-  onSubmit: (data: EventFormData) => void | Promise<void>;
+  onSubmit: (data: EventFormData, asDraft?: boolean) => void | Promise<void>;
   pendingUploads: number;
   onUploadStateChange: (uploading: boolean) => void;
 }
@@ -273,6 +274,7 @@ export function EventFormModal({
   });
 
   const [form, setForm] = useState<EventFormData>({
+    isLive: initialData?.isLive,
     name: initialData?.name || "",
     category: initialData?.category || "Technical",
     rawDate: initialData?.rawDate || defaultRawDate,
@@ -774,14 +776,13 @@ export function EventFormModal({
   const prevSection = currentSectionIndex > 0 ? visibleSections[currentSectionIndex - 1] : null;
   const nextSection = currentSectionIndex < visibleSections.length - 1 ? visibleSections[currentSectionIndex + 1] : null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitWithMode = async (asDraft?: boolean) => {
     if (!form.name.trim()) {
       setActiveSection("details");
       setFormError("Please enter an Event Title.");
       return;
     }
-    if (!form.organizer || !form.organizer.trim() || form.organizer === "__custom__") {
+    if (!asDraft && (!form.organizer || !form.organizer.trim() || form.organizer === "__custom__")) {
       setActiveSection("details");
       setFormError("Please select or enter the organizing club, council, or department.");
       return;
@@ -808,6 +809,8 @@ export function EventFormModal({
       const payload: EventFormData = form.isParentFest
         ? {
             ...form,
+            isLive: asDraft ? false : (form.isLive !== undefined ? form.isLive : true),
+            status: asDraft ? "draft" : (form.status === "draft" ? "Upcoming" : form.status),
             coordinatorContact: cleanCoordinator,
             hasSchedule: false,
             hasPrizes: false,
@@ -831,6 +834,8 @@ export function EventFormModal({
           }
         : {
             ...form,
+            isLive: asDraft ? false : (form.isLive !== undefined ? form.isLive : true),
+            status: asDraft ? "draft" : (form.status === "draft" ? "Upcoming" : form.status),
             coordinatorContact: cleanCoordinator,
             hasSchedule: Boolean(form.hasSchedule),
             hasPrizes: Boolean(form.hasPrizes),
@@ -838,12 +843,17 @@ export function EventFormModal({
             prizes: form.hasPrizes ? (form.prizes || []) : [],
           };
 
-      await onSubmit(payload);
+      await onSubmit(payload, asDraft);
     } catch (err: any) {
       setFormError(err?.message || "Failed to save event to cloud database. Please verify connection and try again.");
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await submitWithMode(false);
   };
 
   const getSectionBadge = (id: EventModalSection) => {
@@ -3325,23 +3335,36 @@ export function EventFormModal({
             )}
           </div>
 
-          <Button
-            type="submit"
-            variant="primary"
-            size="sm"
-            disabled={pendingUploads > 0 || isSubmitting}
-            className="disabled:opacity-50 disabled:cursor-not-allowed gap-2"
-          >
-            {isSubmitting ? (
-              <><Loader2 className="w-4 h-4 animate-spin text-white" /><span>Saving to Cloud Database...</span></>
-            ) : pendingUploads > 0 ? (
-              <><Loader2 className="w-4 h-4 animate-spin text-white" /><span>Uploading ({pendingUploads})...</span></>
-            ) : mode === "create" ? (
-              <span>Save &amp; Publish Event</span>
-            ) : (
-              <span>Save Changes</span>
-            )}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={pendingUploads > 0 || isSubmitting}
+              onClick={() => submitWithMode(true)}
+              className="disabled:opacity-50 disabled:cursor-not-allowed gap-2 text-amber-700 border-amber-300 hover:bg-amber-50"
+            >
+              <span>Save as Draft</span>
+            </Button>
+
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              disabled={pendingUploads > 0 || isSubmitting}
+              className="disabled:opacity-50 disabled:cursor-not-allowed gap-2"
+            >
+              {isSubmitting ? (
+                <><Loader2 className="w-4 h-4 animate-spin text-white" /><span>Saving to Cloud Database...</span></>
+              ) : pendingUploads > 0 ? (
+                <><Loader2 className="w-4 h-4 animate-spin text-white" /><span>Uploading ({pendingUploads})...</span></>
+              ) : mode === "create" ? (
+                <span>Save &amp; Publish Event</span>
+              ) : (
+                <span>Save Changes</span>
+              )}
+            </Button>
+          </div>
         </div>
       </form>
     </Modal>

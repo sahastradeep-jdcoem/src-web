@@ -13,7 +13,8 @@ import {
   Search, 
   Filter, 
   Trash2, 
-  Eye, 
+  Eye,
+  EyeOff, 
   CheckCircle2, 
   Clock, 
   AlertTriangle, 
@@ -784,6 +785,44 @@ export default function AdminListingsPage() {
 
                       <td className="py-4 px-6 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const isDraft = item.isLive === false || item.status === "draft";
+                              const updated = listings.map((l) =>
+                                l.id === item.id
+                                  ? {
+                                      ...l,
+                                      isLive: isDraft ? true : false,
+                                      status: (isDraft ? "active" : "draft") as any,
+                                      ...(isDraft && !l.publishedAt ? { publishedAt: new Date().toISOString() } : {}),
+                                    }
+                                  : l
+                              );
+                              saveStoredListings(updated);
+                              showToast(
+                                isDraft
+                                  ? `"${item.title}" is now live.`
+                                  : `"${item.title}" has been unlisted from public view.`
+                              );
+                            }}
+                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                              item.isLive === false || item.status === "draft"
+                                ? "bg-amber-50 hover:bg-amber-100 text-amber-600"
+                                : "bg-emerald-50 hover:bg-emerald-100 text-emerald-600"
+                            }`}
+                            title={
+                              item.isLive === false || item.status === "draft"
+                                ? "Listing is unlisted — click to publish live"
+                                : "Listing is live — click to unlist from public view"
+                            }
+                          >
+                            {item.isLive === false || item.status === "draft" ? (
+                              <EyeOff className="w-3.5 h-3.5" />
+                            ) : (
+                              <Eye className="w-3.5 h-3.5" />
+                            )}
+                          </button>
                           <button
                             type="button"
                             onClick={() => {
