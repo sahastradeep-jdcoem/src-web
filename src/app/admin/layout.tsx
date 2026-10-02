@@ -19,8 +19,8 @@ import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/context/AuthContext";
-import { usePathname } from "next/navigation";
-import { adminRouteCapabilities, hasAdminCapability } from "@/types/rbac";
+import { usePathname, useRouter } from "next/navigation";
+import { adminRouteCapabilities, hasAdminCapability, getDefaultAdminRoute, ADMIN_ROLE_LABELS } from "@/types/rbac";
 
 export default function AdminLayout({
   children,
@@ -29,8 +29,17 @@ export default function AdminLayout({
 }) {
   const { user, isLoading, isAdmin, isOwner, adminAccess, openAuthModal } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
+  const defaultRoute = getDefaultAdminRoute(adminAccess?.role);
   const routeAccess = adminRouteCapabilities(pathname);
-  const hasRouteAccess = !adminAccess || isOwner || routeAccess.some((capability) => hasAdminCapability(adminAccess, capability));
+  const hasRouteAccess = isOwner || (Boolean(adminAccess?.active !== false && adminAccess?.role) && routeAccess.some((capability) => hasAdminCapability(adminAccess, capability)));
+
+  React.useEffect(() => {
+    if (!isLoading && user && !isOwner && adminAccess && pathname === "/admin") {
+      router.replace(defaultRoute);
+    }
+  }, [isLoading, user, isOwner, adminAccess, pathname, defaultRoute, router]);
+
 
   // 1. Loading State
   if (isLoading) {
@@ -214,8 +223,9 @@ export default function AdminLayout({
         <div className="max-w-md rounded-3xl border border-rose-500/30 bg-slate-900 p-8 text-center shadow-2xl">
           <ShieldAlert className="mx-auto mb-4 h-12 w-12 text-rose-400" />
           <h1 className="font-heading text-xl font-extrabold uppercase">Access Restricted</h1>
-          <p className="mt-2 text-sm text-slate-300">Your assigned admin role does not include this console surface.</p>
-          <Link href="/admin" className="mt-6 inline-flex rounded-xl bg-[#E78023] px-4 py-2 text-xs font-bold uppercase">Return to dashboard</Link>
+          <Link href={defaultRoute} className="mt-6 inline-flex rounded-xl bg-[#E78023] px-4 py-2 text-xs font-bold uppercase">
+            Return to {adminAccess?.role ? ADMIN_ROLE_LABELS[adminAccess.role] : "Dashboard"}
+          </Link>
         </div>
       </div>
     );

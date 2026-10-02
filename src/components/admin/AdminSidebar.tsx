@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
-import { adminRouteCapabilities, hasAdminCapability } from "@/types/rbac";
+import { adminRouteCapabilities, hasAdminCapability, ADMIN_ROLE_LABELS } from "@/types/rbac";
 
 const ADMIN_NAV = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
@@ -73,14 +73,18 @@ export function AdminSidebar() {
               </span>
             </div>
             <p className="text-[10px] text-slate-500 font-medium">JDCOEM Central Council</p>
+            <p className="text-[10px] text-[#E78023] font-bold truncate max-w-[140px]">
+              {isOwner ? "Owner • Full Access" : `${adminAccess ? ADMIN_ROLE_LABELS[adminAccess.role] : "Staff"}${adminAccess?.clubName ? ` • ${adminAccess.clubName}` : ""}`}
+            </p>
           </div>
         </div>
 
         {/* Navigation Links */}
         <nav className="space-y-1">
           {ADMIN_NAV.filter((item) => {
-            if (item.ownerOnly) return isOwner;
-            if (!adminAccess || isOwner) return true;
+            if (isOwner) return true;
+            if (item.ownerOnly) return false;
+            if (!adminAccess || adminAccess.active === false) return false;
             return adminRouteCapabilities(item.href).some((capability) => hasAdminCapability(adminAccess, capability));
           }).map((item) => {
             const isActive = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href + "/"));

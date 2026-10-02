@@ -26,38 +26,43 @@ service cloud.firestore {
       ];
     }
 
-    // Authoritative Admin check: dynamic /admins collection + /users collection + safety fallback
-    function isAdmin() {
-      return isHardcodedAdmin() || (
-        isAuthenticated() && (
-          (exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) &&
-           get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.active != false) ||
-           (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'COUNCIL_ADMIN') ||
-           (exists(/databases/$(database)/documents/admin_access/$(request.auth.uid)) &&
-           get(/databases/$(database)/documents/admin_access/$(request.auth.uid)).data.active != false)
-        )
-      );
+    // Retrieve user's official college BT ID from /users/{uid}
+    function getUserBtId() {
+      return (isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.btId
+        : null;
     }
 
+    // Retrieve active role assignment from /admin_access keyed by UID or BT ID
+    function getAdminAccess() {
+      return (isAuthenticated() && exists(/databases/$(database)/documents/admin_access/$(request.auth.uid)))
+        ? get(/databases/$(database)/documents/admin_access/$(request.auth.uid)).data
+        : (
+          (getUserBtId() != null && exists(/databases/$(database)/documents/admin_access/$(getUserBtId())))
+            ? get(/databases/$(database)/documents/admin_access/$(getUserBtId())).data
+            : null
+        );
+    }
+
+    // Check specific role assignment and ensure it is not deactivated
+    function hasRole(roleName) {
+      return getAdminAccess() != null &&
+        getAdminAccess().role == roleName &&
+        getAdminAccess().active != false;
+    }
+
+    // Full system Owner identity (break-glass emails or Firestore OWNER role)
     function isOwner() {
       return isAuthenticated() && (
         request.auth.token.email in [
           'shendeha@jdcoem.ac.in',
           'harshshende0718@gmail.com'
         ] ||
-        (exists(/databases/$(database)/documents/admin_access/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/admin_access/$(request.auth.uid)).data.role == 'OWNER' &&
-         get(/databases/$(database)/documents/admin_access/$(request.auth.uid)).data.active != false)
+        (getAdminAccess() != null && getAdminAccess().role == 'OWNER' && getAdminAccess().active != false)
       );
     }
 
-    function hasRole(roleName) {
-      return isAuthenticated() && exists(/databases/$(database)/documents/admin_access/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/admin_access/$(request.auth.uid)).data.role == roleName &&
-        get(/databases/$(database)/documents/admin_access/$(request.auth.uid)).data.active != false;
-    }
-
+    // Legacy Council Admin check
     function isLegacyAdmin() {
       return isHardcodedAdmin() || (
         isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
@@ -67,6 +72,20 @@ service cloud.firestore {
 
     function isPrivilegedAdmin() {
       return isOwner() || isLegacyAdmin();
+    }
+
+    function isClubOwner() {
+      return hasRole('CLUB_OWNER');
+    }
+
+    // General admin evaluation across all legacy and current scopes
+    function isAdmin() {
+      return isPrivilegedAdmin() || getAdminAccess() != null || (
+        isAuthenticated() && (
+          (exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) &&
+           get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.active != false)
+        )
+      );
     }
 
     // Verification check for paid registrations (against active checkout sessions or verified UPI ledger)
@@ -85,72 +104,64 @@ service cloud.firestore {
     // Public site content (events, clubs, council, hero, gallery, departments, tenures)
     match /site_content/{docId} {
       allow read: if true;
-      allow write: if isOwner() || isLegacyAdmin() ||
+      allow write: if isPrivilegedAdmin() ||
         (hasRole('PROTOCOL_OFFICER') && (docId == 'src_dispatches' || docId == 'src_dispatch_responses')) ||
         (hasRole('TREASURER') && docId == 'payment_config') ||
-        (hasRole('CLUB_OWNER') && (docId == 'clubs' || docId == 'listings'));
+        (isClubOwner() && (docId == 'clubs' || docId == 'listings'));
     }
 
     // Individual event documents (1 event = 1 document)
     match /events/{eventId} {
       allow read: if true;
-      allow write: if isOwner() || isLegacyAdmin() ||
-        (hasRole('CLUB_OWNER') && request.resource.data.organizerClubSlug == get(/databases/$(database)/documents/admin_access/$(request.auth.uid)).data.clubSlug);
+      allow write: if isPrivilegedAdmin() || (isClubOwner() && (
+        (request.resource != null && request.resource.data.organizerClubSlug == getAdminAccess().clubSlug) ||
+        (request.resource == null && resource.data.organizerClubSlug == getAdminAccess().clubSlug)
+      ));
     }
 
     // Admin authorization records
     match /admins/{email} {
       allow read: if isAuthenticated();
-      allow write: if isOwner() || isLegacyAdmin();
+      allow write: if isPrivilegedAdmin();
     }
 
-    // Owner-controlled BT-ID assignments. This collection is never writable by a role holder.
-    match /admin_access/{userId} {
-      allow read: if isOwner() || (isAuthenticated() && request.auth.uid == userId);
+    // Owner-controlled admin access assignments (keyed by UID or BT ID)
+    match /admin_access/{accessId} {
+      allow read: if isOwner() || (isAuthenticated() && (request.auth.uid == accessId || getUserBtId() == accessId));
       allow write: if isOwner();
     }
 
     // Student & user profiles
     match /users/{userId} {
       allow read: if isAuthenticated();
-       allow write: if isUserOwner(userId) || isAdmin();
+      allow write: if isUserOwner(userId) || isAdmin();
     }
 
     // Event registrations & pass records
     match /registrations/{regId} {
-       // Gate check-in (/verify/[id]) & public verification need open read
-       allow read: if true;
+      // Gate check-in (/verify/[id]) & public verification need open read
+      allow read: if true;
 
       // Registration creation:
-      // Must be authenticated OR provide valid contact email.
-      // Crucially, paymentStatus can only be FREE or PENDING, unless verified via checkout session / UPI ledger or admin.
-       allow create: if isPrivilegedAdmin() || (
+      // Allowed for privileged admin or club owner, or student / external applicant with valid email and valid payment state
+      allow create: if isPrivilegedAdmin() || isClubOwner() || (
         (isAuthenticated() || (request.resource.data.email is string && request.resource.data.email.size() > 0)) &&
         (
           request.resource.data.paymentStatus in ['FREE', 'PENDING'] ||
-          (request.resource.data.paymentStatus == 'PAID' && isVerifiedPaidRegistration())
-        )
-      );
-
-      // Registration updates:
-      // Allowed if admin (e.g. check-in, treasurer approval, cancellation).
-      // Regular user / owner can update non-sensitive fields (paymentStatus MUST remain unchanged).
-      // Gateways or webhook can transition status to PAID only if matching verification exists.
-       allow update: if isOwner() || isLegacyAdmin() || hasRole('TREASURER') || (
-        (
-          isAuthenticated() &&
-          request.auth.token.email != null &&
-          resource.data.email != null &&
-          request.auth.token.email == resource.data.email &&
-          request.resource.data.paymentStatus == resource.data.paymentStatus
-        ) ||
-        (
-          request.resource.data.paymentStatus == 'PAID' &&
           isVerifiedPaidRegistration()
         )
       );
 
-       allow delete: if isOwner() || isLegacyAdmin();
+      // Registration updates:
+      // Allowed for privileged admins, treasurers, club owners, or self-registered applicants without altering payment status
+      allow update: if isPrivilegedAdmin() || hasRole('TREASURER') || isClubOwner() || (
+        isAuthenticated() &&
+        request.auth.token.email != null &&
+        resource.data.email == request.auth.token.email &&
+        request.resource.data.paymentStatus == resource.data.paymentStatus
+      );
+
+      allow delete: if isPrivilegedAdmin();
     }
 
     // Active checkout sessions for live UPI QR verification
@@ -159,7 +170,7 @@ service cloud.firestore {
       allow read: if true;
 
       // Anyone (student or server route) can initiate an active waiting session
-       allow create: if isPrivilegedAdmin() || (
+      allow create: if isPrivilegedAdmin() || (
         request.resource.data.status == 'WAITING' &&
         request.resource.data.amount is number &&
         request.resource.data.amount > 0
@@ -167,7 +178,7 @@ service cloud.firestore {
 
       // Updates restricted to prevent arbitrary status escalation:
       // Preserves original orderId, amount, and createdAt, and enforces strict state transitions.
-       allow update: if isPrivilegedAdmin() || (
+      allow update: if isPrivilegedAdmin() || (
         request.resource.data.orderId == resource.data.orderId &&
         request.resource.data.amount == resource.data.amount &&
         (
@@ -185,17 +196,17 @@ service cloud.firestore {
         )
       );
 
-       allow delete: if isPrivilegedAdmin();
+      allow delete: if isPrivilegedAdmin();
     }
 
     // Verified incoming UPI payments ledger (from phone webhook / MacroDroid)
     match /verified_upi_payments/{utr} {
       // Authenticated users and admins can read; prevents anonymous scraping of bank records
-       allow read: if isAuthenticated() || isPrivilegedAdmin();
+      allow read: if isAuthenticated() || isPrivilegedAdmin();
 
       // Server routes connect via Client SDK without request.auth:
       // Must contain valid immutable ledger fields (utr, amount, receivedAt)
-       allow create: if isPrivilegedAdmin() || (
+      allow create: if isPrivilegedAdmin() || (
         request.resource.data.utr is string &&
         request.resource.data.utr == utr &&
         request.resource.data.amount is number &&
@@ -204,25 +215,25 @@ service cloud.firestore {
       );
 
       // Updates can only match orders or link registrations without altering ledger financials
-       allow update: if isPrivilegedAdmin() || (
+      allow update: if isPrivilegedAdmin() || (
         request.resource.data.utr == resource.data.utr &&
         request.resource.data.amount == resource.data.amount &&
         request.resource.data.receivedAt == resource.data.receivedAt
       );
 
-       allow delete: if isPrivilegedAdmin();
+      allow delete: if isPrivilegedAdmin();
     }
 
     // Incoming webhook diagnostic logs
     match /upi_webhook_logs/{logId} {
-       allow create: if isPrivilegedAdmin() || (request.resource.data.receivedAt != null);
-       allow read, update, delete: if isPrivilegedAdmin();
+      allow create: if isPrivilegedAdmin() || (request.resource.data.receivedAt != null);
+      allow read, update, delete: if isPrivilegedAdmin();
     }
 
     // Contact form submissions
     match /contact_submissions/{submissionId} {
       allow create: if true;
-       allow read, update, delete: if isPrivilegedAdmin();
+      allow read, update, delete: if isPrivilegedAdmin();
     }
   }
 }

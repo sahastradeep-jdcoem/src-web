@@ -84,11 +84,23 @@ const ADMINS_COLLECTION = "admins";
 const USERS_COLLECTION = "users";
 export const ADMIN_ACCESS_COLLECTION = "admin_access";
 
-export async function getAdminAccessFromFirestore(uid: string): Promise<AdminAccessAssignment | null> {
-  if (!uid || !db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return null;
+export async function getAdminAccessFromFirestore(uid?: string, btId?: string): Promise<AdminAccessAssignment | null> {
+  if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return null;
+  const cleanBt = normalizeBtId(btId);
   try {
-    const snapshot = await getDoc(doc(db, ADMIN_ACCESS_COLLECTION, uid));
-    return snapshot.exists() ? ({ uid: snapshot.id, ...snapshot.data() } as AdminAccessAssignment) : null;
+    if (uid) {
+      const snapUid = await getDoc(doc(db, ADMIN_ACCESS_COLLECTION, uid));
+      if (snapUid.exists()) {
+        return { uid: snapUid.id, ...snapUid.data() } as AdminAccessAssignment;
+      }
+    }
+    if (cleanBt) {
+      const snapBt = await getDoc(doc(db, ADMIN_ACCESS_COLLECTION, cleanBt));
+      if (snapBt.exists()) {
+        return { uid: snapBt.id, ...snapBt.data() } as AdminAccessAssignment;
+      }
+    }
+    return null;
   } catch (error) {
     console.warn("Firestore admin access fetch notice", error);
     return null;
@@ -99,7 +111,15 @@ export async function getAllAdminAccessFromFirestore(): Promise<AdminAccessAssig
   if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return [];
   try {
     const snapshot = await getDocs(collection(db, ADMIN_ACCESS_COLLECTION));
-    return snapshot.docs.map((item) => ({ uid: item.id, ...item.data() } as AdminAccessAssignment));
+    const map = new Map<string, AdminAccessAssignment>();
+    snapshot.docs.forEach((item) => {
+      const data = item.data() as AdminAccessAssignment;
+      const key = normalizeBtId(data.btId) || data.uid || item.id;
+      if (!map.has(key) || (data.updatedAt && (!map.get(key)?.updatedAt || data.updatedAt > map.get(key)!.updatedAt))) {
+        map.set(key, { ...data, uid: data.uid || item.id });
+      }
+    });
+    return Array.from(map.values());
   } catch (error) {
     console.warn("Firestore admin access list notice", error);
     return [];
@@ -113,7 +133,17 @@ export function subscribeToAdminAccessFromFirestore(
   try {
     return onSnapshot(
       collection(db, ADMIN_ACCESS_COLLECTION),
-      (snapshot) => callback(snapshot.docs.map((item) => ({ uid: item.id, ...item.data() } as AdminAccessAssignment))),
+      (snapshot) => {
+        const map = new Map<string, AdminAccessAssignment>();
+        snapshot.docs.forEach((item) => {
+          const data = item.data() as AdminAccessAssignment;
+          const key = normalizeBtId(data.btId) || data.uid || item.id;
+          if (!map.has(key) || (data.updatedAt && (!map.get(key)?.updatedAt || data.updatedAt > map.get(key)!.updatedAt))) {
+            map.set(key, { ...data, uid: data.uid || item.id });
+          }
+        });
+        callback(Array.from(map.values()));
+      },
       (error) => console.warn("Firestore live admin access notice", error)
     );
   } catch (error) {
@@ -124,15 +154,50 @@ export function subscribeToAdminAccessFromFirestore(
 
 export function subscribeToAdminAccessForUser(
   uid: string,
+  btId: string | undefined,
   callback: (assignment: AdminAccessAssignment | null) => void
 ): () => void {
-  if (!uid || !db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return () => {};
+  if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return () => {};
+  const cleanBt = normalizeBtId(btId);
+  const unsubs: (() => void)[] = [];
+  let uidAssignment: AdminAccessAssignment | null = null;
+  let btAssignment: AdminAccessAssignment | null = null;
+
+  const notify = () => {
+    const active = (uidAssignment?.active !== false && uidAssignment) ||
+                   (btAssignment?.active !== false && btAssignment) ||
+                   uidAssignment ||
+                   btAssignment ||
+                   null;
+    callback(active);
+  };
+
   try {
-    return onSnapshot(
-      doc(db, ADMIN_ACCESS_COLLECTION, uid),
-      (snapshot) => callback(snapshot.exists() ? ({ uid: snapshot.id, ...snapshot.data() } as AdminAccessAssignment) : null),
-      (error) => console.warn("Firestore live user admin access notice", error)
-    );
+    if (uid) {
+      unsubs.push(
+        onSnapshot(
+          doc(db, ADMIN_ACCESS_COLLECTION, uid),
+          (snap) => {
+            uidAssignment = snap.exists() ? ({ uid: snap.id, ...snap.data() } as AdminAccessAssignment) : null;
+            notify();
+          },
+          (error) => console.warn("Firestore user admin access notice", error)
+        )
+      );
+    }
+    if (cleanBt) {
+      unsubs.push(
+        onSnapshot(
+          doc(db, ADMIN_ACCESS_COLLECTION, cleanBt),
+          (snap) => {
+            btAssignment = snap.exists() ? ({ uid: snap.id, ...snap.data() } as AdminAccessAssignment) : null;
+            notify();
+          },
+          (error) => console.warn("Firestore btId admin access notice", error)
+        )
+      );
+    }
+    return () => unsubs.forEach((u) => u());
   } catch (error) {
     console.warn("Firestore user admin access subscription error", error);
     return () => {};
@@ -142,28 +207,45 @@ export function subscribeToAdminAccessForUser(
 export async function saveAdminAccessToFirestore(
   assignment: Omit<AdminAccessAssignment, "grantedAt" | "updatedAt"> & Partial<Pick<AdminAccessAssignment, "grantedAt" | "updatedAt">>
 ): Promise<void> {
-  if (!assignment.uid || !db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return;
+  if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return;
+  const cleanBt = normalizeBtId(assignment.btId);
+  if (!cleanBt && !assignment.uid) return;
   const now = new Date().toISOString();
-  await setDoc(
-    doc(db, ADMIN_ACCESS_COLLECTION, assignment.uid),
-    cleanUndefined({
-      ...assignment,
-      btId: normalizeBtId(assignment.btId),
-      active: assignment.active !== false,
-      grantedAt: assignment.grantedAt || now,
-      updatedAt: now,
-    }),
-    { merge: true }
-  );
+  const payload = cleanUndefined({
+    ...assignment,
+    btId: cleanBt,
+    active: assignment.active !== false,
+    grantedAt: assignment.grantedAt || now,
+    updatedAt: now,
+  });
+
+  const batchOps: Promise<any>[] = [];
+  if (cleanBt) {
+    batchOps.push(setDoc(doc(db, ADMIN_ACCESS_COLLECTION, cleanBt), payload, { merge: true }));
+  }
+  if (assignment.uid && assignment.uid !== cleanBt) {
+    batchOps.push(setDoc(doc(db, ADMIN_ACCESS_COLLECTION, assignment.uid), payload, { merge: true }));
+  }
+  await Promise.all(batchOps);
 }
 
-export async function revokeAdminAccessFromFirestore(uid: string, revokedBy: string): Promise<void> {
-  if (!uid || !db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return;
-  await setDoc(doc(db, ADMIN_ACCESS_COLLECTION, uid), {
+export async function revokeAdminAccessFromFirestore(
+  identifier: string,
+  revokedBy: string,
+  secondaryIdentifier?: string
+): Promise<void> {
+  if (!identifier || !db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return;
+  const now = new Date().toISOString();
+  const payload = {
     active: false,
     revokedBy,
-    updatedAt: new Date().toISOString(),
-  }, { merge: true });
+    updatedAt: now,
+  };
+  const batchOps = [setDoc(doc(db, ADMIN_ACCESS_COLLECTION, identifier), payload, { merge: true })];
+  if (secondaryIdentifier && secondaryIdentifier !== identifier) {
+    batchOps.push(setDoc(doc(db, ADMIN_ACCESS_COLLECTION, secondaryIdentifier), payload, { merge: true }));
+  }
+  await Promise.all(batchOps);
 }
 
 /**

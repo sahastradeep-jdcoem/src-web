@@ -119,20 +119,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (fbUser && fbUser.email) {
         let storedProfile = await getUserProfileFromFirestore(fbUser.uid);
 
-        const isAdminUser = await checkIsAdminInFirestore(fbUser.email, fbUser.uid);
-        const firestoreAdminAccess = await getAdminAccessFromFirestore(fbUser.uid);
-        const adminAccess: AdminAccessAssignment | null = firestoreAdminAccess || (isOwnerEmail(fbUser.email)
-          ? {
-              uid: fbUser.uid,
-              btId: (storedProfile?.btId || "").trim().toUpperCase(),
-              role: "OWNER",
-              active: true,
-              grantedBy: "system",
-              grantedAt: new Date(0).toISOString(),
-              updatedAt: new Date().toISOString(),
-            }
-          : null);
-
         let localProfile: Partial<UserProfile> = {};
         try {
           const cached = localStorage.getItem("src_auth_user");
@@ -154,6 +140,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const resolvedBtId = storedProfile?.btId || localProfile?.btId || registeredUser?.btId || "";
         const cleanBt = resolvedBtId ? resolvedBtId.trim().toUpperCase() : "";
+
+        const isOwner = isOwnerEmail(fbUser.email);
+        const isAdminUser = await checkIsAdminInFirestore(fbUser.email || "", fbUser.uid);
+        const firestoreAdminAccess = await getAdminAccessFromFirestore(fbUser.uid, cleanBt);
+        const adminAccess: AdminAccessAssignment | null = firestoreAdminAccess || (isOwner
+          ? {
+              uid: fbUser.uid,
+              btId: cleanBt,
+              role: "OWNER",
+              active: true,
+              grantedBy: "system",
+              grantedAt: new Date(0).toISOString(),
+              updatedAt: new Date().toISOString(),
+            }
+          : null);
+
 
         // Dynamic council/club roster resolution is authoritative for users with a BT ID.
         const targetName = storedProfile?.displayName || storedProfile?.name || localProfile?.displayName || localProfile?.name || registeredUser?.name || fbUser.displayName || fbUser.email;
@@ -260,8 +262,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!user?.uid) return;
-    const unsubscribe = subscribeToAdminAccessForUser(user.uid, (assignment) => {
+    if (!user?.uid && !user?.btId) return;
+    const unsubscribe = subscribeToAdminAccessForUser(user?.uid || "", user?.btId, (assignment) => {
       setUser((current) => {
         if (!current) return current;
         const revokedManagedAccess = !assignment && current.adminAccessManaged && !isOwnerEmail(current.email);
@@ -274,7 +276,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
     });
     return () => unsubscribe();
-  }, [user?.uid]);
+  }, [user?.uid, user?.btId]);
 
   useEffect(() => {
     const handleUsersChange = () => {
@@ -614,7 +616,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         isLoading,
-        isAdmin: user?.role === "COUNCIL_ADMIN" || user?.adminAccess?.active === true,
+        isAdmin: isOwnerEmail(user?.email) || user?.adminAccess?.role === "OWNER" || (user?.adminAccess?.active !== false && Boolean(user?.adminAccess?.role)),
         isOwner: isOwnerEmail(user?.email) || user?.adminAccess?.role === "OWNER",
         adminAccess: user?.adminAccess || null,
         isAuthModalOpen,

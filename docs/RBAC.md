@@ -1,52 +1,105 @@
-# Admin RBAC
+# Role-Based Access Control (RBAC) System Architecture
 
-## Authorization model
+## Overview
 
-Authorization is based on the authenticated Firebase UID and a normalized BT ID. The BT ID is the human-auditable assignment key; the UID is the immutable enforcement key. Firestore is authoritative. `localStorage` may display cached profile data, but it never grants an admin scope.
+The Student Representative Council (SRC) JDCOEM Web Platform enforces a strict, owner-controlled, Firestore-authoritative Role-Based Access Control (RBAC) system. 
 
-| Role | Capabilities |
-| --- | --- |
-| Owner | Full admin access, role assignment/revocation, all clubs and tenures |
-| Treasurer | Payments surface and payment review/configuration |
-| Protocol Officer | SRC Operations surface |
-| Club Owner | Assigned club, events/listings for that club, and associated registrations/payments |
+Administrative access is managed exclusively by the **Owner** via institutional student **BT IDs** (e.g., `BT22CSE045`). Appointees never obtain administrative privileges through unvetted client-side state, designation badges, or `localStorage` caches.
 
-The owner is a break-glass identity configured with `NEXT_PUBLIC_SRC_OWNER_EMAIL` and the existing primary owner fallback identities. The same primary identities are intentionally duplicated in `firestore.rules` because Firestore rules cannot read client environment variables. An explicit `OWNER` assignment can also be stored in Firestore.
+---
 
-## Firestore schema
+## Authorization Model & Roles Matrix
 
-`/admin_access/{uid}`
+| Role | Admin Surfaces | Scope & Capabilities |
+| :--- | :--- | :--- |
+| **Owner** | **FULL ACCESS** (All 14 Admin surfaces, including Roles tab) | • Unrestricted read/write across all collections and modules.<br>• Full control over role provisioning, editing, and revocation.<br>• Master tenure synchronization and hardcoded break-glass identities. |
+| **Treasurer** | **Payments Page Only** (`/admin/payments`) | • Real-time UPI & Paytm financial ledger review.<br>• Transaction approvals, refund processing, and Excel export.<br>• Payment Gateway settings and UPI QR configuration.<br>• Strictly blocked from events, clubs, listings, and council management. |
+| **Protocol Officer** | **SRC Operations Page Only** (`/admin/src-updates`) | • SRC Dispatches, student broadcasts, and priority notifications.<br>• Council updates, emergency notices, and dispatch forms management.<br>• Strictly blocked from payments, events, clubs, and registrations. |
+| **Club Owner** | **Assigned Club Scoped** (`/admin/clubs`, `/admin/events`, `/admin/listings`, `/admin/registrations`, `/admin/payments`) | • **Clubs**: View and edit details for their assigned club only; cannot delete clubs, add new clubs, or change sequencing.<br>• **Events**: Create and edit events strictly under their assigned club (`organizerClubSlug === clubSlug`).<br>• **Engagement Hub**: Create and manage listings/forms strictly under their club.<br>• **Registrations**: Inspect and export student responses and registrations strictly for their club's events and listings.<br>• **Payments**: Inspect financial transactions and revenues strictly for their club's paid events; cannot modify payment gateway settings. |
+
+---
+
+## Dual-Keyed Firestore Schema (`/admin_access/{accessId}`)
+
+Role assignments are dual-indexed by **BT ID** (human-auditable and primary) and **UID** (immutable Firebase Auth enforcement):
 
 ```ts
-{
-  uid: string,
-  btId: string,
-  role: "OWNER" | "TREASURER" | "PROTOCOL_OFFICER" | "CLUB_OWNER",
-  clubId?: string,
-  clubSlug?: string,
-  clubName?: string,
-  tenureId?: string,
-  active: boolean,
-  grantedBy: string,
-  grantedAt: string,
-  updatedAt: string
+interface AdminAccessAssignment {
+  uid: string;           // Firebase Auth UID (linked upon student sign-in)
+  btId: string;          // Official College BT ID (e.g. BT22CSE045, uppercase)
+  role: "OWNER" | "TREASURER" | "PROTOCOL_OFFICER" | "CLUB_OWNER";
+  clubId?: string;       // Assigned Club ID (for CLUB_OWNER)
+  clubSlug?: string;     // Assigned Club Slug (for CLUB_OWNER)
+  clubName?: string;     // Assigned Club Name (for CLUB_OWNER)
+  tenureId?: string;     // Council Tenure ID
+  active: boolean;       // Status flag (false = revoked)
+  grantedBy: string;     // Owner email or UID who provisioned the clearance
+  grantedAt: string;     // ISO-8601 timestamp
+  updatedAt: string;     // ISO-8601 timestamp
 }
 ```
 
-The document ID is the Firebase UID. The owner-only `/admin/roles` page derives candidates from the active club leadership, Treasurer, and protocol/operations rosters, then resolves the BT ID to a registered Firebase user before writing the assignment. Manual BT-ID correction and bulk tenure-start granting are supported.
+### Dual-Key Indexing Benefits:
+1. **Zero-Wait Pre-Provisioning**: The Owner can provision access to BT IDs before students ever register or sign in to the website.
+2. **Instant Auth Activation**: When the student registers or completes their profile with their BT ID, `AuthContext` instantly detects the assignment and grants clearance.
+3. **Sub-Second Revocation**: Revoking by BT ID sets `active: false` across both documents, and live snapshot listeners instantly revoke administrative navigation and capabilities.
 
-## Enforcement
+---
 
-- `AuthContext` fetches and live-subscribes to `/admin_access/{uid}`.
-- `admin/layout.tsx` gates every admin route; `AdminSidebar` only shows permitted navigation.
-- Role-specific pages scope event, club, listing, registration, and payment data to the assigned club.
-- `firestore.rules` protects `/admin_access`, event writes, role-sensitive site content, and registration/payment mutations. Existing legacy council admins remain supported for migration compatibility.
-- Revoke is a Firestore write with an immediate live-listener update, so a revoked session loses scoped navigation on refresh/auth refresh.
+## Enforcement Architecture
 
-## Operational rollout
+```mermaid
+flowchart TD
+    A["Authenticated User (Firebase Auth)"] --> B["AuthContext (Dual Subscription)"]
+    B --> C{"Is Owner Email / UID?"}
+    C -- Yes --> D["OWNER: Full Clearance + /admin/roles"]
+    C -- No --> E["Query /admin_access by UID & BT ID"]
+    E --> F{"Active Role Assignment?"}
+    F -- None / Revoked --> G["STUDENT: Admin Access Blocked"]
+    F -- TREASURER --> H["Payments Surface Only (/admin/payments)"]
+    F -- PROTOCOL_OFFICER --> I["SRC Operations Only (/admin/src-updates)"]
+    F -- CLUB_OWNER --> J["Club-Scoped Surfaces (/admin/clubs, events, listings, registrations, payments)"]
+```
 
-1. Deploy the application and Firestore rules.
-2. Set `NEXT_PUBLIC_SRC_OWNER_EMAIL` to the actual owner before production deployment and add the same email to `firestore.rules` if it is not already listed.
-3. Sign in as owner, open **Admin → Roles**, verify the detected BT IDs, and click **Grant detected tenure access**.
-4. Use manual assignment for missing or corrected BT IDs.
-5. At each tenure start, review the detected roster and run the bulk grant, then revoke outgoing assignments.
+### 1. Route Gating & Automatic Redirection (`src/app/admin/layout.tsx`)
+- Every admin page route is verified against `adminRouteCapabilities(pathname)` and `hasAdminCapability(adminAccess, capability)`.
+- If a non-owner navigates to `/admin`, they are automatically redirected to their role's home surface:
+  - Treasurer → `/admin/payments`
+  - Protocol Officer → `/admin/src-updates`
+  - Club Owner → `/admin/clubs`
+- Non-permitted routes show an Access Restricted view with a "Return to [Role] Console" button, preventing dead loops.
+
+### 2. Sidebar Filtering (`src/components/admin/AdminSidebar.tsx`)
+- Navigation items are strictly filtered by role capabilities.
+- The "Roles" tab is visible exclusively to the Owner (`ownerOnly: true`).
+- The sidebar displays the active administrator's role and assigned club badge.
+
+### 3. Firestore Security Rules (`firestore.rules`)
+- `/admin_access/{accessId}`: Write access is restricted exclusively to `isOwner()`. Read access is permitted only for the Owner or the authenticated user matching `uid` or `btId`.
+- `/events/{eventId}`: Privileged admins have full write access; Club Owners can write only if the event's `organizerClubSlug` matches their assigned `clubSlug`.
+- `/site_content/{docId}`: Club Owners can update only `clubs` and `listings`; Treasurers can update `payment_config`; Protocol Officers can update dispatch collections.
+- `/registrations/{regId}`: Status and refund mutations are guarded to privileged admins, treasurers, and club owners.
+
+---
+
+## Owner Workflows (`/admin/roles`)
+
+### 1. Tenure Start Single-Click Provisioning
+- The Owner navigates to **Admin → Roles**.
+- Click **"Grant Detected Tenure Access (1-Click)"**.
+- The system automatically scans active rosters across:
+  - All chartered clubs (detects Head and Co-Head BT IDs).
+  - Council roster (detects Treasurer and Protocol Officer BT IDs).
+- All detected appointees are provisioned in Firestore in parallel.
+
+### 2. Inline Manual BT ID Adjustments
+- Each Club card displays the auto-detected Head and Co-Head with an editable BT ID field.
+- If a leader changes or has a missing/incorrect BT ID, the Owner simply types the correct BT ID and clicks **Grant** / **Update BT ID**.
+- Dedicated cards for Treasurer and Protocol Officer allow immediate inline BT ID edits.
+
+### 3. Manual Custom Grants
+- A dedicated form allows assigning any role and club scope to an arbitrary BT ID.
+
+### 4. Live Revocation
+- Clicking **Revoke Access** on any card or in the Active Assignments ledger immediately updates Firestore.
+- The appointee's browser session is downgraded without requiring a page refresh.

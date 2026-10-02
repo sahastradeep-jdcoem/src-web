@@ -88,6 +88,9 @@ export default function AdminPaymentsPage() {
   const [registrations, setRegistrations] = useState<RegistrationRecord[]>([]);
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
   const [tenuresList, setTenuresList] = useState<CouncilTenure[]>([]);
+  const scopedEventsList = useMemo(() => isClubOwner
+    ? eventsList.filter((event) => event.organizerClubSlug === adminAccess?.clubSlug)
+    : eventsList, [eventsList, isClubOwner, adminAccess?.clubSlug]);
   const [selectedTenureId, setSelectedTenureId] = useState<string>("all");
   const [selectedEventSlug, setSelectedEventSlug] = useState<string>("all");
   const [statusTab, setStatusTab] = useState<PaymentTabFilter>("all");
@@ -738,14 +741,22 @@ export default function AdminPaymentsPage() {
 
         {/* Header Actions: Gateway Settings & Export Excel */}
         <div className="flex items-center gap-2.5 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setIsPaymentConfigOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition-all cursor-pointer"
-          >
-            <Sliders className="w-3.5 h-3.5 text-[#17458F]" />
-            <span>Gateway Settings</span>
-          </button>
+          {isClubOwner && (
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-xs font-bold text-[#17458F]">
+              <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
+              <span>{adminAccess?.clubName || "Assigned Club"} Only</span>
+            </span>
+          )}
+          {!isClubOwner && (
+            <button
+              type="button"
+              onClick={() => setIsPaymentConfigOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition-all cursor-pointer"
+            >
+              <Sliders className="w-3.5 h-3.5 text-[#17458F]" />
+              <span>Gateway Settings</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -926,7 +937,7 @@ export default function AdminPaymentsPage() {
                     >
                       All Events &amp; Competitions
                     </button>
-                    {eventsList
+                    {scopedEventsList
                       .filter((e) => !eventSearchQuery || e.name.toLowerCase().includes(eventSearchQuery.toLowerCase()))
                       .map((e) => (
                         <button

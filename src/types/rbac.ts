@@ -57,8 +57,24 @@ export const ADMIN_ROLE_CAPABILITIES: Record<AdminAccessRole, AdminCapability[]>
     "events_manage",
     "engagement_manage",
     "club_registrations",
+    "payments",
   ],
 };
+
+export function getDefaultAdminRoute(role?: AdminAccessRole | null): string {
+  switch (role) {
+    case "TREASURER":
+      return "/admin/payments";
+    case "PROTOCOL_OFFICER":
+      return "/admin/src-updates";
+    case "CLUB_OWNER":
+      return "/admin/clubs";
+    case "OWNER":
+    default:
+      return "/admin";
+  }
+}
+
 
 export function normalizeBtId(btId?: string | null): string {
   return (btId || "").trim().toUpperCase();

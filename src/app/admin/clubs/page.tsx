@@ -317,7 +317,7 @@ export default function AdminClubsPage() {
   };
 
   const handleDeleteClub = (id: string, name: string) => {
-    if (isClubOwner && id !== adminAccess?.clubId) return;
+    if (isClubOwner) return;
     const isDraft = selectedTenure && !selectedTenure.isCurrent;
     const confirmMsg = isDraft
       ? `Are you sure you want to remove "${name || "this club"}" from DRAFT session "${selectedTenure.label}"?\n\nAll associated Club Heads and Co-Heads will also be removed.\n(Note: The live platform and current tenure will NOT be affected.)`
@@ -356,7 +356,7 @@ export default function AdminClubsPage() {
   };
 
   const handleMoveClub = (clubId: string, direction: "up" | "down") => {
-    if (isClubOwner && clubId !== adminAccess?.clubId) return;
+    if (isClubOwner) return;
     const currentIndex = clubs.findIndex((c) => c.id === clubId);
     if (currentIndex === -1) return;
 
@@ -432,23 +432,32 @@ export default function AdminClubsPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleResetDefaults}
-            className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Reset Defaults</span>
-          </button>
+          {!isClubOwner ? (
+            <>
+              <button
+                onClick={handleResetDefaults}
+                className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset Defaults</span>
+              </button>
 
-          <Button
-            onClick={handleOpenAddModal}
-            variant="primary"
-            size="sm"
-            className="gap-1.5"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add New Club</span>
-          </Button>
+              <Button
+                onClick={handleOpenAddModal}
+                variant="primary"
+                size="sm"
+                className="gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add New Club</span>
+              </Button>
+            </>
+          ) : (
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-xs font-bold text-[#17458F]">
+              <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
+              <span>{adminAccess?.clubName || "Assigned Club"} Management</span>
+            </span>
+          )}
 
           <Link
             href="/clubs"
@@ -739,13 +748,15 @@ export default function AdminClubsPage() {
               {/* Actions Toolbar */}
               <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => handleDeleteClub(club.id, club.name)}
-                    className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 transition-colors cursor-pointer"
-                    title="Delete Club"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {!isClubOwner && (
+                    <button
+                      onClick={() => handleDeleteClub(club.id, club.name)}
+                      className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 transition-colors cursor-pointer"
+                      title="Delete Club"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                   <Link
                     href={`/clubs/${club.slug}`}
                     target="_blank"
@@ -757,26 +768,28 @@ export default function AdminClubsPage() {
 
                 <div className="flex items-center gap-1.5">
                   {/* Sequence Reorder Controls (Toolbar) */}
-                  <div className="flex items-center bg-slate-100 rounded-xl p-0.5 border border-slate-200">
-                    <button
-                      type="button"
-                      onClick={() => handleMoveClub(club.id, "up")}
-                      disabled={actualIndex === 0 || isFiltering}
-                      className="p-1.5 rounded-lg text-slate-600 hover:text-white hover:bg-[#17458F] disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer"
-                      title={isFiltering ? "Clear filter to adjust sequence" : "Move Up in Sequence"}
-                    >
-                      <ArrowUp className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleMoveClub(club.id, "down")}
-                      disabled={actualIndex === clubs.length - 1 || isFiltering}
-                      className="p-1.5 rounded-lg text-slate-600 hover:text-white hover:bg-[#17458F] disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer"
-                      title={isFiltering ? "Clear filter to adjust sequence" : "Move Down in Sequence"}
-                    >
-                      <ArrowDown className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  {!isClubOwner && (
+                    <div className="flex items-center bg-slate-100 rounded-xl p-0.5 border border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => handleMoveClub(club.id, "up")}
+                        disabled={actualIndex === 0 || isFiltering}
+                        className="p-1.5 rounded-lg text-slate-600 hover:text-white hover:bg-[#17458F] disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer"
+                        title={isFiltering ? "Clear filter to adjust sequence" : "Move Up in Sequence"}
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleMoveClub(club.id, "down")}
+                        disabled={actualIndex === clubs.length - 1 || isFiltering}
+                        className="p-1.5 rounded-lg text-slate-600 hover:text-white hover:bg-[#17458F] disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer"
+                        title={isFiltering ? "Clear filter to adjust sequence" : "Move Down in Sequence"}
+                      >
+                        <ArrowDown className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
 
                   <button
                     onClick={() => {
