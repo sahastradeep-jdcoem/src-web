@@ -26,10 +26,14 @@ import { Badge } from "@/components/ui/Badge";
 export default function LeadershipSpotlightSection() {
   const [councilMembers, setCouncilMembers] = useState<TeamMember[]>([]);
   const [currentTenureLabel, setCurrentTenureLabel] = useState<string>("2025-26");
+  const [presidentImgError, setPresidentImgError] = useState(false);
+  const [vpImgError, setVpImgError] = useState(false);
 
   const refresh = () => {
     const members = getStoredCouncilMembers();
     setCouncilMembers(members);
+    setPresidentImgError(false);
+    setVpImgError(false);
     const tenure = getCurrentTenure();
     if (tenure) {
       setCurrentTenureLabel(tenure.label);
@@ -138,13 +142,14 @@ export default function LeadershipSpotlightSection() {
                 {/* Photo with Gold Ring */}
                 <div className="relative shrink-0">
                   <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl overflow-hidden ring-4 ring-amber-400/30 shadow-md relative bg-slate-100 flex items-center justify-center">
-                    {president.avatar ? (
+                    {president.avatar && !presidentImgError ? (
                       <Image
                         src={president.avatar}
                         alt={president.name}
                         fill
                         unoptimized={true}
                         className="object-cover group-hover:scale-105 transition-transform duration-500"
+                        onError={() => setPresidentImgError(true)}
                       />
                     ) : (
                       <span className="text-3xl sm:text-4xl font-bold text-slate-400">
@@ -229,13 +234,14 @@ export default function LeadershipSpotlightSection() {
                 {/* Photo with Blue Ring */}
                 <div className="relative shrink-0">
                   <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl overflow-hidden ring-4 ring-[#17458F]/20 shadow-md relative bg-slate-100 flex items-center justify-center">
-                    {vicePresident.avatar ? (
+                    {vicePresident.avatar && !vpImgError ? (
                       <Image
                         src={vicePresident.avatar}
                         alt={vicePresident.name}
                         fill
                         unoptimized={true}
                         className="object-cover group-hover:scale-105 transition-transform duration-500"
+                        onError={() => setVpImgError(true)}
                       />
                     ) : (
                       <span className="text-3xl sm:text-4xl font-bold text-slate-400">

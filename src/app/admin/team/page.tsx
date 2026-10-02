@@ -96,6 +96,54 @@ import { cn } from "@/lib/utils";
 
 type TeamCategoryTab = "council" | "hosting" | "founding" | "clubs" | "pillars" | "members";
 
+function AdminMemberAvatar({ avatar, name }: { avatar?: string; name?: string }) {
+  const [hasError, setHasError] = useState(false);
+  useEffect(() => { setHasError(false); }, [avatar]);
+
+  if (!avatar || hasError) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400">
+        <Users className="w-6 h-6" />
+      </div>
+    );
+  }
+
+  return (
+    <Image
+      src={avatar}
+      alt={name || "Member"}
+      fill
+      unoptimized={true}
+      className="object-cover"
+      onError={() => setHasError(true)}
+    />
+  );
+}
+
+function AdminPillarAvatar({ avatar, name }: { avatar?: string; name?: string }) {
+  const [hasError, setHasError] = useState(false);
+  useEffect(() => { setHasError(false); }, [avatar]);
+
+  if (!avatar || hasError) {
+    return (
+      <span className="text-2xl font-bold text-slate-400">
+        {(name || "P").slice(0, 2).toUpperCase()}
+      </span>
+    );
+  }
+
+  return (
+    <Image
+      src={avatar}
+      alt={name || "Pillar"}
+      fill
+      unoptimized={true}
+      className="object-cover object-top"
+      onError={() => setHasError(true)}
+    />
+  );
+}
+
 export default function AdminTeamPage() {
   const [activeTab, setActiveTab] = useState<TeamCategoryTab>("council");
   const [tenures, setTenures] = useState<CouncilTenure[]>([]);
@@ -1751,19 +1799,7 @@ export default function AdminTeamPage() {
               >
                 <div className="space-y-3">
                   <div className="relative aspect-[4/5] rounded-2xl overflow-hidden bg-slate-100 border border-slate-200/80 shadow-inner flex items-center justify-center">
-                    {pillar.avatar ? (
-                      <Image
-                        src={pillar.avatar}
-                        alt={pillar.name}
-                        fill
-                        unoptimized={true}
-                        className="object-cover object-top"
-                      />
-                    ) : (
-                      <span className="text-2xl font-bold text-slate-400">
-                        {(pillar.name || "P").slice(0, 2).toUpperCase()}
-                      </span>
-                    )}
+                    <AdminPillarAvatar avatar={pillar.avatar} name={pillar.name} />
                   </div>
 
                   <div className="space-y-1">
@@ -1889,19 +1925,7 @@ export default function AdminTeamPage() {
                 {/* Photo & Name */}
                 <div className="flex items-center gap-3">
                   <div className="relative h-14 w-14 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
-                    {member.avatar ? (
-                      <Image
-                        src={member.avatar}
-                        alt={member.name || "Member"}
-                        fill
-                        unoptimized={true}
-                        className="object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400">
-                        <Users className="w-6 h-6" />
-                      </div>
-                    )}
+                    <AdminMemberAvatar avatar={member.avatar} name={member.name} />
                   </div>
                   <div className="min-w-0">
                     <h3 className="font-bold text-sm text-[#0F172A] truncate">

@@ -77,8 +77,8 @@ export function StorageCleanerModal({ isOpen, onClose }: StorageCleanerModalProp
       const result = await scanOrphanStorageFiles();
       if (isCancelledRef.current) return;
       setScanResult(result);
-      // Pre-select all orphan files for easy 1-click purge
-      setSelectedPaths(new Set(result.orphanFiles.map((f) => f.fullPath)));
+      // Safety Invariant: Never pre-select orphan files for bulk purge by default
+      setSelectedPaths(new Set());
       setStage("scanned");
     } catch (err: any) {
       if (isCancelledRef.current) return;

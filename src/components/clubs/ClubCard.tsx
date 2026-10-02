@@ -41,22 +41,38 @@ const ICON_MAP: Record<string, React.ReactNode> = {
 };
 
 export function ClubCard({ club }: ClubCardProps) {
+  const [cardImgError, setCardImgError] = React.useState(false);
+  const [logoImgError, setLogoImgError] = React.useState(false);
+
+  React.useEffect(() => {
+    setCardImgError(false);
+    setLogoImgError(false);
+  }, [club.cardImage, club.heroImage, club.logoImage]);
+
+  const rawCard = club.cardImage || club.heroImage;
+  const effectiveCard = !cardImgError && rawCard ? rawCard : "";
+
   return (
     <div className="group rounded-2xl bg-white border border-slate-200 hover:border-[#17458F]/30 hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col justify-between shadow-xs font-sans">
       
       {/* Background Image Preview */}
-      <div className="relative h-44 w-full overflow-hidden">
-        <Image
-          src={club.cardImage || club.heroImage}
-          alt={`${club.name} cover`}
-          fill
-          unoptimized={true}
-          className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-        />
+      <div className="relative h-44 w-full overflow-hidden bg-slate-900">
+        {effectiveCard ? (
+          <Image
+            src={effectiveCard}
+            alt={`${club.name} cover`}
+            fill
+            unoptimized={true}
+            className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+            onError={() => setCardImgError(true)}
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-[#17458F] via-[#0E2F66] to-slate-900" />
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
         <div className="absolute top-3.5 left-3.5 flex items-center gap-2.5">
-          {club.logoImage ? (
+          {club.logoImage && !logoImgError ? (
             <div className="relative h-9 w-9 rounded-full overflow-hidden shrink-0 shadow-xs">
               <Image 
                 src={club.logoImage} 
@@ -64,6 +80,7 @@ export function ClubCard({ club }: ClubCardProps) {
                 fill
                 unoptimized={true}
                 className="object-cover w-full h-full rounded-full" 
+                onError={() => setLogoImgError(true)}
               />
             </div>
           ) : (

@@ -12,13 +12,19 @@ interface CouncilMemberCardProps {
 }
 
 export function CouncilMemberCard({ member, categoryLabel = "ADMIN" }: CouncilMemberCardProps) {
+  const [imgError, setImgError] = React.useState(false);
+
+  React.useEffect(() => {
+    setImgError(false);
+  }, [member.avatar]);
+
   const hasBio = Boolean(member.bio && member.bio.trim().length > 0 && !isHardcodedBio(member.bio));
   const cleanEmail = member.email?.trim();
   const cleanLinkedin = member.linkedin?.trim();
   const hasEmail = Boolean(cleanEmail && cleanEmail !== "undefined" && cleanEmail !== "null");
   const hasLinkedin = Boolean(cleanLinkedin && cleanLinkedin !== "undefined" && cleanLinkedin !== "null");
 
-  const effectiveAvatar = member.avatar?.trim() || "";
+  const effectiveAvatar = !imgError && member.avatar?.trim() ? member.avatar.trim() : "";
 
   return (
     <div className="group rounded-2xl bg-white border border-slate-200 hover:border-[#17458F]/30 hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col justify-between shadow-xs font-sans">
@@ -34,6 +40,7 @@ export function CouncilMemberCard({ member, categoryLabel = "ADMIN" }: CouncilMe
               unoptimized={true}
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
               className="object-cover object-top transition-transform duration-500 group-hover:scale-[1.02]"
+              onError={() => setImgError(true)}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
           </>

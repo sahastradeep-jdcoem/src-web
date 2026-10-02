@@ -170,9 +170,11 @@ export async function collectAllReferencedPaths(): Promise<{
   paths: Set<string>;
   urls: Set<string>;
   totalReferences: number;
+  hasErrorOrTimeout: boolean;
 }> {
   const referencedPaths = new Set<string>();
   const referencedUrls = new Set<string>();
+  let hasErrorOrTimeout = false;
 
   const registerCandidate = (raw?: string | null) => {
     if (!raw || typeof raw !== "string") return;
@@ -194,7 +196,7 @@ export async function collectAllReferencedPaths(): Promise<{
         if (typeof item === "string") {
           registerCandidate(item);
         } else if (item && typeof item === "object") {
-          registerCandidate(item.url || item.imageUrl || item.avatar || item.photoURL);
+          registerCandidate(item.url || item.imageUrl || item.avatar || item.photoURL || item.cardImage || item.poster || item.headerImage);
         }
       });
     }
@@ -223,6 +225,9 @@ export async function collectAllReferencedPaths(): Promise<{
       if (c.lead) registerCandidate(c.lead.avatar);
       if (Array.isArray(c.coLeads)) {
         c.coLeads.forEach((cl: any) => registerCandidate(cl.avatar));
+      }
+      if (Array.isArray(c.leaders)) {
+        c.leaders.forEach((cl: any) => registerCandidate(cl.avatar));
       }
     });
 
@@ -263,6 +268,9 @@ export async function collectAllReferencedPaths(): Promise<{
     const tenures = getStoredTenures();
     tenures.forEach((t: any) => {
       registerCandidateArray(t.roster);
+      registerCandidateArray(t.adminCouncil);
+      registerCandidateArray(t.hostingCommittee);
+      registerCandidateArray(t.foundingMembers);
       registerCandidateArray(t.events);
       registerCandidateArray(t.clubs);
     });
@@ -274,11 +282,13 @@ export async function collectAllReferencedPaths(): Promise<{
     console.warn("Notice: Non-critical issue reading local stores for storage cleanup:", localErr);
   }
 
-  // 2. Cross-check authoritative Cloud Firestore site_content documents with safe timeouts
+  // 2. Cross-check authoritative Cloud Firestore site_content documents with safe 15s timeouts
   const collections = [
     "events",
     "clubs",
     "council_team",
+    "council_tenures",
+    "tenures",
     "hosting_committee",
     "founding_members",
     "spokespersons",
@@ -286,15 +296,41 @@ export async function collectAllReferencedPaths(): Promise<{
     "gallery_photos",
     "hero_settings",
     "hero_presets",
-    "tenures",
     "listings",
+    "departments",
+    // 12 Dedicated Club Leaders Documents
+    "club_leaders_coding",
+    "club_leaders_creative",
+    "club_leaders_dance",
+    "club_leaders_drama",
+    "club_leaders_event",
+    "club_leaders_fitness",
+    "club_leaders_gaming",
+    "club_leaders_music",
+    "club_leaders_nexus",
+    "club_leaders_publicity",
+    "club_leaders_robotics",
+    "club_leaders_visual-arts",
+    // Draft Tenure Collections
+    "draft_council_tenure-2025-26",
+    "draft_council_tenure-2026-27",
+    "draft_clubs_tenure-2025-26",
+    "draft_clubs_tenure-2026-27",
+    "draft_hosting_tenure-2025-26",
+    "draft_hosting_tenure-2026-27",
   ];
 
   await Promise.allSettled(
     collections.map(async (colId) => {
       try {
-        const payload: any = await withTimeout(getSiteContentFromFirestore(colId), 2500, null);
-        if (!payload) return;
+        const payload: any = await withTimeout(getSiteContentFromFirestore(colId), 15000, null);
+        if (!payload) {
+          // If a primary document returned null due to timeout, mark potential timeout
+          if (["council_team", "council_tenures", "events", "clubs"].includes(colId)) {
+            console.warn(`Firestore check timed out or empty for primary collection [${colId}]`);
+          }
+          return;
+        }
 
         // Stringify and regex-extract all URLs and paths to ensure zero accidental deletions
         const serialized = JSON.stringify(payload);
@@ -312,7 +348,8 @@ export async function collectAllReferencedPaths(): Promise<{
           });
         }
       } catch (cloudErr) {
-        console.warn(`Firestore check notice for [${colId}]:`, cloudErr);
+        hasErrorOrTimeout = true;
+        console.warn(`Firestore check error for [${colId}]:`, cloudErr);
       }
     })
   );
@@ -321,6 +358,7 @@ export async function collectAllReferencedPaths(): Promise<{
     paths: referencedPaths,
     urls: referencedUrls,
     totalReferences: referencedUrls.size,
+    hasErrorOrTimeout,
   };
 }
 
@@ -480,7 +518,23 @@ export async function scanOrphanStorageFiles(): Promise<StorageScanResult> {
   const activeStorage = storage;
 
   // 1. Gather all active referenced URLs and paths across local + cloud
-  const { paths: referencedPaths, urls: referencedUrls, totalReferences } = await collectAllReferencedPaths();
+  const { paths: referencedPaths, urls: referencedUrls, totalReferences, hasErrorOrTimeout } = await collectAllReferencedPaths();
+
+  if (hasErrorOrTimeout) {
+    return {
+      scannedAt,
+      totalFiles: 0,
+      inUseCount: 0,
+      orphanCount: 0,
+      totalBytes: 0,
+      orphanBytes: 0,
+      formattedOrphanBytes: "0 B",
+      orphanFiles: [],
+      activeReferencedCount: totalReferences,
+      bucketAccessible: true,
+      statusMessage: "Firestore database scan encountered a timeout. Orphan detection was safely aborted to protect live assets.",
+    };
+  }
 
   // 2. Fast pre-flight bucket probe to verify connectivity in < 2.5s
   const probe = await probeBucketAccessibility(activeStorage);

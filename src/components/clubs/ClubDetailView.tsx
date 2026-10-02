@@ -28,9 +28,40 @@ interface ClubDetailViewProps {
   clubEvents: EventItem[];
 }
 
+function LeaderAvatar({ avatar, name }: { avatar?: string; name?: string }) {
+  const [hasError, setHasError] = useState(false);
+  useEffect(() => { setHasError(false); }, [avatar]);
+
+  if (!avatar || hasError) {
+    return (
+      <span className="text-lg font-bold text-slate-500">
+        {(name || "CH").slice(0, 2).toUpperCase()}
+      </span>
+    );
+  }
+
+  return (
+    <Image
+      src={avatar}
+      alt={name || "Leader"}
+      fill
+      unoptimized={true}
+      className="object-cover"
+      onError={() => setHasError(true)}
+    />
+  );
+}
+
 export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailViewProps) {
   const [club, setClub] = useState<ClubItem>(initialClub);
   const [events, setEvents] = useState<EventItem[]>(clubEvents);
+  const [headerImgError, setHeaderImgError] = useState(false);
+  const [logoImgError, setLogoImgError] = useState(false);
+
+  useEffect(() => {
+    setHeaderImgError(false);
+    setLogoImgError(false);
+  }, [club.headerImage, club.heroImage, club.logoImage]);
 
   // Strictly filter out any officers from public member display
   const displayMembers = useMemo(() => {
@@ -129,14 +160,19 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
       
       {/* 1. CINEMATIC HERO */}
       <section className="relative h-[50vh] sm:h-[55vh] flex items-end pb-12 px-4 sm:px-6 lg:px-8 overflow-hidden bg-slate-900">
-        <Image
-          src={club.headerImage || club.heroImage}
-          alt={club.name}
-          fill
-          priority
-          unoptimized={true}
-          className="object-cover opacity-60"
-        />
+        {(!headerImgError && (club.headerImage || club.heroImage)) ? (
+          <Image
+            src={club.headerImage || club.heroImage}
+            alt={club.name}
+            fill
+            priority
+            unoptimized={true}
+            className="object-cover opacity-60"
+            onError={() => setHeaderImgError(true)}
+          />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-[#17458F] via-[#0E2F66] to-slate-900 opacity-90" />
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
 
         <div className="max-w-7xl mx-auto w-full relative z-10 space-y-6">
@@ -149,7 +185,7 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
           </Link>
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-6">
-            {club.logoImage && (
+            {club.logoImage && !logoImgError && (
               <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden shrink-0 shadow-md">
                 <Image
                   src={club.logoImage}
@@ -157,6 +193,7 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
                   fill
                   unoptimized={true}
                   className="object-cover w-full h-full rounded-full"
+                  onError={() => setLogoImgError(true)}
                 />
               </div>
             )}
@@ -233,19 +270,7 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
               return (
                 <div key={leader.id || idx} className="p-6 rounded-3xl bg-white border border-slate-200 flex items-center gap-4 shadow-xs">
                   <div className="relative h-16 w-16 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shrink-0 flex items-center justify-center">
-                    {leader.avatar ? (
-                      <Image
-                        src={leader.avatar}
-                        alt={leader.name}
-                        fill
-                        unoptimized={true}
-                        className="object-cover"
-                      />
-                    ) : (
-                      <span className="text-lg font-bold text-slate-500">
-                        {(leader.name || "CH").slice(0, 2).toUpperCase()}
-                      </span>
-                    )}
+                    <LeaderAvatar avatar={leader.avatar} name={leader.name} />
                   </div>
                   <div className="space-y-0.5 min-w-0">
                     <span className={`text-[10px] font-bold uppercase tracking-wider ${isCoLead ? "text-[#17458F]" : "text-[#E78023]"}`} title={leader.role}>

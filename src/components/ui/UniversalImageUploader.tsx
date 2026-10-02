@@ -562,6 +562,10 @@ export function UniversalImageUploader({
                 fill
                 unoptimized={true}
                 className="object-cover"
+                onError={() => {
+                  setPreview("");
+                  setError("Image URL unreachable or not found. Please upload a new photo.");
+                }}
               />
               <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-10">
                 <button
@@ -619,6 +623,10 @@ export function UniversalImageUploader({
                 fill
                 unoptimized={true}
                 className="object-cover"
+                onError={() => {
+                  setPreview("");
+                  setError("Stored photo not found on cloud storage. Please upload a fresh photo.");
+                }}
               />
 
               {/* Top-right actions: Crop & Clear */}
