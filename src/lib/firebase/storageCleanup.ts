@@ -25,6 +25,7 @@ export interface StorageFileRecord {
   timeCreated?: string;
   downloadUrl: string;
   isOrphan: boolean;
+  protectedByPolicy?: boolean;
 }
 
 export interface StorageScanResult {
@@ -162,6 +163,19 @@ export function extractStoragePath(urlOrPath: string): string | null {
   return null;
 }
 
+function canonicalStoragePath(path: string): string {
+  try {
+    return decodeURIComponent(path).replace(/^\/+/, "").replace(/\/+/g, "/");
+  } catch {
+    return path.replace(/^\/+/, "").replace(/\/+/g, "/");
+  }
+}
+
+function isProtectedPortraitPath(path: string): boolean {
+  const canonical = canonicalStoragePath(path);
+  return canonical.startsWith("team/members/") || canonical.startsWith("pillars/");
+}
+
 /**
  * Collect all active image URLs and storage paths currently referenced across
  * both local state AND Cloud Firestore collections.
@@ -185,8 +199,7 @@ export async function collectAllReferencedPaths(): Promise<{
 
     const extractedPath = extractStoragePath(trimmed);
     if (extractedPath) {
-      referencedPaths.add(extractedPath);
-      referencedPaths.add(extractedPath.toLowerCase());
+      referencedPaths.add(canonicalStoragePath(extractedPath));
     }
   };
 
@@ -621,8 +634,8 @@ export async function scanOrphanStorageFiles(): Promise<StorageScanResult> {
     const batch = allFileRefs.slice(i, i + BATCH_SIZE);
     await Promise.all(
       batch.map(async (fileRef) => {
-        const fullPath = fileRef.fullPath.replace(/^\/+/, "");
-        const normalizedPath = fullPath.toLowerCase();
+        const fullPath = canonicalStoragePath(fileRef.fullPath);
+        const protectedByPolicy = isProtectedPortraitPath(fullPath);
 
         let size = 0;
         let contentType = "image/webp";
@@ -644,16 +657,14 @@ export async function scanOrphanStorageFiles(): Promise<StorageScanResult> {
 
         totalBytes += size;
 
-        // Check if referenced
-        const isReferenced =
-          referencedPaths.has(fullPath) ||
-          referencedPaths.has(normalizedPath) ||
-          (downloadUrl && referencedUrls.has(downloadUrl)) ||
-          Array.from(referencedPaths).some(
-            (p) => p.endsWith(fileRef.name) || fullPath.endsWith(p) || p.includes(fullPath)
-          );
+        // Exact canonical path or exact download URL only. Never use basename or substring matching.
+        const isReferenced = referencedPaths.has(fullPath) ||
+          (downloadUrl && referencedUrls.has(downloadUrl));
+        const createdAtMs = timeCreated ? Date.parse(timeCreated) : Number.NaN;
+        const isWithinGracePeriod = !Number.isFinite(createdAtMs) ||
+          Date.now() - createdAtMs < 72 * 60 * 60 * 1000;
 
-        if (isReferenced) {
+        if (isReferenced || isWithinGracePeriod || protectedByPolicy) {
           inUseCount++;
         } else {
           orphanBytes += size;
@@ -666,6 +677,7 @@ export async function scanOrphanStorageFiles(): Promise<StorageScanResult> {
             timeCreated,
             downloadUrl: downloadUrl || "",
             isOrphan: true,
+            protectedByPolicy,
           });
         }
       })
@@ -727,6 +739,16 @@ export async function purgeOrphanStorageFiles(
   }
 
   const activeStorage = storage;
+  const latestReferences = await collectAllReferencedPaths();
+  if (latestReferences.hasErrorOrTimeout) {
+    return {
+      deletedCount: 0,
+      failedCount: orphanPaths.length,
+      errors: ["Purge aborted: authoritative Firestore reference revalidation failed or timed out."],
+    };
+  }
+  const latestReferencedPaths = latestReferences.paths;
+  const latestReferencedUrls = latestReferences.urls;
   let deletedCount = 0;
   let failedCount = 0;
   const errors: string[] = [];
@@ -737,7 +759,23 @@ export async function purgeOrphanStorageFiles(
     await Promise.all(
       batch.map(async (path) => {
         try {
-          const fileRef = ref(activeStorage, path);
+          const canonicalPath = canonicalStoragePath(path);
+          if (isProtectedPortraitPath(canonicalPath)) {
+            throw new Error(`Protected portrait path requires explicit individual admin confirmation: ${canonicalPath}`);
+          }
+          if (latestReferencedPaths.has(canonicalPath)) {
+            throw new Error(`Purge skipped because the asset is now referenced: ${canonicalPath}`);
+          }
+          const fileRef = ref(activeStorage, canonicalPath);
+          const latestUrl = await withTimeout(getDownloadURL(fileRef), 2000, "");
+          if (latestUrl && latestReferencedUrls.has(latestUrl)) {
+            throw new Error(`Purge skipped because the asset URL is now referenced: ${canonicalPath}`);
+          }
+          const latestMetadata = await withTimeout(getMetadata(fileRef), 2000, null as any);
+          const createdAtMs = latestMetadata?.timeCreated ? Date.parse(latestMetadata.timeCreated) : Number.NaN;
+          if (!Number.isFinite(createdAtMs) || Date.now() - createdAtMs < 72 * 60 * 60 * 1000) {
+            throw new Error(`Purge skipped because the asset is within the 72-hour safety window: ${canonicalPath}`);
+          }
           await racePromiseWithTimeout(
             deleteObject(fileRef),
             8000,
@@ -755,9 +793,9 @@ export async function purgeOrphanStorageFiles(
               err?.code === "storage/forbidden" ||
               err?.status_ === 403;
 
-            const reason = isAuthError
-              ? `Permission Denied (storage/unauthorized): Firebase Storage Security Rules blocked deletion of "${path}". Please update your Storage Rules in Firebase Console.`
-              : err?.message || err?.code || `Failed to delete ${path}`;
+             const reason = isAuthError
+               ? `Permission Denied (storage/unauthorized): Firebase Storage Security Rules blocked deletion of "${path}". Please update your Storage Rules in Firebase Console.`
+               : err?.message || err?.code || `Failed to delete ${path}`;
 
             console.error(`[StorageCleanup] Failed to delete ${path}:`, err);
             if (!errors.includes(reason)) {

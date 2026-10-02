@@ -51,9 +51,9 @@ export type UploadPhase =
   | "idle"                  // No image, or showing a previously persisted image
   | "selecting"             // Cropper modal is open
   | "processing"            // Canvas optimization in progress
-  | "ready_local"           // Optimized preview ready in memory, pending save
-  | "saving"                // Persisting to storage (cloud or inline)
-  | "persisted"             // Confirmed written and verified
+  | "local_ready"           // Optimized preview ready in memory, pending save
+  | "uploading"              // Persisting to cloud storage
+  | "cloud_uploaded"        // Confirmed written to cloud storage
   | "failed";               // Error with retry available
 
 // ─── Props ───────────────────────────────────────────────────────────────────
@@ -114,8 +114,8 @@ export function UniversalImageUploader({
   const initialUrlRef = useRef<string | undefined>(previewUrl);
   const [phase, setPhase] = useState<UploadPhase>(() => {
     if (!previewUrl) return "idle";
-    if (previewUrl.startsWith("http")) return "persisted";
-    if (previewUrl.startsWith("data:")) return "persisted"; // Existing persisted inline record
+    if (previewUrl.startsWith("http")) return "cloud_uploaded";
+    if (previewUrl.startsWith("data:")) return "local_ready"; // Inline data is not proof of cloud persistence.
     return "idle";
   });
   const [preview, setPreview] = useState<string>(previewUrl || "");
@@ -150,15 +150,15 @@ export function UniversalImageUploader({
       setError(null);
     } else if (previewUrl === initialUrlRef.current) {
       // Unchanged from the originally passed persisted record
-      setPhase("persisted");
+      setPhase(previewUrl.startsWith("http") ? "cloud_uploaded" : "local_ready");
     } else if (previewUrl.startsWith("http")) {
-      setPhase("persisted");
+      setPhase("cloud_uploaded");
     } else if (previewUrl.startsWith("data:")) {
-      // If the user modified or newly cropped it in this session, keep as ready_local
+        // If the user modified or newly cropped it in this session, keep as local_ready
       if (localDataUrlRef.current && previewUrl === localDataUrlRef.current) {
-        setPhase("ready_local");
+        setPhase("local_ready");
       } else {
-        setPhase("persisted");
+        setPhase("local_ready");
       }
     }
   }, [previewUrl]);
@@ -174,7 +174,7 @@ export function UniversalImageUploader({
   // ─── Cloud Upload (Blaze Mode) ──────────────────────────────────────────
 
   const attemptCloudUpload = useCallback(async (dataUrl: string, fileName: string) => {
-    setPhase("saving");
+    setPhase("uploading");
     setError(null);
     try {
       const previousUrls = [...sessionUploadedCloudUrlsRef.current];
@@ -201,11 +201,11 @@ export function UniversalImageUploader({
         sessionUploadedCloudUrlsRef.current = [result.url];
         setPreview(result.url);
         setManualUrl(result.url);
-        setPhase("persisted");
+        setPhase("cloud_uploaded");
         onUrlChange?.(result.url);
       } else {
         // In Spark mode, inline data URL is ready for form save
-        setPhase("ready_local");
+        setPhase("local_ready");
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Cloud upload failed.";
@@ -249,7 +249,7 @@ export function UniversalImageUploader({
       });
 
       // Deliver the optimized data URL to the parent form immediately
-      setPhase("ready_local");
+       setPhase("local_ready");
       onUrlChange?.(result.dataUrl);
 
       // On Blaze mode: await cloud upload before signaling completion
@@ -292,7 +292,7 @@ export function UniversalImageUploader({
       }));
 
       // Newly cropped image is ready in memory; parent form must save to persist
-      setPhase("ready_local");
+       setPhase("local_ready");
       onUrlChange?.(croppedDataUrl);
 
       // On Blaze mode: await cloud upload before signaling completion
@@ -324,7 +324,7 @@ export function UniversalImageUploader({
         // On Spark, the data URL is ready for form save
         setPreview(targetDataUrl);
         setManualUrl(targetDataUrl);
-        setPhase("ready_local");
+        setPhase("local_ready");
         onUrlChange?.(targetDataUrl);
       } else {
         await attemptCloudUpload(targetDataUrl, originalFileName);
@@ -417,11 +417,13 @@ export function UniversalImageUploader({
     setManualUrl(urlVal);
     setPreview(urlVal);
     if (urlVal.startsWith("http")) {
-      setPhase("persisted");
+      setPhase("cloud_uploaded");
     } else if (urlVal.startsWith("data:")) {
-      setPhase(isSparkMode() ? "persisted" : "ready_local");
+      setPhase("local_ready");
     } else if (!urlVal) {
       setPhase("idle");
+    } else {
+      setPhase("failed");
     }
     onUrlChange?.(urlVal);
   };
@@ -442,7 +444,7 @@ export function UniversalImageUploader({
   // ─── Status Badge ──────────────────────────────────────────────────────
 
   const renderStatusBadge = () => {
-    if (phase === "processing" || phase === "saving") {
+    if (phase === "processing" || phase === "uploading") {
       return (
         <div className="px-2.5 py-1 rounded-full bg-slate-900/90 backdrop-blur-md text-amber-300 text-[10px] font-bold flex items-center gap-1.5 border border-amber-400/30 shadow-md">
           <RefreshCw className="w-3 h-3 animate-spin text-amber-400" />
@@ -451,17 +453,16 @@ export function UniversalImageUploader({
       );
     }
 
-    if (phase === "persisted") {
-      const isCloud = preview.startsWith("http");
+    if (phase === "cloud_uploaded") {
       return (
         <div className="px-2.5 py-1 rounded-full bg-slate-900/90 backdrop-blur-md text-emerald-300 text-[10px] font-bold flex items-center gap-1.5 border border-emerald-400/30 shadow-md">
           <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-          <span>{isCloud ? "Cloud Verified" : "Saved (Optimized WebP)"}</span>
+          <span>Cloud Verified</span>
         </div>
       );
     }
 
-    if (phase === "ready_local") {
+    if (phase === "local_ready") {
       return (
         <div className="px-2.5 py-1 rounded-full bg-slate-900/90 backdrop-blur-md text-blue-300 text-[10px] font-bold flex items-center gap-1.5 border border-blue-400/30 shadow-md">
           <CheckCircle2 className="w-3 h-3 text-blue-400" />
@@ -562,9 +563,10 @@ export function UniversalImageUploader({
                 fill
                 unoptimized={true}
                 className="object-cover"
-                onError={() => {
-                  setPreview("");
-                  setError("Image URL unreachable or not found. Please upload a new photo.");
+                 onError={() => {
+                   setPreview("");
+                   setPhase("failed");
+                   setError("Image URL unreachable or not found. Please upload a new photo.");
                 }}
               />
               <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-10">
@@ -623,9 +625,10 @@ export function UniversalImageUploader({
                 fill
                 unoptimized={true}
                 className="object-cover"
-                onError={() => {
-                  setPreview("");
-                  setError("Stored photo not found on cloud storage. Please upload a fresh photo.");
+                 onError={() => {
+                   setPreview("");
+                   setPhase("failed");
+                   setError("Stored photo not found on cloud storage. Please upload a fresh photo.");
                 }}
               />
 
@@ -688,10 +691,10 @@ export function UniversalImageUploader({
             <button
               type="button"
               onClick={handleRetryUpload}
-              disabled={phase === "processing" || phase === "saving"}
+              disabled={phase === "processing" || phase === "uploading"}
               className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] shrink-0 transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
             >
-              <RefreshCw className={`w-3 h-3 ${(phase === "processing" || phase === "saving") ? "animate-spin" : ""}`} />
+              <RefreshCw className={`w-3 h-3 ${(phase === "processing" || phase === "uploading") ? "animate-spin" : ""}`} />
               <span>Retry</span>
             </button>
           )}
@@ -699,7 +702,7 @@ export function UniversalImageUploader({
       )}
 
       {/* Compression Stats */}
-      {compressionStats && compressionStats.compressedSize > 0 && phase === "persisted" && (
+      {compressionStats && compressionStats.compressedSize > 0 && (phase === "local_ready" || phase === "cloud_uploaded") && (
         <div className="p-3 rounded-2xl bg-emerald-50/80 border border-emerald-200/80 text-emerald-950 text-[11px] flex items-center justify-between font-medium">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />

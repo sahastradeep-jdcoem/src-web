@@ -72,7 +72,6 @@ export async function POST(req: NextRequest) {
         if (remoteConfig.upiId?.trim()) upiId = remoteConfig.upiId.trim();
         if (remoteConfig.payeeName?.trim()) payeeName = remoteConfig.payeeName.trim();
         if (remoteConfig.paytmMid?.trim()) mid = remoteConfig.paytmMid.trim();
-        if (remoteConfig.paytmMerchantKey?.trim()) merchantKey = remoteConfig.paytmMerchantKey.trim();
       }
     } catch (fsErr) {
       console.warn("Firestore payment_config read notice in API route:", fsErr);

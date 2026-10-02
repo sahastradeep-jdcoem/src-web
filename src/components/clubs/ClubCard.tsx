@@ -1,6 +1,5 @@
 import React from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { 
   Sparkles, 
   Music, 
@@ -20,6 +19,7 @@ import {
 import { ClubItem } from "@/types";
 import { getClubLeaders } from "@/lib/councilStore";
 import { Badge } from "@/components/ui/Badge";
+import { ResilientImage } from "@/components/ui/ResilientImage";
 
 interface ClubCardProps {
   club: ClubItem;
@@ -41,30 +41,20 @@ const ICON_MAP: Record<string, React.ReactNode> = {
 };
 
 export function ClubCard({ club }: ClubCardProps) {
-  const [cardImgError, setCardImgError] = React.useState(false);
-  const [logoImgError, setLogoImgError] = React.useState(false);
-
-  React.useEffect(() => {
-    setCardImgError(false);
-    setLogoImgError(false);
-  }, [club.cardImage, club.heroImage, club.logoImage]);
-
-  const rawCard = club.cardImage || club.heroImage;
-  const effectiveCard = !cardImgError && rawCard ? rawCard : "";
-
   return (
     <div className="group rounded-2xl bg-white border border-slate-200 hover:border-[#17458F]/30 hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col justify-between shadow-xs font-sans">
       
       {/* Background Image Preview */}
       <div className="relative h-44 w-full overflow-hidden bg-slate-900">
-        {effectiveCard ? (
-          <Image
-            src={effectiveCard}
+        {club.cardImage || club.heroImage ? (
+          <ResilientImage
+            src={club.cardImage}
+            backupUrl={club.heroImage}
             alt={`${club.name} cover`}
             fill
-            unoptimized={true}
             className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-            onError={() => setCardImgError(true)}
+            initials={club.name.slice(0, 2).toUpperCase()}
+            fallbackClassName="bg-gradient-to-br from-[#17458F] via-[#0E2F66] to-slate-900 text-white"
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-[#17458F] via-[#0E2F66] to-slate-900" />
@@ -72,15 +62,15 @@ export function ClubCard({ club }: ClubCardProps) {
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
         <div className="absolute top-3.5 left-3.5 flex items-center gap-2.5">
-          {club.logoImage && !logoImgError ? (
+          {club.logoImage ? (
             <div className="relative h-9 w-9 rounded-full overflow-hidden shrink-0 shadow-xs">
-              <Image 
+              <ResilientImage
                 src={club.logoImage} 
                 alt={`${club.name} emblem`} 
                 fill
-                unoptimized={true}
                 className="object-cover w-full h-full rounded-full" 
-                onError={() => setLogoImgError(true)}
+                initials={club.name.slice(0, 2).toUpperCase()}
+                fallbackClassName="bg-white/90 text-[#E78023]"
               />
             </div>
           ) : (
@@ -125,12 +115,13 @@ export function ClubCard({ club }: ClubCardProps) {
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="relative h-7 w-7 rounded-full overflow-hidden border border-slate-200 shrink-0 bg-slate-100 flex items-center justify-center">
                   {primaryLead?.avatar ? (
-                    <Image
+                    <ResilientImage
                       src={primaryLead.avatar}
                       alt={primaryLead.name || club.name}
                       fill
-                      unoptimized={true}
                       className="object-cover"
+                      initials={(primaryLead.name || club.name).slice(0, 2).toUpperCase()}
+                      fallbackClassName="bg-slate-100 text-slate-600 text-[10px] font-bold"
                     />
                   ) : (
                     <span className="text-[10px] font-bold text-slate-600">

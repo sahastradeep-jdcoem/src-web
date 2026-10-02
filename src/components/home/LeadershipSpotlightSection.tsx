@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { 
   Sparkles, 
   Crown, 
@@ -22,18 +21,15 @@ import { getCurrentTenure, getStoredTenures } from "@/lib/tenureStore";
 import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { TeamMember } from "@/types";
 import { Badge } from "@/components/ui/Badge";
+import { ResilientImage } from "@/components/ui/ResilientImage";
 
 export default function LeadershipSpotlightSection() {
   const [councilMembers, setCouncilMembers] = useState<TeamMember[]>([]);
   const [currentTenureLabel, setCurrentTenureLabel] = useState<string>("2025-26");
-  const [presidentImgError, setPresidentImgError] = useState(false);
-  const [vpImgError, setVpImgError] = useState(false);
 
   const refresh = () => {
     const members = getStoredCouncilMembers();
     setCouncilMembers(members);
-    setPresidentImgError(false);
-    setVpImgError(false);
     const tenure = getCurrentTenure();
     if (tenure) {
       setCurrentTenureLabel(tenure.label);
@@ -142,14 +138,14 @@ export default function LeadershipSpotlightSection() {
                 {/* Photo with Gold Ring */}
                 <div className="relative shrink-0">
                   <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl overflow-hidden ring-4 ring-amber-400/30 shadow-md relative bg-slate-100 flex items-center justify-center">
-                    {president.avatar && !presidentImgError ? (
-                      <Image
+                    {president.avatar ? (
+                      <ResilientImage
                         src={president.avatar}
                         alt={president.name}
                         fill
-                        unoptimized={true}
                         className="object-cover group-hover:scale-105 transition-transform duration-500"
-                        onError={() => setPresidentImgError(true)}
+                        initials={(president.name || "PR").slice(0, 2).toUpperCase()}
+                        fallbackClassName="bg-slate-100 text-slate-400 text-3xl sm:text-4xl"
                       />
                     ) : (
                       <span className="text-3xl sm:text-4xl font-bold text-slate-400">
@@ -234,14 +230,14 @@ export default function LeadershipSpotlightSection() {
                 {/* Photo with Blue Ring */}
                 <div className="relative shrink-0">
                   <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl overflow-hidden ring-4 ring-[#17458F]/20 shadow-md relative bg-slate-100 flex items-center justify-center">
-                    {vicePresident.avatar && !vpImgError ? (
-                      <Image
+                    {vicePresident.avatar ? (
+                      <ResilientImage
                         src={vicePresident.avatar}
                         alt={vicePresident.name}
                         fill
-                        unoptimized={true}
                         className="object-cover group-hover:scale-105 transition-transform duration-500"
-                        onError={() => setVpImgError(true)}
+                        initials={(vicePresident.name || "VP").slice(0, 2).toUpperCase()}
+                        fallbackClassName="bg-slate-100 text-slate-400 text-3xl sm:text-4xl"
                       />
                     ) : (
                       <span className="text-3xl sm:text-4xl font-bold text-slate-400">

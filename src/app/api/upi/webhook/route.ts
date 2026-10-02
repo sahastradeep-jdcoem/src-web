@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { db } from "@/lib/firebase/config";
 import { 
   collection, 
@@ -11,7 +12,7 @@ import {
   updateDoc 
 } from "firebase/firestore";
 
-const DEFAULT_SECRET = "SRC_UPI_2026_GATEWAY";
+const WEBHOOK_MAX_SKEW_SECONDS = 5 * 60;
 
 /**
  * Helper to extract 12-digit numeric UTR from raw notification text
@@ -118,30 +119,28 @@ function extractAmountFromText(text: string): number | null {
 /**
  * Validate incoming webhook authentication token
  */
-function isAuthorized(req: NextRequest, body: any): boolean {
-  const configuredSecret = process.env.UPI_WEBHOOK_SECRET || DEFAULT_SECRET;
+function isAuthorized(req: NextRequest, rawBody: string): boolean {
+  const timestamp = req.headers.get("x-src-webhook-timestamp");
+  const signature = req.headers.get("x-src-webhook-signature");
+  const configuredSecret = process.env.UPI_WEBHOOK_SECRET;
 
-  // Check 1: Authorization header "Bearer <secret>"
-  const authHeader = req.headers.get("authorization") || "";
-  if (authHeader.startsWith("Bearer ")) {
-    const token = authHeader.slice(7).trim();
-    if (token === configuredSecret) return true;
+  if (!timestamp || !signature || !configuredSecret || !/^\d+$/.test(timestamp)) return false;
+  const timestampNumber = Number(timestamp);
+  const timestampSeconds = timestampNumber > 1e12
+    ? Math.floor(timestampNumber / 1000)
+    : timestampNumber;
+  if (!Number.isSafeInteger(timestampSeconds) ||
+      Math.abs(Math.floor(Date.now() / 1000) - timestampSeconds) > WEBHOOK_MAX_SKEW_SECONDS) {
+    return false;
   }
 
-  // Check 2: Custom header "x-webhook-secret"
-  const customHeader = req.headers.get("x-webhook-secret") || "";
-  if (customHeader.trim() === configuredSecret) return true;
-
-  // Check 3: Query param "?secret=<secret>"
-  const querySecret = req.nextUrl.searchParams.get("secret") || "";
-  if (querySecret.trim() === configuredSecret) return true;
-
-  // Check 4: Request body secret field
-  if (body?.secret && String(body.secret).trim() === configuredSecret) {
-    return true;
-  }
-
-  return false;
+  const expected = createHmac("sha256", configuredSecret)
+    .update(`${timestamp}.${rawBody}`, "utf8")
+    .digest("base64");
+  const actualBuffer = Buffer.from(signature, "base64");
+  const expectedBuffer = Buffer.from(expected, "base64");
+  return actualBuffer.length === expectedBuffer.length &&
+    timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
 /**
@@ -234,8 +233,8 @@ export async function POST(req: NextRequest) {
       rawBody = { notificationText: trimmedText };
     }
 
-    // Authentication check
-    if (!isAuthorized(req, rawBody)) {
+    // Authentication check must use the exact body bytes received on the wire.
+    if (!isAuthorized(req, rawText)) {
       return NextResponse.json(
         { success: false, error: "Unauthorized: Invalid or missing webhook secret key." },
         { status: 401 }
@@ -279,33 +278,6 @@ export async function POST(req: NextRequest) {
 
     // If neither amount nor UTR can be detected: handle as connectivity test/ping
     if ((!utr || !/^\d{12}$/.test(utr)) && (!amount || amount <= 0)) {
-      if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-        try {
-          const pingId = `PING-${Date.now().toString().slice(-6)}`;
-          await setDoc(doc(db, "verified_upi_payments", pingId), {
-            utr: pingId,
-            amount: 0,
-            rawNotification: combinedText || trimmedText || "MacroDroid Phone Test Ping",
-            status: "PING",
-            matchedStudentName: "MacroDroid Phone Connected",
-            receivedAt: now,
-          }, { merge: true });
-
-          const logId = `SIG-${Date.now()}`;
-          await setDoc(doc(db, "upi_webhook_logs", logId), {
-            id: logId,
-            receivedAt: now,
-            combinedText: (combinedText || trimmedText || "").slice(0, 500),
-            extractedUtr: null,
-            extractedAmount: 0,
-            status: "PING",
-            note: "Connectivity ping or no amount/UTR detected",
-          }, { merge: true });
-        } catch (pingErr) {
-          console.warn("Notice: ping save to verified_upi_payments notice:", pingErr);
-        }
-      }
-
       return NextResponse.json({
         success: true,
         isPing: true,
@@ -613,12 +585,12 @@ export async function POST(req: NextRequest) {
  * Health check & recent transaction inspection for admin setup testing
  */
 export async function GET(req: NextRequest) {
-  const isAuth = isAuthorized(req, {});
+  const isAuth = isAuthorized(req, "");
   if (!isAuth) {
     return NextResponse.json({
       status: "ONLINE",
       service: "SRC JDCOEM Automated UPI Webhook Engine",
-      note: "Provide valid ?secret= token to view recent verification signals.",
+      note: "Webhook endpoint is online. Signed POST requests are required for payment processing.",
     });
   }
 

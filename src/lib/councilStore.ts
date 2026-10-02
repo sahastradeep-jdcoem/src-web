@@ -232,8 +232,9 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
     return av;
   };
 
-  // Cross-club avatar catalog (keyed by normalized student name and ID)
-  // Ensures leaders who serve in multiple clubs have their portrait cross-hydrated seamlessly
+  // Cross-club avatar catalog keyed only by stable identity fields. Names are
+  // intentionally excluded: two students can share a name, while an ID/BT ID
+  // or verified email is an explicit identity assertion.
   const knownAvatars = new Map<string, string>();
   for (const c of clubs) {
     const allPersons = [
@@ -246,18 +247,9 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
       if (!p) continue;
       const av = sanitizeAvatar(p.avatar);
       if (av) {
-        if (p.name) {
-          const normName = p.name.toLowerCase().trim();
-          if (normName && !knownAvatars.has(normName)) {
-            knownAvatars.set(normName, av);
-          }
-        }
-        if (p.id) {
-          const normId = p.id.toLowerCase().trim();
-          if (normId && !knownAvatars.has(normId)) {
-            knownAvatars.set(normId, av);
-          }
-        }
+        getRosterIdentityKeys(p).forEach((identityKey) => {
+          if (!knownAvatars.has(identityKey)) knownAvatars.set(identityKey, av);
+        });
       }
     }
   }
@@ -271,13 +263,8 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
       if (!person) return "";
       const direct = sanitizeAvatar(person.avatar);
       if (direct) return direct;
-      if (person.name) {
-        const normName = person.name.toLowerCase().trim();
-        if (knownAvatars.has(normName)) return knownAvatars.get(normName)!;
-      }
-      if (person.id) {
-        const normId = person.id.toLowerCase().trim();
-        if (knownAvatars.has(normId)) return knownAvatars.get(normId)!;
+      for (const identityKey of getRosterIdentityKeys(person)) {
+        if (knownAvatars.has(identityKey)) return knownAvatars.get(identityKey)!;
       }
       return "";
     };
@@ -352,7 +339,7 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
     const coLeads = rawCoLeads.length > 0
       ? rawCoLeads.map((cl, i) => {
           const matchingLeader = leaders.find(
-            (l) => (l.id && l.id === cl.id) || (l.name && cl.name && l.name.toLowerCase().trim() === cl.name.toLowerCase().trim())
+            (l) => rosterIdentitiesMatch(l, cl)
           );
           const avatar = resolveAvatar(matchingLeader) || resolveAvatar(cl) || coLeadAvatar || sanitizeAvatar(cl.avatar) || "";
           return {
@@ -535,7 +522,11 @@ export function normalizeMemberName(name?: string): string {
   return name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-// Phonetic / transliteration equivalence for Indian surnames/names (e.g. Jambulkar / Jambhulkar)
+/**
+ * Legacy helper retained for import compatibility. It is intentionally not
+ * used for roster matching or deduplication because phonetic equivalence is
+ * ambiguous and can merge two different students.
+ */
 export function normalizePhoneticMemberName(name?: string): string {
   if (!name) return "";
   return normalizeMemberName(name)
@@ -568,8 +559,8 @@ export function sanitizeTeamMember(m: TeamMember): TeamMember {
     copy.bio = "";
   }
   // Auto-heal active portraits from live verified storage assets
-  if (copy.name) {
-    const key = normalizePhoneticMemberName(copy.name);
+   if (copy.name) {
+     const key = normalizeMemberName(copy.name);
     if (KNOWN_RECOVERED_AVATARS[key]) {
       const isDeadPurgedUrl =
         !copy.avatar ||
@@ -609,108 +600,92 @@ export function getBaseMemberId(id?: string): string {
   return id.replace(/^(admin|council-admin|founder|member)-/i, "").trim();
 }
 
+function isValidRosterBtId(btId?: string): boolean {
+  if (!btId || typeof btId !== "string") return false;
+  const normalized = btId.trim().toUpperCase();
+  return normalized.length > 3 &&
+    normalized !== "000000" &&
+    normalized !== "BT00" &&
+    normalized !== "BT01" &&
+    !normalized.startsWith("BT00") &&
+    !normalized.startsWith("BT01") &&
+    !normalized.includes("PLACEHOLDER");
+}
+
+function getVerifiedRosterEmail(member?: Partial<TeamMember> | null): string {
+  if (!member || typeof member !== "object") return "";
+  const record = member as Partial<TeamMember> & {
+    emailVerified?: boolean;
+    isEmailVerified?: boolean;
+    verifiedEmail?: string;
+  };
+
+  // Existing roster records predate an explicit boolean flag. Treat a valid
+  // roster email as verified unless a record explicitly marks it unverified;
+  // imports may provide the canonical value as verifiedEmail.
+  if (record.emailVerified === false || record.isEmailVerified === false) return "";
+  const rawEmail = typeof record.verifiedEmail === "string" && record.verifiedEmail.trim()
+    ? record.verifiedEmail
+    : record.email;
+  if (!rawEmail || typeof rawEmail !== "string") return "";
+  const email = rawEmail.trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && !email.includes("placeholder") ? email : "";
+}
+
+/**
+ * Stable identity keys for council, founding, and club rosters.
+ * Stable ID (including historical admin/founder prefix variants) wins first,
+ * followed by BT ID and verified email. Names deliberately produce no key.
+ */
+export function getRosterIdentityKeys(member?: Partial<TeamMember> | null): string[] {
+  if (!member || typeof member !== "object") return [];
+  const keys: string[] = [];
+  const add = (key: string) => {
+    if (key && !keys.includes(key)) keys.push(key);
+  };
+
+  const rawId = typeof member.id === "string" ? member.id.trim().toLowerCase() : "";
+  if (rawId && !rawId.includes("placeholder")) {
+    add(`id:${rawId}`);
+    const baseId = getBaseMemberId(rawId).toLowerCase();
+    if (baseId && baseId !== rawId && !baseId.includes("placeholder")) add(`base:${baseId}`);
+  }
+
+  if (isValidRosterBtId(member.btId)) add(`bt:${member.btId!.trim().toUpperCase()}`);
+
+  const verifiedEmail = getVerifiedRosterEmail(member);
+  if (verifiedEmail) add(`email:${verifiedEmail}`);
+  return keys;
+}
+
+export function rosterIdentitiesMatch(
+  first?: Partial<TeamMember> | null,
+  second?: Partial<TeamMember> | null
+): boolean {
+  const secondKeys = new Set(getRosterIdentityKeys(second));
+  return getRosterIdentityKeys(first).some((key) => secondKeys.has(key));
+}
+
 export function matchCouncilAndFounder(m1: TeamMember, m2: TeamMember): boolean {
   if (!m1 || !m2) return false;
-
-  // 1. Match by clean normalized name or phonetic transliteration
-  if (m1.name && m2.name) {
-    const n1 = normalizeMemberName(m1.name);
-    const n2 = normalizeMemberName(m2.name);
-    if (n1 === n2 && n1.length > 2 && !n1.includes("placeholder")) {
-      return true;
-    }
-    const p1 = normalizePhoneticMemberName(m1.name);
-    const p2 = normalizePhoneticMemberName(m2.name);
-    if (p1 === p2 && p1.length > 2 && !p1.includes("placeholder")) {
-      return true;
-    }
-  }
-
-  // 2. Match by unique Base ID if present (e.g. member-1788159155799 <-> founder-1788159155799)
-  const base1 = getBaseMemberId(m1.id);
-  const base2 = getBaseMemberId(m2.id);
-  if (base1 && base2 && base1 === base2 && base1 !== "" && !base1.includes("placeholder")) {
-    return true;
-  }
-
-  // 3. Match by BT ID (with same first name or matching phonetic name)
-  if (m1.btId && m2.btId) {
-    const b1 = m1.btId.trim().toUpperCase();
-    const b2 = m2.btId.trim().toUpperCase();
-    if (b1 === b2 && b1.length > 3 && b1 !== "000000" && !b1.includes("PLACEHOLDER") && !b1.startsWith("BT00") && !b1.startsWith("BT01")) {
-      if (m1.name && m2.name) {
-        const fn1 = m1.name.trim().toLowerCase().split(/\s+/)[0];
-        const fn2 = m2.name.trim().toLowerCase().split(/\s+/)[0];
-        const p1 = normalizePhoneticMemberName(m1.name);
-        const p2 = normalizePhoneticMemberName(m2.name);
-        if (p1 === p2 || fn1 === fn2) {
-          return true;
-        }
-        return false;
-      }
-      return true;
-    }
-  }
-
-  // 4. Match by Email if present
-  if (m1.email && m2.email) {
-    const e1 = m1.email.trim().toLowerCase();
-    const e2 = m2.email.trim().toLowerCase();
-    if (e1 === e2 && e1.length > 5 && e1.includes("@") && !e1.includes("placeholder")) {
-      return true;
-    }
-  }
-
-  return false;
+  // Identity precedence is stable ID, BT ID, then verified email. Names are
+  // deliberately never used, including exact or phonetic name matches.
+  return rosterIdentitiesMatch(m1, m2);
 }
 
 export function deduplicateTeamMembers(members: TeamMember[]): TeamMember[] {
   if (!Array.isArray(members)) return [];
   const result: TeamMember[] = [];
-  const seenBaseIds = new Set<string>();
-  const seenBtIds = new Set<string>();
-  const seenPhoneticNames = new Set<string>();
+  const seenIdentityKeys = new Set<string>();
 
   for (const m of members) {
     if (!m) continue;
-    const baseId = getBaseMemberId(m.id);
-    const cleanBt = m.btId?.trim().toUpperCase();
-    const pName = normalizePhoneticMemberName(m.name);
-    const firstName = m.name?.trim().toLowerCase().split(/\s+/)[0] || "";
+    const identityKeys = getRosterIdentityKeys(m);
 
-    let isDuplicate = false;
-
-    if (baseId && seenBaseIds.has(baseId)) {
-      isDuplicate = true;
-    }
-
-    if (!isDuplicate && cleanBt && cleanBt.length > 3 && cleanBt !== "BT00" && cleanBt !== "BT01" && !cleanBt.includes("PLACEHOLDER")) {
-      if (seenBtIds.has(cleanBt)) {
-        const match = result.find((existing) => {
-          const exBt = existing.btId?.trim().toUpperCase();
-          if (exBt !== cleanBt) return false;
-          const exFn = existing.name?.trim().toLowerCase().split(/\s+/)[0] || "";
-          const exP = normalizePhoneticMemberName(existing.name);
-          return exFn === firstName || exP === pName;
-        });
-        if (match) {
-          isDuplicate = true;
-        }
-      }
-    }
-
-    if (!isDuplicate && pName && pName.length > 3) {
-      if (seenPhoneticNames.has(pName)) {
-        isDuplicate = true;
-      }
-    }
-
-    if (!isDuplicate) {
-      if (baseId) seenBaseIds.add(baseId);
-      if (cleanBt && cleanBt.length > 3 && cleanBt !== "BT00" && cleanBt !== "BT01" && !cleanBt.includes("PLACEHOLDER")) {
-        seenBtIds.add(cleanBt);
-      }
-      if (pName && pName.length > 3) seenPhoneticNames.add(pName);
+    // Only explicit identity collisions deduplicate. Same-name records with
+    // different identities, and records without identities, are preserved.
+    if (!identityKeys.some((key) => seenIdentityKeys.has(key))) {
+      identityKeys.forEach((key) => seenIdentityKeys.add(key));
       result.push(m);
     }
   }
@@ -1918,5 +1893,3 @@ export function subscribeToInstitutionalPillars(callback: (pillars: Institutiona
     }
   });
 }
-
-

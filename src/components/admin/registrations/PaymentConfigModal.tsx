@@ -17,8 +17,6 @@ import {
   Send,
   Smartphone,
   Zap,
-  Eye,
-  EyeOff
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -45,11 +43,9 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
   // Cashfree Testing State
   const [isTestingCashfree, setIsTestingCashfree] = useState(false);
   const [cashfreeTestResult, setCashfreeTestResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [showSecretKey, setShowSecretKey] = useState(false);
 
   // Webhook Testing & Copy State
   const [copiedUrl, setCopiedUrl] = useState(false);
-  const [copiedSecret, setCopiedSecret] = useState(false);
   const [isTestingWebhook, setIsTestingWebhook] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [recentSignals, setRecentSignals] = useState<any[]>([]);
@@ -68,12 +64,10 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
     ? `${window.location.origin.replace("://srcjdcoem.in", "://www.srcjdcoem.in")}/api/upi/webhook`
     : "https://www.srcjdcoem.in/api/upi/webhook";
 
-  const webhookSecret = config.webhookSecret || "SRC_UPI_2026_GATEWAY";
-
   const fetchRecentSignals = async () => {
     setIsLoadingSignals(true);
     try {
-      const res = await fetch(`/api/upi/webhook?secret=${encodeURIComponent(webhookSecret)}`);
+      const res = await fetch("/api/upi/webhook");
       const data = await res.json();
       if (data?.recentPayments) {
         setRecentSignals(data.recentPayments);
@@ -98,22 +92,11 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
     setIsTestingWebhook(true);
     setTestResult(null);
     try {
-      const dummyUtr = `9999${Math.floor(10000000 + Math.random() * 90000000)}`;
-      const res = await fetch("/api/upi/webhook", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${webhookSecret}`,
-        },
-        body: JSON.stringify({
-          title: "Paytm for Business (Test)",
-          notificationText: `Received ₹150.00 via UPI from Demo Student. UPI Ref: ${dummyUtr}`,
-        }),
-      });
+      const res = await fetch("/api/upi/webhook");
 
       const data = await res.json();
-      if (res.ok && data.success) {
-        setTestResult(`Success! Verified UTR ${data.utr} (Amount: ₹${data.amount}) recorded in cloud.`);
+      if (res.ok && data.status === "ONLINE") {
+        setTestResult("Success! Webhook endpoint is online. Authentication is managed by the server.");
         fetchRecentSignals();
       } else {
         setTestResult(`Failed: ${data.error || "Webhook rejected payload"}`);
@@ -356,27 +339,13 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
             {/* Cashfree Secret Key */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                Cashfree Secret Key *
+                Cashfree Secret Key
               </label>
-              <div className="relative">
-                <input
-                  type={showSecretKey ? "text" : "password"}
-                  required
-                  placeholder="e.g. Secret Key from Cashfree Dashboard"
-                  value={config.cashfreeSecretKey}
-                  onChange={(e) => setConfig({ ...config, cashfreeSecretKey: e.target.value.trim() })}
-                  className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-slate-300 text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#17458F]/30 focus:border-[#17458F]"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowSecretKey(!showSecretKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  {showSecretKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+              <div className="px-3.5 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50 text-sm font-semibold text-emerald-800">
+                Managed by server environment
               </div>
               <p className="text-[11px] text-slate-500 mt-1">
-                Server-only secret key used for signing order and refund requests.
+                The Cashfree secret is never entered, stored, or exposed in the browser. Configure <code>CASHFREE_SECRET_KEY</code> on the server.
               </p>
             </div>
 
@@ -646,27 +615,12 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                   Webhook Secret Token
                 </label>
                 <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={webhookSecret}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-100 border border-slate-300 text-xs font-mono text-slate-800 focus:outline-none select-all"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(webhookSecret);
-                      setCopiedSecret(true);
-                      setTimeout(() => setCopiedSecret(false), 2000);
-                    }}
-                    className="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold transition-colors cursor-pointer shrink-0 flex items-center gap-1"
-                  >
-                    {copiedSecret ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedSecret ? "Copied" : "Copy"}</span>
-                  </button>
+                   <div className="w-full px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800">
+                     Server-configured authentication
+                   </div>
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1 font-mono">
-                  Pass as header: `Authorization: Bearer {webhookSecret}`
+                   Authentication is managed by the server; do not append a token to the webhook URL.
                 </p>
               </div>
             </div>
@@ -679,7 +633,7 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                     Verify Cloud Pipeline
                   </span>
                   <span className="text-[11px] text-slate-500 block">
-                    Simulate an incoming ₹150 UPI notification to confirm that the server receives and parses UTRs.
+                     Check that the server webhook endpoint is online. Authentication remains server-side.
                   </span>
                 </div>
                 <button
@@ -742,7 +696,7 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                       <span className="font-semibold text-slate-800">Server URL:</span>
                       <div className="mt-0.5">
                         <span className="text-slate-900 bg-white px-2 py-1 rounded border border-slate-200 break-all select-all font-mono text-[10px] font-bold block">
-                          {webhookUrl}?secret={webhookSecret}
+                           {webhookUrl}
                         </span>
                         <span className="text-[9.5px] text-amber-800 font-medium block mt-0.5">
                           ⚠️ Notice: Must include <strong>www.srcjdcoem.in</strong>. Without &quot;www&quot;, Android cancels POST redirects.
@@ -770,7 +724,7 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                       </div>
                     </li>
                     <li>
-                      <span className="font-semibold text-slate-800">Header Params Tab:</span> Leave <strong>completely empty</strong> (the secret key is already in the URL).
+                      <span className="font-semibold text-slate-800">Header Params Tab:</span> The sender must provide <strong className="font-mono">x-src-webhook-timestamp</strong> and <strong className="font-mono">x-src-webhook-signature</strong>. Unsigned requests are rejected; never put the signing secret in the URL or request body.
                     </li>
                   </ul>
                 </li>

@@ -6,6 +6,7 @@ import { mockClubs } from "@/data/clubs";
 import { cleanUndefined, saveSiteContentToFirestore } from "./firestore";
 import { compressImage } from "@/lib/imageCompression";
 import { hydrateClubAvatars, deduplicateClubAvatarsForCloud, saveStoredClubs } from "@/lib/councilStore";
+import { safeStorageSet } from "@/lib/safeStorage";
 
 const SITE_CONTENT_COLLECTION = "site_content";
 const CLUBS_DOC_ID = "clubs";
@@ -15,21 +16,28 @@ const LOCAL_STORAGE_KEY = "src_clubs_roster";
  * Get all clubs from Firestore (single source of truth) with graceful fallback
  */
 export async function getClubs(): Promise<ClubItem[]> {
-  try {
-    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+  if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    try {
       const docRef = doc(db, SITE_CONTENT_COLLECTION, CLUBS_DOC_ID);
       const snapshot = await getDoc(docRef);
-      if (snapshot.exists() && Array.isArray(snapshot.data()?.payload) && snapshot.data().payload.length > 0) {
-        const data = snapshot.data().payload as ClubItem[];
-        const hydrated = hydrateClubAvatars(data);
-        if (typeof window !== "undefined") {
-          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+
+      // A successful read is authoritative, including an empty payload or a
+      // missing document. Do not resurrect stale local clubs in either case.
+      const payload = snapshot.exists() ? snapshot.data()?.payload : undefined;
+      const data = Array.isArray(payload) ? payload as ClubItem[] : [];
+      const hydrated = hydrateClubAvatars(data);
+      if (typeof window !== "undefined") {
+        try {
+          safeStorageSet(LOCAL_STORAGE_KEY, data);
+        } catch (storageError) {
+          console.warn("Could not cache Firestore clubs snapshot:", storageError);
         }
-        return hydrated;
       }
+      return hydrated;
+    } catch (error) {
+      // Only an actual read/offline failure is allowed to use the local cache.
+      console.warn("Firestore getClubs notice:", error);
     }
-  } catch (error) {
-    console.warn("Firestore getClubs notice:", error);
   }
 
   // Fallback to local storage if offline
@@ -38,7 +46,7 @@ export async function getClubs(): Promise<ClubItem[]> {
       const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return hydrateClubAvatars(parsed);
+        if (Array.isArray(parsed)) return hydrateClubAvatars(parsed);
       }
     } catch {}
   }
@@ -167,18 +175,23 @@ export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => v
 
   try {
     const docRef = doc(db, SITE_CONTENT_COLLECTION, CLUBS_DOC_ID);
-    return onSnapshot(
+      return onSnapshot(
       docRef,
       (snapshot) => {
-        if (snapshot.exists() && Array.isArray(snapshot.data()?.payload)) {
-          const remoteClubs = snapshot.data().payload as ClubItem[];
-          const hydrated = hydrateClubAvatars(remoteClubs);
-          if (typeof window !== "undefined") {
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(remoteClubs));
-            window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: hydrated }));
+        // onSnapshot reports a successful empty/missing document as well.
+        // Treat it as the authoritative empty roster.
+        const payload = snapshot.exists() ? snapshot.data()?.payload : undefined;
+        const remoteClubs = Array.isArray(payload) ? payload as ClubItem[] : [];
+        const hydrated = hydrateClubAvatars(remoteClubs);
+        if (typeof window !== "undefined") {
+          try {
+            safeStorageSet(LOCAL_STORAGE_KEY, remoteClubs);
+          } catch (storageError) {
+            console.warn("Could not cache live Firestore clubs snapshot:", storageError);
           }
-          callback(hydrated);
+          window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: hydrated }));
         }
+        callback(hydrated);
       },
       (error) => {
         console.warn("Firestore clubs subscription notice:", error);

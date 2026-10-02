@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { Calendar, Clock, MapPin, Users, Layers, Sparkles, Share2, Check } from "lucide-react";
 import { EventItem } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -10,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toastStore";
 import { useSocialShare } from "@/context/SocialShareContext";
 import { isRegistrationDeadlinePassed, getEventEffectiveStatus } from "@/lib/eventsStore";
+import { ResilientImage } from "@/components/ui/ResilientImage";
 
 interface EventCardProps {
   event: EventItem;
@@ -47,7 +47,6 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
     ? "Registration Closed"
     : effectiveStatus;
 
-  const eventImage = event.cardImage || event.poster || DEFAULT_EVENT_IMAGE;
   const [copied, setCopied] = useState(false);
   const { openShare } = useSocialShare();
 
@@ -82,14 +81,16 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
         
         {/* Poster / Card Image */}
         <div className="relative lg:w-3/5 h-64 sm:h-80 lg:h-auto overflow-hidden">
-          <Image
-            src={eventImage}
+          <ResilientImage
+            src={event.cardImage}
+            backupUrl={event.poster || DEFAULT_EVENT_IMAGE}
             alt={event.name || "Event Image"}
             fill
             priority={featuredLayout}
             sizes="(max-width: 1024px) 100vw, 60vw"
-            unoptimized={true}
             className="object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+            initials={event.name.slice(0, 2).toUpperCase()}
+            fallbackClassName="bg-gradient-to-br from-[#17458F] via-[#0E2F66] to-slate-900 text-white text-2xl"
           />
           <div className="absolute inset-0 bg-gradient-to-t lg:bg-gradient-to-r from-black/60 via-transparent to-transparent" />
 
@@ -229,13 +230,15 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
       
       {/* Top Image Container */}
       <div className="relative h-48 w-full overflow-hidden">
-        <Image
-          src={eventImage}
+        <ResilientImage
+          src={event.cardImage}
+          backupUrl={event.poster || DEFAULT_EVENT_IMAGE}
           alt={event.name || "Event Image"}
           fill
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-          unoptimized={true}
           className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+          initials={event.name.slice(0, 2).toUpperCase()}
+          fallbackClassName="bg-gradient-to-br from-[#17458F] via-[#0E2F66] to-slate-900 text-white text-xl"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
         

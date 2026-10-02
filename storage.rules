@@ -24,9 +24,11 @@ service firebase.storage {
     function isAdmin() {
       return isHardcodedAdmin() || (
         isAuthenticated() && (
-          firestore.exists(/databases/(default)/documents/admins/$(request.auth.token.email)) ||
+          (firestore.exists(/databases/(default)/documents/admins/$(request.auth.token.email)) &&
+           firestore.get(/databases/(default)/documents/admins/$(request.auth.token.email)).data.active != false) ||
           (firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
-           firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'COUNCIL_ADMIN')
+           firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'COUNCIL_ADMIN' &&
+           firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.active != false)
         )
       );
     }
@@ -39,7 +41,7 @@ service firebase.storage {
                    && request.resource.size < 15 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
       // Allow authenticated users (restricted to admin console workflows) to delete unlinked assets
-      allow delete: if isAuthenticated();
+      allow delete: if isAdmin();
     }
   }
 }

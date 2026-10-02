@@ -16,6 +16,7 @@ import {
 import { db } from "./config";
 import { UserProfile } from "@/types/auth";
 import { EventItem } from "@/types";
+import { safeStorageSet } from "@/lib/safeStorage";
 
 export interface StudentRegistrationRecord {
   id: string; // Accreditation Registration ID (e.g. SRC-PRA-8291)
@@ -265,22 +266,30 @@ export async function deleteUserProfileFromFirestore(uid: string): Promise<boole
  * Fetch all registered student users from Firestore
  */
 export async function getAllUsersFromFirestore(): Promise<UserProfile[]> {
-  try {
-    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+  if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    try {
       const usersRef = collection(db, USERS_COLLECTION);
       const snapshot = await getDocs(usersRef);
-      if (!snapshot.empty) {
-        return snapshot.docs.map((d) => ({ uid: d.id, ...d.data() } as UserProfile));
-      }
+
+      // An empty successful query is an authoritative empty user dataset. It
+      // must not fall through to stale localStorage and resurrect deletions.
+      return snapshot.docs.map((d) => ({ uid: d.id, ...d.data() } as UserProfile));
+    } catch (error) {
+      console.warn("Could not fetch users from Firestore", error);
     }
-  } catch (error) {
-    console.warn("Could not fetch users from Firestore", error);
   }
 
-  try {
-    const local = localStorage.getItem("src_registered_users");
-    if (local) return JSON.parse(local);
-  } catch {}
+  // No configured Firestore or an actual read/offline failure: local cache is
+  // a best-effort fallback for offline use only.
+  if (typeof window !== "undefined") {
+    try {
+      const local = localStorage.getItem("src_registered_users");
+      if (local) {
+        const parsed = JSON.parse(local);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+  }
   return [];
 }
 
@@ -368,7 +377,7 @@ export async function saveRegistrationToFirestore(
       registeredAt: cleanData.registeredAt || nowIso,
       paidAt: cleanData.paidAt || (cleanData.amountPaid && cleanData.amountPaid > 0 ? nowIso : undefined),
     };
-    localStorage.setItem("src_local_registrations", JSON.stringify([localRecord, ...existing]));
+    safeStorageSet("src_local_registrations", [localRecord, ...existing]);
   } catch (e) {
     console.warn("LocalStorage save warning", e);
   }
@@ -497,7 +506,7 @@ export async function checkInStudentPass(id: string): Promise<boolean> {
     const updated = local.map((r: StudentRegistrationRecord) => 
       r.id === id ? { ...r, status: "CHECKED_IN", checkInTimestamp: new Date().toISOString() } : r
     );
-    localStorage.setItem("src_local_registrations", JSON.stringify(updated));
+    safeStorageSet("src_local_registrations", updated);
     return true;
   } catch (error) {
     console.error("Failed to check in student pass", error);
@@ -556,26 +565,28 @@ export function isHubRecord(r: any): boolean {
  * Fetch all registrations from Firestore (strictly excluding hub submissions & poll ballots)
  */
 export async function getAllRegistrationsFromFirestore(): Promise<StudentRegistrationRecord[]> {
-  try {
-    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+  if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    try {
       const colRef = collection(db, REGISTRATIONS_COLLECTION);
       const snapshot = await getDocs(colRef);
-      if (!snapshot.empty) {
-        return snapshot.docs
-          .filter((d) => !isHubRecord({ id: d.id, ...d.data() }) && !isTestPassRecord({ id: d.id, ...d.data() }))
-          .map((d) => ({ id: d.id, ...d.data() } as StudentRegistrationRecord));
-      }
+      // Preserve the successful [] result; local registrations are only an
+      // offline/error fallback and must never resurrect deleted passes.
+      return snapshot.docs
+        .filter((d) => !isHubRecord({ id: d.id, ...d.data() }) && !isTestPassRecord({ id: d.id, ...d.data() }))
+        .map((d) => ({ id: d.id, ...d.data() } as StudentRegistrationRecord));
+    } catch (error) {
+      console.warn("Could not fetch registrations from Firestore", error);
     }
-  } catch (error) {
-    console.warn("Could not fetch registrations from Firestore", error);
   }
 
-  try {
-    const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
-    if (Array.isArray(local)) {
-      return local.filter((r: any) => !isHubRecord(r) && !isTestPassRecord(r));
-    }
-  } catch {}
+  if (typeof window !== "undefined") {
+    try {
+      const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+      if (Array.isArray(local)) {
+        return local.filter((r: any) => !isHubRecord(r) && !isTestPassRecord(r));
+      }
+    } catch {}
+  }
   return [];
 }
 
@@ -683,7 +694,7 @@ export async function cancelRegistrationInFirestore(
             }
           : r
       );
-      localStorage.setItem("src_local_registrations", JSON.stringify(updated));
+      safeStorageSet("src_local_registrations", updated);
       window.dispatchEvent(new CustomEvent("src_registrations_updated", { detail: updated }));
     } catch (e) {
       console.warn("Local storage update warning on cancel registration:", e);
@@ -710,7 +721,7 @@ export async function deleteRegistrationFromFirestore(id: string): Promise<boole
     try {
       const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
       const updated = local.filter((r: any) => r.id !== id);
-      localStorage.setItem("src_local_registrations", JSON.stringify(updated));
+      safeStorageSet("src_local_registrations", updated);
       window.dispatchEvent(new CustomEvent("src_registrations_updated", { detail: updated }));
     } catch {}
   }
@@ -766,7 +777,7 @@ export async function deleteRegistrationsForEvent(
         return !matchesEvent;
       });
 
-      localStorage.setItem("src_local_registrations", JSON.stringify(updated));
+      safeStorageSet("src_local_registrations", updated);
       window.dispatchEvent(new CustomEvent("src_registrations_updated", { detail: updated }));
     } catch {}
   }
@@ -885,7 +896,7 @@ export async function cancelEventRegistrations(
         return r;
       });
 
-      localStorage.setItem("src_local_registrations", JSON.stringify(updated));
+      safeStorageSet("src_local_registrations", updated);
       window.dispatchEvent(new CustomEvent("src_registrations_updated", { detail: updated }));
     } catch (e) {
       console.warn("Local storage update warning during bulk event cancellation:", e);
@@ -954,7 +965,7 @@ export async function updateRegistrationRefundInFirestore(
             }
           : r
       );
-      localStorage.setItem("src_local_registrations", JSON.stringify(updated));
+      safeStorageSet("src_local_registrations", updated);
       window.dispatchEvent(new CustomEvent("src_registrations_updated", { detail: updated }));
     } catch (e) {
       console.warn("Local storage refund update error:", e);
@@ -1007,7 +1018,7 @@ export async function updateRegistrationPaymentStatus(
             }
           : r
       );
-      localStorage.setItem("src_local_registrations", JSON.stringify(updated));
+      safeStorageSet("src_local_registrations", updated);
       window.dispatchEvent(new CustomEvent("src_registrations_updated", { detail: updated }));
     } catch (e) {
       console.warn("Local storage update error for payment status:", e);
@@ -1166,9 +1177,12 @@ export function getEventDocId(event: Partial<EventItem> | string): string {
 }
 
 /**
- * Save an individual event directly to its own document (1 Event = 1 Document).
- * Dedicated document site_content/event_{docId} guarantees 1MB headroom for all 3 images
- * and is universally permitted by the active Firestore security rules.
+ * Save an individual event directly to its authoritative top-level document.
+ *
+ * `/events/{eventId}` is the only active event data store.  The former
+ * `site_content/event_{eventId}` and `site_content/events` writes are purposely
+ * gone: dual-writing those legacy locations allowed stale catalog data to win
+ * during a later read and made deletion resurrection possible.
  */
 export async function saveEventToFirestore(event: EventItem): Promise<void> {
   try {
@@ -1192,21 +1206,11 @@ export async function saveEventToFirestore(event: EventItem): Promise<void> {
         throw new Error(errorMsg);
       }
 
-      // 1 Event = 1 Document: Write to dedicated document site_content/event_{docId}
-      // This is immediately permitted by match /site_content/{docId} in deployed Firestore rules
-      const siteDocRef = doc(db, SITE_CONTENT_COLLECTION, `event_${docId}`);
-      await setDoc(siteDocRef, { payload: sanitized, updatedAt: serverTimestamp() });
-
-      // Dual-write to top-level collection /events/{docId} if rules allow it
-      try {
-        const colDocRef = doc(db, EVENTS_COLLECTION, docId);
-        await setDoc(colDocRef, { ...sanitized, updatedAt: serverTimestamp() }, { merge: true });
-      } catch (colErr: any) {
-        // Silently ignore permission-denied on top-level collection until rules are deployed via console
-        if (colErr?.code !== "permission-denied" && !colErr?.message?.includes("Missing or insufficient permissions")) {
-          console.warn(`[Firestore] Top-level /events/${docId} write notice:`, colErr);
-        }
-      }
+      // 1 Event = 1 Document: the top-level event document is authoritative.
+      // Do not swallow permission errors here; callers enqueue the complete
+      // event payload and surface an expired-admin-session error when needed.
+      const eventDocRef = doc(db, EVENTS_COLLECTION, docId);
+      await setDoc(eventDocRef, { ...sanitized, updatedAt: serverTimestamp() }, { merge: true });
     }
   } catch (error: any) {
     console.error(`Firestore saveEventToFirestore error [${event.id || event.slug}]:`, error?.code || "", error?.message || error);
@@ -1239,7 +1243,18 @@ export async function deleteEventPermanentlyFromFirestore(
         targetKeys.add(getEventDocId(cleanSlug));
       }
 
-      // 1. Delete all individual documents in /events collection
+      // Record the tombstone before deleting the document. This closes the
+      // delete/write race: a stale client or offline queue can no longer make
+      // the just-deleted event visible if the delete acknowledgement is late.
+      const tombstoneRef = doc(db, SITE_CONTENT_COLLECTION, "deleted_events_tombstones");
+      const tombstoneData: Record<string, any> = {
+        lastPurgedAt: serverTimestamp(),
+      };
+      if (cleanId) tombstoneData[cleanId.toLowerCase()] = true;
+      if (cleanSlug) tombstoneData[cleanSlug.toLowerCase()] = true;
+      await setDoc(tombstoneRef, tombstoneData, { merge: true });
+
+      // Delete all individual documents in the authoritative /events collection.
       for (const k of targetKeys) {
         try {
           await deleteDoc(doc(db, EVENTS_COLLECTION, k));
@@ -1265,76 +1280,18 @@ export async function deleteEventPermanentlyFromFirestore(
         console.warn("Notice querying /events for deletion:", err);
       }
 
-      // 2. Delete all dedicated documents in /site_content (event_{id}, event_{slug})
-      for (const k of targetKeys) {
-        try {
-          await deleteDoc(doc(db, SITE_CONTENT_COLLECTION, `event_${k}`));
-        } catch {}
-      }
+      // Legacy site_content event documents are intentionally not read or
+      // written anymore. They can be cleaned by a separately authorized
+      // migration after all clients have moved to /events.
 
-      // Also query /site_content to catch any doc with prefix event_ matching id or slug
-      try {
-        const siteCol = collection(db, SITE_CONTENT_COLLECTION);
-        const snap = await getDocs(siteCol);
-        for (const d of snap.docs) {
-          if (!d.id.startsWith("event_")) continue;
-          const cleanDocId = d.id.replace(/^event_/, "");
-          if (
-            targetKeys.has(cleanDocId) ||
-            (cleanId && cleanDocId.toLowerCase() === cleanId.toLowerCase()) ||
-            (cleanSlug && cleanDocId.toLowerCase() === cleanSlug.toLowerCase())
-          ) {
-            await deleteDoc(doc(db, SITE_CONTENT_COLLECTION, d.id));
-          }
-        }
-      } catch (err) {
-        console.warn("Notice querying /site_content for deletion:", err);
-      }
-
-      // 3. Purge from legacy / catalog document in site_content/events
-      try {
-        const catalogRef = doc(db, SITE_CONTENT_COLLECTION, "events");
-        const catSnap = await getDoc(catalogRef);
-        if (catSnap.exists()) {
-          const payload = catSnap.data()?.payload;
-          if (Array.isArray(payload)) {
-            const cleaned = payload.filter((e: any) => {
-              const eId = (e?.id || "").trim();
-              const eSlug = (e?.slug || "").trim();
-              const eName = (e?.name || "").trim().toLowerCase();
-              if (cleanId && (eId === cleanId || eSlug === cleanId)) return false;
-              if (cleanSlug && (eId === cleanSlug || eSlug === cleanSlug)) return false;
-              if (cleanName && eName === cleanName.toLowerCase()) return false;
-              return true;
-            });
-            await setDoc(catalogRef, { payload: cleaned, updatedAt: serverTimestamp() }, { merge: true });
-          }
-        }
-      } catch (err) {
-        console.warn("Notice updating site_content/events catalog on deletion:", err);
-      }
-
-      // 4. Record in /site_content/deleted_events_tombstones so all clients and queries reject this event forever
-      try {
-        const tombstoneRef = doc(db, SITE_CONTENT_COLLECTION, "deleted_events_tombstones");
-        const updateData: Record<string, any> = {
-          lastPurgedAt: serverTimestamp(),
-        };
-        if (cleanId) updateData[cleanId] = true;
-        if (cleanSlug) updateData[cleanSlug] = true;
-        await setDoc(tombstoneRef, updateData, { merge: true });
-      } catch (err) {
-        console.warn("Notice recording event tombstone:", err);
-      }
-
-      // 5. Cascade-delete all registrations & passes
+      // Cascade-delete all registrations & passes
       try {
         await deleteRegistrationsForEvent(cleanId, cleanSlug, cleanName);
       } catch (err) {
         console.warn("Notice cascade-deleting registrations:", err);
       }
 
-      // 6. Cascade-delete active checkout sessions
+      // Cascade-delete active checkout sessions
       try {
         await deleteActiveCheckoutSessionsForEvent(cleanId, cleanSlug, cleanName);
       } catch (err) {
@@ -1356,11 +1313,9 @@ export async function deleteEventFromFirestore(eventIdOrSlug: string, eventSlug?
 
 /**
  * Fetch all individual event documents from Firestore (1 event = 1 document)
- * Queries all three potential Firestore event stores in parallel:
- * 1. Top-level /events collection (Directive #13: 1 Event = 1 Document)
- * 2. Dedicated individual documents site_content/event_{id} written by saveEventToFirestore
- * 3. Legacy events catalog in site_content/events
- * Filters out all events marked in deleted_events_tombstones to guarantee zero resurrection.
+ * Queries only the authoritative /events collection plus the tombstone
+ * document. Legacy site_content event documents/catalogs are not read.
+ * Filtering tombstones here guarantees zero resurrection from stale snapshots.
  */
 export async function getAllEventsFromFirestore(): Promise<EventItem[]> {
   try {
@@ -1384,7 +1339,7 @@ export async function getAllEventsFromFirestore(): Promise<EventItem[]> {
         }
       }
 
-      // 2. Process top-level /events collection (Directive #13: authoritative primary)
+      // 2. Process top-level /events collection (authoritative primary)
       if (eventsSnapResult.status === "fulfilled") {
         eventsSnapResult.value.docs.forEach((d) => {
           const docIdLower = d.id.toLowerCase().trim();
@@ -1405,31 +1360,6 @@ export async function getAllEventsFromFirestore(): Promise<EventItem[]> {
         });
       }
 
-      // 3. Fallback: If /events collection was empty (e.g. legacy installation), read site_content/events doc
-      if (mergedMap.size === 0) {
-        try {
-          const legacySnap = await getDoc(doc(db, SITE_CONTENT_COLLECTION, "events"));
-          if (legacySnap.exists()) {
-            const rawData = legacySnap.data();
-            const catalog = rawData?.payload;
-            if (Array.isArray(catalog)) {
-              catalog.forEach((evt) => {
-                if (evt && typeof evt === "object" && typeof evt.name === "string" && evt.name.trim().length > 0) {
-                  const idKey = (evt.id || "").toLowerCase().trim();
-                  const slugKey = (evt.slug || "").toLowerCase().trim();
-                  if (!tombstones.has(idKey) && !tombstones.has(slugKey)) {
-                    const key = evt.id || evt.slug || "";
-                    if (key) mergedMap.set(key, evt);
-                  }
-                }
-              });
-            }
-          }
-        } catch (e) {
-          console.warn("Legacy catalog fallback check skipped:", e);
-        }
-      }
-
       return Array.from(mergedMap.values());
     }
   } catch (error) {
@@ -1446,31 +1376,38 @@ export async function getEventFromFirestore(eventIdOrSlug: string): Promise<Even
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY && eventIdOrSlug) {
       const docId = getEventDocId(eventIdOrSlug);
 
-      // 1. Check dedicated document site_content/event_{docId} (holds full 3 images)
-      try {
-        const siteDocRef = doc(db, SITE_CONTENT_COLLECTION, `event_${docId}`);
-        const snap = await getDoc(siteDocRef);
-        if (snap.exists() && snap.data()?.payload) {
-          return { id: snap.id.replace(/^event_/, ""), ...snap.data().payload } as EventItem;
-        }
-      } catch {}
-
-      // 2. Check /events/{docId} collection
+      // Check the authoritative /events/{docId} document.
       try {
         const docRef = doc(db, EVENTS_COLLECTION, docId);
         const snap = await getDoc(docRef);
         if (snap.exists()) {
-          return { id: snap.id, ...snap.data() } as EventItem;
+          const data = snap.data();
+          const tombstones = await getDoc(doc(db, SITE_CONTENT_COLLECTION, "deleted_events_tombstones"));
+          const tombstoneData = tombstones.exists() ? tombstones.data() : undefined;
+          const idKey = (data.id || snap.id).toLowerCase().trim();
+          const slugKey = (data.slug || "").toLowerCase().trim();
+          if (tombstoneData?.[idKey] === true || (slugKey && tombstoneData?.[slugKey] === true)) {
+            return null;
+          }
+          return { id: snap.id, ...data } as EventItem;
         }
       } catch {}
 
-      // 3. Lookup by slug in /events collection
+      // Lookup by slug in the same authoritative /events collection.
       try {
         const slugQuery = query(collection(db, EVENTS_COLLECTION), where("slug", "==", eventIdOrSlug));
         const slugSnap = await getDocs(slugQuery);
         if (!slugSnap.empty) {
           const firstDoc = slugSnap.docs[0];
-          return { id: firstDoc.id, ...firstDoc.data() } as EventItem;
+          const data = firstDoc.data();
+          const tombstones = await getDoc(doc(db, SITE_CONTENT_COLLECTION, "deleted_events_tombstones"));
+          const tombstoneData = tombstones.exists() ? tombstones.data() : undefined;
+          const idKey = (data.id || firstDoc.id).toLowerCase().trim();
+          const slugKey = (data.slug || "").toLowerCase().trim();
+          if (tombstoneData?.[idKey] === true || (slugKey && tombstoneData?.[slugKey] === true)) {
+            return null;
+          }
+          return { id: firstDoc.id, ...data } as EventItem;
         }
       } catch {}
     }

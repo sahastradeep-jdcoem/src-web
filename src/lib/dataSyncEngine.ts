@@ -489,6 +489,15 @@ export async function processQueue(): Promise<boolean> {
         continue;
       }
 
+      // Phase 3: event data is top-level /events/{id} only. Drop any queue
+      // entries created by the retired site_content event catalog instead of
+      // allowing an offline browser to write legacy data back after migration.
+      if (item.docId === "events" || item.docId === "site_content_events") {
+        const latestQueue = getPendingQueue();
+        savePendingQueue(latestQueue.filter((q) => q.id !== item.id && q.docId !== item.docId));
+        continue;
+      }
+
       try {
         // GUARD 2: Version check — for non-event site_content docs, verify the
         // Firestore document hasn't been updated AFTER this queue item was created.
@@ -566,7 +575,7 @@ export function purgePendingQueueFor(docIds: string[]): void {
       return true;
     });
 
-    // Also clean array payloads in events / site_content_events queue items
+    // Also clean any retired event-catalog queue items and event payloads.
     updated.forEach((item) => {
       if ((item.docId === "events" || item.docId === "site_content_events") && Array.isArray(item.payload)) {
         item.payload = item.payload.filter((p: any) => {
@@ -655,7 +664,7 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
   const baseIdMap = new Map<string, T>();
   const slugMap = new Map<string, T>();
   const btIdMap = new Map<string, T>();
-  const nameMap = new Map<string, T>();
+  const emailMap = new Map<string, T>();
 
   localList.forEach((item) => {
     if (!item || typeof item !== "object") return;
@@ -676,11 +685,12 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
         btIdMap.set(b, item);
       }
     }
-    if ((item as any).name && !isGenericPlaceholder((item as any).name)) {
-      const n = (item as any).name.toLowerCase().trim().replace(/[^a-z0-9]/g, "");
-      if (n.length > 2) {
-        nameMap.set(n, item);
-      }
+    const email = typeof (item as any).email === "string"
+      ? (item as any).email.trim().toLowerCase()
+      : "";
+    const emailVerified = (item as any).emailVerified !== false && (item as any).isEmailVerified !== false;
+    if (emailVerified && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && !email.includes("placeholder")) {
+      emailMap.set(email, item);
     }
   });
 
@@ -716,24 +726,14 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
       }
     }
 
-    // 4. Non-placeholder human name match
-    if ((remoteItem as any).name && !isGenericPlaceholder((remoteItem as any).name)) {
-      const n = (remoteItem as any).name.toLowerCase().trim().replace(/[^a-z0-9]/g, "");
-      if (n.length > 2 && nameMap.has(n)) {
-        return nameMap.get(n);
-      }
-    }
-
-    // 5. Role and club match for leaders
-    if ((remoteItem as any).role && ((remoteItem as any).clubId || (remoteItem as any).clubSlug)) {
-      const rRole = (remoteItem as any).role.toLowerCase().trim();
-      const rClub = ((remoteItem as any).clubId || (remoteItem as any).clubSlug || "").toLowerCase().trim();
-      const match = localList.find((loc: any) => {
-        const lClub = (loc.clubId || loc.clubSlug || "").toLowerCase().trim();
-        const lRole = (loc.role || "").toLowerCase().trim();
-        return lClub === rClub && lRole === rRole;
-      });
-      if (match) return match;
+    // 4. Verified email match. Names are intentionally not a fallback:
+    // same-name students must remain separate roster records.
+    const email = typeof (remoteItem as any).email === "string"
+      ? (remoteItem as any).email.trim().toLowerCase()
+      : "";
+    const emailVerified = (remoteItem as any).emailVerified !== false && (remoteItem as any).isEmailVerified !== false;
+    if (emailVerified && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && emailMap.has(email)) {
+      return emailMap.get(email);
     }
 
     return undefined;

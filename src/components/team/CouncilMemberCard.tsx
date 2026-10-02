@@ -1,10 +1,10 @@
 import React from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { Mail, Linkedin, ArrowRight } from "lucide-react";
 import { TeamMember } from "@/types";
 import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { isHardcodedBio } from "@/lib/councilStore";
+import { ResilientImage } from "@/components/ui/ResilientImage";
 
 interface CouncilMemberCardProps {
   member: TeamMember;
@@ -12,35 +12,27 @@ interface CouncilMemberCardProps {
 }
 
 export function CouncilMemberCard({ member, categoryLabel = "ADMIN" }: CouncilMemberCardProps) {
-  const [imgError, setImgError] = React.useState(false);
-
-  React.useEffect(() => {
-    setImgError(false);
-  }, [member.avatar]);
-
   const hasBio = Boolean(member.bio && member.bio.trim().length > 0 && !isHardcodedBio(member.bio));
   const cleanEmail = member.email?.trim();
   const cleanLinkedin = member.linkedin?.trim();
   const hasEmail = Boolean(cleanEmail && cleanEmail !== "undefined" && cleanEmail !== "null");
   const hasLinkedin = Boolean(cleanLinkedin && cleanLinkedin !== "undefined" && cleanLinkedin !== "null");
 
-  const effectiveAvatar = !imgError && member.avatar?.trim() ? member.avatar.trim() : "";
-
   return (
     <div className="group rounded-2xl bg-white border border-slate-200 hover:border-[#17458F]/30 hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col justify-between shadow-xs font-sans">
       
       {/* Top Banner / Avatar */}
       <div className="relative h-44 sm:h-72 w-full overflow-hidden bg-slate-100">
-        {effectiveAvatar ? (
+        {member.avatar?.trim() ? (
           <>
-            <Image
-              src={effectiveAvatar}
+            <ResilientImage
+              src={member.avatar}
               alt={member.role}
               fill
-              unoptimized={true}
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
               className="object-cover object-top transition-transform duration-500 group-hover:scale-[1.02]"
-              onError={() => setImgError(true)}
+              initials={member.name.split(" ").map((n) => n[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "SRC"}
+              fallbackClassName="bg-gradient-to-br from-[#17458F]/10 via-slate-100 to-amber-500/10 text-[#17458F] text-lg sm:text-2xl"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
           </>

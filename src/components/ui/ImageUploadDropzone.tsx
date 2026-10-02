@@ -40,8 +40,8 @@ export function ImageUploadDropzone({
 }: ImageUploadDropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "cloud_synced" | "upload_failed">(
-    previewUrl && previewUrl.startsWith("http") ? "cloud_synced" : previewUrl && previewUrl.startsWith("data:") ? "upload_failed" : "idle"
+  const [uploadStatus, setUploadStatus] = useState<"idle" | "local_ready" | "uploading" | "cloud_uploaded" | "failed">(
+    previewUrl && previewUrl.startsWith("http") ? "cloud_uploaded" : previewUrl && previewUrl.startsWith("data:") ? "local_ready" : "idle"
   );
   const [compressionStats, setCompressionStats] = useState<CompressionResult | null>(null);
   const [preview, setPreview] = useState<string>(previewUrl || "");
@@ -66,9 +66,9 @@ export function ImageUploadDropzone({
       lastCroppedDataUrlRef.current = null;
       setUploadStatus("idle");
     } else if (previewUrl.startsWith("http")) {
-      setUploadStatus("cloud_synced");
+      setUploadStatus("cloud_uploaded");
     } else if (previewUrl.startsWith("data:")) {
-      setUploadStatus("upload_failed");
+      setUploadStatus("local_ready");
     }
   }, [previewUrl]);
 
@@ -150,18 +150,18 @@ export function ImageUploadDropzone({
             sessionUploadedCloudUrlsRef.current = [cloudUrl];
             setPreview(cloudUrl);
             setManualUrl(cloudUrl);
-            setUploadStatus("cloud_synced");
+             setUploadStatus("cloud_uploaded");
             if (onUrlChange) onUrlChange(cloudUrl);
           } else {
-            setUploadStatus("cloud_synced"); // Local optimized WebP fallback is safe
+            setUploadStatus("local_ready"); // The optimized local preview is not cloud-backed.
           }
         })
         .catch(() => {
-          setUploadStatus("cloud_synced");
+          setUploadStatus("failed");
         });
     } catch (err: any) {
       console.error("Image direct processing error", err);
-      setUploadStatus("upload_failed");
+      setUploadStatus("failed");
       setError(err?.message || "Failed to process image.");
     } finally {
       setIsProcessing(false);
@@ -254,18 +254,18 @@ export function ImageUploadDropzone({
             sessionUploadedCloudUrlsRef.current = [cloudUrl];
             setPreview(cloudUrl);
             setManualUrl(cloudUrl);
-            setUploadStatus("cloud_synced");
+             setUploadStatus("cloud_uploaded");
             if (onUrlChange) onUrlChange(cloudUrl);
           } else {
-            setUploadStatus("cloud_synced");
+            setUploadStatus("local_ready");
           }
         })
         .catch(() => {
-          setUploadStatus("cloud_synced");
+          setUploadStatus("failed");
         });
     } catch (err: any) {
       console.error("Image crop and storage error", err);
-      setUploadStatus("upload_failed");
+      setUploadStatus("failed");
       setError(err?.message || "Failed to save cropped image.");
     } finally {
       setIsProcessing(false);
@@ -295,14 +295,14 @@ export function ImageUploadDropzone({
         if (cloudUrl && cloudUrl.startsWith("http")) {
           setPreview(cloudUrl);
           setManualUrl(cloudUrl);
-          setUploadStatus("cloud_synced");
+           setUploadStatus("cloud_uploaded");
           if (onUrlChange) onUrlChange(cloudUrl);
         } else {
-          setUploadStatus("cloud_synced");
+          setUploadStatus("local_ready");
           if (onUrlChange) onUrlChange(targetDataUrl);
         }
       } catch (err: any) {
-        setUploadStatus("cloud_synced");
+          setUploadStatus("failed");
       } finally {
         setIsProcessing(false);
         onUploadStateChange?.(false);
@@ -351,6 +351,15 @@ export function ImageUploadDropzone({
   const handleManualUrlSubmit = (urlVal: string) => {
     setManualUrl(urlVal);
     setPreview(urlVal);
+    if (!urlVal) {
+      setUploadStatus("idle");
+    } else if (urlVal.startsWith("http")) {
+      setUploadStatus("cloud_uploaded");
+    } else if (urlVal.startsWith("data:")) {
+      setUploadStatus("local_ready");
+    } else {
+      setUploadStatus("failed");
+    }
     if (onUrlChange) {
       onUrlChange(urlVal);
     }
@@ -519,10 +528,15 @@ export function ImageUploadDropzone({
                     <RefreshCw className="w-3 h-3 animate-spin text-amber-400" />
                     <span>Uploading to Cloud...</span>
                   </div>
-                ) : uploadStatus === "cloud_synced" || (preview && preview.startsWith("http")) || (preview && preview.startsWith("data:image/")) ? (
+                ) : uploadStatus === "cloud_uploaded" ? (
                   <div className="px-2.5 py-1 rounded-full bg-slate-900/90 backdrop-blur-md text-emerald-300 text-[10px] font-bold flex items-center gap-1.5 border border-emerald-400/30 shadow-md">
                     <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                    <span>{preview && preview.startsWith("http") ? "Verified Cloud Storage" : "Verified (High-Res WebP)"}</span>
+                    <span>Verified Cloud Storage</span>
+                  </div>
+                ) : uploadStatus === "local_ready" ? (
+                  <div className="px-2.5 py-1 rounded-full bg-slate-900/90 backdrop-blur-md text-blue-300 text-[10px] font-bold flex items-center gap-1.5 border border-blue-400/30 shadow-md">
+                    <CheckCircle2 className="w-3 h-3 text-blue-400" />
+                    <span>Ready (Local Draft)</span>
                   </div>
                 ) : (
                   <div className="flex items-center gap-1.5">
@@ -571,7 +585,7 @@ export function ImageUploadDropzone({
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
-          {(uploadStatus === "upload_failed" || localDataUrlRef.current) && (
+          {(uploadStatus === "failed" || localDataUrlRef.current) && (
             <button
               type="button"
               onClick={handleRetryUpload}

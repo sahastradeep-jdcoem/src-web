@@ -101,36 +101,15 @@ export interface CashfreeRefundResponse {
 }
 
 /**
- * Resolve server credentials from environment variables with Firestore document fallback
+ * Resolve server credentials from server environment only.
+ * Never read payment credentials from client state or Firestore.
  */
 export async function getServerCashfreeCredentials(): Promise<CashfreeCredentials> {
-  let appId =
-    process.env.CASHFREE_APP_ID ||
-    process.env.NEXT_PUBLIC_CASHFREE_APP_ID ||
-    "";
+  const appId = process.env.CASHFREE_APP_ID || "";
+  const secretKey = process.env.CASHFREE_SECRET_KEY || "";
 
-  let secretKey =
-    process.env.CASHFREE_SECRET_KEY ||
-    "";
-
-  let environment =
-    ((process.env.CASHFREE_ENVIRONMENT ||
-      process.env.NEXT_PUBLIC_CASHFREE_ENV) as "TEST" | "PROD") || "TEST";
-
-  // Fallback to Firestore payment_config document if secretKey or appId is missing
-  if (!secretKey || !appId) {
-    try {
-      const { getSiteContentFromFirestore } = await import("./firebase/firestore");
-      const remote = await getSiteContentFromFirestore<any>("payment_config");
-      if (remote) {
-        if (!appId && remote.cashfreeAppId) appId = remote.cashfreeAppId;
-        if (!secretKey && remote.cashfreeSecretKey) secretKey = remote.cashfreeSecretKey;
-        if (remote.cashfreeEnvironment) environment = remote.cashfreeEnvironment;
-      }
-    } catch (e) {
-      console.warn("Could not load Cashfree credentials from Firestore:", e);
-    }
-  }
+  const environment =
+    (process.env.CASHFREE_ENVIRONMENT as "TEST" | "PROD") || "TEST";
 
   return { appId: appId.trim(), secretKey: secretKey.trim(), environment };
 }

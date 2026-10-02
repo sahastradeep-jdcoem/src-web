@@ -7,7 +7,6 @@ import {
   getAllEventsFromFirestore,
   subscribeToEventsFromFirestore,
   getEventDocId,
-  saveSiteContentToFirestore,
   cleanUndefined
 } from "./firebase/firestore";
 import { 
@@ -17,9 +16,9 @@ import {
   markLocalWrite,
   markLocalDelete,
   getLastLocalWriteTime,
-  compactEventDataset,
   purgePendingQueueFor
 } from "./dataSyncEngine";
+import { safeStorageSet } from "@/lib/safeStorage";
 
 const EVENTS_STORAGE_KEY = "src_events";
 
@@ -869,7 +868,7 @@ if (typeof window !== "undefined") {
 function safeWriteEventsToLocalStorage(events: EventItem[]): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(events));
+    safeStorageSet(EVENTS_STORAGE_KEY, events);
   } catch (quotaErr) {
     console.warn("localStorage quota exceeded for events, reclaiming cache space:", quotaErr);
     try {
@@ -879,7 +878,7 @@ function safeWriteEventsToLocalStorage(events: EventItem[]): void {
         try { localStorage.removeItem(k); } catch {}
       });
       // Attempt write again with full event fidelity
-      localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(events));
+      safeStorageSet(EVENTS_STORAGE_KEY, events);
     } catch (secondErr) {
       // Directive #4 (No Silent Data Stripping): NEVER overwrite images with empty strings ("").
       // In-memory events and individual Firestore documents (/events/{id}) remain the authoritative source of truth.
@@ -943,13 +942,6 @@ export async function saveStoredEvent(event: EventItem): Promise<void> {
     enqueueCloudWrite(`event_${docId}`, sanitized, `Event: ${sanitized.name}`);
   }
 
-  // Background update events catalog in site_content/events without blocking
-  compactEventDataset(sorted)
-    .then((compacted) => {
-      saveSiteContentToFirestore("events", cleanUndefined(compacted)).catch(() => {});
-    })
-    .catch(() => {});
-
   if (cloudWriteError) {
     const errMsg = cloudWriteError?.message || String(cloudWriteError);
     if (errMsg.includes("permission-denied") || errMsg.includes("Missing or insufficient permissions")) {
@@ -1004,19 +996,6 @@ export async function saveStoredEvents(events: EventItem[]): Promise<void> {
       const docId = getEventDocId(d);
       await deleteEventFromFirestore(docId);
     });
-
-    // Update the lightweight events catalog in site_content/events in parallel
-    // so all browser tabs and client devices discover the new/updated events immediately.
-    // Thumbnails are compacted so the catalog stays under 500KB even with 20+ events,
-    // while each event's dedicated document stores the full-resolution assets.
-    compactEventDataset(sanitized)
-      .then((compacted) => {
-        saveSiteContentToFirestore("events", cleanUndefined(compacted)).catch((err) => {
-          console.warn("Could not sync events catalog to site_content:", err);
-          enqueueCloudWrite("site_content_events", cleanUndefined(compacted), "Events Catalog");
-        });
-      })
-      .catch(() => {});
 
     const writeResults = await Promise.allSettled(writePromises);
     await Promise.allSettled(deletePromises);
@@ -1172,5 +1151,3 @@ export function resetStoredEvents(): EventItem[] {
   saveStoredEvents(defaults);
   return defaults;
 }
-
-

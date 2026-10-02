@@ -16,6 +16,7 @@ import {
   getStoredFoundingMembers,
   getClubLeaders
 } from "./councilStore";
+import { safeStorageSet } from "@/lib/safeStorage";
 
 export const USERS_STORAGE_KEY = "src_registered_users";
 
@@ -920,20 +921,19 @@ export function getStoredUsers(): RegisteredUserRecord[] {
       const stored = localStorage.getItem(USERS_STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        // The presence of an array (including []) is meaningful. An empty
+        // array is a successful cloud snapshot cached by mergeRemoteUsers and
+        // must not be repopulated with built-in defaults.
+        if (Array.isArray(parsed)) {
           const map = new Map<string, RegisteredUserRecord>();
-          for (const u of DEFAULT_REGISTERED_USERS) {
-            if (u.email) map.set(u.email.toLowerCase(), u);
-          }
           for (const u of parsed) {
-            if (u && u.email) {
-              const key = u.email.toLowerCase();
-              const existing = map.get(key);
+            if (u && (u.uid || u.email)) {
+              const key = u.uid || u.email.toLowerCase();
               if (key === "sanskrutitidke@jdcoem.ac.in" && u.year === "2nd Year") {
                 u.year = "3rd Year";
                 u.phone = u.phone || "9075828232";
               }
-              map.set(key, { ...(existing || {}), ...u });
+              map.set(key, u);
             }
           }
           list = Array.from(map.values());
@@ -1066,16 +1066,6 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
         ),
       };
 
-      // Auto-repair in Firestore if remote user has a valid BT ID but was miscategorized as EXTERNAL_STUDENT or Other College
-      if (r.uid && isJdcoemStudent && (r.userType === "EXTERNAL_STUDENT" || r.collegeName === "Other College" || r.isCollegeStudent === false)) {
-        saveUserProfileToFirestore(r.uid, {
-          userType: "JDCOEM_STUDENT",
-          isCollegeStudent: true,
-          collegeName: "",
-          btId: cleanBtId,
-        }).catch(() => {});
-      }
-
       // If active session belongs to this user, synchronize session state
       if (typeof window !== "undefined" && isJdcoemStudent) {
         try {
@@ -1090,8 +1080,10 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
                 authUser.btId = cleanBtId || authUser.btId;
                 authUser.designationBadge = assignedBadge || authUser.designationBadge;
                 authUser.isCouncilOfficer = isOfficer;
-                localStorage.setItem("src_auth_user", JSON.stringify(authUser));
-                sessionStorage.setItem("src_auth_user", JSON.stringify(authUser));
+                try {
+                  safeStorageSet("src_auth_user", authUser);
+                  sessionStorage.setItem("src_auth_user", JSON.stringify(authUser));
+                } catch {}
                 window.dispatchEvent(new CustomEvent("src_auth_state_changed", { detail: authUser }));
               }
             }
@@ -1107,7 +1099,11 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
 
     const mergedList = Array.from(map.values()).sort(compareUsersNewestFirst);
 
-    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(mergedList));
+    try {
+      safeStorageSet(USERS_STORAGE_KEY, mergedList);
+    } catch (storageError) {
+      console.warn("Could not cache merged users", storageError);
+    }
     window.dispatchEvent(new CustomEvent("src_users_updated", { detail: mergedList }));
     return mergedList;
   } catch (e) {
@@ -1122,9 +1118,10 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
 export async function syncUsersFromFirestore(): Promise<RegisteredUserRecord[]> {
   try {
     const remote = await getAllUsersFromFirestore();
-    if (remote && remote.length > 0) {
-      return mergeRemoteUsers(remote as RegisteredUserRecord[]);
-    }
+    // getAllUsersFromFirestore returns [] for a successful empty Firestore
+    // query. Merge it too so deleted remote users cannot be resurrected from
+    // localStorage.
+    return mergeRemoteUsers(remote as RegisteredUserRecord[]);
   } catch (e) {
     console.warn("Could not sync users from Firestore", e);
   }
@@ -1224,7 +1221,7 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
     }
     updated.sort(compareUsersNewestFirst);
 
-    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
+    safeStorageSet(USERS_STORAGE_KEY, updated);
     window.dispatchEvent(new CustomEvent("src_users_updated", { detail: updated }));
 
     // Also persist to Firestore
@@ -1270,7 +1267,7 @@ export function approveFacultyUser(uid: string, adminEmail = "SRC Central Counci
   });
 
   if (typeof window !== "undefined") {
-    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
+    safeStorageSet(USERS_STORAGE_KEY, updated);
     window.dispatchEvent(new CustomEvent("src_users_updated", { detail: updated }));
     saveUserProfileToFirestore(uid, {
       role: "FACULTY",
@@ -1299,7 +1296,7 @@ export function rejectFacultyUser(uid: string): RegisteredUserRecord[] {
   });
 
   if (typeof window !== "undefined") {
-    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
+    safeStorageSet(USERS_STORAGE_KEY, updated);
     window.dispatchEvent(new CustomEvent("src_users_updated", { detail: updated }));
     saveUserProfileToFirestore(uid, {
       facultyApprovalStatus: "rejected",
@@ -1338,7 +1335,7 @@ export function markUserAsDeleted(uid: string): RegisteredUserRecord[] {
 
   if (typeof window !== "undefined") {
     try {
-      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
+      safeStorageSet(USERS_STORAGE_KEY, updated);
     } catch {}
     window.dispatchEvent(new CustomEvent("src_users_updated", { detail: updated }));
     saveUserProfileToFirestore(uid, {
@@ -1365,7 +1362,7 @@ export function purgeRegisteredUser(uid: string): RegisteredUserRecord[] {
   const updated = current.filter((u) => u.uid !== uid);
   if (typeof window !== "undefined") {
     try {
-      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
+      safeStorageSet(USERS_STORAGE_KEY, updated);
     } catch {}
     window.dispatchEvent(new CustomEvent("src_users_updated", { detail: updated }));
     // Rule 3 & 9: Instantly sync hard deletion to Cloud Firestore
@@ -1396,7 +1393,7 @@ export function reactivateUserAccount(uid: string): RegisteredUserRecord[] {
 
   if (typeof window !== "undefined") {
     try {
-      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
+      safeStorageSet(USERS_STORAGE_KEY, updated);
     } catch {}
     window.dispatchEvent(new CustomEvent("src_users_updated", { detail: updated }));
     saveUserProfileToFirestore(uid, {
@@ -1452,7 +1449,7 @@ export function changeUserRole(uid: string, newRole: "STUDENT" | "COUNCIL_ADMIN"
   const targetUser = current.find((u) => u.uid === uid);
   const updated = current.map((u) => (u.uid === uid ? { ...u, role: newRole } : u));
   if (typeof window !== "undefined") {
-    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
+    safeStorageSet(USERS_STORAGE_KEY, updated);
     window.dispatchEvent(new CustomEvent("src_users_updated", { detail: updated }));
     saveUserProfileToFirestore(uid, { role: newRole });
 
@@ -1476,7 +1473,8 @@ export function changeUserRole(uid: string, newRole: "STUDENT" | "COUNCIL_ADMIN"
 
 /**
  * Reconcile all registered student user designation badges against the live council and club rosters.
- * Heals local storage and persists updated badges to Cloud Firestore.
+ * Heals local storage only. Cloud profiles remain authoritative; computed
+ * roster badges must not be written back during passive reconciliation.
  */
 export async function reconcileAllUserDesignations(): Promise<RegisteredUserRecord[]> {
   const current = getStoredUsers();
@@ -1495,12 +1493,6 @@ export async function reconcileAllUserDesignations(): Promise<RegisteredUserReco
         designationBadge: newBadge,
         isCouncilOfficer: newOfficer,
       };
-      if (u.uid) {
-        saveUserProfileToFirestore(u.uid, {
-          designationBadge: newBadge || (null as any),
-          isCouncilOfficer: newOfficer,
-        }).catch((err) => console.warn("Failed to heal cloud user badge:", err));
-      }
       return fixed;
     }
     return u;
@@ -1509,7 +1501,7 @@ export async function reconcileAllUserDesignations(): Promise<RegisteredUserReco
   if (changedCount > 0 && typeof window !== "undefined") {
     updated.sort(compareUsersNewestFirst);
     try {
-      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
+    safeStorageSet(USERS_STORAGE_KEY, updated);
     } catch {}
     window.dispatchEvent(new CustomEvent("src_users_updated", { detail: updated }));
   }
