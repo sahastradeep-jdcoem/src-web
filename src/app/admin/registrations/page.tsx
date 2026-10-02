@@ -1098,19 +1098,19 @@ export default function AdminRegistrationsPage() {
     }
 
     const refundAmount = record.amountPaid || 0;
-    const confirmMsg = `Initiate Paytm refund of ₹${refundAmount} for ${record.participantName} (${record.registrationId})?`;
+    const confirmMsg = `Initiate refund of ₹${refundAmount} for ${record.participantName} (${record.registrationId})?`;
     if (!confirm(confirmMsg)) return;
 
     setRefundingId(record.id);
     try {
-      const res = await fetch("/api/paytm/refund", {
+      const res = await fetch("/api/cashfree/refund", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          paymentId: record.paymentId,
-          amount: refundAmount,
-          registrationId: record.registrationId || record.id,
-          reason: "Refund initiated by SRC Council Admin",
+          orderId: record.orderId || record.paymentId,
+          refundAmount: refundAmount,
+          refundId: `ref_${Date.now()}`,
+          note: "Refund initiated by SRC Council Admin",
         }),
       });
 
@@ -1286,14 +1286,14 @@ export default function AdminRegistrationsPage() {
       setBulkRefundProgress({ current: i + 1, total: eligible.length });
 
       try {
-        const res = await fetch("/api/paytm/refund", {
+        const res = await fetch("/api/cashfree/refund", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            paymentId: record.paymentId,
-            amount: record.amountPaid || 0,
-            registrationId: record.registrationId || record.id,
-            reason: `Event cancelled by SRC: ${currentSelectedEventObj?.cancellationNotice || currentSelectedEventObj?.name || "Event cancelled"}`,
+            orderId: record.orderId || record.paymentId,
+            refundAmount: record.amountPaid || 0,
+            refundId: `ref_bulk_${Date.now()}_${i}`,
+            note: `Event cancelled by SRC: ${currentSelectedEventObj?.cancellationNotice || currentSelectedEventObj?.name || "Event cancelled"}`,
           }),
         });
 

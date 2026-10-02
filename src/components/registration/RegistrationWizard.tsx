@@ -42,9 +42,7 @@ import {
   ChevronRight,
   X
 } from "lucide-react";
-import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { CancelRegistrationModal } from "@/components/registration/CancelRegistrationModal";
-import { SecureCheckoutModal } from "@/components/registration/SecureCheckoutModal";
 import confetti from "canvas-confetti";
 import { 
   getStoredDepartments, 
@@ -162,28 +160,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   const [isVerifyingTeammate, setIsVerifyingTeammate] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [paytmCheckoutData, setPaytmCheckoutData] = useState<{
-    orderId: string;
-    amount: number;
-    baseAmount?: number;
-    microPaisaOffset?: number;
-    formattedAmount: string;
-    upiLink: string;
-    gpayLink?: string;
-    phonepeLink?: string;
-    paytmLink?: string;
-    bhimLink?: string;
-    payeeName: string;
-    upiId: string;
-    expiresAt?: string;
-  } | null>(null);
-  const [isRegeneratingQR, setIsRegeneratingQR] = useState(false);
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(() => getStoredPaymentConfig());
-  const [showManualUtr, setShowManualUtr] = useState(false);
-  const [isAutoDetectingPayment, setIsAutoDetectingPayment] = useState(false);
-  const autoDetectCompletedRef = useRef(false);
-  const [paytmUtr, setPaytmUtr] = useState("");
-  const [isVerifyingPaytm, setIsVerifyingPaytm] = useState(false);
   const [customAnswers, setCustomAnswers] = useState<Record<string, any>>({});
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
   const [existingRegistration, setExistingRegistration] = useState<StudentRegistrationRecord | null>(null);
@@ -834,115 +811,9 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     });
     pendingRegistrationDraftRef.current = { regId: draftRegId, tkCode: draftTkCode, payload: draftPayload };
 
-    // 2A. Cashfree Payment Gateway Flow (Instant Auto-Checkout Modal)
-    const isCashfree = paymentConfig.gateway === "cashfree" || paymentConfig.gateway === "paytm" || !paymentConfig.gateway;
-    if (isCashfree) {
-      try {
-        const orderRes = await fetch("/api/cashfree/create-order", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            amount: totalPayableAmount,
-            eventId: event.id,
-            eventName: event.name,
-            participantName: formData.fullName,
-            email: formData.email,
-            phone: formData.phone,
-            btId: formData.btId,
-            registrationId: draftRegId,
-          }),
-        });
-
-        if (!orderRes.ok) {
-          const errData = await orderRes.json().catch(() => ({}));
-          throw new Error(errData.error || "Failed to initialize Cashfree checkout order.");
-        }
-
-        const orderData = await orderRes.json();
-        if (!orderData.success || !orderData.paymentSessionId) {
-          throw new Error(orderData.error || "Could not retrieve Cashfree payment session.");
-        }
-
-        // Initialize Cashfree checkout SDK
-        const CashfreeSDK = await loadCashfreeSDK();
-        const cashfreeInstance = CashfreeSDK({
-          mode: orderData.environment === "PROD" ? "production" : "sandbox",
-        });
-
-        // Set up active polling so even if modal closes or user pays via UPI app, it auto-detects
-        let isPolledAndCompleted = false;
-        const pollInterval = setInterval(async () => {
-          if (isPolledAndCompleted) return;
-          try {
-            const verifyCheck = await fetch("/api/cashfree/verify-order", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ orderId: orderData.orderId }),
-            });
-            const vData = await verifyCheck.json();
-            if (vData.isPaid) {
-              isPolledAndCompleted = true;
-              clearInterval(pollInterval);
-              await completeRegistration({
-                paymentStatus: "PAID",
-                paymentId: vData.payment?.utr || `CF_${orderData.orderId}`,
-                orderId: orderData.orderId,
-                amountPaid: totalPayableAmount,
-              });
-            }
-          } catch (e) {
-            // Ignore polling errors
-          }
-        }, 2500);
-
-        // Auto-clear polling after 5 minutes
-        setTimeout(() => clearInterval(pollInterval), 300000);
-
-        setIsSubmitting(false);
-
-        // Open official Cashfree checkout dropin modal
-        await cashfreeInstance.checkout({
-          paymentSessionId: orderData.paymentSessionId,
-          redirectTarget: "_modal",
-        });
-
-        // Check verification after modal interaction
-        setTimeout(async () => {
-          if (isPolledAndCompleted) return;
-          try {
-            const finalCheck = await fetch("/api/cashfree/verify-order", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ orderId: orderData.orderId }),
-            });
-            const fData = await finalCheck.json();
-            if (fData.isPaid) {
-              isPolledAndCompleted = true;
-              clearInterval(pollInterval);
-              await completeRegistration({
-                paymentStatus: "PAID",
-                paymentId: fData.payment?.utr || `CF_${orderData.orderId}`,
-                orderId: orderData.orderId,
-                amountPaid: totalPayableAmount,
-              });
-            }
-          } catch (e) {
-            console.warn("Post-modal verification notice:", e);
-          }
-        }, 1500);
-
-        return;
-      } catch (cfErr: any) {
-        console.error("Cashfree checkout error:", cfErr);
-        alert(cfErr.message || "Failed to launch Cashfree checkout. Please try again.");
-        setIsSubmitting(false);
-        return;
-      }
-    }
-
-    // 2B. Paytm for Business / UPI Gateway Flow
+    // 2. Cashfree Payment Gateway Flow (Instant Auto-Checkout Modal)
     try {
-      const orderRes = await fetch("/api/paytm/initiate-transaction", {
+      const orderRes = await fetch("/api/cashfree/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -953,251 +824,96 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           email: formData.email,
           phone: formData.phone,
           btId: formData.btId,
-          teamType: formData.teamType,
-          teamSize: formData.teamType === "Team" ? teamMembers.length : 1,
-          tenureId: getCurrentTenure()?.id || "tenure-2025-26",
-          upiId: paymentConfig.upiId,
-          payeeName: paymentConfig.payeeName,
-          paytmMid: paymentConfig.paytmMid,
           registrationId: draftRegId,
-          registrationData: draftPayload,
         }),
       });
 
       if (!orderRes.ok) {
-        const errJson = await orderRes.json().catch(() => ({}));
-        throw new Error(errJson.error || "Could not initialize payment gateway order.");
+        const errData = await orderRes.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to initialize Cashfree checkout order.");
       }
 
       const orderData = await orderRes.json();
-      if (!orderData.success) {
-        throw new Error(orderData.error || "Failed to generate payment payload.");
+      if (!orderData.success || !orderData.paymentSessionId) {
+        throw new Error(orderData.error || "Could not retrieve Cashfree payment session.");
       }
 
-      setShowManualUtr(false);
-      setPaytmUtr("");
-      autoDetectCompletedRef.current = false;
-      setPaytmCheckoutData({
-        orderId: orderData.orderId,
-        amount: orderData.amount,
-        baseAmount: orderData.baseAmount || orderData.amount,
-        microPaisaOffset: orderData.microPaisaOffset || 0,
-        formattedAmount: orderData.formattedAmount,
-        upiLink: orderData.upiLink,
-        gpayLink: orderData.gpayLink,
-        phonepeLink: orderData.phonepeLink,
-        paytmLink: orderData.paytmLink,
-        bhimLink: orderData.bhimLink,
-        payeeName: orderData.payeeName || paymentConfig.payeeName,
-        upiId: orderData.upiId || paymentConfig.upiId,
-        expiresAt: orderData.expiresAt,
+      // Initialize Cashfree checkout SDK
+      const CashfreeSDK = await loadCashfreeSDK();
+      const cashfreeInstance = CashfreeSDK({
+        mode: orderData.environment === "PROD" ? "production" : "sandbox",
       });
 
-      setIsSubmitting(false);
-    } catch (err: any) {
-      console.error("Payment initialization error:", err);
-      alert(
-        err?.message ||
-        "Failed to initiate payment gateway. Please check your connection or contact the coordinator."
-      );
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleRegenerateQR = async () => {
-    if (isRegeneratingQR) return;
-    setIsRegeneratingQR(true);
-    try {
-      const orderRes = await fetch("/api/paytm/initiate-transaction", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: totalPayableAmount,
-          eventId: event.id,
-          eventName: event.name,
-          participantName: formData.fullName,
-          email: formData.email,
-          phone: formData.phone,
-          btId: formData.btId,
-          teamType: formData.teamType,
-          teamSize: formData.teamType === "Team" ? teamMembers.length : 1,
-          tenureId: getCurrentTenure()?.id || "tenure-2025-26",
-          upiId: paymentConfig.upiId,
-          payeeName: paymentConfig.payeeName,
-          paytmMid: paymentConfig.paytmMid,
-          registrationId: pendingRegistrationDraftRef.current?.regId,
-          registrationData: pendingRegistrationDraftRef.current?.payload,
-        }),
-      });
-
-      if (!orderRes.ok) {
-        const errJson = await orderRes.json().catch(() => ({}));
-        throw new Error(errJson.error || "Could not regenerate payment QR code.");
-      }
-
-      const orderData = await orderRes.json();
-      if (!orderData.success) {
-        throw new Error(orderData.error || "Failed to generate payment payload.");
-      }
-
-      setShowManualUtr(false);
-      setPaytmUtr("");
-      autoDetectCompletedRef.current = false;
-      setPaytmCheckoutData({
-        orderId: orderData.orderId,
-        amount: orderData.amount,
-        baseAmount: orderData.baseAmount || orderData.amount,
-        microPaisaOffset: orderData.microPaisaOffset || 0,
-        formattedAmount: orderData.formattedAmount,
-        upiLink: orderData.upiLink,
-        gpayLink: orderData.gpayLink,
-        phonepeLink: orderData.phonepeLink,
-        paytmLink: orderData.paytmLink,
-        bhimLink: orderData.bhimLink,
-        payeeName: orderData.payeeName || paymentConfig.payeeName,
-        upiId: orderData.upiId || paymentConfig.upiId,
-        expiresAt: orderData.expiresAt,
-      });
-    } catch (err: any) {
-      console.error("Payment QR regeneration error:", err);
-      alert(err?.message || "Failed to refresh payment QR code. Please check your connection.");
-    } finally {
-      setIsRegeneratingQR(false);
-    }
-  };
-
-  const handleVerifyPaytmPayment = async () => {
-    if (!paytmCheckoutData) return;
-
-    const cleanedUtr = paytmUtr.trim();
-    if (!cleanedUtr) {
-      alert("Please enter the 12-digit UPI Reference (UTR) Number from your Google Pay, PhonePe, or Paytm receipt.");
-      return;
-    }
-
-    if (!/^\d{12}$/.test(cleanedUtr)) {
-      alert(`Invalid UTR: "${cleanedUtr}". All Indian UPI payment receipts provide an exact 12-digit numeric reference (e.g. 425512345678).`);
-      return;
-    }
-
-    setIsVerifyingPaytm(true);
-    try {
-      const verifyRes = await fetch("/api/paytm/verify-transaction", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId: paytmCheckoutData.orderId,
-          txnId: cleanedUtr,
-          amount: paytmCheckoutData.amount,
-        }),
-      });
-
-      const verifyData = await verifyRes.json();
-      if (verifyData.verified) {
-        autoDetectCompletedRef.current = true;
-        // Sets status to "PENDING" (awaiting Treasurer confirmation) or "PAID"
-        const targetPaymentStatus = (verifyData.paymentStatus as "PAID" | "PENDING") || "PENDING";
-
-        await completeRegistration({
-          paymentStatus: targetPaymentStatus,
-          paymentId: verifyData.paymentId || cleanedUtr,
-          orderId: paytmCheckoutData.orderId,
-          amountPaid: totalPayableAmount,
-        });
-        setPaytmCheckoutData(null);
-      } else {
-        alert(verifyData.error || "Payment verification failed. Please check your transaction details.");
-      }
-    } catch (err: any) {
-      console.error("Payment verification error:", err);
-      alert("Error verifying payment. Please ensure your transaction completed successfully.");
-    } finally {
-      setIsVerifyingPaytm(false);
-    }
-  };
-
-  // Hands-Free Auto-Detection: Listen for incoming MacroDroid webhook payment confirmation
-  useEffect(() => {
-    if (!paytmCheckoutData?.orderId) {
-      setIsAutoDetectingPayment(false);
-      return;
-    }
-
-    setIsAutoDetectingPayment(true);
-    autoDetectCompletedRef.current = false;
-    const currentOrderId = paytmCheckoutData.orderId;
-    const currentAmount = paytmCheckoutData.amount;
-
-    const handleAutoSuccess = async (completedUtr: string) => {
-      if (autoDetectCompletedRef.current) return;
-      autoDetectCompletedRef.current = true;
-      setIsAutoDetectingPayment(false);
-
-      await completeRegistration({
-        paymentStatus: "PAID",
-        paymentId: completedUtr || `UPI-AUTO-${Date.now().toString().slice(-8)}`,
-        orderId: currentOrderId,
-        amountPaid: currentAmount,
-      });
-      setPaytmCheckoutData(null);
-    };
-
-    // 1. Real-time Firestore snapshot listener on active_checkout_sessions doc
-    let unsubscribeSnapshot: (() => void) | null = null;
-    if (db) {
-      try {
-        const sessionDocRef = doc(db, "active_checkout_sessions", currentOrderId);
-        unsubscribeSnapshot = onSnapshot(
-          sessionDocRef,
-          async (snap) => {
-            if (snap.exists()) {
-              const data = snap.data();
-              if (data?.status === "COMPLETED" && !autoDetectCompletedRef.current) {
-                try {
-                  const res = await fetch(`/api/upi/check-status?orderId=${encodeURIComponent(currentOrderId)}`);
-                  if (res.ok) {
-                    const verifiedData = await res.json();
-                    if (verifiedData?.status === "PAID" && !autoDetectCompletedRef.current) {
-                      handleAutoSuccess(verifiedData.utr || data.utr || "");
-                      return;
-                    }
-                  }
-                } catch {}
-                // Fallback in case of local offline notification
-                handleAutoSuccess(data.utr || "");
-              }
-            }
-          },
-          (err) => {
-            console.warn("active_checkout_sessions listener notice:", err);
+      // Set up active polling so even if modal closes or user pays via UPI app, it auto-detects
+      let isPolledAndCompleted = false;
+      const pollInterval = setInterval(async () => {
+        if (isPolledAndCompleted) return;
+        try {
+          const verifyCheck = await fetch("/api/cashfree/verify-order", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ orderId: orderData.orderId }),
+          });
+          const vData = await verifyCheck.json();
+          if (vData.isPaid) {
+            isPolledAndCompleted = true;
+            clearInterval(pollInterval);
+            await completeRegistration({
+              paymentStatus: "PAID",
+              paymentId: vData.payment?.utr || `CF_${orderData.orderId}`,
+              orderId: orderData.orderId,
+              amountPaid: totalPayableAmount,
+            });
           }
-        );
-      } catch (e) {
-        console.warn("Failed to attach session listener:", e);
-      }
-    }
-
-    // 2. Fallback polling interval every 3 seconds
-    const pollInterval = setInterval(async () => {
-      if (autoDetectCompletedRef.current) return;
-      try {
-        const res = await fetch(`/api/upi/check-status?orderId=${encodeURIComponent(currentOrderId)}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.status === "PAID" && !autoDetectCompletedRef.current) {
-            handleAutoSuccess(data.utr || "");
-          }
+        } catch (e) {
+          // Ignore polling errors
         }
-      } catch (e) {
-        // Silent polling error catch
-      }
-    }, 3000);
+      }, 2500);
 
-    return () => {
-      if (unsubscribeSnapshot) unsubscribeSnapshot();
-      clearInterval(pollInterval);
-    };
-  }, [paytmCheckoutData?.orderId]);
+      // Auto-clear polling after 5 minutes
+      setTimeout(() => clearInterval(pollInterval), 300000);
+
+      setIsSubmitting(false);
+
+      // Open official Cashfree checkout dropin modal
+      await cashfreeInstance.checkout({
+        paymentSessionId: orderData.paymentSessionId,
+        redirectTarget: "_modal",
+      });
+
+      // Check verification after modal interaction
+      setTimeout(async () => {
+        if (isPolledAndCompleted) return;
+        try {
+          const finalCheck = await fetch("/api/cashfree/verify-order", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ orderId: orderData.orderId }),
+          });
+          const fData = await finalCheck.json();
+          if (fData.isPaid) {
+            isPolledAndCompleted = true;
+            clearInterval(pollInterval);
+            await completeRegistration({
+              paymentStatus: "PAID",
+              paymentId: fData.payment?.utr || `CF_${orderData.orderId}`,
+              orderId: orderData.orderId,
+              amountPaid: totalPayableAmount,
+            });
+          }
+        } catch (e) {
+          console.warn("Post-modal verification notice:", e);
+        }
+      }, 1500);
+
+      return;
+    } catch (cfErr: any) {
+      console.error("Cashfree checkout error:", cfErr);
+      alert(cfErr.message || "Failed to launch Cashfree checkout. Please try again or contact support.");
+      setIsSubmitting(false);
+      return;
+    }
+  };
 
 
   if (event.status === "Coming Soon") {
@@ -2476,26 +2192,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         />
       )}
 
-      {/* Modal: Secure UPI & Instant Checkout (Mobile & PC Dedicated) */}
-      {paytmCheckoutData && (
-        <SecureCheckoutModal
-          isOpen={Boolean(paytmCheckoutData)}
-          onClose={() => {
-            if (!isVerifyingPaytm && !isRegeneratingQR) setPaytmCheckoutData(null);
-          }}
-          paytmCheckoutData={paytmCheckoutData}
-          event={event}
-          formData={formData}
-          isVerifyingPaytm={isVerifyingPaytm}
-          paytmUtr={paytmUtr}
-          setPaytmUtr={setPaytmUtr}
-          handleVerifyPaytmPayment={handleVerifyPaytmPayment}
-          showManualUtr={showManualUtr}
-          setShowManualUtr={setShowManualUtr}
-          onRegenerateQR={handleRegenerateQR}
-          isRegeneratingQR={isRegeneratingQR}
-        />
-      )}
+
 
     </div>
   );

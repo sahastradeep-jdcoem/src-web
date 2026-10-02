@@ -568,15 +568,14 @@ export default function AdminPaymentsPage() {
 
     setIsRefunding(true);
     try {
-      const res = await fetch("/api/paytm/refund", {
+      const res = await fetch("/api/cashfree/refund", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          paymentId: refundTargetRecord.paymentId,
-          orderId: refundTargetRecord.orderId,
-          amount: amountNum,
-          registrationId: regTicketId,
-          reason: refundReasonInput || "Refund issued via SRC Admin Payments Studio",
+          orderId: refundTargetRecord.orderId || refundTargetRecord.paymentId,
+          refundAmount: amountNum,
+          refundId: `ref_${Date.now()}`,
+          note: refundReasonInput || "Refund issued via SRC Admin Payments Studio",
         }),
       });
 

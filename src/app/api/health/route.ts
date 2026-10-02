@@ -3,8 +3,8 @@ import { NextResponse } from "next/server";
 export async function GET() {
   const isFirebaseConfigured = Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
   const storageBucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "src-jdcoem.firebasestorage.app";
-  const isPaytmConfigured = Boolean(
-    (process.env.PAYTM_MID || process.env.NEXT_PUBLIC_PAYTM_MID) && process.env.PAYTM_MERCHANT_KEY
+  const isCashfreeConfigured = Boolean(
+    (process.env.CASHFREE_APP_ID || process.env.NEXT_PUBLIC_CASHFREE_APP_ID) && process.env.CASHFREE_SECRET_KEY
   );
 
   return NextResponse.json(
@@ -21,9 +21,9 @@ export async function GET() {
           bucket: storageBucket,
           cdn: "Google Cloud CDN enabled",
         },
-        paytm: isPaytmConfigured ? "configured" : "upi_direct_mode",
+        cashfree: isCashfreeConfigured ? "configured" : "unconfigured",
       },
-      version: "1.1.0-blaze",
+      version: "1.2.0-cashfree",
     },
     {
       status: 200,

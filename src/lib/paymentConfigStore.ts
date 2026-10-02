@@ -6,19 +6,11 @@ import {
 import { enqueueCloudWrite } from "./dataSyncEngine";
 
 export interface PublicPaymentConfig {
-  gateway: "cashfree" | "paytm" | "upi";
+  gateway: "cashfree";
   // Cashfree PG Settings
   cashfreeAppId: string;
   cashfreeEnvironment: "TEST" | "PROD";
-  // Paytm PG Settings
-  paytmMid: string;
-  paytmWebsite: string;
-  paytmEnvironment: "PROD" | "STAGE";
-  // Direct UPI & General Settings
-  upiId: string;
-  payeeName: string;
   isGatewayActive: boolean;
-  isWebhookActive?: boolean;
   instructions?: string;
   updatedAt?: string;
   updatedBy?: string;
@@ -35,13 +27,7 @@ export const DEFAULT_PAYMENT_CONFIG: PaymentConfig = {
   gateway: "cashfree",
   cashfreeAppId: process.env.NEXT_PUBLIC_CASHFREE_APP_ID || "",
   cashfreeEnvironment: (process.env.CASHFREE_ENVIRONMENT as "TEST" | "PROD") || "TEST",
-  paytmMid: process.env.NEXT_PUBLIC_PAYTM_MID || "",
-  paytmWebsite: process.env.PAYTM_WEBSITE || "DEFAULT",
-  paytmEnvironment: (process.env.PAYTM_ENVIRONMENT as "PROD" | "STAGE") || "PROD",
-  upiId: "8237981028@paytm",
-  payeeName: "SRC JDCOEM",
   isGatewayActive: true,
-  isWebhookActive: true,
   instructions: "Instant online checkout powered by Cashfree (UPI, Cards, Netbanking).",
   updatedAt: new Date().toISOString(),
   updatedBy: "System",
@@ -61,21 +47,13 @@ export function getStoredPaymentConfig(): PaymentConfig {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object") {
-        const { cashfreeSecretKey: _legacySecret, paytmMerchantKey: _legacyPaytmKey, webhookSecret: _legacyWebhook, ...publicParsed } = parsed as Partial<PaymentConfig> & {
-          cashfreeSecretKey?: string;
-          paytmMerchantKey?: string;
-          webhookSecret?: string;
-        };
-        // Automatically migrate legacy "paytm" gateway setting to "cashfree"
-        const gateway = publicParsed.gateway === "paytm" || !publicParsed.gateway ? "cashfree" : publicParsed.gateway;
         return {
           ...DEFAULT_PAYMENT_CONFIG,
-          ...publicParsed,
-          gateway,
-          // Only the public Cashfree client id may be read in the browser.
+          ...parsed,
+          gateway: "cashfree",
           cashfreeAppId: parsed.cashfreeAppId || process.env.NEXT_PUBLIC_CASHFREE_APP_ID || DEFAULT_PAYMENT_CONFIG.cashfreeAppId,
           cashfreeEnvironment: parsed.cashfreeEnvironment || DEFAULT_PAYMENT_CONFIG.cashfreeEnvironment,
-          paytmMid: parsed.paytmMid || process.env.NEXT_PUBLIC_PAYTM_MID || "",
+          isGatewayActive: parsed.isGatewayActive !== undefined ? parsed.isGatewayActive : true,
         };
       }
     }
@@ -88,20 +66,23 @@ export function getStoredPaymentConfig(): PaymentConfig {
 
 /**
  * Save public payment config to localStorage and trigger local event broadcast.
- * Strip legacy secret fields so old browser caches cannot keep propagating them.
  */
 export function saveStoredPaymentConfig(config: PaymentConfig): void {
   if (typeof window === "undefined") return;
 
   try {
-    const { cashfreeSecretKey: _legacySecret, paytmMerchantKey: _legacyPaytmKey, webhookSecret: _legacyWebhook, ...publicConfig } = config as PaymentConfig & {
-      cashfreeSecretKey?: string;
-      paytmMerchantKey?: string;
-      webhookSecret?: string;
+    const cleanConfig: PaymentConfig = {
+      gateway: "cashfree",
+      cashfreeAppId: config.cashfreeAppId || "",
+      cashfreeEnvironment: config.cashfreeEnvironment || "TEST",
+      isGatewayActive: config.isGatewayActive !== undefined ? config.isGatewayActive : true,
+      instructions: config.instructions || DEFAULT_PAYMENT_CONFIG.instructions,
+      updatedAt: config.updatedAt,
+      updatedBy: config.updatedBy,
     };
-    localStorage.setItem(PAYMENT_CONFIG_STORAGE_KEY, JSON.stringify(publicConfig));
+    localStorage.setItem(PAYMENT_CONFIG_STORAGE_KEY, JSON.stringify(cleanConfig));
     window.dispatchEvent(
-      new CustomEvent(PAYMENT_CONFIG_CHANGE_EVENT, { detail: config })
+      new CustomEvent(PAYMENT_CONFIG_CHANGE_EVENT, { detail: cleanConfig })
     );
   } catch (err) {
     console.error("Error saving payment config to localStorage:", err);
@@ -116,13 +97,13 @@ export async function updatePaymentConfig(
   updatedBy: string = "Admin"
 ): Promise<PaymentConfig> {
   const current = getStoredPaymentConfig();
-  const { cashfreeSecretKey: _legacySecret, paytmMerchantKey: _legacyPaytmKey, webhookSecret: _legacyWebhook, ...publicConfig } = {
+  const updated: PaymentConfig = {
     ...current,
     ...config,
+    gateway: "cashfree",
     updatedAt: new Date().toISOString(),
     updatedBy,
-  } as PaymentConfig & { cashfreeSecretKey?: string; paytmMerchantKey?: string; webhookSecret?: string };
-  const updated = publicConfig as PaymentConfig;
+  };
 
   // 1. Instant local persistence and cross-tab event dispatch
   saveStoredPaymentConfig(updated);
@@ -145,15 +126,11 @@ export async function syncPaymentConfigFromFirestore(): Promise<PaymentConfig> {
   try {
     const remote = await getSiteContentFromFirestore<PaymentConfig>(PAYMENT_CONFIG_DOC_ID);
     if (remote && typeof remote === "object") {
-      const gateway = remote.gateway === "paytm" || !remote.gateway ? "cashfree" : remote.gateway;
       const merged: PaymentConfig = {
         ...DEFAULT_PAYMENT_CONFIG,
-         ...remote,
-         gateway,
-       };
-      delete (merged as PaymentConfig & { cashfreeSecretKey?: string; webhookSecret?: string }).cashfreeSecretKey;
-       delete (merged as PaymentConfig & { paytmMerchantKey?: string }).paytmMerchantKey;
-       delete (merged as PaymentConfig & { cashfreeSecretKey?: string; webhookSecret?: string }).webhookSecret;
+        ...remote,
+        gateway: "cashfree",
+      };
       saveStoredPaymentConfig(merged);
       return merged;
     }
@@ -186,15 +163,11 @@ export function subscribeToPaymentConfig(
     PAYMENT_CONFIG_DOC_ID,
     (remoteData) => {
       if (remoteData && typeof remoteData === "object") {
-        const gateway = remoteData.gateway === "paytm" || !remoteData.gateway ? "cashfree" : remoteData.gateway;
-         const merged: PaymentConfig = {
-           ...DEFAULT_PAYMENT_CONFIG,
-            ...remoteData,
-            gateway,
-          };
-         delete (merged as PaymentConfig & { cashfreeSecretKey?: string; webhookSecret?: string }).cashfreeSecretKey;
-          delete (merged as PaymentConfig & { paytmMerchantKey?: string }).paytmMerchantKey;
-         delete (merged as PaymentConfig & { cashfreeSecretKey?: string; webhookSecret?: string }).webhookSecret;
+        const merged: PaymentConfig = {
+          ...DEFAULT_PAYMENT_CONFIG,
+          ...remoteData,
+          gateway: "cashfree",
+        };
         saveStoredPaymentConfig(merged);
         callback(merged);
       }
