@@ -184,8 +184,10 @@ export default function AdminListingsPage() {
       date: formData.date || "TBD 2026",
       time: "10:00 AM IST",
       venue: formData.venue,
-      organizer: formData.organizer || "SRC JDCOEM",
-      organizerClubSlug: formData.organizerClubSlug || (formData.organizer === "SRC JDCOEM" ? "src-council" : undefined),
+      organizer: formData.organizer || (clubOwnerScope?.name || "SRC JDCOEM"),
+      organizerClubSlug: formData.organizerClubSlug || (clubOwnerScope?.slug || (formData.organizer === "SRC JDCOEM" ? "src-council" : undefined)),
+      collaboratingClubs: formData.collaboratingClubs && formData.collaboratingClubs.length > 0 ? formData.collaboratingClubs : undefined,
+      coOrganizers: formData.collaboratingClubs && formData.collaboratingClubs.length > 0 ? formData.collaboratingClubs.map((c) => c.name) : undefined,
       status: formData.status,
       poster: primaryPoster,
       cardImage: formData.cardImage || primaryPoster,
@@ -921,7 +923,9 @@ export default function AdminListingsPage() {
           onClose={() => setIsCreateEventOpen(false)}
           mode="create"
           eventsList={eventsList}
-          clubsList={isClubOwner ? clubsList.filter((club) => club.slug === adminAccess?.clubSlug || club.id === adminAccess?.clubId) : clubsList}
+          clubsList={clubsList}
+          allClubsList={clubsList}
+          clubOwnerScope={clubOwnerScope}
           onSubmit={handleCreateEventSubmit}
           pendingUploads={pendingUploads}
           onUploadStateChange={handleUploadStateChange}

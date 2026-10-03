@@ -117,6 +117,10 @@ export default function AdminEventsPage() {
     ? clubsList.filter((club) => club.slug === adminAccess?.clubSlug || club.id === adminAccess?.clubId)
     : clubsList, [clubsList, isClubOwner, adminAccess?.clubId, adminAccess?.clubSlug]);
 
+  const clubOwnerScope = isClubOwner && adminAccess?.clubSlug && adminAccess?.clubName
+    ? { slug: adminAccess.clubSlug, name: adminAccess.clubName, id: adminAccess.clubId }
+    : undefined;
+
   // Undo-delete state: the event is soft-removed from UI immediately;
   // real Firestore deletion fires only after the 10-second undo window expires.
   const [pendingDeleteEvent, setPendingDeleteEvent] = useState<EventItem | null>(null);
@@ -1609,7 +1613,8 @@ export default function AdminEventsPage() {
           onSuccess={(item) => {
             showNotice(`Published "${item.title}" to student engagement hub.`);
           }}
-          clubsList={scopedClubsList}
+          clubsList={clubsList}
+          clubOwnerScope={clubOwnerScope}
         />
       )}
 
@@ -1620,7 +1625,9 @@ export default function AdminEventsPage() {
           onClose={() => setIsCreateOpen(false)}
           mode="create"
           eventsList={eventsList}
-          clubsList={scopedClubsList}
+          clubsList={clubsList}
+          allClubsList={clubsList}
+          clubOwnerScope={clubOwnerScope}
           onSubmit={handleCreateSubmit}
           pendingUploads={pendingUploads}
           onUploadStateChange={handleUploadStateChange}
@@ -1635,7 +1642,9 @@ export default function AdminEventsPage() {
           mode="edit"
           initialData={editingInitialData}
           eventsList={eventsList}
-          clubsList={scopedClubsList}
+          clubsList={clubsList}
+          allClubsList={clubsList}
+          clubOwnerScope={clubOwnerScope}
           editingEventId={editingEvent.id}
           onSubmit={handleEditSubmit}
           pendingUploads={pendingUploads}

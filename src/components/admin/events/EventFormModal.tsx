@@ -43,6 +43,7 @@ import { SrcFormsBuilder } from "@/components/admin/forms/SrcFormsBuilder";
 import { EventItem, ClubItem, SrcFormField, CustomQuestion, TargetAudience, EventScheduleItem, EventPrize } from "@/types";
 import { cn } from "@/lib/utils";
 import { parseDateStringToTimestamp } from "@/lib/eventsStore";
+import { getStoredClubs } from "@/lib/councilStore";
 
 export type EventModalSection = "details" | "schedule" | "registration" | "participation" | "visuals" | "qa";
 
@@ -179,6 +180,8 @@ interface EventFormModalProps {
   initialData?: Partial<EventFormData>;
   eventsList: EventItem[];
   clubsList: ClubItem[];
+  allClubsList?: ClubItem[];
+  clubOwnerScope?: { slug: string; name: string; id?: string };
   editingEventId?: string;
   onSubmit: (data: EventFormData, asDraft?: boolean) => void | Promise<void>;
   pendingUploads: number;
@@ -243,6 +246,8 @@ export function EventFormModal({
   initialData,
   eventsList,
   clubsList,
+  allClubsList,
+  clubOwnerScope,
   editingEventId,
   onSubmit,
   pendingUploads,
@@ -265,7 +270,11 @@ export function EventFormModal({
     ? Boolean(initialData.hasPrizes)
     : Boolean(initialData?.prizes && initialData.prizes.length > 0);
 
+  const initialOrg = initialData?.organizer || (clubOwnerScope ? clubOwnerScope.name : "");
+  const initialSlug = initialData?.organizerClubSlug || (clubOwnerScope ? clubOwnerScope.slug : "");
+
   const [isCustomOrganizer, setIsCustomOrganizer] = useState(() => {
+    if (clubOwnerScope) return false;
     if (!initialData?.organizer) return false;
     const org = initialData.organizer;
     const isCentral = org === "SRC JDCOEM";
@@ -284,8 +293,8 @@ export function EventFormModal({
     isMultiDay: initialIsMulti,
     time: initialData?.time || "10:00 AM IST",
     venue: initialData?.venue || "JDCOEM Campus",
-    organizer: initialData?.organizer || "",
-    organizerClubSlug: initialData?.organizerClubSlug || "",
+    organizer: initialOrg,
+    organizerClubSlug: initialSlug,
     collaboratingClubs: initialData?.collaboratingClubs || [],
     status: initialData?.status || "Registration Open",
     poster: initialData?.poster || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
@@ -330,7 +339,9 @@ export function EventFormModal({
 
   useEffect(() => {
     if (initialData) {
-      if (initialData.organizer) {
+      if (clubOwnerScope) {
+        setIsCustomOrganizer(false);
+      } else if (initialData.organizer) {
         const org = initialData.organizer;
         const isCentral = org === "SRC JDCOEM";
         const isClub = clubsList.some((c) => c.name === org || `SRC ${c.name}` === org);
@@ -360,9 +371,14 @@ export function EventFormModal({
         initialRegDeadline = rawDateVal;
       }
 
+      const resolvedOrg = initialData.organizer || (clubOwnerScope ? clubOwnerScope.name : undefined);
+      const resolvedSlug = initialData.organizerClubSlug || (clubOwnerScope ? clubOwnerScope.slug : undefined);
+
       setForm((prev) => ({
         ...prev,
         ...initialData,
+        organizer: resolvedOrg !== undefined ? resolvedOrg : prev.organizer,
+        organizerClubSlug: resolvedSlug !== undefined ? resolvedSlug : prev.organizerClubSlug,
         isMultiDay: isMulti,
         rawEndDate: endVal,
         date: initialData.date || (isMulti ? formatDateRangeToReadable(initialData.rawDate || form.rawDate, endVal) : formatDateToReadable(initialData.rawDate || form.rawDate)),
@@ -397,8 +413,6 @@ export function EventFormModal({
         prizes: initialData.prizes && Array.isArray(initialData.prizes) ? JSON.parse(JSON.stringify(initialData.prizes)) : prev.prizes || [],
         customQuestions: initialData.customQuestions || [],
         isFeatured: Boolean(initialData.isFeatured),
-        organizer: initialData.organizer || "",
-        organizerClubSlug: initialData.organizerClubSlug || "",
         isPaid: initialData.noRegistrationRequired
           ? false
           : initialData.isPaid !== undefined
@@ -479,16 +493,32 @@ export function EventFormModal({
     });
   };
 
+  // List of all chartered clubs for collaboration
+  const allClubsPool = useMemo(() => {
+    if (allClubsList && allClubsList.length > 0) return allClubsList;
+    const stored = getStoredClubs();
+    if (stored && stored.length > clubsList.length) {
+      return stored;
+    }
+    return clubsList;
+  }, [allClubsList, clubsList]);
+
   const availableCollabClubs = useMemo(() => {
     const selectedSlugs = new Set((form.collaboratingClubs || []).map((c) => c.slug));
-    return clubsList.filter(
-      (c) => c.slug !== form.organizerClubSlug && c.name !== form.organizer && !selectedSlugs.has(c.slug)
+    const currentOrganizerSlug = form.organizerClubSlug || clubOwnerScope?.slug || "";
+    const currentOrganizerName = form.organizer || clubOwnerScope?.name || "";
+
+    return allClubsPool.filter(
+      (c) =>
+        c.slug !== currentOrganizerSlug &&
+        c.name !== currentOrganizerName &&
+        !selectedSlugs.has(c.slug)
     );
-  }, [clubsList, form.organizerClubSlug, form.organizer, form.collaboratingClubs]);
+  }, [allClubsPool, form.organizerClubSlug, form.organizer, form.collaboratingClubs, clubOwnerScope]);
 
   const handleAddCollaboratingClub = (clubSlug: string) => {
     if (!clubSlug) return;
-    const clubObj = clubsList.find((c) => c.slug === clubSlug);
+    const clubObj = allClubsPool.find((c) => c.slug === clubSlug);
     if (!clubObj) return;
     setForm((prev) => {
       const exists = (prev.collaboratingClubs || []).some((c) => c.slug === clubSlug);
@@ -990,82 +1020,97 @@ export function EventFormModal({
                 <Users className="w-3.5 h-3.5 text-[#17458F]" />
                 <span>Organized By *</span>
               </label>
-              <select
-                value={
-                  isCustomOrganizer
-                    ? (form.organizer &&
-                       form.organizer !== "SRC JDCOEM" &&
-                       !clubsList.some((c) => c.name === form.organizer)
-                        ? form.organizer
-                        : "__custom__")
-                    : form.organizer
-                }
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === "__custom__") {
-                    setIsCustomOrganizer(true);
-                    setForm((prev) => ({
-                      ...prev,
-                      organizer: "",
-                      organizerClubSlug: ""
-                    }));
-                    return;
-                  }
-                  setIsCustomOrganizer(false);
-                  const matchedClub = clubsList.find((c) => c.name === val || `SRC ${c.name}` === val);
-                  const isCentral = val === "SRC JDCOEM";
-                  setForm((prev) => ({
-                    ...prev,
-                    organizer: val,
-                    organizerClubSlug: matchedClub ? matchedClub.slug : (isCentral ? "src-council" : "")
-                  }));
-                }}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
-              >
-                <option value="">-- Select Organizing Body / Club --</option>
-                <optgroup label="Central Student Council">
-                  <option value="SRC JDCOEM">SRC JDCOEM</option>
-                </optgroup>
-                <optgroup label="Chartered Student Clubs">
-                  {clubsList.map((c) => (
-                    <option key={c.id || c.slug} value={c.name}>
-                      {c.name}
-                    </option>
-                  ))}
-                </optgroup>
-                {form.organizer &&
-                  form.organizer !== "SRC JDCOEM" &&
-                  !clubsList.some((c) => c.name === form.organizer) && (
-                    <optgroup label="Current Custom Organizer">
-                      <option value={form.organizer}>{form.organizer}</option>
-                    </optgroup>
-                )}
-                <optgroup label="Custom / External Body">
-                  <option value="__custom__">+ Enter Custom Organizer Name...</option>
-                </optgroup>
-              </select>
 
-              {isCustomOrganizer && (
-                <div className="pt-2">
-                  <input
-                    type="text"
-                    value={form.organizer === "__custom__" ? "" : form.organizer}
+              {clubOwnerScope ? (
+                <div className="w-full px-4 py-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 text-sm font-semibold flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-[#17458F]" />
+                    <span>{clubOwnerScope.name}</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-[#17458F] uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200">
+                    Assigned Club
+                  </span>
+                </div>
+              ) : (
+                <>
+                  <select
+                    value={
+                      isCustomOrganizer
+                        ? (form.organizer &&
+                           form.organizer !== "SRC JDCOEM" &&
+                           !clubsList.some((c) => c.name === form.organizer)
+                            ? form.organizer
+                            : "__custom__")
+                        : form.organizer
+                    }
                     onChange={(e) => {
                       const val = e.target.value;
+                      if (val === "__custom__") {
+                        setIsCustomOrganizer(true);
+                        setForm((prev) => ({
+                          ...prev,
+                          organizer: "",
+                          organizerClubSlug: ""
+                        }));
+                        return;
+                      }
+                      setIsCustomOrganizer(false);
+                      const matchedClub = clubsList.find((c) => c.name === val || `SRC ${c.name}` === val);
+                      const isCentral = val === "SRC JDCOEM";
                       setForm((prev) => ({
                         ...prev,
                         organizer: val,
-                        organizerClubSlug: ""
+                        organizerClubSlug: matchedClub ? matchedClub.slug : (isCentral ? "src-council" : "")
                       }));
                     }}
-                    placeholder="Type organizer name (e.g. Department of CSE, Sports Committee, GDG...)"
-                    className="w-full px-4 py-2.5 rounded-xl bg-white border-2 border-[#17458F] text-slate-900 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#17458F]/20"
-                    autoFocus
-                  />
-                  <p className="text-[10px] text-slate-500 mt-1">
-                    Type the specific organizing club, academic department, cell, or institutional body.
-                  </p>
-                </div>
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
+                  >
+                    <option value="">-- Select Organizing Body / Club --</option>
+                    <optgroup label="Central Student Council">
+                      <option value="SRC JDCOEM">SRC JDCOEM</option>
+                    </optgroup>
+                    <optgroup label="Chartered Student Clubs">
+                      {clubsList.map((c) => (
+                        <option key={c.id || c.slug} value={c.name}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    {form.organizer &&
+                      form.organizer !== "SRC JDCOEM" &&
+                      !clubsList.some((c) => c.name === form.organizer) && (
+                        <optgroup label="Current Custom Organizer">
+                          <option value={form.organizer}>{form.organizer}</option>
+                        </optgroup>
+                    )}
+                    <optgroup label="Custom / External Body">
+                      <option value="__custom__">+ Enter Custom Organizer Name...</option>
+                    </optgroup>
+                  </select>
+
+                  {isCustomOrganizer && (
+                    <div className="pt-2">
+                      <input
+                        type="text"
+                        value={form.organizer === "__custom__" ? "" : form.organizer}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setForm((prev) => ({
+                            ...prev,
+                            organizer: val,
+                            organizerClubSlug: ""
+                          }));
+                        }}
+                        placeholder="Type organizer name (e.g. Department of CSE, Sports Committee, GDG...)"
+                        className="w-full px-4 py-2.5 rounded-xl bg-white border-2 border-[#17458F] text-slate-900 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#17458F]/20"
+                        autoFocus
+                      />
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        Type the specific organizing club, academic department, cell, or institutional body.
+                      </p>
+                    </div>
+                  )}
+                </>
               )}
 
               <p className="text-[10px] text-slate-400">
