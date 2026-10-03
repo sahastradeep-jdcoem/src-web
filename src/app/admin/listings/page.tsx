@@ -54,6 +54,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/context/AuthContext";
+import { isEntityOwnedByClub } from "@/types/rbac";
 
 export default function AdminListingsPage() {
   const { adminAccess } = useAuth();
@@ -253,7 +254,7 @@ export default function AdminListingsPage() {
 
   const filteredListings = useMemo(() => {
     return listings.filter((item) => {
-      if (isClubOwner && item.organizerClubSlug !== adminAccess?.clubSlug) return false;
+      if (isClubOwner && !isEntityOwnedByClub(item, adminAccess)) return false;
       if (selectedPillar !== "all" && item.pillar !== selectedPillar) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -265,7 +266,7 @@ export default function AdminListingsPage() {
       }
       return true;
     });
-  }, [listings, selectedPillar, searchQuery, isClubOwner, adminAccess?.clubSlug]);
+  }, [listings, selectedPillar, searchQuery, isClubOwner, adminAccess]);
 
   // Responses belonging to the actively inspected listing
   const activeListingResponses = useMemo(() => {
@@ -274,6 +275,10 @@ export default function AdminListingsPage() {
   }, [inspectingListing, responses]);
 
   const handleDeleteListing = (item: ListingItem) => {
+    if (isClubOwner && !isEntityOwnedByClub(item, adminAccess)) {
+      showToast("Club Owners can only manage listings for their assigned club.");
+      return;
+    }
     const updated = listings.filter((l) => l.id !== item.id);
     setListings(updated);
     saveStoredListings(updated);
@@ -282,6 +287,10 @@ export default function AdminListingsPage() {
   };
 
   const handleToggleStatus = (item: ListingItem) => {
+    if (isClubOwner && !isEntityOwnedByClub(item, adminAccess)) {
+      showToast("Club Owners can only manage listings for their assigned club.");
+      return;
+    }
     const isCurrentlyClosed = item.status === "closed" || item.isAcceptingResponses === false;
     const nextStatus: ListingStatus = isCurrentlyClosed ? "active" : "closed";
     const nextAccepting = isCurrentlyClosed;
@@ -293,6 +302,10 @@ export default function AdminListingsPage() {
 
   const handleToggleAcceptingResponses = (accepting: boolean) => {
     if (!liveInspectingListing) return;
+    if (isClubOwner && !isEntityOwnedByClub(liveInspectingListing, adminAccess)) {
+      showToast("Club Owners can only manage listings for their assigned club.");
+      return;
+    }
     const nextStatus: ListingStatus = accepting ? "active" : "closed";
     const updated = listings.map((l) => (l.id === liveInspectingListing.id ? { ...l, status: nextStatus, isAcceptingResponses: accepting } : l));
     setListings(updated as ListingItem[]);
@@ -301,6 +314,10 @@ export default function AdminListingsPage() {
   };
 
   const handleToggleAudience = (item: ListingItem) => {
+    if (isClubOwner && !isEntityOwnedByClub(item, adminAccess)) {
+      showToast("Club Owners can only manage listings for their assigned club.");
+      return;
+    }
     const nextAudience: TargetAudience = item.targetAudience === "jdcoem_only" ? "inter_college" : "jdcoem_only";
     const updated = listings.map((l) => (l.id === item.id ? { ...l, targetAudience: nextAudience, isInterCollege: nextAudience === "inter_college" } : l));
     setListings(updated as ListingItem[]);
@@ -314,6 +331,10 @@ export default function AdminListingsPage() {
   ) => {
     const target = responses.find((r) => r.id === respId);
     if (!target) return;
+    if (isClubOwner && liveInspectingListing && !isEntityOwnedByClub(liveInspectingListing, adminAccess)) {
+      showToast("Club Owners can only update responses for their assigned club.");
+      return;
+    }
 
     const updatedRecord: ListingResponseRecord = {
       ...target,
@@ -327,6 +348,10 @@ export default function AdminListingsPage() {
 
   const handleDeleteResponse = (respId: string) => {
     if (!inspectingListing) return;
+    if (isClubOwner && !isEntityOwnedByClub(inspectingListing, adminAccess)) {
+      showToast("Club Owners can only delete responses for their assigned club.");
+      return;
+    }
     deleteStoredListingResponse(respId, inspectingListing.id);
     setResponses((prev) => prev.filter((r) => r.id !== respId));
     showToast("Response record deleted successfully.");
@@ -334,6 +359,10 @@ export default function AdminListingsPage() {
 
   const handleResetPollVotes = (item: ListingItem) => {
     if (item.type !== "poll" || !item.pollConfig) return;
+    if (isClubOwner && !isEntityOwnedByClub(item, adminAccess)) {
+      showToast("Club Owners can only reset votes for their assigned club's polls.");
+      return;
+    }
     const confirmed = window.confirm(
       `Are you sure you want to reset all votes for "${item.title}" to 0? This cannot be undone.`
     );
@@ -548,6 +577,10 @@ export default function AdminListingsPage() {
 
   const handleToggleApprovalWorkflow = (enabled: boolean) => {
     if (!liveInspectingListing) return;
+    if (isClubOwner && !isEntityOwnedByClub(liveInspectingListing, adminAccess)) {
+      showToast("Club Owners can only manage listings for their assigned club.");
+      return;
+    }
     const updated: ListingItem = { ...liveInspectingListing, requiresApproval: enabled };
     const nextListings = listings.map((l) => (l.id === updated.id ? updated : l));
     setListings(nextListings);
@@ -562,6 +595,10 @@ export default function AdminListingsPage() {
 
   const handleEditInspectingListing = () => {
     if (!liveInspectingListing) return;
+    if (isClubOwner && !isEntityOwnedByClub(liveInspectingListing, adminAccess)) {
+      showToast("Club Owners can only manage listings for their assigned club.");
+      return;
+    }
     setEditingListing(liveInspectingListing);
     setIsEditModalOpen(true);
   };

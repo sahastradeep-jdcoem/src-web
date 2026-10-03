@@ -46,6 +46,7 @@ import { Modal } from "@/components/ui/Modal";
 import { ClubFormModal } from "@/components/admin/clubs/ClubFormModal";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { isEntityOwnedByClub } from "@/types/rbac";
 
 export default function AdminClubsPage() {
   const { adminAccess } = useAuth();
@@ -211,7 +212,7 @@ export default function AdminClubsPage() {
   const filteredClubs = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return clubs.filter((club) => {
-      if (isClubOwner && club.slug !== adminAccess?.clubSlug && club.id !== adminAccess?.clubId) return false;
+      if (isClubOwner && !isEntityOwnedByClub(club, adminAccess)) return false;
       const leaders = getClubLeaders(club);
       const matchesLeader = leaders.some((l) => l.name?.toLowerCase().includes(q) || l.department?.toLowerCase().includes(q));
       const matchesSearch =
@@ -222,7 +223,7 @@ export default function AdminClubsPage() {
       const matchesDomain = selectedDomain === "All" || club.category === selectedDomain;
       return matchesSearch && matchesDomain;
     });
-  }, [clubs, searchQuery, selectedDomain, isClubOwner, adminAccess?.clubId, adminAccess?.clubSlug]);
+  }, [clubs, searchQuery, selectedDomain, isClubOwner, adminAccess]);
 
   const isFiltering = !!searchQuery.trim() || selectedDomain !== "All";
 
@@ -269,7 +270,7 @@ export default function AdminClubsPage() {
     if (e?.preventDefault) e.preventDefault();
     const club = clubOverride || editingClub;
     if (!club) return;
-    if (isClubOwner && club.slug !== adminAccess?.clubSlug && club.id !== adminAccess?.clubId) {
+    if (isClubOwner && !isEntityOwnedByClub(club, adminAccess)) {
       alert("Club Owners can only change their assigned club details.");
       return;
     }

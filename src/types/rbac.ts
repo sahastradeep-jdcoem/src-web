@@ -117,3 +117,48 @@ export function adminRouteCapabilities(pathname: string): AdminCapability[] {
   if (pathname.startsWith("/admin/registrations")) return ["club_registrations"];
   return ["all"];
 }
+
+/**
+ * Strict Club Ownership Verification
+ * Checks whether an event, listing, or registration record belongs to the assigned club.
+ * Matches by slug, id, or normalized organizer name.
+ */
+export function isEntityOwnedByClub(
+  entity: { organizerClubSlug?: string; organizer?: string; clubId?: string; clubSlug?: string; clubName?: string; id?: string; slug?: string; name?: string } | null | undefined,
+  assignedClub?: { clubId?: string; clubSlug?: string; clubName?: string } | null
+): boolean {
+  if (!entity || !assignedClub) return false;
+  const targetSlug = (assignedClub.clubSlug || "").toLowerCase().trim();
+  const targetId = (assignedClub.clubId || "").toLowerCase().trim();
+  const targetName = (assignedClub.clubName || "").toLowerCase().trim();
+
+  if (!targetSlug && !targetId && !targetName) return false;
+
+  const evSlug = (entity.organizerClubSlug || entity.clubSlug || entity.slug || "").toLowerCase().trim();
+  const evId = (entity.clubId || entity.id || "").toLowerCase().trim();
+  const evOrg = (entity.organizer || entity.clubName || entity.name || "").toLowerCase().trim();
+
+  // 1. Direct slug match
+  if (targetSlug && evSlug) {
+    if (evSlug === targetSlug) return true;
+    const cleanTarget = targetSlug.replace(/^club-/, "");
+    const cleanEv = evSlug.replace(/^club-/, "");
+    if (cleanTarget && cleanEv && cleanTarget === cleanEv) return true;
+  }
+
+  // 2. Direct ID match
+  if (targetId && (evId === targetId || evSlug === targetId)) {
+    return true;
+  }
+
+  // 3. Organizer name match (e.g. "Agentic AI", "SRC Agentic AI", "Agentic AI Club")
+  if (targetName && evOrg) {
+    if (evOrg === targetName) return true;
+    if (evOrg === `src ${targetName}`) return true;
+    const cleanEvOrg = evOrg.replace(/^src\s+/i, "").replace(/\s+club$/i, "").trim();
+    const cleanTarget = targetName.replace(/^src\s+/i, "").replace(/\s+club$/i, "").trim();
+    if (cleanEvOrg && cleanTarget && cleanEvOrg === cleanTarget) return true;
+  }
+
+  return false;
+}

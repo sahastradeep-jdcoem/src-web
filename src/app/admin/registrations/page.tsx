@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import { 
   Search, 
@@ -79,6 +79,7 @@ import {
   PaymentConfig 
 } from "@/lib/paymentConfigStore";
 import { useAuth } from "@/context/AuthContext";
+import { isEntityOwnedByClub } from "@/types/rbac";
 
 type ActiveTab = "summary" | "question" | "individual" | "table";
 
@@ -390,39 +391,99 @@ export default function AdminRegistrationsPage() {
     }
   }, [departmentsList]);
 
-  // Events available in selected tenure
-  const tenureFilteredEvents = useMemo(() => {
-    const scopedEvents = isClubOwner ? eventsList.filter((event) => event.organizerClubSlug === adminAccess?.clubSlug) : eventsList;
-    if (selectedTenureId === "all") return scopedEvents;
-    const matchedTenure = tenuresList.find((t) => t.id === selectedTenureId);
-    if (!matchedTenure) {
-      return scopedEvents.filter((e) => {
-        const resolved = resolveTenureForEvent(e, tenuresList);
-        return resolved ? resolved.id === selectedTenureId : e.tenureId === selectedTenureId;
-      });
+  // Comprehensive catalog of all events (live store + past tenure snapshots)
+  const allKnownEvents = useMemo(() => {
+    const map = new Map<string, EventItem>();
+    eventsList.forEach((e) => {
+      if (e && (e.id || e.slug)) map.set(e.id || e.slug, e);
+    });
+    tenuresList.forEach((t) => {
+      if (Array.isArray(t.events)) {
+        t.events.forEach((e) => {
+          if (e && (e.id || e.slug) && !map.has(e.id || e.slug)) {
+            map.set(e.id || e.slug, e);
+          }
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [eventsList, tenuresList]);
+
+  // Helper to determine if a registration record strictly belongs to the club
+  const isRegistrationOwned = useCallback((r: any) => {
+    if (!isClubOwner) return true;
+    if (!r) return false;
+    if (isEntityOwnedByClub(r, adminAccess)) return true;
+    const rSlug = (r.eventSlug || "").toLowerCase();
+    const rId = (r.eventId || "").toLowerCase();
+    const rName = (r.eventName || "").toLowerCase();
+    const rParentId = (r.parentEventId || "").toLowerCase();
+    const rParentSlug = (r.parentEventSlug || "").toLowerCase();
+    const rParentName = (r.parentEventName || "").toLowerCase();
+
+    // 1. Direct event check
+    const directEvent = allKnownEvents.find((e) =>
+      (e.id && (e.id.toLowerCase() === rId || e.id.toLowerCase() === rSlug)) ||
+      (e.slug && (e.slug.toLowerCase() === rSlug || e.slug.toLowerCase() === rId)) ||
+      (e.name && e.name.toLowerCase() === rName)
+    );
+    if (directEvent) {
+      return isEntityOwnedByClub(directEvent, adminAccess);
     }
 
-    if (matchedTenure.isCurrent || matchedTenure.status === "active") {
-      // By default, in the search list show current tenure events only!
-      return scopedEvents.filter((e) => {
+    // 2. Parent umbrella event check
+    if (rParentId || rParentSlug || rParentName) {
+      const parentEvent = allKnownEvents.find((e) =>
+        (rParentId && e.id && e.id.toLowerCase() === rParentId) ||
+        (rParentSlug && e.slug && e.slug.toLowerCase() === rParentSlug) ||
+        (rParentName && e.name && e.name.toLowerCase() === rParentName)
+      );
+      if (parentEvent) {
+        return isEntityOwnedByClub(parentEvent, adminAccess);
+      }
+    }
+    return false;
+  }, [isClubOwner, adminAccess, allKnownEvents]);
+
+  // Events available in selected tenure
+  const tenureFilteredEvents = useMemo(() => {
+    let result: EventItem[] = [];
+    const matchedTenure = tenuresList.find((t) => t.id === selectedTenureId);
+    if (selectedTenureId === "all" || !matchedTenure) {
+      if (selectedTenureId === "all") {
+        result = eventsList;
+      } else {
+        result = eventsList.filter((e) => {
+          const resolved = resolveTenureForEvent(e, tenuresList);
+          return resolved ? resolved.id === selectedTenureId : e.tenureId === selectedTenureId;
+        });
+      }
+    } else if (matchedTenure.isCurrent || matchedTenure.status === "active") {
+      result = eventsList.filter((e) => {
         const resolved = resolveTenureForEvent(e, tenuresList);
         return resolved ? resolved.id === matchedTenure.id : (e.tenureId === matchedTenure.id || !e.tenureId);
       });
+    } else {
+      // Past tenure: load past tenure events only when user changes the filter manually
+      const snapshotEvents = Array.isArray(matchedTenure.events) ? matchedTenure.events : [];
+      const pastFromStore = eventsList.filter((e) => {
+        const resolved = resolveTenureForEvent(e, tenuresList);
+        return resolved ? resolved.id === matchedTenure.id : e.tenureId === matchedTenure.id;
+      });
+
+      const map = new Map<string, EventItem>();
+      [...snapshotEvents, ...pastFromStore].forEach((ev) => {
+        if (ev && (ev.id || ev.slug)) map.set(ev.id || ev.slug, ev);
+      });
+      result = Array.from(map.values());
     }
 
-    // Past tenure: load past tenure events only when user changes the filter manually
-    const snapshotEvents = Array.isArray(matchedTenure.events) ? matchedTenure.events : [];
-    const pastFromStore = scopedEvents.filter((e) => {
-      const resolved = resolveTenureForEvent(e, tenuresList);
-      return resolved ? resolved.id === matchedTenure.id : e.tenureId === matchedTenure.id;
-    });
-
-    const map = new Map<string, EventItem>();
-    [...snapshotEvents, ...pastFromStore].forEach((ev) => {
-      if (ev && (ev.id || ev.slug)) map.set(ev.id || ev.slug, ev);
-    });
-    return Array.from(map.values());
-  }, [eventsList, selectedTenureId, tenuresList, isClubOwner, adminAccess?.clubSlug]);
+    // STRICT INVARIANT: If club owner, filter ALL results down strictly to their assigned club
+    if (isClubOwner) {
+      return result.filter((event) => isEntityOwnedByClub(event, adminAccess));
+    }
+    return result;
+  }, [eventsList, selectedTenureId, tenuresList, isClubOwner, adminAccess]);
 
   // Autocomplete / search filtered events for dropdown
   const filteredDropdownEvents = useMemo(() => {
@@ -436,20 +497,24 @@ export default function AdminRegistrationsPage() {
     );
   }, [tenureFilteredEvents, eventSearchQuery]);
 
+  const clubScopedRegistrations = useMemo(() => {
+    return registrations.filter(isRegistrationOwned);
+  }, [registrations, isRegistrationOwned]);
+
   // Selectable event options list for keyboard navigation and rendering
   const selectableEventOptions = useMemo(() => {
     const allOption = {
       slug: "all",
-      name: "All Events & Forms",
+      name: isClubOwner ? `${adminAccess?.clubName || "My Club"} Events & Forms` : "All Events & Forms",
       category: "Overview",
-      count: registrations.length,
+      count: clubScopedRegistrations.length,
       isAll: true,
     };
 
     const eventOptions = filteredDropdownEvents.map((evt) => {
       // Find all child events if this is an umbrella parent fest
       const childEvents = evt.isParentFest
-        ? eventsList.filter(
+        ? allKnownEvents.filter(
             (e) =>
               (e.parentEventId && (e.parentEventId === evt.id || e.parentEventId === evt.slug)) ||
               (e.parentEventSlug && (e.parentEventSlug === evt.slug || e.parentEventSlug === evt.id)) ||
@@ -460,7 +525,7 @@ export default function AdminRegistrationsPage() {
       const childIds = new Set(childEvents.map((c) => (c.id || "").toLowerCase()));
       const childNames = new Set(childEvents.map((c) => (c.name || "").toLowerCase()));
 
-      const count = registrations.filter((r) => {
+      const count = clubScopedRegistrations.filter((r) => {
         const rName = (r.eventName || "").toLowerCase();
         const rSlug = (r.eventSlug || "").toLowerCase();
         const rId = (r.eventId || "").toLowerCase();
@@ -506,7 +571,7 @@ export default function AdminRegistrationsPage() {
     });
 
     return [allOption, ...eventOptions];
-  }, [filteredDropdownEvents, registrations, eventsList]);
+  }, [filteredDropdownEvents, clubScopedRegistrations, allKnownEvents, isClubOwner, adminAccess?.clubName]);
 
   // Keep highlighted index in sync when search changes
   useEffect(() => {
@@ -569,23 +634,18 @@ export default function AdminRegistrationsPage() {
   const currentSelectedEventObj = useMemo(() => {
     if (selectedEventSlug === "all") return null;
     return (
-      eventsList.find(
+      allKnownEvents.find(
         (e) =>
           e.slug.toLowerCase() === selectedEventSlug.toLowerCase() ||
           e.name.toLowerCase() === selectedEventSlug.toLowerCase() ||
           e.id.toLowerCase() === selectedEventSlug.toLowerCase()
       ) || null
     );
-  }, [selectedEventSlug, eventsList]);
+  }, [selectedEventSlug, allKnownEvents]);
 
   // Filter registrations by currently selected tenure & event (including umbrella event aggregation)
   const eventRegistrations = useMemo(() => {
-    let list = isClubOwner
-      ? registrations.filter((registration) => {
-          const event = eventsList.find((item) => item.id === registration.eventId || item.slug === registration.eventSlug || item.name === registration.eventName);
-          return event?.organizerClubSlug === adminAccess?.clubSlug;
-        })
-      : registrations;
+    let list = registrations.filter(isRegistrationOwned);
 
     // Filter by tenure
     if (selectedTenureId !== "all") {
@@ -611,16 +671,12 @@ export default function AdminRegistrationsPage() {
         const rName = (r.eventName || "").toLowerCase();
 
         // 1. Authoritative Event Match:
-        // Find the event object and resolve its actual tenure using resolveTenureForEvent
-        const matchedEvent = eventsList.find((e) =>
+        // Find the event object across all known events and resolve its actual tenure using resolveTenureForEvent
+        const matchedEvent = allKnownEvents.find((e) =>
           (e.id && (e.id.toLowerCase() === rId || e.id.toLowerCase() === rSlug)) ||
           (e.slug && (e.slug.toLowerCase() === rSlug || e.slug.toLowerCase() === rId)) ||
           (e.name && e.name.toLowerCase() === rName)
-        ) || (Array.isArray(currentTenure.events) ? currentTenure.events.find((e) =>
-          (e.id && (e.id.toLowerCase() === rId || e.id.toLowerCase() === rSlug)) ||
-          (e.slug && (e.slug.toLowerCase() === rSlug || e.slug.toLowerCase() === rId)) ||
-          (e.name && e.name.toLowerCase() === rName)
-        ) : undefined);
+        );
 
         if (matchedEvent) {
           const evTenure = resolveTenureForEvent(matchedEvent, tenuresList);
@@ -681,7 +737,7 @@ export default function AdminRegistrationsPage() {
       const childIds = new Set<string>();
 
       if (currentSelectedEventObj && currentSelectedEventObj.isParentFest) {
-        eventsList.forEach((e) => {
+        allKnownEvents.forEach((e) => {
           if (
             (e.parentEventId && (e.parentEventId === currentSelectedEventObj.id || e.parentEventId === currentSelectedEventObj.slug)) ||
             (e.parentEventSlug && (e.parentEventSlug === currentSelectedEventObj.slug || e.parentEventSlug === currentSelectedEventObj.id)) ||
@@ -728,7 +784,7 @@ export default function AdminRegistrationsPage() {
     }
 
     return list;
-  }, [registrations, selectedEventSlug, selectedTenureId, currentSelectedEventObj, eventsList, tenuresList, tenureFilteredEvents, isClubOwner, adminAccess?.clubSlug]);
+  }, [registrations, isRegistrationOwned, selectedTenureId, tenuresList, tenureFilteredEvents, selectedEventSlug, currentSelectedEventObj, allKnownEvents]);
 
   // Export Excel button is enabled only after selecting a specific event filter
   const isExportDisabled = selectedEventSlug === "all" || eventRegistrations.length === 0;
@@ -1072,6 +1128,10 @@ export default function AdminRegistrationsPage() {
   };
 
   const handleGateCheckIn = async (record: RegistrationRecord) => {
+    if (isClubOwner && !isRegistrationOwned(record)) {
+      alert("Club Owners can only check in passes for their assigned club's events.");
+      return;
+    }
     await checkInStudentPass(record.registrationId);
     setRegistrations((prev) =>
       prev.map((r) => (r.id === record.id ? { ...r, status: "CHECKED_IN" as any } : r))
@@ -1084,6 +1144,11 @@ export default function AdminRegistrationsPage() {
   };
 
   const handleDeleteRegistration = async (regId: string, name: string) => {
+    const record = registrations.find((r) => r.id === regId || r.registrationId === regId);
+    if (isClubOwner && record && !isRegistrationOwned(record)) {
+      alert("Club Owners can only delete registrations for their assigned club's events.");
+      return;
+    }
     if (confirm(`Delete registration record for "${name}" (${regId})?`)) {
       try {
         await deleteRegistrationFromFirestore(regId);
@@ -1101,6 +1166,10 @@ export default function AdminRegistrationsPage() {
   };
 
   const handleIndividualRefund = async (record: RegistrationRecord) => {
+    if (isClubOwner && !isRegistrationOwned(record)) {
+      alert("Club Owners can only process refunds for their assigned club's events.");
+      return;
+    }
     if (!record.paymentId || record.paymentId === "N/A" || record.paymentId.includes("Free")) {
       alert("No valid payment ID found for this registration.");
       return;
@@ -1175,6 +1244,10 @@ export default function AdminRegistrationsPage() {
   };
 
   const handleApprovePayment = async (record: RegistrationRecord) => {
+    if (isClubOwner && !isRegistrationOwned(record)) {
+      alert("Club Owners can only approve payments for their assigned club's events.");
+      return;
+    }
     const regId = record.registrationId || record.id;
     if (!regId) return;
 
@@ -1212,6 +1285,10 @@ export default function AdminRegistrationsPage() {
   };
 
   const handleRejectPayment = async (record: RegistrationRecord) => {
+    if (isClubOwner && !isRegistrationOwned(record)) {
+      alert("Club Owners can only reject payments for their assigned club's events.");
+      return;
+    }
     const regId = record.registrationId || record.id;
     if (!regId) return;
 
@@ -1274,6 +1351,10 @@ export default function AdminRegistrationsPage() {
   };
 
   const handleBulkRefund = async () => {
+    if (isClubOwner && currentSelectedEventObj && !isEntityOwnedByClub(currentSelectedEventObj, adminAccess)) {
+      alert("Club Owners can only process refunds for their assigned club's events.");
+      return;
+    }
     const eligible = metrics.eligibleForRefund;
     if (eligible.length === 0) {
       alert("No eligible un-refunded paid registrations found for this event.");
@@ -1348,6 +1429,10 @@ export default function AdminRegistrationsPage() {
   };
 
   const handleClearAll = () => {
+    if (isClubOwner) {
+      alert("Club Owners cannot clear registrations.");
+      return;
+    }
     const label = selectedEventSlug === "all" ? "ALL registrations" : `all registrations for ${selectedEventSlug}`;
     if (confirm(`Are you sure you want to delete ${label}? This cannot be undone.`)) {
       if (selectedEventSlug === "all") {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { 
   CreditCard, 
   Search, 
@@ -53,6 +53,7 @@ import {
 } from "@/lib/paymentConfigStore";
 import { EventItem, RegistrationRecord } from "@/types";
 import { useAuth } from "@/context/AuthContext";
+import { isEntityOwnedByClub } from "@/types/rbac";
 
 type PaymentTabFilter = "all" | "completed" | "pending" | "refunded" | "cancelled";
 
@@ -88,11 +89,81 @@ export default function AdminPaymentsPage() {
   const [registrations, setRegistrations] = useState<RegistrationRecord[]>([]);
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
   const [tenuresList, setTenuresList] = useState<CouncilTenure[]>([]);
-  const scopedEventsList = useMemo(() => isClubOwner
-    ? eventsList.filter((event) => event.organizerClubSlug === adminAccess?.clubSlug)
-    : eventsList, [eventsList, isClubOwner, adminAccess?.clubSlug]);
+
+  // Comprehensive lookup of all events across live store and historical tenure snapshots
+  const allKnownEvents = useMemo(() => {
+    const map = new Map<string, EventItem>();
+    eventsList.forEach((e) => {
+      if (e && (e.id || e.slug)) map.set(e.id || e.slug, e);
+    });
+    tenuresList.forEach((t) => {
+      if (Array.isArray(t.events)) {
+        t.events.forEach((e) => {
+          if (e && (e.id || e.slug) && !map.has(e.id || e.slug)) {
+            map.set(e.id || e.slug, e);
+          }
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [eventsList, tenuresList]);
+
+  // Helper to determine if a payment/registration record strictly belongs to the club
+  const isRegistrationOwned = useCallback((r: any) => {
+    if (!isClubOwner) return true;
+    if (!r) return false;
+    if (isEntityOwnedByClub(r, adminAccess)) return true;
+    const rSlug = (r.eventSlug || "").toLowerCase();
+    const rId = (r.eventId || "").toLowerCase();
+    const rName = (r.eventName || "").toLowerCase();
+    const rParentId = (r.parentEventId || "").toLowerCase();
+    const rParentSlug = (r.parentEventSlug || "").toLowerCase();
+    const rParentName = (r.parentEventName || "").toLowerCase();
+
+    // 1. Direct event check
+    const directEvent = allKnownEvents.find((e) =>
+      (e.id && (e.id.toLowerCase() === rId || e.id.toLowerCase() === rSlug)) ||
+      (e.slug && (e.slug.toLowerCase() === rSlug || e.slug.toLowerCase() === rId)) ||
+      (e.name && e.name.toLowerCase() === rName)
+    );
+    if (directEvent) {
+      return isEntityOwnedByClub(directEvent, adminAccess);
+    }
+
+    // 2. Parent umbrella event check
+    if (rParentId || rParentSlug || rParentName) {
+      const parentEvent = allKnownEvents.find((e) =>
+        (rParentId && e.id && e.id.toLowerCase() === rParentId) ||
+        (rParentSlug && e.slug && e.slug.toLowerCase() === rParentSlug) ||
+        (rParentName && e.name && e.name.toLowerCase() === rParentName)
+      );
+      if (parentEvent) {
+        return isEntityOwnedByClub(parentEvent, adminAccess);
+      }
+    }
+    return false;
+  }, [isClubOwner, adminAccess, allKnownEvents]);
+
   const [selectedTenureId, setSelectedTenureId] = useState<string>("all");
   const [selectedEventSlug, setSelectedEventSlug] = useState<string>("all");
+
+  const scopedEventsList = useMemo(() => {
+    let result = eventsList;
+    if (selectedTenureId !== "all") {
+      const currentTenure = tenuresList.find((t) => t.id === selectedTenureId);
+      if (currentTenure && currentTenure.events && Array.isArray(currentTenure.events)) {
+        const map = new Map<string, EventItem>();
+        [...currentTenure.events, ...eventsList].forEach((ev) => {
+          if (ev && (ev.id || ev.slug)) map.set(ev.id || ev.slug, ev);
+        });
+        result = Array.from(map.values());
+      }
+    }
+    if (isClubOwner) {
+      return result.filter((event) => isEntityOwnedByClub(event, adminAccess));
+    }
+    return result;
+  }, [eventsList, selectedTenureId, tenuresList, isClubOwner, adminAccess]);
   const [statusTab, setStatusTab] = useState<PaymentTabFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   
@@ -273,12 +344,7 @@ export default function AdminPaymentsPage() {
 
   // Filter Payments by Tenure & Event
   const filteredByTenure = useMemo(() => {
-    const scopedRegistrations = isClubOwner
-      ? registrations.filter((registration) => {
-          const event = eventsList.find((item) => item.id === registration.eventId || item.slug === registration.eventSlug || item.name === registration.eventName);
-          return event?.organizerClubSlug === adminAccess?.clubSlug;
-        })
-      : registrations;
+    const scopedRegistrations = registrations.filter(isRegistrationOwned);
     if (selectedTenureId === "all") return scopedRegistrations;
     const currentTenure = tenuresList.find((t) => t.id === selectedTenureId);
     if (!currentTenure) return scopedRegistrations;
@@ -350,17 +416,17 @@ export default function AdminPaymentsPage() {
 
       return false;
     });
-  }, [registrations, selectedTenureId, tenuresList, eventsList, isClubOwner, adminAccess?.clubSlug]);
+  }, [registrations, isRegistrationOwned, selectedTenureId, tenuresList, eventsList]);
 
   const filteredByEvent = useMemo(() => {
     if (selectedEventSlug === "all") return filteredByTenure;
-    const selectedEvt = eventsList.find((e) => (e.slug && e.slug.toLowerCase() === selectedEventSlug.toLowerCase()) || (e.name && e.name.toLowerCase() === selectedEventSlug.toLowerCase()) || e.id === selectedEventSlug);
+    const selectedEvt = allKnownEvents.find((e) => (e.slug && e.slug.toLowerCase() === selectedEventSlug.toLowerCase()) || (e.name && e.name.toLowerCase() === selectedEventSlug.toLowerCase()) || e.id === selectedEventSlug);
     
     const childNames = new Set<string>();
     const childSlugs = new Set<string>();
     const childIds = new Set<string>();
     if (selectedEvt && selectedEvt.isParentFest) {
-      eventsList.forEach((e) => {
+      allKnownEvents.forEach((e) => {
         if (
           (e.parentEventId && (e.parentEventId === selectedEvt.id || e.parentEventId === selectedEvt.slug)) ||
           (e.parentEventSlug && (e.parentEventSlug === selectedEvt.slug || e.parentEventSlug === selectedEvt.id)) ||
@@ -404,7 +470,7 @@ export default function AdminPaymentsPage() {
 
       return matchesDirect || matchesChild;
     });
-  }, [filteredByTenure, selectedEventSlug, eventsList]);
+  }, [filteredByTenure, selectedEventSlug, allKnownEvents]);
 
   // Primary Table Rows (Filtered by Status Tab & Search)
   const displayedPayments = useMemo(() => {
@@ -511,6 +577,10 @@ export default function AdminPaymentsPage() {
   // Approve Payment Action
   const handleApproveConfirm = async () => {
     if (!approveTargetRecord) return;
+    if (isClubOwner && !isRegistrationOwned(approveTargetRecord)) {
+      alert("Club Owners can only approve payments for their assigned club's events.");
+      return;
+    }
     const docId = approveTargetRecord.id;
     const regTicketId = approveTargetRecord.registrationId || approveTargetRecord.id;
     const finalUtr = approveUtrInput.trim() || approveTargetRecord.paymentId || `MANUAL-${Date.now().toString().slice(-6)}`;
@@ -569,6 +639,10 @@ export default function AdminPaymentsPage() {
   // Refund Payment Action
   const handleRefundConfirm = async () => {
     if (!refundTargetRecord) return;
+    if (isClubOwner && !isRegistrationOwned(refundTargetRecord)) {
+      alert("Club Owners can only refund payments for their assigned club's events.");
+      return;
+    }
     const regDocId = refundTargetRecord.id;
     const regTicketId = refundTargetRecord.registrationId || refundTargetRecord.id;
     const amountNum = parseFloat(refundAmountInput) || (refundTargetRecord.amountPaid ?? 0);
@@ -659,6 +733,10 @@ export default function AdminPaymentsPage() {
   // Cancel Transaction Action
   const handleCancelConfirm = async () => {
     if (!cancelTargetRecord) return;
+    if (isClubOwner && !isRegistrationOwned(cancelTargetRecord)) {
+      alert("Club Owners can only cancel payments for their assigned club's events.");
+      return;
+    }
     const docId = cancelTargetRecord.id;
     const regTicketId = cancelTargetRecord.registrationId || cancelTargetRecord.id;
 

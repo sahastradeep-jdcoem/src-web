@@ -72,6 +72,7 @@ import {
   getLatestAvailableTenure 
 } from "@/lib/tenureStore";
 import { useAuth } from "@/context/AuthContext";
+import { isEntityOwnedByClub } from "@/types/rbac";
 
 export default function AdminEventsPage() {
   const { adminAccess } = useAuth();
@@ -232,37 +233,46 @@ export default function AdminEventsPage() {
 
   // Events available in selected tenure
   const tenureFilteredEvents = useMemo(() => {
-    const scope = (items: EventItem[]) => isClubOwner ? items.filter((event) => event.organizerClubSlug === adminAccess?.clubSlug) : items;
-    if (selectedTenureId === "all") return scope(eventsList);
-    const matchedTenure = tenuresList.find((t) => t.id === selectedTenureId);
-    if (!matchedTenure) {
-      return scope(eventsList.filter((e) => {
-        const resolved = resolveTenureForEvent(e, tenuresList);
-        return resolved ? resolved.id === selectedTenureId : e.tenureId === selectedTenureId;
-      }));
-    }
+    let result: EventItem[] = [];
 
-    if (matchedTenure.isCurrent || matchedTenure.status === "active") {
+    const matchedTenure = tenuresList.find((t) => t.id === selectedTenureId);
+    if (selectedTenureId === "all" || !matchedTenure) {
+      if (selectedTenureId === "all") {
+        result = eventsList;
+      } else {
+        result = eventsList.filter((e) => {
+          const resolved = resolveTenureForEvent(e, tenuresList);
+          return resolved ? resolved.id === selectedTenureId : e.tenureId === selectedTenureId;
+        });
+      }
+    } else if (matchedTenure.isCurrent || matchedTenure.status === "active") {
       // By default, in the list show current tenure events only!
-      return scope(eventsList.filter((e) => {
+      result = eventsList.filter((e) => {
         const resolved = resolveTenureForEvent(e, tenuresList);
         return resolved ? resolved.id === matchedTenure.id : (e.tenureId === matchedTenure.id || !e.tenureId);
-      }));
+      });
+    } else {
+      // Past tenure: load past tenure events only when user changes the filter manually
+      const snapshotEvents = Array.isArray(matchedTenure.events) ? matchedTenure.events : [];
+      const pastFromStore = eventsList.filter((e) => {
+        const resolved = resolveTenureForEvent(e, tenuresList);
+        return resolved ? resolved.id === matchedTenure.id : e.tenureId === matchedTenure.id;
+      });
+
+      const map = new Map<string, EventItem>();
+      [...snapshotEvents, ...pastFromStore].forEach((ev) => {
+        if (ev && (ev.id || ev.slug)) map.set(ev.id || ev.slug, ev);
+      });
+      result = Array.from(map.values());
     }
 
-    // Past tenure: load past tenure events only when user changes the filter manually
-    const snapshotEvents = Array.isArray(matchedTenure.events) ? matchedTenure.events : [];
-    const pastFromStore = scope(eventsList.filter((e) => {
-      const resolved = resolveTenureForEvent(e, tenuresList);
-      return resolved ? resolved.id === matchedTenure.id : e.tenureId === matchedTenure.id;
-    }));
+    // STRICT INVARIANT: If club owner, filter ALL results down strictly to their assigned club
+    if (isClubOwner) {
+      return result.filter((event) => isEntityOwnedByClub(event, adminAccess));
+    }
 
-    const map = new Map<string, EventItem>();
-    [...snapshotEvents, ...pastFromStore].forEach((ev) => {
-      if (ev && (ev.id || ev.slug)) map.set(ev.id || ev.slug, ev);
-    });
-    return Array.from(map.values());
-  }, [eventsList, selectedTenureId, tenuresList, isClubOwner, adminAccess?.clubSlug]);
+    return result;
+  }, [eventsList, selectedTenureId, tenuresList, isClubOwner, adminAccess]);
 
   const filteredEvents = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -424,6 +434,10 @@ export default function AdminEventsPage() {
   };
 
   const handleToggleAudience = (evt: EventItem) => {
+    if (isClubOwner && !isEntityOwnedByClub(evt, adminAccess)) {
+      showNotice("Club Owners can only manage events for their assigned club.");
+      return;
+    }
     const nextAudience: TargetAudience = evt.targetAudience === "jdcoem_only" ? "inter_college" : "jdcoem_only";
     const updated = eventsList.map((e) =>
       e.id === evt.id || e.slug === evt.slug
@@ -444,6 +458,10 @@ export default function AdminEventsPage() {
   };
 
   const handleToggleFeatured = async (evt: EventItem) => {
+    if (isClubOwner) {
+      showNotice("Only SRC administrators can designate Flagship Spotlight events.");
+      return;
+    }
     const nextFeatured = !evt.isFeatured;
     const updated = eventsList.map((e) => {
       if (e.id === evt.id || e.slug === evt.slug) {
@@ -469,6 +487,10 @@ export default function AdminEventsPage() {
   };
 
   const handleToggleLive = async (evt: EventItem) => {
+    if (isClubOwner && !isEntityOwnedByClub(evt, adminAccess)) {
+      showNotice("Club Owners can only manage events for their assigned club.");
+      return;
+    }
     const nextLive = evt.isLive === false; // false → true, undefined/true → false
     const updatedEvent: EventItem = {
       ...evt,
@@ -575,6 +597,10 @@ export default function AdminEventsPage() {
   }, [editingEvent]);
 
   const handleStartEdit = (evt: EventItem) => {
+    if (isClubOwner && !isEntityOwnedByClub(evt, adminAccess)) {
+      showNotice("Club Owners can only edit events for their assigned club.");
+      return;
+    }
     setEditingEvent(evt);
     if (evt.id || evt.slug) {
       getEventFromFirestore(evt.id || evt.slug)
@@ -594,9 +620,13 @@ export default function AdminEventsPage() {
 
   const handleEditSubmit = async (formData: EventFormData, asDraft?: boolean) => {
     if (!editingEvent) return;
-    if (isClubOwner && editingEvent.organizerClubSlug !== adminAccess?.clubSlug) {
+    if (isClubOwner && !isEntityOwnedByClub(editingEvent, adminAccess)) {
       showNotice("Club Owners can only edit events owned by their assigned club.");
       return;
+    }
+    if (isClubOwner) {
+      if (adminAccess?.clubSlug) formData.organizerClubSlug = adminAccess.clubSlug;
+      if (adminAccess?.clubName) formData.organizer = adminAccess.clubName;
     }
 
     const isUmbrella = Boolean(formData.isParentFest);
@@ -753,6 +783,10 @@ export default function AdminEventsPage() {
   };
 
   const handleDuplicate = (evt: EventItem) => {
+    if (isClubOwner && !isEntityOwnedByClub(evt, adminAccess)) {
+      showNotice("Club Owners can only duplicate events owned by their assigned club.");
+      return;
+    }
     const randSuffix = Math.random().toString(36).substring(2, 6);
     const tenures = getStoredTenures();
     const resolvedTenure = resolveTenureForEvent(evt, tenures);
@@ -779,6 +813,10 @@ export default function AdminEventsPage() {
 
   /** Fire immediately when user clicks the trash icon — soft-removes from UI and starts 10s undo window */
   const handleDeleteClick = (evt: EventItem) => {
+    if (isClubOwner && !isEntityOwnedByClub(evt, adminAccess)) {
+      showNotice("Club Owners can only delete events owned by their assigned club.");
+      return;
+    }
     // If there's already a pending delete for another event, fire it immediately first
     if (pendingDeleteEvent && pendingDeleteEvent.id !== evt.id) {
       clearUndoTimers();
@@ -821,6 +859,10 @@ export default function AdminEventsPage() {
 
   /** Actually delete — called when countdown reaches 0 or user navigates away */
   const executePermanentDelete = async (evt: EventItem) => {
+    if (isClubOwner && !isEntityOwnedByClub(evt, adminAccess)) {
+      showNotice("Club Owners can only delete events owned by their assigned club.");
+      return;
+    }
     setPendingDeleteEvent(null);
     setUndoCountdown(0);
     setIsDeletingEvent(true);
@@ -876,6 +918,10 @@ export default function AdminEventsPage() {
 
   const confirmCancelEvent = async () => {
     if (!eventToCancel) return;
+    if (isClubOwner && !isEntityOwnedByClub(eventToCancel, adminAccess)) {
+      showNotice("Club Owners can only cancel events owned by their assigned club.");
+      return;
+    }
     const cleanNotice = cancellationNotice.trim();
     if (!cleanNotice || cleanNotice.length < 5) {
       showNotice("Please provide a valid cancellation notice (minimum 5 characters).");
