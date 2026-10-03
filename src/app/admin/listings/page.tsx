@@ -889,6 +889,7 @@ export default function AdminListingsPage() {
             showToast(`Published "${item.title}" successfully.`);
           }}
           clubOwnerScope={clubOwnerScope}
+          clubsList={clubsList}
         />
       )}
 
@@ -909,6 +910,7 @@ export default function AdminListingsPage() {
             setEditingListing(null);
           }}
           clubOwnerScope={clubOwnerScope}
+          clubsList={clubsList}
         />
       )}
 

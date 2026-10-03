@@ -1609,6 +1609,7 @@ export default function AdminEventsPage() {
           onSuccess={(item) => {
             showNotice(`Published "${item.title}" to student engagement hub.`);
           }}
+          clubsList={scopedClubsList}
         />
       )}
 

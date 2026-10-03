@@ -40,6 +40,7 @@ import { SrcFormsBuilder } from "@/components/admin/forms/SrcFormsBuilder";
 import { UniversalImageUploader } from "@/components/ui/UniversalImageUploader";
 import { SrcFormField, CustomQuestion } from "@/types";
 import { saveStoredListings, getStoredListings } from "@/lib/listingsStore";
+import { getStoredClubs } from "@/lib/councilStore";
 import { validateSectionGraph } from "@/lib/srcFormsHelper";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +52,7 @@ interface CreateListingModalProps {
   mode?: "create" | "edit";
   initialData?: ListingItem | null;
   clubOwnerScope?: { slug: string; name: string };
+  clubsList?: Array<{ id?: string; name: string; slug: string }>;
 }
 
 interface PillarOption {
@@ -345,6 +347,7 @@ export function CreateListingModal({
   mode = "create",
   initialData,
   clubOwnerScope,
+  clubsList,
 }: CreateListingModalProps) {
   const [step, setStep] = useState<"select_type" | "configure_form">("select_type");
   const [selectedPillarOption, setSelectedPillarOption] = useState<PillarOption | null>(null);
@@ -353,11 +356,27 @@ export function CreateListingModal({
   const [pendingUploads, setPendingUploads] = useState<number>(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Clubs List Resolution
+  const [internalClubsList, setInternalClubsList] = useState<Array<{ id?: string; name: string; slug: string }>>(() => {
+    if (clubsList && clubsList.length > 0) return clubsList;
+    return getStoredClubs();
+  });
+
+  useEffect(() => {
+    if (clubsList && clubsList.length > 0) {
+      setInternalClubsList(clubsList);
+    } else {
+      setInternalClubsList(getStoredClubs());
+    }
+  }, [clubsList]);
+
   // 1. Details Section State
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
   const [description, setDescription] = useState("");
   const [organizer, setOrganizer] = useState(clubOwnerScope?.name || "SRC JDCOEM");
+  const [organizerClubSlug, setOrganizerClubSlug] = useState(clubOwnerScope?.slug || (clubOwnerScope?.name ? "" : "src-council"));
+  const [isCustomOrganizer, setIsCustomOrganizer] = useState(false);
   const [deadline, setDeadline] = useState("");
   const [targetAudience, setTargetAudience] = useState<TargetAudience>("inter_college");
 
@@ -407,7 +426,16 @@ export function CreateListingModal({
       setTitle(initialData.title || "");
       setSummary(initialData.summary || "");
       setDescription(initialData.description || "");
-      setOrganizer(initialData.organizer || clubOwnerScope?.name || "SRC JDCOEM");
+
+      const currentOrg = initialData.organizer || clubOwnerScope?.name || "SRC JDCOEM";
+      const currentSlug = initialData.organizerClubSlug || clubOwnerScope?.slug || (currentOrg === "SRC JDCOEM" ? "src-council" : "");
+      setOrganizer(currentOrg);
+      setOrganizerClubSlug(currentSlug);
+
+      const isCentral = currentOrg === "SRC JDCOEM";
+      const isClub = internalClubsList.some((c) => c.name === currentOrg || `SRC ${c.name}` === currentOrg);
+      setIsCustomOrganizer(!isCentral && !isClub && Boolean(currentOrg));
+
       setDeadline(initialData.deadline || "");
       setTargetAudience(initialData.targetAudience || (initialData.isInterCollege ? "inter_college" : "jdcoem_only"));
       setCoverImage(initialData.coverImage || PRESET_COVERS[0].url);
@@ -457,7 +485,13 @@ export function CreateListingModal({
       setTitle("");
       setSummary("");
       setDescription("");
-      setOrganizer("SRC JDCOEM");
+
+      const defaultOrg = clubOwnerScope?.name || "SRC JDCOEM";
+      const defaultSlug = clubOwnerScope?.slug || (defaultOrg === "SRC JDCOEM" ? "src-council" : "");
+      setOrganizer(defaultOrg);
+      setOrganizerClubSlug(defaultSlug);
+      setIsCustomOrganizer(false);
+
       setDeadline("");
       setTargetAudience("inter_college");
       setCoverImage("https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1200&auto=format&fit=crop");
@@ -525,9 +559,15 @@ export function CreateListingModal({
 
   const handleSectionNav = (direction: "next" | "prev") => {
     if (direction === "next") {
-      if (activeSection === "details" && !title.trim()) {
-        setFormError("Please provide a Title / Headline in the Details section before continuing.");
-        return;
+      if (activeSection === "details") {
+        if (!title.trim()) {
+          setFormError("Please provide a Title / Headline in the Details section before continuing.");
+          return;
+        }
+        if (!organizer.trim() || organizer === "__custom__") {
+          setFormError("Please select or enter an Organizing Entity before continuing.");
+          return;
+        }
       }
       if (nextSection) {
         setActiveSection(nextSection.id);
@@ -545,6 +585,12 @@ export function CreateListingModal({
     if (!title.trim()) {
       setActiveSection("details");
       setFormError(asDraft ? "Please provide at least a Title / Headline to save as draft." : "Please provide a Title / Headline in the Details section before publishing.");
+      return;
+    }
+
+    if (!asDraft && (!organizer || !organizer.trim() || organizer === "__custom__")) {
+      setActiveSection("details");
+      setFormError("Please select or enter an Organizing Entity before publishing.");
       return;
     }
 
@@ -588,8 +634,8 @@ export function CreateListingModal({
           publishedAt: asDraft ? initialData.publishedAt : (initialData.publishedAt || new Date().toISOString()),
           summary: summary.trim() || title.trim(),
           description: description.trim() || summary.trim() || title.trim(),
-           organizer: organizer.trim() || clubOwnerScope?.name || "SRC JDCOEM",
-           organizerClubSlug: clubOwnerScope?.slug || initialData.organizerClubSlug,
+          organizer: organizer.trim() || clubOwnerScope?.name || "SRC JDCOEM",
+          organizerClubSlug: clubOwnerScope?.slug || organizerClubSlug || initialData.organizerClubSlug,
           coverImage: coverImage || PRESET_COVERS[0].url,
           deadline: deadline || undefined,
           allowResponseEditing: selectedPillarOption.type === "poll" ? false : allowResponseEditing,
@@ -683,8 +729,8 @@ export function CreateListingModal({
         isInterCollege: targetAudience === "inter_college",
         summary: summary.trim() || title.trim(),
         description: description.trim() || summary.trim() || title.trim(),
-         organizer: organizer.trim() || clubOwnerScope?.name || "SRC JDCOEM",
-         organizerClubSlug: clubOwnerScope?.slug,
+        organizer: organizer.trim() || clubOwnerScope?.name || "SRC JDCOEM",
+        organizerClubSlug: clubOwnerScope?.slug || organizerClubSlug,
         coverImage: coverImage || PRESET_COVERS[0].url,
         deadline: deadline || undefined,
         allowResponseEditing: selectedPillarOption.type === "poll" ? false : allowResponseEditing,
@@ -966,19 +1012,94 @@ export function CreateListingModal({
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                         <Building2 className="w-3.5 h-3.5 text-[#17458F]" />
-                        <span>Organizing Entity</span>
+                        <span>Organizing Entity *</span>
                       </label>
-                      <input
-                        type="text"
-                        value={organizer}
-                        onChange={(e) => setOrganizer(e.target.value)}
-                        placeholder="e.g. SRC JDCOEM, GDG Club, NSS Cell"
-                        className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F] focus:bg-white transition-all"
-                      />
+                      {clubOwnerScope ? (
+                        <div className="px-4 py-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-sm font-semibold flex items-center justify-between">
+                          <span>{clubOwnerScope.name}</span>
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                            Club Scope
+                          </span>
+                        </div>
+                      ) : (
+                        <>
+                          <select
+                            value={
+                              isCustomOrganizer
+                                ? (organizer &&
+                                   organizer !== "SRC JDCOEM" &&
+                                   !internalClubsList.some((c) => c.name === organizer)
+                                    ? organizer
+                                    : "__custom__")
+                                : organizer
+                            }
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "__custom__") {
+                                setIsCustomOrganizer(true);
+                                setOrganizer("");
+                                setOrganizerClubSlug("");
+                                return;
+                              }
+                              setIsCustomOrganizer(false);
+                              const matchedClub = internalClubsList.find((c) => c.name === val || `SRC ${c.name}` === val);
+                              const isCentral = val === "SRC JDCOEM";
+                              setOrganizer(val);
+                              setOrganizerClubSlug(matchedClub ? matchedClub.slug : (isCentral ? "src-council" : ""));
+                            }}
+                            className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] focus:bg-white transition-all cursor-pointer"
+                          >
+                            <option value="">-- Select Organizing Body / Club --</option>
+                            <optgroup label="Central Student Council">
+                              <option value="SRC JDCOEM">SRC JDCOEM</option>
+                            </optgroup>
+                            <optgroup label="Chartered Student Clubs">
+                              {internalClubsList.map((c) => (
+                                <option key={c.id || c.slug} value={c.name}>
+                                  {c.name}
+                                </option>
+                              ))}
+                            </optgroup>
+                            {organizer &&
+                              organizer !== "SRC JDCOEM" &&
+                              !internalClubsList.some((c) => c.name === organizer) && (
+                                <optgroup label="Current Custom Organizer">
+                                  <option value={organizer}>{organizer}</option>
+                                </optgroup>
+                            )}
+                            <optgroup label="Custom / External Body">
+                              <option value="__custom__">+ Enter Custom Organizer Name...</option>
+                            </optgroup>
+                          </select>
+
+                          {isCustomOrganizer && (
+                            <div className="pt-2">
+                              <input
+                                type="text"
+                                value={organizer === "__custom__" ? "" : organizer}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setOrganizer(val);
+                                  setOrganizerClubSlug("");
+                                }}
+                                placeholder="Type organizer name (e.g. Department of CSE, Sports Committee, GDG...)"
+                                className="w-full px-4 py-2.5 rounded-xl bg-white border-2 border-[#17458F] text-slate-900 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#17458F]/20"
+                                autoFocus
+                              />
+                              <p className="text-[10px] text-slate-500 mt-1">
+                                Type the specific organizing club, academic department, cell, or institutional body.
+                              </p>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      <p className="text-[10px] text-slate-400">
+                        Select or specify the student council, chartered club, or department organizing this listing.
+                      </p>
                     </div>
 
                     <div className="space-y-1.5">
