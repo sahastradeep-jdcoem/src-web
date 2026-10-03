@@ -17,6 +17,7 @@ export interface AdminAccessAssignment {
   uid: string;
   btId: string;
   role: AdminAccessRole;
+  name?: string;
   clubId?: string;
   clubSlug?: string;
   clubName?: string;

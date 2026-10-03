@@ -25,6 +25,8 @@ import {
   saveAdminAccessToFirestore,
   subscribeToAdminAccessFromFirestore,
   revokeAdminAccessFromFirestore,
+  getAllUsersFromFirestore,
+  findUserByBtIdInFirestore,
 } from "@/lib/firebase/firestore";
 import { 
   getStoredClubs, 
@@ -40,6 +42,7 @@ import {
 import { findRegisteredUserByBtId, lookupUserByBtId } from "@/lib/usersStore";
 import { AdminAccessAssignment, AdminAccessRole, ADMIN_ROLE_LABELS, normalizeBtId } from "@/types/rbac";
 import { ClubItem, TeamMember } from "@/types";
+import { UserProfile } from "@/types/auth";
 
 interface LeaderCandidate {
   id: string;
@@ -72,6 +75,8 @@ export default function AdminRolesPage() {
   const [assignments, setAssignments] = useState<AdminAccessAssignment[]>([]);
   const [clubs, setClubs] = useState<ClubItem[]>(() => getStoredClubs());
   const [officers, setOfficers] = useState<TeamMember[]>([]);
+  const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>([]);
+  const [asyncNames, setAsyncNames] = useState<Record<string, string>>({});
   
   // Editable BT ID overrides mapped by slot key
   const [btIdOverrides, setBtIdOverrides] = useState<Record<string, string>>({});
@@ -87,12 +92,13 @@ export default function AdminRolesPage() {
   // Load latest data from Firestore and stores
   const loadData = useCallback(async () => {
     try {
-      const [remoteClubs, remoteCouncil, remoteHosting, remoteSpokespersons, remoteAssignments] = await Promise.all([
+      const [remoteClubs, remoteCouncil, remoteHosting, remoteSpokespersons, remoteAssignments, remoteUsers] = await Promise.all([
         syncClubsFromFirestore(),
         syncCouncilMembersFromFirestore(),
         syncHostingCommitteeFromFirestore(),
         syncSpokespersonsFromFirestore(),
         getAllAdminAccessFromFirestore(),
+        getAllUsersFromFirestore(),
       ]);
 
       if (remoteClubs && remoteClubs.length > 0) setClubs(remoteClubs);
@@ -105,6 +111,7 @@ export default function AdminRolesPage() {
       ];
       setOfficers(combinedOfficers);
       setAssignments(remoteAssignments);
+      if (remoteUsers && remoteUsers.length > 0) setRegisteredUsers(remoteUsers);
     } catch {
       setNotice({ message: "Notice: Synchronizing latest administrative datasets from Firestore.", type: "info" });
     }
@@ -128,6 +135,101 @@ export default function AdminRolesPage() {
     });
     return map;
   }, [assignments]);
+
+  // Comprehensive name lookup map built from Canonical records, Club Rosters, Officers, and Registered Users
+  const nameLookupMap = useMemo(() => {
+    const map = new Map<string, string>();
+
+    // 1. Canonical council registry
+    try {
+      const canonical = require("@/data/canonicalCouncil.json");
+      if (Array.isArray(canonical)) {
+        canonical.forEach((c: any) => {
+          const cleanBt = normalizeBtId(c.btId);
+          if (cleanBt && c.name && !map.has(cleanBt)) {
+            map.set(cleanBt, String(c.name).trim());
+          }
+        });
+      }
+    } catch {}
+
+    // 2. Officers (Council, Hosting, Spokespersons)
+    officers.forEach((o) => {
+      const cleanBt = normalizeBtId(o.btId);
+      if (cleanBt && o.name && !map.has(cleanBt)) {
+        map.set(cleanBt, String(o.name).trim());
+      }
+    });
+
+    // 3. Chartered Clubs (Leaders & Members)
+    clubs.forEach((c) => {
+      const leaders = getClubLeaders(c);
+      leaders.forEach((l) => {
+        const cleanBt = normalizeBtId(l.btId);
+        if (cleanBt && l.name && !map.has(cleanBt)) {
+          map.set(cleanBt, String(l.name).trim());
+        }
+      });
+      if (Array.isArray(c.members)) {
+        c.members.forEach((m) => {
+          const cleanBt = normalizeBtId(m.btId);
+          if (cleanBt && m.name && !map.has(cleanBt)) {
+            map.set(cleanBt, String(m.name).trim());
+          }
+        });
+      }
+    });
+
+    // 4. Registered users (authoritative from Firestore /users collection)
+    registeredUsers.forEach((u) => {
+      const cleanBt = normalizeBtId(u.btId);
+      const name = String(u.name || (u as any).displayName || "").trim();
+      if (cleanBt && name) {
+        map.set(cleanBt, name);
+      }
+      if (u.uid && name && !map.has(u.uid)) {
+        map.set(u.uid, name);
+      }
+    });
+
+    return map;
+  }, [officers, clubs, registeredUsers]);
+
+  // Dynamically resolve names for any assignments missing in local memory
+  useEffect(() => {
+    if (!assignments || assignments.length === 0) return;
+    const unresolved = assignments.filter((a) => {
+      const cleanBt = normalizeBtId(a.btId);
+      const hasName = Boolean(
+        a.name ||
+        (cleanBt && nameLookupMap.get(cleanBt)) ||
+        (cleanBt && asyncNames[cleanBt]) ||
+        (a.uid && nameLookupMap.get(a.uid))
+      );
+      return !hasName && Boolean(cleanBt);
+    });
+
+    if (unresolved.length === 0) return;
+
+    let isMounted = true;
+    unresolved.forEach(async (a) => {
+      const cleanBt = normalizeBtId(a.btId);
+      if (!cleanBt) return;
+      try {
+        const u = await findUserByBtIdInFirestore(cleanBt);
+        if (isMounted && u && (u.name || (u as any).displayName)) {
+          const resolved = String(u.name || (u as any).displayName || "").trim();
+          if (resolved) {
+            setAsyncNames((prev) => ({ ...prev, [cleanBt]: resolved }));
+          }
+        }
+      } catch {}
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [assignments, nameLookupMap, asyncNames]);
 
   // Compute club candidate groups (Supports any number of leaders per club)
   const clubCandidateGroups = useMemo<ClubCandidateGroup[]>(() => {
@@ -268,7 +370,8 @@ export default function AdminRolesPage() {
     rawBtId: string,
     role: AdminAccessRole,
     club?: Pick<ClubItem, "id" | "slug" | "name">,
-    slotKey?: string
+    slotKey?: string,
+    candidateName?: string
   ) => {
     const cleanBt = normalizeBtId(rawBtId);
     if (!cleanBt) {
@@ -284,12 +387,19 @@ export default function AdminRolesPage() {
       const localUser = findRegisteredUserByBtId(cleanBt);
       const remoteUser = localUser || (await lookupUserByBtId(cleanBt));
       const uid = remoteUser?.uid || "";
+      const resolvedName =
+        candidateName ||
+        nameLookupMap.get(cleanBt) ||
+        remoteUser?.name ||
+        (remoteUser as any)?.displayName ||
+        "";
 
       const now = new Date().toISOString();
       await saveAdminAccessToFirestore({
         btId: cleanBt,
         uid: uid || cleanBt,
         role,
+        name: resolvedName || undefined,
         clubId: club?.id,
         clubSlug: club?.slug,
         clubName: club?.name,
@@ -300,7 +410,7 @@ export default function AdminRolesPage() {
       });
 
       setNotice({
-        message: `${ADMIN_ROLE_LABELS[role]} clearance granted to ${cleanBt}${club?.name ? ` (${club.name})` : ""}${uid ? " (Linked to account)" : " (Awaiting student sign-in)"}.`,
+        message: `${ADMIN_ROLE_LABELS[role]} clearance granted to ${resolvedName ? `${resolvedName} (${cleanBt})` : cleanBt}${club?.name ? ` (${club.name})` : ""}${uid ? " (Linked to account)" : " (Awaiting student sign-in)"}.`,
         type: "success",
       });
       await loadData();
@@ -340,10 +450,12 @@ export default function AdminRolesPage() {
             const cleanBt = normalizeBtId(leader.currentBtId);
             if (cleanBt) {
               const matched = findRegisteredUserByBtId(cleanBt);
+              const resolvedName = leader.name || nameLookupMap.get(cleanBt) || matched?.name || "";
               await saveAdminAccessToFirestore({
                 btId: cleanBt,
                 uid: matched?.uid || cleanBt,
                 role: "CLUB_OWNER",
+                name: resolvedName || undefined,
                 clubId: group.club.id,
                 clubSlug: group.club.slug,
                 clubName: group.club.name,
@@ -364,10 +476,12 @@ export default function AdminRolesPage() {
           const cleanBt = normalizeBtId(officer.currentBtId);
           if (cleanBt) {
             const matched = findRegisteredUserByBtId(cleanBt);
+            const resolvedName = officer.name || nameLookupMap.get(cleanBt) || matched?.name || "";
             await saveAdminAccessToFirestore({
               btId: cleanBt,
               uid: matched?.uid || cleanBt,
               role: officer.role,
+              name: resolvedName || undefined,
               active: true,
               grantedBy: user?.email || "owner",
               grantedAt: now,
@@ -597,7 +711,7 @@ export default function AdminRolesPage() {
                     )}
 
                     <Button
-                      onClick={() => grantAccess(officer.currentBtId, officer.role, undefined, officer.key)}
+                      onClick={() => grantAccess(officer.currentBtId, officer.role, undefined, officer.key, officer.name)}
                       disabled={isBusy || !cleanBt}
                       size="sm"
                       variant={isGrantActive ? "outline" : "primary"}
@@ -760,7 +874,7 @@ export default function AdminRolesPage() {
                             </Button>
                           ) : (
                             <Button
-                              onClick={() => grantAccess(cleanBt, "CLUB_OWNER", group.club, leader.slotKey)}
+                              onClick={() => grantAccess(cleanBt, "CLUB_OWNER", group.club, leader.slotKey, leader.name)}
                               disabled={isLeaderBusy || !cleanBt}
                               size="sm"
                               variant="primary"
@@ -836,7 +950,14 @@ export default function AdminRolesPage() {
           <Button
             onClick={() => {
               const matchedClub = clubs.find((c) => c.id === manualClubId);
-              grantAccess(manualBtId, manualRole, matchedClub ? { id: matchedClub.id, slug: matchedClub.slug, name: matchedClub.name } : undefined);
+              const clean = normalizeBtId(manualBtId);
+              grantAccess(
+                manualBtId,
+                manualRole,
+                matchedClub ? { id: matchedClub.id, slug: matchedClub.slug, name: matchedClub.name } : undefined,
+                undefined,
+                nameLookupMap.get(clean)
+              );
               setManualBtId("");
             }}
             disabled={!manualBtId.trim() || (manualRole === "CLUB_OWNER" && !manualClubId)}
@@ -866,78 +987,110 @@ export default function AdminRolesPage() {
         </div>
 
         <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-          {assignments.map((assignment) => {
-            const cleanBt = normalizeBtId(assignment.btId);
-            const isBusy = busyKey === cleanBt;
-            const isOwnerAssignment = assignment.role === "OWNER";
+          {assignments
+            .filter((assignment) => {
+              if (!searchQuery.trim()) return true;
+              const q = searchQuery.toLowerCase().trim();
+              const cleanBt = normalizeBtId(assignment.btId);
+              const resolvedName =
+                assignment.name ||
+                (cleanBt && nameLookupMap.get(cleanBt)) ||
+                (cleanBt && asyncNames[cleanBt]) ||
+                (assignment.uid && nameLookupMap.get(assignment.uid)) ||
+                "";
+              return (
+                resolvedName.toLowerCase().includes(q) ||
+                (assignment.btId && assignment.btId.toLowerCase().includes(q)) ||
+                (assignment.uid && assignment.uid.toLowerCase().includes(q)) ||
+                (assignment.clubName && assignment.clubName.toLowerCase().includes(q)) ||
+                (assignment.role && assignment.role.toLowerCase().includes(q))
+              );
+            })
+            .map((assignment) => {
+              const cleanBt = normalizeBtId(assignment.btId);
+              const isBusy = busyKey === cleanBt;
+              const isOwnerAssignment = assignment.role === "OWNER";
+              const resolvedName =
+                assignment.name ||
+                (cleanBt && nameLookupMap.get(cleanBt)) ||
+                (cleanBt && asyncNames[cleanBt]) ||
+                (assignment.uid && nameLookupMap.get(assignment.uid)) ||
+                "";
 
-            return (
-              <div
-                key={`${assignment.btId}-${assignment.uid}`}
-                className="flex flex-wrap items-center justify-between gap-4 p-4 bg-white hover:bg-slate-50 transition-colors"
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-sm font-bold text-slate-900">
-                      {assignment.btId || assignment.uid}
-                    </span>
-                    <Badge
-                      variant={
-                        assignment.role === "OWNER"
-                          ? "orange"
-                          : assignment.role === "TREASURER"
-                          ? "success"
-                          : assignment.role === "PROTOCOL_OFFICER"
-                          ? "navy"
-                          : "slate"
-                      }
-                      size="sm"
-                    >
-                      {ADMIN_ROLE_LABELS[assignment.role]}
-                    </Badge>
-                    {assignment.clubName && (
-                      <span className="text-xs font-medium text-slate-500">
-                        • {assignment.clubName}
+              return (
+                <div
+                  key={`${assignment.btId}-${assignment.uid}`}
+                  className="flex flex-wrap items-center justify-between gap-4 p-4 bg-white hover:bg-slate-50 transition-colors"
+                >
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {resolvedName ? (
+                        <span className="text-sm font-extrabold text-slate-900 tracking-tight">
+                          {resolvedName}
+                        </span>
+                      ) : null}
+
+                      <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md">
+                        {assignment.btId || assignment.uid}
                       </span>
-                    )}
+
+                      <Badge
+                        variant={
+                          assignment.role === "OWNER"
+                            ? "orange"
+                            : assignment.role === "TREASURER"
+                            ? "success"
+                            : assignment.role === "PROTOCOL_OFFICER"
+                            ? "navy"
+                            : "slate"
+                        }
+                        size="sm"
+                      >
+                        {ADMIN_ROLE_LABELS[assignment.role]}
+                      </Badge>
+                      {assignment.clubName && (
+                        <span className="text-xs font-semibold text-slate-500">
+                          • {assignment.clubName}
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-[10px] text-slate-400">
+                      Granted by {assignment.grantedBy} on {new Date(assignment.grantedAt).toLocaleDateString()}
+                      {assignment.uid && assignment.uid !== assignment.btId ? (
+                        <span className="ml-2 font-medium text-emerald-600">✓ Linked Account</span>
+                      ) : (
+                        <span className="ml-2 font-medium text-amber-600">⏳ Awaiting First Login</span>
+                      )}
+                    </p>
                   </div>
 
-                  <p className="text-[10px] text-slate-400">
-                    Granted by {assignment.grantedBy} on {new Date(assignment.grantedAt).toLocaleDateString()}
-                    {assignment.uid && assignment.uid !== assignment.btId ? (
-                      <span className="ml-2 font-medium text-emerald-600">✓ Linked Account</span>
-                    ) : (
-                      <span className="ml-2 font-medium text-amber-600">⏳ Awaiting First Login</span>
-                    )}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                      assignment.active !== false
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        : "bg-rose-50 text-rose-700 border-rose-200"
-                    }`}
-                  >
-                    {assignment.active !== false ? "Active" : "Revoked"}
-                  </span>
-
-                  {assignment.active !== false && !isOwnerAssignment && (
-                    <Button
-                      onClick={() => revokeAccess(cleanBt, assignment.uid)}
-                      disabled={isBusy}
-                      size="sm"
-                      variant="danger"
-                      className="cursor-pointer text-xs"
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                        assignment.active !== false
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : "bg-rose-50 text-rose-700 border-rose-200"
+                      }`}
                     >
-                      {isBusy ? "Revoking…" : "Revoke Access"}
-                    </Button>
-                  )}
+                      {assignment.active !== false ? "Active" : "Revoked"}
+                    </span>
+
+                    {assignment.active !== false && !isOwnerAssignment && (
+                      <Button
+                        onClick={() => revokeAccess(cleanBt, assignment.uid)}
+                        disabled={isBusy}
+                        size="sm"
+                        variant="danger"
+                        className="cursor-pointer text-xs"
+                      >
+                        {isBusy ? "Revoking…" : "Revoke Access"}
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
 
           {assignments.length === 0 && (
             <div className="p-8 text-center text-xs text-slate-500">
