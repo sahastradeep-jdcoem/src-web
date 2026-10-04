@@ -162,13 +162,12 @@ export default function Navbar() {
               <Link
                 href="/admin"
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-2 rounded-xl border border-amber-300 bg-amber-50/80 text-[#17458F] hover:bg-amber-100 hover:text-[#E78023] hover:border-[#E78023] shadow-xs transition-all font-sans font-bold",
+                  "p-2.5 rounded-xl border border-amber-200 bg-amber-50/50 text-[#17458F] hover:text-[#E78023] hover:border-[#E78023] shadow-xs transition-all",
                   isAdminRoute && "text-[#E78023] border-[#E78023] bg-[#E78023]/10"
                 )}
                 title="Admin Console"
               >
                 <ShieldCheck className="w-4 h-4 text-[#17458F]" />
-                <span className="text-xs font-bold text-[#17458F] hidden lg:inline">Admin Console</span>
               </Link>
             )}
 
