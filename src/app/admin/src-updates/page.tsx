@@ -69,13 +69,6 @@ import {
   RegisteredUserRecord 
 } from "@/lib/usersStore";
 import { 
-  getStoredCouncilMembers,
-  getStoredHostingCommittee,
-  getStoredFoundingMembers,
-  getStoredClubs,
-  getClubLeaders
-} from "@/lib/councilStore";
-import { 
   getCurrentTenure, 
   getStoredTenures, 
   syncTenuresFromFirestore, 
@@ -96,7 +89,6 @@ export default function AdminSrcUpdatesPage() {
   const [users, setUsers] = useState<RegisteredUserRecord[]>([]);
   const [availableTenures, setAvailableTenures] = useState<CouncilTenure[]>([]);
   const [selectedTenureId, setSelectedTenureId] = useState<string | null>(null);
-  const [rosterVersion, setRosterVersion] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   // Filters
@@ -264,16 +256,8 @@ export default function AdminSrcUpdatesPage() {
       setSavedMembers(getAllSavedSrcMembers());
     };
 
-    const handleRosterUpdate = () => {
-      setRosterVersion((v) => v + 1);
-      setSavedMembers(getAllSavedSrcMembers());
-    };
-
     window.addEventListener("src_users_updated", handleUsersUpdate);
     window.addEventListener("src_tenures_updated", handleTenuresUpdate);
-    window.addEventListener("src_council_team_updated", handleRosterUpdate);
-    window.addEventListener("src_hosting_updated", handleRosterUpdate);
-    window.addEventListener("src_clubs_updated", handleRosterUpdate);
 
     return () => {
       unsubDispatches();
@@ -282,9 +266,6 @@ export default function AdminSrcUpdatesPage() {
       unsubTenures();
       window.removeEventListener("src_users_updated", handleUsersUpdate);
       window.removeEventListener("src_tenures_updated", handleTenuresUpdate);
-      window.removeEventListener("src_council_team_updated", handleRosterUpdate);
-      window.removeEventListener("src_hosting_updated", handleRosterUpdate);
-      window.removeEventListener("src_clubs_updated", handleRosterUpdate);
     };
   }, []);
 
@@ -330,11 +311,10 @@ export default function AdminSrcUpdatesPage() {
       }
     });
 
-    // 3. Map of all unique student SRC positions strictly belonging to this tenure by BT ID / Name
+    // 3. Map of all unique student SRC positions strictly belonging to this tenure by BT ID
     const tenureMemberMap = new Map<string, {
       btId: string;
       normBt: string;
-      normName: string;
       name: string;
       role: string;
       email?: string;
@@ -352,11 +332,9 @@ export default function AdminSrcUpdatesPage() {
       department?: string,
       avatar?: string
     ) => {
-      if (!btId?.trim() && !name?.trim()) return;
-      const cleanBt = (btId || "").trim().toUpperCase();
+      if (!btId || !btId.trim()) return;
+      const cleanBt = btId.trim().toUpperCase();
       const nBt = normBt(btId);
-      const nName = normName(name);
-
       // Exclude honorary non-student test keys without real student BT IDs
       if (name && /sarvashree|munesh/i.test(name)) {
         return;
@@ -370,37 +348,11 @@ export default function AdminSrcUpdatesPage() {
         tier = defaultTier === "spokesperson" ? "spokesperson" : defaultTier === "admin" ? "admin" : "head";
       }
 
-      // Check if this exact student already exists in the roster map
-      let foundKey: string | null = null;
-      for (const [k, existing] of tenureMemberMap.entries()) {
-        const sameBt = Boolean(nBt && existing.normBt && nBt === existing.normBt);
-        const sameName = Boolean(nName && existing.normName && (existing.normName === nName || existing.normName.includes(nName) || nName.includes(existing.normName)));
-
-        // If both BT ID and Name match, it is the same person holding multiple positions
-        if (sameBt && sameName) {
-          foundKey = k;
-          break;
-        }
-        // If no BT ID was provided but name matches exactly
-        if (!nBt && sameName && existing.normName.length >= 4) {
-          foundKey = k;
-          break;
-        }
-      }
-
-      if (foundKey) {
-        const existing = tenureMemberMap.get(foundKey)!;
-        if (role && !existing.role.includes(role)) {
-          existing.role = `${existing.role}, ${role}`;
-        }
-        if (avatar && !existing.avatar) existing.avatar = avatar;
-        if (email && !existing.email) existing.email = email;
-      } else {
-        const uniqueKey = nBt && nName ? `${nBt}_${nName}` : (nBt || `name_${nName}` || `mem_${Date.now()}_${Math.random()}`);
-        tenureMemberMap.set(uniqueKey, {
+      const key = nBt || cleanBt;
+      if (!tenureMemberMap.has(key)) {
+        tenureMemberMap.set(key, {
           btId: cleanBt,
           normBt: nBt,
-          normName: nName,
           name: name?.trim() || "Council Member",
           role: role?.trim() || "Council Member",
           email: email?.trim(),
@@ -412,21 +364,23 @@ export default function AdminSrcUpdatesPage() {
     };
 
     // A. Admin Council from this tenure
-    const rawAdmins = (currentTenure.isCurrent ? getStoredCouncilMembers() : null) || currentTenure.adminCouncil || [];
-    rawAdmins.forEach((m) => {
+    (currentTenure.adminCouncil || []).forEach((m) => {
       registerMember(m.btId, m.name, m.role, "admin", m.email, m.department, m.avatar);
     });
 
     // B. Hosting Committee & Spokespersons from this tenure
-    const rawHosting = (currentTenure.isCurrent ? getStoredHostingCommittee() : null) || currentTenure.hostingCommittee || [];
-    rawHosting.forEach((m) => {
+    (currentTenure.hostingCommittee || []).forEach((m) => {
       registerMember(m.btId, m.name, m.role, "spokesperson", m.email, m.department, m.avatar);
     });
 
     // C. Chartered Clubs from this tenure: Leaders (Heads & Co-Heads) and Regular Members
-    const rawClubs = (currentTenure.isCurrent ? getStoredClubs() : null) || currentTenure.clubs || [];
-    rawClubs.forEach((club) => {
-      const leaders = getClubLeaders(club);
+    (currentTenure.clubs || []).forEach((club) => {
+      const leaders = [
+        ...(club.leaders || []),
+        ...(club.lead ? [club.lead] : []),
+        ...(club.coLead ? [club.coLead] : []),
+        ...(club.coLeads || []),
+      ];
       leaders.forEach((l) => {
         const isCoHead = l.roleType === "coLead" || (l.role && l.role.toLowerCase().includes("co-head"));
         registerMember(l.btId, l.name, `${club.name} ${isCoHead ? "Co-Head" : "Head"}`, isCoHead ? "cohead" : "head", l.email, l.department, l.avatar);
@@ -441,8 +395,7 @@ export default function AdminSrcUpdatesPage() {
 
     // D. Founding Members: STRICTLY registered ONLY if inspecting the 1st Founding Tenure (2025-26)
     if (isFirstTenure) {
-      const rawFounding = (currentTenure.isCurrent ? getStoredFoundingMembers() : null) || currentTenure.foundingMembers || [];
-      rawFounding.forEach((m) => {
+      (currentTenure.foundingMembers || []).forEach((m) => {
         registerMember(m.btId, m.name, m.role || "Founding Member", "member", m.email, m.department, m.avatar);
       });
     }
@@ -456,60 +409,38 @@ export default function AdminSrcUpdatesPage() {
       let matchedBy: "BT ID" | "Email" | "Name" | null = null;
       let matchedAccount: RegisteredUserRecord | undefined = undefined;
 
-      // 1. Exact match: both BT ID and Name match registered account
-      const exactMatch = users.find((u) => {
-        if (u.isDeleted || u.status === "deleted") return false;
-        const uBt = normBt(u.btId);
-        const uName = normName(u.displayName || u.name);
-        return (
-          Boolean(m.normBt && uBt && uBt === m.normBt) &&
-          Boolean(m.normName && uName && (uName === m.normName || uName.includes(m.normName) || m.normName.includes(uName)))
-        );
-      });
-
-      if (exactMatch) {
+      // 1. Check BT ID (exact or normalized alphanumeric)
+      if (m.normBt && registeredNormBtIds.has(m.normBt)) {
         isLinked = true;
         matchedBy = "BT ID";
-        matchedAccount = exactMatch;
+        matchedAccount = userLookupByBt.get(m.normBt);
       }
 
-      // 2. Fallback: match by email (if email was provided in roster or Google Sign-In)
-      if (!isLinked && m.email) {
-        const emailMatch = users.find((u) => {
-          if (u.isDeleted || u.status === "deleted") return false;
-          return Boolean(u.email && u.email.trim().toLowerCase() === m.email!.toLowerCase().trim());
-        });
-        if (emailMatch) {
-          isLinked = true;
-          matchedBy = "Email";
-          matchedAccount = emailMatch;
-        }
+      // 2. Fallback: Match by email (if email was provided in council roster or Google Sign-In)
+      if (!isLinked && m.email && registeredEmails.has(m.email.toLowerCase().trim())) {
+        isLinked = true;
+        matchedBy = "Email";
+        matchedAccount = userLookupByEmail.get(m.email.toLowerCase().trim());
       }
 
-      // 3. Fallback: match by student name
-      if (!isLinked && m.normName && m.normName.length >= 4) {
-        const nameMatch = users.find((u) => {
-          if (u.isDeleted || u.status === "deleted") return false;
-          const uName = normName(u.displayName || u.name);
-          return Boolean(uName && (uName === m.normName || uName.includes(m.normName) || m.normName.includes(uName)));
-        });
-        if (nameMatch) {
-          isLinked = true;
-          matchedBy = "Name";
-          matchedAccount = nameMatch;
-        }
-      }
-
-      // 4. Fallback: match by BT ID alone (if normalized BT ID exists in registered users)
-      if (!isLinked && m.normBt) {
-        const btMatch = users.find((u) => {
-          if (u.isDeleted || u.status === "deleted") return false;
-          return normBt(u.btId) === m.normBt;
-        });
-        if (btMatch) {
-          isLinked = true;
-          matchedBy = "BT ID";
-          matchedAccount = btMatch;
+      // 3. Fallback: Match by student name
+      if (!isLinked && m.name) {
+        const cName = normName(m.name);
+        if (cName && cName.length >= 4) {
+          if (registeredUserNames.has(cName)) {
+            isLinked = true;
+            matchedBy = "Name";
+            matchedAccount = userLookupByName.get(cName);
+          } else {
+            for (const regName of registeredUserNames) {
+              if (regName.includes(cName) || cName.includes(regName)) {
+                isLinked = true;
+                matchedBy = "Name";
+                matchedAccount = userLookupByName.get(regName);
+                break;
+              }
+            }
+          }
         }
       }
 
@@ -545,7 +476,7 @@ export default function AdminSrcUpdatesPage() {
       onboardedRegularMembers,
       membersList,
     };
-  }, [users, availableTenures, selectedTenureId, rosterVersion]);
+  }, [users, availableTenures, selectedTenureId]);
 
   // Filtered dispatches
   const filteredDispatches = useMemo(() => {
