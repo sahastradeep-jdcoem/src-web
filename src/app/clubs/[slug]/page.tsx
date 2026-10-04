@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, AlertCircle } from "lucide-react";
 import { getStoredClubs, syncClubsFromFirestore, subscribeToClubs, findClub } from "@/lib/councilStore";
 import { mockClubs } from "@/data/clubs";
@@ -10,6 +10,7 @@ import { ClubItem } from "@/types";
 import ClubDetailView from "@/components/clubs/ClubDetailView";
 
 export default function ClubDetailPage() {
+  const router = useRouter();
   const params = useParams();
   const rawSlug = params?.slug as string;
   const slug = rawSlug ? decodeURIComponent(rawSlug) : "";
@@ -81,10 +82,15 @@ export default function ClubDetailPage() {
           currentParam.includes("robotics") ||
           currentParam.includes("agentic"))
       ) {
-        window.history.replaceState(null, "", `/clubs/${canonical}`);
+        // Crucial: Preserve Next.js App Router internal state so links and navigation never freeze
+        if (window.history.state) {
+          window.history.replaceState(window.history.state, "", `/clubs/${canonical}`);
+        } else {
+          router.replace(`/clubs/${canonical}`, { scroll: false });
+        }
       }
     }
-  }, [club, slug]);
+  }, [club, slug, router]);
 
   if (isLoading && !club) {
     return (

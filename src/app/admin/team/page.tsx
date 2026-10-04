@@ -292,7 +292,7 @@ export default function AdminTeamPage() {
       sessionStorage.setItem("src_admin_selected_tenure", selectedTenure.id);
       const url = new URL(window.location.href);
       url.searchParams.set("tenure", selectedTenure.id);
-      window.history.replaceState({}, "", url.toString());
+      window.history.replaceState(window.history.state, "", url.toString());
     }
 
     setIsCopyModalOpen(false);
@@ -537,7 +537,7 @@ export default function AdminTeamPage() {
       sessionStorage.setItem("src_admin_selected_tenure", tId);
       const url = new URL(window.location.href);
       url.searchParams.set("tenure", tId);
-      window.history.replaceState({}, "", url.toString());
+      window.history.replaceState(window.history.state, "", url.toString());
     }
     const targetTenure = tenures.find((t) => t.id === tId);
     const isFirst = targetTenure?.id === "tenure-2025-26" || targetTenure?.label?.includes("2025") || targetTenure?.tenureNumber?.includes("1st");

@@ -9,6 +9,7 @@ import { ProfileSetupModal } from "@/components/auth/ProfileSetupModal";
 import { ToastContainer } from "@/components/ui/Toast";
 import SEOStructuredData from "@/components/seo/SEOStructuredData";
 import { SocialShareProvider } from "@/context/SocialShareContext";
+import NavigationProgressBar from "@/components/layout/NavigationProgressBar";
 
 export const viewport: Viewport = {
   themeColor: "#17458F",
@@ -74,6 +75,9 @@ export default function RootLayout({
       <body className="min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans flex flex-col justify-between selection:bg-[#E78023] selection:text-white">
         <Suspense fallback={null}>
           <SEOStructuredData />
+        </Suspense>
+        <Suspense fallback={null}>
+          <NavigationProgressBar />
         </Suspense>
         <AuthProvider>
           <SocialShareProvider>
