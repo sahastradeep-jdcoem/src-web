@@ -17,11 +17,13 @@ import {
   Link as LinkIcon,
   Sparkles,
   ArrowRight,
-  ChevronLeft
+  ChevronLeft,
+  AlertCircle
 } from "lucide-react";
 import { SocialSharePayload, StoryPalette } from "@/lib/share/types";
 import { extractStoryPalette, DEFAULT_STORY_PALETTE } from "@/lib/share/colorExtractor";
 import { renderStoryToCanvas, exportStoryBlob } from "@/lib/share/storyCanvasRenderer";
+import { renderBrandedQRCode, getQrDownloadFilename } from "@/lib/share/qrCanvasRenderer";
 import { toast } from "@/lib/toastStore";
 
 interface SocialShareModalProps {
@@ -31,8 +33,8 @@ interface SocialShareModalProps {
 }
 
 export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalProps) {
-  // Mode: "choose" (Options: Copy Link or Share to Instagram Story) | "instagram" (Preview, controls, download, share)
-  const [activeView, setActiveView] = useState<"choose" | "instagram">("choose");
+  // Mode: "choose" (Options: Copy Link, Instagram Story, QR Code) | "instagram" (Story Studio) | "qrcode" (Branded QR Studio)
+  const [activeView, setActiveView] = useState<"choose" | "instagram" | "qrcode">("choose");
 
   const [isRendering, setIsRendering] = useState(true);
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
@@ -44,12 +46,20 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
   const [isDownloading, setIsDownloading] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
 
+  // Dedicated QR Code Studio State
+  const [isQrRendering, setIsQrRendering] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrBlob, setQrBlob] = useState<Blob | null>(null);
+  const [qrError, setQrError] = useState<string | null>(null);
+  const [isQrDownloading, setIsQrDownloading] = useState(false);
+
   // Reset to initial choose screen whenever modal opens
   useEffect(() => {
     if (isOpen) {
       setActiveView("choose");
       setCopiedLink(false);
       setShowInstructions(false);
+      setIsQrDownloading(false);
     }
   }, [isOpen, payload]);
 
@@ -105,6 +115,50 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
     };
   }, [isOpen, payload, includeQrCode]);
 
+  // Generate Ultra-HD Branded QR Code whenever modal opens with payload
+  useEffect(() => {
+    if (!isOpen || !payload || !payload.url) {
+      setQrDataUrl(null);
+      setQrBlob(null);
+      setQrError(null);
+      return;
+    }
+
+    let isMounted = true;
+    setIsQrRendering(true);
+    setQrError(null);
+
+    async function generateQR() {
+      try {
+        if (!payload?.url || payload.url.trim().length === 0) {
+          throw new Error("Missing or invalid event URL");
+        }
+        const result = await renderBrandedQRCode(payload.url, {
+          size: 1024,
+          logoSrc: "/assets/SRC Logo.png",
+          logoRatio: 0.20,
+          margin: 4,
+        });
+
+        if (!isMounted) return;
+        setQrDataUrl(result.dataUrl);
+        setQrBlob(result.blob);
+      } catch (err: any) {
+        console.error("[SocialShareModal] Failed to generate QR code:", err);
+        if (!isMounted) return;
+        setQrError(err?.message || "Unable to generate QR code. Please try again.");
+      } finally {
+        if (isMounted) setIsQrRendering(false);
+      }
+    }
+
+    generateQR();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, payload]);
+
   if (!isOpen || !payload) return null;
 
   // Canonical share URL with lightweight UTM parameters
@@ -119,15 +173,72 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
     .slice(0, 30);
   const downloadFileName = `srcjdcoem-${sanitizedSlug}-story.png`;
 
-  // Copy Link Handler
+  // Copy Link Handler - Copies exact canonical event URL
   const handleCopyLink = async () => {
     try {
-      await navigator.clipboard.writeText(shareUrlWithUtm);
+      await navigator.clipboard.writeText(payload.url);
       setCopiedLink(true);
-      toast.show("Link copied to clipboard!", "success", { title: "Link Copied" });
+      toast.show("Canonical event link copied to clipboard!", "success", { title: "Link Copied" });
       setTimeout(() => setCopiedLink(false), 3000);
     } catch {
       toast.show("Could not copy link to clipboard", "error");
+    }
+  };
+
+  // Robust Download QR Code Image Handler
+  const handleDownloadQr = async () => {
+    if (!qrBlob && !qrDataUrl) {
+      toast.show("QR code is not ready yet", "error");
+      return;
+    }
+    setIsQrDownloading(true);
+
+    try {
+      const filename = getQrDownloadFilename(payload.url, payload.title);
+
+      // Support mobile Web Share API for saving directly to photo library
+      if (qrBlob && typeof navigator !== "undefined" && navigator.canShare) {
+        const file = new File([qrBlob], filename, { type: "image/png" });
+        if (navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: `${payload.title} QR Code`,
+            });
+            toast.show("QR Code saved / shared successfully!", "success");
+            setIsQrDownloading(false);
+            return;
+          } catch (shareErr: any) {
+            if (shareErr?.name === "AbortError") {
+              setIsQrDownloading(false);
+              return;
+            }
+          }
+        }
+      }
+
+      // Standard browser download
+      const downloadUrl = qrBlob ? URL.createObjectURL(qrBlob) : qrDataUrl!;
+      const downloadLink = document.createElement("a");
+      downloadLink.href = downloadUrl;
+      downloadLink.download = filename;
+      downloadLink.rel = "noopener";
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+
+      setTimeout(() => {
+        document.body.removeChild(downloadLink);
+        if (qrBlob) URL.revokeObjectURL(downloadUrl);
+      }, 250);
+
+      toast.show("QR Code downloaded in Ultra-HD (1024×1024)!", "success", {
+        title: "Download Complete",
+      });
+    } catch (err) {
+      console.error("[SocialShareModal] QR Download failed:", err);
+      toast.show("Could not download QR code. Try long-pressing the preview.", "error");
+    } finally {
+      setIsQrDownloading(false);
     }
   };
 
@@ -256,7 +367,13 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-lg sm:max-w-xl md:max-w-4xl max-h-[92vh] bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden flex flex-col text-slate-900 font-sans"
+        className={`relative w-full ${
+          activeView === "choose"
+            ? "max-w-lg sm:max-w-2xl md:max-w-3xl"
+            : activeView === "qrcode"
+            ? "max-w-md sm:max-w-lg"
+            : "max-w-lg sm:max-w-xl md:max-w-4xl"
+        } max-h-[92vh] bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden flex flex-col text-slate-900 font-sans transition-all duration-200`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* ================================================================= */}
@@ -288,13 +405,13 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
               </button>
             </div>
 
-            {/* Two Primary Action Options */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2">
+            {/* Three Primary Action Options */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-2">
               {/* Option 1: Copy Link */}
               <button
                 type="button"
                 onClick={handleCopyLink}
-                className="group p-5 rounded-2xl border-2 border-slate-200 hover:border-[#17458F] bg-slate-50/60 hover:bg-blue-50/30 transition-all text-left flex flex-col justify-between space-y-4 shadow-2xs hover:shadow-md cursor-pointer active:scale-[0.99]"
+                className="group p-4 sm:p-5 rounded-2xl border-2 border-slate-200 hover:border-[#17458F] bg-slate-50/60 hover:bg-blue-50/30 transition-all text-left flex flex-col justify-between space-y-4 shadow-2xs hover:shadow-md cursor-pointer active:scale-[0.99]"
               >
                 <div className="flex items-center justify-between w-full">
                   <div className="w-10 h-10 rounded-xl bg-blue-100 text-[#17458F] flex items-center justify-center group-hover:scale-105 transition-transform shadow-2xs">
@@ -307,7 +424,7 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
 
                 <div>
                   <h4 className="text-sm font-bold text-slate-900 group-hover:text-[#17458F] transition-colors">
-                    {copiedLink ? "Link Copied to Clipboard!" : "Copy Web Link"}
+                    {copiedLink ? "Link Copied!" : "Copy Web Link"}
                   </h4>
                   <p className="text-xs text-slate-500 mt-0.5 leading-snug">
                     Share directly via WhatsApp, Telegram, or messages with preview tags.
@@ -319,7 +436,7 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
               <button
                 type="button"
                 onClick={() => setActiveView("instagram")}
-                className="group p-5 rounded-2xl border-2 border-slate-200 hover:border-pink-500/80 bg-gradient-to-br from-pink-50/50 via-orange-50/30 to-amber-50/50 hover:from-pink-50 hover:to-orange-50 transition-all text-left flex flex-col justify-between space-y-4 shadow-2xs hover:shadow-md cursor-pointer active:scale-[0.99]"
+                className="group p-4 sm:p-5 rounded-2xl border-2 border-slate-200 hover:border-pink-500/80 bg-gradient-to-br from-pink-50/50 via-orange-50/30 to-amber-50/50 hover:from-pink-50 hover:to-orange-50 transition-all text-left flex flex-col justify-between space-y-4 shadow-2xs hover:shadow-md cursor-pointer active:scale-[0.99]"
               >
                 <div className="flex items-center justify-between w-full">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 text-white flex items-center justify-center group-hover:scale-105 transition-transform shadow-sm">
@@ -340,6 +457,31 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
                   </p>
                 </div>
               </button>
+
+              {/* Option 3: QR Code */}
+              <button
+                type="button"
+                onClick={() => setActiveView("qrcode")}
+                className="group p-4 sm:p-5 rounded-2xl border-2 border-slate-200 hover:border-[#17458F] bg-gradient-to-br from-slate-50/80 via-blue-50/20 to-slate-50/80 hover:from-blue-50/50 hover:to-indigo-50/30 transition-all text-left flex flex-col justify-between space-y-4 shadow-2xs hover:shadow-md cursor-pointer active:scale-[0.99]"
+              >
+                <div className="flex items-center justify-between w-full">
+                  <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center group-hover:scale-105 transition-transform shadow-2xs">
+                    <QrCode className="w-5 h-5 text-[#E78023]" />
+                  </div>
+                  <span className="text-xs font-bold text-[#17458F] opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                    View <ArrowRight className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900 group-hover:text-[#17458F] transition-colors flex items-center gap-1.5">
+                    <span>QR Code</span>
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5 leading-snug">
+                    Generate a branded QR code for this event.
+                  </p>
+                </div>
+              </button>
             </div>
 
             {/* Destination URL strip */}
@@ -356,9 +498,139 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
               </button>
             </div>
           </div>
+        ) : activeView === "qrcode" ? (
+          /* ================================================================= */
+          /* VIEW 2: DEDICATED QR CODE STUDIO (Crisp, High-Contrast & Branded)  */
+          /* ================================================================= */
+          <div className="flex flex-col max-h-[92vh]">
+            {/* Studio Header */}
+            <div className="px-5 py-3.5 sm:px-6 sm:py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white z-10">
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setActiveView("choose")}
+                  className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                  title="Back to share options"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900 leading-tight flex items-center gap-1.5">
+                    <span>Event QR Code</span>
+                    <QrCode className="w-4 h-4 text-[#17458F]" />
+                  </h3>
+                  <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
+                    Official Ultra-HD QR code with central SRC emblem
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close dialog"
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* QR Studio Content */}
+            <div className="flex-1 overflow-y-auto p-5 sm:p-7 flex flex-col items-center justify-center text-center bg-slate-50/50">
+              {/* Event Name & Category */}
+              <div className="space-y-1 mb-4 sm:mb-5 max-w-sm px-2">
+                <span className="text-[10px] sm:text-[11px] font-bold text-[#E78023] uppercase tracking-wider block">
+                  {payload.typeLabel || "OFFICIAL EVENT"}
+                </span>
+                <h4 className="text-base sm:text-lg font-heading font-extrabold text-[#0F172A] tracking-tight line-clamp-2">
+                  {payload.title}
+                </h4>
+                <p className="text-xs text-slate-500 font-medium">
+                  Event QR Code
+                </p>
+              </div>
+
+              {/* Centered QR Card Container */}
+              <div className="relative p-4 sm:p-5 bg-white rounded-3xl border-2 border-slate-200/90 shadow-xl flex flex-col items-center justify-center transition-all group">
+                {isQrRendering ? (
+                  <div className="w-[220px] h-[220px] sm:w-[260px] sm:h-[260px] flex flex-col items-center justify-center gap-3 p-4">
+                    <Loader2 className="w-8 h-8 text-[#17458F] animate-spin" />
+                    <span className="text-xs font-semibold text-slate-500">
+                      Generating branded QR code...
+                    </span>
+                  </div>
+                ) : qrError ? (
+                  <div className="w-[220px] h-[220px] sm:w-[260px] sm:h-[260px] flex flex-col items-center justify-center gap-2.5 p-4 text-center">
+                    <AlertCircle className="w-8 h-8 text-rose-500" />
+                    <span className="text-xs font-bold text-rose-700">
+                      {qrError}
+                    </span>
+                  </div>
+                ) : qrDataUrl ? (
+                  <div className="relative w-[220px] h-[220px] sm:w-[260px] sm:h-[260px] flex items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={qrDataUrl}
+                      alt={`Official QR Code for ${payload.title}`}
+                      width={260}
+                      height={260}
+                      className="w-full h-full object-contain rounded-xl select-none"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-[220px] h-[220px] sm:w-[260px] sm:h-[260px] flex items-center justify-center text-xs text-slate-400">
+                    No URL available
+                  </div>
+                )}
+              </div>
+
+              {/* Below QR: Scan Helper Prompt */}
+              <div className="mt-4 space-y-1 max-w-xs px-2">
+                <p className="text-xs font-semibold text-slate-700">
+                  Scan to view this event
+                </p>
+                <p className="text-[11px] font-mono text-slate-400 truncate max-w-[260px] mx-auto">
+                  {payload.url.replace(/^https?:\/\//, "")}
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-5 flex flex-col sm:flex-row items-center gap-2.5 w-full max-w-xs">
+                {/* Download Button */}
+                <button
+                  type="button"
+                  onClick={handleDownloadQr}
+                  disabled={isQrRendering || !!qrError || !qrDataUrl || isQrDownloading}
+                  className="w-full sm:flex-1 py-3 px-4 rounded-2xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md shadow-blue-900/20 cursor-pointer active:scale-[0.98] disabled:opacity-50 min-h-[46px]"
+                >
+                  {isQrDownloading ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  ) : (
+                    <Download className="w-4 h-4 text-[#E78023]" />
+                  )}
+                  <span>Download QR Code</span>
+                </button>
+
+                {/* Copy Canonical Link Button */}
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className="w-full sm:w-auto py-3 px-3.5 rounded-2xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] min-h-[46px]"
+                  title="Copy Link"
+                >
+                  {copiedLink ? (
+                    <Check className="w-4 h-4 text-emerald-600" />
+                  ) : (
+                    <Copy className="w-4 h-4 text-slate-500" />
+                  )}
+                  <span className="sm:hidden">{copiedLink ? "Copied" : "Copy Link"}</span>
+                </button>
+              </div>
+            </div>
+          </div>
         ) : (
           /* ================================================================= */
-          /* VIEW 2: INSTAGRAM STORY STUDIO (Clean, light-themed container) */
+          /* VIEW 3: INSTAGRAM STORY STUDIO (Clean, light-themed container) */
           /* ================================================================= */
           <div className="flex flex-col max-h-[92vh]">
             {/* Studio Header */}
