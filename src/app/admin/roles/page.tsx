@@ -974,6 +974,7 @@ export default function AdminRolesPage() {
               <option value="TREASURER">Treasurer</option>
               <option value="PROTOCOL_OFFICER">Protocol Officer</option>
               <option value="CHIEF_EDITOR">Chief Editor</option>
+              <option value="OWNER">Owner (Full Access)</option>
             </select>
           </div>
 

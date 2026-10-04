@@ -18,7 +18,8 @@ import {
   getUserProfileFromFirestore, 
   saveUserProfileToFirestore,
   getAdminAccessFromFirestore,
-  subscribeToAdminAccessForUser
+  subscribeToAdminAccessForUser,
+  findBtIdByEmailInRosters
 } from "@/lib/firebase/firestore";
 import { UserProfile, AuthUser, AuthContextType } from "@/types/auth";
 import { AdminAccessAssignment, isOwnerEmail } from "@/types/rbac";
@@ -138,13 +139,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           );
         } catch {}
 
-        const resolvedBtId = storedProfile?.btId || localProfile?.btId || registeredUser?.btId || "";
+        const rosterBt = findBtIdByEmailInRosters(fbUser.email);
+        const resolvedBtId = storedProfile?.btId || localProfile?.btId || registeredUser?.btId || rosterBt || "";
         const cleanBt = resolvedBtId ? resolvedBtId.trim().toUpperCase() : "";
 
         const isOwner = isOwnerEmail(fbUser.email);
         const isAdminUser = await checkIsAdminInFirestore(fbUser.email || "", fbUser.uid);
-        const firestoreAdminAccess = await getAdminAccessFromFirestore(fbUser.uid, cleanBt);
-        const adminAccess: AdminAccessAssignment | null = firestoreAdminAccess || (isOwner
+        const firestoreAdminAccess = await getAdminAccessFromFirestore(fbUser.uid, cleanBt, fbUser.email);
+        const adminAccess: AdminAccessAssignment | null = firestoreAdminAccess || (isOwner || isAdminUser
           ? {
               uid: fbUser.uid,
               btId: cleanBt,
@@ -262,21 +264,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!user?.uid && !user?.btId) return;
+    if (!user?.uid && !user?.btId && !user?.email) return;
     const unsubscribe = subscribeToAdminAccessForUser(user?.uid || "", user?.btId, (assignment) => {
       setUser((current) => {
         if (!current) return current;
+        const isCurrentOwner = isOwnerEmail(current.email) || current.adminAccess?.role === "OWNER";
+        // Preserve synthetic owner admin access if Firestore has no overriding document
+        const effectiveAccess = assignment || (isCurrentOwner ? (current.adminAccess || {
+          uid: current.uid,
+          btId: current.btId || "",
+          role: "OWNER",
+          active: true,
+          grantedBy: "system",
+          grantedAt: new Date(0).toISOString(),
+          updatedAt: new Date().toISOString(),
+        }) : undefined);
+
         const revokedManagedAccess = !assignment && current.adminAccessManaged && !isOwnerEmail(current.email);
         return {
           ...current,
-          adminAccess: assignment || undefined,
+          adminAccess: effectiveAccess,
           role: revokedManagedAccess ? "STUDENT" : current.role,
           adminAccessManaged: Boolean(assignment),
         };
       });
-    });
+    }, user?.email);
     return () => unsubscribe();
-  }, [user?.uid, user?.btId]);
+  }, [user?.uid, user?.btId, user?.email]);
 
   useEffect(() => {
     const handleUsersChange = () => {
@@ -340,20 +354,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const fbUser = await firebaseGoogleSignIn();
       if (fbUser) {
         let storedProfile = await getUserProfileFromFirestore(fbUser.uid);
-        const isAdminUser = await checkIsAdminInFirestore(fbUser.email || "", fbUser.uid);
-        const firestoreAdminAccess = await getAdminAccessFromFirestore(fbUser.uid);
-        const adminAccess: AdminAccessAssignment | null = firestoreAdminAccess || (isOwnerEmail(fbUser.email)
-          ? {
-              uid: fbUser.uid,
-              btId: (storedProfile?.btId || "").trim().toUpperCase(),
-              role: "OWNER",
-              active: true,
-              grantedBy: "system",
-              grantedAt: new Date(0).toISOString(),
-              updatedAt: new Date().toISOString(),
-            }
-          : null);
-
         let localProfile: Partial<UserProfile> = {};
         try {
           const cached = localStorage.getItem("src_auth_user");
@@ -373,8 +373,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           );
         } catch {}
 
-        const resolvedBtId = storedProfile?.btId || localProfile?.btId || registeredUser?.btId || "";
+        const rosterBt = findBtIdByEmailInRosters(fbUser.email);
+        const resolvedBtId = storedProfile?.btId || localProfile?.btId || registeredUser?.btId || rosterBt || "";
         const cleanBt = resolvedBtId ? resolvedBtId.trim().toUpperCase() : "";
+
+        const isOwner = isOwnerEmail(fbUser.email);
+        const isAdminUser = await checkIsAdminInFirestore(fbUser.email || "", fbUser.uid);
+        const firestoreAdminAccess = await getAdminAccessFromFirestore(fbUser.uid, cleanBt, fbUser.email || undefined);
+        const adminAccess: AdminAccessAssignment | null = firestoreAdminAccess || (isOwner || isAdminUser
+          ? {
+              uid: fbUser.uid,
+              btId: cleanBt,
+              role: "OWNER",
+              active: true,
+              grantedBy: "system",
+              grantedAt: new Date(0).toISOString(),
+              updatedAt: new Date().toISOString(),
+            }
+          : null);
         
         // Dynamic council/club roster resolution is authoritative for users with a BT ID.
         const targetName = storedProfile?.displayName || storedProfile?.name || localProfile?.displayName || localProfile?.name || registeredUser?.name || fbUser.displayName || fbUser.email;
@@ -616,7 +632,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         isLoading,
-        isAdmin: isOwnerEmail(user?.email) || user?.adminAccess?.role === "OWNER" || (user?.adminAccess?.active !== false && Boolean(user?.adminAccess?.role)),
+        isAdmin: isOwnerEmail(user?.email) || user?.role === "COUNCIL_ADMIN" || user?.adminAccess?.role === "OWNER" || (user?.adminAccess?.active !== false && Boolean(user?.adminAccess?.role)),
         isOwner: isOwnerEmail(user?.email) || user?.adminAccess?.role === "OWNER",
         adminAccess: user?.adminAccess || null,
         isAuthModalOpen,

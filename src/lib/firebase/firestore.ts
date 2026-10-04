@@ -15,7 +15,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./config";
 import { UserProfile } from "@/types/auth";
-import { AdminAccessAssignment, AdminAccessRole, normalizeBtId } from "@/types/rbac";
+import { AdminAccessAssignment, AdminAccessRole, normalizeBtId, isOwnerEmail } from "@/types/rbac";
 import { EventItem } from "@/types";
 import { safeStorageSet } from "@/lib/safeStorage";
 
@@ -84,21 +84,100 @@ const ADMINS_COLLECTION = "admins";
 const USERS_COLLECTION = "users";
 export const ADMIN_ACCESS_COLLECTION = "admin_access";
 
-export async function getAdminAccessFromFirestore(uid?: string, btId?: string): Promise<AdminAccessAssignment | null> {
+/**
+ * Resolves a student's BT ID from official rosters using their email address.
+ * Matches across canonical council, council roster, hosting committee, spokespersons, and chartered clubs.
+ */
+export function findBtIdByEmailInRosters(email?: string | null): string {
+  if (!email) return "";
+  const cleanEmail = email.toLowerCase().trim();
+
+  // 1. Canonical council JSON
+  try {
+    const canonical = require("@/data/canonicalCouncil.json");
+    if (Array.isArray(canonical)) {
+      const match = canonical.find((c: any) => c.email && c.email.toLowerCase().trim() === cleanEmail);
+      if (match?.btId) return normalizeBtId(match.btId);
+    }
+  } catch {}
+
+  // 2. Council store
+  try {
+    const { getStoredCouncilMembers, getStoredHostingCommittee, getStoredSpokespersons } = require("@/lib/councilStore");
+    const members = [
+      ...getStoredCouncilMembers(),
+      ...getStoredHostingCommittee(),
+      ...getStoredSpokespersons(),
+    ];
+    const match = members.find((m: any) => m.email && m.email.toLowerCase().trim() === cleanEmail);
+    if (match?.btId) return normalizeBtId(match.btId);
+  } catch {}
+
+  // 3. Chartered Clubs
+  try {
+    const { getStoredClubs, getClubLeaders } = require("@/lib/councilStore");
+    const clubs = getStoredClubs();
+    for (const club of clubs) {
+      const leaders = getClubLeaders(club);
+      const lMatch = leaders.find((l: any) => l.email && l.email.toLowerCase().trim() === cleanEmail);
+      if (lMatch?.btId) return normalizeBtId(lMatch.btId);
+      if (Array.isArray(club.members)) {
+        const mMatch = club.members.find((m: any) => m.email && m.email.toLowerCase().trim() === cleanEmail);
+        if (mMatch?.btId) return normalizeBtId(mMatch.btId);
+      }
+    }
+  } catch {}
+
+  return "";
+}
+
+export async function getAdminAccessFromFirestore(
+  uid?: string, 
+  btId?: string, 
+  email?: string
+): Promise<AdminAccessAssignment | null> {
   if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return null;
   const cleanBt = normalizeBtId(btId);
+  const cleanEmail = (email || "").toLowerCase().trim();
   try {
     if (uid) {
       const snapUid = await getDoc(doc(db, ADMIN_ACCESS_COLLECTION, uid));
       if (snapUid.exists()) {
-        return { uid: snapUid.id, ...snapUid.data() } as AdminAccessAssignment;
+        const data = snapUid.data() as AdminAccessAssignment;
+        if (data.active !== false) {
+          return { ...data, uid: data.uid || snapUid.id };
+        }
       }
     }
     if (cleanBt) {
       const snapBt = await getDoc(doc(db, ADMIN_ACCESS_COLLECTION, cleanBt));
       if (snapBt.exists()) {
-        return { uid: snapBt.id, ...snapBt.data() } as AdminAccessAssignment;
+        const data = snapBt.data() as AdminAccessAssignment;
+        if (data.active !== false) {
+          return { ...data, uid: data.uid || snapBt.id };
+        }
       }
+    }
+    if (cleanEmail) {
+      const snapEmail = await getDoc(doc(db, ADMIN_ACCESS_COLLECTION, cleanEmail));
+      if (snapEmail.exists()) {
+        const data = snapEmail.data() as AdminAccessAssignment;
+        if (data.active !== false) {
+          return { ...data, uid: data.uid || snapEmail.id };
+        }
+      }
+      try {
+        const q = query(
+          collection(db, ADMIN_ACCESS_COLLECTION),
+          where("email", "==", cleanEmail)
+        );
+        const qSnap = await getDocs(q);
+        if (!qSnap.empty) {
+          const docActive = qSnap.docs.find((d) => (d.data() as AdminAccessAssignment).active !== false) || qSnap.docs[0];
+          const docData = docActive.data() as AdminAccessAssignment;
+          return { ...docData, uid: docData.uid || docActive.id };
+        }
+      } catch {}
     }
     return null;
   } catch (error) {
@@ -155,19 +234,24 @@ export function subscribeToAdminAccessFromFirestore(
 export function subscribeToAdminAccessForUser(
   uid: string,
   btId: string | undefined,
-  callback: (assignment: AdminAccessAssignment | null) => void
+  callback: (assignment: AdminAccessAssignment | null) => void,
+  email?: string | null
 ): () => void {
   if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return () => {};
   const cleanBt = normalizeBtId(btId);
+  const cleanEmail = (email || "").toLowerCase().trim();
   const unsubs: (() => void)[] = [];
   let uidAssignment: AdminAccessAssignment | null = null;
   let btAssignment: AdminAccessAssignment | null = null;
+  let emailAssignment: AdminAccessAssignment | null = null;
 
   const notify = () => {
     const active = (uidAssignment?.active !== false && uidAssignment) ||
                    (btAssignment?.active !== false && btAssignment) ||
+                   (emailAssignment?.active !== false && emailAssignment) ||
                    uidAssignment ||
                    btAssignment ||
+                   emailAssignment ||
                    null;
     callback(active);
   };
@@ -194,6 +278,18 @@ export function subscribeToAdminAccessForUser(
             notify();
           },
           (error) => console.warn("Firestore btId admin access notice", error)
+        )
+      );
+    }
+    if (cleanEmail) {
+      unsubs.push(
+        onSnapshot(
+          doc(db, ADMIN_ACCESS_COLLECTION, cleanEmail),
+          (snap) => {
+            emailAssignment = snap.exists() ? ({ uid: snap.id, ...snap.data() } as AdminAccessAssignment) : null;
+            notify();
+          },
+          (error) => console.warn("Firestore email admin access notice", error)
         )
       );
     }
@@ -270,7 +366,7 @@ export async function checkIsAdminInFirestore(email?: string | null, uid?: strin
     "src.gensec@jdcoem.ac.in",
   ];
 
-  if (normalizedEmail && DEFAULT_ADMINS.includes(normalizedEmail)) {
+  if (normalizedEmail && (isOwnerEmail(normalizedEmail) || DEFAULT_ADMINS.includes(normalizedEmail))) {
     return true;
   }
 

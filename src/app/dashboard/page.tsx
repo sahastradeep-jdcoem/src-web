@@ -99,7 +99,14 @@ import {
 } from "@/lib/srcDispatchesStore";
 
 export default function StudentDashboardPage() {
-  const { user, openAuthModal, openProfileModal, logout } = useAuth();
+  const { user, openAuthModal, openProfileModal, logout, isAdmin, isOwner } = useAuth();
+  const isUserAdmin = Boolean(
+    isAdmin ||
+    isOwner ||
+    user?.role === "COUNCIL_ADMIN" ||
+    user?.adminAccess?.role === "OWNER" ||
+    (user?.adminAccess?.active !== false && Boolean(user?.adminAccess?.role))
+  );
   const [registrations, setRegistrations] = useState<RegistrationRecord[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -982,6 +989,16 @@ export default function StudentDashboardPage() {
 
             {/* Quick Actions Toolbar */}
             <div className="flex flex-wrap items-center gap-2.5 pt-2 lg:pt-0">
+              {isUserAdmin && (
+                <Link
+                  href="/admin"
+                  className="inline-flex items-center gap-1.5 py-2.5 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs shadow-md shadow-amber-400/25 transition-all cursor-pointer font-sans"
+                >
+                  <ShieldCheck className="w-4 h-4 text-slate-950" />
+                  <span>Admin Console</span>
+                </Link>
+              )}
+
               <Button
                 onClick={openProfileModal}
                 variant="outline"

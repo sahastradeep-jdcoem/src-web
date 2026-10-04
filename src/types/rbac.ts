@@ -44,14 +44,20 @@ export const DEFAULT_OWNER_EMAILS = [
   "harshshende0718@gmail.com",
   "harshxfr@gmail.com",
   "studentrepresentcouncil@jdcoem.ac.in",
+  "admin@jdcoem.ac.in",
+  "src.president@jdcoem.ac.in",
+  "src.mentor@jdcoem.ac.in",
+  "src.gensec@jdcoem.ac.in",
 ];
 
 export function isOwnerEmail(email?: string | null): boolean {
+  if (!email) return false;
   const configured = typeof process !== "undefined" ? process.env.NEXT_PUBLIC_SRC_OWNER_EMAIL : undefined;
-  const allowed = [configured, ...DEFAULT_OWNER_EMAILS]
+  const configuredList = configured ? configured.split(",").map((e) => e.trim().toLowerCase()) : [];
+  const allowed = [...configuredList, ...DEFAULT_OWNER_EMAILS]
     .filter(Boolean)
-    .map((value) => value!.trim().toLowerCase());
-  return Boolean(email && allowed.includes(email.trim().toLowerCase()));
+    .map((value) => value.trim().toLowerCase());
+  return allowed.includes(email.trim().toLowerCase());
 }
 
 export const ADMIN_ROLE_CAPABILITIES: Record<AdminAccessRole, AdminCapability[]> = {

@@ -33,14 +33,18 @@ service cloud.firestore {
         : null;
     }
 
-    // Retrieve active role assignment from /admin_access keyed by UID or BT ID
+    // Retrieve active role assignment from /admin_access keyed by UID, BT ID, or Email
     function getAdminAccess() {
       return (isAuthenticated() && exists(/databases/$(database)/documents/admin_access/$(request.auth.uid)))
         ? get(/databases/$(database)/documents/admin_access/$(request.auth.uid)).data
         : (
           (getUserBtId() != null && exists(/databases/$(database)/documents/admin_access/$(getUserBtId())))
             ? get(/databases/$(database)/documents/admin_access/$(getUserBtId())).data
-            : null
+            : (
+              (request.auth.token.email != null && exists(/databases/$(database)/documents/admin_access/$(request.auth.token.email)))
+                ? get(/databases/$(database)/documents/admin_access/$(request.auth.token.email)).data
+                : null
+            )
         );
     }
 
@@ -58,7 +62,11 @@ service cloud.firestore {
           'shendeha@jdcoem.ac.in',
           'harshshende0718@gmail.com',
           'harshxfr@gmail.com',
-          'studentrepresentcouncil@jdcoem.ac.in'
+          'studentrepresentcouncil@jdcoem.ac.in',
+          'admin@jdcoem.ac.in',
+          'src.president@jdcoem.ac.in',
+          'src.mentor@jdcoem.ac.in',
+          'src.gensec@jdcoem.ac.in'
         ] ||
         (getAdminAccess() != null && getAdminAccess().role == 'OWNER' && getAdminAccess().active != false)
       );
@@ -128,9 +136,15 @@ service cloud.firestore {
       allow write: if isPrivilegedAdmin();
     }
 
-    // Owner-controlled admin access assignments (keyed by UID or BT ID)
+    // Owner-controlled admin access assignments (keyed by UID, BT ID, or Email)
     match /admin_access/{accessId} {
-      allow read: if isOwner() || (isAuthenticated() && (request.auth.uid == accessId || getUserBtId() == accessId));
+      allow read: if isOwner() || (
+        isAuthenticated() && (
+          request.auth.uid == accessId ||
+          getUserBtId() == accessId ||
+          request.auth.token.email == accessId
+        )
+      );
       allow write: if isOwner();
     }
 
