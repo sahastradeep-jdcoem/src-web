@@ -68,19 +68,16 @@ export default function ClubDetailPage() {
     };
   }, [slug]);
 
-  // Synchronize canonical URL if accessed via legacy or alternate alias (e.g. /clubs/robotics -> /clubs/agentic-ai or vice versa)
+  // Synchronize canonical URL only if accessed via an ID or '-club' variant of this exact club
   useEffect(() => {
     if (club?.slug && slug && typeof window !== "undefined") {
       const currentParam = slug.toLowerCase().trim();
       const canonical = club.slug.toLowerCase().trim();
       if (
         currentParam !== canonical &&
-        (currentParam === "agentic-ai" ||
-          currentParam === "robotics" ||
-          currentParam === "robotics-club" ||
-          currentParam === "agentic-ai-club" ||
-          currentParam.includes("robotics") ||
-          currentParam.includes("agentic"))
+        (currentParam === `${canonical}-club` ||
+          `${currentParam}-club` === canonical ||
+          currentParam === (club.id || "").toLowerCase().trim())
       ) {
         router.replace(`/clubs/${canonical}`, { scroll: false });
       }

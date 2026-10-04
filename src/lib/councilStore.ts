@@ -115,36 +115,19 @@ export async function saveClubLeadersDocument(
     members: rawMembers,
     updatedAt: Date.now(),
   });
-  const partnerDocId =
-    docId === "club_leaders_agentic-ai"
-      ? "club_leaders_robotics"
-      : docId === "club_leaders_robotics"
-      ? "club_leaders_agentic-ai"
-      : null;
-
   markLocalWrite(docId);
-  if (partnerDocId) markLocalWrite(partnerDocId);
 
   if (typeof window !== "undefined") {
     try {
       localStorage.setItem(`src_${docId}`, JSON.stringify(sanitized));
-      if (partnerDocId) {
-        localStorage.setItem(`src_${partnerDocId}`, JSON.stringify(sanitized));
-      }
     } catch {}
   }
   try {
     await saveSiteContentToFirestore(docId, sanitized);
-    if (partnerDocId) {
-      await saveSiteContentToFirestore(partnerDocId, sanitized).catch(() => {});
-    }
   } catch (err) {
     console.warn(`Firestore direct write for club leaders [${docId}] failed, enqueuing:`, err);
   }
   enqueueCloudWrite(docId, sanitized, `Club Leaders (${payload.clubName || slugOrId})`);
-  if (partnerDocId) {
-    enqueueCloudWrite(partnerDocId, sanitized, `Club Leaders Partner (${payload.clubName || slugOrId})`);
-  }
 }
 
 /**
@@ -152,34 +135,11 @@ export async function saveClubLeadersDocument(
  */
 export async function getClubLeadersDocument(slugOrId: string): Promise<ClubLeadersDocument | null> {
   const docId = getClubLeadersDocId(slugOrId);
-  const partnerDocId =
-    docId === "club_leaders_agentic-ai"
-      ? "club_leaders_robotics"
-      : docId === "club_leaders_robotics"
-      ? "club_leaders_agentic-ai"
-      : null;
 
   try {
     const remote = await getSiteContentFromFirestore<ClubLeadersDocument>(docId);
     if (remote !== null && typeof remote === "object") {
-      if (Array.isArray(remote.leaders) && remote.leaders.length > 0) {
-        return remote;
-      }
-      // If primary doc has no leaders, check partner fallback if applicable
-      if (partnerDocId) {
-        const partnerRemote = await getSiteContentFromFirestore<ClubLeadersDocument>(partnerDocId);
-        if (partnerRemote !== null && typeof partnerRemote === "object" && Array.isArray(partnerRemote.leaders) && partnerRemote.leaders.length > 0) {
-          return partnerRemote;
-        }
-      }
       return remote;
-    }
-
-    if (partnerDocId) {
-      const partnerRemote = await getSiteContentFromFirestore<ClubLeadersDocument>(partnerDocId);
-      if (partnerRemote !== null && typeof partnerRemote === "object") {
-        return partnerRemote;
-      }
     }
   } catch (err) {
     console.warn(`Could not fetch [${docId}] from Firestore:`, err);
@@ -187,14 +147,6 @@ export async function getClubLeadersDocument(slugOrId: string): Promise<ClubLead
   if (typeof window !== "undefined") {
     try {
       const cached = localStorage.getItem(`src_${docId}`);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed?.leaders) && parsed.leaders.length > 0) return parsed;
-      }
-      if (partnerDocId) {
-        const partnerCached = localStorage.getItem(`src_${partnerDocId}`);
-        if (partnerCached) return JSON.parse(partnerCached);
-      }
       if (cached) return JSON.parse(cached);
     } catch {}
   }
@@ -1099,47 +1051,7 @@ export function findClub(allClubs: ClubItem[], targetSlugOrId: string): ClubItem
   });
   if (byStrippedName) return byStrippedName;
 
-  // 5. Cross-alias for Robotics / Agentic AI with smart priority
-  const isAgenticQuery = cleanTarget === "agentic-ai" || cleanTarget === "agentic-ai-club" || cleanTarget.includes("agentic");
-  const isRoboticsQuery = cleanTarget === "robotics" || cleanTarget === "robotics-club" || cleanTarget.includes("robotics");
 
-  if (isAgenticQuery) {
-    const agenticMatch = allClubs.find(
-      (c) =>
-        c?.slug?.toLowerCase() === "agentic-ai" ||
-        c?.name?.toLowerCase().includes("agentic")
-    );
-    if (agenticMatch) return agenticMatch;
-
-    // Fallback if current tenure only has robotics
-    const roboticsFallback = allClubs.find(
-      (c) =>
-        c?.slug?.toLowerCase() === "robotics" ||
-        c?.id?.toLowerCase() === "club-robotics" ||
-        c?.id === "club-1788779206223" ||
-        c?.name?.toLowerCase().includes("robotics")
-    );
-    if (roboticsFallback) return roboticsFallback;
-  }
-
-  if (isRoboticsQuery) {
-    const roboticsMatch = allClubs.find(
-      (c) =>
-        c?.slug?.toLowerCase() === "robotics" ||
-        c?.name?.toLowerCase().includes("robotics")
-    );
-    if (roboticsMatch) return roboticsMatch;
-
-    // Fallback if current tenure only has agentic ai
-    const agenticFallback = allClubs.find(
-      (c) =>
-        c?.slug?.toLowerCase() === "agentic-ai" ||
-        c?.id?.toLowerCase() === "club-robotics" ||
-        c?.id === "club-1788779206223" ||
-        c?.name?.toLowerCase().includes("agentic")
-    );
-    if (agenticFallback) return agenticFallback;
-  }
 
   // 6. Generic partial contains matching
   const byFuzzy = allClubs.find((c) => {
