@@ -264,7 +264,7 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
               CLUB COORDINATORS & LEADERSHIP
             </h3>
             <p className="text-xs text-slate-500 font-medium">
-              Council-appointed student heads overseeing club affairs and workshops.
+              Council-appointed student heads overseeing the club
             </p>
           </div>
 
