@@ -16,7 +16,7 @@ import {
   Image as ImageIcon 
 } from "lucide-react";
 import { getStoredClubs, syncClubsFromFirestore, subscribeToClubs, getClubLeaders, findClub } from "@/lib/councilStore";
-import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, isSubEvent } from "@/lib/eventsStore";
+import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
 import { findStudentByBtId, checkBtIdPositionConflict } from "@/lib/usersStore";
 import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { ClubItem, EventItem } from "@/types";
@@ -106,11 +106,11 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
     const applyEvents = (list: EventItem[]) => {
       const filtered = list.filter(
         (e) =>
-          !isSubEvent(e, list) &&
           e.isLive !== false &&
           e.status !== "draft" &&
           !e.isCancelled &&
           e.status !== "Cancelled" &&
+          !e.isParentFest &&
           (e.organizerClubSlug === club.slug ||
             e.organizerClubSlug === club.id ||
             e.collaboratingClubs?.some((c) => c.slug === club.slug || c.id === club.id))
@@ -118,7 +118,22 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
       setEvents(filtered);
     };
 
+    // 1. Instant optimistic render from localStorage cache
     applyEvents(getStoredEvents());
+
+    // 2. Fetch authoritative cloud state
+    syncEventsFromFirestore().then((remote) => {
+      if (remote && Array.isArray(remote) && remote.length > 0) {
+        applyEvents(remote);
+      }
+    });
+
+    // 3. Real-time subscription for live updates
+    const unsubscribeEvents = subscribeToEvents((remoteEvents) => {
+      if (remoteEvents && Array.isArray(remoteEvents) && remoteEvents.length > 0) {
+        applyEvents(remoteEvents);
+      }
+    });
 
     const handleEventsUpdate = (e?: any) => {
       if (e?.detail && Array.isArray(e.detail)) {
@@ -130,6 +145,7 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
     window.addEventListener("src_events_updated", handleEventsUpdate);
 
     return () => {
+      unsubscribeEvents();
       window.removeEventListener("src_events_updated", handleEventsUpdate);
     };
   }, [club.slug, club.id]);
