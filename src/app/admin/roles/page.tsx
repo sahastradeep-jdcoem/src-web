@@ -15,7 +15,8 @@ import {
   Search,
   Building2,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Image as ImageIcon
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/Button";
@@ -65,7 +66,7 @@ interface OfficerCandidate {
   name: string;
   detectedBtId: string;
   currentBtId: string;
-  role: "TREASURER" | "PROTOCOL_OFFICER";
+  role: "TREASURER" | "PROTOCOL_OFFICER" | "CHIEF_EDITOR";
   surface: string;
   source: string;
 }
@@ -350,6 +351,40 @@ export default function AdminRolesPage() {
       });
     }
 
+    // 3. Chief Editor (Visual & Media Gallery Studio)
+    const chiefEditors = officers.filter((m) =>
+      /chief\s*editor|editor|editorial|media\s*lead|creative\s*director|photography\s*head/i.test(m.role || "")
+    );
+    if (chiefEditors.length > 0) {
+      chiefEditors.forEach((e, idx) => {
+        const slotKey = `officer:chief_editor:${idx}`;
+        const detectedBt = normalizeBtId(e.btId);
+        list.push({
+          key: slotKey,
+          title: "Chief Editor",
+          name: e.name,
+          detectedBtId: detectedBt,
+          currentBtId: btIdOverrides[slotKey] !== undefined ? btIdOverrides[slotKey] : detectedBt,
+          role: "CHIEF_EDITOR",
+          surface: "Gallery Surface Only",
+          source: e.role || "Chief Editor",
+        });
+      });
+    } else {
+      // Fallback placeholder slot so owner can assign manually
+      const slotKey = "officer:chief_editor:fallback";
+      list.push({
+        key: slotKey,
+        title: "Chief Editor",
+        name: "Appointed Chief Editor",
+        detectedBtId: "",
+        currentBtId: btIdOverrides[slotKey] || "",
+        role: "CHIEF_EDITOR",
+        surface: "Gallery Surface Only",
+        source: "Council Office",
+      });
+    }
+
     return list;
   }, [officers, btIdOverrides]);
 
@@ -591,14 +626,14 @@ export default function AdminRolesPage() {
         </div>
       )}
 
-      {/* SECTION 1: TREASURER & PROTOCOL OFFICERS ACCESS */}
+      {/* SECTION 1: TREASURER, PROTOCOL & CHIEF EDITOR ACCESS */}
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-[#17458F]" />
               <h2 className="font-heading text-lg font-extrabold text-slate-900">
-                Treasurer &amp; Protocol Officers Access
+                Treasurer, Protocol &amp; Chief Editor Access
               </h2>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -625,14 +660,25 @@ export default function AdminRolesPage() {
                       <div className="p-2 rounded-xl bg-white border border-slate-200 shadow-2xs">
                         {officer.role === "TREASURER" ? (
                           <CreditCard className="h-5 w-5 text-emerald-600" />
-                        ) : (
+                        ) : officer.role === "PROTOCOL_OFFICER" ? (
                           <BellRing className="h-5 w-5 text-indigo-600" />
+                        ) : (
+                          <ImageIcon className="h-5 w-5 text-purple-600" />
                         )}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
                           <h3 className="font-bold text-sm text-slate-900">{officer.title}</h3>
-                          <Badge variant={officer.role === "TREASURER" ? "success" : "navy"} size="sm">
+                          <Badge
+                            variant={
+                              officer.role === "TREASURER"
+                                ? "success"
+                                : officer.role === "PROTOCOL_OFFICER"
+                                ? "navy"
+                                : "purple"
+                            }
+                            size="sm"
+                          >
                             {officer.surface}
                           </Badge>
                         </div>
@@ -927,6 +973,7 @@ export default function AdminRolesPage() {
               <option value="CLUB_OWNER">Club Owner</option>
               <option value="TREASURER">Treasurer</option>
               <option value="PROTOCOL_OFFICER">Protocol Officer</option>
+              <option value="CHIEF_EDITOR">Chief Editor</option>
             </select>
           </div>
 
@@ -1042,6 +1089,8 @@ export default function AdminRolesPage() {
                             ? "success"
                             : assignment.role === "PROTOCOL_OFFICER"
                             ? "navy"
+                            : assignment.role === "CHIEF_EDITOR"
+                            ? "purple"
                             : "slate"
                         }
                         size="sm"

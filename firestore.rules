@@ -109,6 +109,7 @@ service cloud.firestore {
       allow write: if isPrivilegedAdmin() ||
         (hasRole('PROTOCOL_OFFICER') && (docId == 'src_dispatches' || docId == 'src_dispatch_responses')) ||
         (hasRole('TREASURER') && docId == 'payment_config') ||
+        (hasRole('CHIEF_EDITOR') && (docId == 'gallery_photos' || docId == 'gallery_categories')) ||
         (isClubOwner() && (docId == 'clubs' || docId == 'listings'));
     }
 

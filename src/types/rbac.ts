@@ -2,12 +2,14 @@ export type AdminAccessRole =
   | "OWNER"
   | "TREASURER"
   | "PROTOCOL_OFFICER"
+  | "CHIEF_EDITOR"
   | "CLUB_OWNER";
 
 export type AdminCapability =
   | "all"
   | "payments"
   | "src_operations"
+  | "gallery_manage"
   | "club_manage"
   | "events_manage"
   | "engagement_manage"
@@ -32,6 +34,7 @@ export const ADMIN_ROLE_LABELS: Record<AdminAccessRole, string> = {
   OWNER: "Owner",
   TREASURER: "Treasurer",
   PROTOCOL_OFFICER: "Protocol Officer",
+  CHIEF_EDITOR: "Chief Editor",
   CLUB_OWNER: "Club Owner",
 };
 
@@ -55,6 +58,7 @@ export const ADMIN_ROLE_CAPABILITIES: Record<AdminAccessRole, AdminCapability[]>
   OWNER: ["all"],
   TREASURER: ["payments"],
   PROTOCOL_OFFICER: ["src_operations"],
+  CHIEF_EDITOR: ["gallery_manage"],
   CLUB_OWNER: [
     "club_manage",
     "events_manage",
@@ -70,6 +74,8 @@ export function getDefaultAdminRoute(role?: AdminAccessRole | null): string {
       return "/admin/payments";
     case "PROTOCOL_OFFICER":
       return "/admin/src-updates";
+    case "CHIEF_EDITOR":
+      return "/admin/gallery";
     case "CLUB_OWNER":
       return "/admin/clubs";
     case "OWNER":
@@ -110,6 +116,7 @@ export function adminRouteCapabilities(pathname: string): AdminCapability[] {
   if (pathname === "/admin" || pathname === "/admin/users" || pathname === "/admin/roles") {
     return ["all"];
   }
+  if (pathname.startsWith("/admin/gallery")) return ["gallery_manage"];
   if (pathname.startsWith("/admin/payments")) return ["payments"];
   if (pathname.startsWith("/admin/src-updates")) return ["src_operations"];
   if (pathname.startsWith("/admin/clubs")) return ["club_manage"];
