@@ -48,6 +48,7 @@ import {
   getStoredClubs,
   saveStoredClubs,
   getClubLeaders,
+  getClubLeadersDocId,
   syncCouncilMembersFromFirestore,
   subscribeToCouncilMembers,
   syncHostingCommitteeFromFirestore,
@@ -628,8 +629,12 @@ export default function AdminTeamPage() {
         let resolvedAvatar = leader.avatar || "";
         if ((!resolvedAvatar || resolvedAvatar.trim() === "") && typeof window !== "undefined") {
           const rawSlug = (club.slug || club.id || "").toLowerCase().trim().replace(/^club-/, "");
-          const docId = `club_leaders_${rawSlug === "agentic-ai" ? "robotics" : rawSlug}`;
-          const cached = localStorage.getItem(`src_${docId}`);
+          const docId = getClubLeadersDocId(rawSlug);
+          let cached = localStorage.getItem(`src_${docId}`);
+          if (!cached && (rawSlug === "agentic-ai" || rawSlug === "robotics")) {
+            const altDocId = rawSlug === "agentic-ai" ? "club_leaders_robotics" : "club_leaders_agentic-ai";
+            cached = localStorage.getItem(`src_${altDocId}`);
+          }
           if (cached) {
             try {
               const parsed = JSON.parse(cached);

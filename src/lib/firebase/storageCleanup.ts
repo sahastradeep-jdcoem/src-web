@@ -323,6 +323,7 @@ export async function collectAllReferencedPaths(): Promise<{
     "club_leaders_nexus",
     "club_leaders_publicity",
     "club_leaders_robotics",
+    "club_leaders_agentic-ai",
     "club_leaders_visual-arts",
     // Draft Tenure Collections
     "draft_council_tenure-2025-26",

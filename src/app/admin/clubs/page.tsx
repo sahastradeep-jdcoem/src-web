@@ -281,9 +281,14 @@ export default function AdminClubsPage() {
     }
 
     // Normalize clean slug in background from club name (or existing slug)
-    let rawSlug = (club.slug && club.slug.trim().length > 0) ? club.slug : club.name;
-    if (rawSlug.startsWith("club-") && club.name.trim().length > 0) {
-      rawSlug = club.name;
+    const lowerName = club.name.toLowerCase().trim();
+    let rawSlug = club.name;
+    if (lowerName.includes("agentic")) {
+      rawSlug = "agentic-ai";
+    } else if (lowerName.includes("robotics")) {
+      rawSlug = "robotics";
+    } else if (club.slug && club.slug.trim().length > 0 && !club.slug.startsWith("club-")) {
+      rawSlug = club.slug;
     }
     const cleanSlug = rawSlug
       .toLowerCase()
