@@ -1440,7 +1440,7 @@ export function subscribeToClubs(callback: (clubs: ClubItem[]) => void): () => v
         }
 
         // Asynchronously fetch missing dedicated document so avatars load automatically
-        if (typeof window !== "undefined" && slug) {
+        if (typeof window !== "undefined" && slug && !leaderDoc) {
           getClubLeadersDocument(slug).then((doc) => {
             if (doc && (doc.lead?.avatar || doc.leaders?.some((l) => l.avatar))) {
               try {

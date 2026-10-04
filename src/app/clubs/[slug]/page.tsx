@@ -82,12 +82,7 @@ export default function ClubDetailPage() {
           currentParam.includes("robotics") ||
           currentParam.includes("agentic"))
       ) {
-        // Crucial: Preserve Next.js App Router internal state so links and navigation never freeze
-        if (window.history.state) {
-          window.history.replaceState(window.history.state, "", `/clubs/${canonical}`);
-        } else {
-          router.replace(`/clubs/${canonical}`, { scroll: false });
-        }
+        router.replace(`/clubs/${canonical}`, { scroll: false });
       }
     }
   }, [club, slug, router]);

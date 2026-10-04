@@ -73,7 +73,12 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
   }, [club.members, club.slug, club.id]);
 
   useEffect(() => {
-    const applyClub = (list: ClubItem[]) => {
+    setClub(initialClub);
+  }, [initialClub]);
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      const list = getStoredClubs();
       const found =
         findClub(list, initialClub.slug) ||
         findClub(list, initialClub.id) ||
@@ -88,29 +93,14 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
       }
     };
 
-    applyClub(getStoredClubs());
-
-    syncClubsFromFirestore().then((res) => {
-      if (res) applyClub(res);
-    });
-
-    const unsubscribe = subscribeToClubs((remoteClubs) => {
-      applyClub(remoteClubs);
-    });
-
-    const handleUpdate = () => {
-      applyClub(getStoredClubs());
-    };
-
     window.addEventListener("src_clubs_updated", handleUpdate);
     window.addEventListener("storage", handleUpdate);
 
     return () => {
-      unsubscribe();
       window.removeEventListener("src_clubs_updated", handleUpdate);
       window.removeEventListener("storage", handleUpdate);
     };
-  }, [initialClub]);
+  }, [initialClub.slug, initialClub.id]);
 
   useEffect(() => {
     const applyEvents = (list: EventItem[]) => {
@@ -136,12 +126,7 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
     };
 
     applyEvents(getStoredEvents());
-    syncEventsFromFirestore().then((remote) => {
-      if (remote) applyEvents(remote);
-    });
-    const unsubEvents = subscribeToEvents((remote) => {
-      applyEvents(remote);
-    });
+
     const handleEventsUpdate = (e?: any) => {
       if (e?.detail && Array.isArray(e.detail)) {
         applyEvents(e.detail);
@@ -152,10 +137,9 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
     window.addEventListener("src_events_updated", handleEventsUpdate);
 
     return () => {
-      unsubEvents();
       window.removeEventListener("src_events_updated", handleEventsUpdate);
     };
-  }, [club.slug]);
+  }, [club.slug, club.id]);
 
   const allLeaders = getClubLeaders(club);
 

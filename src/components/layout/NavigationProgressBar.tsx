@@ -3,84 +3,63 @@
 import React, { useEffect, useState, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
-// ============================================================================
-// DEFENSIVE SAFEGUARD: PROTECT NEXT.JS APP ROUTER HISTORY STATE
-// In Next.js 15 App Router, window.history.state contains critical router
-// metadata (__NA, tree, etc.). If any script calls replaceState or pushState
-// with null or an empty object, client-side navigation permanently dies until
-// full page refresh. This interceptor guarantees Next.js state is never wiped.
-// ============================================================================
-if (typeof window !== "undefined") {
-  const originalReplaceState = window.history.replaceState;
-  const originalPushState = window.history.pushState;
-
-  window.history.replaceState = function (data: any, unused: string, url?: string | URL | null) {
-    const existing = window.history.state;
-    let safeData = data;
-    if (existing && typeof existing === "object") {
-      const isNextJsExisting = "__NA" in existing || "tree" in existing;
-      const incomingHasNextState = data && typeof data === "object" && ("__NA" in data || "tree" in data);
-      if (isNextJsExisting && !incomingHasNextState) {
-        safeData = data && typeof data === "object" ? { ...existing, ...data } : existing;
-      }
-    }
-    return originalReplaceState.call(this, safeData, unused, url);
-  };
-
-  window.history.pushState = function (data: any, unused: string, url?: string | URL | null) {
-    const existing = window.history.state;
-    let safeData = data;
-    if (existing && typeof existing === "object") {
-      const isNextJsExisting = "__NA" in existing || "tree" in existing;
-      const incomingHasNextState = data && typeof data === "object" && ("__NA" in data || "tree" in data);
-      if (isNextJsExisting && !incomingHasNextState) {
-        safeData = data && typeof data === "object" ? { ...existing, ...data } : existing;
-      }
-    }
-    return originalPushState.call(this, safeData, unused, url);
-  };
-}
-
 export default function NavigationProgressBar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isNavigating, setIsNavigating] = useState(false);
   const [progress, setProgress] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const safetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const failSafeRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingTargetRef = useRef<string | null>(null);
 
-  const startProgress = () => {
+  const startProgress = (targetUrl?: string) => {
     if (timerRef.current) clearInterval(timerRef.current);
-    if (safetyTimeoutRef.current) clearTimeout(safetyTimeoutRef.current);
+    if (failSafeRef.current) clearTimeout(failSafeRef.current);
+
+    if (targetUrl) {
+      pendingTargetRef.current = targetUrl;
+    }
 
     setIsNavigating(true);
-    setProgress(18);
+    setProgress(20);
 
     timerRef.current = setInterval(() => {
       setProgress((prev) => {
-        if (prev < 60) return prev + 12;
-        if (prev < 85) return prev + 4;
+        if (prev < 65) return prev + 15;
+        if (prev < 85) return prev + 3;
         return prev;
       });
-    }, 120);
+    }, 100);
 
-    // Safety timeout: if page doesn't change in 8s, stop
-    safetyTimeoutRef.current = setTimeout(() => {
-      completeProgress();
-    }, 8000);
+    // Fail-Safe Auto-Recovery:
+    // If a soft Next.js App Router transition hangs or freezes for > 2.8 seconds,
+    // seamlessly execute native browser navigation so the user NEVER stays stuck.
+    if (targetUrl) {
+      failSafeRef.current = setTimeout(() => {
+        if (typeof window !== "undefined") {
+          const currentFullUrl = window.location.pathname + window.location.search;
+          const targetClean = targetUrl.split("#")[0];
+          if (currentFullUrl !== targetClean && window.location.pathname !== targetClean.split("?")[0]) {
+            console.warn("Soft transition stalled; performing direct navigation fallback to:", targetUrl);
+            window.location.assign(targetUrl);
+          } else {
+            completeProgress();
+          }
+        }
+      }, 2800);
+    }
   };
 
   const completeProgress = () => {
     if (timerRef.current) clearInterval(timerRef.current);
-    if (safetyTimeoutRef.current) clearTimeout(safetyTimeoutRef.current);
+    if (failSafeRef.current) clearTimeout(failSafeRef.current);
+    pendingTargetRef.current = null;
 
     setProgress(100);
-    const fadeTimer = setTimeout(() => {
+    setTimeout(() => {
       setIsNavigating(false);
       setProgress(0);
     }, 250);
-
-    return () => clearTimeout(fadeTimer);
   };
 
   // Complete progress whenever route path or query changes
@@ -88,7 +67,7 @@ export default function NavigationProgressBar() {
     completeProgress();
   }, [pathname, searchParams]);
 
-  // Intercept click on links for instant tactile feedback
+  // Intercept click on links for instant tactile feedback & fail-safe fallback
   useEffect(() => {
     const handleDocumentClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
@@ -122,8 +101,8 @@ export default function NavigationProgressBar() {
         return;
       }
 
-      // Start navigation indicator immediately
-      startProgress();
+      // Start navigation indicator & fail-safe timer
+      startProgress(href);
     };
 
     const handlePopState = () => {
@@ -137,7 +116,7 @@ export default function NavigationProgressBar() {
       document.removeEventListener("click", handleDocumentClick, { capture: true });
       window.removeEventListener("popstate", handlePopState);
       if (timerRef.current) clearInterval(timerRef.current);
-      if (safetyTimeoutRef.current) clearTimeout(safetyTimeoutRef.current);
+      if (failSafeRef.current) clearTimeout(failSafeRef.current);
     };
   }, []);
 
