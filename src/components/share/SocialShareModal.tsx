@@ -519,9 +519,6 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
                     <span>Event QR Code</span>
                     <QrCode className="w-4 h-4 text-[#17458F]" />
                   </h3>
-                  <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
-                    Official Ultra-HD QR code with central SRC emblem
-                  </p>
                 </div>
               </div>
 
@@ -537,11 +534,8 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
 
             {/* QR Studio Content */}
             <div className="flex-1 overflow-y-auto p-5 sm:p-7 flex flex-col items-center justify-center text-center bg-slate-50/50">
-              {/* Event Name & Category */}
-              <div className="space-y-1 mb-4 sm:mb-5 max-w-sm px-2">
-                <span className="text-[10px] sm:text-[11px] font-bold text-[#E78023] uppercase tracking-wider block">
-                  {payload.typeLabel || "OFFICIAL EVENT"}
-                </span>
+              {/* Event Name */}
+              <div className="space-y-0.5 mb-4 sm:mb-5 max-w-sm px-2">
                 <h4 className="text-base sm:text-lg font-heading font-extrabold text-[#0F172A] tracking-tight line-clamp-2">
                   {payload.title}
                 </h4>
