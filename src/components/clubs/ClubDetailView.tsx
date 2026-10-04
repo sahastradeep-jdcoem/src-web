@@ -112,15 +112,8 @@ export default function ClubDetailView({ initialClub, clubEvents }: ClubDetailVi
           !e.isCancelled &&
           e.status !== "Cancelled" &&
           (e.organizerClubSlug === club.slug ||
-          (club.slug === "agentic-ai" && (e.organizerClubSlug === "robotics" || e.organizerClubSlug === "club-robotics")) ||
-          (club.slug === "robotics" && (e.organizerClubSlug === "agentic-ai" || e.organizerClubSlug === "club-1788779206223")) ||
-          e.organizerClubSlug === club.id ||
-          e.collaboratingClubs?.some(
-            (c) =>
-              c.slug === club.slug ||
-              (club.slug === "agentic-ai" && c.slug === "robotics") ||
-              (club.slug === "robotics" && c.slug === "agentic-ai")
-          ))
+            e.organizerClubSlug === club.id ||
+            e.collaboratingClubs?.some((c) => c.slug === club.slug || c.id === club.id))
       );
       setEvents(filtered);
     };
