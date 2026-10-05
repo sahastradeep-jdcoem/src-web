@@ -46,6 +46,7 @@ import {
 import { db } from "@/lib/firebase/config";
 import { doc, updateDoc } from "firebase/firestore";
 import { PaymentConfigModal } from "@/components/admin/registrations/PaymentConfigModal";
+import { SyncCashfreeModal } from "@/components/admin/payments/SyncCashfreeModal";
 import { 
   getStoredPaymentConfig, 
   subscribeToPaymentConfig, 
@@ -193,6 +194,7 @@ export default function AdminPaymentsPage() {
 
   // Payment gateway config modal
   const [isPaymentConfigOpen, setIsPaymentConfigOpen] = useState(false);
+  const [isSyncCashfreeOpen, setIsSyncCashfreeOpen] = useState(false);
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(getStoredPaymentConfig());
 
   // 1. Initial Load & Subscriptions
@@ -835,6 +837,16 @@ export default function AdminPaymentsPage() {
               <span>Gateway Settings</span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => setIsSyncCashfreeOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition-all cursor-pointer"
+            title="Recover or sync missing passes using Cashfree Order ID"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-[#17458F]" />
+            <span>Sync Cashfree Order</span>
+          </button>
 
           <button
             type="button"
@@ -1624,6 +1636,16 @@ export default function AdminPaymentsPage() {
       <PaymentConfigModal
         isOpen={isPaymentConfigOpen}
         onClose={() => setIsPaymentConfigOpen(false)}
+      />
+
+      {/* SYNC CASHFREE MODAL */}
+      <SyncCashfreeModal
+        isOpen={isSyncCashfreeOpen}
+        onClose={() => setIsSyncCashfreeOpen(false)}
+        onSuccess={(newReg) => {
+          setRegistrations((prev) => [newReg, ...prev.filter((r) => r.id !== newReg.id)]);
+          setFeedbackNotice(`Successfully recovered pass for ${newReg.participantName || "Student"}!`);
+        }}
       />
 
     </div>

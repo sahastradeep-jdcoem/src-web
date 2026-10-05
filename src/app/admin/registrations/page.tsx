@@ -73,6 +73,7 @@ import {
   isHubRecord
 } from "@/lib/firebase/firestore";
 import { PaymentConfigModal } from "@/components/admin/registrations/PaymentConfigModal";
+import { SyncCashfreeModal } from "@/components/admin/payments/SyncCashfreeModal";
 import { 
   getStoredPaymentConfig, 
   subscribeToPaymentConfig, 
@@ -143,6 +144,7 @@ export default function AdminRegistrationsPage() {
 
   // Payment Gateway & UPI Settings State
   const [isPaymentConfigOpen, setIsPaymentConfigOpen] = useState(false);
+  const [isSyncCashfreeOpen, setIsSyncCashfreeOpen] = useState(false);
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(getStoredPaymentConfig());
 
   useEffect(() => {
@@ -1818,8 +1820,18 @@ export default function AdminRegistrationsPage() {
 
         </div>
 
-        {/* Right Corner: Export Excel */}
+        {/* Right Corner: Export Excel & Sync Cashfree */}
         <div className="pt-1 md:pt-0 flex flex-wrap items-end gap-2">
+          <button
+            type="button"
+            onClick={() => setIsSyncCashfreeOpen(true)}
+            className="h-9 px-3.5 sm:px-4 rounded-xl text-xs font-semibold tracking-normal transition-all duration-200 inline-flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-2xs hover:shadow-xs active:scale-[0.98] cursor-pointer"
+            title="Recover or sync missing passes using Cashfree Order ID"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-[#17458F]" />
+            <span>Sync Cashfree Pass</span>
+          </button>
+
           <button
             onClick={handleExportExcel}
             disabled={isExportDisabled}
@@ -3208,6 +3220,19 @@ export default function AdminRegistrationsPage() {
       <PaymentConfigModal
         isOpen={isPaymentConfigOpen}
         onClose={() => setIsPaymentConfigOpen(false)}
+      />
+
+      {/* Sync Cashfree Pass Modal */}
+      <SyncCashfreeModal
+        isOpen={isSyncCashfreeOpen}
+        onClose={() => setIsSyncCashfreeOpen(false)}
+        onSuccess={(newReg) => {
+          setRegistrations((prev) => {
+            const formatted = formatRecords([newReg]);
+            return [formatted[0] || newReg, ...prev.filter((r) => r.id !== newReg.id)];
+          });
+          setCheckInNotice(`Successfully recovered and synced pass for ${newReg.participantName || "Student"}!`);
+        }}
       />
 
     </div>

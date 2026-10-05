@@ -92,12 +92,40 @@ export async function POST(req: NextRequest) {
 
       console.log(`[Cashfree Webhook] Verified Payment SUCCESS: Order=${orderId}, UTR=${utr}, Reg=${registrationId}, Amount=₹${amount}`);
 
+      let confirmationResult: any = { success: false };
+      if (orderId) {
+        const { confirmCashfreeOrderRegistration } = await import("@/lib/cashfree");
+        confirmationResult = await confirmCashfreeOrderRegistration(orderId);
+      }
+
+      // Record audit diagnostic log
+      try {
+        const { db } = await import("@/lib/firebase/config");
+        const { doc, setDoc } = await import("firebase/firestore");
+        if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+          const logId = `CF-${Date.now()}`;
+          await setDoc(doc(db, "upi_webhook_logs", logId), {
+            id: logId,
+            receivedAt: new Date().toISOString(),
+            gateway: "cashfree",
+            eventType,
+            orderId: orderId || null,
+            extractedUtr: utr ? String(utr) : null,
+            extractedAmount: amount ? Number(amount) : null,
+            matchedRegistrationId: confirmationResult?.registrationId || registrationId || null,
+            matchedStudentName: confirmationResult?.registration?.participantName || null,
+          });
+        }
+      } catch (logErr) {
+        console.warn("Notice: webhook diagnostic logging skipped:", logErr);
+      }
+
       return NextResponse.json({
         status: "SUCCESS",
         orderId,
         utr,
-        registrationId,
-        message: "Payment successfully confirmed",
+        registrationId: confirmationResult?.registrationId || registrationId,
+        message: "Payment successfully confirmed and pass issued in Firestore",
       });
     }
 
@@ -132,7 +160,32 @@ export async function POST(req: NextRequest) {
       const refundId = refundData?.refund_id || refundData?.cf_refund_id;
       const orderId = refundData?.order_id || orderData?.order_id;
       const refundStatus = refundData?.refund_status || "PROCESSED";
+      const refundAmount = refundData?.refund_amount;
       console.log(`[Cashfree Webhook] Refund ${refundStatus}: RefundId=${refundId}, Order=${orderId}`);
+
+      if (orderId && refundStatus === "SUCCESS") {
+        try {
+          const { db } = await import("@/lib/firebase/config");
+          const { collection, query, where, getDocs, updateDoc } = await import("firebase/firestore");
+          if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+            const q = query(collection(db, "registrations"), where("orderId", "==", orderId));
+            const snap = await getDocs(q);
+            const nowIso = new Date().toISOString();
+            for (const d of snap.docs) {
+              await updateDoc(d.ref, {
+                paymentStatus: "REFUNDED",
+                status: "CANCELLED",
+                refundStatus: "PROCESSED",
+                refundId,
+                refundAmount: Number(refundAmount || 0),
+                refundedAt: nowIso,
+              });
+            }
+          }
+        } catch (rfErr) {
+          console.warn("Notice: refund status sync warning:", rfErr);
+        }
+      }
 
       return NextResponse.json({
         status: "REFUND_PROCESSED",

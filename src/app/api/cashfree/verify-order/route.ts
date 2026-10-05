@@ -39,6 +39,19 @@ export async function POST(req: NextRequest) {
       console.warn("Could not fetch individual payment details:", paymentErr);
     }
 
+    let registrationInfo: any = null;
+    if (isPaid) {
+      try {
+        const { confirmCashfreeOrderRegistration } = await import("@/lib/cashfree");
+        const confirmResult = await confirmCashfreeOrderRegistration(orderId, creds);
+        if (confirmResult.success) {
+          registrationInfo = confirmResult.registration;
+        }
+      } catch (confErr) {
+        console.warn("Notice: confirmation during verify-order warning:", confErr);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       orderId: order.order_id,
@@ -48,6 +61,7 @@ export async function POST(req: NextRequest) {
       amount: order.order_amount,
       currency: order.order_currency,
       payment: paymentDetails,
+      registration: registrationInfo,
     });
   } catch (error: any) {
     console.error("Cashfree order verification error:", error);

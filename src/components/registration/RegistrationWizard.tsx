@@ -195,6 +195,41 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     };
   }, []);
 
+  // Realtime detection of returnUrl order_id if user was redirected back after Cashfree payment
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const returnOrderId = urlParams.get("order_id");
+    if (!returnOrderId || generatedTicket) return;
+
+    fetch("/api/cashfree/verify-order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId: returnOrderId }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.isPaid) {
+          const reg = data.registration || {};
+          const regId = reg.id || returnOrderId;
+          const tkCode = reg.ticketCode || `${String(regId).slice(0, 7)}-TK`;
+          setGeneratedTicket({
+            id: regId,
+            registrationId: regId,
+            ticketCode: tkCode,
+            paymentStatus: "PAID",
+            paymentId: data.payment?.utr || reg.paymentId || `CF_${returnOrderId}`,
+            orderId: returnOrderId,
+          });
+          setCurrentStep(3);
+          try {
+            confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+          } catch {}
+        }
+      })
+      .catch((e) => console.warn("Order return check notice:", e));
+  }, []);
+
   // Realtime subscription for instant auto-approval when phone webhook lands
   useEffect(() => {
     if (!generatedTicket || generatedTicket.paymentStatus !== "PENDING" || !generatedTicket.registrationId) {
@@ -820,11 +855,13 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           amount: totalPayableAmount,
           eventId: event.id,
           eventName: event.name,
+          eventSlug: event.slug,
           participantName: formData.fullName,
           email: formData.email,
           phone: formData.phone,
           btId: formData.btId,
           registrationId: draftRegId,
+          registrationDraft: draftPayload,
         }),
       });
 

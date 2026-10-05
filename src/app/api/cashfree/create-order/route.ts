@@ -8,11 +8,13 @@ export async function POST(req: NextRequest) {
       amount,
       eventId,
       eventName,
+      eventSlug,
       participantName,
       email,
       phone,
       registrationId,
       btId,
+      registrationDraft,
     } = body;
 
     const parsedAmount = Number(amount);
@@ -37,6 +39,9 @@ export async function POST(req: NextRequest) {
       .slice(0, 32);
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.srcjdcoem.in";
+    const targetReturnUrl = eventSlug
+      ? `${siteUrl}/events/${eventSlug}/register?order_id={order_id}`
+      : `${siteUrl}/events?order_id={order_id}`;
 
     const cashfreeOrder = await createCashfreeOrder({
       orderId,
@@ -49,7 +54,7 @@ export async function POST(req: NextRequest) {
         customerPhone: phone || "9999999999",
       },
       orderMeta: {
-        returnUrl: `${siteUrl}/events?order_id={order_id}`,
+        returnUrl: targetReturnUrl,
         notifyUrl: `${siteUrl}/api/cashfree/webhook`,
       },
       orderNote: `SRC JDCOEM: ${eventName || "Event Entry Pass"}`,
@@ -58,6 +63,58 @@ export async function POST(req: NextRequest) {
         registrationId: (registrationId || "").slice(0, 30),
       },
     }, creds);
+
+    // Persist active checkout session and draft registration to Firestore
+    try {
+      const { db } = await import("@/lib/firebase/config");
+      const { doc, setDoc } = await import("firebase/firestore");
+
+      if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+        const nowIso = new Date().toISOString();
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+        await setDoc(
+          doc(db, "active_checkout_sessions", orderId),
+          {
+            orderId,
+            cfOrderId: String(cashfreeOrder.cf_order_id),
+            gateway: "cashfree",
+            status: "WAITING",
+            amount: parsedAmount,
+            eventId: eventId || "",
+            eventName: eventName || "",
+            eventSlug: eventSlug || "",
+            registrationId: registrationId || "",
+            registrationData: registrationDraft || null,
+            participantName: participantName || "",
+            email: email || "",
+            phone: phone || "",
+            btId: btId || "",
+            createdAt: nowIso,
+            expiresAt,
+          },
+          { merge: true }
+        );
+
+        if (registrationDraft && registrationId) {
+          await setDoc(
+            doc(db, "registrations", registrationId),
+            {
+              ...registrationDraft,
+              id: registrationId,
+              orderId,
+              status: "PENDING",
+              paymentStatus: "PENDING",
+              amountPaid: parsedAmount,
+              createdAt: nowIso,
+            },
+            { merge: true }
+          );
+        }
+      }
+    } catch (fsErr) {
+      console.warn("Notice: could not pre-create session/draft in Firestore:", fsErr);
+    }
 
     return NextResponse.json({
       success: true,
