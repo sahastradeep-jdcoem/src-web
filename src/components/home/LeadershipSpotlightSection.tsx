@@ -22,6 +22,7 @@ import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { TeamMember } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { ResilientImage } from "@/components/ui/ResilientImage";
+import { formatLinkedinUrl } from "@/lib/utils";
 
 export default function LeadershipSpotlightSection() {
   const [councilMembers, setCouncilMembers] = useState<TeamMember[]>([]);
@@ -201,9 +202,9 @@ export default function LeadershipSpotlightSection() {
                         <Mail className="w-3.5 h-3.5" />
                       </a>
                     )}
-                    {president.linkedin && (
+                    {Boolean(formatLinkedinUrl(president.linkedin)) && (
                       <a
-                        href={president.linkedin}
+                        href={formatLinkedinUrl(president.linkedin)}
                         target="_blank"
                         rel="noreferrer"
                         className="p-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-[#17458F] hover:border-[#17458F]/40 transition-colors"
@@ -293,9 +294,9 @@ export default function LeadershipSpotlightSection() {
                         <Mail className="w-3.5 h-3.5" />
                       </a>
                     )}
-                    {vicePresident.linkedin && (
+                    {Boolean(formatLinkedinUrl(vicePresident.linkedin)) && (
                       <a
-                        href={vicePresident.linkedin}
+                        href={formatLinkedinUrl(vicePresident.linkedin)}
                         target="_blank"
                         rel="noreferrer"
                         className="p-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-[#17458F] hover:border-[#17458F]/40 transition-colors"

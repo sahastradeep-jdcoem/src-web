@@ -13,6 +13,7 @@ import {
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { UniversalImageUploader } from "@/components/ui/UniversalImageUploader";
+import { formatLinkedinUrl } from "@/lib/utils";
 import { TeamMember, ClubItem } from "@/types";
 
 interface PositionFormModalProps {
@@ -61,7 +62,11 @@ export function PositionFormModal({
       try {
         setIsSubmitting(true);
         setFormError(null);
-        await onSave(formMember);
+        const normalizedMember = {
+          ...formMember,
+          linkedin: formMember.linkedin ? formatLinkedinUrl(formMember.linkedin) : "",
+        };
+        await onSave(normalizedMember);
       } catch (err: any) {
         setFormError(err?.message || "Failed to save changes to cloud database. Please check your internet connection and try again.");
       } finally {
@@ -434,9 +439,14 @@ export function PositionFormModal({
             <label className="font-bold text-slate-700">LinkedIn Profile URL</label>
             <input
               type="text"
-              placeholder="https://linkedin.com/in/..."
+              placeholder="e.g. linkedin.com/in/username or full URL"
               value={formMember.linkedin || ""}
               onChange={(e) => setFormMember({ ...formMember, linkedin: e.target.value })}
+              onBlur={() => {
+                if (formMember.linkedin?.trim()) {
+                  setFormMember((prev) => prev ? { ...prev, linkedin: formatLinkedinUrl(prev.linkedin) } : null);
+                }
+              }}
               className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
             />
           </div>

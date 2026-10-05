@@ -91,9 +91,8 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { PositionFormModal } from "@/components/admin/team/PositionFormModal";
 import { ClubMembersModal } from "@/components/admin/team/ClubMembersModal";
-import { reconcileAllUserDesignations, checkBtIdPositionConflict } from "@/lib/usersStore";
-import { isLocalWriteRecent, hasPendingWritesFor } from "@/lib/dataSyncEngine";
-import { cn } from "@/lib/utils";
+import { checkBtIdPositionConflict, reconcileAllUserDesignations } from "@/lib/usersStore";
+import { cn, formatLinkedinUrl } from "@/lib/utils";
 
 type TeamCategoryTab = "council" | "hosting" | "founding" | "clubs" | "pillars" | "members";
 
@@ -689,7 +688,7 @@ export default function AdminTeamPage() {
             avatar: resolvedAvatar,
             bio: leader.bio || "",
             email: leader.email || "",
-            linkedin: leader.linkedin || "",
+            linkedin: leader.linkedin ? formatLinkedinUrl(leader.linkedin) : "",
             btId: leader.btId || "",
             order: clubIndex * 2 + (isCoLead ? 2 : 1),
             clubId: club.id,
@@ -1013,7 +1012,7 @@ export default function AdminTeamPage() {
             avatar: m.avatar !== undefined ? m.avatar : p.avatar,
             quote: m.bio || p.quote,
             email: m.email,
-            linkedin: m.linkedin,
+            linkedin: m.linkedin ? formatLinkedinUrl(m.linkedin) : "",
           };
         }
         return p;
@@ -1086,7 +1085,7 @@ export default function AdminTeamPage() {
         avatar: m.avatar || "",
         bio: m.bio || "",
         email: m.email || "",
-        linkedin: m.linkedin || "",
+        linkedin: m.linkedin ? formatLinkedinUrl(m.linkedin) : "",
         btId: (m.btId || "").trim().toUpperCase(),
         clubId: targetClubIds[0] || "",
         clubSlug: clubSlugs[0] || "",
@@ -1241,14 +1240,19 @@ export default function AdminTeamPage() {
     const maxRank = currentMembers.length + (isCreatingNew ? 1 : 0);
     const targetRank = Math.max(1, Math.min(m.order || maxRank, maxRank));
 
+    const memberWithFormattedLinkedin: TeamMember = {
+      ...m,
+      linkedin: m.linkedin ? formatLinkedinUrl(m.linkedin) : "",
+    };
+
     let updated: TeamMember[];
     if (isCreatingNew) {
       const listWithoutNew = [...currentMembers];
-      listWithoutNew.splice(targetRank - 1, 0, { ...m, order: targetRank });
+      listWithoutNew.splice(targetRank - 1, 0, { ...memberWithFormattedLinkedin, order: targetRank });
       updated = listWithoutNew;
     } else {
       const listFiltered = currentMembers.filter((item) => item.id !== m.id);
-      listFiltered.splice(targetRank - 1, 0, { ...m, order: targetRank });
+      listFiltered.splice(targetRank - 1, 0, { ...memberWithFormattedLinkedin, order: targetRank });
       updated = listFiltered;
     }
 

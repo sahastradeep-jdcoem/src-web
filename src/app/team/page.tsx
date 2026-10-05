@@ -34,7 +34,7 @@ import { reconcileArrayDatasets } from "@/lib/dataSyncEngine";
 import { TeamMember, ClubItem } from "@/types";
 import { CouncilMemberCard } from "@/components/team/CouncilMemberCard";
 import { Badge } from "@/components/ui/Badge";
-import { cn } from "@/lib/utils";
+import { cn, formatLinkedinUrl } from "@/lib/utils";
 import { StaggerGrid, StaggerItem } from "@/components/ui/StaggerContainer";
 import { MemberCardSkeleton } from "@/components/ui/SkeletonCard";
 
@@ -260,7 +260,7 @@ export default function TeamPage() {
             avatar: leader.avatar || "",
             bio: leader.bio || "",
             email: leader.email?.trim() || "",
-            linkedin: leader.linkedin?.trim() || "",
+            linkedin: formatLinkedinUrl(leader.linkedin),
             order: clubIndex * 10 + leaderIndex + 1
           });
         }

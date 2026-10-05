@@ -5,6 +5,7 @@ import { TeamMember } from "@/types";
 import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { isHardcodedBio } from "@/lib/councilStore";
 import { ResilientImage } from "@/components/ui/ResilientImage";
+import { formatLinkedinUrl } from "@/lib/utils";
 
 interface CouncilMemberCardProps {
   member: TeamMember;
@@ -14,9 +15,9 @@ interface CouncilMemberCardProps {
 export function CouncilMemberCard({ member, categoryLabel = "ADMIN" }: CouncilMemberCardProps) {
   const hasBio = Boolean(member.bio && member.bio.trim().length > 0 && !isHardcodedBio(member.bio));
   const cleanEmail = member.email?.trim();
-  const cleanLinkedin = member.linkedin?.trim();
+  const validLinkedinUrl = formatLinkedinUrl(member.linkedin);
   const hasEmail = Boolean(cleanEmail && cleanEmail !== "undefined" && cleanEmail !== "null");
-  const hasLinkedin = Boolean(cleanLinkedin && cleanLinkedin !== "undefined" && cleanLinkedin !== "null");
+  const hasLinkedin = Boolean(validLinkedinUrl);
 
   return (
     <div className="group rounded-2xl bg-white border border-slate-200 hover:border-[#17458F]/30 hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col justify-between shadow-xs font-sans">
@@ -131,7 +132,7 @@ export function CouncilMemberCard({ member, categoryLabel = "ADMIN" }: CouncilMe
             )}
             {hasLinkedin && (
               <a
-                href={cleanLinkedin}
+                href={validLinkedinUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-1.5 sm:p-2 rounded-lg bg-slate-100 hover:bg-[#17458F] text-slate-700 hover:text-white transition-colors"

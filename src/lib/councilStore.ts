@@ -24,6 +24,7 @@ import {
   getLastLocalWriteTime,
   isLocalWriteRecent
 } from "./dataSyncEngine";
+import { formatLinkedinUrl } from "@/lib/utils";
 
 export function isPlaceholderLeaderName(name?: string): boolean {
   if (!name || typeof name !== "string") return true;
@@ -177,6 +178,7 @@ export function getClubLeaders(club: ClubItem): ClubLeader[] {
           id: l.id || defaultId,
           roleType,
           avatar: sanitizeAvatar(rawAvatar),
+          linkedin: l.linkedin ? formatLinkedinUrl(l.linkedin) : "",
         };
       });
     if (validLeaders.length > 0) {
@@ -191,6 +193,7 @@ export function getClubLeaders(club: ClubItem): ClubLeader[] {
       id: club.lead.id || `${club.id || club.slug}-lead-0`,
       roleType: "lead",
       avatar: sanitizeAvatar(club.lead.avatar),
+      linkedin: club.lead.linkedin ? formatLinkedinUrl(club.lead.linkedin) : "",
     });
   }
 
@@ -202,6 +205,7 @@ export function getClubLeaders(club: ClubItem): ClubLeader[] {
           id: cl.id || `${club.id || club.slug}-colead-${i}`,
           roleType: "coLead",
           avatar: sanitizeAvatar(cl.avatar || club.coLead?.avatar),
+          linkedin: cl.linkedin || club.coLead?.linkedin ? formatLinkedinUrl(cl.linkedin || club.coLead?.linkedin) : "",
         });
       }
     });
@@ -211,6 +215,7 @@ export function getClubLeaders(club: ClubItem): ClubLeader[] {
       id: club.coLead.id || `${club.id || club.slug}-colead-0`,
       roleType: "coLead",
       avatar: sanitizeAvatar(club.coLead.avatar),
+      linkedin: club.coLead.linkedin ? formatLinkedinUrl(club.coLead.linkedin) : "",
     });
   }
 
@@ -363,6 +368,7 @@ export function hydrateClubAvatars(clubs: ClubItem[]): ClubItem[] {
         id: l.id || defaultId,
         roleType,
         avatar: safeAvatar,
+        linkedin: l.linkedin ? formatLinkedinUrl(l.linkedin) : "",
       };
     });
 
@@ -548,6 +554,9 @@ export function sanitizeTeamMember(m: TeamMember): TeamMember {
   delete (copy as any).category;
   if (copy.bio && isHardcodedBio(copy.bio)) {
     copy.bio = "";
+  }
+  if (copy.linkedin) {
+    copy.linkedin = formatLinkedinUrl(copy.linkedin);
   }
   return copy;
 }
@@ -1423,7 +1432,7 @@ export function syncCouncilAdminsToFounding(councilList?: TeamMember[], persist 
       designation: foundingRole,
       avatar: admin.avatar !== undefined ? admin.avatar : (existing?.avatar || ""),
       email: admin.email || existing?.email || "",
-      linkedin: admin.linkedin || existing?.linkedin || "",
+      linkedin: formatLinkedinUrl(admin.linkedin || existing?.linkedin || ""),
       bio: admin.bio || existing?.bio || "",
       btId: cleanBt,
       department: admin.department || existing?.department || "",
@@ -1468,7 +1477,7 @@ export function syncFoundingToCouncilAdmins(foundingList?: TeamMember[], persist
       designation: adminRole,
       avatar: founder.avatar !== undefined ? founder.avatar : (existing?.avatar || ""),
       email: founder.email || existing?.email || "",
-      linkedin: founder.linkedin || existing?.linkedin || "",
+      linkedin: formatLinkedinUrl(founder.linkedin || existing?.linkedin || ""),
       bio: founder.bio || existing?.bio || "",
       btId: cleanBt,
       department: founder.department || existing?.department || "",
