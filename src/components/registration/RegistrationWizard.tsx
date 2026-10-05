@@ -40,10 +40,12 @@ import {
   Clock,
   Lock,
   ChevronRight,
+  MessageCircle,
   X
 } from "lucide-react";
 import { CancelRegistrationModal } from "@/components/registration/CancelRegistrationModal";
 import confetti from "canvas-confetti";
+import { formatWhatsAppUrl } from "@/lib/srcFormsHelper";
 import { 
   getStoredDepartments, 
   DEFAULT_DEPARTMENTS,
@@ -87,7 +89,17 @@ export interface TeamMemberEntry {
 export function RegistrationWizard({ event }: RegistrationWizardProps) {
   const { user, openAuthModal, updateUserProfile } = useAuth();
   const [departmentsList, setDepartmentsList] = useState<string[]>(DEFAULT_DEPARTMENTS);
-  const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
+
+  const hasCustomQuestions = Boolean(event.customQuestions && event.customQuestions.length > 0);
+  const STEP_DETAILS = 1;
+  const STEP_PARTICIPATION = 2;
+  const STEP_QUESTIONS = hasCustomQuestions ? 3 : -1;
+  const STEP_REVIEW = hasCustomQuestions ? 4 : 3;
+  const STEP_PASS = hasCustomQuestions ? 5 : 4;
+  const totalSteps = hasCustomQuestions ? 4 : 3;
+
+  const [currentStep, setCurrentStep] = useState<number>(1);
+  const [hasJoinedWhatsApp, setHasJoinedWhatsApp] = useState(false);
   const stepContainerRef = useRef<HTMLDivElement>(null);
   const isFirstRender = useRef(true);
 
@@ -235,7 +247,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             paymentId: data.payment?.utr || reg.paymentId || `CF_${returnOrderId}`,
             orderId: returnOrderId,
           });
-          setCurrentStep(4);
+          setCurrentStep(STEP_PASS);
           try {
             confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
           } catch {}
@@ -627,11 +639,11 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
-    setCurrentStep(2);
+    setCurrentStep(STEP_PARTICIPATION);
     scrollToStepTop();
   };
 
-  const handleProceedToStep3 = () => {
+  const handleProceedFromParticipation = () => {
     if (formData.teamType === "Team") {
       const trimmedTeam = formData.teamName.trim();
       if (!trimmedTeam || trimmedTeam.length < 2) {
@@ -650,6 +662,19 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       }
     }
 
+    if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+
+    if (hasCustomQuestions) {
+      setCurrentStep(STEP_QUESTIONS);
+    } else {
+      setCurrentStep(STEP_REVIEW);
+    }
+    scrollToStepTop();
+  };
+
+  const handleProceedFromQuestionsToReview = () => {
     // Validate custom registration questions
     if (event.customQuestions && event.customQuestions.length > 0) {
       const errors: Record<string, string> = {};
@@ -678,7 +703,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
-    setCurrentStep(3);
+    setCurrentStep(STEP_REVIEW);
     scrollToStepTop();
   };
 
@@ -816,7 +841,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         orderId: paymentDetails?.orderId,
       });
       setIsSubmitting(false);
-      setCurrentStep(4);
+      setHasJoinedWhatsApp(false);
+      setCurrentStep(STEP_PASS);
 
       // Fire celebratory confetti!
       try {
@@ -964,7 +990,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               orderId: orderData.orderId,
             });
             setIsSubmitting(false);
-            setCurrentStep(4);
+            setHasJoinedWhatsApp(false);
+            setCurrentStep(STEP_PASS);
             try {
               confetti({
                 particleCount: 100,
@@ -1023,7 +1050,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               orderId: orderData.orderId,
             });
             setIsSubmitting(false);
-            setCurrentStep(4);
+            setHasJoinedWhatsApp(false);
+            setCurrentStep(STEP_PASS);
             try {
               confetti({
                 particleCount: 100,
@@ -1158,18 +1186,26 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     );
   }
 
-  const steps = [
-    { number: 1, title: "01 DETAILS", shortTitle: "01 INFO" },
-    { number: 2, title: "02 PARTICIPATION", shortTitle: "02 SQUAD" },
-    { number: 3, title: "03 REVIEW", shortTitle: "03 REVIEW" },
-    { number: 4, title: "04 PASS", shortTitle: "04 PASS" },
-  ];
+  const steps = hasCustomQuestions
+    ? [
+        { number: 1, title: "01 DETAILS", shortTitle: "01 INFO" },
+        { number: 2, title: "02 PARTICIPATION", shortTitle: "02 SQUAD" },
+        { number: 3, title: "03 QUESTIONS", shortTitle: "03 FORM" },
+        { number: 4, title: "04 REVIEW", shortTitle: "04 REVIEW" },
+        { number: 5, title: "05 PASS", shortTitle: "05 PASS" },
+      ]
+    : [
+        { number: 1, title: "01 DETAILS", shortTitle: "01 INFO" },
+        { number: 2, title: "02 PARTICIPATION", shortTitle: "02 SQUAD" },
+        { number: 3, title: "03 REVIEW", shortTitle: "03 REVIEW" },
+        { number: 4, title: "04 PASS", shortTitle: "04 PASS" },
+      ];
 
   return (
     <div className="max-w-4xl mx-auto space-y-10 font-sans">
       
       {/* Progress Stepper Bar */}
-      <div className="grid grid-cols-4 gap-1.5 sm:gap-4">
+      <div className={`grid ${steps.length === 5 ? "grid-cols-5" : "grid-cols-4"} gap-1.5 sm:gap-4`}>
         {steps.map((step) => {
           const isActive = currentStep === step.number;
           const isCompleted = currentStep > step.number;
@@ -1211,7 +1247,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <span className="text-xs font-bold uppercase tracking-wider text-[#E78023]">
-                Step 01 of 03
+                Step 01 of {totalSteps < 10 ? `0${totalSteps}` : totalSteps}
               </span>
               <h3 className="font-heading font-extrabold text-2xl text-[#17458F] uppercase mt-1">
                 PRIMARY PARTICIPANT INFORMATION
@@ -1342,7 +1378,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                           paymentStatus: existingRegistration.paymentStatus,
                           paymentId: existingRegistration.paymentId,
                         });
-                        setCurrentStep(4);
+                        setHasJoinedWhatsApp(true);
+                        setCurrentStep(STEP_PASS);
                         scrollToStepTop();
                       }}
                       variant="primary"
@@ -1581,7 +1618,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         >
           <div className="border-b border-slate-100 pb-4">
             <span className="text-xs font-bold uppercase tracking-wider text-[#E78023]">
-              Step 02 of 03
+              Step 02 of {totalSteps < 10 ? `0${totalSteps}` : totalSteps}
             </span>
             <h3 className="font-heading font-extrabold text-2xl text-[#17458F] uppercase mt-1">
               PARTICIPATION FORMAT &amp; TEAM ROSTER
@@ -1857,214 +1894,12 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               </div>
             )}
 
-            {/* Custom Event Questions & Notes Section (SRC Forms) */}
-            {event.customQuestions && event.customQuestions.length > 0 && (
-              <div className="space-y-6 pt-6 border-t border-slate-200">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-extrabold uppercase tracking-wider text-[#17458F] font-heading flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
-                      <span>SRC Forms • Event Questions &amp; Guidelines</span>
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 font-medium">
-                    Please review the notes and complete the custom details required by event organizers.
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  {event.customQuestions.map((q, qIdx) => {
-                    const isError = Boolean(customErrors[q.id]);
-                    const currentVal = customAnswers[q.id];
-
-                    if (q.type === "note") {
-                      return (
-                        <div key={q.id} className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-1.5">
-                          <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
-                            <AlertCircle className="w-4 h-4 text-[#E78023] shrink-0" />
-                            <span>{q.question || "Important Notice"}</span>
-                          </div>
-                          {q.noteContent && (
-                            <p className="text-xs text-slate-700 leading-relaxed pl-6 whitespace-pre-line">
-                              {q.noteContent}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div
-                        key={q.id}
-                        className={`p-4 sm:p-5 rounded-2xl border transition-all space-y-3 ${
-                          isError
-                            ? "bg-rose-50/50 border-rose-300 ring-2 ring-rose-200"
-                            : "bg-slate-50/60 border-slate-200 hover:border-slate-300"
-                        }`}
-                      >
-                        <div className="space-y-1">
-                          <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[#E78023] font-mono text-[11px]">0{qIdx + 1}.</span>
-                            <span>{q.question}</span>
-                            {q.required && <span className="text-rose-500 font-bold">*</span>}
-                          </label>
-                          {q.description && (
-                            <p className="text-[11px] text-slate-500 font-medium leading-normal">
-                              {q.description}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Question Inputs by Type */}
-                        {q.type === "short_text" && (
-                          <input
-                            type="text"
-                            value={currentVal || ""}
-                            onChange={(e) => {
-                              setCustomAnswers({ ...customAnswers, [q.id]: e.target.value });
-                              if (customErrors[q.id]) {
-                                const errs = { ...customErrors };
-                                delete errs[q.id];
-                                setCustomErrors(errs);
-                              }
-                            }}
-                            placeholder={q.placeholder || "Your answer..."}
-                            className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F]"
-                          />
-                        )}
-
-                        {q.type === "long_text" && (
-                          <textarea
-                            rows={3}
-                            value={currentVal || ""}
-                            onChange={(e) => {
-                              setCustomAnswers({ ...customAnswers, [q.id]: e.target.value });
-                              if (customErrors[q.id]) {
-                                const errs = { ...customErrors };
-                                delete errs[q.id];
-                                setCustomErrors(errs);
-                              }
-                            }}
-                            placeholder={q.placeholder || "Enter detailed response..."}
-                            className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F]"
-                          />
-                        )}
-
-                        {q.type === "multiple_choice" && (
-                          <div className="space-y-2">
-                            {(q.options || []).map((opt) => {
-                              const isSelected = currentVal === opt;
-                              return (
-                                <label
-                                  key={opt}
-                                  onClick={() => {
-                                    setCustomAnswers({ ...customAnswers, [q.id]: opt });
-                                    if (customErrors[q.id]) {
-                                      const errs = { ...customErrors };
-                                      delete errs[q.id];
-                                      setCustomErrors(errs);
-                                    }
-                                  }}
-                                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
-                                    isSelected
-                                      ? "bg-[#17458F]/5 border-[#17458F] text-[#17458F] font-bold shadow-2xs"
-                                      : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
-                                  }`}
-                                >
-                                  <div
-                                    className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                                      isSelected ? "border-[#17458F] bg-[#17458F]" : "border-slate-300"
-                                    }`}
-                                  >
-                                    {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                                  </div>
-                                  <span className="text-xs">{opt}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        )}
-
-                        {q.type === "checkboxes" && (
-                          <div className="space-y-2">
-                            {(q.options || []).map((opt) => {
-                              const selectedList: string[] = Array.isArray(currentVal) ? currentVal : [];
-                              const isChecked = selectedList.includes(opt);
-                              return (
-                                <label
-                                  key={opt}
-                                  onClick={() => {
-                                    const next = isChecked
-                                      ? selectedList.filter((item) => item !== opt)
-                                      : [...selectedList, opt];
-                                    setCustomAnswers({ ...customAnswers, [q.id]: next });
-                                    if (customErrors[q.id]) {
-                                      const errs = { ...customErrors };
-                                      delete errs[q.id];
-                                      setCustomErrors(errs);
-                                    }
-                                  }}
-                                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
-                                    isChecked
-                                      ? "bg-emerald-50/60 border-emerald-600 text-emerald-950 font-bold shadow-2xs"
-                                      : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
-                                  }`}
-                                >
-                                  <div
-                                    className={`w-4 h-4 rounded-md border flex items-center justify-center ${
-                                      isChecked ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300"
-                                    }`}
-                                  >
-                                    {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
-                                  </div>
-                                  <span className="text-xs">{opt}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        )}
-
-                        {q.type === "dropdown" && (
-                          <select
-                            value={currentVal || ""}
-                            onChange={(e) => {
-                              setCustomAnswers({ ...customAnswers, [q.id]: e.target.value });
-                              if (customErrors[q.id]) {
-                                const errs = { ...customErrors };
-                                delete errs[q.id];
-                                setCustomErrors(errs);
-                              }
-                            }}
-                            className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
-                          >
-                            <option value="">-- Choose an option --</option>
-                            {(q.options || []).map((opt) => (
-                              <option key={opt} value={opt}>
-                                {opt}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-
-                        {isError && (
-                          <p className="text-[11px] font-bold text-rose-600 flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3" />
-                            <span>{customErrors[q.id]}</span>
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
           </div>
 
           <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-100">
             <Button
               onClick={() => {
-                setCurrentStep(1);
+                setCurrentStep(STEP_DETAILS);
                 scrollToStepTop();
               }}
               variant="outline"
@@ -2076,7 +1911,238 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             </Button>
 
             <Button
-              onClick={handleProceedToStep3}
+              onClick={handleProceedFromParticipation}
+              variant="primary"
+              size="md"
+              className="w-full sm:w-auto justify-center gap-2 cursor-pointer min-h-[44px]"
+            >
+              <span>{hasCustomQuestions ? "Continue to Questions" : "Review Summary"}</span>
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* STEP 3: SRC FORMS QUESTIONS & GUIDELINES (WHEN CUSTOM QUESTIONS EXIST) */}
+      {hasCustomQuestions && currentStep === STEP_QUESTIONS && (
+        <div 
+          ref={stepContainerRef}
+          id="registration-step-card"
+          className="rounded-3xl bg-white border border-slate-200 p-6 sm:p-10 space-y-8 shadow-sm scroll-mt-20"
+        >
+          <div className="border-b border-slate-100 pb-4">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#E78023]">
+              Step 03 of {totalSteps < 10 ? `0${totalSteps}` : totalSteps}
+            </span>
+            <h3 className="font-heading font-extrabold text-2xl text-[#17458F] uppercase mt-1">
+              EVENT QUESTIONS &amp; GUIDELINES
+            </h3>
+            <p className="text-xs text-slate-500 font-medium">
+              Please review organizer guidelines and complete the required responses for {event.name}.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            {event.customQuestions!.map((q, qIdx) => {
+              const isError = Boolean(customErrors[q.id]);
+              const currentVal = customAnswers[q.id];
+
+              if (q.type === "note") {
+                return (
+                  <div key={q.id} className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-1.5">
+                    <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                      <AlertCircle className="w-4 h-4 text-[#E78023] shrink-0" />
+                      <span>{q.question || "Important Notice"}</span>
+                    </div>
+                    {q.noteContent && (
+                      <p className="text-xs text-slate-700 leading-relaxed pl-6 whitespace-pre-line">
+                        {q.noteContent}
+                      </p>
+                    )}
+                  </div>
+                );
+              }
+
+              return (
+                <div
+                  key={q.id}
+                  className={`p-4 sm:p-5 rounded-2xl border transition-all space-y-3 ${
+                    isError
+                      ? "bg-rose-50/50 border-rose-300 ring-2 ring-rose-200"
+                      : "bg-slate-50/60 border-slate-200 hover:border-slate-300"
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[#E78023] font-mono text-[11px]">0{qIdx + 1}.</span>
+                      <span>{q.question}</span>
+                      {q.required && <span className="text-rose-500 font-bold">*</span>}
+                    </label>
+                    {q.description && (
+                      <p className="text-[11px] text-slate-500 font-medium leading-normal">
+                        {q.description}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Question Inputs by Type */}
+                  {q.type === "short_text" && (
+                    <input
+                      type="text"
+                      value={currentVal || ""}
+                      onChange={(e) => {
+                        setCustomAnswers({ ...customAnswers, [q.id]: e.target.value });
+                        if (customErrors[q.id]) {
+                          const errs = { ...customErrors };
+                          delete errs[q.id];
+                          setCustomErrors(errs);
+                        }
+                      }}
+                      placeholder={q.placeholder || "Your answer..."}
+                      className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F]"
+                    />
+                  )}
+
+                  {q.type === "long_text" && (
+                    <textarea
+                      rows={3}
+                      value={currentVal || ""}
+                      onChange={(e) => {
+                        setCustomAnswers({ ...customAnswers, [q.id]: e.target.value });
+                        if (customErrors[q.id]) {
+                          const errs = { ...customErrors };
+                          delete errs[q.id];
+                          setCustomErrors(errs);
+                        }
+                      }}
+                      placeholder={q.placeholder || "Enter detailed response..."}
+                      className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F]"
+                    />
+                  )}
+
+                  {q.type === "multiple_choice" && (
+                    <div className="space-y-2">
+                      {(q.options || []).map((opt) => {
+                        const isSelected = currentVal === opt;
+                        return (
+                          <label
+                            key={opt}
+                            onClick={() => {
+                              setCustomAnswers({ ...customAnswers, [q.id]: opt });
+                              if (customErrors[q.id]) {
+                                const errs = { ...customErrors };
+                                delete errs[q.id];
+                                setCustomErrors(errs);
+                              }
+                            }}
+                            className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                              isSelected
+                                ? "bg-[#17458F]/5 border-[#17458F] text-[#17458F] font-bold shadow-2xs"
+                                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                            }`}
+                          >
+                            <div
+                              className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                                isSelected ? "border-[#17458F] bg-[#17458F]" : "border-slate-300"
+                              }`}
+                            >
+                              {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </div>
+                            <span className="text-xs">{opt}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {q.type === "checkboxes" && (
+                    <div className="space-y-2">
+                      {(q.options || []).map((opt) => {
+                        const selectedList: string[] = Array.isArray(currentVal) ? currentVal : [];
+                        const isChecked = selectedList.includes(opt);
+                        return (
+                          <label
+                            key={opt}
+                            onClick={() => {
+                              const next = isChecked
+                                ? selectedList.filter((item) => item !== opt)
+                                : [...selectedList, opt];
+                              setCustomAnswers({ ...customAnswers, [q.id]: next });
+                              if (customErrors[q.id]) {
+                                const errs = { ...customErrors };
+                                delete errs[q.id];
+                                setCustomErrors(errs);
+                              }
+                            }}
+                            className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                              isChecked
+                                ? "bg-emerald-50/60 border-emerald-600 text-emerald-950 font-bold shadow-2xs"
+                                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                            }`}
+                          >
+                            <div
+                              className={`w-4 h-4 rounded-md border flex items-center justify-center ${
+                                isChecked ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300"
+                              }`}
+                            >
+                              {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                            </div>
+                            <span className="text-xs">{opt}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {q.type === "dropdown" && (
+                    <select
+                      value={currentVal || ""}
+                      onChange={(e) => {
+                        setCustomAnswers({ ...customAnswers, [q.id]: e.target.value });
+                        if (customErrors[q.id]) {
+                          const errs = { ...customErrors };
+                          delete errs[q.id];
+                          setCustomErrors(errs);
+                        }
+                      }}
+                      className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
+                    >
+                      <option value="">-- Choose an option --</option>
+                      {(q.options || []).map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
+                  {isError && (
+                    <p className="text-[11px] font-bold text-rose-600 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      <span>{customErrors[q.id]}</span>
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-100">
+            <Button
+              onClick={() => {
+                setCurrentStep(STEP_PARTICIPATION);
+                scrollToStepTop();
+              }}
+              variant="outline"
+              size="md"
+              className="w-full sm:w-auto justify-center gap-2 cursor-pointer min-h-[44px]"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back</span>
+            </Button>
+
+            <Button
+              onClick={handleProceedFromQuestionsToReview}
               variant="primary"
               size="md"
               className="w-full sm:w-auto justify-center gap-2 cursor-pointer min-h-[44px]"
@@ -2088,8 +2154,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         </div>
       )}
 
-      {/* STEP 3: REVIEW & CONFIRM */}
-      {currentStep === 3 && (
+      {/* STEP REVIEW & CONFIRM */}
+      {currentStep === STEP_REVIEW && (
         <div 
           ref={stepContainerRef}
           id="registration-step-card"
@@ -2097,7 +2163,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         >
           <div className="border-b border-slate-100 pb-4">
             <span className="text-xs font-bold uppercase tracking-wider text-[#E78023]">
-              Step 03 of 03
+              Step {totalSteps < 10 ? `0${totalSteps}` : totalSteps} of {totalSteps < 10 ? `0${totalSteps}` : totalSteps}
             </span>
             <h3 className="font-heading font-extrabold text-2xl text-[#17458F] uppercase mt-1">
               REVIEW &amp; CONFIRM REGISTRATION
@@ -2229,7 +2295,6 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               </div>
             )}
 
-
           </div>
 
           <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1 font-medium">
@@ -2244,7 +2309,11 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-100">
             <Button
               onClick={() => {
-                setCurrentStep(2);
+                if (hasCustomQuestions) {
+                  setCurrentStep(STEP_QUESTIONS);
+                } else {
+                  setCurrentStep(STEP_PARTICIPATION);
+                }
                 scrollToStepTop();
               }}
               variant="outline"
@@ -2278,41 +2347,117 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         </div>
       )}
 
-      {/* STEP 4: PASS TICKET DISPLAY */}
-      {currentStep === 4 && generatedTicket && (
+      {/* STEP PASS: PASS TICKET DISPLAY & WHATSAPP INTERSTITIAL GATE */}
+      {currentStep === STEP_PASS && generatedTicket && (
         <div ref={stepContainerRef} id="registration-step-card" className="scroll-mt-20 space-y-6">
-          {event.whatsappGroupUrl && (
-            <div className="max-w-xl mx-auto">
-              <WhatsAppJoinCard
-                whatsappGroupUrl={event.whatsappGroupUrl}
-                whatsappGroupName={event.whatsappGroupName}
-                variant="card"
-                title="Join Official WhatsApp Group"
-                subtitle="Connect with event coordinators, get instant notices, schedule changes, and collaborate with delegates."
-              />
+          {event.whatsappGroupUrl && !hasJoinedWhatsApp ? (
+            /* Dedicated WhatsApp Group Gate Screen */
+            <div className="max-w-xl mx-auto rounded-3xl bg-white border border-emerald-200/80 p-6 sm:p-10 shadow-lg text-center space-y-6 animate-in fade-in duration-300">
+              <div className="mx-auto w-16 h-16 rounded-3xl bg-emerald-50 border border-emerald-200 text-[#25D366] flex items-center justify-center shadow-inner">
+                <MessageCircle className="w-8 h-8 fill-[#25D366]" />
+              </div>
+
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100/80 text-emerald-900 text-[11px] font-bold uppercase tracking-wider">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Registration Confirmed • Next Step</span>
+                </div>
+                <h3 className="font-heading font-extrabold text-2xl sm:text-3xl text-slate-900 tracking-tight">
+                  Join Official WhatsApp Group
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed max-w-md mx-auto">
+                  Stage callouts, reporting desks, schedule updates, and coordinator circulars are announced directly in this group. Join the group and return to access your official pass.
+                </p>
+              </div>
+
+              {/* Group Details Card */}
+              <div className="p-5 rounded-2xl bg-emerald-50/70 border border-emerald-200/90 text-left space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 font-mono">
+                    Participant Community
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-white px-2.5 py-0.5 rounded-full border border-emerald-200">
+                    Official JDCOEM
+                  </span>
+                </div>
+
+                <div>
+                  <h4 className="font-heading font-extrabold text-base text-slate-900">
+                    {event.whatsappGroupName || `${event.name} • Official Group`}
+                  </h4>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    Direct communication line with event leads and registered participants.
+                  </p>
+                </div>
+
+                <a
+                  href={formatWhatsAppUrl(event.whatsappGroupUrl) || event.whatsappGroupUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-sm transition-all shadow-sm active:scale-95 cursor-pointer"
+                >
+                  <MessageCircle className="w-5 h-5 fill-white" />
+                  <span>Join WhatsApp Group</span>
+                  <ExternalLink className="w-4 h-4 ml-1" />
+                </a>
+              </div>
+
+              {/* Progression Action */}
+              <div className="pt-2 space-y-3">
+                <Button
+                  onClick={() => {
+                    setHasJoinedWhatsApp(true);
+                    scrollToStepTop();
+                  }}
+                  variant="primary"
+                  size="lg"
+                  className="w-full justify-center gap-2 cursor-pointer min-h-[48px] text-sm font-bold shadow-md bg-[#17458F] hover:bg-[#123670]"
+                >
+                  <span>Continue to Event Pass</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+
+                <p className="text-[11px] text-slate-400 font-medium">
+                  Already joined or using a separate device? Click above to view and download your pass.
+                </p>
+              </div>
             </div>
+          ) : (
+            <>
+              {event.whatsappGroupUrl && (
+                <div className="max-w-xl mx-auto">
+                  <WhatsAppJoinCard
+                    whatsappGroupUrl={event.whatsappGroupUrl}
+                    whatsappGroupName={event.whatsappGroupName}
+                    variant="card"
+                    title="Participant WhatsApp Community"
+                    subtitle="Connect with event coordinators, get instant notices, schedule changes, and collaborate with delegates."
+                  />
+                </div>
+              )}
+              <TicketPass
+                registrationId={generatedTicket.registrationId}
+                eventName={event.name}
+                eventDate={event.date}
+                eventVenue={event.venue}
+                participantName={generatedTicket.participantName || formData.fullName || "Delegate"}
+                department={generatedTicket.department || (isExternal ? (formData.collegeName ? `${formData.collegeName} • ${formData.department}` : formData.department) : formData.department)}
+                year={generatedTicket.year || (isExternal ? (formData.city ? `📍 ${formData.city} • ${formData.year}` : formData.year) : formData.year)}
+                teamType={generatedTicket.teamType || formData.teamType}
+                teamName={generatedTicket.teamName || formData.teamName}
+                teamMembers={
+                  generatedTicket.teamMembers && Array.isArray(generatedTicket.teamMembers)
+                    ? generatedTicket.teamMembers.map((m: any) => typeof m === "string" ? m : `${m.name} (${m.department || m.btId || ""})`)
+                    : (formData.teamType === "Team" ? teamMembers.map((m) => isExternal ? `${m.name} (${m.department})` : `${m.name} (${m.btId})`) : undefined)
+                }
+                ticketCode={generatedTicket.ticketCode}
+                parentEventName={event.parentEventName}
+                subEventBadge={event.subEventBadge}
+                paymentStatus={generatedTicket.paymentStatus}
+                paymentId={generatedTicket.paymentId}
+              />
+            </>
           )}
-          <TicketPass
-            registrationId={generatedTicket.registrationId}
-            eventName={event.name}
-            eventDate={event.date}
-            eventVenue={event.venue}
-            participantName={generatedTicket.participantName || formData.fullName || "Delegate"}
-            department={generatedTicket.department || (isExternal ? (formData.collegeName ? `${formData.collegeName} • ${formData.department}` : formData.department) : formData.department)}
-            year={generatedTicket.year || (isExternal ? (formData.city ? `📍 ${formData.city} • ${formData.year}` : formData.year) : formData.year)}
-            teamType={generatedTicket.teamType || formData.teamType}
-            teamName={generatedTicket.teamName || formData.teamName}
-            teamMembers={
-              generatedTicket.teamMembers && Array.isArray(generatedTicket.teamMembers)
-                ? generatedTicket.teamMembers.map((m: any) => typeof m === "string" ? m : `${m.name} (${m.department || m.btId || ""})`)
-                : (formData.teamType === "Team" ? teamMembers.map((m) => isExternal ? `${m.name} (${m.department})` : `${m.name} (${m.btId})`) : undefined)
-            }
-            ticketCode={generatedTicket.ticketCode}
-            parentEventName={event.parentEventName}
-            subEventBadge={event.subEventBadge}
-            paymentStatus={generatedTicket.paymentStatus}
-            paymentId={generatedTicket.paymentId}
-          />
         </div>
       )}
 
