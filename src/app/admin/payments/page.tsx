@@ -1241,9 +1241,6 @@ export default function AdminPaymentsPage() {
                         <div className="font-heading font-black text-sm text-slate-900">
                           ₹{(r.amountPaid ?? 0).toFixed(2)}
                         </div>
-                        <span className="text-[9px] text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.2 rounded inline-block mt-0.5">
-                          Zero Surcharge
-                        </span>
                       </td>
 
                       {/* Status */}
