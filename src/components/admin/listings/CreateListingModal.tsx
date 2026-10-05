@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   X, 
   Calendar, 
@@ -412,6 +412,14 @@ export function CreateListingModal({
   const [isAcceptingResponses, setIsAcceptingResponses] = useState(true);
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
   const [whatsappGroupName, setWhatsappGroupName] = useState("");
+  const formScrollRef = useRef<HTMLDivElement>(null);
+
+  // Reset scroll position to top whenever active tab changes or modal opens
+  useEffect(() => {
+    if (formScrollRef.current) {
+      formScrollRef.current.scrollTop = 0;
+    }
+  }, [activeSection, step, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -974,7 +982,7 @@ export function CreateListingModal({
                 )}
 
                 {/* Scrollable Form Body */}
-                <div className={cn(
+                <div ref={formScrollRef} className={cn(
                   "flex-1 overflow-y-auto",
                   activeSection === "qa" ? "p-0" : "p-6 sm:p-8 space-y-6"
                 )}>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { 
   FileText, 
   Ticket, 
@@ -256,6 +256,14 @@ export function EventFormModal({
   const [activeSection, setActiveSection] = useState<EventModalSection>("details");
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const contentScrollRef = useRef<HTMLDivElement>(null);
+
+  // Reset scroll position to top whenever active tab changes or modal opens
+  useEffect(() => {
+    if (contentScrollRef.current) {
+      contentScrollRef.current.scrollTop = 0;
+    }
+  }, [activeSection, isOpen]);
 
   const defaultRawDate = new Date().toISOString().split("T")[0];
 
@@ -971,7 +979,7 @@ export function EventFormModal({
           </nav>
 
           {/* Scrollable Content Area */}
-          <div className="flex-1 overflow-y-auto p-6 min-h-0">
+          <div ref={contentScrollRef} className="flex-1 overflow-y-auto p-6 min-h-0">
             {/* Section Micro-Header */}
             <div className="flex items-center gap-2 text-slate-500 text-[11px] mb-5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#E78023]" />
@@ -3166,7 +3174,7 @@ export function EventFormModal({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setForm({ ...form, rules: [...form.rules, ""] })}
+                  onClick={() => setForm({ ...form, rules: ["", ...form.rules] })}
                   className="px-2.5 py-1 rounded-lg bg-blue-50 text-[#17458F] hover:bg-blue-100 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" /> Add Rule
@@ -3217,7 +3225,7 @@ export function EventFormModal({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setForm({ ...form, whatToExpect: [...form.whatToExpect, ""] })}
+                  onClick={() => setForm({ ...form, whatToExpect: ["", ...form.whatToExpect] })}
                   className="px-2.5 py-1 rounded-lg bg-blue-50 text-[#17458F] hover:bg-blue-100 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" /> Add Item
