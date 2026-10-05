@@ -31,7 +31,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
-import { getStoredEvents, syncEventsFromFirestore } from "@/lib/eventsStore";
+import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
 import { getStoredTenures, syncTenuresFromFirestore, subscribeToTenures, CouncilTenure } from "@/lib/tenureStore";
 import { 
   getAllRegistrationsFromFirestore, 
@@ -217,7 +217,7 @@ export default function AdminPaymentsPage() {
       if (res && res.length > 0) setTenuresList(res);
     });
 
-    const unsubscribeEvents = subscribeToSiteContent<EventItem[]>("events", (cloudEvts) => {
+    const unsubscribeEvents = subscribeToEvents((cloudEvts) => {
       if (cloudEvts && Array.isArray(cloudEvts) && cloudEvts.length > 0) {
         setEventsList(cloudEvts);
       }

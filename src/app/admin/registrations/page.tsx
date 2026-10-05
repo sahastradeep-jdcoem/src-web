@@ -49,7 +49,12 @@ import { RegistrationRecord, EventItem, SrcFormField, CustomQuestion } from "@/t
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { getStoredEvents, syncEventsFromFirestore, resolveTenureForEvent } from "@/lib/eventsStore";
+import { 
+  getStoredEvents, 
+  syncEventsFromFirestore, 
+  subscribeToEvents,
+  resolveTenureForEvent 
+} from "@/lib/eventsStore";
 import { 
   getDepartmentShortName, 
   resolveCanonicalDepartmentName, 
@@ -182,7 +187,7 @@ export default function AdminRegistrationsPage() {
       if (depts && depts.length > 0) setDepartmentsList(depts);
     });
 
-    const unsubscribeEvents = subscribeToSiteContent<EventItem[]>("events", (cloudEvts) => {
+    const unsubscribeEvents = subscribeToEvents((cloudEvts) => {
       if (cloudEvts && Array.isArray(cloudEvts) && cloudEvts.length > 0) {
         setEventsList(cloudEvts);
       }
