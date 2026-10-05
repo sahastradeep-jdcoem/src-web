@@ -662,7 +662,17 @@ export default function EventRegisterPage() {
                             </div>
                             <div className="flex items-center gap-2">
                               <Users className="w-3.5 h-3.5 text-[#17458F]" />
-                              <span>Format: {sub.teamType || "Individual"} {sub.maxTeamSize ? `(Max ${sub.maxTeamSize})` : ""}</span>
+                              <span>
+                                Format: {sub.teamType || "Individual"} {
+                                  sub.teamType === "Team" && sub.minTeamSize && sub.maxTeamSize
+                                    ? sub.minTeamSize === sub.maxTeamSize
+                                      ? `(${sub.maxTeamSize} ${sub.maxTeamSize === 1 ? "Member" : "Members"})`
+                                      : `(${sub.minTeamSize} – ${sub.maxTeamSize} Members)`
+                                    : sub.maxTeamSize
+                                    ? `(Max ${sub.maxTeamSize})`
+                                    : ""
+                                }
+                              </span>
                             </div>
                             {topPrize && (
                               <div className="flex items-center gap-2 text-[#17458F] font-bold">

@@ -683,7 +683,9 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       }
       if (teamMembers.length < minTeamSize) {
         alert(
-          `This event requires at least ${minTeamSize} members per team. You currently have ${teamMembers.length} member(s). Please add ${minTeamSize - teamMembers.length} more verified teammate(s).`
+          minTeamSize === maxTeamSize
+            ? `This event requires exactly ${maxTeamSize} members per team. You currently have ${teamMembers.length} member(s). Please add ${minTeamSize - teamMembers.length} more verified teammate(s).`
+            : `This event requires at least ${minTeamSize} members per team. You currently have ${teamMembers.length} member(s). Please add ${minTeamSize - teamMembers.length} more verified teammate(s).`
         );
         return;
       }
@@ -1703,7 +1705,9 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                     Team Entry
                   </span>
                   <span className="text-[11px] opacity-80">
-                    Squad ({minTeamSize} - {maxTeamSize} Members)
+                    {minTeamSize === maxTeamSize
+                      ? `Squad (${maxTeamSize} ${maxTeamSize === 1 ? "Member" : "Members"})`
+                      : `Squad (${minTeamSize} - ${maxTeamSize} Members)`}
                   </span>
                 </button>
               </div>
@@ -1741,7 +1745,9 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                       Team Roster
                     </label>
                     <span className="text-[11px] font-bold text-[#E78023]">
-                      Requirement: {minTeamSize} – {maxTeamSize} Members
+                      Requirement: {minTeamSize === maxTeamSize
+                        ? `${maxTeamSize} ${maxTeamSize === 1 ? "Member" : "Members"}`
+                        : `${minTeamSize} – ${maxTeamSize} Members`}
                     </span>
                   </div>
 

@@ -985,7 +985,11 @@ export default function EventDetailPage() {
                   {!event.noRegistrationRequired && event.maxTeamSize && (
                     <div className="flex justify-between items-center py-1 border-b border-slate-100">
                       <span className="text-slate-500">Team Size:</span>
-                      <span className="font-bold text-slate-900">{event.minTeamSize || 1} – {event.maxTeamSize} Members</span>
+                      <span className="font-bold text-slate-900">
+                        {(event.minTeamSize && event.minTeamSize === event.maxTeamSize) || (!event.minTeamSize && event.maxTeamSize === 1)
+                          ? `${event.maxTeamSize} ${event.maxTeamSize === 1 ? "Member" : "Members"}`
+                          : `${event.minTeamSize || 1} – ${event.maxTeamSize} Members`}
+                      </span>
                     </div>
                   )}
                   <div className="flex justify-between items-center py-1 border-b border-slate-100">
