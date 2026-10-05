@@ -259,15 +259,27 @@ export default function AdminPaymentsPage() {
           cleanRegisteredAt = new Date(r.createdAt.seconds * 1000).toISOString();
         }
 
+        const matchedEvt = allKnownEvents.find((e) =>
+          (e.id && (e.id.toLowerCase() === (r.eventId || "").toLowerCase() || e.id.toLowerCase() === (r.eventSlug || "").toLowerCase())) ||
+          (e.slug && (e.slug.toLowerCase() === (r.eventSlug || "").toLowerCase() || e.slug.toLowerCase() === (r.eventId || "").toLowerCase())) ||
+          (e.name && (e.name.toLowerCase() === (r.eventName || "").toLowerCase() || e.name.toLowerCase() === (r.eventTitle || "").toLowerCase()))
+        );
+
+        const enrichedEventName = r.eventTitle || r.eventName || matchedEvt?.name || "Event Delegate Pass";
+        const enrichedEventSlug = r.eventSlug || matchedEvt?.slug || r.eventId || "general-event";
+        const enrichedParentId = r.parentEventId || matchedEvt?.parentEventId || undefined;
+        const enrichedParentName = r.parentEventName || matchedEvt?.parentEventName || undefined;
+        const enrichedSubBadge = r.subEventBadge || matchedEvt?.subEventBadge || undefined;
+
         return {
           id: r.id,
           registrationId: r.registrationId || r.id,
-          eventId: r.eventId || "",
-          eventSlug: r.eventSlug || r.eventId || "general-event",
-          eventName: r.eventTitle || r.eventName || "Event Delegate Pass",
-          parentEventName: r.parentEventName,
-          parentEventId: r.parentEventId,
-          subEventBadge: r.subEventBadge,
+          eventId: r.eventId || matchedEvt?.id || "",
+          eventSlug: enrichedEventSlug,
+          eventName: enrichedEventName,
+          parentEventName: enrichedParentName,
+          parentEventId: enrichedParentId,
+          subEventBadge: enrichedSubBadge,
           participantName: r.leaderName || r.participantName || "Delegate",
           email: r.email || "",
           phone: r.phone || "",

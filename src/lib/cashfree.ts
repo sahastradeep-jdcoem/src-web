@@ -342,7 +342,7 @@ export async function confirmCashfreeOrderRegistration(
       console.warn("Notice: could not read checkout session", e);
     }
 
-    // 2. Identify registration document
+    // 2. Identify registration document and prevent duplicate pass creation
     let existingRegDoc: any = null;
     let targetRegId: string | null = order.order_tags?.registrationId || sessionData?.registrationId || null;
 
@@ -357,11 +357,22 @@ export async function confirmCashfreeOrderRegistration(
 
     if (!existingRegDoc) {
       try {
-        const q = query(collection(db, "registrations"), where("orderId", "==", orderId));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          existingRegDoc = snap.docs[0].data();
-          targetRegId = snap.docs[0].id;
+        const qOrder = query(collection(db, "registrations"), where("orderId", "==", orderId));
+        const snapOrder = await getDocs(qOrder);
+        if (!snapOrder.empty) {
+          existingRegDoc = snapOrder.docs[0].data();
+          targetRegId = snapOrder.docs[0].id;
+        }
+      } catch (e) {}
+    }
+
+    if (!existingRegDoc && utr) {
+      try {
+        const qUtr = query(collection(db, "registrations"), where("paymentId", "==", utr));
+        const snapUtr = await getDocs(qUtr);
+        if (!snapUtr.empty) {
+          existingRegDoc = snapUtr.docs[0].data();
+          targetRegId = snapUtr.docs[0].id;
         }
       } catch (e) {}
     }
@@ -376,7 +387,7 @@ export async function confirmCashfreeOrderRegistration(
           status: "MATCHED",
           matchedRegistrationId: targetRegId || null,
           matchedOrderId: orderId,
-          matchedStudentName: order.customer_details?.customer_name || null,
+          matchedStudentName: order.customer_details?.customer_name || sessionData?.participantName || null,
           receivedAt: paidAt,
           matchedAt: nowIso,
           gateway: "cashfree",
@@ -387,47 +398,90 @@ export async function confirmCashfreeOrderRegistration(
       console.warn("Notice: verified_upi_payments ledger write warning:", ledgerErr);
     }
 
-    // 4. Update or construct registration document
+    // 4. Resolve event metadata dynamically from Firestore to guarantee umbrella & sub-competition linkage (Rule 8)
     const cust = order.customer_details;
     const tags = order.order_tags;
+    const draft = sessionData?.registrationData || {};
+    const rawEventId = tags?.eventId || sessionData?.eventId || draft.eventId || "";
+
+    let resolvedEvent: any = null;
+    if (rawEventId) {
+      try {
+        const evSnap = await getDoc(doc(db, "events", rawEventId));
+        if (evSnap.exists()) {
+          resolvedEvent = { id: evSnap.id, ...evSnap.data() };
+        } else {
+          // Fallback search by slug or name if ID differs
+          const qSlug = query(collection(db, "events"), where("slug", "==", rawEventId));
+          const snapSlug = await getDocs(qSlug);
+          if (!snapSlug.empty) {
+            resolvedEvent = { id: snapSlug.docs[0].id, ...snapSlug.docs[0].data() };
+          }
+        }
+      } catch (evErr) {
+        console.warn("Notice: could not dynamically fetch event:", evErr);
+      }
+    }
+
+    const eventId = resolvedEvent?.id || rawEventId || "event-pass";
+    const eventName = resolvedEvent?.name || draft.eventName || draft.eventTitle || sessionData?.eventName || order.order_note?.replace("SRC JDCOEM:", "").trim() || "Event Entry Pass";
+    const eventSlug = resolvedEvent?.slug || draft.eventSlug || sessionData?.eventSlug || (rawEventId.includes("-") ? rawEventId : "event");
+    const parentEventId = resolvedEvent?.parentEventId || draft.parentEventId || sessionData?.parentEventId || null;
+    const parentEventName = resolvedEvent?.parentEventName || draft.parentEventName || sessionData?.parentEventName || null;
+    const subEventBadge = resolvedEvent?.subEventBadge || draft.subEventBadge || sessionData?.subEventBadge || null;
+    const tenureId = resolvedEvent?.tenureId || draft.tenureId || sessionData?.tenureId || "tenure-2026-27";
+
     const custBtId = cust?.customer_id && cust.customer_id !== "student" && !cust.customer_id.startsWith("cust_")
       ? cust.customer_id.trim().toUpperCase()
       : undefined;
 
-    const eventId = tags?.eventId || sessionData?.eventId || "general-event";
-    const regId = targetRegId || `SRC-DAN-26-${Math.floor(10000 + Math.random() * 90000)}`;
-    const tkCode = existingRegDoc?.ticketCode || sessionData?.registrationData?.ticketCode || `${regId.slice(4, 7)}26-TK-${Math.floor(1000 + Math.random() * 9000)}`;
+    const slugPrefix = (eventSlug.slice(0, 3) || "SRC").toUpperCase();
+    const regId = targetRegId || `SRC-${slugPrefix}-26-${Math.floor(10000 + Math.random() * 90000)}`;
+    const tkCode = existingRegDoc?.ticketCode || draft.ticketCode || `${slugPrefix}26-TK-${Math.floor(1000 + Math.random() * 9000)}`;
 
     let finalRecord: any;
 
     if (existingRegDoc) {
       finalRecord = {
         ...existingRegDoc,
-        id: targetRegId,
+        id: targetRegId || regId,
+        registrationId: targetRegId || regId,
         orderId,
         paymentStatus: "PAID",
         status: "CONFIRMED",
         paymentId: utr,
         amountPaid: amount,
         paidAt,
+        eventId,
+        eventName,
+        eventTitle: eventName,
+        eventSlug,
+        parentEventId: parentEventId || existingRegDoc.parentEventId || null,
+        parentEventName: parentEventName || existingRegDoc.parentEventName || null,
+        subEventBadge: subEventBadge || existingRegDoc.subEventBadge || null,
+        tenureId: tenureId || existingRegDoc.tenureId || "tenure-2026-27",
+        ticketCode: tkCode,
         verifiedBy: "Cashfree Payment Gateway (Verified)",
         verifiedAt: nowIso,
       };
     } else {
-      const draft = sessionData?.registrationData || {};
       finalRecord = {
         ...draft,
         id: regId,
         registrationId: regId,
         eventId,
-        eventTitle: draft.eventTitle || draft.eventName || order.order_note?.replace("SRC JDCOEM:", "").trim() || "Dance Competition",
-        eventName: draft.eventName || draft.eventTitle || order.order_note?.replace("SRC JDCOEM:", "").trim() || "Dance Competition",
-        eventSlug: draft.eventSlug || eventId,
-        participantName: draft.participantName || draft.leaderName || cust?.customer_name || "Delegate",
-        leaderName: draft.leaderName || draft.participantName || cust?.customer_name || "Delegate",
-        email: draft.email || cust?.customer_email || "",
-        phone: draft.phone || cust?.customer_phone || "",
-        btId: draft.btId || custBtId,
+        eventTitle: eventName,
+        eventName,
+        eventSlug,
+        parentEventId,
+        parentEventName,
+        subEventBadge,
+        tenureId,
+        participantName: draft.participantName || draft.leaderName || sessionData?.participantName || cust?.customer_name || "Delegate",
+        leaderName: draft.leaderName || draft.participantName || sessionData?.participantName || cust?.customer_name || "Delegate",
+        email: draft.email || sessionData?.email || cust?.customer_email || "",
+        phone: draft.phone || sessionData?.phone || cust?.customer_phone || "",
+        btId: draft.btId || sessionData?.btId || custBtId,
         department: draft.department || "Student",
         year: draft.year || "Student",
         teamType: draft.teamType || "Individual",

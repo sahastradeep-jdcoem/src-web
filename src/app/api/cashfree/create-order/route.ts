@@ -9,6 +9,10 @@ export async function POST(req: NextRequest) {
       eventId,
       eventName,
       eventSlug,
+      parentEventId,
+      parentEventName,
+      subEventBadge,
+      tenureId,
       participantName,
       email,
       phone,
@@ -25,6 +29,63 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const { db } = await import("@/lib/firebase/config");
+    const { doc, setDoc, collection, query, where, getDocs } = await import("firebase/firestore");
+
+    // Anti-duplicate protection: prevent duplicate order creation if student already has a confirmed pass
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY && eventId) {
+      try {
+        const cleanEmail = (email || "").toLowerCase().trim();
+        const cleanBt = (btId || "").toUpperCase().trim();
+
+        if (cleanEmail) {
+          const qEmail = query(
+            collection(db, "registrations"),
+            where("eventId", "==", eventId),
+            where("email", "==", cleanEmail)
+          );
+          const snap = await getDocs(qEmail);
+          const existing = snap.docs.find((d) => {
+            const data = d.data();
+            return data.status === "CONFIRMED" || data.paymentStatus === "PAID";
+          });
+          if (existing) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: `A confirmed pass already exists for this email (${cleanEmail}). Duplicate registrations are not allowed.`,
+              },
+              { status: 409 }
+            );
+          }
+        }
+
+        if (cleanBt && cleanBt !== "STUDENT") {
+          const qBt = query(
+            collection(db, "registrations"),
+            where("eventId", "==", eventId),
+            where("btId", "==", cleanBt)
+          );
+          const snap = await getDocs(qBt);
+          const existing = snap.docs.find((d) => {
+            const data = d.data();
+            return data.status === "CONFIRMED" || data.paymentStatus === "PAID";
+          });
+          if (existing) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: `A confirmed pass already exists for this BT ID (${cleanBt}). Duplicate registrations are not allowed.`,
+              },
+              { status: 409 }
+            );
+          }
+        }
+      } catch (dupErr) {
+        console.warn("Notice: duplicate check warning in create-order:", dupErr);
+      }
+    }
+
     const creds = await getServerCashfreeCredentials();
 
     // Unique order ID (Alphanumeric, max 45 chars for Cashfree standard)
@@ -38,7 +99,8 @@ export async function POST(req: NextRequest) {
       .replace(/[^a-zA-Z0-9_-]/g, "_")
       .slice(0, 32);
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.srcjdcoem.in";
+    const origin = req.nextUrl?.origin || process.env.NEXT_PUBLIC_SITE_URL || "https://www.srcjdcoem.in";
+    const siteUrl = origin.replace("://srcjdcoem.in", "://www.srcjdcoem.in");
     const targetReturnUrl = eventSlug
       ? `${siteUrl}/events/${eventSlug}/register?order_id={order_id}`
       : `${siteUrl}/events?order_id={order_id}`;
@@ -64,12 +126,9 @@ export async function POST(req: NextRequest) {
       },
     }, creds);
 
-    // Persist active checkout session and draft registration to Firestore
-    try {
-      const { db } = await import("@/lib/firebase/config");
-      const { doc, setDoc } = await import("firebase/firestore");
-
-      if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    // Persist active checkout session ONLY. Invariant: DO NOT pre-create unconfirmed pass in registrations
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      try {
         const nowIso = new Date().toISOString();
         const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
@@ -84,6 +143,10 @@ export async function POST(req: NextRequest) {
             eventId: eventId || "",
             eventName: eventName || "",
             eventSlug: eventSlug || "",
+            parentEventId: parentEventId || null,
+            parentEventName: parentEventName || null,
+            subEventBadge: subEventBadge || null,
+            tenureId: tenureId || null,
             registrationId: registrationId || "",
             registrationData: registrationDraft || null,
             participantName: participantName || "",
@@ -95,25 +158,9 @@ export async function POST(req: NextRequest) {
           },
           { merge: true }
         );
-
-        if (registrationDraft && registrationId) {
-          await setDoc(
-            doc(db, "registrations", registrationId),
-            {
-              ...registrationDraft,
-              id: registrationId,
-              orderId,
-              status: "PENDING",
-              paymentStatus: "PENDING",
-              amountPaid: parsedAmount,
-              createdAt: nowIso,
-            },
-            { merge: true }
-          );
-        }
+      } catch (fsErr) {
+        console.warn("Notice: could not save active_checkout_sessions in Firestore:", fsErr);
       }
-    } catch (fsErr) {
-      console.warn("Notice: could not pre-create session/draft in Firestore:", fsErr);
     }
 
     return NextResponse.json({

@@ -173,6 +173,12 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     paymentStatus?: string;
     paymentId?: string;
     orderId?: string;
+    participantName?: string;
+    department?: string;
+    year?: string;
+    teamType?: "Individual" | "Team";
+    teamName?: string;
+    teamMembers?: any[];
   } | null>(null);
   const pendingRegistrationDraftRef = useRef<{ regId: string; tkCode: string; payload: any } | null>(null);
 
@@ -202,6 +208,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     const returnOrderId = urlParams.get("order_id");
     if (!returnOrderId || generatedTicket) return;
 
+    setIsSubmitting(true);
     fetch("/api/cashfree/verify-order", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -209,25 +216,40 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     })
       .then((res) => res.json())
       .then((data) => {
+        setIsSubmitting(false);
         if (data.isPaid) {
           const reg = data.registration || {};
-          const regId = reg.id || returnOrderId;
+          const regId = reg.id || reg.registrationId || returnOrderId;
           const tkCode = reg.ticketCode || `${String(regId).slice(0, 7)}-TK`;
           setGeneratedTicket({
             id: regId,
             registrationId: regId,
             ticketCode: tkCode,
+            participantName: reg.participantName || reg.leaderName || "Delegate",
+            department: reg.department || "Student",
+            year: reg.year || "Student",
+            teamType: reg.teamType,
+            teamName: reg.teamName,
+            teamMembers: reg.teamMembers,
             paymentStatus: "PAID",
             paymentId: data.payment?.utr || reg.paymentId || `CF_${returnOrderId}`,
             orderId: returnOrderId,
           });
-          setCurrentStep(3);
+          setCurrentStep(4);
           try {
             confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
           } catch {}
+
+          // Clean query params so refreshing doesn't re-trigger
+          if (typeof window !== "undefined" && window.history && window.history.replaceState) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
         }
       })
-      .catch((e) => console.warn("Order return check notice:", e));
+      .catch((e) => {
+        setIsSubmitting(false);
+        console.warn("Order return check notice:", e);
+      });
   }, []);
 
   // Realtime subscription for instant auto-approval when phone webhook lands
@@ -713,9 +735,12 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       id: regId,
       eventId: event.id,
       eventTitle: event.name,
+      eventName: event.name,
+      eventSlug: event.slug,
       parentEventName: event.parentEventName,
       parentEventId: event.parentEventId,
       subEventBadge: event.subEventBadge,
+      participantName: formData.fullName,
       leaderName: formData.fullName,
       email: formData.email,
       phone: formData.phone,
@@ -751,13 +776,15 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     paymentId?: string;
     orderId?: string;
     amountPaid?: number;
+    registrationId?: string;
+    ticketCode?: string;
   }) => {
     if (!user) {
       openAuthModal();
       return;
     }
-    const regId = pendingRegistrationDraftRef.current?.regId || `SRC-${event.slug.slice(0, 3).toUpperCase()}-26-${Math.floor(10000 + Math.random() * 90000)}`;
-    const tkCode = pendingRegistrationDraftRef.current?.tkCode || `${event.slug.slice(0, 3).toUpperCase()}26-TK-${Math.floor(1000 + Math.random() * 9000)}`;
+    const regId = paymentDetails?.registrationId || pendingRegistrationDraftRef.current?.regId || `SRC-${event.slug.slice(0, 3).toUpperCase()}-26-${Math.floor(10000 + Math.random() * 90000)}`;
+    const tkCode = paymentDetails?.ticketCode || pendingRegistrationDraftRef.current?.tkCode || `${event.slug.slice(0, 3).toUpperCase()}26-TK-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const registrationPayload = buildRegistrationPayload(regId, tkCode, paymentDetails);
 
@@ -769,10 +796,18 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
     setTimeout(() => {
       setGeneratedTicket({
+        id: regId,
         registrationId: regId,
         ticketCode: tkCode,
+        participantName: formData.fullName,
+        department: formData.department,
+        year: formData.year,
+        teamType: formData.teamType,
+        teamName: formData.teamName,
+        teamMembers: formData.teamType === "Team" ? teamMembers : undefined,
         paymentStatus: paymentDetails?.paymentStatus,
         paymentId: paymentDetails?.paymentId,
+        orderId: paymentDetails?.orderId,
       });
       setIsSubmitting(false);
       setCurrentStep(4);
@@ -856,6 +891,10 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           eventId: event.id,
           eventName: event.name,
           eventSlug: event.slug,
+          parentEventId: event.parentEventId,
+          parentEventName: event.parentEventName,
+          subEventBadge: event.subEventBadge,
+          tenureId: event.tenureId,
           participantName: formData.fullName,
           email: formData.email,
           phone: formData.phone,
@@ -895,12 +934,35 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           if (vData.isPaid) {
             isPolledAndCompleted = true;
             clearInterval(pollInterval);
-            await completeRegistration({
+
+            const confirmedReg = vData.registration;
+            const finalRegId = confirmedReg?.id || draftRegId;
+            const finalTkCode = confirmedReg?.ticketCode || draftTkCode;
+
+            setGeneratedTicket({
+              id: finalRegId,
+              registrationId: finalRegId,
+              ticketCode: finalTkCode,
+              participantName: confirmedReg?.participantName || formData.fullName,
+              department: confirmedReg?.department || formData.department,
+              year: confirmedReg?.year || formData.year,
+              teamType: confirmedReg?.teamType || formData.teamType,
+              teamName: confirmedReg?.teamName || formData.teamName,
+              teamMembers: confirmedReg?.teamMembers || teamMembers,
               paymentStatus: "PAID",
-              paymentId: vData.payment?.utr || `CF_${orderData.orderId}`,
+              paymentId: vData.payment?.utr || confirmedReg?.paymentId || `CF_${orderData.orderId}`,
               orderId: orderData.orderId,
-              amountPaid: totalPayableAmount,
             });
+            setIsSubmitting(false);
+            setCurrentStep(4);
+            try {
+              confetti({
+                particleCount: 100,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ["#E78023", "#17458F", "#FFFFFF", "#3D406B"],
+              });
+            } catch {}
           }
         } catch (e) {
           // Ignore polling errors
@@ -931,12 +993,35 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           if (fData.isPaid) {
             isPolledAndCompleted = true;
             clearInterval(pollInterval);
-            await completeRegistration({
+
+            const confirmedReg = fData.registration;
+            const finalRegId = confirmedReg?.id || draftRegId;
+            const finalTkCode = confirmedReg?.ticketCode || draftTkCode;
+
+            setGeneratedTicket({
+              id: finalRegId,
+              registrationId: finalRegId,
+              ticketCode: finalTkCode,
+              participantName: confirmedReg?.participantName || formData.fullName,
+              department: confirmedReg?.department || formData.department,
+              year: confirmedReg?.year || formData.year,
+              teamType: confirmedReg?.teamType || formData.teamType,
+              teamName: confirmedReg?.teamName || formData.teamName,
+              teamMembers: confirmedReg?.teamMembers || teamMembers,
               paymentStatus: "PAID",
-              paymentId: fData.payment?.utr || `CF_${orderData.orderId}`,
+              paymentId: fData.payment?.utr || confirmedReg?.paymentId || `CF_${orderData.orderId}`,
               orderId: orderData.orderId,
-              amountPaid: totalPayableAmount,
             });
+            setIsSubmitting(false);
+            setCurrentStep(4);
+            try {
+              confetti({
+                particleCount: 100,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ["#E78023", "#17458F", "#FFFFFF", "#3D406B"],
+              });
+            } catch {}
           }
         } catch (e) {
           console.warn("Post-modal verification notice:", e);
@@ -2202,12 +2287,16 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             eventName={event.name}
             eventDate={event.date}
             eventVenue={event.venue}
-            participantName={formData.fullName}
-            department={isExternal ? (formData.collegeName ? `${formData.collegeName} • ${formData.department}` : formData.department) : formData.department}
-            year={isExternal ? (formData.city ? `📍 ${formData.city} • ${formData.year}` : formData.year) : formData.year}
-            teamType={formData.teamType}
-            teamName={formData.teamName}
-            teamMembers={formData.teamType === "Team" ? teamMembers.map((m) => isExternal ? `${m.name} (${m.department})` : `${m.name} (${m.btId})`) : undefined}
+            participantName={generatedTicket.participantName || formData.fullName || "Delegate"}
+            department={generatedTicket.department || (isExternal ? (formData.collegeName ? `${formData.collegeName} • ${formData.department}` : formData.department) : formData.department)}
+            year={generatedTicket.year || (isExternal ? (formData.city ? `📍 ${formData.city} • ${formData.year}` : formData.year) : formData.year)}
+            teamType={generatedTicket.teamType || formData.teamType}
+            teamName={generatedTicket.teamName || formData.teamName}
+            teamMembers={
+              generatedTicket.teamMembers && Array.isArray(generatedTicket.teamMembers)
+                ? generatedTicket.teamMembers.map((m: any) => typeof m === "string" ? m : `${m.name} (${m.department || m.btId || ""})`)
+                : (formData.teamType === "Team" ? teamMembers.map((m) => isExternal ? `${m.name} (${m.department})` : `${m.name} (${m.btId})`) : undefined)
+            }
             ticketCode={generatedTicket.ticketCode}
             parentEventName={event.parentEventName}
             subEventBadge={event.subEventBadge}

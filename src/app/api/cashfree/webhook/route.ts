@@ -63,6 +63,20 @@ export async function POST(req: NextRequest) {
     // 2. Validate HMAC SHA256 Signature for production event webhooks
     if (!isValidSignature(req, rawBody)) {
       console.warn("[Cashfree Webhook] Signature verification failed");
+      try {
+        const { db } = await import("@/lib/firebase/config");
+        const { doc, setDoc } = await import("firebase/firestore");
+        if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+          const logId = `CF-ERR-${Date.now()}`;
+          await setDoc(doc(db, "upi_webhook_logs", logId), {
+            id: logId,
+            receivedAt: new Date().toISOString(),
+            gateway: "cashfree",
+            eventType: "SIGNATURE_FAILED",
+            rawText: rawBody.slice(0, 500),
+          });
+        }
+      } catch {}
       return NextResponse.json(
         { status: "ERROR", message: "Invalid or missing webhook signature" },
         { status: 401 }
@@ -83,8 +97,12 @@ export async function POST(req: NextRequest) {
 
     console.log(`[Cashfree Webhook] Received ${eventType} for order: ${orderData?.order_id || refundData?.order_id}`);
 
-    // A. Payment Success
-    if (eventType === "PAYMENT_SUCCESS_WEBHOOK" || paymentData?.payment_status === "SUCCESS") {
+    // A. Payment Success (handles PAYMENT_SUCCESS_WEBHOOK, ORDER_PAID_WEBHOOK, and SUCCESS payment status)
+    if (
+      eventType === "PAYMENT_SUCCESS_WEBHOOK" || 
+      eventType === "ORDER_PAID_WEBHOOK" || 
+      paymentData?.payment_status === "SUCCESS"
+    ) {
       const orderId = orderData?.order_id;
       const utr = paymentData?.bank_reference || paymentData?.cf_payment_id;
       const amount = paymentData?.payment_amount || orderData?.order_amount;

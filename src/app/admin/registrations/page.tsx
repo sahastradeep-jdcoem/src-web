@@ -240,10 +240,28 @@ export default function AdminRegistrationsPage() {
     }
   }, []);
 
+  // Comprehensive catalog of all events (live store + past tenure snapshots)
+  const allKnownEvents = useMemo(() => {
+    const map = new Map<string, EventItem>();
+    eventsList.forEach((e) => {
+      if (e && (e.id || e.slug)) map.set(e.id || e.slug, e);
+    });
+    tenuresList.forEach((t) => {
+      if (Array.isArray(t.events)) {
+        t.events.forEach((e) => {
+          if (e && (e.id || e.slug) && !map.has(e.id || e.slug)) {
+            map.set(e.id || e.slug, e);
+          }
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [eventsList, tenuresList]);
+
   const formatRecords = (records: any[], activeDepts?: string[]): RegistrationRecord[] => {
     const depts = activeDepts && activeDepts.length > 0 ? activeDepts : (departmentsList.length > 0 ? departmentsList : getStoredDepartments());
     return records
-      .filter((r: any) => !r.id?.startsWith("hub_") && !r.customAnswers?.isHubBallot && !r.customAnswers?.isHubSubmission && !r.eventTitle?.startsWith("[HUB]"))
+      .filter((r: any) => !r.id?.startsWith("hub_") && !r.customAnswers?.isHubBallot && !r.customAnswers?.isHubSubmission && !r.eventTitle?.startsWith("[HUB]") && !(r.status === "PENDING" && r.paymentStatus === "PENDING"))
       .map((r: any) => {
       // Determine the best ISO time string from r.paidAt, r.registeredAt, or r.createdAt
       let fullIsoTime = "";
@@ -301,16 +319,29 @@ export default function AdminRegistrationsPage() {
         }).catch(() => {});
       }
 
+      // Auto-heal umbrella parent links if missing
+      const matchedEvt = allKnownEvents.find((e) =>
+        (e.id && (e.id.toLowerCase() === (r.eventId || "").toLowerCase() || e.id.toLowerCase() === (r.eventSlug || "").toLowerCase())) ||
+        (e.slug && (e.slug.toLowerCase() === (r.eventSlug || "").toLowerCase() || e.slug.toLowerCase() === (r.eventId || "").toLowerCase())) ||
+        (e.name && (e.name.toLowerCase() === (r.eventName || "").toLowerCase() || e.name.toLowerCase() === (r.eventTitle || "").toLowerCase()))
+      );
+
+      const enrichedEventName = r.eventTitle || r.eventName || matchedEvt?.name || "Event Delegate Pass";
+      const enrichedEventSlug = r.eventSlug || matchedEvt?.slug || r.eventId || "";
+      const enrichedParentId = r.parentEventId || matchedEvt?.parentEventId || undefined;
+      const enrichedParentName = r.parentEventName || matchedEvt?.parentEventName || undefined;
+      const enrichedSubBadge = r.subEventBadge || matchedEvt?.subEventBadge || undefined;
+
       return {
         ...r,
         id: r.id,
         registrationId: r.id,
-        eventId: r.eventId || "",
-        eventSlug: r.eventSlug || r.eventId || "",
-        eventName: r.eventTitle || r.eventName || "Event Delegate Pass",
-        parentEventName: r.parentEventName,
-        parentEventId: r.parentEventId,
-        subEventBadge: r.subEventBadge,
+        eventId: r.eventId || matchedEvt?.id || "",
+        eventSlug: enrichedEventSlug,
+        eventName: enrichedEventName,
+        parentEventName: enrichedParentName,
+        parentEventId: enrichedParentId,
+        subEventBadge: enrichedSubBadge,
         participantName: r.leaderName || r.participantName || "Delegate",
         email: r.email,
         phone: r.phone,
@@ -392,24 +423,6 @@ export default function AdminRegistrationsPage() {
       setRegistrations((prev) => formatRecords(prev, departmentsList));
     }
   }, [departmentsList]);
-
-  // Comprehensive catalog of all events (live store + past tenure snapshots)
-  const allKnownEvents = useMemo(() => {
-    const map = new Map<string, EventItem>();
-    eventsList.forEach((e) => {
-      if (e && (e.id || e.slug)) map.set(e.id || e.slug, e);
-    });
-    tenuresList.forEach((t) => {
-      if (Array.isArray(t.events)) {
-        t.events.forEach((e) => {
-          if (e && (e.id || e.slug) && !map.has(e.id || e.slug)) {
-            map.set(e.id || e.slug, e);
-          }
-        });
-      }
-    });
-    return Array.from(map.values());
-  }, [eventsList, tenuresList]);
 
   // Helper to determine if a registration record strictly belongs to the club
   const isRegistrationOwned = useCallback((r: any) => {
