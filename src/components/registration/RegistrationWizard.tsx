@@ -1648,7 +1648,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               Step 02 of {totalSteps < 10 ? `0${totalSteps}` : totalSteps}
             </span>
             <h3 className="font-heading font-extrabold text-2xl text-[#17458F] uppercase mt-1">
-              PARTICIPATION FORMAT &amp; TEAM ROSTER
+              <span className="sm:hidden">PARTICIPATION</span>
+              <span className="hidden sm:inline">PARTICIPATION FORMAT &amp; TEAM ROSTER</span>
             </h3>
             <p className="text-xs text-slate-500 font-medium">
               {isExternal 
@@ -1735,15 +1736,6 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
                 {/* Team Members List */}
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                      Team Roster ({teamMembers.length} of max {maxTeamSize})
-                    </label>
-                    <span className="text-[11px] font-bold text-[#E78023]">
-                      Requirement: {minTeamSize} – {maxTeamSize} Members
-                    </span>
-                  </div>
-                  
                   <div className="space-y-2.5">
                     {teamMembers.map((member, idx) => (
                       <div
@@ -1759,28 +1751,28 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                             0{idx + 1}
                           </div>
                           
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
+                          {idx === 0 ? (
+                            <div>
                               <span className="font-bold text-slate-900">{member.name}</span>
-                              {member.btId && !isExternal && (
-                                <span className="font-mono text-xs font-bold text-[#E78023] px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200">
-                                  {member.btId}
-                                </span>
-                              )}
-                              {idx === 0 ? (
-                                <Badge variant="navy" size="sm">
-                                  Team Leader (Primary)
-                                </Badge>
-                              ) : (
+                            </div>
+                          ) : (
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-slate-900">{member.name}</span>
+                                {member.btId && !isExternal && (
+                                  <span className="font-mono text-xs font-bold text-[#E78023] px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200">
+                                    {member.btId}
+                                  </span>
+                                )}
                                 <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                                   Squad Member
                                 </span>
-                              )}
+                              </div>
+                              <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                                {member.department} {member.year ? `• ${member.year}` : ""}
+                              </p>
                             </div>
-                            <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                              {member.department} {member.year ? `• ${member.year}` : ""}
-                            </p>
-                          </div>
+                          )}
                         </div>
 
                         {idx !== 0 && (
