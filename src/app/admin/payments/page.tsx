@@ -32,7 +32,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
 import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
-import { getStoredTenures, syncTenuresFromFirestore, subscribeToTenures, CouncilTenure } from "@/lib/tenureStore";
+import { getStoredTenures, syncTenuresFromFirestore, subscribeToTenures, CouncilTenure, getLatestAvailableTenure } from "@/lib/tenureStore";
 import { 
   getAllRegistrationsFromFirestore, 
   subscribeToRegistrationsFromFirestore, 
@@ -145,7 +145,17 @@ export default function AdminPaymentsPage() {
     return false;
   }, [isClubOwner, adminAccess, allKnownEvents]);
 
-  const [selectedTenureId, setSelectedTenureId] = useState<string>("all");
+  const [userSelectedTenure, setUserSelectedTenure] = useState(false);
+  const [selectedTenureId, setSelectedTenureId] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = getStoredTenures();
+        const latest = getLatestAvailableTenure(stored);
+        if (latest) return latest.id;
+      } catch {}
+    }
+    return "tenure-2026-27";
+  });
   const [selectedEventSlug, setSelectedEventSlug] = useState<string>("all");
 
   const scopedEventsList = useMemo(() => {
@@ -212,9 +222,21 @@ export default function AdminPaymentsPage() {
     });
 
     // Tenures
-    setTenuresList(getStoredTenures());
+    const initialTenures = getStoredTenures();
+    setTenuresList(initialTenures);
+    if (!userSelectedTenure && initialTenures.length > 0) {
+      const latest = getLatestAvailableTenure(initialTenures);
+      if (latest) setSelectedTenureId(latest.id);
+    }
+
     syncTenuresFromFirestore().then((res) => {
-      if (res && res.length > 0) setTenuresList(res);
+      if (res && res.length > 0) {
+        setTenuresList(res);
+        if (!userSelectedTenure) {
+          const latest = getLatestAvailableTenure(res);
+          if (latest) setSelectedTenureId(latest.id);
+        }
+      }
     });
 
     const unsubscribeEvents = subscribeToEvents((cloudEvts) => {
@@ -226,6 +248,10 @@ export default function AdminPaymentsPage() {
     const unsubscribeTenures = subscribeToTenures((cloudTenures) => {
       if (cloudTenures && Array.isArray(cloudTenures) && cloudTenures.length > 0) {
         setTenuresList(cloudTenures);
+        if (!userSelectedTenure) {
+          const latest = getLatestAvailableTenure(cloudTenures);
+          if (latest) setSelectedTenureId(latest.id);
+        }
       }
     });
 
@@ -984,7 +1010,10 @@ export default function AdminPaymentsPage() {
                 </span>
                 <select
                   value={selectedTenureId}
-                  onChange={(e) => setSelectedTenureId(e.target.value)}
+                  onChange={(e) => {
+                    setUserSelectedTenure(true);
+                    setSelectedTenureId(e.target.value);
+                  }}
                   className="bg-transparent text-xs font-bold text-slate-800 focus:outline-none cursor-pointer pr-1"
                 >
                   <option value="all">All Tenures (Full History)</option>
