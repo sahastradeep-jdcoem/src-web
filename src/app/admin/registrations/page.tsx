@@ -1049,7 +1049,7 @@ export default function AdminRegistrationsPage() {
     // If a specific event is selected and has defined custom questions
     if (currentSelectedEventObj?.customQuestions && currentSelectedEventObj.customQuestions.length > 0) {
       currentSelectedEventObj.customQuestions.forEach((q) => {
-        if (q.type !== "note") {
+        if (q.type !== "note" && q.type !== "section" && q.type !== "whatsapp_link" && (q.type as string) !== "whatsapp") {
           questions.push({
             id: q.id,
             title: q.question || "Custom Question",

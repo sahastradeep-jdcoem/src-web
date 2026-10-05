@@ -90,7 +90,34 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   const { user, openAuthModal, updateUserProfile } = useAuth();
   const [departmentsList, setDepartmentsList] = useState<string[]>(DEFAULT_DEPARTMENTS);
 
-  const hasCustomQuestions = Boolean(event.customQuestions && event.customQuestions.length > 0);
+  const isWhatsappField = (q: any) => {
+    if (!q) return false;
+    if (q.type === "whatsapp_link" || q.type === "whatsapp") return true;
+    if (q.waGroupUrl && String(q.waGroupUrl).trim()) return true;
+    const qStr = `${q.question || ""} ${q.noteContent || ""} ${q.description || ""}`.toLowerCase();
+    if (qStr.includes("chat.whatsapp.com") || qStr.includes("wa.me") || qStr.includes("whatsapp group")) return true;
+    return false;
+  };
+
+  const extractWhatsappUrl = (q: any): string | undefined => {
+    if (!q) return undefined;
+    if (q.waGroupUrl && String(q.waGroupUrl).trim()) return String(q.waGroupUrl).trim();
+    const urlRegex = /(https?:\/\/(?:chat\.whatsapp\.com|wa\.me)\/[^\s]+)/i;
+    const textToScan = `${q.waGroupUrl || ""} ${q.noteContent || ""} ${q.question || ""} ${q.placeholder || ""} ${q.description || ""}`;
+    const match = textToScan.match(urlRegex);
+    return match ? match[1] : undefined;
+  };
+
+  // WhatsApp group link MUST NEVER be treated as a form question! It will appear after payment on the pass screen.
+  const whatsappFromQuestions = (event.customQuestions || []).find((q) => isWhatsappField(q));
+  const extractedUrlFromQuestions = whatsappFromQuestions ? extractWhatsappUrl(whatsappFromQuestions) : undefined;
+  const resolvedWhatsappUrl = event.whatsappGroupUrl?.trim() || extractedUrlFromQuestions || "";
+  const resolvedWhatsappName = event.whatsappGroupName?.trim() || whatsappFromQuestions?.waGroupName?.trim() || whatsappFromQuestions?.question?.trim() || `${event.name} • Official Group`;
+
+  const eligibleQuestions = (event.customQuestions || []).filter(
+    (q) => !isWhatsappField(q) && q.type !== "section"
+  );
+  const hasCustomQuestions = eligibleQuestions.length > 0;
   const STEP_DETAILS = 1;
   const STEP_PARTICIPATION = 2;
   const STEP_QUESTIONS = hasCustomQuestions ? 3 : -1;
@@ -675,10 +702,10 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   };
 
   const handleProceedFromQuestionsToReview = () => {
-    // Validate custom registration questions
-    if (event.customQuestions && event.customQuestions.length > 0) {
+    // Validate custom registration questions (excluding non-interactive/WhatsApp fields)
+    if (eligibleQuestions.length > 0) {
       const errors: Record<string, string> = {};
-      for (const q of event.customQuestions) {
+      for (const q of eligibleQuestions) {
         if (q.type === "note") continue;
         if (q.required) {
           const val = customAnswers[q.id];
@@ -739,8 +766,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   }) => {
     // Build structured custom answers preserving human-readable question titles
     const structuredAnswers: Record<string, any> = {};
-    if (event.customQuestions && event.customQuestions.length > 0) {
-      event.customQuestions.forEach((q) => {
+    if (eligibleQuestions.length > 0) {
+      eligibleQuestions.forEach((q) => {
         if (q.type !== "note" && customAnswers[q.id] !== undefined) {
           structuredAnswers[q.id] = {
             id: q.id,
@@ -1943,7 +1970,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           </div>
 
           <div className="space-y-4">
-            {event.customQuestions!.map((q, qIdx) => {
+            {eligibleQuestions.map((q, qIdx) => {
               const isError = Boolean(customErrors[q.id]);
               const currentVal = customAnswers[q.id];
 
@@ -2269,13 +2296,13 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             )}
 
             {/* Custom Question Answers Review */}
-            {event.customQuestions && event.customQuestions.some((q) => q.type !== "note" && customAnswers[q.id]) && (
+            {eligibleQuestions.some((q) => q.type !== "note" && customAnswers[q.id]) && (
               <div className="pt-4 border-t border-slate-200 text-xs space-y-2">
                 <span className="text-[10px] text-slate-500 uppercase font-bold block">
                   Event-Specific Answers:
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {event.customQuestions
+                  {eligibleQuestions
                     .filter((q) => q.type !== "note" && customAnswers[q.id])
                     .map((q) => {
                       const val = customAnswers[q.id];
@@ -2350,7 +2377,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       {/* STEP PASS: PASS TICKET DISPLAY & WHATSAPP INTERSTITIAL GATE */}
       {currentStep === STEP_PASS && generatedTicket && (
         <div ref={stepContainerRef} id="registration-step-card" className="scroll-mt-20 space-y-6">
-          {event.whatsappGroupUrl && !hasJoinedWhatsApp ? (
+          {resolvedWhatsappUrl && !hasJoinedWhatsApp ? (
             /* Dedicated WhatsApp Group Gate Screen */
             <div className="max-w-xl mx-auto rounded-3xl bg-white border border-emerald-200/80 p-6 sm:p-10 shadow-lg text-center space-y-6 animate-in fade-in duration-300">
               <div className="mx-auto w-16 h-16 rounded-3xl bg-emerald-50 border border-emerald-200 text-[#25D366] flex items-center justify-center shadow-inner">
@@ -2383,7 +2410,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
                 <div>
                   <h4 className="font-heading font-extrabold text-base text-slate-900">
-                    {event.whatsappGroupName || `${event.name} • Official Group`}
+                    {resolvedWhatsappName}
                   </h4>
                   <p className="text-xs text-slate-500 font-medium mt-0.5">
                     Direct communication line with event leads and registered participants.
@@ -2391,7 +2418,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                 </div>
 
                 <a
-                  href={formatWhatsAppUrl(event.whatsappGroupUrl) || event.whatsappGroupUrl}
+                  href={formatWhatsAppUrl(resolvedWhatsappUrl) || resolvedWhatsappUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-sm transition-all shadow-sm active:scale-95 cursor-pointer"
@@ -2424,11 +2451,11 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             </div>
           ) : (
             <>
-              {event.whatsappGroupUrl && (
+              {resolvedWhatsappUrl && (
                 <div className="max-w-xl mx-auto">
                   <WhatsAppJoinCard
-                    whatsappGroupUrl={event.whatsappGroupUrl}
-                    whatsappGroupName={event.whatsappGroupName}
+                    whatsappGroupUrl={resolvedWhatsappUrl}
+                    whatsappGroupName={resolvedWhatsappName}
                     variant="card"
                     title="Participant WhatsApp Community"
                     subtitle="Connect with event coordinators, get instant notices, schedule changes, and collaborate with delegates."
