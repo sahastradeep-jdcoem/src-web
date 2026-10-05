@@ -1736,6 +1736,15 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
                 {/* Team Members List */}
                 <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="hidden sm:inline text-xs font-bold uppercase tracking-wider text-slate-700">
+                      Team Roster
+                    </label>
+                    <span className="text-[11px] font-bold text-[#E78023]">
+                      Requirement: {minTeamSize} – {maxTeamSize} Members
+                    </span>
+                  </div>
+
                   <div className="space-y-2.5">
                     {teamMembers.map((member, idx) => (
                       <div
