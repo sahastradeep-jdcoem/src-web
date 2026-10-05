@@ -15,7 +15,7 @@ export interface UserProfile {
   profileCompleted?: boolean;
 
   // JDCOEM Student fields
-  btId?: string; // Official BT ID (e.g. BT22CSE045)
+  btId?: string; // Official BT ID (e.g. BT210115DS)
   department?: string;
   year?: string; // Year of study (e.g. 1st Year, 2nd Year, 3rd Year, 4th Year)
   designationBadge?: string; // e.g. "President", "Mentor", "Head • Coding Club"

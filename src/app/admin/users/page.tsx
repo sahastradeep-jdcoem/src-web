@@ -1412,7 +1412,7 @@ export default function AdminUsersPage() {
                   type="text"
                   value={newUserForm.btId}
                   onChange={(e) => setNewUserForm({ ...newUserForm, btId: e.target.value.toUpperCase() })}
-                  placeholder="e.g. BT240115DS"
+                  placeholder="e.g. BT210115DS"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold text-[#E78023] focus:outline-none focus:border-[#17458F]"
                 />
               </div>

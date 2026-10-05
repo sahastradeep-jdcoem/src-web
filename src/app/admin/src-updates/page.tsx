@@ -1433,7 +1433,7 @@ export default function AdminSrcUpdatesPage() {
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. BT230036CS"
+                    placeholder="e.g. BT210115DS"
                     value={formData.targetBtId}
                     onChange={(e) => handleSelectMember(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl border border-amber-300 text-xs font-mono font-bold uppercase text-slate-900 bg-white focus:outline-none"

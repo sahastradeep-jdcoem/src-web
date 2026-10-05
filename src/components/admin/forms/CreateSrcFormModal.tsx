@@ -194,7 +194,7 @@ export function CreateSrcFormModal({
           id: `q-${Date.now()}-2`,
           type: "short_text",
           question: "College BT ID",
-          placeholder: "e.g. BT230012CS",
+          placeholder: "e.g. BT210115DS",
           required: true,
         },
       ]);
@@ -620,7 +620,7 @@ export function CreateSrcFormModal({
                           </label>
                           <input
                             type="text"
-                            placeholder="e.g. BT230036CS"
+                            placeholder="e.g. BT210115DS"
                             value={targetBtId}
                             onChange={(e) => handleSelectMember(e.target.value)}
                             className="w-full px-3 py-2 rounded-xl border border-amber-300 text-xs font-mono font-bold uppercase text-slate-900 bg-white focus:outline-none"

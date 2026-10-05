@@ -710,7 +710,7 @@ export default function AdminRolesPage() {
                           const val = e.target.value.toUpperCase();
                           setBtIdOverrides((prev) => ({ ...prev, [officer.key]: val }));
                         }}
-                        placeholder="e.g. BT22CSE045"
+                        placeholder="e.g. BT210115DS"
                         className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-xs font-bold text-slate-800 uppercase focus:border-[#17458F] focus:outline-hidden"
                       />
                       {officer.detectedBtId && officer.currentBtId !== officer.detectedBtId && (
@@ -904,7 +904,7 @@ export default function AdminRolesPage() {
                               const val = e.target.value.toUpperCase();
                               setBtIdOverrides((prev) => ({ ...prev, [leader.slotKey]: val }));
                             }}
-                            placeholder="BT ID (e.g. BT22CSE001)"
+                            placeholder="BT ID (e.g. BT210115DS)"
                             className="flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 font-mono text-xs font-bold uppercase text-slate-800 focus:border-[#17458F] focus:outline-hidden"
                           />
 
@@ -958,7 +958,7 @@ export default function AdminRolesPage() {
               type="text"
               value={manualBtId}
               onChange={(e) => setManualBtId(e.target.value.toUpperCase())}
-              placeholder="e.g. BT22CSE099"
+              placeholder="e.g. BT210115DS"
               className="w-full rounded-xl border border-slate-200 px-3 py-2 font-mono text-xs font-bold uppercase text-slate-800 focus:border-[#17458F] focus:outline-hidden"
             />
           </div>

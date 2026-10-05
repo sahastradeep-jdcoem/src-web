@@ -1888,7 +1888,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                             type="text"
                             value={teammateBtIdInput}
                             onChange={(e) => setTeammateBtIdInput(e.target.value.toUpperCase())}
-                            placeholder="e.g. BT240115DS"
+                            placeholder="e.g. BT210115DS"
                             className="flex-1 px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-mono font-bold uppercase focus:outline-none focus:border-[#17458F]"
                           />
                           <Button

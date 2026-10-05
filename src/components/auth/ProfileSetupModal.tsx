@@ -466,7 +466,7 @@ export function ProfileSetupModal() {
     if (accountType === "JDCOEM_STUDENT") {
       const cleanBtId = btId.trim().toUpperCase();
       if (!cleanBtId || cleanBtId.length < 3) {
-        setError("Please enter your official College BT ID (e.g. BT22CSE045).");
+        setError("Please enter your official College BT ID (e.g. BT210115DS).");
         return;
       }
 
@@ -1168,13 +1168,13 @@ export function ProfileSetupModal() {
                             <span>Available</span>
                           </span>
                         )}
-                        <span className="text-[10px] text-slate-400 font-mono">Format: BT22CSE045</span>
+                        <span className="text-[10px] text-slate-400 font-mono">Format: BT210115DS</span>
                       </div>
                     </div>
                     <input
                       type="text"
                       required
-                      placeholder="e.g. BT22CSE045"
+                      placeholder="e.g. BT210115DS"
                       value={btId}
                       onChange={(e) => handleBtIdChange(e.target.value)}
                       onBlur={handleBtIdBlur}

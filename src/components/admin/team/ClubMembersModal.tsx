@@ -304,7 +304,7 @@ export function ClubMembersModal({
           <textarea
             value={bulkInput}
             onChange={(e) => setBulkInput(e.target.value)}
-            placeholder="e.g. BT230015EE, BT230049AI, BT240115DS, BT230036CS, BT01TEST..."
+            placeholder="e.g. BT230015EE, BT230049AI, BT210115DS, BT230036CS, BT01TEST..."
             rows={3}
             className="w-full px-4 py-3 rounded-xl border border-slate-200 text-xs sm:text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-[#17458F] focus:border-transparent transition-all resize-y"
           />

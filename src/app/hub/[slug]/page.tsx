@@ -1336,7 +1336,7 @@ export default function ListingDetailPage() {
                             type="text"
                             value={candidateBtId}
                             onChange={(e) => setCandidateBtId(e.target.value.toUpperCase())}
-                            placeholder="BT23..."
+                            placeholder="e.g. BT210115DS"
                             className="w-full px-3.5 py-3 sm:py-2 rounded-xl bg-slate-50 border border-slate-200 text-base sm:text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/15 transition-all"
                           />
                         </div>

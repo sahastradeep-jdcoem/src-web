@@ -410,7 +410,7 @@ export function PositionFormModal({
               </div>
               <input
                 type="text"
-                placeholder="e.g. BT22CSE045"
+                placeholder="e.g. BT210115DS"
                 value={formMember.btId || ""}
                 onChange={(e) => setFormMember({ ...formMember, btId: e.target.value.toUpperCase() })}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-amber-300 text-xs font-mono font-bold text-[#E78023] uppercase tracking-wider focus:outline-none focus:border-[#17458F]"
