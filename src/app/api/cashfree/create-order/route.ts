@@ -33,27 +33,60 @@ export async function POST(req: NextRequest) {
     const { doc, setDoc, collection, query, where, getDocs } = await import("firebase/firestore");
 
     // Anti-duplicate protection: prevent duplicate order creation if student already has a confirmed pass
-    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY && eventId) {
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY && (eventId || eventSlug || eventName)) {
       try {
         const cleanEmail = (email || "").toLowerCase().trim();
         const cleanBt = (btId || "").toUpperCase().trim();
+        const targetEventId = (eventId || "").trim().toLowerCase();
+        const targetEventSlug = (eventSlug || "").trim().toLowerCase();
+        const targetEventName = (eventName || "").trim().toLowerCase();
+
+        const isStudentMatch = (data: any) => {
+          const rEmail = (data.email || "").trim().toLowerCase();
+          const rBt = (data.btId || "").trim().toUpperCase();
+
+          if (cleanEmail && rEmail && rEmail === cleanEmail) return true;
+          if (cleanBt && rBt && cleanBt !== "STUDENT" && rBt === cleanBt) return true;
+
+          const members = Array.isArray(data.teamMembers) ? data.teamMembers : Array.isArray(data.members) ? data.members : [];
+          return members.some((m: any) => {
+            const mEmail = (m?.email || "").trim().toLowerCase();
+            const mBt = (m?.btId || "").trim().toUpperCase();
+            if (cleanEmail && mEmail && mEmail === cleanEmail) return true;
+            if (cleanBt && mBt && cleanBt !== "STUDENT" && mBt === cleanBt) return true;
+            return false;
+          });
+        };
+
+        const isEventRecordMatch = (data: any) => {
+          if (!data || data.status === "CANCELLED" || data.paymentStatus === "FAILED") return false;
+          if (data.status !== "CONFIRMED" && data.paymentStatus !== "PAID") return false;
+
+          const rId = (data.eventId || "").trim().toLowerCase();
+          const rSlug = (data.eventSlug || "").trim().toLowerCase();
+          const rName = (data.eventName || data.eventTitle || "").trim().toLowerCase();
+
+          if (targetEventId && (rId === targetEventId || rSlug === targetEventId)) return true;
+          if (targetEventSlug && (rSlug === targetEventSlug || rId === targetEventSlug)) return true;
+          if (targetEventName && rName) {
+            const stripped1 = targetEventName.replace(/[^a-z0-9]/g, "");
+            const stripped2 = rName.replace(/[^a-z0-9]/g, "");
+            if (stripped1 && stripped2 && (stripped1 === stripped2 || stripped1.includes(stripped2) || stripped2.includes(stripped1))) {
+              return true;
+            }
+          }
+          return false;
+        };
 
         if (cleanEmail) {
-          const qEmail = query(
-            collection(db, "registrations"),
-            where("eventId", "==", eventId),
-            where("email", "==", cleanEmail)
-          );
+          const qEmail = query(collection(db, "registrations"), where("email", "==", cleanEmail));
           const snap = await getDocs(qEmail);
-          const existing = snap.docs.find((d) => {
-            const data = d.data();
-            return data.status === "CONFIRMED" || data.paymentStatus === "PAID";
-          });
+          const existing = snap.docs.find((d) => isEventRecordMatch(d.data()));
           if (existing) {
             return NextResponse.json(
               {
                 success: false,
-                error: `A confirmed pass already exists for this email (${cleanEmail}). Duplicate registrations are not allowed.`,
+                error: `A confirmed pass already exists for this email (${cleanEmail}) for ${eventName || "this event"}. Duplicate registrations are not allowed.`,
               },
               { status: 409 }
             );
@@ -61,21 +94,33 @@ export async function POST(req: NextRequest) {
         }
 
         if (cleanBt && cleanBt !== "STUDENT") {
-          const qBt = query(
-            collection(db, "registrations"),
-            where("eventId", "==", eventId),
-            where("btId", "==", cleanBt)
-          );
+          const qBt = query(collection(db, "registrations"), where("btId", "==", cleanBt));
           const snap = await getDocs(qBt);
-          const existing = snap.docs.find((d) => {
+          const existing = snap.docs.find((d) => isEventRecordMatch(d.data()));
+          if (existing) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: `A confirmed pass already exists for this BT ID (${cleanBt}) for ${eventName || "this event"}. Duplicate registrations are not allowed.`,
+              },
+              { status: 409 }
+            );
+          }
+        }
+
+        // Fallback: Check if participant is part of an existing team registration for this event
+        if (targetEventId) {
+          const qEvent = query(collection(db, "registrations"), where("eventId", "==", targetEventId));
+          const snapEvent = await getDocs(qEvent);
+          const existing = snapEvent.docs.find((d) => {
             const data = d.data();
-            return data.status === "CONFIRMED" || data.paymentStatus === "PAID";
+            return isEventRecordMatch(data) && isStudentMatch(data);
           });
           if (existing) {
             return NextResponse.json(
               {
                 success: false,
-                error: `A confirmed pass already exists for this BT ID (${cleanBt}). Duplicate registrations are not allowed.`,
+                error: `A confirmed pass already exists for you (or as part of a registered team) for ${eventName || "this event"}. Duplicate registrations are not allowed.`,
               },
               { status: 409 }
             );

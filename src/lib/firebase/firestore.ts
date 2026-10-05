@@ -22,9 +22,14 @@ import { safeStorageSet } from "@/lib/safeStorage";
 export interface StudentRegistrationRecord {
   id: string; // Accreditation Registration ID (e.g. SRC-PRA-8291)
   eventId: string;
+  eventSlug?: string;
+  eventName?: string;
   eventTitle: string;
+  teamType?: string;
   teamName?: string;
   leaderName: string;
+  participantName?: string;
+  ticketCode?: string;
   email: string;
   phone: string;
   college: string;
@@ -680,70 +685,155 @@ export async function checkExistingStudentRegistration(
   eventId: string,
   eventSlug: string,
   email?: string | null,
-  btId?: string | null
+  btId?: string | null,
+  eventName?: string | null
 ): Promise<StudentRegistrationRecord | null> {
   const cleanEmail = email?.trim().toLowerCase();
   const cleanBtId = btId?.trim().toUpperCase();
-  const cleanEventId = eventId.trim().toLowerCase();
-  const cleanEventSlug = eventSlug.trim().toLowerCase();
+  const cleanEventId = (eventId || "").trim().toLowerCase();
+  const cleanEventSlug = (eventSlug || "").trim().toLowerCase();
+  const cleanEventName = (eventName || "").trim().toLowerCase();
 
-  const matchesRecord = (r: StudentRegistrationRecord): boolean => {
-    if (r.status === "CANCELLED") return false;
-    const recEventId = (r.eventId || "").trim().toLowerCase();
-    const isSameEvent = recEventId === cleanEventId || recEventId === cleanEventSlug;
-    if (!isSameEvent) return false;
+  if (!cleanEmail && !cleanBtId) return null;
 
-    // Check primary delegate
-    if (cleanEmail && r.email && r.email.trim().toLowerCase() === cleanEmail) return true;
-    if (cleanBtId && r.btId && r.btId.trim().toUpperCase() === cleanBtId) return true;
+  const isEventMatch = (r: any): boolean => {
+    if (!r) return false;
+    const rEventId = (r.eventId || "").trim().toLowerCase();
+    const rEventSlug = (r.eventSlug || "").trim().toLowerCase();
+    const rEventName = (r.eventName || r.eventTitle || "").trim().toLowerCase();
 
-    // Check team members
-    if (r.teamMembers && Array.isArray(r.teamMembers)) {
-      return r.teamMembers.some((m: any) => {
-        if (cleanEmail && m.email && m.email.trim().toLowerCase() === cleanEmail) return true;
-        if (cleanBtId && m.btId && m.btId.trim().toUpperCase() === cleanBtId) return true;
-        return false;
-      });
+    // 1. Direct ID match
+    if (cleanEventId && (rEventId === cleanEventId || rEventSlug === cleanEventId)) return true;
+
+    // 2. Direct Slug match
+    if (cleanEventSlug && (rEventSlug === cleanEventSlug || rEventId === cleanEventSlug)) return true;
+
+    // 3. Direct Name match
+    if (cleanEventName && rEventName) {
+      if (rEventName === cleanEventName) return true;
+      const stripped1 = cleanEventName.replace(/[^a-z0-9]/g, "");
+      const stripped2 = rEventName.replace(/[^a-z0-9]/g, "");
+      if (stripped1 && stripped2 && (stripped1 === stripped2 || stripped1.includes(stripped2) || stripped2.includes(stripped1))) {
+        return true;
+      }
+    }
+
+    // 4. If slug is derived from name or vice-versa
+    if (cleanEventSlug && rEventName) {
+      const slugFromName = rEventName.replace(/[^a-z0-9]+/g, "-");
+      if (slugFromName === cleanEventSlug || cleanEventSlug.includes(slugFromName) || slugFromName.includes(cleanEventSlug)) {
+        return true;
+      }
     }
 
     return false;
   };
 
-  // Check local cache first
+  const isStudentMatch = (r: any): boolean => {
+    if (!r || r.status === "CANCELLED" || r.paymentStatus === "FAILED") return false;
+
+    const rEmail = (r.email || "").trim().toLowerCase();
+    const rBtId = (r.btId || "").trim().toUpperCase();
+
+    // Primary participant match
+    if (cleanEmail && rEmail && rEmail === cleanEmail) return true;
+    if (cleanBtId && rBtId && cleanBtId !== "STUDENT" && rBtId === cleanBtId) return true;
+
+    // Team members match
+    const members = Array.isArray(r.teamMembers) ? r.teamMembers : Array.isArray(r.members) ? r.members : [];
+    return members.some((m: any) => {
+      const mEmail = (m?.email || "").trim().toLowerCase();
+      const mBtId = (m?.btId || "").trim().toUpperCase();
+      if (cleanEmail && mEmail && mEmail === cleanEmail) return true;
+      if (cleanBtId && mBtId && cleanBtId !== "STUDENT" && mBtId === cleanBtId) return true;
+      return false;
+    });
+  };
+
+  const isMatch = (r: any): boolean => isStudentMatch(r) && isEventMatch(r);
+
+  // 1. Instant check in local cache
   try {
     const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
     if (Array.isArray(local)) {
-      const match = local.find(matchesRecord);
-      if (match) return match;
+      const match = local.find(isMatch);
+      if (match) return match as StudentRegistrationRecord;
     }
   } catch {}
 
-  // Check Firestore with targeted query instead of full collection scan
+  // 2. Query Firestore by STUDENT (email and BT ID) - Single field queries with zero composite index requirement!
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       const colRef = collection(db, REGISTRATIONS_COLLECTION);
-      const q = query(colRef, where("eventId", "==", eventId));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        const found = snap.docs
-          .map((d) => ({ id: d.id, ...d.data() } as StudentRegistrationRecord))
-          .find(matchesRecord);
-        if (found) return found;
+      const candidates: any[] = [];
+
+      // Query by email
+      if (cleanEmail) {
+        try {
+          const qEmail = query(colRef, where("email", "==", cleanEmail));
+          const snapEmail = await getDocs(qEmail);
+          snapEmail.docs.forEach((d) => candidates.push({ id: d.id, ...d.data() }));
+        } catch (e) {
+          console.warn("Notice: email query in checkExistingStudentRegistration:", e);
+        }
       }
 
-      if (eventSlug && eventSlug !== eventId) {
-        const qSlug = query(colRef, where("eventId", "==", eventSlug));
-        const snapSlug = await getDocs(qSlug);
-        if (!snapSlug.empty) {
-          const foundSlug = snapSlug.docs
-            .map((d) => ({ id: d.id, ...d.data() } as StudentRegistrationRecord))
-            .find(matchesRecord);
-          if (foundSlug) return foundSlug;
+      // Query by btId
+      if (cleanBtId && cleanBtId !== "STUDENT") {
+        try {
+          const qBt = query(colRef, where("btId", "==", cleanBtId));
+          const snapBt = await getDocs(qBt);
+          snapBt.docs.forEach((d) => {
+            if (!candidates.some((c) => c.id === d.id)) {
+              candidates.push({ id: d.id, ...d.data() });
+            }
+          });
+        } catch (e) {
+          console.warn("Notice: btId query in checkExistingStudentRegistration:", e);
         }
+      }
+
+      // Query by eventId as fallback
+      if (cleanEventId) {
+        try {
+          const qEv = query(colRef, where("eventId", "==", eventId));
+          const snapEv = await getDocs(qEv);
+          snapEv.docs.forEach((d) => {
+            if (!candidates.some((c) => c.id === d.id)) {
+              candidates.push({ id: d.id, ...d.data() });
+            }
+          });
+        } catch (e) {}
+      }
+
+      // Query by eventSlug as fallback
+      if (cleanEventSlug && cleanEventSlug !== cleanEventId) {
+        try {
+          const qSlug = query(colRef, where("eventSlug", "==", eventSlug));
+          const snapSlug = await getDocs(qSlug);
+          snapSlug.docs.forEach((d) => {
+            if (!candidates.some((c) => c.id === d.id)) {
+              candidates.push({ id: d.id, ...d.data() });
+            }
+          });
+        } catch (e) {}
+      }
+
+      // Search candidates
+      const matched = candidates.find(isMatch);
+      if (matched) {
+        // Cache to local storage so subsequent renders are synchronous
+        try {
+          const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+          if (Array.isArray(local) && !local.some((l) => l.id === matched.id)) {
+            localStorage.setItem("src_local_registrations", JSON.stringify([...local, matched]));
+          }
+        } catch {}
+        return matched as StudentRegistrationRecord;
       }
     }
   } catch (error) {
-    console.warn("Targeted Firestore registration check notice:", error);
+    console.warn("Firestore registration check error:", error);
   }
 
   return null;

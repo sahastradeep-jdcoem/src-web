@@ -45,6 +45,7 @@ import { cn } from "@/lib/utils";
 import { isExternalUser } from "@/lib/usersStore";
 import { toast } from "@/lib/toastStore";
 import { useSocialShare } from "@/context/SocialShareContext";
+import { checkExistingStudentRegistration, StudentRegistrationRecord } from "@/lib/firebase/firestore";
 
 export default function EventDetailPage() {
   const params = useParams();
@@ -55,8 +56,26 @@ export default function EventDetailPage() {
   const [subEvents, setSubEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [existingRegistration, setExistingRegistration] = useState<StudentRegistrationRecord | null>(null);
 
   const { openShare } = useSocialShare();
+
+  useEffect(() => {
+    if (!user || !event) return;
+    let isMounted = true;
+    checkExistingStudentRegistration(
+      event.id,
+      event.slug,
+      user.email,
+      user.btId,
+      event.name
+    ).then((found) => {
+      if (isMounted && found) {
+        setExistingRegistration(found);
+      }
+    });
+    return () => { isMounted = false; };
+  }, [user, event]);
 
   const handleShare = () => {
     if (!event) return;
@@ -1033,6 +1052,24 @@ export default function EventDetailPage() {
                       Dates, schedule, and registrations for this event are coming soon. Follow updates on this portal!
                     </p>
                   </div>
+                ) : existingRegistration ? (
+                  <div className="space-y-2">
+                    <div className="w-full py-3.5 px-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>Already Registered</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 text-center font-medium leading-relaxed">
+                      You already hold confirmed pass <span className="font-mono font-bold text-slate-700">{existingRegistration.id}</span> for this event.
+                    </p>
+                    <Link
+                      href="/dashboard"
+                      className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold uppercase tracking-wider text-center transition-all shadow-md shadow-emerald-600/25 flex items-center justify-center gap-2 group cursor-pointer"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>VIEW PASS ON DASHBOARD</span>
+                      <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                    </Link>
+                  </div>
                 ) : isRegistrationOpen ? (
                   isJdcoemOnly && isExternalStudent ? (
                     <div className="space-y-2">
@@ -1169,6 +1206,24 @@ export default function EventDetailPage() {
               <span>EXPLORE LINEUP &amp; EVENTS ({subEvents.length})</span>
               <ArrowDown className="w-4 h-4" />
             </a>
+            <button
+              type="button"
+              onClick={handleShare}
+              className="p-3 rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-[#17458F] text-xs font-bold flex items-center justify-center min-h-[44px] min-w-[44px] cursor-pointer shadow-2xs"
+              aria-label="Share event"
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
+          </div>
+        ) : existingRegistration ? (
+          <div className="w-full flex items-center gap-2">
+            <Link
+              href="/dashboard"
+              className="flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2 shadow-md shadow-emerald-600/25 min-h-[44px]"
+            >
+              <CheckCircle2 className="w-4 h-4 text-emerald-100" />
+              <span>ALREADY REGISTERED • VIEW PASS</span>
+            </Link>
             <button
               type="button"
               onClick={handleShare}

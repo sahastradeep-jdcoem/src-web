@@ -336,7 +336,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           event.id,
           event.slug,
           targetEmail,
-          targetBtId
+          targetBtId,
+          event.name
         );
         if (isMounted && found) {
           setExistingRegistration(found);
@@ -537,7 +538,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         event.id,
         event.slug,
         found.email || undefined,
-        cleanBtId
+        cleanBtId,
+        event.name
       );
 
       if (teammateDuplicate) {
@@ -612,7 +614,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       event.id,
       event.slug,
       formData.email || user.email,
-      formData.btId || user.btId
+      formData.btId || user.btId,
+      event.name
     );
 
     if (dup) {
@@ -851,7 +854,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         event.id,
         event.slug,
         formData.email || user?.email,
-        formData.btId || user?.btId
+        formData.btId || user?.btId,
+        event.name
       );
       if (dup) {
         setExistingRegistration(dup);

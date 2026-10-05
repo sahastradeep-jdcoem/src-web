@@ -17,7 +17,8 @@ import {
   Globe,
   LogIn,
   CheckCircle2,
-  Clock
+  Clock,
+  ShieldCheck
 } from "lucide-react";
 import { getStoredEvents, syncEventsFromFirestore, isRegistrationDeadlinePassed, isEventCompletedByDate, getEventEffectiveStatus } from "@/lib/eventsStore";
 import { EventItem } from "@/types";
@@ -26,6 +27,7 @@ import { Badge } from "@/components/ui/Badge";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { isExternalUser } from "@/lib/usersStore";
+import { checkExistingStudentRegistration, StudentRegistrationRecord } from "@/lib/firebase/firestore";
 
 export default function EventRegisterPage() {
   const router = useRouter();
@@ -38,6 +40,25 @@ export default function EventRegisterPage() {
   const [subEvents, setSubEvents] = useState<EventItem[]>([]);
   const [selectedSubEvent, setSelectedSubEvent] = useState<EventItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [existingRegistration, setExistingRegistration] = useState<StudentRegistrationRecord | null>(null);
+
+  useEffect(() => {
+    if (!user || !event) return;
+    let isMounted = true;
+    const targetEvent = selectedSubEvent || event;
+    checkExistingStudentRegistration(
+      targetEvent.id,
+      targetEvent.slug,
+      user.email,
+      user.btId,
+      targetEvent.name
+    ).then((found) => {
+      if (isMounted && found) {
+        setExistingRegistration(found);
+      }
+    });
+    return () => { isMounted = false; };
+  }, [user, event, selectedSubEvent]);
 
   useEffect(() => {
     if (event && (event.isParentFest || subEvents.length > 0)) {
@@ -458,6 +479,81 @@ export default function EventRegisterPage() {
                 <span>Sign In with Student Account</span>
               </button>
             </div>
+            <div className="pt-4 border-t border-slate-100">
+              <Link
+                href={`/events/${event.slug}`}
+                className="text-xs font-bold text-slate-500 hover:text-[#17458F] transition-colors"
+              >
+                &larr; Return to Event Overview
+              </Link>
+            </div>
+          </div>
+        ) : existingRegistration ? (
+          /* Prominent Already-Registered Screen */
+          <div className="p-8 sm:p-12 rounded-3xl bg-white border border-emerald-200 text-center space-y-6 max-w-2xl mx-auto shadow-sm animate-in fade-in duration-300">
+            <div className="w-16 h-16 rounded-3xl bg-emerald-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-emerald-600/20">
+              <ShieldCheck className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                Official Delegate Pass Confirmed
+              </span>
+              <h2 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#0F172A] uppercase">
+                You Are Already Registered
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed max-w-md mx-auto">
+                An active delegate accreditation pass already exists for your student profile for <strong>{selectedSubEvent?.name || event.name}</strong>. Duplicate registrations for the same event are restricted.
+              </p>
+            </div>
+
+            <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 grid grid-cols-2 sm:grid-cols-3 gap-3 text-left text-xs">
+              <div>
+                <span className="text-slate-400 text-[10px] uppercase font-bold block">Pass ID</span>
+                <span className="font-mono font-bold text-[#17458F] truncate block">{existingRegistration.id}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 text-[10px] uppercase font-bold block">Ticket Code</span>
+                <span className="font-mono font-bold text-slate-900 truncate block">{(existingRegistration as any).ticketCode || `${existingRegistration.id}-TK`}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 text-[10px] uppercase font-bold block">Status</span>
+                <span className="font-bold text-emerald-700">{existingRegistration.status || "CONFIRMED"}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 text-[10px] uppercase font-bold block">Participant</span>
+                <span className="font-bold text-slate-900 truncate block">{existingRegistration.participantName || existingRegistration.leaderName || user?.displayName}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 text-[10px] uppercase font-bold block">College BT ID</span>
+                <span className="font-mono font-bold text-slate-900 truncate block">{existingRegistration.btId || user.btId || "Accredited"}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 text-[10px] uppercase font-bold block">Format</span>
+                <span className="font-semibold text-slate-800">
+                  {(existingRegistration.teamSize && existingRegistration.teamSize > 1) || existingRegistration.teamName ? `Team: ${existingRegistration.teamName || "Squad"}` : "Solo Entry"}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+              <Link
+                href="/dashboard"
+                className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Go to Student Dashboard &amp; View Pass</span>
+              </Link>
+              <Link
+                href={`/verify/${encodeURIComponent(existingRegistration.id)}`}
+                target="_blank"
+                className="w-full sm:w-auto px-5 py-3.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2"
+              >
+                <span>Verify Ticket</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+
             <div className="pt-4 border-t border-slate-100">
               <Link
                 href={`/events/${event.slug}`}
