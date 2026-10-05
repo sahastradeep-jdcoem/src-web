@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createCashfreeRefund, getServerCashfreeCredentials } from "@/lib/cashfree";
+import { verifyAdminRequest } from "@/lib/serverAuth";
 
 export async function POST(req: NextRequest) {
   try {
+    // Enforce Administrator Authentication & Role Authorization
+    const authResult = await verifyAdminRequest(req);
+    if (!authResult.authorized) {
+      return NextResponse.json(
+        { success: false, error: authResult.error || "Unauthorized: Administrator privileges required." },
+        { status: 401 }
+      );
+    }
+
     const body = await req.json();
     const { orderId, refundAmount, refundId, note } = body;
 
@@ -20,9 +30,31 @@ export async function POST(req: NextRequest) {
       orderId,
       Number(refundAmount),
       generatedRefundId,
-      note || "Refund initiated by SRC JDCOEM",
+      note || `Refund initiated by ${authResult.email || "SRC JDCOEM Admin"}`,
       creds
     );
+
+    // Record audit trail of refund action
+    try {
+      const { db } = await import("@/lib/firebase/config");
+      const { doc, setDoc } = await import("firebase/firestore");
+      if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+        const logId = `AUDIT-REFUND-${Date.now()}`;
+        await setDoc(doc(db, "upi_webhook_logs", logId), {
+          id: logId,
+          receivedAt: new Date().toISOString(),
+          gateway: "cashfree",
+          eventType: "ADMIN_REFUND_EXECUTED",
+          orderId,
+          refundId: generatedRefundId,
+          amount: Number(refundAmount),
+          executedBy: authResult.email,
+          userRole: authResult.role,
+        });
+      }
+    } catch (auditErr) {
+      console.warn("Notice: refund audit log warning:", auditErr);
+    }
 
     return NextResponse.json({
       success: true,

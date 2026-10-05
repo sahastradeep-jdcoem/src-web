@@ -47,14 +47,13 @@ export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();
 
-    // 1. Handle Cashfree Dashboard Verification / Test Ping
-    const hasSignature = Boolean(req.headers.get("x-webhook-signature"));
-    if (!hasSignature || rawBody.trim().length === 0) {
-      console.log("[Cashfree Webhook] Verified Dashboard Ping / Test Probe");
+    // 1. Handle Cashfree Dashboard Empty Body Probe
+    if (rawBody.trim().length === 0) {
+      console.log("[Cashfree Webhook] Verified Empty Body Probe");
       return NextResponse.json(
         {
           status: "SUCCESS",
-          message: "Cashfree webhook probe acknowledged successfully",
+          message: "Cashfree webhook empty probe acknowledged successfully",
         },
         { status: 200 }
       );
@@ -62,7 +61,7 @@ export async function POST(req: NextRequest) {
 
     // 2. Validate HMAC SHA256 Signature for production event webhooks
     if (!isValidSignature(req, rawBody)) {
-      console.warn("[Cashfree Webhook] Signature verification failed");
+      console.warn("[Cashfree Webhook] Signature verification failed or missing");
       try {
         const { db } = await import("@/lib/firebase/config");
         const { doc, setDoc } = await import("firebase/firestore");
@@ -153,6 +152,22 @@ export async function POST(req: NextRequest) {
       const failureReason = paymentData?.payment_message || "Payment declined or failed";
       console.warn(`[Cashfree Webhook] Payment FAILED: Order=${orderId}, Reason=${failureReason}`);
 
+      if (orderId) {
+        try {
+          const { db } = await import("@/lib/firebase/config");
+          const { doc, updateDoc } = await import("firebase/firestore");
+          if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+            await updateDoc(doc(db, "active_checkout_sessions", orderId), {
+              status: "FAILED",
+              failureReason,
+              updatedAt: new Date().toISOString(),
+            });
+          }
+        } catch (e) {
+          console.warn("Notice: could not update session status to FAILED:", e);
+        }
+      }
+
       return NextResponse.json({
         status: "FAILED",
         orderId,
@@ -165,6 +180,21 @@ export async function POST(req: NextRequest) {
     if (eventType === "PAYMENT_USER_DROPPED_WEBHOOK" || paymentData?.payment_status === "USER_DROPPED") {
       const orderId = orderData?.order_id;
       console.log(`[Cashfree Webhook] User DROPPED payment session: Order=${orderId}`);
+
+      if (orderId) {
+        try {
+          const { db } = await import("@/lib/firebase/config");
+          const { doc, updateDoc } = await import("firebase/firestore");
+          if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+            await updateDoc(doc(db, "active_checkout_sessions", orderId), {
+              status: "DROPPED",
+              updatedAt: new Date().toISOString(),
+            });
+          }
+        } catch (e) {
+          console.warn("Notice: could not update session status to DROPPED:", e);
+        }
+      }
 
       return NextResponse.json({
         status: "USER_DROPPED",

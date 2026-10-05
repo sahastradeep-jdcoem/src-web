@@ -3,6 +3,8 @@
  * Official integration for SRC JDCOEM — Sahastradeep
  */
 
+import { randomBytes } from "node:crypto";
+
 export interface CashfreeCredentials {
   appId: string;
   secretKey: string;
@@ -431,13 +433,41 @@ export async function confirmCashfreeOrderRegistration(
     const subEventBadge = resolvedEvent?.subEventBadge || draft.subEventBadge || sessionData?.subEventBadge || null;
     const tenureId = resolvedEvent?.tenureId || draft.tenureId || sessionData?.tenureId || "tenure-2026-27";
 
+    // 4.5. Underpayment Shield: Verify paid amount against authoritative fee
+    let expectedFee = Number(sessionData?.expectedAmount || sessionData?.authoritativeFee || 0);
+    if (!expectedFee && resolvedEvent) {
+      const isTeam = (draft.teamType === "Team") || (sessionData?.registrationData?.teamType === "Team") || (Array.isArray(draft.teamMembers) && draft.teamMembers.length > 1);
+      if (isTeam) {
+        if (resolvedEvent.feePricingModel === "per_team" && resolvedEvent.teamFeeAmount) {
+          expectedFee = Number(resolvedEvent.teamFeeAmount);
+        } else {
+          const members = Array.isArray(draft.teamMembers) ? draft.teamMembers : [];
+          const memberCount = Math.max(1, members.length);
+          const perMember = typeof resolvedEvent.feeAmount === "number" ? resolvedEvent.feeAmount : 100;
+          expectedFee = perMember * memberCount;
+        }
+      } else {
+        expectedFee = typeof resolvedEvent.feeAmount === "number" ? resolvedEvent.feeAmount : 100;
+      }
+    }
+
+    if (expectedFee > 0 && amount < (expectedFee - 0.01)) {
+      console.error(`Underpayment detected for order ${orderId}: expected ₹${expectedFee}, received ₹${amount}`);
+      return {
+        success: false,
+        error: `Payment amount of ₹${amount} does not meet the authoritative event fee of ₹${expectedFee}. Pass issuance blocked.`,
+      };
+    }
+
     const custBtId = cust?.customer_id && cust.customer_id !== "student" && !cust.customer_id.startsWith("cust_")
       ? cust.customer_id.trim().toUpperCase()
       : undefined;
 
     const slugPrefix = (eventSlug.slice(0, 3) || "SRC").toUpperCase();
-    const regId = targetRegId || `SRC-${slugPrefix}-26-${Math.floor(10000 + Math.random() * 90000)}`;
-    const tkCode = existingRegDoc?.ticketCode || draft.ticketCode || `${slugPrefix}26-TK-${Math.floor(1000 + Math.random() * 9000)}`;
+    const entropyHex = randomBytes(4).toString("hex").toUpperCase().slice(0, 6);
+    const entropyNum = randomBytes(3).toString("hex").toUpperCase().slice(0, 4);
+    const regId = targetRegId || `SRC-${slugPrefix}-26-${entropyHex}`;
+    const tkCode = existingRegDoc?.ticketCode || draft.ticketCode || `${slugPrefix}26-TK-${entropyNum}`;
 
     let finalRecord: any;
 

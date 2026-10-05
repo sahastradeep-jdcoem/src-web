@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
+import { useAuth } from "@/context/AuthContext";
+import { auth } from "@/lib/firebase/config";
 import { 
   RefreshCw, 
   CheckCircle2, 
@@ -19,6 +21,7 @@ interface SyncCashfreeModalProps {
 }
 
 export function SyncCashfreeModal({ isOpen, onClose, onSuccess }: SyncCashfreeModalProps) {
+  const { user } = useAuth();
   const [orderInput, setOrderInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<{
@@ -37,9 +40,13 @@ export function SyncCashfreeModal({ isOpen, onClose, onSuccess }: SyncCashfreeMo
     setResult(null);
 
     try {
+      const idToken = auth?.currentUser ? await auth.currentUser.getIdToken() : "";
       const res = await fetch("/api/cashfree/recover-order", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
         body: JSON.stringify({ orderId: cleanId }),
       });
 

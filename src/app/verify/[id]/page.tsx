@@ -51,6 +51,17 @@ export default function PassVerificationPage() {
     setLoading(true);
     setErrorNotice(null);
     try {
+      const apiRes = await fetch(`/api/verify/${encodeURIComponent(passId)}`);
+      if (apiRes.ok) {
+        const json = await apiRes.json();
+        if (json.success && json.record) {
+          setRecord(json.record);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Fallback direct read
       const data = await getRegistrationById(passId);
       if (data) {
         setRecord(data);

@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { confirmCashfreeOrderRegistration } from "@/lib/cashfree";
+import { verifyAdminRequest } from "@/lib/serverAuth";
 
 export async function POST(req: NextRequest) {
   try {
+    // Enforce Administrator Authentication
+    const authResult = await verifyAdminRequest(req);
+    if (!authResult.authorized) {
+      return NextResponse.json(
+        { success: false, error: authResult.error || "Unauthorized: Administrator privileges required." },
+        { status: 401 }
+      );
+    }
+
     const body = await req.json();
     const { orderId, orderIds } = body;
 

@@ -59,7 +59,7 @@ import {
 } from "@/lib/departmentsStore";
 import { getStoredTenures, syncTenuresFromFirestore, subscribeToTenures, getCurrentTenure, getLatestAvailableTenure, CouncilTenure } from "@/lib/tenureStore";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
-import { db } from "@/lib/firebase/config";
+import { db, auth } from "@/lib/firebase/config";
 import { doc, updateDoc } from "firebase/firestore";
 import { 
   checkInStudentPass, 
@@ -85,7 +85,7 @@ import { isEntityOwnedByClub } from "@/types/rbac";
 type ActiveTab = "summary" | "question" | "individual" | "table";
 
 export default function AdminRegistrationsPage() {
-  const { adminAccess } = useAuth();
+  const { adminAccess, user } = useAuth();
   const isClubOwner = adminAccess?.role === "CLUB_OWNER" && adminAccess.active !== false;
   const [registrations, setRegistrations] = useState<RegistrationRecord[]>([]);
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
@@ -1196,9 +1196,13 @@ export default function AdminRegistrationsPage() {
 
     setRefundingId(record.id);
     try {
+      const idToken = auth?.currentUser ? await auth.currentUser.getIdToken() : "";
       const res = await fetch("/api/cashfree/refund", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
         body: JSON.stringify({
           orderId: record.orderId || record.paymentId,
           refundAmount: refundAmount,
@@ -1386,6 +1390,8 @@ export default function AdminRegistrationsPage() {
     let successCount = 0;
     let failedCount = 0;
 
+    const idToken = auth?.currentUser ? await auth.currentUser.getIdToken() : "";
+
     for (let i = 0; i < eligible.length; i++) {
       const record = eligible[i];
       setBulkRefundProgress({ current: i + 1, total: eligible.length });
@@ -1393,7 +1399,10 @@ export default function AdminRegistrationsPage() {
       try {
         const res = await fetch("/api/cashfree/refund", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+          },
           body: JSON.stringify({
             orderId: record.orderId || record.paymentId,
             refundAmount: record.amountPaid || 0,

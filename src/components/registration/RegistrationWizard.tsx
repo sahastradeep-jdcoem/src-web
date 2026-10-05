@@ -786,8 +786,11 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       openAuthModal();
       return;
     }
-    const regId = paymentDetails?.registrationId || pendingRegistrationDraftRef.current?.regId || `SRC-${event.slug.slice(0, 3).toUpperCase()}-26-${Math.floor(10000 + Math.random() * 90000)}`;
-    const tkCode = paymentDetails?.ticketCode || pendingRegistrationDraftRef.current?.tkCode || `${event.slug.slice(0, 3).toUpperCase()}26-TK-${Math.floor(1000 + Math.random() * 9000)}`;
+    const slugPrefix = (event.slug.slice(0, 3) || "SRC").toUpperCase();
+    const entropyHex = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const entropyTk = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const regId = paymentDetails?.registrationId || pendingRegistrationDraftRef.current?.regId || `SRC-${slugPrefix}-26-${entropyHex}`;
+    const tkCode = paymentDetails?.ticketCode || pendingRegistrationDraftRef.current?.tkCode || `${slugPrefix}26-TK-${entropyTk}`;
 
     const registrationPayload = buildRegistrationPayload(regId, tkCode, paymentDetails);
 
@@ -877,8 +880,11 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     }
 
     // 2. Paid Event Flow
-    const draftRegId = `SRC-${event.slug.slice(0, 3).toUpperCase()}-26-${Math.floor(10000 + Math.random() * 90000)}`;
-    const draftTkCode = `${event.slug.slice(0, 3).toUpperCase()}26-TK-${Math.floor(1000 + Math.random() * 9000)}`;
+    const paidSlugPrefix = (event.slug.slice(0, 3) || "SRC").toUpperCase();
+    const draftEntropy = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const draftTkEntropy = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const draftRegId = `SRC-${paidSlugPrefix}-26-${draftEntropy}`;
+    const draftTkCode = `${paidSlugPrefix}26-TK-${draftTkEntropy}`;
     const draftPayload = buildRegistrationPayload(draftRegId, draftTkCode, {
       paymentStatus: "PENDING",
       amountPaid: totalPayableAmount,

@@ -101,13 +101,15 @@ service cloud.firestore {
     // Verification check for paid registrations (against active checkout sessions or verified UPI ledger)
     function isVerifiedPaidRegistration() {
       return (
-        // Case 1: Verified via completed active checkout session
+        // Case 1: Verified via completed active checkout session with verified received amount
         (request.resource.data.orderId != null &&
          exists(/databases/$(database)/documents/active_checkout_sessions/$(request.resource.data.orderId)) &&
-         get(/databases/$(database)/documents/active_checkout_sessions/$(request.resource.data.orderId)).data.status == 'COMPLETED') ||
+         get(/databases/$(database)/documents/active_checkout_sessions/$(request.resource.data.orderId)).data.status == 'COMPLETED' &&
+         get(/databases/$(database)/documents/active_checkout_sessions/$(request.resource.data.orderId)).data.receivedAmount >= get(/databases/$(database)/documents/active_checkout_sessions/$(request.resource.data.orderId)).data.amount) ||
         // Case 2: Verified via verified incoming UPI payments ledger
         (request.resource.data.paymentId != null &&
-         exists(/databases/$(database)/documents/verified_upi_payments/$(request.resource.data.paymentId)))
+         exists(/databases/$(database)/documents/verified_upi_payments/$(request.resource.data.paymentId)) &&
+         get(/databases/$(database)/documents/verified_upi_payments/$(request.resource.data.paymentId)).data.status == 'MATCHED')
       );
     }
 
@@ -156,8 +158,13 @@ service cloud.firestore {
 
     // Event registrations & pass records
     match /registrations/{regId} {
-      // Gate check-in (/verify/[id]) & public verification need open read
-      allow read: if true;
+      // Single pass lookup (/verify/[id] & server checks)
+      allow get: if true;
+
+      // Collection queries restricted: Admins can list all; authenticated users can only list queries matching their email/btId
+      allow list: if isPrivilegedAdmin() || hasRole('TREASURER') || isClubOwner() || (
+        isAuthenticated() && request.auth.token.email != null
+      );
 
       // Registration creation:
       // Allowed for privileged admin or club owner, or student / external applicant with valid email and valid payment state
@@ -201,14 +208,21 @@ service cloud.firestore {
         (
           // Transition 1: Expire waiting session
           (resource.data.status == 'WAITING' && request.resource.data.status == 'EXPIRED') ||
-          // Transition 2: Complete waiting session with legitimate payment details from gateway
+          // Transition 2: Complete waiting session with legitimate payment verified in ledger
           (
             resource.data.status == 'WAITING' &&
             request.resource.data.status == 'COMPLETED' &&
             request.resource.data.utr is string &&
             request.resource.data.utr.size() >= 4 &&
             request.resource.data.receivedAmount is number &&
-            request.resource.data.receivedAmount > 0
+            request.resource.data.receivedAmount >= resource.data.amount &&
+            exists(/databases/$(database)/documents/verified_upi_payments/$(request.resource.data.utr)) &&
+            get(/databases/$(database)/documents/verified_upi_payments/$(request.resource.data.utr)).data.matchedOrderId == resource.data.orderId
+          ) ||
+          // Transition 3: Mark failed or dropped from gateway webhook
+          (
+            resource.data.status == 'WAITING' &&
+            request.resource.data.status in ['FAILED', 'DROPPED']
           )
         )
       );

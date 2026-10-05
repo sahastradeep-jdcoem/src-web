@@ -74,6 +74,7 @@ import { TicketPass } from "@/components/registration/TicketPass";
 import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
 import { 
   getAllRegistrationsFromFirestore, 
+  getStudentRegistrationsFromFirestore,
   subscribeToRegistrationsFromFirestore, 
   isTestPassRecord,
   isHubRecord,
@@ -435,7 +436,7 @@ export default function StudentDashboardPage() {
         let allRecords: any[] = [];
         let remoteRecords = cloudList;
         if (!remoteRecords) {
-          remoteRecords = await getAllRegistrationsFromFirestore();
+          remoteRecords = await getStudentRegistrationsFromFirestore(user?.email, user?.btId, user?.uid);
         }
 
         if (!isCurrent) return;

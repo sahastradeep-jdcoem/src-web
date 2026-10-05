@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createCashfreeOrder, getServerCashfreeCredentials } from "@/lib/cashfree";
+import { getEventFromFirestore } from "@/lib/firebase/firestore";
+import { randomBytes } from "node:crypto";
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,6 +27,75 @@ export async function POST(req: NextRequest) {
     if (!parsedAmount || isNaN(parsedAmount) || parsedAmount <= 0) {
       return NextResponse.json(
         { success: false, error: "Invalid registration amount specified." },
+        { status: 400 }
+      );
+    }
+
+    // 1. Authoritative Event Lookup & Server-Side Fee Verification
+    const lookupTarget = eventId || eventSlug;
+    let authoritativeEvent = lookupTarget ? await getEventFromFirestore(lookupTarget) : null;
+    if (!authoritativeEvent && eventSlug && eventId && eventSlug !== eventId) {
+      authoritativeEvent = await getEventFromFirestore(eventSlug);
+    }
+
+    if (!authoritativeEvent) {
+      return NextResponse.json(
+        { success: false, error: "The requested event could not be found or is inactive." },
+        { status: 404 }
+      );
+    }
+
+    if (authoritativeEvent.isCancelled || authoritativeEvent.status === "Cancelled") {
+      return NextResponse.json(
+        { success: false, error: "This event has been cancelled. Registrations are closed." },
+        { status: 400 }
+      );
+    }
+
+    if (authoritativeEvent.registrationDeadline) {
+      const deadlineMs = new Date(authoritativeEvent.registrationDeadline).getTime();
+      if (!isNaN(deadlineMs) && deadlineMs < Date.now()) {
+        return NextResponse.json(
+          { success: false, error: "Registrations for this event have closed." },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Determine authoritative payable amount
+    const isPaid = Boolean(
+      (authoritativeEvent.feeAmount && authoritativeEvent.feeAmount > 0) ||
+      (authoritativeEvent.teamFeeAmount && authoritativeEvent.teamFeeAmount > 0)
+    );
+
+    if (!isPaid) {
+      return NextResponse.json(
+        { success: false, error: "This is a free event. Payment order creation is not permitted." },
+        { status: 400 }
+      );
+    }
+
+    const isTeam = body.teamType === "Team" || (registrationDraft?.teamType === "Team") || (Array.isArray(registrationDraft?.teamMembers) && registrationDraft.teamMembers.length > 1);
+    let expectedFee = 0;
+    if (isTeam) {
+      if (authoritativeEvent.feePricingModel === "per_team" && authoritativeEvent.teamFeeAmount) {
+        expectedFee = Number(authoritativeEvent.teamFeeAmount);
+      } else {
+        const members = Array.isArray(registrationDraft?.teamMembers) ? registrationDraft.teamMembers : [];
+        const memberCount = Math.max(1, members.length);
+        const perMember = typeof authoritativeEvent.feeAmount === "number" ? authoritativeEvent.feeAmount : 100;
+        expectedFee = perMember * memberCount;
+      }
+    } else {
+      expectedFee = typeof authoritativeEvent.feeAmount === "number" ? authoritativeEvent.feeAmount : 100;
+    }
+
+    if (Math.abs(parsedAmount - expectedFee) > 0.01) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Price verification failed: Authoritative event fee is ₹${expectedFee}, but client requested ₹${parsedAmount}.`,
+        },
         { status: 400 }
       );
     }
@@ -133,11 +204,12 @@ export async function POST(req: NextRequest) {
 
     const creds = await getServerCashfreeCredentials();
 
-    // Unique order ID (Alphanumeric, max 45 chars for Cashfree standard)
+    // Unique order ID with cryptographic entropy (Alphanumeric, max 45 chars for Cashfree standard)
     const cleanRegPrefix = (registrationId || "REG")
       .replace(/[^a-zA-Z0-9]/g, "")
-      .slice(-12);
-    const orderId = `SRC_${cleanRegPrefix}_${Date.now()}`;
+      .slice(-10);
+    const entropy = randomBytes(3).toString("hex").toUpperCase();
+    const orderId = `SRC_${cleanRegPrefix}_${Date.now()}_${entropy}`.slice(0, 44);
 
     // Clean customer ID
     const cleanCustomerId = (btId || email || "student")
@@ -152,7 +224,7 @@ export async function POST(req: NextRequest) {
 
     const cashfreeOrder = await createCashfreeOrder({
       orderId,
-      orderAmount: parsedAmount,
+      orderAmount: expectedFee,
       orderCurrency: "INR",
       customerDetails: {
         customerId: cleanCustomerId || `cust_${Date.now()}`,
@@ -164,9 +236,9 @@ export async function POST(req: NextRequest) {
         returnUrl: targetReturnUrl,
         notifyUrl: `${siteUrl}/api/cashfree/webhook`,
       },
-      orderNote: `SRC JDCOEM: ${eventName || "Event Entry Pass"}`,
+      orderNote: `SRC JDCOEM: ${eventName || authoritativeEvent.name || "Event Entry Pass"}`,
       orderTags: {
-        eventId: (eventId || "").slice(0, 20),
+        eventId: (eventId || authoritativeEvent.id || "").slice(0, 20),
         registrationId: (registrationId || "").slice(0, 30),
       },
     }, creds);
@@ -184,14 +256,17 @@ export async function POST(req: NextRequest) {
             cfOrderId: String(cashfreeOrder.cf_order_id),
             gateway: "cashfree",
             status: "WAITING",
-            amount: parsedAmount,
-            eventId: eventId || "",
-            eventName: eventName || "",
-            eventSlug: eventSlug || "",
-            parentEventId: parentEventId || null,
-            parentEventName: parentEventName || null,
-            subEventBadge: subEventBadge || null,
-            tenureId: tenureId || null,
+            amount: expectedFee,
+            expectedAmount: expectedFee,
+            authoritativeFee: expectedFee,
+            feePricingModel: authoritativeEvent.feePricingModel || "per_person",
+            eventId: eventId || authoritativeEvent.id || "",
+            eventName: eventName || authoritativeEvent.name || "",
+            eventSlug: eventSlug || authoritativeEvent.slug || "",
+            parentEventId: parentEventId || authoritativeEvent.parentEventId || null,
+            parentEventName: parentEventName || authoritativeEvent.parentEventName || null,
+            subEventBadge: subEventBadge || authoritativeEvent.subEventBadge || null,
+            tenureId: tenureId || authoritativeEvent.tenureId || null,
             registrationId: registrationId || "",
             registrationData: registrationDraft || null,
             participantName: participantName || "",

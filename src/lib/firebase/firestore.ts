@@ -943,6 +943,60 @@ export async function getAllRegistrationsFromFirestore(): Promise<StudentRegistr
 }
 
 /**
+ * Query student registrations strictly scoped to the student's email, BT ID, or UID.
+ * Eliminates full-database download on student devices and protects student PII.
+ */
+export async function getStudentRegistrationsFromFirestore(
+  email?: string | null,
+  btId?: string | null,
+  uid?: string | null
+): Promise<StudentRegistrationRecord[]> {
+  const recordsMap = new Map<string, StudentRegistrationRecord>();
+  if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    if (typeof window !== "undefined") {
+      try {
+        const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+        if (Array.isArray(local)) return local.filter((r) => !isHubRecord(r) && !isTestPassRecord(r));
+      } catch {}
+    }
+    return [];
+  }
+
+  const cleanEmail = (email || "").trim().toLowerCase();
+  const cleanBt = (btId || "").trim().toUpperCase();
+  const cleanUid = (uid || "").trim();
+
+  try {
+    const colRef = collection(db, REGISTRATIONS_COLLECTION);
+    const promises: Promise<any>[] = [];
+
+    if (cleanEmail) {
+      promises.push(getDocs(query(colRef, where("email", "==", cleanEmail))));
+    }
+    if (cleanBt && cleanBt !== "STUDENT" && cleanBt !== "BT ID PENDING") {
+      promises.push(getDocs(query(colRef, where("btId", "==", cleanBt))));
+    }
+    if (cleanUid) {
+      promises.push(getDocs(query(colRef, where("userId", "==", cleanUid))));
+    }
+
+    const snapshots = await Promise.all(promises);
+    for (const snap of snapshots) {
+      for (const d of snap.docs) {
+        const data = { id: d.id, ...d.data() } as StudentRegistrationRecord;
+        if (!isHubRecord(data) && !isTestPassRecord(data)) {
+          recordsMap.set(d.id, data);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Notice: could not query student registrations:", err);
+  }
+
+  return Array.from(recordsMap.values());
+}
+
+/**
  * Subscribe to real-time updates of event registrations in Firestore (strictly excluding hub submissions & poll ballots)
  */
 export function subscribeToRegistrationsFromFirestore(

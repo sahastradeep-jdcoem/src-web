@@ -43,7 +43,7 @@ import {
   isHubRecord,
   StudentRegistrationRecord
 } from "@/lib/firebase/firestore";
-import { db } from "@/lib/firebase/config";
+import { db, auth } from "@/lib/firebase/config";
 import { doc, updateDoc } from "firebase/firestore";
 import { PaymentConfigModal } from "@/components/admin/registrations/PaymentConfigModal";
 import { SyncCashfreeModal } from "@/components/admin/payments/SyncCashfreeModal";
@@ -85,7 +85,7 @@ function formatTimestamp(val: any): string {
 }
 
 export default function AdminPaymentsPage() {
-  const { adminAccess } = useAuth();
+  const { adminAccess, user } = useAuth();
   const isClubOwner = adminAccess?.role === "CLUB_OWNER" && adminAccess.active !== false;
   const [registrations, setRegistrations] = useState<RegistrationRecord[]>([]);
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
@@ -668,9 +668,13 @@ export default function AdminPaymentsPage() {
 
     setIsRefunding(true);
     try {
+      const idToken = auth?.currentUser ? await auth.currentUser.getIdToken() : "";
       const res = await fetch("/api/cashfree/refund", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
         body: JSON.stringify({
           orderId: refundTargetRecord.orderId || refundTargetRecord.paymentId,
           refundAmount: amountNum,
