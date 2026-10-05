@@ -48,7 +48,6 @@ export async function POST(req: NextRequest) {
     const rawBody = await req.text();
 
     // 1. Handle Cashfree Dashboard Verification / Test Ping
-    // When the "Test" button is clicked in Cashfree Console, it sends an unsigned test payload or empty ping
     const hasSignature = Boolean(req.headers.get("x-webhook-signature"));
     if (!hasSignature || rawBody.trim().length === 0) {
       console.log("[Cashfree Webhook] Verified Dashboard Ping / Test Probe");
@@ -80,23 +79,81 @@ export async function POST(req: NextRequest) {
     const eventType = body?.type;
     const paymentData = body?.data?.payment;
     const orderData = body?.data?.order;
+    const refundData = body?.data?.refund;
 
-    console.log(`[Cashfree Webhook] Received ${eventType} for order: ${orderData?.order_id}`);
+    console.log(`[Cashfree Webhook] Received ${eventType} for order: ${orderData?.order_id || refundData?.order_id}`);
 
+    // A. Payment Success
     if (eventType === "PAYMENT_SUCCESS_WEBHOOK" || paymentData?.payment_status === "SUCCESS") {
       const orderId = orderData?.order_id;
-      const utr = paymentData?.bank_reference;
+      const utr = paymentData?.bank_reference || paymentData?.cf_payment_id;
       const amount = paymentData?.payment_amount || orderData?.order_amount;
       const registrationId = orderData?.order_tags?.registrationId;
 
-      console.log(`[Cashfree Webhook] Verified Payment: Order=${orderId}, UTR=${utr}, Reg=${registrationId}, Amount=₹${amount}`);
+      console.log(`[Cashfree Webhook] Verified Payment SUCCESS: Order=${orderId}, UTR=${utr}, Reg=${registrationId}, Amount=₹${amount}`);
 
       return NextResponse.json({
         status: "SUCCESS",
         orderId,
         utr,
         registrationId,
-        message: "Webhook processed successfully",
+        message: "Payment successfully confirmed",
+      });
+    }
+
+    // B. Payment Failed
+    if (eventType === "PAYMENT_FAILED_WEBHOOK" || paymentData?.payment_status === "FAILED") {
+      const orderId = orderData?.order_id;
+      const failureReason = paymentData?.payment_message || "Payment declined or failed";
+      console.warn(`[Cashfree Webhook] Payment FAILED: Order=${orderId}, Reason=${failureReason}`);
+
+      return NextResponse.json({
+        status: "FAILED",
+        orderId,
+        reason: failureReason,
+        message: "Payment failure acknowledged",
+      });
+    }
+
+    // C. User Dropped Payment Session
+    if (eventType === "PAYMENT_USER_DROPPED_WEBHOOK" || paymentData?.payment_status === "USER_DROPPED") {
+      const orderId = orderData?.order_id;
+      console.log(`[Cashfree Webhook] User DROPPED payment session: Order=${orderId}`);
+
+      return NextResponse.json({
+        status: "USER_DROPPED",
+        orderId,
+        message: "User dropped session acknowledged",
+      });
+    }
+
+    // D. Refund Status / Success
+    if (eventType === "REFUND_STATUS_WEBHOOK" || eventType === "REFUND_SUCCESS_WEBHOOK") {
+      const refundId = refundData?.refund_id || refundData?.cf_refund_id;
+      const orderId = refundData?.order_id || orderData?.order_id;
+      const refundStatus = refundData?.refund_status || "PROCESSED";
+      console.log(`[Cashfree Webhook] Refund ${refundStatus}: RefundId=${refundId}, Order=${orderId}`);
+
+      return NextResponse.json({
+        status: "REFUND_PROCESSED",
+        refundId,
+        orderId,
+        refundStatus,
+        message: "Refund status acknowledged",
+      });
+    }
+
+    // E. Refund Failed
+    if (eventType === "REFUND_FAILED_WEBHOOK") {
+      const refundId = refundData?.refund_id;
+      const orderId = refundData?.order_id || orderData?.order_id;
+      console.warn(`[Cashfree Webhook] Refund FAILED: RefundId=${refundId}, Order=${orderId}`);
+
+      return NextResponse.json({
+        status: "REFUND_FAILED",
+        refundId,
+        orderId,
+        message: "Refund failure acknowledged",
       });
     }
 
