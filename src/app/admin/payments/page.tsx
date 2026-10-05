@@ -827,7 +827,7 @@ export default function AdminPaymentsPage() {
             PAYMENTS &amp; TREASURY STUDIO
           </h1>
           <p className="text-xs text-slate-500 font-medium mt-1">
-            Institutional Financial Ledger • Real-time UPI &amp; Paytm Settlements
+            Institutional Financial Ledger • Cashfree Auto-Settlements &amp; Treasury Reconciliation
           </p>
         </div>
 
@@ -1334,6 +1334,17 @@ export default function AdminPaymentsPage() {
                           >
                             <History className="w-4 h-4" />
                           </button>
+
+                          {/* Inspect Ticket Pass */}
+                          <a
+                            href={`/verify/${r.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Inspect Pass / Accreditation Ticket"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
                         </div>
                       </td>
                     </tr>
@@ -1546,28 +1557,28 @@ export default function AdminPaymentsPage() {
           onClose={() => setHistoryRecord(null)}
           title="Transaction Audit History"
           subtitle={`Full chronological lifecycle for Order ${historyRecord.orderId || historyRecord.id}`}
-          maxWidth="lg"
+          maxWidth="2xl"
         >
-          <div className="space-y-5 pt-2 text-left">
+          <div className="space-y-6 pt-2 text-left">
             {/* Meta summary */}
-            <div className="grid grid-cols-2 gap-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+            <div className="grid grid-cols-2 gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs shadow-2xs">
               <div>
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">Participant</span>
-                <span className="font-bold text-slate-900">{historyRecord.participantName}</span>
-                <span className="text-slate-500 block text-[11px]">{historyRecord.phone}</span>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Participant</span>
+                <span className="font-bold text-slate-900 text-sm">{historyRecord.participantName}</span>
+                <span className="text-slate-500 block text-xs mt-0.5">{historyRecord.phone}</span>
               </div>
               <div>
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">Event</span>
-                <span className="font-semibold text-slate-900">{historyRecord.eventName}</span>
-                <span className="font-mono font-bold text-slate-700 block">₹{(historyRecord.amountPaid ?? 0).toFixed(2)}</span>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Event</span>
+                <span className="font-semibold text-slate-900 text-sm">{historyRecord.eventName}</span>
+                <span className="font-mono font-bold text-slate-800 block text-xs mt-0.5">₹{(historyRecord.amountPaid ?? 0).toFixed(2)}</span>
               </div>
             </div>
 
             {/* Visual Timeline */}
-            <div className="space-y-4 pl-2 border-l-2 border-slate-200 ml-3">
+            <div className="space-y-6 relative border-l-2 border-slate-200 ml-4 pl-6 py-1">
               {/* Event 1: Registration Session Initialized */}
-              <div className="relative pl-6">
-                <div className="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-blue-500 border-2 border-white" />
+              <div className="relative">
+                <div className="absolute -left-[32px] top-1 w-3.5 h-3.5 rounded-full bg-blue-500 ring-4 ring-white shadow-2xs" />
                 <div className="font-bold text-xs text-slate-900">Registration Initiated</div>
                 <div className="text-[11px] text-slate-500">
                   {formatTimestamp(historyRecord.createdAt)}
@@ -1577,8 +1588,8 @@ export default function AdminPaymentsPage() {
 
               {/* Event 2: Payment / UTR Submission */}
               {historyRecord.paymentId && (
-                <div className="relative pl-6">
-                  <div className="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-amber-500 border-2 border-white" />
+                <div className="relative">
+                  <div className="absolute -left-[32px] top-1 w-3.5 h-3.5 rounded-full bg-amber-500 ring-4 ring-white shadow-2xs" />
                   <div className="font-bold text-xs text-slate-900">UTR / Reference Logged</div>
                   <div className="text-[11px] font-mono text-slate-700 font-semibold">
                     UTR: {historyRecord.paymentId}
@@ -1591,8 +1602,8 @@ export default function AdminPaymentsPage() {
 
               {/* Event 3: Approval / Verification */}
               {historyRecord.paymentStatus === "PAID" && (
-                <div className="relative pl-6">
-                  <div className="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-emerald-500 border-2 border-white" />
+                <div className="relative">
+                  <div className="absolute -left-[32px] top-1 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-4 ring-white shadow-2xs" />
                   <div className="font-bold text-xs text-emerald-900">Payment Verified &amp; Pass Activated</div>
                   <div className="text-[11px] text-slate-500">
                     Verified By: {historyRecord.verifiedBy || "Automated Bank Webhook / Auto-Approval"}
@@ -1605,8 +1616,8 @@ export default function AdminPaymentsPage() {
 
               {/* Event 4: Refund Record */}
               {historyRecord.refundStatus && (
-                <div className="relative pl-6">
-                  <div className="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-purple-500 border-2 border-white" />
+                <div className="relative">
+                  <div className="absolute -left-[32px] top-1 w-3.5 h-3.5 rounded-full bg-purple-500 ring-4 ring-white shadow-2xs" />
                   <div className="font-bold text-xs text-purple-900">Refund Processed</div>
                   <div className="text-[11px] text-slate-600">
                     Refund of <strong>₹{historyRecord.refundAmount || historyRecord.amountPaid || 0}</strong> issued.
@@ -1622,8 +1633,8 @@ export default function AdminPaymentsPage() {
 
               {/* Event 5: Cancellation Record */}
               {historyRecord.status === "CANCELLED" && (
-                <div className="relative pl-6">
-                  <div className="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-rose-500 border-2 border-white" />
+                <div className="relative">
+                  <div className="absolute -left-[32px] top-1 w-3.5 h-3.5 rounded-full bg-rose-500 ring-4 ring-white shadow-2xs" />
                   <div className="font-bold text-xs text-rose-900">Pass Voided / Cancelled</div>
                   <p className="text-[11px] text-slate-500">
                     Reason: {historyRecord.cancellationReason || "Cancelled by admin"}
