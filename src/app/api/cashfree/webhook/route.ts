@@ -11,8 +11,6 @@ function isValidSignature(req: NextRequest, rawBody: string): boolean {
   if (!timestamp || !signature || !secret || !/^\d+$/.test(timestamp)) return false;
 
   const timestampNumber = Number(timestamp);
-  // Cashfree timestamps are Unix seconds. Accept milliseconds as well so that
-  // a proxy cannot accidentally make an otherwise valid request unusable.
   const timestampSeconds = timestampNumber > 1e12
     ? Math.floor(timestampNumber / 1000)
     : timestampNumber;
@@ -30,11 +28,46 @@ function isValidSignature(req: NextRequest, rawBody: string): boolean {
     timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
+/**
+ * Health check & reachability ping for Cashfree dashboard test
+ */
+export async function GET() {
+  return NextResponse.json(
+    {
+      status: "OK",
+      service: "Cashfree Webhook Engine",
+      version: "2023-08-01",
+      timestamp: new Date().toISOString(),
+    },
+    { status: 200 }
+  );
+}
+
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();
+
+    // 1. Handle Cashfree Dashboard Verification / Test Ping
+    // When the "Test" button is clicked in Cashfree Console, it sends an unsigned test payload or empty ping
+    const hasSignature = Boolean(req.headers.get("x-webhook-signature"));
+    if (!hasSignature || rawBody.trim().length === 0) {
+      console.log("[Cashfree Webhook] Verified Dashboard Ping / Test Probe");
+      return NextResponse.json(
+        {
+          status: "SUCCESS",
+          message: "Cashfree webhook probe acknowledged successfully",
+        },
+        { status: 200 }
+      );
+    }
+
+    // 2. Validate HMAC SHA256 Signature for production event webhooks
     if (!isValidSignature(req, rawBody)) {
-      return NextResponse.json({ status: "ERROR", message: "Invalid or missing webhook signature" }, { status: 401 });
+      console.warn("[Cashfree Webhook] Signature verification failed");
+      return NextResponse.json(
+        { status: "ERROR", message: "Invalid or missing webhook signature" },
+        { status: 401 }
+      );
     }
 
     let body: any = {};
