@@ -118,12 +118,20 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     (q) => !isWhatsappField(q) && q.type !== "section"
   );
   const hasCustomQuestions = eligibleQuestions.length > 0;
+
+  const isIndividualOnly = event.teamType === "Individual";
+  const isTeamOnly = event.teamType === "Team";
+  // If event is strictly Individual, participation/team step is skipped entirely
+  const skipParticipationStep = isIndividualOnly;
+
   const STEP_DETAILS = 1;
-  const STEP_PARTICIPATION = 2;
-  const STEP_QUESTIONS = hasCustomQuestions ? 3 : -1;
-  const STEP_REVIEW = hasCustomQuestions ? 4 : 3;
-  const STEP_PASS = hasCustomQuestions ? 5 : 4;
-  const totalSteps = hasCustomQuestions ? 4 : 3;
+  const STEP_PARTICIPATION = skipParticipationStep ? -1 : 2;
+  const STEP_QUESTIONS = hasCustomQuestions ? (skipParticipationStep ? 2 : 3) : -1;
+  const STEP_REVIEW = hasCustomQuestions 
+    ? (skipParticipationStep ? 3 : 4) 
+    : (skipParticipationStep ? 2 : 3);
+  const STEP_PASS = STEP_REVIEW + 1;
+  const totalSteps = STEP_REVIEW;
 
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [hasJoinedWhatsApp, setHasJoinedWhatsApp] = useState(false);
@@ -666,7 +674,15 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
-    setCurrentStep(STEP_PARTICIPATION);
+    if (skipParticipationStep) {
+      if (hasCustomQuestions) {
+        setCurrentStep(STEP_QUESTIONS);
+      } else {
+        setCurrentStep(STEP_REVIEW);
+      }
+    } else {
+      setCurrentStep(STEP_PARTICIPATION);
+    }
     scrollToStepTop();
   };
 
@@ -1215,26 +1231,43 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     );
   }
 
-  const steps = hasCustomQuestions
-    ? [
-        { number: 1, title: "01 DETAILS", shortTitle: "01 INFO" },
-        { number: 2, title: "02 PARTICIPATION", shortTitle: "02 SQUAD" },
-        { number: 3, title: "03 QUESTIONS", shortTitle: "03 FORM" },
-        { number: 4, title: "04 REVIEW", shortTitle: "04 REVIEW" },
-        { number: 5, title: "05 PASS", shortTitle: "05 PASS" },
-      ]
-    : [
-        { number: 1, title: "01 DETAILS", shortTitle: "01 INFO" },
-        { number: 2, title: "02 PARTICIPATION", shortTitle: "02 SQUAD" },
-        { number: 3, title: "03 REVIEW", shortTitle: "03 REVIEW" },
-        { number: 4, title: "04 PASS", shortTitle: "04 PASS" },
-      ];
+  const steps = [
+    { number: STEP_DETAILS, title: "01 DETAILS", shortTitle: "01 INFO" },
+    ...(!skipParticipationStep
+      ? [{ number: STEP_PARTICIPATION, title: isTeamOnly ? "02 SQUAD" : "02 PARTICIPATION", shortTitle: "02 SQUAD" }]
+      : []),
+    ...(hasCustomQuestions
+      ? [
+          {
+            number: STEP_QUESTIONS,
+            title: `${STEP_QUESTIONS < 10 ? `0${STEP_QUESTIONS}` : STEP_QUESTIONS} QUESTIONS`,
+            shortTitle: `${STEP_QUESTIONS < 10 ? `0${STEP_QUESTIONS}` : STEP_QUESTIONS} FORM`,
+          },
+        ]
+      : []),
+    {
+      number: STEP_REVIEW,
+      title: `${STEP_REVIEW < 10 ? `0${STEP_REVIEW}` : STEP_REVIEW} REVIEW`,
+      shortTitle: `${STEP_REVIEW < 10 ? `0${STEP_REVIEW}` : STEP_REVIEW} REVIEW`,
+    },
+    {
+      number: STEP_PASS,
+      title: `${STEP_PASS < 10 ? `0${STEP_PASS}` : STEP_PASS} PASS`,
+      shortTitle: `${STEP_PASS < 10 ? `0${STEP_PASS}` : STEP_PASS} PASS`,
+    },
+  ];
 
   return (
     <div className="max-w-4xl mx-auto space-y-10 font-sans">
       
       {/* Progress Stepper Bar */}
-      <div className={`grid ${steps.length === 5 ? "grid-cols-5" : "grid-cols-4"} gap-1.5 sm:gap-4`}>
+      <div className={`grid ${
+        steps.length === 5 
+          ? "grid-cols-5" 
+          : steps.length === 4 
+          ? "grid-cols-4" 
+          : "grid-cols-3"
+      } gap-1.5 sm:gap-4`}>
         {steps.map((step) => {
           const isActive = currentStep === step.number;
           const isCompleted = currentStep > step.number;
@@ -1626,8 +1659,24 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                       size="md"
                       className="w-full sm:w-auto justify-center gap-2 cursor-pointer min-h-[44px]"
                     >
-                      <span className="sm:hidden">Continue to Participation</span>
-                      <span className="hidden sm:inline">Continue to Participation Format</span>
+                      {skipParticipationStep ? (
+                        hasCustomQuestions ? (
+                          <>
+                            <span className="sm:hidden">Continue to Questions</span>
+                            <span className="hidden sm:inline">Continue to Questions</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="sm:hidden">Review Summary</span>
+                            <span className="hidden sm:inline">Review Summary</span>
+                          </>
+                        )
+                      ) : (
+                        <>
+                          <span className="sm:hidden">Continue to {isTeamOnly ? "Squad" : "Participation"}</span>
+                          <span className="hidden sm:inline">Continue to {isTeamOnly ? "Squad Roster" : "Participation Format"}</span>
+                        </>
+                      )}
                       <ArrowRight className="w-4 h-4" />
                     </Button>
                   </div>
@@ -1639,7 +1688,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       )}
 
       {/* STEP 2: PARTICIPATION FORMAT & TEAM ROSTER */}
-      {currentStep === 2 && (
+      {currentStep === STEP_PARTICIPATION && (
         <div 
           ref={stepContainerRef}
           id="registration-step-card"
@@ -1647,81 +1696,84 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         >
           <div className="border-b border-slate-100 pb-4">
             <span className="text-xs font-bold uppercase tracking-wider text-[#E78023]">
-              Step 02 of {totalSteps < 10 ? `0${totalSteps}` : totalSteps}
+              Step {STEP_PARTICIPATION < 10 ? `0${STEP_PARTICIPATION}` : STEP_PARTICIPATION} of {totalSteps < 10 ? `0${totalSteps}` : totalSteps}
             </span>
             <h3 className="font-heading font-extrabold text-2xl text-[#17458F] uppercase mt-1">
-              <span className="sm:hidden">PARTICIPATION</span>
-              <span className="hidden sm:inline">PARTICIPATION FORMAT &amp; TEAM ROSTER</span>
+              {isTeamOnly ? (
+                <>
+                  <span className="sm:hidden">SQUAD ROSTER</span>
+                  <span className="hidden sm:inline">TEAM &amp; SQUAD ROSTER</span>
+                </>
+              ) : (
+                <>
+                  <span className="sm:hidden">PARTICIPATION</span>
+                  <span className="hidden sm:inline">PARTICIPATION FORMAT &amp; TEAM ROSTER</span>
+                </>
+              )}
             </h3>
             <p className="text-xs text-slate-500 font-medium">
-              {isExternal 
-                ? "Configure solo entry or assemble an inter-collegiate squad with other college teammates." 
-                : "Configure solo registration or add verified team members by BT ID."}
+              {isTeamOnly
+                ? (isExternal
+                    ? "Enter your team name and assemble an inter-collegiate squad with visiting teammates."
+                    : "Enter your team name and add verified team members by BT ID.")
+                : (isExternal 
+                    ? "Configure solo entry or assemble an inter-collegiate squad with other college teammates." 
+                    : "Configure solo registration or add verified team members by BT ID.")}
             </p>
           </div>
 
           <div className="space-y-6">
             
-            {/* Format Selector */}
-            <div className="space-y-3">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                Entry Category
-              </label>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <button
-                  type="button"
-                  disabled={event.teamType === "Team"}
-                  onClick={() => setFormData({ ...formData, teamType: "Individual" })}
-                  className={`p-4 rounded-2xl border text-center transition-all cursor-pointer ${
-                    formData.teamType === "Individual"
-                      ? "bg-[#17458F] border-[#E78023] text-white shadow-sm"
-                      : event.teamType === "Team"
-                      ? "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-50"
-                      : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
-                  }`}
-                >
-                  <User className="w-5 h-5 mx-auto mb-1" />
-                  <span className="font-heading font-bold text-xs uppercase tracking-wider block">
-                    Individual Entry
-                  </span>
-                  <span className="text-[11px] opacity-80">Single participant pass</span>
-                </button>
+            {/* Format Selector: Rendered ONLY when event accommodates both Individual and Team formats */}
+            {event.teamType === "Both" && (
+              <div className="space-y-3">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Entry Category
+                </label>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, teamType: "Individual" })}
+                    className={`p-4 rounded-2xl border text-center transition-all cursor-pointer ${
+                      formData.teamType === "Individual"
+                        ? "bg-[#17458F] border-[#E78023] text-white shadow-sm"
+                        : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    <User className="w-5 h-5 mx-auto mb-1" />
+                    <span className="font-heading font-bold text-xs uppercase tracking-wider block">
+                      Individual Entry
+                    </span>
+                    <span className="text-[11px] opacity-80">Single participant pass</span>
+                  </button>
 
-                <button
-                  type="button"
-                  disabled={event.teamType === "Individual"}
-                  onClick={() => setFormData({ ...formData, teamType: "Team" })}
-                  className={`p-4 rounded-2xl border text-center transition-all cursor-pointer ${
-                    formData.teamType === "Team"
-                      ? "bg-[#17458F] border-[#E78023] text-white shadow-sm"
-                      : event.teamType === "Individual"
-                      ? "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-50"
-                      : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
-                  }`}
-                >
-                  <Users className="w-5 h-5 mx-auto mb-1" />
-                  <span className="font-heading font-bold text-xs uppercase tracking-wider block">
-                    Team Entry
-                  </span>
-                  <span className="text-[11px] opacity-80">
-                    {minTeamSize === maxTeamSize
-                      ? `Squad (${maxTeamSize} ${maxTeamSize === 1 ? "Member" : "Members"})`
-                      : `Squad (${minTeamSize} - ${maxTeamSize} Members)`}
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, teamType: "Team" })}
+                    className={`p-4 rounded-2xl border text-center transition-all cursor-pointer ${
+                      formData.teamType === "Team"
+                        ? "bg-[#17458F] border-[#E78023] text-white shadow-sm"
+                        : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    <Users className="w-5 h-5 mx-auto mb-1" />
+                    <span className="font-heading font-bold text-xs uppercase tracking-wider block">
+                      Team Entry
+                    </span>
+                    <span className="text-[11px] opacity-80">
+                      {minTeamSize === maxTeamSize
+                        ? `Squad (${maxTeamSize} ${maxTeamSize === 1 ? "Member" : "Members"})`
+                        : `Squad (${minTeamSize} - ${maxTeamSize} Members)`}
+                    </span>
+                  </button>
+                </div>
               </div>
-
-              {event.teamType !== "Both" && (
-                <p className="text-[11px] text-slate-500 font-medium">
-                  Note: This event is chartered specifically as a <strong>{event.teamType}</strong> competition.
-                </p>
-              )}
-            </div>
+            )}
 
             {/* Team Specific Inputs & Squad Roster */}
             {formData.teamType === "Team" && (
-              <div className="space-y-6 pt-4 border-t border-slate-100">
+              <div className={`space-y-6 ${event.teamType === "Both" ? "pt-4 border-t border-slate-100" : ""}`}>
                 
                 {/* Team Name */}
                 <div className="space-y-2">
@@ -1966,7 +2018,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         >
           <div className="border-b border-slate-100 pb-4">
             <span className="text-xs font-bold uppercase tracking-wider text-[#E78023]">
-              Step 03 of {totalSteps < 10 ? `0${totalSteps}` : totalSteps}
+              Step {STEP_QUESTIONS < 10 ? `0${STEP_QUESTIONS}` : STEP_QUESTIONS} of {totalSteps < 10 ? `0${totalSteps}` : totalSteps}
             </span>
             <h3 className="font-heading font-extrabold text-2xl text-[#17458F] uppercase mt-1">
               EVENT QUESTIONS &amp; GUIDELINES
@@ -2164,7 +2216,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-100">
             <Button
               onClick={() => {
-                setCurrentStep(STEP_PARTICIPATION);
+                setCurrentStep(skipParticipationStep ? STEP_DETAILS : STEP_PARTICIPATION);
                 scrollToStepTop();
               }}
               variant="outline"
@@ -2345,6 +2397,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               onClick={() => {
                 if (hasCustomQuestions) {
                   setCurrentStep(STEP_QUESTIONS);
+                } else if (skipParticipationStep) {
+                  setCurrentStep(STEP_DETAILS);
                 } else {
                   setCurrentStep(STEP_PARTICIPATION);
                 }
