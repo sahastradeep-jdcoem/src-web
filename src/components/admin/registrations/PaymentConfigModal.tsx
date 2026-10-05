@@ -14,6 +14,7 @@ import {
   Lock,
   Server,
   Zap,
+  CheckCircle2,
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -30,11 +31,24 @@ interface PaymentConfigModalProps {
   onClose: () => void;
 }
 
+interface ServerGatewayStatus {
+  configured: boolean;
+  hasAppId: boolean;
+  hasSecretKey: boolean;
+  appIdMasked: string;
+  environment: "TEST" | "PROD";
+  source: string;
+}
+
 export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps) {
   const [config, setConfig] = useState<PaymentConfig>(getStoredPaymentConfig());
   const [isSaving, setIsSaving] = useState(false);
   const [showSavedToast, setShowSavedToast] = useState(false);
   const [copiedWebhook, setCopiedWebhook] = useState(false);
+
+  // Server-side Vercel gateway status
+  const [serverStatus, setServerStatus] = useState<ServerGatewayStatus | null>(null);
+  const [isLoadingStatus, setIsLoadingStatus] = useState(false);
   
   // Cashfree Testing State
   const [isTestingCashfree, setIsTestingCashfree] = useState(false);
@@ -46,6 +60,17 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
       setConfig(updated);
     });
     return unsub;
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsLoadingStatus(true);
+      fetch("/api/cashfree/status")
+        .then((res) => res.json())
+        .then((data) => setServerStatus(data))
+        .catch((err) => console.warn("Failed to fetch gateway status:", err))
+        .finally(() => setIsLoadingStatus(false));
+    }
   }, [isOpen]);
 
   const webhookUrl = typeof window !== "undefined"
@@ -79,12 +104,12 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
       if (res.ok && data.success) {
         setCashfreeTestResult({
           success: true,
-          message: `Connection Verified! Successfully connected to Cashfree ${data.environment || "API"} mode. Generated Session: ${data.orderId}`,
+          message: `Connection Verified! Successfully connected to Cashfree ${data.environment || "API"} mode using Vercel credentials. Generated Session: ${data.orderId}`,
         });
       } else {
         setCashfreeTestResult({
           success: false,
-          message: `Cashfree Error: ${data.error || "Authentication failed. Check your App ID and Secret Key."}`,
+          message: `Cashfree Error: ${data.error || "Authentication failed. Check your Vercel CASHFREE_APP_ID and CASHFREE_SECRET_KEY."}`,
         });
       }
     } catch (err: any) {
@@ -101,7 +126,10 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
     e.preventDefault();
     setIsSaving(true);
     try {
-      await updatePaymentConfig(config, "Admin / Treasurer");
+      await updatePaymentConfig({
+        isGatewayActive: config.isGatewayActive,
+        instructions: config.instructions,
+      }, "Admin / Treasurer");
       setShowSavedToast(true);
       setTimeout(() => setShowSavedToast(false), 3000);
       setTimeout(() => onClose(), 600);
@@ -112,12 +140,15 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
     }
   };
 
+  const activeEnv = serverStatus?.environment || "PROD";
+  const isConfigured = serverStatus?.configured;
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
       title="Cashfree Payment Gateway Settings"
-      subtitle="Configure Cashfree auto-checkout, credentials, environment mode, and webhooks."
+      subtitle="Gateway credentials and environment modes are securely handled exclusively via Vercel."
       maxWidth="lg"
     >
       <div className="space-y-6">
@@ -128,18 +159,22 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
               CF
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h4 className="font-heading font-extrabold text-sm text-slate-900">
                   Cashfree Payment Gateway
                 </h4>
                 <Badge variant={config.isGatewayActive ? "success" : "slate"} size="sm">
-                  {config.isGatewayActive ? "LIVE" : "PAUSED"}
+                  {config.isGatewayActive ? "GATEWAY LIVE" : "PAUSED"}
                 </Badge>
-                <Badge variant={config.cashfreeEnvironment === "PROD" ? "orange" : "navy"} size="sm">
-                  {config.cashfreeEnvironment === "PROD" ? "PRODUCTION LIVE" : "TEST SANDBOX"}
+                <Badge variant={activeEnv === "PROD" ? "orange" : "navy"} size="sm">
+                  {activeEnv === "PROD" ? "PRODUCTION LIVE" : "TEST SANDBOX"}
                 </Badge>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                  <Lock className="w-3 h-3 text-emerald-600" />
+                  Vercel Managed
+                </span>
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-500 mt-0.5">
                 Official checkout engine for UPI, Credit/Debit Cards & Netbanking
               </p>
             </div>
@@ -151,7 +186,7 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
             variant="outline"
             onClick={handleTestCashfree}
             disabled={isTestingCashfree}
-            className="text-xs border-[#17458F] text-[#17458F] hover:bg-blue-50 font-bold"
+            className="text-xs border-[#17458F] text-[#17458F] hover:bg-blue-50 font-bold shrink-0"
           >
             {isTestingCashfree ? (
               <>
@@ -188,128 +223,115 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
           </div>
         )}
 
-        {/* Security Recommendation Callout */}
-        <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-2">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-amber-700" />
-            <span className="font-bold text-xs text-amber-900 uppercase tracking-wider">
-              Recommended: Set Keys in Vercel Dashboard
-            </span>
+        {/* Vercel Environment Authoritative Credentials Box */}
+        <div className="p-4 rounded-2xl bg-slate-900 text-white space-y-3 shadow-sm border border-slate-800">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-md bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                <Lock className="w-3.5 h-3.5" />
+              </div>
+              <div>
+                <span className="font-bold text-xs uppercase tracking-wider text-slate-200">
+                  Credentials Source: Vercel Environment Variables
+                </span>
+                <span className="block text-[11px] text-slate-400">
+                  Stored securely on server • Never exposed to client browsers or Firestore
+                </span>
+              </div>
+            </div>
+            {isLoadingStatus ? (
+              <span className="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
+                <RefreshCw className="w-3 h-3 animate-spin" /> Verifying...
+              </span>
+            ) : isConfigured ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-950/80 px-2.5 py-1 rounded-full border border-emerald-800/80">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Connected
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-400 bg-rose-950/80 px-2.5 py-1 rounded-full border border-rose-800/80">
+                <AlertCircle className="w-3.5 h-3.5" /> Missing in Vercel
+              </span>
+            )}
           </div>
-          <p className="text-xs text-amber-800 leading-relaxed">
-            For maximum security, configure your Cashfree API keys as server environment variables in your{" "}
-            <strong>Vercel Project Dashboard → Settings → Environment Variables</strong>. Server variables are encrypted at rest, never committed to code, and never exposed in the browser bundle.
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+            <div className="bg-slate-800/90 p-3 rounded-xl border border-slate-700/80">
+              <span className="text-slate-400 font-mono text-[10px] block uppercase">CASHFREE_ENVIRONMENT</span>
+              <span className="text-sm font-bold text-white font-mono flex items-center gap-1.5 mt-0.5">
+                <span className={`w-2 h-2 rounded-full ${activeEnv === "PROD" ? "bg-amber-400 animate-pulse" : "bg-blue-400"}`} />
+                {activeEnv === "PROD" ? "PROD (Production)" : "TEST (Sandbox)"}
+              </span>
+            </div>
+
+            <div className="bg-slate-800/90 p-3 rounded-xl border border-slate-700/80">
+              <span className="text-slate-400 font-mono text-[10px] block uppercase">CASHFREE_APP_ID</span>
+              <span className="text-sm font-bold text-slate-200 font-mono mt-0.5 block truncate">
+                {serverStatus?.appIdMasked || "Configured via Vercel"}
+              </span>
+            </div>
+
+            <div className="bg-slate-800/90 p-3 rounded-xl border border-slate-700/80">
+              <span className="text-slate-400 font-mono text-[10px] block uppercase">CASHFREE_SECRET_KEY</span>
+              <span className="text-sm font-bold text-emerald-400 font-mono mt-0.5 block">
+                ••••••••••••••••
+              </span>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-slate-400 leading-relaxed pt-1">
+            To switch environments or update keys, update variables in your{" "}
+            <strong className="text-slate-200">Vercel Project Dashboard → Settings → Environment Variables</strong>.
+            Changes take effect on your next deployment with zero risk of client-side credential exposure.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
-            <div className="bg-white/90 px-2.5 py-1.5 rounded-lg border border-amber-200 font-mono text-[11px] text-slate-700">
-              <span className="text-amber-800 font-bold block">CASHFREE_APP_ID</span>
-              Client / App ID
-            </div>
-            <div className="bg-white/90 px-2.5 py-1.5 rounded-lg border border-amber-200 font-mono text-[11px] text-slate-700">
-              <span className="text-amber-800 font-bold block">CASHFREE_SECRET_KEY</span>
-              Client Secret Key
-            </div>
-            <div className="bg-white/90 px-2.5 py-1.5 rounded-lg border border-amber-200 font-mono text-[11px] text-slate-700">
-              <span className="text-amber-800 font-bold block">CASHFREE_ENVIRONMENT</span>
-              TEST or PROD
-            </div>
-          </div>
         </div>
 
-        {/* Form Settings */}
+        {/* Operational Form Settings */}
         <form onSubmit={handleSave} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Gateway Status */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                Checkout Status
-              </label>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setConfig({ ...config, isGatewayActive: true })}
-                  className={`flex-1 py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                    config.isGatewayActive
-                      ? "bg-emerald-50 border-emerald-400 text-emerald-900 ring-2 ring-emerald-200"
-                      : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
-                  }`}
-                >
-                  ✓ Enabled (Live)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfig({ ...config, isGatewayActive: false })}
-                  className={`flex-1 py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                    !config.isGatewayActive
-                      ? "bg-rose-50 border-rose-400 text-rose-900 ring-2 ring-rose-200"
-                      : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
-                  }`}
-                >
-                  ✕ Paused (Maintenance)
-                </button>
-              </div>
-            </div>
-
-            {/* Environment Toggle */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                Cashfree Environment
-              </label>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setConfig({ ...config, cashfreeEnvironment: "TEST" })}
-                  className={`flex-1 py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                    config.cashfreeEnvironment === "TEST"
-                      ? "bg-blue-50 border-blue-400 text-[#17458F] ring-2 ring-blue-200"
-                      : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
-                  }`}
-                >
-                  Test (Sandbox)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfig({ ...config, cashfreeEnvironment: "PROD" })}
-                  className={`flex-1 py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                    config.cashfreeEnvironment === "PROD"
-                      ? "bg-amber-50 border-amber-400 text-amber-900 ring-2 ring-amber-200"
-                      : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
-                  }`}
-                >
-                  Production (Real Money)
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Cashfree App ID */}
+          {/* Checkout Operational Status */}
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Cashfree App ID (Client ID)
-              </label>
-              <span className="text-[11px] text-slate-400">Public identifier</span>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+              Public Checkout Toggle
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setConfig({ ...config, isGatewayActive: true })}
+                className={`flex-1 py-2.5 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                  config.isGatewayActive
+                    ? "bg-emerald-50 border-emerald-400 text-emerald-900 ring-2 ring-emerald-200"
+                    : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                }`}
+              >
+                ✓ Active (Accepting Registrations & Payments)
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfig({ ...config, isGatewayActive: false })}
+                className={`flex-1 py-2.5 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                  !config.isGatewayActive
+                    ? "bg-rose-50 border-rose-400 text-rose-900 ring-2 ring-rose-200"
+                    : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                }`}
+              >
+                ✕ Paused (Maintenance Mode)
+              </button>
             </div>
-            <input
-              type="text"
-              value={config.cashfreeAppId}
-              onChange={(e) => setConfig({ ...config, cashfreeAppId: e.target.value.trim() })}
-              placeholder="e.g. TEST11275390ec5beb3e152dea3063d009357211"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#17458F] focus:border-transparent"
-            />
+            <p className="text-[11px] text-slate-500 mt-1.5">
+              Toggle this if you need to pause online checkout without taking the website or event pages offline.
+            </p>
           </div>
 
           {/* Checkout Instructions Notice */}
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Checkout Instructions / Subtitle
+              Student Checkout Notice / Subtitle
             </label>
             <input
               type="text"
               value={config.instructions || ""}
               onChange={(e) => setConfig({ ...config, instructions: e.target.value })}
               placeholder="e.g. Instant online checkout powered by Cashfree (UPI, Cards, Netbanking)."
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#17458F] focus:border-transparent"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#17458F] focus:border-transparent"
             />
           </div>
 
@@ -336,7 +358,7 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
               {webhookUrl}
             </div>
             <div className="text-[11px] text-slate-500">
-              API Version: <span className="font-semibold text-slate-700">2023-08-01</span> • Events: <span className="font-semibold text-slate-700">PAYMENT_SUCCESS_WEBHOOK</span>, <span className="font-semibold text-slate-700">PAYMENT_FAILED_WEBHOOK</span>
+              API Version: <span className="font-semibold text-slate-700">2023-08-01</span> • Events: <span className="font-semibold text-slate-700">PAYMENT_SUCCESS_WEBHOOK</span>, <span className="font-semibold text-slate-700">ORDER_PAID_WEBHOOK</span>, <span className="font-semibold text-slate-700">PAYMENT_FAILED_WEBHOOK</span>
             </div>
           </div>
 

@@ -7,9 +7,9 @@ import { enqueueCloudWrite } from "./dataSyncEngine";
 
 export interface PublicPaymentConfig {
   gateway: "cashfree";
-  // Cashfree PG Settings
-  cashfreeAppId: string;
-  cashfreeEnvironment: "TEST" | "PROD";
+  // Cashfree PG Settings (Handled securely via Vercel server environment)
+  cashfreeAppId?: string;
+  cashfreeEnvironment?: "TEST" | "PROD";
   isGatewayActive: boolean;
   instructions?: string;
   updatedAt?: string;
@@ -25,8 +25,6 @@ export const PAYMENT_CONFIG_CHANGE_EVENT = "src_payment_config_changed";
 
 export const DEFAULT_PAYMENT_CONFIG: PaymentConfig = {
   gateway: "cashfree",
-  cashfreeAppId: process.env.NEXT_PUBLIC_CASHFREE_APP_ID || "",
-  cashfreeEnvironment: (process.env.CASHFREE_ENVIRONMENT as "TEST" | "PROD") || "TEST",
   isGatewayActive: true,
   instructions: "Instant online checkout powered by Cashfree (UPI, Cards, Netbanking).",
   updatedAt: new Date().toISOString(),
@@ -51,8 +49,6 @@ export function getStoredPaymentConfig(): PaymentConfig {
           ...DEFAULT_PAYMENT_CONFIG,
           ...parsed,
           gateway: "cashfree",
-          cashfreeAppId: parsed.cashfreeAppId || process.env.NEXT_PUBLIC_CASHFREE_APP_ID || DEFAULT_PAYMENT_CONFIG.cashfreeAppId,
-          cashfreeEnvironment: parsed.cashfreeEnvironment || DEFAULT_PAYMENT_CONFIG.cashfreeEnvironment,
           isGatewayActive: parsed.isGatewayActive !== undefined ? parsed.isGatewayActive : true,
         };
       }
@@ -73,8 +69,6 @@ export function saveStoredPaymentConfig(config: PaymentConfig): void {
   try {
     const cleanConfig: PaymentConfig = {
       gateway: "cashfree",
-      cashfreeAppId: config.cashfreeAppId || "",
-      cashfreeEnvironment: config.cashfreeEnvironment || "TEST",
       isGatewayActive: config.isGatewayActive !== undefined ? config.isGatewayActive : true,
       instructions: config.instructions || DEFAULT_PAYMENT_CONFIG.instructions,
       updatedAt: config.updatedAt,
