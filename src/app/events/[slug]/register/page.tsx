@@ -387,6 +387,48 @@ export default function EventRegisterPage() {
     );
   }
 
+  const isEventRegistrationClosed = getEventEffectiveStatus(event) === "Registration Closed";
+  if (isEventRegistrationClosed) {
+    return (
+      <div className="min-h-[70vh] bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center space-y-6">
+        <div className="p-4 rounded-3xl bg-slate-100 border border-slate-200 text-slate-600">
+          <AlertCircle className="w-10 h-10 mx-auto text-slate-500" />
+        </div>
+        <div className="space-y-3 max-w-lg">
+          <Badge variant="slate" size="md">Registration Closed • Entries Closed by Organizer</Badge>
+          <h1 className="font-heading font-extrabold text-2xl text-[#0F172A] uppercase">
+            {event.name}
+          </h1>
+          <div className="p-4 rounded-2xl bg-white border border-slate-200 text-left space-y-1.5 shadow-xs">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block font-sans">
+              Registration Notice:
+            </span>
+            <p className="text-xs text-slate-700 leading-relaxed font-medium">
+              Official registrations for this event have been closed by the event organizers. New registrations are no longer being accepted.
+            </p>
+          </div>
+          <p className="text-xs text-slate-500 leading-relaxed font-sans">
+            Already registered? View your verified event pass and details on your Student Dashboard.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Link
+            href="/events"
+            className="px-6 py-3 rounded-2xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider transition-all hover:bg-[#123670] shadow-sm"
+          >
+            &larr; Browse Available Events
+          </Link>
+          <Link
+            href="/dashboard"
+            className="px-6 py-3 rounded-2xl bg-white border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider transition-all hover:bg-slate-50 shadow-2xs"
+          >
+            Go to Student Dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const isDeadlinePassed = isRegistrationDeadlinePassed(event);
   if (isDeadlinePassed) {
     return (

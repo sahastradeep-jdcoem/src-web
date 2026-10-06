@@ -291,6 +291,8 @@ export default function AdminEventsPage() {
         if (e.isLive !== false && e.status !== "draft") return false;
       } else if (selectedStatus === "open") {
         if (e.isCancelled || e.status !== "Registration Open" || e.noRegistrationRequired || isRegistrationDeadlinePassed(e)) return false;
+      } else if (selectedStatus === "closed") {
+        if (e.isCancelled || (e.status !== "Registration Closed" && !(e.status === "Registration Open" && isRegistrationDeadlinePassed(e)))) return false;
       } else if (selectedStatus === "walkin") {
         if (!e.noRegistrationRequired) return false;
       } else if (selectedStatus === "upcoming") {
@@ -1132,6 +1134,11 @@ export default function AdminEventsPage() {
               id: "open", 
               label: "Registration Open", 
               count: tenureFilteredEvents.filter((e) => !e.isCancelled && e.status === "Registration Open" && !e.noRegistrationRequired && !isRegistrationDeadlinePassed(e)).length 
+            },
+            { 
+              id: "closed", 
+              label: "Registration Closed", 
+              count: tenureFilteredEvents.filter((e) => !e.isCancelled && (e.status === "Registration Closed" || (e.status === "Registration Open" && isRegistrationDeadlinePassed(e)))).length 
             },
             { 
               id: "walkin", 

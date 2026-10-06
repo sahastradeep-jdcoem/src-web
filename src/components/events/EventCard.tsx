@@ -23,9 +23,10 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
   const isComingSoon = effectiveStatus === "Coming Soon";
   const isUpcoming = effectiveStatus === "Upcoming";
   const isCompleted = effectiveStatus === "Completed";
+  const isRegistrationClosedStatus = effectiveStatus === "Registration Closed";
   const isDeadlinePassed = isRegistrationDeadlinePassed(event);
   const isRegistrationOpen = effectiveStatus === "Registration Open" && !isDeadlinePassed && !isCompleted;
-  const isRegistrationClosed = (effectiveStatus === "Registration Open" && isDeadlinePassed) || isCompleted;
+  const isRegistrationClosed = (effectiveStatus === "Registration Open" && isDeadlinePassed) || isCompleted || isRegistrationClosedStatus;
 
   const statusVariant = isComingSoon
     ? "warning"
@@ -43,7 +44,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
     ? "Registration Open"
     : isCompleted
     ? "Completed"
-    : isDeadlinePassed
+    : (isDeadlinePassed || isRegistrationClosedStatus)
     ? "Registration Closed"
     : effectiveStatus;
 

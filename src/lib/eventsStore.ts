@@ -51,6 +51,8 @@ export function sanitizeEventItem(event: EventItem): EventItem {
   let effectiveStatus: EventItem["status"] = event.status || "Upcoming";
   if (isAutoCompleted) {
     effectiveStatus = "Completed";
+  } else if (event.status === "Registration Closed") {
+    effectiveStatus = "Registration Closed";
   } else if (event.status === "Completed" || event.status?.toLowerCase() === "completed") {
     effectiveStatus = isNoReg ? "Upcoming" : "Registration Open";
   }
@@ -361,6 +363,11 @@ export function getEventEffectiveStatus(event: Partial<EventItem> | null | undef
   if (event.isCancelled || event.status === "Cancelled") return "Cancelled";
   if (event.status === "draft") return "draft";
   if (event.status === "Coming Soon") return "Coming Soon";
+  if (event.status === "Registration Closed") {
+    const isCompleted = isEventCompletedByDate(event);
+    if (isCompleted) return "Completed";
+    return "Registration Closed";
+  }
 
   const targetDateStr = event.rawEndDate || event.rawDate || event.endDate || event.date;
   const isCompleted = isEventCompletedByDate(event);

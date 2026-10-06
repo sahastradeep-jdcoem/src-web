@@ -630,7 +630,9 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     const isCompleted = effectiveStatus === "Completed";
     const isDeadlinePassed = isRegistrationDeadlinePassed(event);
     if (isCompleted || isDeadlinePassed || effectiveStatus !== "Registration Open") {
-      if (effectiveStatus === "Coming Soon") {
+      if (effectiveStatus === "Registration Closed") {
+        alert("Registrations for this event have been closed by the event organizers.");
+      } else if (effectiveStatus === "Coming Soon") {
         alert("This event is coming soon. Registrations have not opened yet.");
       } else if (effectiveStatus === "Upcoming") {
         alert("Registrations for this event have not opened yet. Please check back soon!");
@@ -911,7 +913,9 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     const isCompleted = effectiveStatus === "Completed";
     const isDeadlinePassed = isRegistrationDeadlinePassed(event);
     if (isCompleted || isDeadlinePassed || effectiveStatus !== "Registration Open") {
-      if (effectiveStatus === "Coming Soon") {
+      if (effectiveStatus === "Registration Closed") {
+        alert("Registrations for this event have been closed by the event organizers.");
+      } else if (effectiveStatus === "Coming Soon") {
         alert("This event is coming soon. Registrations have not opened yet.");
       } else if (effectiveStatus === "Upcoming") {
         alert("Registrations for this event have not opened yet. Please check back soon!");
@@ -1191,6 +1195,34 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           </h3>
           <p className="text-xs text-slate-600 leading-relaxed font-medium">
             This event has officially concluded and is marked as <strong>Completed</strong>. Registration is closed and cannot be submitted.
+          </p>
+        </div>
+        <div className="pt-2">
+          <Link
+            href="/events"
+            className="inline-flex px-6 py-3 rounded-2xl bg-[#17458F] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#123670] transition-all shadow-sm"
+          >
+            &larr; Explore Available Events
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const isWizardRegistrationClosed = getEventEffectiveStatus(event) === "Registration Closed";
+  if (isWizardRegistrationClosed) {
+    return (
+      <div className="max-w-xl mx-auto p-8 rounded-3xl bg-white border border-slate-200 text-center space-y-5 shadow-sm">
+        <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto text-slate-500">
+          <AlertCircle className="w-7 h-7" />
+        </div>
+        <div className="space-y-2">
+          <Badge variant="slate" size="md">Registration Closed • Entries Closed by Organizer</Badge>
+          <h3 className="font-heading font-extrabold text-2xl text-[#0F172A] uppercase">
+            {event.name}
+          </h3>
+          <p className="text-xs text-slate-600 leading-relaxed font-medium">
+            Official registrations for this event have been closed by the event organizers. New registrations cannot be submitted.
           </p>
         </div>
         <div className="pt-2">

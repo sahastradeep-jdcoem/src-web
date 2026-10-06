@@ -61,7 +61,7 @@ export interface EventFormData {
   organizer: string;
   organizerClubSlug: string;
   collaboratingClubs?: { id?: string; name: string; slug: string }[];
-  status: "Registration Open" | "Upcoming" | "Coming Soon" | "Completed" | "Cancelled" | "draft";
+  status: "Registration Open" | "Registration Closed" | "Upcoming" | "Coming Soon" | "Completed" | "Cancelled" | "draft";
   poster: string;
   cardImage: string;
   posterImage: string;
@@ -1405,6 +1405,7 @@ export function EventFormModal({
                   className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
                 >
                   <option value="Registration Open">Registration Open</option>
+                  <option value="Registration Closed">Registration Closed</option>
                   <option value="Upcoming">Upcoming</option>
                   <option value="Coming Soon">Coming Soon</option>
                   <option value="Completed">Completed</option>

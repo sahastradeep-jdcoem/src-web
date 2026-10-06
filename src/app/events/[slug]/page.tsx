@@ -310,6 +310,7 @@ export default function EventDetailPage() {
   const isComingSoon = effectiveStatus === "Coming Soon";
   const isUpcoming = effectiveStatus === "Upcoming";
   const isCompleted = effectiveStatus === "Completed";
+  const isRegistrationClosedStatus = effectiveStatus === "Registration Closed";
   const isDeadlinePassed = isRegistrationDeadlinePassed(event);
   const isRegistrationOpen = effectiveStatus === "Registration Open" && !isDeadlinePassed && !isCompleted;
   const isDateComingSoon = isComingSoon || Boolean(
@@ -1110,6 +1111,16 @@ export default function EventDetailPage() {
                   <div className="w-full py-3.5 px-4 rounded-2xl bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                     <span>Event Completed • Registration Closed</span>
+                  </div>
+                ) : isRegistrationClosedStatus ? (
+                  <div className="space-y-2">
+                    <div className="w-full py-3.5 px-4 rounded-2xl bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-slate-500 shrink-0" />
+                      <span>Registration Closed</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 text-center font-medium leading-relaxed">
+                      Official registrations for this event have been closed by the event organizers.
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-2">
