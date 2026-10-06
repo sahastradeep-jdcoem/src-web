@@ -389,6 +389,42 @@ export async function revokeAdminAccessFromFirestore(
   await Promise.all(batchOps);
 }
 
+export async function deleteAdminAccessFromFirestore(
+  identifier?: string,
+  secondaryIdentifier?: string,
+  email?: string
+): Promise<void> {
+  if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return;
+  const targets = new Set<string>();
+  if (identifier && identifier.trim()) targets.add(identifier.trim());
+  if (secondaryIdentifier && secondaryIdentifier.trim()) targets.add(secondaryIdentifier.trim());
+  if (email && email.trim()) targets.add(email.trim().toLowerCase());
+
+  if (targets.size === 0) return;
+
+  const firestoreDb = db;
+  const batchOps: Promise<any>[] = [];
+  for (const key of targets) {
+    batchOps.push(deleteDoc(doc(firestoreDb, ADMIN_ACCESS_COLLECTION, key)));
+  }
+  await Promise.all(batchOps);
+
+  // Update local cache
+  try {
+    const cached = localStorage.getItem("src_admin_access_cache");
+    if (cached) {
+      const parsed: AdminAccessAssignment[] = JSON.parse(cached);
+      const filtered = parsed.filter(
+        (a) =>
+          !targets.has(a.btId) &&
+          !targets.has(a.uid) &&
+          (!a.email || !targets.has(a.email.toLowerCase().trim()))
+      );
+      safeStorageSet("src_admin_access_cache", filtered);
+    }
+  } catch {}
+}
+
 /**
  * Check if an email or user UID has Council Admin privileges.
  * Authorizes:

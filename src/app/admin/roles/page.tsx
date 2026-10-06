@@ -16,7 +16,8 @@ import {
   Building2,
   CheckCircle2,
   AlertCircle,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Trash2
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/Button";
@@ -26,6 +27,7 @@ import {
   saveAdminAccessToFirestore,
   subscribeToAdminAccessFromFirestore,
   revokeAdminAccessFromFirestore,
+  deleteAdminAccessFromFirestore,
   getAllUsersFromFirestore,
   findUserByBtIdInFirestore,
 } from "@/lib/firebase/firestore";
@@ -475,6 +477,33 @@ export default function AdminRolesPage() {
       await loadData();
     } catch {
       setNotice({ message: "Failed to revoke role access.", type: "error" });
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  // Delete role record permanently from Firestore
+  const deleteAccess = async (cleanBt: string, uid?: string, email?: string) => {
+    if (!window.confirm("Permanently delete this administrative role record from Firestore?")) {
+      return;
+    }
+    const currentBusyKey = cleanBt || uid || email || "delete";
+    setBusyKey(currentBusyKey);
+    try {
+      await deleteAdminAccessFromFirestore(cleanBt, uid, email);
+      setAssignments((prev) =>
+        prev.filter((a) => {
+          const aBt = normalizeBtId(a.btId);
+          if (cleanBt && aBt === cleanBt) return false;
+          if (uid && a.uid === uid) return false;
+          if (email && a.email && a.email.toLowerCase().trim() === email.toLowerCase().trim()) return false;
+          return true;
+        })
+      );
+      setNotice({ message: "Administrative record deleted permanently.", type: "success" });
+      await loadData();
+    } catch {
+      setNotice({ message: "Failed to delete administrative record.", type: "error" });
     } finally {
       setBusyKey(null);
     }
@@ -1135,7 +1164,7 @@ export default function AdminRolesPage() {
                       {assignment.active !== false ? "Active" : "Revoked"}
                     </span>
 
-                    {assignment.active !== false && !isOwnerAssignment && (
+                    {assignment.active !== false && !isOwnerAssignment ? (
                       <Button
                         onClick={() => revokeAccess(cleanBt, assignment.uid)}
                         disabled={isBusy}
@@ -1145,6 +1174,19 @@ export default function AdminRolesPage() {
                       >
                         {isBusy ? "Revoking…" : "Revoke Access"}
                       </Button>
+                    ) : (
+                      !isOwnerAssignment && (
+                        <button
+                          type="button"
+                          onClick={() => deleteAccess(cleanBt, assignment.uid, assignment.email)}
+                          disabled={busyKey === (cleanBt || assignment.uid || assignment.email || "delete")}
+                          title="Delete Record Permanently"
+                          aria-label="Delete Record Permanently"
+                          className="p-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all cursor-pointer shadow-2xs disabled:opacity-50 flex items-center justify-center"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )
                     )}
                   </div>
                 </div>
