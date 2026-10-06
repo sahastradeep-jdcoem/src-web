@@ -60,13 +60,25 @@ type PaymentTabFilter = "all" | "completed" | "pending" | "refunded" | "cancelle
 
 function getTimestampMs(val: any): number {
   if (!val) return NaN;
-  if (typeof val === "string" || typeof val === "number") {
+  if (typeof val === "number") return val > 1e11 ? val : val * 1000;
+  if (typeof val === "string") {
+    if (/^\d{10,13}$/.test(val.trim())) {
+      const num = Number(val.trim());
+      return num > 1e11 ? num : num * 1000;
+    }
     const d = new Date(val).getTime();
     return isNaN(d) ? NaN : d;
   }
   if (val instanceof Date) return val.getTime();
+  if (typeof val?.toDate === "function") {
+    const d = val.toDate();
+    return isNaN(d.getTime()) ? NaN : d.getTime();
+  }
   if (typeof val === "object" && typeof val.seconds === "number") {
-    return val.seconds * 1000;
+    return val.seconds * 1000 + (val.nanoseconds ? val.nanoseconds / 1000000 : 0);
+  }
+  if (typeof val === "object" && typeof val._seconds === "number") {
+    return val._seconds * 1000 + (val._nanoseconds ? val._nanoseconds / 1000000 : 0);
   }
   return NaN;
 }
@@ -541,7 +553,15 @@ export default function AdminPaymentsPage() {
       );
     }
 
-    return list;
+    // Sort Latest First (Newest transactions on top)
+    return [...list].sort((a, b) => {
+      const targetA = a.paidAt || a.registeredAt || a.createdAt || a.refundedAt;
+      const targetB = b.paidAt || b.registeredAt || b.createdAt || b.refundedAt;
+      const timeA = getTimestampMs(targetA) || 0;
+      const timeB = getTimestampMs(targetB) || 0;
+      if (timeB !== timeA) return timeB - timeA;
+      return String(b.id || "").localeCompare(String(a.id || ""));
+    });
   }, [filteredByEvent, statusTab, searchQuery]);
 
   // KPI Metrics Calculation

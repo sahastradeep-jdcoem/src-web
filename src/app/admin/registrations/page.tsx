@@ -89,6 +89,42 @@ import { isEntityOwnedByClub } from "@/types/rbac";
 
 type ActiveTab = "summary" | "question" | "individual" | "table";
 
+function getRegistrationTimestampMs(r: any): number {
+  if (!r) return 0;
+  const candidates = [
+    r.registeredAt,
+    r.createdAt,
+    r.paidAt,
+    r.timestamp,
+  ];
+
+  for (const val of candidates) {
+    if (!val) continue;
+    if (typeof val?.toDate === "function") {
+      const d = val.toDate();
+      if (!isNaN(d.getTime())) return d.getTime();
+    }
+    if (typeof val?.seconds === "number") {
+      return val.seconds * 1000 + (val.nanoseconds ? val.nanoseconds / 1000000 : 0);
+    }
+    if (typeof val?._seconds === "number") {
+      return val._seconds * 1000 + (val._nanoseconds ? val._nanoseconds / 1000000 : 0);
+    }
+    if (typeof val === "number") {
+      return val > 1e11 ? val : val * 1000;
+    }
+    if (typeof val === "string") {
+      if (/^\d{10,13}$/.test(val.trim())) {
+        const num = Number(val.trim());
+        return num > 1e11 ? num : num * 1000;
+      }
+      const parsed = new Date(val).getTime();
+      if (!isNaN(parsed)) return parsed;
+    }
+  }
+  return 0;
+}
+
 export default function AdminRegistrationsPage() {
   const { adminAccess, user } = useAuth();
   const isClubOwner = adminAccess?.role === "CLUB_OWNER" && adminAccess.active !== false;
@@ -802,6 +838,16 @@ export default function AdminRegistrationsPage() {
         return matchesDirect || matchesChild;
       });
     }
+
+    // Chronological Sort (Oldest first / ascending by registration timestamp)
+    // Ensures the first person to register receives registration sequence #1,
+    // the second gets #2, and the 33rd gets #33.
+    list.sort((a, b) => {
+      const timeA = getRegistrationTimestampMs(a);
+      const timeB = getRegistrationTimestampMs(b);
+      if (timeA !== timeB) return timeA - timeB;
+      return String(a.id || "").localeCompare(String(b.id || ""));
+    });
 
     return list;
   }, [registrations, isRegistrationOwned, selectedTenureId, tenuresList, tenureFilteredEvents, selectedEventSlug, currentSelectedEventObj, allKnownEvents]);
