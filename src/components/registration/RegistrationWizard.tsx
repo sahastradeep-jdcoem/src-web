@@ -201,7 +201,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     college: "",
     department: "",
   });
-  const [teamAddMode, setTeamAddMode] = useState<"external" | "btId">(isExternal ? "external" : "btId");
+  const [teamAddMode, setTeamAddMode] = useState<"external" | "btId">(isJdcoemOnly ? "btId" : (isExternal ? "external" : "btId"));
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [lookupSuccess, setLookupSuccess] = useState<string | null>(null);
   const [isVerifyingTeammate, setIsVerifyingTeammate] = useState(false);
@@ -574,7 +574,9 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
       if (!found) {
         setLookupError(
-          `BT ID "${cleanBtId}" is not registered on the portal. Please verify the BT ID or add them as a Visiting Teammate.`
+          isJdcoemOnly
+            ? `BT ID "${cleanBtId}" is not registered on the portal. Please verify the BT ID. Only verified JDCOEM students are eligible for this event.`
+            : `BT ID "${cleanBtId}" is not registered on the portal. Please verify the BT ID or add them as a Visiting Teammate.`
         );
         setIsVerifyingTeammate(false);
         return;
@@ -1860,40 +1862,47 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                   {teamMembers.length < maxTeamSize ? (
                     <div className="pt-3 space-y-3 p-4 rounded-2xl bg-slate-50 border border-slate-200">
                       
-                      {/* Mode Switcher for External vs BT ID lookup */}
+                      {/* Mode Switcher for External vs BT ID lookup (Omitted entirely for JDCOEM-only events) */}
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                           <Users className="w-3.5 h-3.5 text-[#17458F]" />
                           <span>Add Squad Member</span>
+                          {isJdcoemOnly && (
+                            <span className="text-[10px] font-mono text-slate-500 font-semibold normal-case">
+                              (By JDCOEM BT ID)
+                            </span>
+                          )}
                         </span>
                         
-                        <div className="flex gap-1.5 text-[11px] font-bold">
-                          <button
-                            type="button"
-                            onClick={() => setTeamAddMode("external")}
-                            className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                              teamAddMode === "external"
-                                ? "bg-[#17458F] text-white shadow-xs"
-                                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
-                            }`}
-                          >
-                            Visiting Teammate
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setTeamAddMode("btId")}
-                            className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                              teamAddMode === "btId"
-                                ? "bg-[#17458F] text-white shadow-xs"
-                                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
-                            }`}
-                          >
-                            By JDCOEM BT ID
-                          </button>
-                        </div>
+                        {!isJdcoemOnly && (
+                          <div className="flex gap-1.5 text-[11px] font-bold">
+                            <button
+                              type="button"
+                              onClick={() => setTeamAddMode("external")}
+                              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                                teamAddMode === "external"
+                                  ? "bg-[#17458F] text-white shadow-xs"
+                                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
+                              }`}
+                            >
+                              Visiting Teammate
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setTeamAddMode("btId")}
+                              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                                teamAddMode === "btId"
+                                  ? "bg-[#17458F] text-white shadow-xs"
+                                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
+                              }`}
+                            >
+                              By JDCOEM BT ID
+                            </button>
+                          </div>
+                        )}
                       </div>
 
-                      {teamAddMode === "external" ? (
+                      {!isJdcoemOnly && teamAddMode === "external" ? (
                         /* Manual External Teammate Form (NO BT ID REQUIRED) */
                         <form onSubmit={handleAddExternalTeammate} className="space-y-3 pt-1">
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
