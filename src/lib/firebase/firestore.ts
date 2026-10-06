@@ -192,7 +192,13 @@ export async function getAdminAccessFromFirestore(
 }
 
 export async function getAllAdminAccessFromFirestore(): Promise<AdminAccessAssignment[]> {
-  if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return [];
+  if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    try {
+      const cached = localStorage.getItem("src_admin_access_cache");
+      if (cached) return JSON.parse(cached);
+    } catch {}
+    return [];
+  }
   try {
     const snapshot = await getDocs(collection(db, ADMIN_ACCESS_COLLECTION));
     const map = new Map<string, AdminAccessAssignment>();
@@ -203,9 +209,17 @@ export async function getAllAdminAccessFromFirestore(): Promise<AdminAccessAssig
         map.set(key, { ...data, uid: data.uid || item.id });
       }
     });
-    return Array.from(map.values());
+    const result = Array.from(map.values());
+    if (result.length > 0) {
+      safeStorageSet("src_admin_access_cache", result);
+    }
+    return result;
   } catch (error) {
     console.warn("Firestore admin access list notice", error);
+    try {
+      const cached = localStorage.getItem("src_admin_access_cache");
+      if (cached) return JSON.parse(cached);
+    } catch {}
     return [];
   }
 }
@@ -213,7 +227,13 @@ export async function getAllAdminAccessFromFirestore(): Promise<AdminAccessAssig
 export function subscribeToAdminAccessFromFirestore(
   callback: (assignments: AdminAccessAssignment[]) => void
 ): () => void {
-  if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return () => {};
+  if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    try {
+      const cached = localStorage.getItem("src_admin_access_cache");
+      if (cached) callback(JSON.parse(cached));
+    } catch {}
+    return () => {};
+  }
   try {
     return onSnapshot(
       collection(db, ADMIN_ACCESS_COLLECTION),
@@ -226,12 +246,26 @@ export function subscribeToAdminAccessFromFirestore(
             map.set(key, { ...data, uid: data.uid || item.id });
           }
         });
-        callback(Array.from(map.values()));
+        const result = Array.from(map.values());
+        if (result.length > 0) {
+          safeStorageSet("src_admin_access_cache", result);
+        }
+        callback(result);
       },
-      (error) => console.warn("Firestore live admin access notice", error)
+      (error) => {
+        console.warn("Firestore live admin access notice", error);
+        try {
+          const cached = localStorage.getItem("src_admin_access_cache");
+          if (cached) callback(JSON.parse(cached));
+        } catch {}
+      }
     );
   } catch (error) {
     console.warn("Firestore admin access subscription error", error);
+    try {
+      const cached = localStorage.getItem("src_admin_access_cache");
+      if (cached) callback(JSON.parse(cached));
+    } catch {}
     return () => {};
   }
 }
@@ -326,6 +360,12 @@ export async function saveAdminAccessToFirestore(
   }
   if (assignment.uid && assignment.uid !== cleanBt) {
     batchOps.push(setDoc(doc(db, ADMIN_ACCESS_COLLECTION, assignment.uid), payload, { merge: true }));
+  }
+  if (assignment.email) {
+    const cleanEmail = assignment.email.toLowerCase().trim();
+    if (cleanEmail && cleanEmail !== cleanBt && cleanEmail !== assignment.uid) {
+      batchOps.push(setDoc(doc(db, ADMIN_ACCESS_COLLECTION, cleanEmail), payload, { merge: true }));
+    }
   }
   await Promise.all(batchOps);
 }

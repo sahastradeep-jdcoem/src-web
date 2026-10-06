@@ -55,7 +55,7 @@ service cloud.firestore {
         getAdminAccess().active != false;
     }
 
-    // Full system Owner identity (break-glass emails or Firestore OWNER role)
+    // Full system Owner identity (break-glass emails, Firestore OWNER role, or appointed Council Admin)
     function isOwner() {
       return isAuthenticated() && (
         request.auth.token.email in [
@@ -68,15 +68,25 @@ service cloud.firestore {
           'src.mentor@jdcoem.ac.in',
           'src.gensec@jdcoem.ac.in'
         ] ||
-        (getAdminAccess() != null && getAdminAccess().role == 'OWNER' && getAdminAccess().active != false)
+        (getAdminAccess() != null && getAdminAccess().role == 'OWNER' && getAdminAccess().active != false) ||
+        (exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) &&
+         get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.active != false) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'OWNER' ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'COUNCIL_ADMIN'))
       );
     }
 
     // Legacy Council Admin check
     function isLegacyAdmin() {
       return isHardcodedAdmin() || (
-        isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'COUNCIL_ADMIN'
+        isAuthenticated() && (
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'COUNCIL_ADMIN' ||
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'OWNER')) ||
+          (exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) &&
+           get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.active != false)
+        )
       );
     }
 
@@ -140,14 +150,14 @@ service cloud.firestore {
 
     // Owner-controlled admin access assignments (keyed by UID, BT ID, or Email)
     match /admin_access/{accessId} {
-      allow read: if isOwner() || (
+      allow read: if isOwner() || isPrivilegedAdmin() || isAdmin() || (
         isAuthenticated() && (
           request.auth.uid == accessId ||
           getUserBtId() == accessId ||
           request.auth.token.email == accessId
         )
       );
-      allow write: if isOwner();
+      allow write: if isOwner() || isPrivilegedAdmin();
     }
 
     // Student & user profiles

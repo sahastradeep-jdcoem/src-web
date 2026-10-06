@@ -118,12 +118,21 @@ export default function AdminRolesPage() {
     }
   }, []);
 
+  const isAuthorizedAdmin = Boolean(
+    isOwner ||
+    user?.role === "COUNCIL_ADMIN" ||
+    user?.adminAccess?.role === "OWNER"
+  );
+
   useEffect(() => {
-    if (!isOwner) return;
     loadData();
-    const unsubscribe = subscribeToAdminAccessFromFirestore(setAssignments);
+    const unsubscribe = subscribeToAdminAccessFromFirestore((remote) => {
+      if (Array.isArray(remote)) {
+        setAssignments(remote);
+      }
+    });
     return () => unsubscribe();
-  }, [isOwner, loadData]);
+  }, [loadData]);
 
   // Map of active assignments keyed by normalized BT ID
   const activeAssignmentsByBtId = useMemo(() => {
@@ -388,7 +397,7 @@ export default function AdminRolesPage() {
     return list;
   }, [officers, btIdOverrides]);
 
-  if (!isOwner) {
+  if (!isAuthorizedAdmin) {
     return (
       <div className="rounded-3xl border border-rose-200 bg-rose-50 p-10 text-center text-rose-900 shadow-xs">
         <ShieldAlert className="mx-auto mb-3 h-10 w-10 text-rose-600" />
