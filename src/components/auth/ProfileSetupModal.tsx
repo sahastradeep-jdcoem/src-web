@@ -240,7 +240,7 @@ export function ProfileSetupModal() {
         setAccountType("JDCOEM_STUDENT");
       }
 
-      if (user.btId) {
+      if (user.btId && !isExternalUser(user) && user.userType !== "EXTERNAL_STUDENT" && user.userType !== "FACULTY") {
         setBtId(user.btId);
         const match = resolveDesignationByBtId(user.btId, user.displayName || user.name || user.email);
         if (match) setDetectedDesignation(match.designationBadge);
@@ -552,7 +552,9 @@ export function ProfileSetupModal() {
           facultyApprovalStatus: user?.facultyApprovalStatus === "approved" ? "approved" : "pending",
           phone: cleanPhone,
           profileCompleted: true,
-          btId: undefined, // Faculty have NO BT ID
+          btId: "", // Faculty have NO BT ID
+          designationBadge: "",
+          isCouncilOfficer: false,
         });
 
         if (user?.facultyApprovalStatus !== "approved") {
@@ -606,7 +608,9 @@ export function ProfileSetupModal() {
           year: externalYear,
           phone: cleanPhone,
           profileCompleted: true,
-          btId: undefined, // External students have NO BT ID
+          btId: "", // External students have NO BT ID
+          designationBadge: "",
+          isCouncilOfficer: false,
         });
         closeProfileModal();
       } catch (err: any) {
