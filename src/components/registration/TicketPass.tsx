@@ -24,6 +24,26 @@ import { downloadPassAsImage } from "@/lib/passExport";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { cn } from "@/lib/utils";
 
+function formatPassDate(dateStr?: string): string {
+  if (!dateStr) return "Event Day";
+  const trimmed = dateStr.trim();
+  // If already a clean human-readable date string, return it as-is
+  if (!trimmed.includes("T") && isNaN(Number(trimmed)) && !/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+  try {
+    const d = new Date(trimmed);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      });
+    }
+  } catch {}
+  return trimmed;
+}
+
 export interface TicketPassProps {
   registrationId: string;
   eventName: string;
@@ -147,12 +167,7 @@ export function TicketPass({
       )}>
         <div
           id="src-delegate-pass-card"
-          className={cn(
-            "relative shrink-0 rounded-3xl bg-white border border-slate-200 shadow-xl overflow-hidden text-left mx-auto font-sans",
-            mode === "dashboard"
-              ? "w-[620px] sm:w-full max-w-[720px]"
-              : "w-[620px] sm:min-w-[680px] md:w-full max-w-[720px]"
-          )}
+          className="relative shrink-0 w-[620px] sm:w-[680px] md:w-[720px] max-w-full rounded-3xl bg-white border border-slate-200/90 shadow-xl overflow-hidden text-left mx-auto font-sans"
         >
           {/* Cancelled Pass Watermark Overlay */}
           {status === "CANCELLED" && (
@@ -169,23 +184,15 @@ export function TicketPass({
           )}
 
           {/* Ticket Top Strip */}
-          <div className={cn(
-            "bg-[#17458F] flex flex-row items-center justify-between gap-4",
-            mode === "dashboard"
-              ? "px-5 py-3 sm:px-6 sm:py-3.5"
-              : "px-6 py-5 sm:px-8 sm:py-6"
-          )}>
+          <div className="bg-[#17458F] px-6 py-4 sm:px-7 sm:py-4.5 flex flex-row items-center justify-between gap-4 rounded-t-[23px]">
             <div className="flex items-center gap-3 sm:gap-4">
-              <div className={cn(
-                "rounded-xl bg-white p-1 shrink-0 flex items-center justify-center overflow-hidden",
-                mode === "dashboard" ? "h-9 w-9 sm:h-10 sm:w-10" : "h-11 w-11 sm:h-12 sm:w-12"
-              )}>
+              <div className="rounded-xl bg-white p-1 shrink-0 flex items-center justify-center overflow-hidden h-10 w-10 sm:h-11 sm:w-11">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="/assets/SRC Logo.png"
                   alt="SRC Logo"
-                  width={mode === "dashboard" ? 40 : 48}
-                  height={mode === "dashboard" ? 40 : 48}
+                  width={44}
+                  height={44}
                   className="w-full h-full object-contain"
                   crossOrigin="anonymous"
                 />
@@ -194,10 +201,7 @@ export function TicketPass({
                 <span className="text-[10px] font-bold uppercase tracking-widest text-[#E78023] block leading-normal">
                   Official Delegate Pass
                 </span>
-                <h3 className={cn(
-                  "font-bold text-white font-sans leading-snug pb-0.5",
-                  mode === "dashboard" ? "text-base sm:text-xl" : "text-lg sm:text-2xl"
-                )}>
+                <h3 className="font-bold text-white font-sans text-lg sm:text-xl leading-snug pb-0.5">
                   SAHASTRADEEP
                 </h3>
                 <p className="text-[10px] sm:text-[11px] text-slate-200 leading-normal">Student Representative Council • JDCOEM</p>
@@ -208,38 +212,24 @@ export function TicketPass({
               <span className="text-[10px] font-bold uppercase tracking-widest text-slate-200 block leading-normal">
                 Pass ID
               </span>
-              <p className={cn(
-                "font-mono font-bold text-[#E78023] leading-normal",
-                mode === "dashboard" ? "text-xs sm:text-base" : "text-sm sm:text-lg"
-              )}>
+              <p className="font-mono font-bold text-[#E78023] text-sm sm:text-base leading-normal">
                 {registrationId}
               </p>
             </div>
           </div>
 
           {/* Ticket Perforation Notch */}
-          <div className={cn(
-            "relative flex items-center justify-between px-2 sm:px-4 bg-slate-50",
-            mode === "dashboard" ? "py-1.5" : "py-2"
-          )}>
-            <div className="w-5 h-5 -ml-5 sm:-ml-7 rounded-full bg-[#F8FAFC] border border-slate-200" />
+          <div className="relative flex items-center justify-between px-3 sm:px-5 py-2 bg-slate-50/80">
+            <div className="w-5 h-5 -ml-5 sm:-ml-7 rounded-full bg-white border border-slate-200" />
             <div className="w-full border-t-2 border-dashed border-slate-300 mx-4" />
-            <div className="w-5 h-5 -mr-5 sm:-mr-7 rounded-full bg-[#F8FAFC] border border-slate-200" />
+            <div className="w-5 h-5 -mr-5 sm:-mr-7 rounded-full bg-white border border-slate-200" />
           </div>
 
           {/* Ticket Body - Horizontal Layout */}
-          <div className={cn(
-            "flex flex-row items-center justify-between bg-white",
-            mode === "dashboard"
-              ? "p-4 sm:p-5 gap-4 sm:gap-6"
-              : "p-6 sm:p-8 gap-6 sm:gap-8"
-          )}>
+          <div className="flex flex-row items-start justify-between bg-white p-6 sm:p-7 gap-6">
             
             {/* Main Info */}
-            <div className={cn(
-              "flex-1 min-w-0",
-              mode === "dashboard" ? "space-y-2 sm:space-y-2.5" : "space-y-4"
-            )}>
+            <div className="flex-1 min-w-0 space-y-3.5">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-[#E78023] block leading-normal">
@@ -256,24 +246,15 @@ export function TicketPass({
                     </span>
                   )}
                 </div>
-                <h4 className={cn(
-                  "font-extrabold text-[#0F172A] mt-0.5 font-sans leading-snug pb-0.5",
-                  mode === "dashboard" ? "text-lg sm:text-xl" : "text-xl sm:text-2xl"
-                )}>
+                <h4 className="font-extrabold text-[#0F172A] mt-0.5 font-sans text-xl sm:text-2xl leading-snug pb-0.5">
                   {eventName}
                 </h4>
-                <p className={cn(
-                  "text-slate-500 font-medium leading-normal",
-                  mode === "dashboard" ? "text-[11px] sm:text-xs mt-0" : "text-xs mt-0.5"
-                )}>
-                  {eventDate} • {eventVenue}
+                <p className="text-slate-500 font-medium text-xs mt-0.5 leading-normal">
+                  {formatPassDate(eventDate)} • {eventVenue}
                 </p>
               </div>
 
-              <div className={cn(
-                "grid grid-cols-2 text-xs",
-                mode === "dashboard" ? "gap-2.5 sm:gap-3" : "gap-4"
-              )}>
+              <div className="grid grid-cols-2 gap-4 text-xs">
                 <div className="min-w-0">
                   <span className="text-slate-500 uppercase font-bold text-[9px] sm:text-[10px] block leading-normal">
                     Participant
@@ -292,7 +273,7 @@ export function TicketPass({
                   <Badge 
                     variant={status === "CHECKED_IN" ? "success" : status === "CANCELLED" ? "rose" : paymentStatus === "PENDING" ? "warning" : "orange"} 
                     size="sm" 
-                    className={mode === "dashboard" ? "mt-0.5 text-[10px] py-0 px-2" : "mt-1"}
+                    className="mt-1 text-[10px] py-0.5 px-2.5 font-bold uppercase tracking-wider"
                   >
                     {paymentStatus === "PENDING" ? "PENDING REVIEW" : (status || "CONFIRMED")}
                   </Badge>
@@ -300,17 +281,11 @@ export function TicketPass({
               </div>
 
               {teamMembers && teamMembers.length > 0 && (
-                <div className={cn(
-                  "border-t border-slate-100 font-medium",
-                  mode === "dashboard" ? "pt-1.5" : "pt-2"
-                )}>
+                <div className="border-t border-slate-100 font-medium pt-2.5 mt-2">
                   <span className="text-[9px] sm:text-[10px] text-slate-500 uppercase font-bold tracking-wider block leading-normal">
                     Roster Members:
                   </span>
-                  <p className={cn(
-                    "text-slate-700 leading-relaxed font-sans line-clamp-2",
-                    mode === "dashboard" ? "text-[11px] mt-0.5" : "text-xs mt-0.5"
-                  )}>
+                  <p className="text-slate-700 text-xs mt-0.5 leading-relaxed font-sans break-words">
                     {teamMembers.join(" • ")}
                   </p>
                 </div>
@@ -318,12 +293,7 @@ export function TicketPass({
             </div>
 
             {/* Visual Scannable QR Code & Verification Block */}
-            <div className={cn(
-              "shrink-0 flex flex-col items-center justify-center rounded-2xl bg-slate-50 border border-slate-200 text-center",
-              mode === "dashboard"
-                ? "w-36 sm:w-40 p-2.5 sm:p-3 space-y-1.5"
-                : "w-44 sm:w-48 p-4 sm:p-5 space-y-2.5"
-            )}>
+            <div className="shrink-0 w-44 p-3.5 sm:p-4 flex flex-col items-center justify-center rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-2">
               <div className="relative p-1.5 bg-white rounded-xl shadow-xs border border-slate-200 flex items-center justify-center overflow-hidden">
                 <ScannableQRCode
                   value={
@@ -331,7 +301,7 @@ export function TicketPass({
                       ? `${window.location.origin}/verify/${encodeURIComponent(registrationId)}`
                       : `https://srcjdcoem.in/verify/${encodeURIComponent(registrationId)}`
                   }
-                  size={mode === "dashboard" ? 92 : 116}
+                  size={112}
                   level="H"
                   includeMargin={true}
                   fgColor="#0F172A"
@@ -363,12 +333,7 @@ export function TicketPass({
           </div>
 
           {/* Ticket Bottom Endorsement Footer */}
-          <div className={cn(
-            "bg-slate-50 border-t border-slate-200 flex flex-row items-center justify-between font-medium gap-2 leading-normal",
-            mode === "dashboard"
-              ? "px-5 py-2 sm:px-6 sm:py-2.5 text-[10px] text-slate-500"
-              : "px-6 py-3.5 sm:px-8 sm:py-4 text-[11px] sm:text-xs text-slate-500"
-          )}>
+          <div className="bg-slate-50/90 border-t border-slate-200/80 px-6 py-3.5 sm:px-7 sm:py-4 text-[11px] sm:text-xs text-slate-500 flex flex-row items-center justify-between font-medium gap-2 leading-normal rounded-b-[23px]">
             <p className="truncate">Entry permitted only with valid physical College ID card.</p>
             <p className="font-semibold text-slate-700 shrink-0">JDCOEM • Sahastradeep</p>
           </div>

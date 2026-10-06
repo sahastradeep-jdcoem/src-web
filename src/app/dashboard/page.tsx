@@ -2825,8 +2825,20 @@ export default function StudentDashboardPage() {
             <TicketPass
               registrationId={selectedTicket.id}
               eventName={selectedTicket.eventName}
-              eventDate={events.find((e) => e.slug === selectedTicket.eventSlug || e.id === selectedTicket.eventSlug)?.date || selectedTicket.registeredAt}
-              eventVenue={events.find((e) => e.slug === selectedTicket.eventSlug || e.id === selectedTicket.eventSlug)?.venue || "Campus Venue"}
+              eventDate={
+                events.find((e) => 
+                  (e.slug && (e.slug.toLowerCase() === (selectedTicket.eventSlug || "").toLowerCase() || e.slug.toLowerCase() === (selectedTicket.eventId || "").toLowerCase())) ||
+                  (e.id && (e.id.toLowerCase() === (selectedTicket.eventId || "").toLowerCase() || e.id.toLowerCase() === (selectedTicket.eventSlug || "").toLowerCase())) ||
+                  (e.name && e.name.toLowerCase().trim() === (selectedTicket.eventName || "").toLowerCase().trim())
+                )?.date || selectedTicket.registeredAt
+              }
+              eventVenue={
+                events.find((e) => 
+                  (e.slug && (e.slug.toLowerCase() === (selectedTicket.eventSlug || "").toLowerCase() || e.slug.toLowerCase() === (selectedTicket.eventId || "").toLowerCase())) ||
+                  (e.id && (e.id.toLowerCase() === (selectedTicket.eventId || "").toLowerCase() || e.id.toLowerCase() === (selectedTicket.eventSlug || "").toLowerCase())) ||
+                  (e.name && e.name.toLowerCase().trim() === (selectedTicket.eventName || "").toLowerCase().trim())
+                )?.venue || "Campus Venue"
+              }
               participantName={selectedTicket.participantName}
               department={selectedTicket.department}
               year={selectedTicket.year}

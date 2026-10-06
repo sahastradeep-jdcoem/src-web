@@ -41,11 +41,11 @@ export async function downloadPassAsImage(
       scale: 3, // 3x ultra-HD resolution (300 DPI equivalent) for razor-sharp text and QR codes
       useCORS: true,
       allowTaint: true,
-      backgroundColor: "#FFFFFF",
+      backgroundColor: null, // Transparent background preserves genuine rounded card corners
       logging: false,
       imageTimeout: 8000,
       removeContainer: true,
-      windowWidth: 1024, // Consistent landscape viewport for render stability
+      windowWidth: 1200, // Wide viewport for render stability
       onclone: (clonedDoc) => {
         const clonedEl = clonedDoc.getElementById(elementId);
         if (clonedEl) {
@@ -54,28 +54,8 @@ export async function downloadPassAsImage(
           clonedEl.style.width = "720px";
           clonedEl.style.minWidth = "720px";
           clonedEl.style.maxWidth = "720px";
+          clonedEl.style.height = "auto";
           clonedEl.style.margin = "0 auto";
-          clonedEl.style.letterSpacing = "normal";
-
-          // Prevent text clipping by resetting line-heights and removing restrictive overflows
-          const textElements = clonedEl.querySelectorAll("h1, h2, h3, h4, h5, h6, p, span, div, strong");
-          textElements.forEach((el) => {
-            const htmlEl = el as HTMLElement;
-            // Prevent truncation clipping in canvas
-            if (htmlEl.classList.contains("truncate")) {
-              htmlEl.style.overflow = "visible";
-              htmlEl.style.textOverflow = "clip";
-              htmlEl.style.whiteSpace = "normal";
-            }
-            // Add padding-bottom breathing room for letter descenders (g, j, p, q, y)
-            if (htmlEl.tagName.startsWith("H") || htmlEl.classList.contains("font-heading")) {
-              htmlEl.style.lineHeight = "1.3";
-              htmlEl.style.paddingBottom = "4px";
-              htmlEl.style.display = "block";
-            } else if (htmlEl.tagName === "P" || htmlEl.tagName === "SPAN") {
-              htmlEl.style.lineHeight = "1.4";
-            }
-          });
 
           // Ensure logo img tags are rendered with explicit dimensions and no distortion
           const images = clonedEl.querySelectorAll("img");
@@ -83,10 +63,10 @@ export async function downloadPassAsImage(
             img.style.objectFit = "contain";
             img.style.display = "block";
             if (img.alt === "SRC Logo") {
-              img.style.width = "48px";
-              img.style.height = "48px";
-              img.style.minWidth = "48px";
-              img.style.minHeight = "48px";
+              img.style.width = "44px";
+              img.style.height = "44px";
+              img.style.minWidth = "44px";
+              img.style.minHeight = "44px";
             }
           });
         }
