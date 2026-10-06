@@ -414,15 +414,6 @@ export function TicketPass({
             <span>Add to Calendar</span>
           </Button>
 
-          {/* Public Verification Link */}
-          <Link
-            href={`/verify/${encodeURIComponent(registrationId)}`}
-            target="_blank"
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold tracking-wide transition-all shadow-xs"
-          >
-            <ExternalLink className="w-3.5 h-3.5 text-[#17458F]" />
-            <span>Public Verification Link</span>
-          </Link>
 
           <Link href="/dashboard">
             <Button

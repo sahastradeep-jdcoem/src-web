@@ -1485,14 +1485,6 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                       <Sparkles className="w-4 h-4" />
                       <span>View &amp; Download Your Pass</span>
                     </Button>
-                    <Link
-                      href={`/verify/${encodeURIComponent(existingRegistration.id)}`}
-                      target="_blank"
-                      className="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 border border-emerald-300 text-emerald-900 text-xs font-bold transition-all flex items-center gap-1.5"
-                    >
-                      <span>Public Verification Link</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
                     {!event.isPaid && (!event.feeAmount || event.feeAmount === 0) && existingRegistration.status !== "CANCELLED" && existingRegistration.status !== "CHECKED_IN" && (
                       <button
                         type="button"
