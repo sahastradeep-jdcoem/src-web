@@ -13,6 +13,7 @@ import {
   Download, 
   ExternalLink, 
   ShieldCheck, 
+  UserCheck,
   Users, 
   ArrowRight, 
   Sparkles, 
@@ -71,7 +72,13 @@ import { formatDesignationBadge, isExternalUser } from "@/lib/usersStore";
 import { useAuth } from "@/context/AuthContext";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { TicketPass } from "@/components/registration/TicketPass";
-import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
+import { 
+  getStoredEvents, 
+  syncEventsFromFirestore, 
+  subscribeToEvents,
+  hasEventGateCheckInAccess,
+  getGateCheckInAccessStatus
+} from "@/lib/eventsStore";
 import { 
   getAllRegistrationsFromFirestore, 
   getStudentRegistrationsFromFirestore,
@@ -608,6 +615,12 @@ export default function StudentDashboardPage() {
     });
   }, [userSrcDispatches, srcFilter, user?.btId]);
 
+  // Active Gatekeeper duties assigned to this user's BT ID
+  const gatekeeperEvents = useMemo(() => {
+    if (!user?.btId) return [];
+    return events.filter((evt) => hasEventGateCheckInAccess(evt, user.btId, false));
+  }, [events, user?.btId]);
+
   // Form answer mutation and submission
   const handleAnswerChange = (dispatchId: string, questionId: string, value: any) => {
     setFormAnswers((prev) => ({
@@ -950,6 +963,16 @@ export default function StudentDashboardPage() {
                   <span>{isFaculty ? "ACADEMIC STAFF" : isExternal ? "VISITING DELEGATE" : "JDCOEM STUDENT"}</span>
                 </span>
               )}
+
+              {gatekeeperEvents.length > 0 && (
+                <Link
+                  href="/verify"
+                  className="text-[10px] font-extrabold uppercase tracking-wider px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 flex items-center gap-1.5 hover:bg-emerald-500/30 transition-colors shadow-xs"
+                >
+                  <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>GATEKEEPER ON DUTY ({gatekeeperEvents.length})</span>
+                </Link>
+              )}
             </div>
           </div>
 
@@ -997,6 +1020,16 @@ export default function StudentDashboardPage() {
                 >
                   <ShieldCheck className="w-4 h-4 text-slate-950" />
                   <span>Admin Console</span>
+                </Link>
+              )}
+
+              {gatekeeperEvents.length > 0 && !isUserAdmin && (
+                <Link
+                  href="/verify"
+                  className="inline-flex items-center gap-1.5 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-950/20 transition-all cursor-pointer font-sans"
+                >
+                  <QrCode className="w-4 h-4 text-emerald-200" />
+                  <span>Gate Scanner</span>
                 </Link>
               )}
 
@@ -1139,6 +1172,53 @@ export default function StudentDashboardPage() {
       {/* 3. MAIN DASHBOARD CONTENT AREA */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-6">
         
+        {/* Assigned Gatekeeper Clearance Widget */}
+        {gatekeeperEvents.length > 0 && (
+          <div className="rounded-3xl bg-gradient-to-r from-emerald-950 via-slate-900 to-[#17458F] text-white p-5 sm:p-6 border border-emerald-500/30 shadow-lg relative overflow-hidden animate-in fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                    <UserCheck className="w-4 h-4" />
+                  </span>
+                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-300">
+                    Assigned Gatekeeper Duty
+                  </span>
+                </div>
+                <h2 className="font-heading font-extrabold text-base sm:text-lg text-white">
+                  You have check-in clearance for {gatekeeperEvents.length} {gatekeeperEvents.length === 1 ? "event" : "events"}
+                </h2>
+                <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                  Your student account ({user?.btId?.toUpperCase()}) is authorized to authenticate delegate passes and mark gate attendance. Clearance automatically expires 1 day after event completion.
+                </p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {gatekeeperEvents.map((evt) => {
+                    const status = getGateCheckInAccessStatus(evt, user?.btId, false);
+                    return (
+                      <span key={evt.id} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 text-slate-200 text-xs font-medium border border-white/10">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                        <span className="font-bold text-white truncate max-w-[200px]">{evt.name}</span>
+                        {status.expiresAt && (
+                          <span className="text-slate-400 text-[11px]">
+                            • until {status.expiresAt.toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                          </span>
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+              <Link
+                href="/verify"
+                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs uppercase tracking-wider transition-all shadow-md shrink-0 self-start sm:self-center"
+              >
+                <QrCode className="w-4 h-4" />
+                <span>Launch Gate Scanner</span>
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* Navigation Switcher Tabs */}
         <div className="flex items-center justify-between border-b border-slate-200 pb-4 gap-3 overflow-x-auto">
           <div className="flex items-center gap-2">

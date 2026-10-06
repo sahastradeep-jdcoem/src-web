@@ -26,10 +26,12 @@ import {
   ShieldAlert,
   LogIn
 } from "lucide-react";
-import { getRegistrationById, checkInStudentPass, StudentRegistrationRecord } from "@/lib/firebase/firestore";
+import { getRegistrationById, checkInStudentPass, getEventFromFirestore, StudentRegistrationRecord } from "@/lib/firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { EventItem } from "@/types";
+import { getStoredEvents, getGateCheckInAccessStatus } from "@/lib/eventsStore";
 
 export default function PassVerificationPage() {
   const params = useParams();
@@ -38,6 +40,7 @@ export default function PassVerificationPage() {
 
   const [loading, setLoading] = useState(true);
   const [record, setRecord] = useState<StudentRegistrationRecord | null>(null);
+  const [event, setEvent] = useState<EventItem | null>(null);
   const [checkingIn, setCheckingIn] = useState(false);
   const [checkInSuccess, setCheckInSuccess] = useState(false);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
@@ -80,24 +83,83 @@ export default function PassVerificationPage() {
     fetchRecord();
   }, [passId]);
 
+  useEffect(() => {
+    if (!record) {
+      setEvent(null);
+      return;
+    }
+    const identifier = record.eventId || record.eventSlug;
+    if (!identifier) return;
+
+    // Check stored events first
+    const stored = getStoredEvents();
+    const match = stored.find(
+      (e) => e.id === identifier || e.slug === identifier || e.name === record.eventName
+    );
+    if (match) {
+      setEvent(match);
+      return;
+    }
+
+    getEventFromFirestore(identifier).then((remote) => {
+      if (remote) setEvent(remote);
+    });
+  }, [record]);
+
+  const gateAccess = React.useMemo(() => {
+    return getGateCheckInAccessStatus(event, user?.btId, isAdmin);
+  }, [event, user?.btId, isAdmin]);
+
+  const canCheckIn = gateAccess.hasAccess;
+
   const handleMarkCheckIn = async () => {
     if (!record) return;
-    if (!isAdmin) {
-      setErrorNotice("Unauthorized: Only authenticated SRC Council Administrators can record gate attendance.");
+    if (!canCheckIn) {
+      setErrorNotice("Unauthorized: Only authorized gatekeepers or SRC Council Administrators can record gate attendance.");
       return;
     }
     setCheckingIn(true);
+    setErrorNotice(null);
     try {
+      // 1. Try server POST endpoint first (evaluates gatekeeper BT ID and event window)
+      const res = await fetch(`/api/verify/${encodeURIComponent(record.id)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userBtId: user?.btId,
+          userEmail: user?.email,
+          adminOverride: isAdmin,
+        }),
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) {
+          setCheckInSuccess(true);
+          setRecord({
+            ...record,
+            status: "CHECKED_IN",
+            checkInTimestamp: new Date().toISOString(),
+          });
+          return;
+        }
+      }
+
+      // 2. Direct client-side write fallback
       const success = await checkInStudentPass(record.id);
       if (success) {
         setCheckInSuccess(true);
         setRecord({
           ...record,
           status: "CHECKED_IN",
+          checkInTimestamp: new Date().toISOString(),
         });
+      } else {
+        setErrorNotice("Failed to record gate attendance. Please check network connectivity and retry.");
       }
     } catch (err) {
       console.error("Check-in error", err);
+      setErrorNotice("Network error while recording gate attendance.");
     } finally {
       setCheckingIn(false);
     }
@@ -335,16 +397,16 @@ export default function PassVerificationPage() {
               )}
             </div>
           ) : !isAlreadyCheckedIn ? (
-            isAdmin ? (
-              /* Admin Check-In Action Allowed */
+            canCheckIn ? (
+              /* Admin or Authorized Student Gatekeeper Mode */
               <div className="pt-2 space-y-2">
                 <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider px-1">
                   <span className="flex items-center gap-1.5 text-emerald-700">
                     <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>Admin Gatekeeper Mode</span>
+                    <span>{isAdmin ? "Admin Gatekeeper Mode" : "Authorized Event Gatekeeper"}</span>
                   </span>
-                  <span className="font-mono text-[10px] text-slate-400 truncate max-w-[200px]">
-                    {user?.email}
+                  <span className="font-mono text-[10px] text-slate-500 truncate max-w-[200px]">
+                    {user?.btId ? `${user.btId} (${user?.email})` : user?.email}
                   </span>
                 </div>
                 <button
@@ -366,16 +428,29 @@ export default function PassVerificationPage() {
                   )}
                 </button>
               </div>
+            ) : gateAccess.isAssigned && gateAccess.isExpired ? (
+              /* Assigned Gatekeeper but Access Expired */
+              <div className="pt-2 space-y-3">
+                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-left space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-900">
+                    <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Gatekeeper Access Expired</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
+                    Your account (<span className="font-mono font-bold">{user?.btId}</span>) was assigned as a gatekeeper for this event, but temporary access ended 1 day after event completion.
+                  </p>
+                </div>
+              </div>
             ) : (
               /* Public / Student View - Check-In Restricted Notice */
               <div className="pt-2 space-y-3">
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-left space-y-2">
                   <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
                     <Lock className="w-4 h-4 text-[#17458F] shrink-0" />
-                    <span>Gate Check-In Restricted to Admins</span>
+                    <span>Gate Check-In Restricted</span>
                   </div>
                   <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
-                    This delegate pass is 100% authentic and registered. Recording gate attendance is restricted to authorized SRC Council Administrators.
+                    This delegate pass is 100% authentic and registered. Recording gate attendance is restricted to authorized SRC Council Administrators and designated event gatekeepers.
                   </p>
                   {!user ? (
                     <div className="pt-1">
@@ -385,13 +460,13 @@ export default function PassVerificationPage() {
                         className="px-3.5 py-2 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white font-bold text-[11px] uppercase tracking-wider inline-flex items-center gap-1.5 shadow-xs cursor-pointer transition-all"
                       >
                         <LogIn className="w-3.5 h-3.5 text-[#E78023]" />
-                        <span>Admin Sign In to Check-In</span>
+                        <span>Sign In to Check-In</span>
                       </button>
                     </div>
                   ) : (
                     <div className="pt-1">
                       <span className="text-[10px] font-mono font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 inline-block">
-                        Signed in as {user.email} (View-Only Delegate Mode)
+                        Signed in as {user.btId ? `${user.btId} • ` : ""}{user.email} (View-Only Mode)
                       </span>
                     </div>
                   )}

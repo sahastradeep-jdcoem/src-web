@@ -186,6 +186,15 @@ export function sanitizeEventItem(event: EventItem): EventItem {
       event.id === "evt-jamming-session"
         ? false
         : Boolean(event.isFeatured),
+    gateCheckInBtIds: Array.isArray(event.gateCheckInBtIds)
+      ? Array.from(
+          new Set(
+            event.gateCheckInBtIds
+              .map((id) => (typeof id === "string" ? id.trim().toUpperCase() : ""))
+              .filter(Boolean)
+          )
+        )
+      : undefined,
   };
 }
 
@@ -385,6 +394,72 @@ export function getEventEffectiveStatus(event: Partial<EventItem> | null | undef
   }
 
   return event.status || "Upcoming";
+}
+
+/**
+ * Calculates the exact timestamp when gate check-in access expires for an event.
+ * Access strictly ends 1 day (24 hours) after event completion.
+ */
+export function getEventGateAccessExpiry(event: Partial<EventItem> | null | undefined): number | null {
+  if (!event) return null;
+  const targetDateStr = event.rawEndDate || event.rawDate || event.endDate || event.date;
+  if (!targetDateStr || /\b(coming soon|tba|to be announced|tbd)\b/i.test(targetDateStr)) {
+    return null;
+  }
+  const endOfDayTs = parseDateStringToTimestamp(targetDateStr, true);
+  if (!endOfDayTs) return null;
+  // 1 day (24 hours) after the end of event date
+  return endOfDayTs + 24 * 60 * 60 * 1000;
+}
+
+/**
+ * Returns structured gate check-in access status for a student BT ID on an event.
+ */
+export function getGateCheckInAccessStatus(
+  event: Partial<EventItem> | null | undefined,
+  userBtId?: string | null,
+  isAdmin?: boolean
+): { hasAccess: boolean; isAssigned: boolean; isExpired: boolean; expiresAt?: Date | null } {
+  if (isAdmin) {
+    return { hasAccess: true, isAssigned: true, isExpired: false };
+  }
+  if (!event || !userBtId) {
+    return { hasAccess: false, isAssigned: false, isExpired: false };
+  }
+
+  const normalizedUserBtId = userBtId.trim().toUpperCase();
+  const allowed = Array.isArray(event.gateCheckInBtIds)
+    ? event.gateCheckInBtIds.map((id) => (typeof id === "string" ? id.trim().toUpperCase() : ""))
+    : [];
+
+  const isAssigned = allowed.includes(normalizedUserBtId);
+  if (!isAssigned) {
+    return { hasAccess: false, isAssigned: false, isExpired: false };
+  }
+
+  const expiryTs = getEventGateAccessExpiry(event);
+  if (expiryTs) {
+    const isExpired = Date.now() > expiryTs;
+    return {
+      hasAccess: !isExpired,
+      isAssigned: true,
+      isExpired,
+      expiresAt: new Date(expiryTs),
+    };
+  }
+
+  return { hasAccess: true, isAssigned: true, isExpired: false };
+}
+
+/**
+ * Checks if a user has active gate check-in permissions for an event.
+ */
+export function hasEventGateCheckInAccess(
+  event: Partial<EventItem> | null | undefined,
+  userBtId?: string | null,
+  isAdmin?: boolean
+): boolean {
+  return getGateCheckInAccessStatus(event, userBtId, isAdmin).hasAccess;
 }
 
 /**

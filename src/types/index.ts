@@ -133,6 +133,7 @@ export interface EventItem {
   cancellationNotice?: string;
   tenureId?: string;
   tenureLabel?: string;
+  gateCheckInBtIds?: string[]; // Student BT IDs granted temporary pass check-in access (ends 1 day post completion)
 }
 
 export interface ClubLeader {

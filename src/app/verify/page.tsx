@@ -24,6 +24,14 @@ import {
 } from "@/lib/firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
 import { Badge } from "@/components/ui/Badge";
+import { EventItem } from "@/types";
+import { 
+  getStoredEvents, 
+  syncEventsFromFirestore, 
+  subscribeToEvents,
+  hasEventGateCheckInAccess,
+  getGateCheckInAccessStatus 
+} from "@/lib/eventsStore";
 
 export default function GateScannerHubPage() {
   const router = useRouter();
@@ -31,7 +39,29 @@ export default function GateScannerHubPage() {
   const [passInput, setPassInput] = useState("");
   const [recentCheckedIn, setRecentCheckedIn] = useState<StudentRegistrationRecord[]>([]);
   const [stats, setStats] = useState({ total: 0, checkedIn: 0, pending: 0 });
+  const [events, setEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Compute events where the current logged-in user is an authorized gatekeeper
+  const gatekeeperEvents = React.useMemo(() => {
+    if (!user?.btId) return [];
+    return events.filter((evt) => hasEventGateCheckInAccess(evt, user.btId, false));
+  }, [events, user?.btId]);
+
+  useEffect(() => {
+    let isCurrent = true;
+    setEvents(getStoredEvents());
+    syncEventsFromFirestore().then((res) => {
+      if (res && isCurrent) setEvents(res);
+    });
+    const unsub = subscribeToEvents((remote) => {
+      if (remote && isCurrent) setEvents(remote);
+    });
+    return () => {
+      isCurrent = false;
+      unsub();
+    };
+  }, []);
 
   useEffect(() => {
     const loadStats = async () => {
@@ -96,12 +126,73 @@ export default function GateScannerHubPage() {
             &larr; SRC JDCOEM
           </Link>
           <span className={`px-3.5 py-1.5 rounded-full border text-[11px] font-bold flex items-center gap-1.5 shadow-xs ${
-            isAdmin ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-blue-50 border-blue-200 text-[#17458F]"
+            isAdmin 
+              ? "bg-emerald-50 border-emerald-200 text-emerald-800" 
+              : gatekeeperEvents.length > 0
+              ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+              : "bg-blue-50 border-blue-200 text-[#17458F]"
           }`}>
-            {isAdmin ? <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> : <Lock className="w-3.5 h-3.5 text-[#E78023]" />}
-            <span>{isAdmin ? "Admin Gatekeeper Scanner" : "Public Pass Authenticator"}</span>
+            {isAdmin ? (
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            ) : gatekeeperEvents.length > 0 ? (
+              <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+            ) : (
+              <Lock className="w-3.5 h-3.5 text-[#E78023]" />
+            )}
+            <span>
+              {isAdmin 
+                ? "Admin Gatekeeper Scanner" 
+                : gatekeeperEvents.length > 0 
+                ? `Authorized Gatekeeper (${user?.btId?.toUpperCase()})` 
+                : "Public Pass Authenticator"}
+            </span>
           </span>
         </div>
+
+        {/* Assigned Gatekeeper Duty Banner */}
+        {!isAdmin && gatekeeperEvents.length > 0 && (
+          <div className="rounded-3xl bg-emerald-50 border border-emerald-200 p-5 space-y-3 shadow-xs text-left animate-in fade-in">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-xl bg-emerald-600 text-white shadow-xs">
+                  <UserCheck className="w-4 h-4" />
+                </span>
+                <div>
+                  <h3 className="font-heading font-extrabold text-sm text-emerald-950">
+                    Official Gate Check-In Clearance
+                  </h3>
+                  <p className="text-[11px] text-emerald-700 font-medium">
+                    Account authorized to authenticate and check in event delegates.
+                  </p>
+                </div>
+              </div>
+              <Badge variant="success" size="sm">
+                {gatekeeperEvents.length} {gatekeeperEvents.length === 1 ? "Event" : "Events"}
+              </Badge>
+            </div>
+
+            <div className="space-y-1.5 pt-1">
+              {gatekeeperEvents.map((evt) => {
+                const status = getGateCheckInAccessStatus(evt, user?.btId, false);
+                return (
+                  <div key={evt.id} className="p-3 rounded-2xl bg-white/90 border border-emerald-200/80 flex items-center justify-between text-xs gap-3">
+                    <div className="min-w-0">
+                      <span className="font-bold text-slate-900 block truncate">{evt.name}</span>
+                      <span className="text-[10px] text-slate-500 font-medium">
+                        {status.expiresAt 
+                          ? `Access expires 1 day post-event: ${status.expiresAt.toLocaleDateString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` 
+                          : "Temporary Gate Clearance Active"}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono font-extrabold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0">
+                      CLEARANCE ACTIVE
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Hero Portal Card */}
         <div className="rounded-3xl bg-white border border-slate-200 p-6 sm:p-8 text-center space-y-4 shadow-sm relative overflow-hidden">
@@ -116,6 +207,8 @@ export default function GateScannerHubPage() {
             <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed font-medium">
               {isAdmin 
                 ? "Scan participant QR passes to verify authenticity and record gate attendance in real time." 
+                : gatekeeperEvents.length > 0
+                ? "Scan or enter delegate QR passes to authenticate credentials and record gate check-in attendance."
                 : "Scan participant QR passes with your smartphone camera to verify official event accreditation."}
             </p>
           </div>

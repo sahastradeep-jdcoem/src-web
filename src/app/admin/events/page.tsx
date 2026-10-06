@@ -415,6 +415,7 @@ export default function AdminEventsPage() {
           : undefined,
       tenureId: resolvedTenure?.id || getCurrentTenure()?.id,
       tenureLabel: resolvedTenure?.label || getCurrentTenure()?.label,
+      gateCheckInBtIds: formData.gateCheckInBtIds && formData.gateCheckInBtIds.length > 0 ? formData.gateCheckInBtIds : undefined,
     };
 
     const updated = created.isFeatured
@@ -595,6 +596,7 @@ export default function AdminEventsPage() {
             phone: editingEvent.coordinatorContact.phone || "",
           }
         : undefined,
+      gateCheckInBtIds: editingEvent.gateCheckInBtIds ? JSON.parse(JSON.stringify(editingEvent.gateCheckInBtIds)) : [],
     };
   }, [editingEvent]);
 
@@ -751,6 +753,7 @@ export default function AdminEventsPage() {
           : undefined,
       tenureId: resolvedTenure?.id || editingEvent.tenureId || getCurrentTenure()?.id,
       tenureLabel: resolvedTenure?.label || editingEvent.tenureLabel || getCurrentTenure()?.label,
+      gateCheckInBtIds: formData.gateCheckInBtIds && formData.gateCheckInBtIds.length > 0 ? formData.gateCheckInBtIds : undefined,
     };
 
     const hasItem = eventsList.some(targetMatch);

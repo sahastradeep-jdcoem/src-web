@@ -35,6 +35,8 @@ import {
   Copy,
   Phone,
   Star,
+  UserCheck,
+  ShieldCheck,
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -44,8 +46,9 @@ import { EventItem, ClubItem, SrcFormField, CustomQuestion, TargetAudience, Even
 import { cn } from "@/lib/utils";
 import { parseDateStringToTimestamp } from "@/lib/eventsStore";
 import { getStoredClubs } from "@/lib/councilStore";
+import { getStoredUsers } from "@/lib/usersStore";
 
-export type EventModalSection = "details" | "schedule" | "registration" | "participation" | "visuals" | "qa";
+export type EventModalSection = "details" | "schedule" | "registration" | "participation" | "gateCheckIn" | "visuals" | "qa";
 
 export interface EventFormData {
   isLive?: boolean;
@@ -62,6 +65,7 @@ export interface EventFormData {
   organizerClubSlug: string;
   collaboratingClubs?: { id?: string; name: string; slug: string }[];
   status: "Registration Open" | "Registration Closed" | "Upcoming" | "Coming Soon" | "Completed" | "Cancelled" | "draft";
+  gateCheckInBtIds?: string[];
   poster: string;
   cardImage: string;
   posterImage: string;
@@ -224,6 +228,13 @@ const SECTIONS: {
     description: "Squad formats, team limits, guidelines, and what delegates should expect.",
   },
   {
+    id: "gateCheckIn",
+    label: "Gate Check-In",
+    shortLabel: "Gate Check-In",
+    icon: UserCheck,
+    description: "Authorize student gatekeepers with temporary access to scan and check in delegate passes.",
+  },
+  {
     id: "visuals",
     label: "Event Visual Asset",
     shortLabel: "Visuals",
@@ -343,6 +354,7 @@ export function EventFormModal({
     isFeatured: Boolean(initialData?.isFeatured),
     whatsappGroupUrl: initialData?.whatsappGroupUrl || "",
     whatsappGroupName: initialData?.whatsappGroupName || "",
+    gateCheckInBtIds: initialData?.gateCheckInBtIds ? JSON.parse(JSON.stringify(initialData.gateCheckInBtIds)) : [],
   });
 
   useEffect(() => {
@@ -429,6 +441,7 @@ export function EventFormModal({
         feeAmount: typeof initialData.feeAmount === "number" && initialData.feeAmount > 0 ? initialData.feeAmount : (initialData.isPaid ? 100 : 0),
         whatsappGroupUrl: initialData.whatsappGroupUrl || "",
         whatsappGroupName: initialData.whatsappGroupName || "",
+        gateCheckInBtIds: initialData.gateCheckInBtIds ? JSON.parse(JSON.stringify(initialData.gateCheckInBtIds)) : (prev.gateCheckInBtIds || []),
       }));
     }
   }, [initialData]);
@@ -499,6 +512,59 @@ export function EventFormModal({
         endDate: isMulti ? formatDateToReadable(endVal) : "",
       };
     });
+  };
+
+  const [newGatekeeperInput, setNewGatekeeperInput] = useState("");
+  const [gatekeeperNotice, setGatekeeperNotice] = useState<string | null>(null);
+
+  const registeredUsers = useMemo(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      return getStoredUsers();
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const handleAddGatekeeperBtIds = () => {
+    if (!newGatekeeperInput.trim()) return;
+    setGatekeeperNotice(null);
+
+    const tokens = newGatekeeperInput
+      .split(/[\s,;\n]+/)
+      .map((t) => t.trim().toUpperCase())
+      .filter((t) => t.length > 0);
+
+    if (tokens.length === 0) return;
+
+    const existing = (form.gateCheckInBtIds || []).map((t) => t.trim().toUpperCase());
+    const newUnique = tokens.filter((t) => !existing.includes(t));
+    if (newUnique.length === 0) {
+      setGatekeeperNotice("All entered BT IDs are already in the gatekeeper roster.");
+      return;
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      gateCheckInBtIds: [...(prev.gateCheckInBtIds || []), ...newUnique],
+    }));
+    setNewGatekeeperInput("");
+  };
+
+  const handleRemoveGatekeeperBtId = (btIdToRemove: string) => {
+    setForm((prev) => ({
+      ...prev,
+      gateCheckInBtIds: (prev.gateCheckInBtIds || []).filter(
+        (id) => id.trim().toUpperCase() !== btIdToRemove.trim().toUpperCase()
+      ),
+    }));
+  };
+
+  const handleClearAllGatekeepers = () => {
+    setForm((prev) => ({
+      ...prev,
+      gateCheckInBtIds: [],
+    }));
   };
 
   // List of all chartered clubs for collaboration
@@ -914,6 +980,10 @@ export function EventFormModal({
         return form.noRegistrationRequired ? "Open Walk-in" : form.isPaid ? `₹${form.feeAmount}` : "Free";
       case "participation":
         return form.teamType;
+      case "gateCheckIn": {
+        const count = form.gateCheckInBtIds?.length || 0;
+        return count > 0 ? `${count} ${count === 1 ? "BT ID" : "BT IDs"}` : null;
+      }
       case "visuals": {
         const count = [form.cardImage, form.posterImage, form.headerImage].filter(Boolean).length;
         return count > 0 ? `${count}/3` : null;
@@ -3269,7 +3339,186 @@ export function EventFormModal({
         )}
 
         {/* ========================================================= */}
-        {/* 4. EVENT VISUAL ASSETS SECTION                           */}
+        {/* GATE CHECK-IN ACCREDITATION & SCANNER ROSTER              */}
+        {/* ========================================================= */}
+        {activeSection === "gateCheckIn" && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Header info banner */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50/80 to-indigo-50/50 border border-blue-200/80 space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-[#17458F] text-white">
+                  <UserCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#17458F]">
+                    Gate Check-In &amp; Scanner Authorization
+                  </h4>
+                  <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                    Authorize student gatekeepers with temporary access to scan and check in delegate passes for this event.
+                  </p>
+                </div>
+              </div>
+              <div className="pt-2 border-t border-blue-200/60 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                <div className="flex items-center gap-1.5 text-slate-700">
+                  <Clock className="w-3.5 h-3.5 text-[#E78023]" />
+                  <span>
+                    <strong>Temporary Access Window:</strong> Active now until <strong>1 day after event completion</strong>.
+                  </span>
+                </div>
+                <span className="px-2.5 py-0.5 rounded-full bg-white border border-blue-200 text-[#17458F] font-bold text-[10px]">
+                  Auto-Expiring Role
+                </span>
+              </div>
+            </div>
+
+            {/* Input Form to Add BT IDs */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center justify-between">
+                  <span>Add Gatekeeper Student BT IDs</span>
+                  <span className="text-[10px] font-normal text-slate-500 font-mono">
+                    Single or comma-separated
+                  </span>
+                </label>
+                <p className="text-[11px] text-slate-500">
+                  Enter student BT ID (e.g. <code className="text-[#E78023] font-bold">BT22CS001</code>). Multiple IDs can be pasted separated by commas or spaces.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={newGatekeeperInput}
+                    onChange={(e) => {
+                      setNewGatekeeperInput(e.target.value);
+                      setGatekeeperNotice(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddGatekeeperBtIds();
+                      }
+                    }}
+                    placeholder="e.g. BT22CS001, BT22CS014, BT23IT005..."
+                    className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm font-mono uppercase placeholder-slate-400 focus:outline-none focus:border-[#17458F]"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={handleAddGatekeeperBtIds}
+                  className="gap-1.5 shrink-0 px-4 py-2.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add BT ID</span>
+                </Button>
+              </div>
+
+              {gatekeeperNotice && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl font-medium">
+                  {gatekeeperNotice}
+                </p>
+              )}
+            </div>
+
+            {/* Gatekeepers Roster List */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    Assigned Gatekeepers
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-mono font-bold">
+                    {form.gateCheckInBtIds?.length || 0}
+                  </span>
+                </div>
+
+                {form.gateCheckInBtIds && form.gateCheckInBtIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearAllGatekeepers}
+                    className="text-[11px] font-bold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer"
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
+
+              {(!form.gateCheckInBtIds || form.gateCheckInBtIds.length === 0) ? (
+                <div className="p-8 rounded-2xl bg-white border border-dashed border-slate-200 text-center space-y-2">
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
+                    <UserCheck className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold text-slate-700">No Gatekeepers Assigned Yet</p>
+                    <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                      Add BT IDs above to grant student organizers temporary permission to check in delegate passes at the entry gate.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
+                  {form.gateCheckInBtIds.map((btId) => {
+                    const cleanBtId = btId.trim().toUpperCase();
+                    const linkedUser = registeredUsers.find(
+                      (u) => u.btId && u.btId.trim().toUpperCase() === cleanBtId
+                    );
+                    const studentName = linkedUser
+                      ? linkedUser.displayName || `${linkedUser.firstName || ""} ${linkedUser.lastName || ""}`.trim() || "Registered Student"
+                      : null;
+                    const dept = linkedUser?.department || (linkedUser as any)?.branch || null;
+
+                    return (
+                      <div
+                        key={cleanBtId}
+                        className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between gap-3 shadow-2xs group hover:border-slate-300 transition-all"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-[#17458F]/10 border border-[#17458F]/20 flex items-center justify-center text-[#17458F] shrink-0 font-bold text-xs">
+                            <ShieldCheck className="w-4 h-4 text-[#17458F]" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono font-bold text-xs text-slate-900 tracking-wider">
+                                {cleanBtId}
+                              </span>
+                              {studentName ? (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  Verified
+                                </span>
+                              ) : (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-500">
+                                  Assigned
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-500 truncate font-medium">
+                              {studentName ? `${studentName}${dept ? ` • ${dept}` : ""}` : "Account linked on sign-in"}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveGatekeeperBtId(cleanBtId)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer shrink-0"
+                          title={`Remove ${cleanBtId}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* 5. EVENT VISUAL ASSETS SECTION                           */}
         {/* ========================================================= */}
         {activeSection === "visuals" && (
           <div className="space-y-5 animate-in fade-in duration-200">

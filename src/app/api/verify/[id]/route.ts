@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRegistrationById } from "@/lib/firebase/firestore";
+import { getRegistrationById, checkInStudentPass, getEventFromFirestore } from "@/lib/firebase/firestore";
+import { hasEventGateCheckInAccess } from "@/lib/eventsStore";
 
 export async function GET(
   req: NextRequest,
@@ -89,6 +90,104 @@ export async function GET(
     console.error("Pass verification API error:", error);
     return NextResponse.json(
       { success: false, error: "Failed to verify delegate pass" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await context.params;
+    const cleanId = decodeURIComponent(id || "").trim();
+
+    if (!cleanId) {
+      return NextResponse.json(
+        { success: false, error: "Missing pass ID" },
+        { status: 400 }
+      );
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const { userBtId, userEmail, adminOverride } = body || {};
+
+    const record = await getRegistrationById(cleanId);
+    if (!record) {
+      return NextResponse.json(
+        { success: false, error: "Delegate pass not found or invalid" },
+        { status: 404 }
+      );
+    }
+
+    if (record.status === "CHECKED_IN") {
+      return NextResponse.json({
+        success: true,
+        alreadyCheckedIn: true,
+        message: "Attendance was already recorded for this delegate pass.",
+      });
+    }
+
+    if (record.status === "CANCELLED") {
+      return NextResponse.json(
+        { success: false, error: "Accreditation denied: This pass was cancelled." },
+        { status: 400 }
+      );
+    }
+
+    // Check authorization: Admin override OR Gatekeeper BT ID active access
+    let isAuthorized = Boolean(adminOverride);
+    if (!isAuthorized) {
+      if (!userBtId) {
+        return NextResponse.json(
+          { success: false, error: "Unauthorized: Missing BT ID for gatekeeper validation." },
+          { status: 403 }
+        );
+      }
+
+      const eventIdOrSlug = record.eventId || record.eventSlug || "";
+      const event = eventIdOrSlug ? await getEventFromFirestore(eventIdOrSlug) : null;
+      if (!event) {
+        return NextResponse.json(
+          { success: false, error: "Could not verify event configuration for gate access." },
+          { status: 403 }
+        );
+      }
+
+      const hasAccess = hasEventGateCheckInAccess(event, userBtId, false);
+      if (!hasAccess) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Unauthorized: BT ID ${userBtId} is not assigned as gatekeeper for this event or temporary access ended 1 day after event completion.`,
+          },
+          { status: 403 }
+        );
+      }
+      isAuthorized = true;
+    }
+
+    const checkInDone = await checkInStudentPass(record.id);
+    if (!checkInDone) {
+      return NextResponse.json(
+        { success: false, error: "Failed to update attendance state in database." },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "Delegate attendance successfully recorded at gate.",
+      record: {
+        ...record,
+        status: "CHECKED_IN",
+      },
+    });
+  } catch (error: any) {
+    console.error("Pass check-in API error:", error);
+    return NextResponse.json(
+      { success: false, error: "Internal server error recording gate check-in" },
       { status: 500 }
     );
   }
