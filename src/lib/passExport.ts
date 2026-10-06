@@ -57,6 +57,12 @@ export async function downloadPassAsImage(
           clonedEl.style.height = "auto";
           clonedEl.style.margin = "0 auto";
 
+          // Ensure all text elements have visible overflow in the clone to avoid canvas font clipping
+          const allText = clonedEl.querySelectorAll<HTMLElement>("p, span, h1, h2, h3, h4, h5, h6, strong");
+          allText.forEach((node) => {
+            node.style.overflow = "visible";
+          });
+
           // Ensure logo img tags are rendered with explicit dimensions and no distortion
           const images = clonedEl.querySelectorAll("img");
           images.forEach((img) => {

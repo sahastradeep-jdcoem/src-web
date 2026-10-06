@@ -259,15 +259,15 @@ export function TicketPass({
                   <span className="text-slate-500 uppercase font-bold text-[9px] sm:text-[10px] block leading-normal">
                     Participant
                   </span>
-                  <p className="font-bold text-slate-900 text-xs sm:text-sm font-sans leading-snug truncate pb-0.5">{participantName}</p>
-                  <p className="text-slate-600 text-[10px] sm:text-[11px] font-medium leading-normal truncate">{department} ({year})</p>
+                  <p className="font-bold text-slate-900 text-xs sm:text-sm font-sans leading-snug pb-0.5 overflow-visible">{participantName}</p>
+                  <p className="text-slate-600 text-[10px] sm:text-[11px] font-medium leading-normal pb-0.5 overflow-visible">{department} ({year})</p>
                 </div>
 
                 <div className="min-w-0">
                   <span className="text-slate-500 uppercase font-bold text-[9px] sm:text-[10px] block leading-normal">
                     Category / Squad
                   </span>
-                  <p className="font-bold text-slate-900 text-xs sm:text-sm font-sans leading-snug truncate pb-0.5">
+                  <p className="font-bold text-slate-900 text-xs sm:text-sm font-sans leading-snug pb-0.5 overflow-visible">
                     {teamType === "Team" ? teamName || "Team Entry" : "Individual Entry"}
                   </p>
                   <Badge 
@@ -285,7 +285,7 @@ export function TicketPass({
                   <span className="text-[9px] sm:text-[10px] text-slate-500 uppercase font-bold tracking-wider block leading-normal">
                     Roster Members:
                   </span>
-                  <p className="text-slate-700 text-xs mt-0.5 leading-relaxed font-sans break-words">
+                  <p className="text-slate-700 text-xs mt-0.5 leading-relaxed font-sans break-words overflow-visible">
                     {teamMembers.join(" • ")}
                   </p>
                 </div>
@@ -311,10 +311,10 @@ export function TicketPass({
               </div>
 
               <div className="space-y-0.5">
-                <span className="font-mono text-[10px] sm:text-[11px] font-bold text-[#E78023] block tracking-wider leading-normal truncate max-w-full">
+                <span className="font-mono text-[11px] sm:text-xs font-bold text-[#E78023] block tracking-wider leading-snug py-0.5 overflow-visible">
                   {ticketCode}
                 </span>
-                <p className="text-[9px] sm:text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1 leading-normal">
+                <p className="text-[9px] sm:text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1 leading-normal overflow-visible">
                   {paymentStatus === "PENDING" ? (
                     <>
                       <Clock className="w-2.5 h-2.5 text-amber-600 shrink-0" />
@@ -334,8 +334,8 @@ export function TicketPass({
 
           {/* Ticket Bottom Endorsement Footer */}
           <div className="bg-slate-50/90 border-t border-slate-200/80 px-6 py-3.5 sm:px-7 sm:py-4 text-[11px] sm:text-xs text-slate-500 flex flex-row items-center justify-between font-medium gap-2 leading-normal rounded-b-[23px]">
-            <p className="truncate">Entry permitted only with valid physical College ID card.</p>
-            <p className="font-semibold text-slate-700 shrink-0">JDCOEM • Sahastradeep</p>
+            <p className="leading-normal overflow-visible">Entry permitted only with valid physical College ID card.</p>
+            <p className="font-semibold text-slate-700 shrink-0 overflow-visible">JDCOEM • Sahastradeep</p>
           </div>
         </div>
       </div>
