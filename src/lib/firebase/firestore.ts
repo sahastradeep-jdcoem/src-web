@@ -466,8 +466,11 @@ export async function checkIsAdminInFirestore(email?: string | null, uid?: strin
       if (uid) {
         const userDocRef = doc(db, USERS_COLLECTION, uid);
         const userSnap = await getDoc(userDocRef);
-        if (userSnap.exists() && userSnap.data()?.role === "COUNCIL_ADMIN") {
-          return true;
+        if (userSnap.exists()) {
+          const uData = userSnap.data();
+          if (uData?.role === "COUNCIL_ADMIN" || uData?.role === "OWNER" || uData?.adminAccess?.role === "OWNER") {
+            return true;
+          }
         }
       }
     }

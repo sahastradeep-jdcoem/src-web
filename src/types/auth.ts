@@ -4,7 +4,7 @@ export interface UserProfile {
   displayName: string | null;
   name?: string;
   photoURL: string | null;
-  role: "STUDENT" | "COUNCIL_ADMIN" | "FACULTY" | "GUEST";
+  role: "STUDENT" | "COUNCIL_ADMIN" | "FACULTY" | "GUEST" | "OWNER";
   userType?: "JDCOEM_STUDENT" | "FACULTY" | "EXTERNAL_STUDENT";
   isCollegeStudent: boolean; // true for JDCOEM students, false for external delegates
   

@@ -27,7 +27,8 @@ import {
   RotateCcw,
   Edit3,
   ArrowUpDown,
-  Calendar
+  Calendar,
+  Crown
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -55,6 +56,8 @@ import {
 } from "@/lib/usersStore";
 import { subscribeToUsersFromFirestore } from "@/lib/firebase/firestore";
 import { getStoredDepartments, getDepartmentShortName, resolveCanonicalDepartmentName, syncDepartmentsFromFirestore } from "@/lib/departmentsStore";
+import { FACULTY_DESIGNATIONS, FACULTY_TITLES } from "@/components/auth/ProfileSetupModal";
+import { isOwnerEmail } from "@/types/rbac";
 import { 
   School, 
   MapPin, 
@@ -136,31 +139,44 @@ export default function AdminUsersPage() {
     displayName: "",
     email: "",
     btId: "",
+    employeeId: "",
     department: "",
     year: "",
-    role: "STUDENT" as "STUDENT" | "COUNCIL_ADMIN",
+    facultyDesignation: "Assistant Professor",
+    title: "Prof.",
+    role: "STUDENT" as "STUDENT" | "COUNCIL_ADMIN" | "FACULTY" | "OWNER",
   });
 
   const [editUserForm, setEditUserForm] = useState({
     displayName: "",
     email: "",
     btId: "",
-    department: "CSE(Data Science)",
+    employeeId: "",
+    department: "Computer Science and Engineering",
     year: "3rd Year",
     phone: "",
-    role: "STUDENT" as "STUDENT" | "COUNCIL_ADMIN",
+    role: "STUDENT" as "STUDENT" | "COUNCIL_ADMIN" | "FACULTY" | "OWNER",
+    userType: "JDCOEM_STUDENT" as "JDCOEM_STUDENT" | "FACULTY" | "EXTERNAL_STUDENT",
+    facultyDesignation: "Assistant Professor",
+    title: "Prof.",
   });
 
   const openEditModal = (u: RegisteredUserRecord) => {
+    const isFaculty = u.role === "FACULTY" || u.userType === "FACULTY";
+    const isOwner = u.role === "OWNER" || u.adminAccess?.role === "OWNER" || isOwnerEmail(u.email);
     setUserToEdit(u);
     setEditUserForm({
       displayName: u.displayName || "",
       email: u.email || "",
-      btId: u.btId || "",
-      department: resolveCanonicalDepartmentName(u.department || "CSE(Data Science)", departments),
+      btId: isFaculty ? "" : (u.btId || ""),
+      employeeId: u.employeeId || "",
+      department: resolveCanonicalDepartmentName(u.facultyDepartment || u.department || "Computer Science and Engineering", departments),
       year: u.year || "3rd Year",
       phone: u.phone || "",
-      role: u.role === "COUNCIL_ADMIN" ? "COUNCIL_ADMIN" : "STUDENT",
+      role: isOwner ? "OWNER" : (u.role === "COUNCIL_ADMIN" ? "COUNCIL_ADMIN" : isFaculty ? "FACULTY" : "STUDENT"),
+      userType: isFaculty ? "FACULTY" : (u.userType || "JDCOEM_STUDENT"),
+      facultyDesignation: u.facultyDesignation || "Assistant Professor",
+      title: u.title || "Prof.",
     });
   };
 
@@ -168,73 +184,129 @@ export default function AdminUsersPage() {
     e.preventDefault();
     if (!userToEdit) return;
 
-    const cleanBt = editUserForm.btId.trim().toUpperCase();
+    const isUserFaculty = editUserForm.userType === "FACULTY" || userToEdit.role === "FACULTY" || userToEdit.userType === "FACULTY";
+    const cleanBt = isUserFaculty ? "" : editUserForm.btId.trim().toUpperCase();
+    const cleanEmpId = isUserFaculty ? editUserForm.employeeId.trim().toUpperCase() : (userToEdit.employeeId || "");
     const parts = editUserForm.displayName.trim().split(" ");
-    const isJdcoem = Boolean(cleanBt && cleanBt.length >= 3);
+    const isJdcoem = !isUserFaculty && Boolean(cleanBt && cleanBt.length >= 3);
+    const isOwner = editUserForm.role === "OWNER";
 
     const updatedRecord: RegisteredUserRecord = {
       ...userToEdit,
       displayName: editUserForm.displayName.trim(),
       email: editUserForm.email.trim().toLowerCase(),
       btId: cleanBt,
+      employeeId: cleanEmpId || undefined,
       department: editUserForm.department,
-      year: editUserForm.year,
+      facultyDepartment: isUserFaculty ? editUserForm.department : userToEdit.facultyDepartment,
+      facultyDesignation: isUserFaculty ? editUserForm.facultyDesignation : userToEdit.facultyDesignation,
+      title: isUserFaculty ? editUserForm.title : userToEdit.title,
+      year: isUserFaculty ? "" : editUserForm.year,
       phone: editUserForm.phone.trim(),
       role: editUserForm.role,
-      userType: isJdcoem ? "JDCOEM_STUDENT" : userToEdit.userType,
-      isCollegeStudent: isJdcoem ? true : userToEdit.isCollegeStudent,
-      collegeName: isJdcoem ? "" : userToEdit.collegeName,
-      degree: isJdcoem ? "" : userToEdit.degree,
-      customBranch: isJdcoem ? "" : userToEdit.customBranch,
+      userType: isUserFaculty ? "FACULTY" : (isJdcoem ? "JDCOEM_STUDENT" : userToEdit.userType || "JDCOEM_STUDENT"),
+      isCollegeStudent: isUserFaculty ? true : (isJdcoem ? true : userToEdit.isCollegeStudent),
+      collegeName: isUserFaculty ? "JDCOEM Nagpur" : (isJdcoem ? "" : userToEdit.collegeName),
+      degree: isUserFaculty || isJdcoem ? "" : userToEdit.degree,
+      customBranch: isUserFaculty || isJdcoem ? "" : userToEdit.customBranch,
       firstName: parts[0] || userToEdit.firstName || "",
       lastName: parts.slice(1).join(" ") || userToEdit.lastName || "",
-      profileCompleted: Boolean(cleanBt),
+      profileCompleted: isUserFaculty ? Boolean(editUserForm.department && editUserForm.facultyDesignation) : Boolean(cleanBt),
       lastActive: new Date().toISOString(),
+      adminAccess: isOwner
+        ? {
+            uid: userToEdit.uid,
+            btId: cleanBt || cleanEmpId || editUserForm.email.trim().toLowerCase(),
+            email: editUserForm.email.trim().toLowerCase(),
+            name: editUserForm.displayName.trim(),
+            role: "OWNER",
+            active: true,
+            grantedBy: "admin",
+            grantedAt: userToEdit.adminAccess?.grantedAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }
+        : userToEdit.adminAccess?.role === "OWNER" && editUserForm.role !== "OWNER"
+        ? undefined
+        : userToEdit.adminAccess,
     };
 
     saveRegisteredUser(updatedRecord);
-    showNotice(`Successfully updated profile for ${updatedRecord.displayName} (${updatedRecord.year}).`);
+    showNotice(
+      isOwner 
+        ? `Successfully updated ${updatedRecord.displayName} as System Owner.`
+        : `Successfully updated profile for ${updatedRecord.displayName}.`
+    );
     setUserToEdit(null);
   };
 
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUserForm.email.trim() || !newUserForm.displayName.trim() || !newUserForm.department.trim() || !newUserForm.year.trim()) {
-      alert("Please fill in all fields (Full Name, Email, Department, and Academic Year).");
+    const isFacultyRole = newUserForm.role === "FACULTY";
+    if (!newUserForm.email.trim() || !newUserForm.displayName.trim() || !newUserForm.department.trim()) {
+      alert("Please fill in all required fields (Full Name, Email, and Department).");
+      return;
+    }
+    if (!isFacultyRole && !newUserForm.year.trim()) {
+      alert("Please select Academic Year for the student record.");
       return;
     }
 
     const email = newUserForm.email.trim().toLowerCase();
-    const cleanBt = newUserForm.btId.trim().toUpperCase();
+    const cleanBt = isFacultyRole ? "" : newUserForm.btId.trim().toUpperCase();
+    const cleanEmpId = isFacultyRole ? newUserForm.employeeId.trim().toUpperCase() : "";
     const parts = newUserForm.displayName.trim().split(" ");
+    const isOwner = newUserForm.role === "OWNER";
 
     const record: RegisteredUserRecord = {
-      uid: `student-${Date.now()}`,
+      uid: `${isFacultyRole ? "faculty" : "student"}-${Date.now()}`,
       email: email,
       displayName: newUserForm.displayName.trim(),
       photoURL: null,
       role: newUserForm.role,
+      userType: isFacultyRole ? "FACULTY" : "JDCOEM_STUDENT",
       isCollegeStudent: true,
+      collegeName: isFacultyRole ? "JDCOEM Nagpur" : "",
       firstName: parts[0] || "",
       lastName: parts.slice(1).join(" ") || "",
       btId: cleanBt,
+      employeeId: cleanEmpId || undefined,
       department: newUserForm.department,
-      year: newUserForm.year,
+      facultyDepartment: isFacultyRole ? newUserForm.department : undefined,
+      facultyDesignation: isFacultyRole ? newUserForm.facultyDesignation : undefined,
+      facultyApprovalStatus: isFacultyRole ? "approved" : undefined,
+      title: isFacultyRole ? newUserForm.title : undefined,
+      year: isFacultyRole ? "" : newUserForm.year,
       phone: "",
-      profileCompleted: Boolean(cleanBt && newUserForm.department && newUserForm.year),
+      profileCompleted: isFacultyRole ? Boolean(newUserForm.department && newUserForm.facultyDesignation) : Boolean(cleanBt && newUserForm.department && newUserForm.year),
       lastActive: new Date().toISOString(),
       createdAt: new Date().toISOString(),
+      adminAccess: isOwner
+        ? {
+            uid: `admin-${Date.now()}`,
+            btId: cleanBt || cleanEmpId || email,
+            email: email,
+            name: newUserForm.displayName.trim(),
+            role: "OWNER",
+            active: true,
+            grantedBy: "owner",
+            grantedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }
+        : undefined,
     };
 
     saveRegisteredUser(record);
-    showNotice(`Successfully added student: ${record.displayName} (${record.email})`);
+    showNotice(`Successfully added ${isFacultyRole ? "faculty member" : "user"}: ${record.displayName} (${record.email})`);
     setIsAddUserOpen(false);
     setNewUserForm({
       displayName: "",
       email: "",
       btId: "",
+      employeeId: "",
       department: "",
       year: "",
+      facultyDesignation: "Assistant Professor",
+      title: "Prof.",
       role: "STUDENT",
     });
   };
@@ -289,10 +361,26 @@ export default function AdminUsersPage() {
   }, []);
 
   const handleRoleToggle = (user: RegisteredUserRecord) => {
-    const newRole = user.role === "COUNCIL_ADMIN" ? "STUDENT" : "COUNCIL_ADMIN";
-    const actionName = newRole === "COUNCIL_ADMIN" ? "Promoted to Admin" : "Demoted to Student";
+    const isFaculty = user.role === "FACULTY" || user.userType === "FACULTY";
+    const isOwner = user.role === "OWNER" || user.adminAccess?.role === "OWNER" || isOwnerEmail(user.email);
+    const isAdmin = user.role === "COUNCIL_ADMIN";
+
+    let newRole: "STUDENT" | "COUNCIL_ADMIN" | "FACULTY" | "OWNER";
+    let actionName: string;
+
+    if (isOwner) {
+      newRole = isFaculty ? "FACULTY" : "STUDENT";
+      actionName = isFaculty ? "Demoted from Owner to Faculty" : "Demoted from Owner to Student";
+    } else if (isAdmin) {
+      newRole = isFaculty ? "FACULTY" : "STUDENT";
+      actionName = isFaculty ? "Demoted from Admin to Faculty" : "Demoted to Student";
+    } else {
+      newRole = "COUNCIL_ADMIN";
+      actionName = isFaculty ? "Promoted Faculty to Admin" : "Promoted to Admin";
+    }
+
     changeUserRole(user.uid, newRole);
-    showNotice(`${actionName}: ${user.displayName} (${user.email})`);
+    showNotice(`${actionName}: ${user.displayName || user.email}`);
   };
 
   const handleReactivateUser = (user: RegisteredUserRecord) => {
@@ -346,7 +434,7 @@ export default function AdminUsersPage() {
   }, [users]);
 
   const adminUsers = useMemo(() => {
-    return users.filter((u) => !u.isDeleted && u.status !== "deleted" && u.role === "COUNCIL_ADMIN");
+    return users.filter((u) => !u.isDeleted && u.status !== "deleted" && (u.role === "COUNCIL_ADMIN" || u.role === "OWNER" || u.adminAccess?.role === "OWNER" || isOwnerEmail(u.email)));
   }, [users]);
 
   const deletedUsers = useMemo(() => {
@@ -379,11 +467,11 @@ export default function AdminUsersPage() {
       } else if (categoryFilter === "VERIFIED_FACULTY") {
         matchesCategory = !u.isDeleted && u.status !== "deleted" && (u.role === "FACULTY" || u.userType === "FACULTY") && u.facultyApprovalStatus === "approved";
       } else if (categoryFilter === "JDCOEM_STUDENTS") {
-        matchesCategory = !u.isDeleted && u.status !== "deleted" && !isExternalUser(u) && u.role !== "FACULTY";
+        matchesCategory = !u.isDeleted && u.status !== "deleted" && !isExternalUser(u) && u.role !== "FACULTY" && u.userType !== "FACULTY";
       } else if (categoryFilter === "EXTERNAL_STUDENTS") {
         matchesCategory = !u.isDeleted && u.status !== "deleted" && isExternalUser(u);
       } else if (categoryFilter === "COUNCIL_ADMIN") {
-        matchesCategory = !u.isDeleted && u.status !== "deleted" && u.role === "COUNCIL_ADMIN";
+        matchesCategory = !u.isDeleted && u.status !== "deleted" && (u.role === "COUNCIL_ADMIN" || u.role === "OWNER" || u.adminAccess?.role === "OWNER" || isOwnerEmail(u.email));
       }
 
       const matchesDept =
@@ -884,7 +972,9 @@ export default function AdminUsersPage() {
                           ) : (
                             <Badge
                               variant={
-                                u.role === "COUNCIL_ADMIN"
+                                u.role === "OWNER" || u.adminAccess?.role === "OWNER" || isOwnerEmail(u.email)
+                                  ? "purple"
+                                  : u.role === "COUNCIL_ADMIN"
                                   ? "orange"
                                   : isFaculty
                                   ? "navy"
@@ -894,8 +984,10 @@ export default function AdminUsersPage() {
                               }
                               size="sm"
                             >
-                              {u.role === "COUNCIL_ADMIN"
-                                ? "Admin"
+                              {u.role === "OWNER" || u.adminAccess?.role === "OWNER" || isOwnerEmail(u.email)
+                                ? (isFaculty ? "Faculty (Owner)" : "Owner")
+                                : u.role === "COUNCIL_ADMIN"
+                                ? (isFaculty ? "Faculty (Admin)" : "Admin")
                                 : isFaculty
                                 ? "Faculty"
                                 : isExternal
@@ -1046,13 +1138,23 @@ export default function AdminUsersPage() {
                               <button
                                 onClick={() => handleRoleToggle(u)}
                                 className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                                  u.role === "COUNCIL_ADMIN"
+                                  u.role === "OWNER"
+                                    ? "bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200"
+                                    : u.role === "COUNCIL_ADMIN"
                                     ? "bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200"
                                     : "bg-slate-100 hover:bg-slate-200 text-slate-600"
                                 }`}
-                                title={u.role === "COUNCIL_ADMIN" ? "Demote to Student" : "Promote to Admin"}
+                                title={
+                                  u.role === "OWNER"
+                                    ? (isFaculty ? "Demote from Owner to Faculty" : "Demote from Owner to Student")
+                                    : u.role === "COUNCIL_ADMIN"
+                                    ? (isFaculty ? "Demote from Admin to Faculty" : "Demote to Student")
+                                    : (isFaculty ? "Promote Faculty to Admin" : "Promote to Admin")
+                                }
                               >
-                                {u.role === "COUNCIL_ADMIN" ? (
+                                {u.role === "OWNER" ? (
+                                  <Crown className="w-3.5 h-3.5 text-purple-600" />
+                                ) : u.role === "COUNCIL_ADMIN" ? (
                                   <ShieldCheck className="w-3.5 h-3.5 text-[#E78023]" />
                                 ) : (
                                   <ShieldAlert className="w-3.5 h-3.5" />
@@ -1143,7 +1245,9 @@ export default function AdminUsersPage() {
                   ) : (
                     <Badge 
                       variant={
-                        selectedUser.role === "COUNCIL_ADMIN" 
+                        selectedUser.role === "OWNER" || selectedUser.adminAccess?.role === "OWNER" || isOwnerEmail(selectedUser.email)
+                          ? "purple"
+                          : selectedUser.role === "COUNCIL_ADMIN" 
                           ? "orange" 
                           : selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY" 
                           ? "navy" 
@@ -1153,8 +1257,10 @@ export default function AdminUsersPage() {
                       } 
                       size="sm"
                     >
-                      {selectedUser.role === "COUNCIL_ADMIN" 
-                        ? "Council Admin" 
+                      {selectedUser.role === "OWNER" || selectedUser.adminAccess?.role === "OWNER" || isOwnerEmail(selectedUser.email)
+                        ? (selectedUser.userType === "FACULTY" || selectedUser.employeeId ? "Faculty (Owner)" : "Platform Owner")
+                        : selectedUser.role === "COUNCIL_ADMIN" 
+                        ? (selectedUser.userType === "FACULTY" || selectedUser.employeeId ? "Council Admin (Faculty)" : "Council Admin")
                         : selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY" 
                         ? "Faculty Member" 
                         : selectedUser.userType === "EXTERNAL_STUDENT" 
@@ -1238,10 +1344,12 @@ export default function AdminUsersPage() {
               {/* Box 2: BT ID or Staff ID */}
               <div className="p-3.5 rounded-xl bg-slate-50 space-y-1 border border-slate-100">
                 <span className="text-slate-400 uppercase text-[10px] font-bold">
-                  {selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY" ? "Staff / Employee ID" : "College BT ID"}
+                  {selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY" || Boolean(selectedUser.employeeId)
+                    ? "Staff / Employee ID"
+                    : "College BT ID"}
                 </span>
                 <p className="font-mono font-bold text-[#E78023] text-sm">
-                  {selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY"
+                  {selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY" || Boolean(selectedUser.employeeId)
                     ? (selectedUser.employeeId || "No ID Required")
                     : (selectedUser.btId || (selectedUser.userType === "EXTERNAL_STUDENT" ? "External Delegate" : "Not registered"))}
                 </p>
@@ -1258,10 +1366,12 @@ export default function AdminUsersPage() {
               {/* Box 4: Academic Year / Designation */}
               <div className="p-3.5 rounded-xl bg-slate-50 space-y-1 border border-slate-100">
                 <span className="text-slate-400 uppercase text-[10px] font-bold">
-                  {selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY" ? "Academic Title & Role" : "Year of Study"}
+                  {selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY" || Boolean(selectedUser.employeeId)
+                    ? "Academic Title & Role"
+                    : "Year of Study"}
                 </span>
                 <p className="font-bold text-slate-900">
-                  {selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY"
+                  {selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY" || Boolean(selectedUser.employeeId)
                     ? (selectedUser.facultyDesignation || "Faculty Member")
                     : (selectedUser.year || "—")}
                 </p>
@@ -1315,7 +1425,11 @@ export default function AdminUsersPage() {
                   variant="primary"
                   size="sm"
                 >
-                  {selectedUser.role === "COUNCIL_ADMIN" ? "Demote to Student" : "Promote to Admin"}
+                  {selectedUser.role === "OWNER" || selectedUser.adminAccess?.role === "OWNER" || isOwnerEmail(selectedUser.email)
+                    ? (selectedUser.userType === "FACULTY" || selectedUser.employeeId ? "Demote to Faculty" : "Demote to Student")
+                    : selectedUser.role === "COUNCIL_ADMIN"
+                    ? (selectedUser.userType === "FACULTY" || selectedUser.employeeId ? "Demote to Faculty" : "Demote to Student")
+                    : (selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY" ? "Promote Faculty to Admin" : "Promote to Admin")}
                 </Button>
               )}
             </div>
@@ -1404,18 +1518,33 @@ export default function AdminUsersPage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  College BT ID (Leave empty for Faculty)
-                </label>
-                <input
-                  type="text"
-                  value={newUserForm.btId}
-                  onChange={(e) => setNewUserForm({ ...newUserForm, btId: e.target.value.toUpperCase() })}
-                  placeholder="e.g. BT210115DS"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold text-[#E78023] focus:outline-none focus:border-[#17458F]"
-                />
-              </div>
+              {newUserForm.role === "FACULTY" ? (
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                    Staff / Employee ID (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={newUserForm.employeeId}
+                    onChange={(e) => setNewUserForm({ ...newUserForm, employeeId: e.target.value.toUpperCase() })}
+                    placeholder="e.g. EMP-1042"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold text-[#17458F] focus:outline-none focus:border-[#17458F]"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                    College BT ID (Leave empty for Faculty)
+                  </label>
+                  <input
+                    type="text"
+                    value={newUserForm.btId}
+                    onChange={(e) => setNewUserForm({ ...newUserForm, btId: e.target.value.toUpperCase() })}
+                    placeholder="e.g. BT210115DS"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold text-[#E78023] focus:outline-none focus:border-[#17458F]"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="text-[11px] font-bold text-slate-700 block mb-1">
@@ -1428,6 +1557,8 @@ export default function AdminUsersPage() {
                 >
                   <option value="STUDENT">Student (Delegate)</option>
                   <option value="COUNCIL_ADMIN">Council Admin</option>
+                  <option value="FACULTY">Faculty Member</option>
+                  <option value="OWNER">Owner (Full Governance)</option>
                 </select>
               </div>
             </div>
@@ -1452,23 +1583,43 @@ export default function AdminUsersPage() {
                 </select>
               </div>
 
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  Year of Study <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={newUserForm.year}
-                  onChange={(e) => setNewUserForm({ ...newUserForm, year: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
-                  required
-                >
-                  <option value="" disabled>-- Click to select year of study --</option>
-                  <option value="1st Year">1st Year</option>
-                  <option value="2nd Year">2nd Year</option>
-                  <option value="3rd Year">3rd Year</option>
-                  <option value="4th Year / Final Year">4th Year / Final Year</option>
-                </select>
-              </div>
+              {newUserForm.role === "FACULTY" ? (
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                    Faculty Designation <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={newUserForm.facultyDesignation}
+                    onChange={(e) => setNewUserForm({ ...newUserForm, facultyDesignation: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                    required
+                  >
+                    {FACULTY_DESIGNATIONS.map((desig) => (
+                      <option key={desig} value={desig}>
+                        {desig}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                    Year of Study <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={newUserForm.year}
+                    onChange={(e) => setNewUserForm({ ...newUserForm, year: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                    required
+                  >
+                    <option value="" disabled>-- Click to select year of study --</option>
+                    <option value="1st Year">1st Year</option>
+                    <option value="2nd Year">2nd Year</option>
+                    <option value="3rd Year">3rd Year</option>
+                    <option value="4th Year / Final Year">4th Year / Final Year</option>
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
@@ -1482,7 +1633,7 @@ export default function AdminUsersPage() {
               </Button>
               <Button
                 type="submit"
-                disabled={!newUserForm.displayName.trim() || !newUserForm.email.trim() || !newUserForm.department.trim() || !newUserForm.year.trim()}
+                disabled={!newUserForm.displayName.trim() || !newUserForm.email.trim() || !newUserForm.department.trim() || (newUserForm.role !== "FACULTY" && !newUserForm.year.trim())}
                 variant="primary"
                 size="sm"
               >
@@ -1529,83 +1680,195 @@ export default function AdminUsersPage() {
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  College BT ID (Optional for Faculty)
-                </label>
-                <input
-                  type="text"
-                  value={editUserForm.btId}
-                  onChange={(e) => setEditUserForm({ ...editUserForm, btId: e.target.value.toUpperCase() })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold text-[#E78023] focus:outline-none focus:border-[#17458F]"
-                />
-              </div>
+            {(() => {
+              const isFaculty = editUserForm.userType === "FACULTY" || userToEdit.role === "FACULTY" || userToEdit.userType === "FACULTY" || Boolean(userToEdit.employeeId);
+              if (isFaculty) {
+                return (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          Staff / Employee ID
+                        </label>
+                        <input
+                          type="text"
+                          value={editUserForm.employeeId}
+                          onChange={(e) => setEditUserForm({ ...editUserForm, employeeId: e.target.value.toUpperCase() })}
+                          placeholder="e.g. EMP-1042"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold text-[#17458F] focus:outline-none focus:border-[#17458F]"
+                        />
+                      </div>
 
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  Contact Phone
-                </label>
-                <input
-                  type="text"
-                  value={editUserForm.phone}
-                  onChange={(e) => setEditUserForm({ ...editUserForm, phone: e.target.value })}
-                  placeholder="e.g. 9075828232"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
-                />
-              </div>
-            </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          Contact Phone
+                        </label>
+                        <input
+                          type="text"
+                          value={editUserForm.phone}
+                          onChange={(e) => setEditUserForm({ ...editUserForm, phone: e.target.value })}
+                          placeholder="e.g. 9075828232"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
+                        />
+                      </div>
+                    </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  Department / Branch
-                </label>
-                <select
-                  value={editUserForm.department}
-                  onChange={(e) => setEditUserForm({ ...editUserForm, department: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
-                >
-                  {departments.map((dept) => (
-                    <option key={dept} value={dept}>
-                      {dept}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          Department / Branch <span className="text-rose-500">*</span>
+                        </label>
+                        <select
+                          value={editUserForm.department}
+                          onChange={(e) => setEditUserForm({ ...editUserForm, department: e.target.value })}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                        >
+                          {departments.map((dept) => (
+                            <option key={dept} value={dept}>
+                              {dept}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  Year of Study <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={editUserForm.year}
-                  onChange={(e) => setEditUserForm({ ...editUserForm, year: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-[#17458F] focus:outline-none focus:border-[#17458F] cursor-pointer"
-                >
-                  <option value="1st Year">1st Year</option>
-                  <option value="2nd Year">2nd Year</option>
-                  <option value="3rd Year">3rd Year</option>
-                  <option value="4th Year / Final Year">4th Year / Final Year</option>
-                  <option value="Postgraduate (MBA/MCA)">Postgraduate (MBA/MCA)</option>
-                  <option value="Faculty / Alumni">Faculty / Alumni</option>
-                </select>
-              </div>
-            </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          Faculty Designation <span className="text-rose-500">*</span>
+                        </label>
+                        <select
+                          value={editUserForm.facultyDesignation}
+                          onChange={(e) => setEditUserForm({ ...editUserForm, facultyDesignation: e.target.value })}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-[#17458F] focus:outline-none focus:border-[#17458F] cursor-pointer"
+                        >
+                          {FACULTY_DESIGNATIONS.map((desig) => (
+                            <option key={desig} value={desig}>
+                              {desig}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
 
-            <div>
-              <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                Access Role
-              </label>
-              <select
-                value={editUserForm.role}
-                onChange={(e) => setEditUserForm({ ...editUserForm, role: e.target.value as any })}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
-              >
-                <option value="STUDENT">Student (Delegate)</option>
-                <option value="COUNCIL_ADMIN">Council Admin</option>
-              </select>
-            </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          Academic Title
+                        </label>
+                        <select
+                          value={editUserForm.title}
+                          onChange={(e) => setEditUserForm({ ...editUserForm, title: e.target.value })}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                        >
+                          {FACULTY_TITLES.map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          Access Role
+                        </label>
+                        <select
+                          value={editUserForm.role}
+                          onChange={(e) => setEditUserForm({ ...editUserForm, role: e.target.value as any })}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                        >
+                          <option value="FACULTY">Faculty Member (Standard Access)</option>
+                          <option value="COUNCIL_ADMIN">Council Admin (Faculty Administrator)</option>
+                          <option value="OWNER">Owner (Full System &amp; Council Governance)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </>
+                );
+              }
+
+              return (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        College BT ID
+                      </label>
+                      <input
+                        type="text"
+                        value={editUserForm.btId}
+                        onChange={(e) => setEditUserForm({ ...editUserForm, btId: e.target.value.toUpperCase() })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold text-[#E78023] focus:outline-none focus:border-[#17458F]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        Contact Phone
+                      </label>
+                      <input
+                        type="text"
+                        value={editUserForm.phone}
+                        onChange={(e) => setEditUserForm({ ...editUserForm, phone: e.target.value })}
+                        placeholder="e.g. 9075828232"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        Department / Branch
+                      </label>
+                      <select
+                        value={editUserForm.department}
+                        onChange={(e) => setEditUserForm({ ...editUserForm, department: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                      >
+                        {departments.map((dept) => (
+                          <option key={dept} value={dept}>
+                            {dept}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        Year of Study <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={editUserForm.year}
+                        onChange={(e) => setEditUserForm({ ...editUserForm, year: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-[#17458F] focus:outline-none focus:border-[#17458F] cursor-pointer"
+                      >
+                        <option value="1st Year">1st Year</option>
+                        <option value="2nd Year">2nd Year</option>
+                        <option value="3rd Year">3rd Year</option>
+                        <option value="4th Year / Final Year">4th Year / Final Year</option>
+                        <option value="Postgraduate (MBA/MCA)">Postgraduate (MBA/MCA)</option>
+                        <option value="Faculty / Alumni">Faculty / Alumni</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Access Role
+                    </label>
+                    <select
+                      value={editUserForm.role}
+                      onChange={(e) => setEditUserForm({ ...editUserForm, role: e.target.value as any })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                    >
+                      <option value="STUDENT">Student (Delegate)</option>
+                      <option value="COUNCIL_ADMIN">Council Admin</option>
+                      <option value="OWNER">Owner (Full Governance)</option>
+                    </select>
+                  </div>
+                </>
+              );
+            })()}
 
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
               <Button

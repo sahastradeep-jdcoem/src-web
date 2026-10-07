@@ -30,6 +30,7 @@ import {
   deleteAdminAccessFromFirestore,
   getAllUsersFromFirestore,
   findUserByBtIdInFirestore,
+  saveSiteContentToFirestore,
 } from "@/lib/firebase/firestore";
 import { 
   getStoredClubs, 
@@ -411,7 +412,7 @@ export default function AdminRolesPage() {
     );
   }
 
-  // Grant role access to a BT ID
+  // Grant role access to a BT ID, Staff ID, or Email
   const grantAccess = async (
     rawBtId: string,
     role: AdminAccessRole,
@@ -419,31 +420,38 @@ export default function AdminRolesPage() {
     slotKey?: string,
     candidateName?: string
   ) => {
-    const cleanBt = normalizeBtId(rawBtId);
-    if (!cleanBt) {
-      setNotice({ message: "Please provide a valid BT ID.", type: "error" });
+    const rawTrimmed = (rawBtId || "").trim();
+    if (!rawTrimmed) {
+      setNotice({ message: "Please provide a valid BT ID, Staff ID, or Email.", type: "error" });
       return;
     }
+
+    const isEmail = rawTrimmed.includes("@");
+    const cleanBt = isEmail ? rawTrimmed.toLowerCase() : normalizeBtId(rawTrimmed);
 
     const currentBusyKey = slotKey || cleanBt;
     setBusyKey(currentBusyKey);
 
     try {
       // Check if user is already registered in local cache or Firestore
-      const localUser = findRegisteredUserByBtId(cleanBt);
-      const remoteUser = localUser || (await lookupUserByBtId(cleanBt));
+      const localUser = isEmail
+        ? registeredUsers.find((u) => u.email?.toLowerCase() === cleanBt)
+        : findRegisteredUserByBtId(cleanBt) || registeredUsers.find((u) => u.employeeId?.toUpperCase() === cleanBt);
+      const remoteUser = localUser || (isEmail ? undefined : await lookupUserByBtId(cleanBt));
       const uid = remoteUser?.uid || "";
+      const email = remoteUser?.email || (isEmail ? cleanBt : undefined);
       const resolvedName =
         candidateName ||
-        nameLookupMap.get(cleanBt) ||
+        (!isEmail ? nameLookupMap.get(cleanBt) : "") ||
         remoteUser?.name ||
         (remoteUser as any)?.displayName ||
         "";
 
       const now = new Date().toISOString();
       await saveAdminAccessToFirestore({
-        btId: cleanBt,
+        btId: isEmail ? (remoteUser?.btId || remoteUser?.employeeId || cleanBt) : cleanBt,
         uid: uid || cleanBt,
+        email: email || undefined,
         role,
         name: resolvedName || undefined,
         clubId: club?.id,
@@ -455,8 +463,17 @@ export default function AdminRolesPage() {
         updatedAt: now,
       });
 
+      if (role === "OWNER" && email) {
+        await saveSiteContentToFirestore(`admins/${email.toLowerCase()}`, {
+          email: email.toLowerCase(),
+          role: "OWNER",
+          active: true,
+          updatedAt: now,
+        });
+      }
+
       setNotice({
-        message: `${ADMIN_ROLE_LABELS[role]} clearance granted to ${resolvedName ? `${resolvedName} (${cleanBt})` : cleanBt}${club?.name ? ` (${club.name})` : ""}${uid ? " (Linked to account)" : " (Awaiting student sign-in)"}.`,
+        message: `${ADMIN_ROLE_LABELS[role]} clearance granted to ${resolvedName ? `${resolvedName} (${cleanBt})` : cleanBt}${club?.name ? ` (${club.name})` : ""}${uid ? " (Linked to account)" : " (Awaiting user sign-in)"}.`,
         type: "success",
       });
       await loadData();
@@ -982,22 +999,22 @@ export default function AdminRolesPage() {
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
         <div>
           <h2 className="font-heading text-lg font-extrabold text-slate-900">
-            Manual BT-ID Clearance Grant
+            Manual Administrative Clearance Grant
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Manually grant console access to any student BT ID with custom role or club assignment.
+            Manually grant console access to any student BT ID, faculty employee ID, or authenticated college email.
           </p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 items-end">
           <div className="space-y-1">
-            <label className="text-[11px] font-bold text-slate-700 uppercase">Student BT ID</label>
+            <label className="text-[11px] font-bold text-slate-700 uppercase">Student BT ID / Staff ID / Email</label>
             <input
               type="text"
               value={manualBtId}
-              onChange={(e) => setManualBtId(e.target.value.toUpperCase())}
-              placeholder="e.g. BT210115DS"
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 font-mono text-xs font-bold uppercase text-slate-800 focus:border-[#17458F] focus:outline-hidden"
+              onChange={(e) => setManualBtId(e.target.value)}
+              placeholder="e.g. BT210115DS or takhan@jdcoem.ac.in"
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 font-mono text-xs font-bold text-slate-800 focus:border-[#17458F] focus:outline-hidden"
             />
           </div>
 
@@ -1012,7 +1029,7 @@ export default function AdminRolesPage() {
               <option value="TREASURER">Treasurer</option>
               <option value="PROTOCOL_OFFICER">Protocol Officer</option>
               <option value="CHIEF_EDITOR">Chief Editor</option>
-              <option value="OWNER">Owner (Full Access)</option>
+              <option value="OWNER">Owner (Full Governance)</option>
             </select>
           </div>
 
@@ -1036,7 +1053,7 @@ export default function AdminRolesPage() {
           <Button
             onClick={() => {
               const matchedClub = clubs.find((c) => c.id === manualClubId);
-              const clean = normalizeBtId(manualBtId);
+              const clean = manualBtId.includes("@") ? manualBtId.toLowerCase().trim() : normalizeBtId(manualBtId);
               grantAccess(
                 manualBtId,
                 manualRole,

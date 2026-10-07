@@ -148,13 +148,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           : (storedProfile?.btId !== undefined ? storedProfile.btId : (localProfile?.btId || registeredUser?.btId || rosterBt || ""));
         const cleanBt = resolvedBtId ? resolvedBtId.trim().toUpperCase() : "";
 
-        const isOwner = isOwnerEmail(fbUser.email);
+        const isOwner = isOwnerEmail(fbUser.email) ||
+          storedProfile?.role === "OWNER" ||
+          storedProfile?.adminAccess?.role === "OWNER" ||
+          localProfile?.role === "OWNER" ||
+          localProfile?.adminAccess?.role === "OWNER" ||
+          registeredUser?.role === "OWNER" ||
+          registeredUser?.adminAccess?.role === "OWNER";
+
         const isAdminUser = await checkIsAdminInFirestore(fbUser.email || "", fbUser.uid);
         const firestoreAdminAccess = await getAdminAccessFromFirestore(fbUser.uid, cleanBt, fbUser.email);
         const adminAccess: AdminAccessAssignment | null = firestoreAdminAccess || (isOwner || isAdminUser
           ? {
               uid: fbUser.uid,
               btId: cleanBt,
+              email: fbUser.email || undefined,
               role: "OWNER",
               active: true,
               grantedBy: "system",
@@ -163,21 +171,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           : null);
 
-
         // Dynamic council/club roster resolution is authoritative for users with a BT ID.
         const targetName = storedProfile?.displayName || storedProfile?.name || localProfile?.displayName || localProfile?.name || registeredUser?.name || fbUser.displayName || fbUser.email;
         const designationInfo = cleanBt ? resolveDesignationByBtId(cleanBt, targetName || undefined) : null;
 
         const isAppointedOrHardcodedAdmin = 
+          isOwner ||
           isAdminUser || 
           Boolean(adminAccess?.active) ||
           storedProfile?.role === "COUNCIL_ADMIN" || 
+          storedProfile?.role === "OWNER" ||
           localProfile?.role === "COUNCIL_ADMIN" || 
-          registeredUser?.role === "COUNCIL_ADMIN";
+          localProfile?.role === "OWNER" ||
+          registeredUser?.role === "COUNCIL_ADMIN" ||
+          registeredUser?.role === "OWNER";
 
-        const assignedRole = isAppointedOrHardcodedAdmin 
-          ? "COUNCIL_ADMIN" 
-          : (isExplicitFaculty ? "FACULTY" : (storedProfile?.role || localProfile?.role || registeredUser?.role || "STUDENT"));
+        const assignedRole: "STUDENT" | "COUNCIL_ADMIN" | "FACULTY" | "GUEST" | "OWNER" = 
+          (isOwner || adminAccess?.role === "OWNER" || storedProfile?.role === "OWNER" || registeredUser?.role === "OWNER")
+            ? "OWNER"
+            : isAppointedOrHardcodedAdmin 
+            ? "COUNCIL_ADMIN" 
+            : (isExplicitFaculty ? "FACULTY" : (storedProfile?.role || localProfile?.role || registeredUser?.role || "STUDENT"));
 
         // Priority: Live roster resolution > non-student stored badge > fallback
         const rawBadge = storedProfile?.designationBadge || localProfile?.designationBadge || registeredUser?.designationBadge;
@@ -198,8 +212,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const activePending = pendingUserType || (typeof window !== "undefined" ? (sessionStorage.getItem("src_pending_user_type") as any) : null);
         const resolvedUserType: "JDCOEM_STUDENT" | "FACULTY" | "EXTERNAL_STUDENT" = activePending || 
-          (isExplicitFaculty || assignedRole === "FACULTY" ? "FACULTY" : 
-          assignedRole === "COUNCIL_ADMIN" ? "JDCOEM_STUDENT" :
+          (isExplicitFaculty ? "FACULTY" : 
+          assignedRole === "FACULTY" ? "FACULTY" :
           isExplicitExternal ? "EXTERNAL_STUDENT" :
           isJdcoem ? "JDCOEM_STUDENT" :
           (storedProfile?.userType as any) || (localProfile?.userType as any) || (registeredUser?.userType as any) || "JDCOEM_STUDENT");
@@ -404,13 +418,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           : (storedProfile?.btId !== undefined ? storedProfile.btId : (localProfile?.btId || registeredUser?.btId || rosterBt || ""));
         const cleanBt = resolvedBtId ? resolvedBtId.trim().toUpperCase() : "";
 
-        const isOwner = isOwnerEmail(fbUser.email);
+        const isOwner = isOwnerEmail(fbUser.email) ||
+          storedProfile?.role === "OWNER" ||
+          storedProfile?.adminAccess?.role === "OWNER" ||
+          localProfile?.role === "OWNER" ||
+          localProfile?.adminAccess?.role === "OWNER" ||
+          registeredUser?.role === "OWNER" ||
+          registeredUser?.adminAccess?.role === "OWNER";
+
         const isAdminUser = await checkIsAdminInFirestore(fbUser.email || "", fbUser.uid);
         const firestoreAdminAccess = await getAdminAccessFromFirestore(fbUser.uid, cleanBt, fbUser.email || undefined);
         const adminAccess: AdminAccessAssignment | null = firestoreAdminAccess || (isOwner || isAdminUser
           ? {
               uid: fbUser.uid,
               btId: cleanBt,
+              email: fbUser.email || undefined,
               role: "OWNER",
               active: true,
               grantedBy: "system",
@@ -424,15 +446,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const designationInfo = cleanBt ? resolveDesignationByBtId(cleanBt, targetName || undefined) : null;
 
         const isAppointedOrHardcodedAdmin = 
+          isOwner ||
           isAdminUser || 
           Boolean(adminAccess?.active) ||
           storedProfile?.role === "COUNCIL_ADMIN" || 
+          storedProfile?.role === "OWNER" ||
           localProfile?.role === "COUNCIL_ADMIN" || 
-          registeredUser?.role === "COUNCIL_ADMIN";
+          localProfile?.role === "OWNER" ||
+          registeredUser?.role === "COUNCIL_ADMIN" ||
+          registeredUser?.role === "OWNER";
 
-        const assignedRole = isAppointedOrHardcodedAdmin 
-          ? "COUNCIL_ADMIN" 
-          : (isExplicitFaculty ? "FACULTY" : (storedProfile?.role || localProfile?.role || registeredUser?.role || "STUDENT"));
+        const assignedRole: "STUDENT" | "COUNCIL_ADMIN" | "FACULTY" | "GUEST" | "OWNER" = 
+          (isOwner || adminAccess?.role === "OWNER" || storedProfile?.role === "OWNER" || registeredUser?.role === "OWNER")
+            ? "OWNER"
+            : isAppointedOrHardcodedAdmin 
+            ? "COUNCIL_ADMIN" 
+            : (isExplicitFaculty ? "FACULTY" : (storedProfile?.role || localProfile?.role || registeredUser?.role || "STUDENT"));
 
         // Priority: Live roster resolution > non-student stored badge > fallback
         const rawBadge = storedProfile?.designationBadge || localProfile?.designationBadge || registeredUser?.designationBadge;
@@ -453,8 +482,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const activePending = selectedUserType || pendingUserType || (typeof window !== "undefined" ? (sessionStorage.getItem("src_pending_user_type") as any) : null);
         const resolvedUserType: "JDCOEM_STUDENT" | "FACULTY" | "EXTERNAL_STUDENT" = activePending || 
-          (isExplicitFaculty || assignedRole === "FACULTY" ? "FACULTY" : 
-          assignedRole === "COUNCIL_ADMIN" ? "JDCOEM_STUDENT" :
+          (isExplicitFaculty ? "FACULTY" : 
+          assignedRole === "FACULTY" ? "FACULTY" :
           isExplicitExternal ? "EXTERNAL_STUDENT" :
           isJdcoem ? "JDCOEM_STUDENT" :
           (storedProfile?.userType as any) || (localProfile?.userType as any) || (registeredUser?.userType as any) || "JDCOEM_STUDENT");
@@ -682,8 +711,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         isLoading,
-        isAdmin: isOwnerEmail(user?.email) || user?.role === "COUNCIL_ADMIN" || user?.adminAccess?.role === "OWNER" || (user?.adminAccess?.active !== false && Boolean(user?.adminAccess?.role)),
-        isOwner: isOwnerEmail(user?.email) || user?.adminAccess?.role === "OWNER",
+        isAdmin: isOwnerEmail(user?.email) || user?.role === "COUNCIL_ADMIN" || user?.role === "OWNER" || user?.adminAccess?.role === "OWNER" || (user?.adminAccess?.active !== false && Boolean(user?.adminAccess?.role)),
+        isOwner: isOwnerEmail(user?.email) || user?.adminAccess?.role === "OWNER" || user?.role === "OWNER",
         adminAccess: user?.adminAccess || null,
         isAuthModalOpen,
         openAuthModal: () => setIsAuthModalOpen(true),

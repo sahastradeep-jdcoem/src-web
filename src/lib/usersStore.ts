@@ -6,7 +6,9 @@ import {
   deleteUserProfileFromFirestore,
   saveAdminRecordToFirestore,
   removeAdminRecordFromFirestore,
-  findUserByBtIdInFirestore
+  findUserByBtIdInFirestore,
+  saveAdminAccessToFirestore,
+  deleteAdminAccessFromFirestore
 } from "./firebase/firestore";
 import { 
   getStoredCouncilMembers, 
@@ -347,7 +349,7 @@ export function isExternalUser(user: {
   role?: string;
 } | null | undefined): boolean {
   if (!user) return false;
-  if (user.role === "COUNCIL_ADMIN" || user.role === "FACULTY" || user.userType === "FACULTY") return false;
+  if (user.role === "COUNCIL_ADMIN" || user.role === "OWNER" || user.role === "FACULTY" || user.userType === "FACULTY") return false;
   
   // Explicit external status takes absolute priority
   if (user.userType === "EXTERNAL_STUDENT") return true;
@@ -998,7 +1000,7 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
       const localMatch = (r.uid ? localMap.get(r.uid) : null) || (r.email ? localMap.get(r.email.toLowerCase()) : null);
       
       const isRemoteExplicitExternal = r.userType === "EXTERNAL_STUDENT";
-      const isRemoteExplicitFaculty = r.userType === "FACULTY" || r.role === "FACULTY";
+      const isRemoteExplicitFaculty = r.userType === "FACULTY" || r.role === "FACULTY" || localMatch?.userType === "FACULTY";
 
       // If user is explicitly EXTERNAL_STUDENT or FACULTY, do not resurrect old BT IDs from local cache
       const cleanBtId = isRemoteExplicitExternal || isRemoteExplicitFaculty
@@ -1022,7 +1024,7 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
         ? "FACULTY" 
         : isRemoteExplicitExternal
         ? "EXTERNAL_STUDENT"
-        : isJdcoemStudent || assignedRole === "COUNCIL_ADMIN" 
+        : isJdcoemStudent || assignedRole === "COUNCIL_ADMIN" || assignedRole === "OWNER"
         ? "JDCOEM_STUDENT" 
         : (r.userType === "JDCOEM_STUDENT" ? "JDCOEM_STUDENT" : (localMatch?.userType || "EXTERNAL_STUDENT"));
 
@@ -1054,7 +1056,7 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
         lastName: r.lastName || localMatch?.lastName || "",
         btId: cleanBtId,
         department: r.department || localMatch?.department || (isRemoteExplicitExternal ? "External Stream" : "Computer Science and Engineering"),
-        year: r.year || localMatch?.year || "3rd Year",
+        year: isRemoteExplicitFaculty ? "" : (r.year || localMatch?.year || "3rd Year"),
         phone: r.phone || localMatch?.phone || "",
         collegeName: resolvedCollegeName,
         city: isRemoteExplicitExternal ? (r.city || localMatch?.city || "") : (isJdcoemStudent ? (r.city || localMatch?.city || "Nagpur") : (r.city || localMatch?.city || "")),
@@ -1168,7 +1170,7 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
     const existing = existingIndex >= 0 ? current[existingIndex] : null;
     
     const isExplicitExternal = user.userType === "EXTERNAL_STUDENT";
-    const isExplicitFaculty = user.userType === "FACULTY" || user.role === "FACULTY" || existing?.role === "FACULTY";
+    const isExplicitFaculty = user.userType === "FACULTY" || user.role === "FACULTY" || existing?.userType === "FACULTY" || existing?.role === "FACULTY";
 
     // Resolve designation badge based on BT ID (cleared if external or faculty)
     const cleanBtId = isExplicitExternal || isExplicitFaculty
@@ -1192,7 +1194,7 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
       ? "FACULTY" 
       : isExplicitExternal
       ? "EXTERNAL_STUDENT"
-      : isJdcoemStudent || assignedRole === "COUNCIL_ADMIN" 
+      : isJdcoemStudent || assignedRole === "COUNCIL_ADMIN" || assignedRole === "OWNER"
       ? "JDCOEM_STUDENT" 
       : (user.userType || existing?.userType || "EXTERNAL_STUDENT");
 
@@ -1224,7 +1226,7 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
       lastName: user.lastName !== undefined ? user.lastName : (existing?.lastName || ""),
       btId: cleanBtId,
       department: user.department || existing?.department || "Basic Science & Humanities Dept.",
-      year: user.year || existing?.year || "1st Year",
+      year: isExplicitFaculty ? "" : (user.year !== undefined ? user.year : (existing?.year || "1st Year")),
       phone: user.phone !== undefined ? user.phone : (existing?.phone || ""),
       profileCompleted: user.profileCompleted !== undefined ? user.profileCompleted : (existing?.profileCompleted !== undefined ? existing.profileCompleted : true),
       designationBadge: assignedBadge,
@@ -1234,7 +1236,7 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
       title: user.title !== undefined ? user.title : existing?.title,
       facultyDesignation: user.facultyDesignation !== undefined ? user.facultyDesignation : existing?.facultyDesignation,
       facultyDepartment: user.facultyDepartment !== undefined ? user.facultyDepartment : existing?.facultyDepartment,
-      facultyApprovalStatus: user.facultyApprovalStatus || existing?.facultyApprovalStatus || (assignedRole === "FACULTY" ? "pending" : undefined),
+      facultyApprovalStatus: user.facultyApprovalStatus || existing?.facultyApprovalStatus || (isExplicitFaculty ? "approved" : undefined),
       facultyApprovedAt: user.facultyApprovedAt || existing?.facultyApprovedAt,
       facultyApprovedBy: user.facultyApprovedBy || existing?.facultyApprovedBy,
       employeeId: user.employeeId !== undefined ? user.employeeId : existing?.employeeId,
@@ -1268,16 +1270,34 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
     saveUserProfileToFirestore(record.uid, record);
 
     if (record.email) {
-      if (record.role === "COUNCIL_ADMIN") {
+      if (record.role === "COUNCIL_ADMIN" || record.role === "OWNER" || record.adminAccess?.role === "OWNER") {
+        const adminRole = record.role === "OWNER" || record.adminAccess?.role === "OWNER" ? "OWNER" : "COUNCIL_ADMIN";
         saveAdminRecordToFirestore(record.email, {
-          role: "COUNCIL_ADMIN",
+          role: adminRole,
           uid: record.uid,
           active: true,
           appointedAt: new Date().toISOString(),
         }).catch((err) => console.warn("Failed to sync admin record to Firestore:", err));
-      } else if (existing?.role === "COUNCIL_ADMIN") {
+
+        if (adminRole === "OWNER") {
+          saveAdminAccessToFirestore({
+            uid: record.uid,
+            btId: record.btId || "",
+            email: record.email,
+            role: "OWNER",
+            name: record.displayName || record.name,
+            active: true,
+            grantedBy: "admin",
+            grantedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }).catch((err) => console.warn("Failed to sync admin access to Firestore:", err));
+        }
+      } else if (existing?.role === "COUNCIL_ADMIN" || existing?.role === "OWNER" || existing?.adminAccess?.role === "OWNER") {
         removeAdminRecordFromFirestore(record.email).catch((err) =>
           console.warn("Failed to remove admin record from Firestore:", err)
+        );
+        deleteAdminAccessFromFirestore(record.uid, record.btId, record.email).catch((err) =>
+          console.warn("Failed to delete admin access from Firestore:", err)
         );
       }
     }
@@ -1482,9 +1502,9 @@ export async function lookupUserByBtId(btId: string): Promise<RegisteredUserReco
 }
 
 /**
- * Change user role (e.g. STUDENT <-> COUNCIL_ADMIN)
+ * Change user role (e.g. STUDENT, COUNCIL_ADMIN, FACULTY, OWNER)
  */
-export function changeUserRole(uid: string, newRole: "STUDENT" | "COUNCIL_ADMIN"): RegisteredUserRecord[] {
+export function changeUserRole(uid: string, newRole: "STUDENT" | "COUNCIL_ADMIN" | "FACULTY" | "OWNER"): RegisteredUserRecord[] {
   const current = getStoredUsers();
   const targetUser = current.find((u) => u.uid === uid);
   const updated = current.map((u) => (u.uid === uid ? { ...u, role: newRole } : u));
@@ -1494,16 +1514,33 @@ export function changeUserRole(uid: string, newRole: "STUDENT" | "COUNCIL_ADMIN"
     saveUserProfileToFirestore(uid, { role: newRole });
 
     if (targetUser?.email) {
-      if (newRole === "COUNCIL_ADMIN") {
+      if (newRole === "COUNCIL_ADMIN" || newRole === "OWNER") {
         saveAdminRecordToFirestore(targetUser.email, {
-          role: "COUNCIL_ADMIN",
+          role: newRole,
           uid,
           active: true,
           appointedAt: new Date().toISOString(),
         }).catch((err) => console.warn("Failed to sync admin record to /admins:", err));
+
+        if (newRole === "OWNER") {
+          saveAdminAccessToFirestore({
+            uid,
+            btId: targetUser.btId || "",
+            email: targetUser.email,
+            role: "OWNER",
+            name: targetUser.displayName || targetUser.name,
+            active: true,
+            grantedBy: "admin",
+            grantedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }).catch((err) => console.warn("Failed to sync admin access to /admin_access:", err));
+        }
       } else {
         removeAdminRecordFromFirestore(targetUser.email).catch((err) =>
           console.warn("Failed to remove admin record from /admins:", err)
+        );
+        deleteAdminAccessFromFirestore(uid, targetUser.btId, targetUser.email).catch((err) =>
+          console.warn("Failed to delete admin access from /admin_access:", err)
         );
       }
     }
