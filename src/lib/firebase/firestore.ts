@@ -199,29 +199,53 @@ export async function getAllAdminAccessFromFirestore(): Promise<AdminAccessAssig
     } catch {}
     return [];
   }
+
+  let result: AdminAccessAssignment[] = [];
+
+  // 1. Primary: query /admin_access collection
   try {
     const snapshot = await getDocs(collection(db, ADMIN_ACCESS_COLLECTION));
-    const map = new Map<string, AdminAccessAssignment>();
-    snapshot.docs.forEach((item) => {
-      const data = item.data() as AdminAccessAssignment;
-      const key = normalizeBtId(data.btId) || data.uid || item.id;
-      if (!map.has(key) || (data.updatedAt && (!map.get(key)?.updatedAt || data.updatedAt > map.get(key)!.updatedAt))) {
-        map.set(key, { ...data, uid: data.uid || item.id });
-      }
-    });
-    const result = Array.from(map.values());
-    if (result.length > 0) {
-      safeStorageSet("src_admin_access_cache", result);
+    if (snapshot && !snapshot.empty) {
+      const map = new Map<string, AdminAccessAssignment>();
+      snapshot.docs.forEach((item) => {
+        const data = item.data() as AdminAccessAssignment;
+        const key = normalizeBtId(data.btId) || data.uid || item.id;
+        if (!map.has(key) || (data.updatedAt && (!map.get(key)?.updatedAt || data.updatedAt > map.get(key)!.updatedAt))) {
+          map.set(key, { ...data, uid: data.uid || item.id });
+        }
+      });
+      result = Array.from(map.values());
     }
-    return result;
   } catch (error) {
-    console.warn("Firestore admin access list notice", error);
-    try {
-      const cached = localStorage.getItem("src_admin_access_cache");
-      if (cached) return JSON.parse(cached);
-    } catch {}
-    return [];
+    console.warn("Firestore admin_access collection notice (falling back to site_content backup):", error);
   }
+
+  // 2. Cloud-authoritative dual fallback: query site_content/admin_access (publicly readable across all devices)
+  if (result.length === 0) {
+    try {
+      const siteBackup = await getSiteContentFromFirestore<AdminAccessAssignment[]>("admin_access");
+      if (Array.isArray(siteBackup) && siteBackup.length > 0) {
+        result = siteBackup;
+      }
+    } catch (e) {
+      console.warn("Notice reading site_content/admin_access backup:", e);
+    }
+  }
+
+  // 3. If records exist from either cloud store, update local cache and ensure site_content backup is synchronized
+  if (result.length > 0) {
+    safeStorageSet("src_admin_access_cache", result);
+    // Background mirror to site_content so non-primary devices immediately have access
+    saveSiteContentToFirestore("admin_access", result).catch(() => {});
+    return result;
+  }
+
+  // 4. Offline device cache fallback
+  try {
+    const cached = localStorage.getItem("src_admin_access_cache");
+    if (cached) return JSON.parse(cached);
+  } catch {}
+  return [];
 }
 
 export function subscribeToAdminAccessFromFirestore(
@@ -234,39 +258,75 @@ export function subscribeToAdminAccessFromFirestore(
     } catch {}
     return () => {};
   }
+
+  let hasEmittedFromCollection = false;
+  let siteContentUnsub: (() => void) | null = null;
+
+  const hookSiteContentFallback = () => {
+    if (siteContentUnsub) return;
+    siteContentUnsub = subscribeToSiteContent<AdminAccessAssignment[]>("admin_access", (remote) => {
+      if (!hasEmittedFromCollection && Array.isArray(remote) && remote.length > 0) {
+        safeStorageSet("src_admin_access_cache", remote);
+        callback(remote);
+      }
+    });
+  };
+
+  // Immediate read from cache or site_content so new devices render immediately without a 0-item blank flash
   try {
-    return onSnapshot(
+    const cached = localStorage.getItem("src_admin_access_cache");
+    if (cached) {
+      callback(JSON.parse(cached));
+    } else {
+      getSiteContentFromFirestore<AdminAccessAssignment[]>("admin_access").then((backup) => {
+        if (!hasEmittedFromCollection && Array.isArray(backup) && backup.length > 0) {
+          safeStorageSet("src_admin_access_cache", backup);
+          callback(backup);
+        }
+      }).catch(() => {});
+    }
+  } catch {}
+
+  try {
+    const unsubCollection = onSnapshot(
       collection(db, ADMIN_ACCESS_COLLECTION),
       (snapshot) => {
-        const map = new Map<string, AdminAccessAssignment>();
-        snapshot.docs.forEach((item) => {
-          const data = item.data() as AdminAccessAssignment;
-          const key = normalizeBtId(data.btId) || data.uid || item.id;
-          if (!map.has(key) || (data.updatedAt && (!map.get(key)?.updatedAt || data.updatedAt > map.get(key)!.updatedAt))) {
-            map.set(key, { ...data, uid: data.uid || item.id });
+        if (!snapshot.empty) {
+          const map = new Map<string, AdminAccessAssignment>();
+          snapshot.docs.forEach((item) => {
+            const data = item.data() as AdminAccessAssignment;
+            const key = normalizeBtId(data.btId) || data.uid || item.id;
+            if (!map.has(key) || (data.updatedAt && (!map.get(key)?.updatedAt || data.updatedAt > map.get(key)!.updatedAt))) {
+              map.set(key, { ...data, uid: data.uid || item.id });
+            }
+          });
+          const result = Array.from(map.values());
+          if (result.length > 0) {
+            hasEmittedFromCollection = true;
+            safeStorageSet("src_admin_access_cache", result);
+            saveSiteContentToFirestore("admin_access", result).catch(() => {});
+            callback(result);
+            return;
           }
-        });
-        const result = Array.from(map.values());
-        if (result.length > 0) {
-          safeStorageSet("src_admin_access_cache", result);
         }
-        callback(result);
+        hookSiteContentFallback();
       },
       (error) => {
-        console.warn("Firestore live admin access notice", error);
-        try {
-          const cached = localStorage.getItem("src_admin_access_cache");
-          if (cached) callback(JSON.parse(cached));
-        } catch {}
+        console.warn("Firestore live admin_access collection notice (switching to site_content fallback):", error);
+        hookSiteContentFallback();
       }
     );
+
+    return () => {
+      unsubCollection();
+      if (siteContentUnsub) siteContentUnsub();
+    };
   } catch (error) {
-    console.warn("Firestore admin access subscription error", error);
-    try {
-      const cached = localStorage.getItem("src_admin_access_cache");
-      if (cached) callback(JSON.parse(cached));
-    } catch {}
-    return () => {};
+    console.warn("Firestore admin_access subscription error, using site_content fallback:", error);
+    hookSiteContentFallback();
+    return () => {
+      if (siteContentUnsub) siteContentUnsub();
+    };
   }
 }
 
@@ -344,9 +404,9 @@ export async function saveAdminAccessToFirestore(
 ): Promise<void> {
   if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return;
   const cleanBt = normalizeBtId(assignment.btId);
-  if (!cleanBt && !assignment.uid) return;
+  if (!cleanBt && !assignment.uid && !assignment.email) return;
   const now = new Date().toISOString();
-  const payload = cleanUndefined({
+  const payload: AdminAccessAssignment = cleanUndefined({
     ...assignment,
     btId: cleanBt,
     active: assignment.active !== false,
@@ -367,7 +427,43 @@ export async function saveAdminAccessToFirestore(
       batchOps.push(setDoc(doc(db, ADMIN_ACCESS_COLLECTION, cleanEmail), payload, { merge: true }));
     }
   }
+
+  // If granting OWNER role, also update root /admins/{email} and /users/{uid}
+  if (assignment.email && assignment.role === "OWNER") {
+    const cleanEmail = assignment.email.toLowerCase().trim();
+    batchOps.push(saveAdminRecordToFirestore(cleanEmail, {
+      role: "OWNER",
+      uid: assignment.uid || "",
+      active: assignment.active !== false,
+    }));
+  }
+  if (assignment.uid && assignment.role === "OWNER") {
+    batchOps.push(saveUserProfileToFirestore(assignment.uid, {
+      role: "OWNER",
+    }));
+  }
+
   await Promise.all(batchOps);
+
+  // Dual-write to site_content/admin_access for cross-device resilience
+  try {
+    let currentList: AdminAccessAssignment[] = [];
+    const cached = localStorage.getItem("src_admin_access_cache");
+    if (cached) {
+      try { currentList = JSON.parse(cached); } catch {}
+    }
+    const filtered = currentList.filter(
+      (a) =>
+        (!cleanBt || a.btId !== cleanBt) &&
+        (!assignment.uid || a.uid !== assignment.uid) &&
+        (!assignment.email || a.email?.toLowerCase().trim() !== assignment.email?.toLowerCase().trim())
+    );
+    const updatedList = [...filtered, payload];
+    safeStorageSet("src_admin_access_cache", updatedList);
+    await saveSiteContentToFirestore("admin_access", updatedList);
+  } catch (err) {
+    console.warn("Dual-write update error for admin_access in site_content:", err);
+  }
 }
 
 export async function revokeAdminAccessFromFirestore(
@@ -387,6 +483,28 @@ export async function revokeAdminAccessFromFirestore(
     batchOps.push(setDoc(doc(db, ADMIN_ACCESS_COLLECTION, secondaryIdentifier), payload, { merge: true }));
   }
   await Promise.all(batchOps);
+
+  // Dual-write revocation update to site_content/admin_access
+  try {
+    const cached = localStorage.getItem("src_admin_access_cache");
+    if (cached) {
+      const parsed: AdminAccessAssignment[] = JSON.parse(cached);
+      const updated = parsed.map((a) => {
+        if (
+          a.btId === identifier ||
+          a.uid === identifier ||
+          (secondaryIdentifier && (a.btId === secondaryIdentifier || a.uid === secondaryIdentifier))
+        ) {
+          return { ...a, active: false, updatedAt: now };
+        }
+        return a;
+      });
+      safeStorageSet("src_admin_access_cache", updated);
+      await saveSiteContentToFirestore("admin_access", updated);
+    }
+  } catch (err) {
+    console.warn("Dual-write revocation notice for admin_access:", err);
+  }
 }
 
 export async function deleteAdminAccessFromFirestore(
@@ -409,7 +527,7 @@ export async function deleteAdminAccessFromFirestore(
   }
   await Promise.all(batchOps);
 
-  // Update local cache
+  // Update local cache and dual-write deletion to site_content/admin_access
   try {
     const cached = localStorage.getItem("src_admin_access_cache");
     if (cached) {
@@ -421,6 +539,7 @@ export async function deleteAdminAccessFromFirestore(
           (!a.email || !targets.has(a.email.toLowerCase().trim()))
       );
       safeStorageSet("src_admin_access_cache", filtered);
+      await saveSiteContentToFirestore("admin_access", filtered);
     }
   } catch {}
 }

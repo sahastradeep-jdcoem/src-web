@@ -150,13 +150,7 @@ service cloud.firestore {
 
     // Owner-controlled admin access assignments (keyed by UID, BT ID, or Email)
     match /admin_access/{accessId} {
-      allow read: if isOwner() || isPrivilegedAdmin() || isAdmin() || (
-        isAuthenticated() && (
-          request.auth.uid == accessId ||
-          getUserBtId() == accessId ||
-          request.auth.token.email == accessId
-        )
-      );
+      allow read: if isAuthenticated();
       allow write: if isOwner() || isPrivilegedAdmin();
     }
 

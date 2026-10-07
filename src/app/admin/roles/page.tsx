@@ -31,6 +31,7 @@ import {
   getAllUsersFromFirestore,
   findUserByBtIdInFirestore,
   saveSiteContentToFirestore,
+  saveAdminRecordToFirestore,
 } from "@/lib/firebase/firestore";
 import { 
   getStoredClubs, 
@@ -114,7 +115,21 @@ export default function AdminRolesPage() {
         ...(remoteSpokespersons && remoteSpokespersons.length > 0 ? remoteSpokespersons : getStoredSpokespersons()),
       ];
       setOfficers(combinedOfficers);
-      setAssignments(remoteAssignments);
+      if (remoteAssignments && remoteAssignments.length > 0) {
+        setAssignments(remoteAssignments);
+        saveSiteContentToFirestore("admin_access", remoteAssignments).catch(() => {});
+      } else {
+        try {
+          const cached = localStorage.getItem("src_admin_access_cache");
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setAssignments(parsed);
+              saveSiteContentToFirestore("admin_access", parsed).catch(() => {});
+            }
+          }
+        } catch {}
+      }
       if (remoteUsers && remoteUsers.length > 0) setRegisteredUsers(remoteUsers);
     } catch {
       setNotice({ message: "Notice: Synchronizing latest administrative datasets from Firestore.", type: "info" });
@@ -464,11 +479,10 @@ export default function AdminRolesPage() {
       });
 
       if (role === "OWNER" && email) {
-        await saveSiteContentToFirestore(`admins/${email.toLowerCase()}`, {
-          email: email.toLowerCase(),
+        await saveAdminRecordToFirestore(email.toLowerCase(), {
           role: "OWNER",
+          uid,
           active: true,
-          updatedAt: now,
         });
       }
 
