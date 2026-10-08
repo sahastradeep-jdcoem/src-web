@@ -18,7 +18,9 @@ import {
   Sparkles,
   ArrowRight,
   ChevronLeft,
-  AlertCircle
+  AlertCircle,
+  Sun,
+  Moon
 } from "lucide-react";
 import { SocialSharePayload, StoryPalette } from "@/lib/share/types";
 import { extractStoryPalette, DEFAULT_STORY_PALETTE } from "@/lib/share/colorExtractor";
@@ -41,6 +43,7 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
   const [storyBlob, setStoryBlob] = useState<Blob | null>(null);
   const [palette, setPalette] = useState<StoryPalette>(DEFAULT_STORY_PALETTE);
   const [includeQrCode, setIncludeQrCode] = useState(false);
+  const [storyTheme, setStoryTheme] = useState<"dark" | "light">("dark");
   const [copiedLink, setCopiedLink] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -92,6 +95,7 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
 
         const canvas = await renderStoryToCanvas(payload, extractedPalette, {
           includeQrCode,
+          theme: storyTheme,
         });
         if (!isMounted) return;
 
@@ -113,7 +117,7 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
     return () => {
       isMounted = false;
     };
-  }, [isOpen, payload, includeQrCode]);
+  }, [isOpen, payload, includeQrCode, storyTheme]);
 
   // Generate Ultra-HD Branded QR Code whenever modal opens with payload
   useEffect(() => {
@@ -171,7 +175,7 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .slice(0, 30);
-  const downloadFileName = `srcjdcoem-${sanitizedSlug}-story.png`;
+  const downloadFileName = `srcjdcoem-${sanitizedSlug}-${storyTheme}-story.png`;
 
   // Copy Link Handler - Copies exact canonical event URL
   const handleCopyLink = async () => {
@@ -251,7 +255,7 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
 
       // If blob isn't ready yet, regenerate from canvas on the fly
       if (!currentBlob) {
-        const canvas = await renderStoryToCanvas(payload, palette, { includeQrCode });
+        const canvas = await renderStoryToCanvas(payload, palette, { includeQrCode, theme: storyTheme });
         currentBlob = await exportStoryBlob(canvas);
         setStoryBlob(currentBlob);
       }
@@ -321,7 +325,7 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
     try {
       let currentBlob = storyBlob;
       if (!currentBlob) {
-        const canvas = await renderStoryToCanvas(payload, palette, { includeQrCode });
+        const canvas = await renderStoryToCanvas(payload, palette, { includeQrCode, theme: storyTheme });
         currentBlob = await exportStoryBlob(canvas);
         setStoryBlob(currentBlob);
       }
@@ -363,9 +367,10 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-300"
       onClick={onClose}
     >
+      <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none opacity-50 dark:opacity-100" />
       <div
         className={`relative w-full ${
           activeView === "choose"
@@ -373,7 +378,7 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
             : activeView === "qrcode"
             ? "max-w-md sm:max-w-lg"
             : "max-w-lg sm:max-w-xl md:max-w-4xl"
-        } max-h-[92vh] bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden flex flex-col text-slate-900 font-sans transition-all duration-200`}
+        } max-h-[92vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl dark:shadow-slate-900/50 overflow-hidden flex flex-col text-slate-900 dark:text-slate-100 font-sans transition-all duration-300 animate-in fade-in zoom-in-95`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* ================================================================= */}
@@ -387,10 +392,10 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
                 <span className="text-[11px] font-bold text-[#E78023] uppercase tracking-wider block">
                   {payload.typeLabel || "SRC SHARE"}
                 </span>
-                <h3 className="text-xl sm:text-2xl font-heading font-extrabold text-[#0F172A] tracking-tight">
+                <h3 className="text-xl sm:text-2xl font-heading font-extrabold text-[#0F172A] dark:text-white tracking-tight">
                   Share this {payload.type === "form" ? "Form" : "Event"}
                 </h3>
-                <p className="text-xs sm:text-sm text-slate-500 font-normal leading-relaxed line-clamp-1">
+                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-normal leading-relaxed line-clamp-1">
                   {payload.title}
                 </p>
               </div>
@@ -399,7 +404,7 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
                 type="button"
                 onClick={onClose}
                 aria-label="Close"
-                className="p-2.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                className="p-2.5 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -411,22 +416,23 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
               <button
                 type="button"
                 onClick={handleCopyLink}
-                className="group p-4 sm:p-5 rounded-2xl border-2 border-slate-200 hover:border-[#17458F] bg-slate-50/60 hover:bg-blue-50/30 transition-all text-left flex flex-col justify-between space-y-4 shadow-2xs hover:shadow-md cursor-pointer active:scale-[0.99]"
+                className="relative group p-4 sm:p-5 rounded-3xl border-2 border-slate-200 dark:border-slate-700 hover:border-[#17458F] dark:hover:border-[#17458F] bg-slate-50/60 dark:bg-slate-800/60 hover:bg-blue-50/30 dark:hover:bg-blue-900/20 transition-all duration-300 text-left flex flex-col justify-between space-y-4 shadow-sm hover:shadow-md cursor-pointer hover:scale-[1.01] active:scale-[0.99] overflow-hidden"
               >
-                <div className="flex items-center justify-between w-full">
-                  <div className="w-10 h-10 rounded-xl bg-blue-100 text-[#17458F] flex items-center justify-center group-hover:scale-105 transition-transform shadow-2xs">
-                    {copiedLink ? <Check className="w-5 h-5 text-emerald-600" /> : <LinkIcon className="w-5 h-5" />}
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#17458F] transform -translate-x-full group-hover:translate-x-0 transition-transform duration-300 rounded-l-3xl" />
+                <div className="flex items-center justify-between w-full relative z-10">
+                  <div className="w-[44px] h-[44px] rounded-xl bg-blue-100 dark:bg-blue-900/50 text-[#17458F] dark:text-blue-400 flex items-center justify-center group-hover:scale-105 group-hover:animate-pulse transition-transform shadow-sm">
+                    {copiedLink ? <Check className="w-5 h-5 text-emerald-600 dark:text-emerald-400" /> : <LinkIcon className="w-5 h-5" />}
                   </div>
-                  <span className="text-xs font-bold text-[#17458F] opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                  <span className="text-xs font-bold text-[#17458F] dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
                     {copiedLink ? "Copied!" : "Copy"} <ArrowRight className="w-3.5 h-3.5" />
                   </span>
                 </div>
 
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900 group-hover:text-[#17458F] transition-colors">
+                <div className="relative z-10">
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 group-hover:text-[#17458F] dark:group-hover:text-blue-400 transition-colors">
                     {copiedLink ? "Link Copied!" : "Copy Web Link"}
                   </h4>
-                  <p className="text-xs text-slate-500 mt-0.5 leading-snug">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
                     Share directly via WhatsApp, Telegram, or messages with preview tags.
                   </p>
                 </div>
@@ -436,23 +442,25 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
               <button
                 type="button"
                 onClick={() => setActiveView("instagram")}
-                className="group p-4 sm:p-5 rounded-2xl border-2 border-slate-200 hover:border-pink-500/80 bg-gradient-to-br from-pink-50/50 via-orange-50/30 to-amber-50/50 hover:from-pink-50 hover:to-orange-50 transition-all text-left flex flex-col justify-between space-y-4 shadow-2xs hover:shadow-md cursor-pointer active:scale-[0.99]"
+                className="relative group p-4 sm:p-5 rounded-3xl border-2 border-transparent bg-gradient-to-br from-pink-50/80 via-orange-50/50 to-amber-50/80 dark:from-slate-800/90 dark:via-slate-800/80 dark:to-slate-800/90 transition-all duration-300 text-left flex flex-col justify-between space-y-4 shadow-sm hover:shadow-lg cursor-pointer hover:scale-[1.02] active:scale-[0.99] overflow-hidden"
               >
-                <div className="flex items-center justify-between w-full">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 text-white flex items-center justify-center group-hover:scale-105 transition-transform shadow-sm">
+                <div className="absolute inset-0 rounded-3xl p-[2px] bg-gradient-to-br from-pink-500 via-orange-400 to-amber-500 opacity-30 group-hover:opacity-100 transition-opacity duration-300 -z-10" />
+                <div className="absolute inset-[2px] rounded-[22px] bg-white dark:bg-slate-900 -z-10" />
+                <div className="flex items-center justify-between w-full relative z-10">
+                  <div className="w-[44px] h-[44px] rounded-xl bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 text-white flex items-center justify-center group-hover:scale-105 group-hover:animate-pulse transition-transform shadow-sm">
                     <Instagram className="w-5 h-5" />
                   </div>
-                  <span className="text-xs font-bold text-pink-600 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                  <span className="text-xs font-bold text-pink-600 dark:text-pink-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
                     Open <ArrowRight className="w-3.5 h-3.5" />
                   </span>
                 </div>
 
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900 group-hover:text-pink-600 transition-colors flex items-center gap-1.5">
+                <div className="relative z-10">
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 group-hover:text-pink-600 dark:group-hover:text-pink-400 transition-colors flex items-center gap-1.5">
                     <span>Instagram Story</span>
                     <Sparkles className="w-3.5 h-3.5 text-amber-500" />
                   </h4>
-                  <p className="text-xs text-slate-500 mt-0.5 leading-snug">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
                     Generate a branded 9:16 story card with 16:9 artwork & official badge.
                   </p>
                 </div>
@@ -462,22 +470,27 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
               <button
                 type="button"
                 onClick={() => setActiveView("qrcode")}
-                className="group p-4 sm:p-5 rounded-2xl border-2 border-slate-200 hover:border-[#17458F] bg-gradient-to-br from-slate-50/80 via-blue-50/20 to-slate-50/80 hover:from-blue-50/50 hover:to-indigo-50/30 transition-all text-left flex flex-col justify-between space-y-4 shadow-2xs hover:shadow-md cursor-pointer active:scale-[0.99]"
+                className="relative group p-4 sm:p-5 rounded-3xl border-2 border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 bg-slate-50/60 dark:bg-slate-800/60 transition-all duration-300 text-left flex flex-col justify-between space-y-4 shadow-sm hover:shadow-md cursor-pointer hover:scale-[1.01] active:scale-[0.99] overflow-hidden"
               >
-                <div className="flex items-center justify-between w-full">
-                  <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center group-hover:scale-105 transition-transform shadow-2xs">
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500 transform -translate-x-full group-hover:translate-x-0 transition-transform duration-300 rounded-l-3xl" />
+                
+                {/* Subtle scanning line animation on hover */}
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-500/10 to-transparent -translate-y-full group-hover:animate-[scan_2s_ease-in-out_infinite] opacity-0 group-hover:opacity-100 pointer-events-none" />
+
+                <div className="flex items-center justify-between w-full relative z-10">
+                  <div className="w-[44px] h-[44px] rounded-xl bg-slate-900 dark:bg-slate-700 text-white flex items-center justify-center group-hover:scale-105 group-hover:animate-pulse transition-transform shadow-sm">
                     <QrCode className="w-5 h-5 text-[#E78023]" />
                   </div>
-                  <span className="text-xs font-bold text-[#17458F] opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                  <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
                     View <ArrowRight className="w-3.5 h-3.5" />
                   </span>
                 </div>
 
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900 group-hover:text-[#17458F] transition-colors flex items-center gap-1.5">
+                <div className="relative z-10">
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors flex items-center gap-1.5">
                     <span>QR Code</span>
                   </h4>
-                  <p className="text-xs text-slate-500 mt-0.5 leading-snug">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
                     Generate a branded QR code for this event.
                   </p>
                 </div>
@@ -485,16 +498,19 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
             </div>
 
             {/* Destination URL strip */}
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs text-slate-500">
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 transition-colors duration-300">
               <span className="truncate pr-2 font-mono text-[11px]">
                 {payload.url.replace(/^https?:\/\//, "")}
               </span>
               <button
                 type="button"
                 onClick={handleCopyLink}
-                className="font-bold text-[#17458F] hover:underline shrink-0 text-xs cursor-pointer"
+                className="font-bold text-[#17458F] dark:text-blue-400 hover:underline shrink-0 text-xs cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center relative overflow-hidden"
               >
-                {copiedLink ? "Copied" : "Copy"}
+                <span className={`transition-all duration-300 absolute inset-0 flex items-center justify-center ${copiedLink ? "opacity-0 scale-95" : "opacity-100 scale-100"}`}>Copy</span>
+                <span className={`absolute inset-0 flex items-center justify-center transition-all duration-300 text-emerald-600 dark:text-emerald-400 ${copiedLink ? "opacity-100 scale-100" : "opacity-0 scale-95"}`}>
+                  <Check className="w-4 h-4 mr-1" /> Copied
+                </span>
               </button>
             </div>
           </div>
@@ -504,20 +520,20 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
           /* ================================================================= */
           <div className="flex flex-col max-h-[92vh]">
             {/* Studio Header */}
-            <div className="px-5 py-3.5 sm:px-6 sm:py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white z-10">
+            <div className="px-5 py-3.5 sm:px-6 sm:py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 bg-white dark:bg-slate-900 z-10">
               <div className="flex items-center gap-2.5">
                 <button
                   type="button"
                   onClick={() => setActiveView("choose")}
-                  className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                  className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer"
                   title="Back to share options"
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
                 <div>
-                  <h3 className="text-sm sm:text-base font-bold text-slate-900 leading-tight flex items-center gap-1.5">
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 leading-tight flex items-center gap-1.5">
                     <span>Event QR Code</span>
-                    <QrCode className="w-4 h-4 text-[#17458F]" />
+                    <QrCode className="w-4 h-4 text-[#17458F] dark:text-blue-400" />
                   </h3>
                 </div>
               </div>
@@ -526,37 +542,37 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
                 type="button"
                 onClick={onClose}
                 aria-label="Close dialog"
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* QR Studio Content */}
-            <div className="flex-1 overflow-y-auto p-5 sm:p-7 flex flex-col items-center justify-center text-center bg-slate-50/50">
+            <div className="flex-1 overflow-y-auto p-5 sm:p-7 flex flex-col items-center justify-center text-center bg-slate-50/50 dark:bg-slate-900/50">
               {/* Event Name */}
               <div className="space-y-0.5 mb-4 sm:mb-5 max-w-sm px-2">
-                <h4 className="text-base sm:text-lg font-heading font-extrabold text-[#0F172A] tracking-tight line-clamp-2">
+                <h4 className="text-base sm:text-lg font-heading font-extrabold text-[#0F172A] dark:text-white tracking-tight line-clamp-2">
                   {payload.title}
                 </h4>
-                <p className="text-xs text-slate-500 font-medium">
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                   Event QR Code
                 </p>
               </div>
 
               {/* Centered QR Card Container */}
-              <div className="relative p-4 sm:p-5 bg-white rounded-3xl border-2 border-slate-200/90 shadow-xl flex flex-col items-center justify-center transition-all group">
+              <div className={`relative p-4 sm:p-5 bg-white dark:bg-slate-800 rounded-3xl border-2 ${isQrRendering ? 'border-indigo-400 animate-pulse' : 'border-slate-200/90 dark:border-slate-700'} shadow-xl dark:shadow-slate-900/50 flex flex-col items-center justify-center transition-all group duration-300`}>
                 {isQrRendering ? (
                   <div className="w-[220px] h-[220px] sm:w-[260px] sm:h-[260px] flex flex-col items-center justify-center gap-3 p-4">
-                    <Loader2 className="w-8 h-8 text-[#17458F] animate-spin" />
-                    <span className="text-xs font-semibold text-slate-500">
+                    <Loader2 className="w-8 h-8 text-[#17458F] dark:text-blue-400 animate-spin" />
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                       Generating branded QR code...
                     </span>
                   </div>
                 ) : qrError ? (
                   <div className="w-[220px] h-[220px] sm:w-[260px] sm:h-[260px] flex flex-col items-center justify-center gap-2.5 p-4 text-center">
                     <AlertCircle className="w-8 h-8 text-rose-500" />
-                    <span className="text-xs font-bold text-rose-700">
+                    <span className="text-xs font-bold text-rose-700 dark:text-rose-400">
                       {qrError}
                     </span>
                   </div>
@@ -580,10 +596,10 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
 
               {/* Below QR: Scan Helper Prompt */}
               <div className="mt-4 space-y-1 max-w-xs px-2">
-                <p className="text-xs font-semibold text-slate-700">
+                <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                   Scan to view this event
                 </p>
-                <p className="text-[11px] font-mono text-slate-400 truncate max-w-[260px] mx-auto">
+                <p className="text-[11px] font-mono text-slate-400 dark:text-slate-500 truncate max-w-[260px] mx-auto">
                   {payload.url.replace(/^https?:\/\//, "")}
                 </p>
               </div>
@@ -595,12 +611,12 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
                   type="button"
                   onClick={handleDownloadQr}
                   disabled={isQrRendering || !!qrError || !qrDataUrl || isQrDownloading}
-                  className="w-full sm:flex-1 py-3 px-4 rounded-2xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md shadow-blue-900/20 cursor-pointer active:scale-[0.98] disabled:opacity-50 min-h-[46px]"
+                  className="w-full sm:flex-1 py-3 px-4 rounded-2xl bg-[#17458F] dark:bg-blue-600 hover:bg-[#123670] dark:hover:bg-blue-700 text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md shadow-blue-900/20 dark:shadow-blue-900/40 cursor-pointer active:scale-[0.98] disabled:opacity-50 min-h-[46px]"
                 >
                   {isQrDownloading ? (
                     <Loader2 className="w-4 h-4 animate-spin text-white" />
                   ) : (
-                    <Download className="w-4 h-4 text-[#E78023]" />
+                    <Download className="w-4 h-4 text-[#E78023] dark:text-amber-400" />
                   )}
                   <span>Download QR Code</span>
                 </button>
@@ -609,13 +625,13 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
                 <button
                   type="button"
                   onClick={handleCopyLink}
-                  className="w-full sm:w-auto py-3 px-3.5 rounded-2xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] min-h-[46px]"
+                  className="w-full sm:w-auto py-3 px-3.5 rounded-2xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] min-h-[46px]"
                   title="Copy Link"
                 >
                   {copiedLink ? (
-                    <Check className="w-4 h-4 text-emerald-600" />
+                    <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   ) : (
-                    <Copy className="w-4 h-4 text-slate-500" />
+                    <Copy className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                   )}
                   <span className="sm:hidden">{copiedLink ? "Copied" : "Copy Link"}</span>
                 </button>
@@ -628,22 +644,22 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
           /* ================================================================= */
           <div className="flex flex-col max-h-[92vh]">
             {/* Studio Header */}
-            <div className="px-5 py-3.5 sm:px-6 sm:py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white z-10">
+            <div className="px-5 py-3.5 sm:px-6 sm:py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 bg-white dark:bg-slate-900 z-10">
               <div className="flex items-center gap-2.5">
                 <button
                   type="button"
                   onClick={() => setActiveView("choose")}
-                  className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                  className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer"
                   title="Back to share options"
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
                 <div>
-                  <h3 className="text-sm sm:text-base font-bold text-slate-900 leading-tight flex items-center gap-1.5">
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 leading-tight flex items-center gap-1.5">
                     <span>Share to Instagram Story</span>
-                    <Instagram className="w-4 h-4 text-pink-600" />
+                    <Instagram className="w-4 h-4 text-pink-600 dark:text-pink-400" />
                   </h3>
-                  <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
+                  <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium">
                     1080 × 1920 Ultra HD card with SRC accreditation
                   </p>
                 </div>
@@ -653,44 +669,68 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
                 type="button"
                 onClick={onClose}
                 aria-label="Close dialog"
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Modal Body: 2 Columns on Desktop, Stacked on Mobile */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 grid grid-cols-1 md:grid-cols-12 gap-6 items-center bg-slate-50/50">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 grid grid-cols-1 md:grid-cols-12 gap-6 items-center bg-slate-50/50 dark:bg-slate-900/50">
               
               {/* Left Column: 9:16 Story Mockup Preview */}
               <div className="md:col-span-6 flex flex-col items-center justify-center">
-                <div className="relative w-[260px] sm:w-[295px] aspect-[9/16] rounded-3xl overflow-hidden border-4 border-slate-800 shadow-xl bg-black flex items-center justify-center group">
-                  {isRendering ? (
-                    <div className="flex flex-col items-center justify-center gap-3 p-6 text-center">
-                      <Loader2 className="w-8 h-8 text-[#E78023] animate-spin" />
-                      <span className="text-xs font-semibold text-slate-300">
-                        Generating 9:16 Story canvas...
+                <div className={`relative w-[260px] sm:w-[295px] aspect-[9/16] rounded-[2.5rem] overflow-hidden shadow-2xl flex items-center justify-center group p-[4px] transition-all duration-300 ${
+                  storyTheme === "dark"
+                    ? "bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 shadow-purple-950/40"
+                    : "bg-gradient-to-tr from-orange-400 via-amber-300 to-blue-500 shadow-slate-400/20"
+                }`}>
+                  <div className={`relative w-full h-full rounded-[2.25rem] overflow-hidden border transition-colors duration-300 ${
+                    storyTheme === "dark" ? "bg-black border-slate-900" : "bg-slate-50 border-slate-200"
+                  }`}>
+                    {/* Device Mockup Details */}
+                    <div className="absolute top-0 inset-x-0 h-6 flex justify-center z-20 pointer-events-none">
+                      <div className={`w-24 h-4 rounded-b-xl opacity-90 ${storyTheme === "dark" ? "bg-black" : "bg-slate-300"}`} />
+                    </div>
+                    <div className="absolute top-1.5 right-4 flex gap-1 z-20 pointer-events-none opacity-50">
+                      <div className={`w-1.5 h-1.5 rounded-full ${storyTheme === "dark" ? "bg-white" : "bg-slate-700"}`} />
+                      <div className={`w-1.5 h-1.5 rounded-full ${storyTheme === "dark" ? "bg-white" : "bg-slate-700"}`} />
+                      <div className={`w-1.5 h-1.5 rounded-full ${storyTheme === "dark" ? "bg-white" : "bg-slate-700"}`} />
+                    </div>
+
+                    {isRendering ? (
+                      <div className="flex flex-col items-center justify-center h-full gap-3 p-6 text-center">
+                        <Loader2 className="w-8 h-8 text-[#E78023] animate-spin" />
+                        <span className={`text-xs font-semibold ${storyTheme === "dark" ? "text-slate-300" : "text-slate-600"}`}>
+                          Generating 9:16 {storyTheme === "dark" ? "Dark" : "Light"} Story canvas...
+                        </span>
+                      </div>
+                    ) : previewDataUrl ? (
+                      <Image
+                        src={previewDataUrl}
+                        alt="Story preview"
+                        fill
+                        unoptimized={true}
+                        className="object-contain"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-xs text-slate-400 text-center p-4">
+                        Unable to render preview
+                      </div>
+                    )}
+
+                    {/* Resolution & Theme Overlay Badge */}
+                    <div className="absolute bottom-3 inset-x-0 flex justify-center pointer-events-none z-10">
+                      <span className={`text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full backdrop-blur-md border flex items-center gap-1.5 transition-colors duration-200 ${
+                        storyTheme === "dark"
+                          ? "bg-black/70 text-white/95 border-white/20"
+                          : "bg-white/85 text-slate-900 border-slate-300/80 shadow-xs"
+                      }`}>
+                        <span>1080 × 1920</span>
+                        <span className="opacity-40">•</span>
+                        <span>{storyTheme === "dark" ? "🌙 DARK" : "☀️ LIGHT"}</span>
                       </span>
                     </div>
-                  ) : previewDataUrl ? (
-                    <Image
-                      src={previewDataUrl}
-                      alt="Story preview"
-                      fill
-                      unoptimized={true}
-                      className="object-contain"
-                    />
-                  ) : (
-                    <div className="text-xs text-slate-400 text-center p-4">
-                      Unable to render preview
-                    </div>
-                  )}
-
-                  {/* Resolution Overlay Badge */}
-                  <div className="absolute bottom-3 inset-x-0 flex justify-center pointer-events-none z-10">
-                    <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-black/60 text-white/90 backdrop-blur-md border border-white/20">
-                      1080 × 1920 • ULTRA HD
-                    </span>
                   </div>
                 </div>
                 <span className="text-[11px] text-slate-400 mt-2 font-medium">
@@ -702,15 +742,65 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
               <div className="md:col-span-6 space-y-4 flex flex-col justify-center">
                 
                 {/* Story Configuration Card */}
-                <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
-                  <div className="flex items-center justify-between">
+                <div className="p-4 rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm dark:shadow-slate-900/50 space-y-3.5">
+                  {/* Theme Selector: Dark vs Light */}
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700/60">
                     <div className="flex items-center gap-2.5">
-                      <div className="p-2 rounded-xl bg-amber-50 text-[#E78023]">
-                        <QrCode className="w-4 h-4" />
+                      <div className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950/40 text-[#17458F] dark:text-blue-400">
+                        {storyTheme === "dark" ? (
+                          <Moon className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
+                        ) : (
+                          <Sun className="w-5 h-5 text-amber-500" />
+                        )}
                       </div>
                       <div>
-                        <span className="text-xs font-bold text-slate-900 block">Include QR Code</span>
-                        <span className="text-[11px] text-slate-500 block">Embed scan link in story footer</span>
+                        <span className="text-xs font-bold text-slate-900 dark:text-slate-100 block">Story Card Theme</span>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
+                          {storyTheme === "dark" ? "Midnight Sapphire aesthetic" : "Porcelain Ivory editorial"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Segmented Theme Switcher */}
+                    <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-700/80">
+                      <button
+                        type="button"
+                        onClick={() => setStoryTheme("dark")}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer ${
+                          storyTheme === "dark"
+                            ? "bg-slate-900 dark:bg-slate-800 text-white shadow-sm ring-1 ring-white/10"
+                            : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                        }`}
+                        title="Midnight Dark Theme"
+                      >
+                        <Moon className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>Dark</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStoryTheme("light")}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer ${
+                          storyTheme === "light"
+                            ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm ring-1 ring-slate-200/80 dark:ring-slate-600"
+                            : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                        }`}
+                        title="Porcelain Light Theme"
+                      >
+                        <Sun className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Light</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Include QR Code Toggle */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-900/20 text-[#E78023] dark:text-amber-500">
+                        <QrCode className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-900 dark:text-slate-100 block">Include QR Code</span>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 block">Embed scan link in story footer</span>
                       </div>
                     </div>
 
@@ -719,13 +809,13 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
                       role="switch"
                       aria-checked={includeQrCode}
                       onClick={() => setIncludeQrCode(!includeQrCode)}
-                      className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
-                        includeQrCode ? "bg-[#E78023]" : "bg-slate-300"
+                      className={`w-12 h-7 rounded-full transition-colors duration-300 relative cursor-pointer flex-shrink-0 ${
+                        includeQrCode ? "bg-[#E78023] dark:bg-amber-600" : "bg-slate-300 dark:bg-slate-600"
                       }`}
                     >
                       <div
-                        className={`w-4 h-4 rounded-full bg-white shadow-xs transition-transform absolute top-1 ${
-                          includeQrCode ? "left-6" : "left-1"
+                        className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-300 absolute top-1 ${
+                          includeQrCode ? "translate-x-6" : "translate-x-1"
                         }`}
                       />
                     </button>
@@ -733,34 +823,37 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
                 </div>
 
                 {/* Primary Action Buttons */}
-                <div className="space-y-2.5">
+                <div className="space-y-3 pt-2">
                   {/* 1. Share Story Button (Native share sheet on iOS/Android) */}
-                  <button
-                    type="button"
-                    onClick={handleNativeShare}
-                    disabled={isRendering || isSharing}
-                    className="w-full py-3.5 px-4 rounded-2xl bg-[#E78023] hover:bg-[#d6731a] text-white text-xs sm:text-sm font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md shadow-[#E78023]/25 cursor-pointer active:scale-[0.98] disabled:opacity-50"
-                  >
-                    {isSharing ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Share2 className="w-4 h-4" />
-                    )}
-                    <span>Share to Instagram Story</span>
-                  </button>
+                  <div className="relative group rounded-3xl overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-r from-amber-500/50 via-[#E78023]/50 to-amber-500/50 opacity-0 group-hover:opacity-100 group-hover:animate-pulse transition-opacity duration-300" />
+                    <button
+                      type="button"
+                      onClick={handleNativeShare}
+                      disabled={isRendering || isSharing}
+                      className="w-full relative z-10 py-3.5 px-4 rounded-3xl bg-[#E78023] hover:bg-[#d6731a] text-white text-xs sm:text-sm font-bold uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-2 shadow-md shadow-[#E78023]/25 dark:shadow-[#E78023]/10 cursor-pointer active:scale-[0.98] disabled:opacity-50 min-h-[46px]"
+                    >
+                      {isSharing ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <Share2 className="w-5 h-5" />
+                      )}
+                      <span>Share to Instagram Story</span>
+                    </button>
+                  </div>
 
                   {/* 2. Direct Actions: Download Image & Open Instagram */}
-                  <div className="grid grid-cols-2 gap-2.5">
+                  <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
                       onClick={handleDownload}
                       disabled={isRendering || isDownloading}
-                      className="py-3 px-3 rounded-2xl bg-white hover:bg-slate-50 border-2 border-slate-200 text-slate-800 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] disabled:opacity-50 shadow-2xs"
+                      className="py-3 px-3 rounded-2xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border-2 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] disabled:opacity-50 shadow-sm min-h-[46px]"
                     >
                       {isDownloading ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#E78023]" />
+                        <Loader2 className="w-4 h-4 animate-spin text-[#E78023]" />
                       ) : (
-                        <Download className="w-3.5 h-3.5 text-emerald-600" />
+                        <Download className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                       )}
                       <span>Download Image</span>
                     </button>
@@ -768,9 +861,9 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
                     <button
                       type="button"
                       onClick={handleOpenInstagram}
-                      className="py-3 px-3 rounded-2xl bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] shadow-sm"
+                      className="py-3 px-3 rounded-2xl bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white text-xs font-bold uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] shadow-sm min-h-[46px]"
                     >
-                      <Instagram className="w-3.5 h-3.5" />
+                      <Instagram className="w-4 h-4" />
                       <span>Open Instagram</span>
                     </button>
                   </div>
@@ -779,50 +872,58 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
                   <button
                     type="button"
                     onClick={handleCopyLink}
-                    className="w-full py-2.5 px-3 rounded-2xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98]"
+                    className="w-full py-3 px-3 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] min-h-[46px]"
                   >
                     {copiedLink ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                     ) : (
-                      <Copy className="w-3.5 h-3.5 text-slate-500" />
+                      <Copy className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                     )}
                     <span>{copiedLink ? "Link Copied to Clipboard!" : "Copy Official Link"}</span>
                   </button>
                 </div>
 
                 {/* Collapsed Guide: How to post on Instagram */}
-                <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
+                <div className="p-3.5 rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm mt-2 space-y-2">
                   <button
                     type="button"
                     onClick={() => setShowInstructions(!showInstructions)}
-                    className="w-full flex items-center justify-between text-left text-xs font-bold text-slate-800 hover:text-[#17458F] transition-colors cursor-pointer"
+                    className="w-full flex items-center justify-between text-left text-xs font-bold text-slate-800 dark:text-slate-200 hover:text-[#17458F] dark:hover:text-blue-400 transition-colors cursor-pointer min-h-[36px]"
                   >
-                    <span className="flex items-center gap-1.5 text-[#E78023]">
-                      <HelpCircle className="w-3.5 h-3.5" />
+                    <span className="flex items-center gap-2 text-[#E78023] dark:text-amber-500">
+                      <HelpCircle className="w-4 h-4" />
                       <span>How to post this on Instagram:</span>
                     </span>
                     {showInstructions ? (
-                      <ChevronUp className="w-4 h-4 text-slate-400" />
+                      <ChevronUp className="w-4 h-4 text-slate-400 dark:text-slate-500" />
                     ) : (
-                      <ChevronDown className="w-4 h-4 text-slate-400" />
+                      <ChevronDown className="w-4 h-4 text-slate-400 dark:text-slate-500" />
                     )}
                   </button>
 
                   {showInstructions && (
-                    <ol className="text-xs text-slate-600 space-y-2 list-decimal list-inside font-normal pt-2 border-t border-slate-100 animate-in fade-in duration-150">
-                      <li>
-                        Tap <strong>Download Image</strong> to save the high-res graphic to your photos.
-                      </li>
-                      <li>
-                        Tap <strong>Copy Official Link</strong> (copied automatically on share).
-                      </li>
-                      <li>
-                        Tap <strong>Open Instagram</strong> → Swipe to create a Story → Pick the saved image.
-                      </li>
-                      <li>
-                        Tap the <strong>Sticker icon (🔗 LINK)</strong> in Instagram → Paste the link so viewers can tap directly to your event!
-                      </li>
-                    </ol>
+                    <div className="pt-3 border-t border-slate-100 dark:border-slate-700 animate-in fade-in slide-in-from-top-2 duration-200 space-y-2">
+                      {[
+                        { text: "Tap Download Image to save the high-res graphic to your photos.", bold: "Download Image" },
+                        { text: "Tap Copy Official Link (copied automatically on share).", bold: "Copy Official Link" },
+                        { text: "Tap Open Instagram → Swipe to create a Story → Pick the saved image.", bold: "Open Instagram" },
+                        { text: "Tap the Sticker icon (🔗 LINK) in Instagram → Paste the link so viewers can tap directly to your event!", bold: "Sticker icon (🔗 LINK)" }
+                      ].map((step, idx) => (
+                        <div key={idx} className="flex gap-2.5 items-start">
+                          <span className="flex-shrink-0 w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center text-[10px] font-bold mt-0.5">
+                            {idx + 1}
+                          </span>
+                          <p className="text-xs text-slate-600 dark:text-slate-300 leading-snug">
+                            {step.text.split(step.bold).map((part, i, arr) => (
+                              <React.Fragment key={i}>
+                                {part}
+                                {i < arr.length - 1 && <strong className="font-bold text-slate-900 dark:text-white">{step.bold}</strong>}
+                              </React.Fragment>
+                            ))}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
 

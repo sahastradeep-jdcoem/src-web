@@ -30,4 +30,5 @@ export interface StoryPalette {
 
 export interface StoryRenderOptions {
   includeQrCode?: boolean;
+  theme?: "dark" | "light";
 }
