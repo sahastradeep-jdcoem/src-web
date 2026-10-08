@@ -18,9 +18,7 @@ import {
   Sparkles,
   ArrowRight,
   ChevronLeft,
-  AlertCircle,
-  Sun,
-  Moon
+  AlertCircle
 } from "lucide-react";
 import { SocialSharePayload, StoryPalette } from "@/lib/share/types";
 import { extractStoryPalette, DEFAULT_STORY_PALETTE } from "@/lib/share/colorExtractor";
@@ -43,7 +41,6 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
   const [storyBlob, setStoryBlob] = useState<Blob | null>(null);
   const [palette, setPalette] = useState<StoryPalette>(DEFAULT_STORY_PALETTE);
   const [includeQrCode, setIncludeQrCode] = useState(false);
-  const [storyTheme, setStoryTheme] = useState<"dark" | "light">("dark");
   const [copiedLink, setCopiedLink] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -95,7 +92,6 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
 
         const canvas = await renderStoryToCanvas(payload, extractedPalette, {
           includeQrCode,
-          theme: storyTheme,
         });
         if (!isMounted) return;
 
@@ -117,7 +113,7 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
     return () => {
       isMounted = false;
     };
-  }, [isOpen, payload, includeQrCode, storyTheme]);
+  }, [isOpen, payload, includeQrCode]);
 
   // Generate Ultra-HD Branded QR Code whenever modal opens with payload
   useEffect(() => {
@@ -175,7 +171,7 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .slice(0, 30);
-  const downloadFileName = `srcjdcoem-${sanitizedSlug}-${storyTheme}-story.png`;
+  const downloadFileName = `srcjdcoem-${sanitizedSlug}-story.png`;
 
   // Copy Link Handler - Copies exact canonical event URL
   const handleCopyLink = async () => {
@@ -255,7 +251,7 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
 
       // If blob isn't ready yet, regenerate from canvas on the fly
       if (!currentBlob) {
-        const canvas = await renderStoryToCanvas(payload, palette, { includeQrCode, theme: storyTheme });
+        const canvas = await renderStoryToCanvas(payload, palette, { includeQrCode });
         currentBlob = await exportStoryBlob(canvas);
         setStoryBlob(currentBlob);
       }
@@ -325,7 +321,7 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
     try {
       let currentBlob = storyBlob;
       if (!currentBlob) {
-        const canvas = await renderStoryToCanvas(payload, palette, { includeQrCode, theme: storyTheme });
+        const canvas = await renderStoryToCanvas(payload, palette, { includeQrCode });
         currentBlob = await exportStoryBlob(canvas);
         setStoryBlob(currentBlob);
       }
@@ -680,29 +676,23 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
               
               {/* Left Column: 9:16 Story Mockup Preview */}
               <div className="md:col-span-6 flex flex-col items-center justify-center">
-                <div className={`relative w-[260px] sm:w-[295px] aspect-[9/16] rounded-[2.5rem] overflow-hidden shadow-2xl flex items-center justify-center group p-[4px] transition-all duration-300 ${
-                  storyTheme === "dark"
-                    ? "bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 shadow-purple-950/40"
-                    : "bg-gradient-to-tr from-orange-400 via-amber-300 to-blue-500 shadow-slate-400/20"
-                }`}>
-                  <div className={`relative w-full h-full rounded-[2.25rem] overflow-hidden border transition-colors duration-300 ${
-                    storyTheme === "dark" ? "bg-black border-slate-900" : "bg-slate-50 border-slate-200"
-                  }`}>
+                <div className="relative w-[260px] sm:w-[295px] aspect-[9/16] rounded-[2.5rem] overflow-hidden shadow-2xl flex items-center justify-center group p-[4px] bg-gradient-to-tr from-amber-500/80 via-pink-500/60 to-purple-600/80 shadow-purple-950/40 transition-all duration-300">
+                  <div className="relative w-full h-full rounded-[2.25rem] overflow-hidden border border-slate-900 bg-black">
                     {/* Device Mockup Details */}
                     <div className="absolute top-0 inset-x-0 h-6 flex justify-center z-20 pointer-events-none">
-                      <div className={`w-24 h-4 rounded-b-xl opacity-90 ${storyTheme === "dark" ? "bg-black" : "bg-slate-300"}`} />
+                      <div className="w-24 h-4 rounded-b-xl opacity-90 bg-black" />
                     </div>
                     <div className="absolute top-1.5 right-4 flex gap-1 z-20 pointer-events-none opacity-50">
-                      <div className={`w-1.5 h-1.5 rounded-full ${storyTheme === "dark" ? "bg-white" : "bg-slate-700"}`} />
-                      <div className={`w-1.5 h-1.5 rounded-full ${storyTheme === "dark" ? "bg-white" : "bg-slate-700"}`} />
-                      <div className={`w-1.5 h-1.5 rounded-full ${storyTheme === "dark" ? "bg-white" : "bg-slate-700"}`} />
+                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
                     </div>
 
                     {isRendering ? (
                       <div className="flex flex-col items-center justify-center h-full gap-3 p-6 text-center">
                         <Loader2 className="w-8 h-8 text-[#E78023] animate-spin" />
-                        <span className={`text-xs font-semibold ${storyTheme === "dark" ? "text-slate-300" : "text-slate-600"}`}>
-                          Generating 9:16 {storyTheme === "dark" ? "Dark" : "Light"} Story canvas...
+                        <span className="text-xs font-semibold text-slate-300">
+                          Generating Ultra-HD Story canvas...
                         </span>
                       </div>
                     ) : previewDataUrl ? (
@@ -719,16 +709,12 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
                       </div>
                     )}
 
-                    {/* Resolution & Theme Overlay Badge */}
+                    {/* Resolution Overlay Badge */}
                     <div className="absolute bottom-3 inset-x-0 flex justify-center pointer-events-none z-10">
-                      <span className={`text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full backdrop-blur-md border flex items-center gap-1.5 transition-colors duration-200 ${
-                        storyTheme === "dark"
-                          ? "bg-black/70 text-white/95 border-white/20"
-                          : "bg-white/85 text-slate-900 border-slate-300/80 shadow-xs"
-                      }`}>
+                      <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full backdrop-blur-md border border-white/20 bg-black/70 text-white/95 flex items-center gap-1.5">
                         <span>1080 × 1920</span>
                         <span className="opacity-40">•</span>
-                        <span>{storyTheme === "dark" ? "🌙 DARK" : "☀️ LIGHT"}</span>
+                        <span>ULTRA HD</span>
                       </span>
                     </div>
                   </div>
@@ -743,55 +729,6 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
                 
                 {/* Story Configuration Card */}
                 <div className="p-4 rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm dark:shadow-slate-900/50 space-y-3.5">
-                  {/* Theme Selector: Dark vs Light */}
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700/60">
-                    <div className="flex items-center gap-2.5">
-                      <div className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950/40 text-[#17458F] dark:text-blue-400">
-                        {storyTheme === "dark" ? (
-                          <Moon className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
-                        ) : (
-                          <Sun className="w-5 h-5 text-amber-500" />
-                        )}
-                      </div>
-                      <div>
-                        <span className="text-xs font-bold text-slate-900 dark:text-slate-100 block">Story Card Theme</span>
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
-                          {storyTheme === "dark" ? "Midnight Sapphire aesthetic" : "Porcelain Ivory editorial"}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Segmented Theme Switcher */}
-                    <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-700/80">
-                      <button
-                        type="button"
-                        onClick={() => setStoryTheme("dark")}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer ${
-                          storyTheme === "dark"
-                            ? "bg-slate-900 dark:bg-slate-800 text-white shadow-sm ring-1 ring-white/10"
-                            : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                        }`}
-                        title="Midnight Dark Theme"
-                      >
-                        <Moon className="w-3.5 h-3.5 text-indigo-400" />
-                        <span>Dark</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setStoryTheme("light")}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer ${
-                          storyTheme === "light"
-                            ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm ring-1 ring-slate-200/80 dark:ring-slate-600"
-                            : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                        }`}
-                        title="Porcelain Light Theme"
-                      >
-                        <Sun className="w-3.5 h-3.5 text-amber-500" />
-                        <span>Light</span>
-                      </button>
-                    </div>
-                  </div>
-
                   {/* Include QR Code Toggle */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
