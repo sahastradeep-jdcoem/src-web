@@ -400,13 +400,10 @@ export default function PassVerificationPage() {
             canCheckIn ? (
               /* Admin or Authorized Student Gatekeeper Mode */
               <div className="pt-2 space-y-2">
-                <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider px-1">
+                <div className="flex items-center justify-center text-[11px] font-bold text-slate-500 uppercase tracking-wider px-1">
                   <span className="flex items-center gap-1.5 text-emerald-700">
                     <ShieldCheck className="w-3.5 h-3.5" />
                     <span>{isAdmin ? "Admin Gatekeeper Mode" : "Authorized Event Gatekeeper"}</span>
-                  </span>
-                  <span className="font-mono text-[10px] text-slate-500 truncate max-w-[200px]">
-                    {user?.btId ? `${user.btId} (${user?.email})` : user?.email}
                   </span>
                 </div>
                 <button
