@@ -107,6 +107,94 @@ import {
   subscribeToDispatchResponses
 } from "@/lib/srcDispatchesStore";
 
+function findMatchingEvent(events: EventItem[], passOrTicket?: { eventSlug?: string; eventId?: string; eventName?: string } | null): EventItem | undefined {
+  if (!passOrTicket || !events || events.length === 0) return undefined;
+  const cleanPassSlug = (passOrTicket.eventSlug || "").trim().toLowerCase();
+  const cleanPassEventId = (passOrTicket.eventId || "").trim().toLowerCase();
+  const cleanPassName = (passOrTicket.eventName || "").trim().toLowerCase();
+  const normPassName = cleanPassName.replace(/[^a-z0-9]/g, "");
+
+  return events.find((e) => {
+    const eSlug = (e.slug || "").trim().toLowerCase();
+    const eId = (e.id || "").trim().toLowerCase();
+    const eName = (e.name || "").trim().toLowerCase();
+    const normEName = eName.replace(/[^a-z0-9]/g, "");
+
+    return (
+      (cleanPassSlug && (eSlug === cleanPassSlug || eId === cleanPassSlug)) ||
+      (cleanPassEventId && (eId === cleanPassEventId || eSlug === cleanPassEventId)) ||
+      (cleanPassName && eName === cleanPassName) ||
+      (normPassName && normPassName.length > 2 && normEName === normPassName)
+    );
+  });
+}
+
+function resolveEventWhatsAppUrl(event?: EventItem | any, pass?: RegistrationRecord | any): string {
+  if (!event && !pass) return "";
+
+  // 1. Direct event / pass properties
+  const directUrls = [
+    event?.whatsappGroupUrl,
+    event?.groupLink,
+    event?.groupUrl,
+    event?.whatsappLink,
+    event?.waGroupUrl,
+    (pass as any)?.whatsappGroupUrl,
+    (pass as any)?.groupLink,
+    (pass as any)?.groupUrl,
+  ];
+  for (const u of directUrls) {
+    if (typeof u === "string" && u.trim()) {
+      const formatted = formatWhatsAppUrl(u.trim());
+      if (formatted) return formatted;
+    }
+  }
+
+  // 2. Scan all custom questions or form fields on the event
+  const questions: any[] = [
+    ...(Array.isArray(event?.customQuestions) ? event.customQuestions : []),
+    ...(Array.isArray(event?.formFields) ? event.formFields : []),
+    ...(Array.isArray(event?.questions) ? event.questions : []),
+  ];
+
+  for (const q of questions) {
+    if (!q || typeof q !== "object") continue;
+    // Check known field property names
+    const candidateUrls = [q.waGroupUrl, q.whatsappGroupUrl, q.url, q.link, q.groupUrl];
+    for (const cu of candidateUrls) {
+      if (typeof cu === "string" && cu.trim()) {
+        const formatted = formatWhatsAppUrl(cu.trim());
+        if (formatted) return formatted;
+      }
+    }
+    // Also scan all string values inside the question object for a chat.whatsapp.com or wa.me URL
+    for (const val of Object.values(q)) {
+      if (typeof val === "string") {
+        const match = val.match(/(https?:\/\/(?:chat\.whatsapp\.com|wa\.me)\/[^\s"']+)/i);
+        if (match) {
+          const formatted = formatWhatsAppUrl(match[1]);
+          if (formatted) return formatted;
+        }
+      }
+    }
+  }
+
+  // 3. Scan pass custom answers
+  if (pass?.customAnswers && typeof pass.customAnswers === "object") {
+    for (const val of Object.values(pass.customAnswers)) {
+      if (typeof val === "string") {
+        const match = val.match(/(https?:\/\/(?:chat\.whatsapp\.com|wa\.me)\/[^\s"']+)/i);
+        if (match) {
+          const formatted = formatWhatsAppUrl(match[1]);
+          if (formatted) return formatted;
+        }
+      }
+    }
+  }
+
+  return "";
+}
+
 export default function StudentDashboardPage() {
   const { user, openAuthModal, openProfileModal, logout, isAdmin, isOwner } = useAuth();
   const isUserAdmin = Boolean(
@@ -2399,24 +2487,8 @@ export default function StudentDashboardPage() {
               ) : (
                 <div className="space-y-4">
                   {filteredPasses.map((pass) => {
-                    const cleanPassSlug = (pass.eventSlug || "").trim().toLowerCase();
-                    const cleanPassEventId = (pass.eventId || "").trim().toLowerCase();
-                    const cleanPassName = (pass.eventName || "").trim().toLowerCase();
-                    const normPassName = cleanPassName.replace(/[^a-z0-9]/g, "");
-
-                    const matchedEvent = events.find((e) => {
-                      const eSlug = (e.slug || "").trim().toLowerCase();
-                      const eId = (e.id || "").trim().toLowerCase();
-                      const eName = (e.name || "").trim().toLowerCase();
-                      const normEName = eName.replace(/[^a-z0-9]/g, "");
-
-                      return (
-                        (cleanPassSlug && (eSlug === cleanPassSlug || eId === cleanPassSlug)) ||
-                        (cleanPassEventId && (eId === cleanPassEventId || eSlug === cleanPassEventId)) ||
-                        (cleanPassName && eName === cleanPassName) ||
-                        (normPassName && normPassName.length > 2 && normEName === normPassName)
-                      );
-                    });
+                    const matchedEvent = findMatchingEvent(events, pass);
+                    const groupUrl = resolveEventWhatsAppUrl(matchedEvent, pass);
 
                     const eventImage = (
                       matchedEvent?.cardImage ||
@@ -2425,17 +2497,6 @@ export default function StudentDashboardPage() {
                       matchedEvent?.headerImage ||
                       (matchedEvent as any)?.imageUrl
                     );
-
-                    const rawGroupUrl = (
-                      matchedEvent?.whatsappGroupUrl || 
-                      (matchedEvent as any)?.groupLink ||
-                      (matchedEvent as any)?.groupUrl ||
-                      (matchedEvent as any)?.whatsappLink ||
-                      matchedEvent?.customQuestions?.find((q: any) => q.type === "whatsapp_group" && q.waGroupUrl)?.waGroupUrl ||
-                      (pass as any)?.whatsappGroupUrl ||
-                      (pass as any)?.groupLink
-                    );
-                    const groupUrl = formatWhatsAppUrl(rawGroupUrl);
 
                     const isCheckedIn = pass.status === "CHECKED_IN";
                     const isCancelled = pass.status === "CANCELLED";
@@ -2883,21 +2944,8 @@ export default function StudentDashboardPage() {
 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
                 {(() => {
-                  const modalEvent = events.find((e) => 
-                    (e.slug && (e.slug.toLowerCase() === (selectedTicket.eventSlug || "").toLowerCase() || e.slug.toLowerCase() === (selectedTicket.eventId || "").toLowerCase())) ||
-                    (e.id && (e.id.toLowerCase() === (selectedTicket.eventId || "").toLowerCase() || e.id.toLowerCase() === (selectedTicket.eventSlug || "").toLowerCase())) ||
-                    (e.name && e.name.toLowerCase().trim() === (selectedTicket.eventName || "").toLowerCase().trim())
-                  );
-                  const mRawGroup = (
-                    modalEvent?.whatsappGroupUrl || 
-                    (modalEvent as any)?.groupLink ||
-                    (modalEvent as any)?.groupUrl ||
-                    (modalEvent as any)?.whatsappLink ||
-                    modalEvent?.customQuestions?.find((q: any) => q.type === "whatsapp_group" && q.waGroupUrl)?.waGroupUrl ||
-                    (selectedTicket as any)?.whatsappGroupUrl ||
-                    (selectedTicket as any)?.groupLink
-                  );
-                  const mGroupUrl = formatWhatsAppUrl(mRawGroup);
+                  const modalEvent = findMatchingEvent(events, selectedTicket);
+                  const mGroupUrl = resolveEventWhatsAppUrl(modalEvent, selectedTicket);
 
                   if (!mGroupUrl) return null;
                   return (
@@ -2928,35 +2976,28 @@ export default function StudentDashboardPage() {
           }
         >
           <div className="w-full min-w-0">
-            <TicketPass
-              registrationId={selectedTicket.id}
-              eventName={selectedTicket.eventName}
-              eventDate={
-                events.find((e) => 
-                  (e.slug && (e.slug.toLowerCase() === (selectedTicket.eventSlug || "").toLowerCase() || e.slug.toLowerCase() === (selectedTicket.eventId || "").toLowerCase())) ||
-                  (e.id && (e.id.toLowerCase() === (selectedTicket.eventId || "").toLowerCase() || e.id.toLowerCase() === (selectedTicket.eventSlug || "").toLowerCase())) ||
-                  (e.name && e.name.toLowerCase().trim() === (selectedTicket.eventName || "").toLowerCase().trim())
-                )?.date || selectedTicket.registeredAt
-              }
-              eventVenue={
-                events.find((e) => 
-                  (e.slug && (e.slug.toLowerCase() === (selectedTicket.eventSlug || "").toLowerCase() || e.slug.toLowerCase() === (selectedTicket.eventId || "").toLowerCase())) ||
-                  (e.id && (e.id.toLowerCase() === (selectedTicket.eventId || "").toLowerCase() || e.id.toLowerCase() === (selectedTicket.eventSlug || "").toLowerCase())) ||
-                  (e.name && e.name.toLowerCase().trim() === (selectedTicket.eventName || "").toLowerCase().trim())
-                )?.venue || "Campus Venue"
-              }
-              participantName={selectedTicket.participantName}
-              department={selectedTicket.department}
-              year={selectedTicket.year}
-              teamType={selectedTicket.teamType}
-              teamName={selectedTicket.teamName}
-              teamMembers={selectedTicket.teamMembers}
-              ticketCode={selectedTicket.ticketCode}
-              status={selectedTicket.status}
-              paymentStatus={selectedTicket.paymentStatus}
-              paymentId={selectedTicket.paymentId}
-              mode="dashboard"
-            />
+            {(() => {
+              const modalEvent = findMatchingEvent(events, selectedTicket);
+              return (
+                <TicketPass
+                  registrationId={selectedTicket.id}
+                  eventName={selectedTicket.eventName}
+                  eventDate={modalEvent?.date || selectedTicket.registeredAt}
+                  eventVenue={modalEvent?.venue || "Campus Venue"}
+                  participantName={selectedTicket.participantName}
+                  department={selectedTicket.department}
+                  year={selectedTicket.year}
+                  teamType={selectedTicket.teamType}
+                  teamName={selectedTicket.teamName}
+                  teamMembers={selectedTicket.teamMembers}
+                  ticketCode={selectedTicket.ticketCode}
+                  status={selectedTicket.status}
+                  paymentStatus={selectedTicket.paymentStatus}
+                  paymentId={selectedTicket.paymentId}
+                  mode="dashboard"
+                />
+              );
+            })()}
           </div>
         </Modal>
       )}
