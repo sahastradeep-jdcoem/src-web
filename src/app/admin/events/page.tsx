@@ -404,9 +404,40 @@ export default function AdminEventsPage() {
       targetAudience: formData.targetAudience || "inter_college",
       isInterCollege: formData.targetAudience === "inter_college",
       isFeatured: Boolean(formData.isFeatured),
+      coordinatorContacts:
+        Array.isArray(formData.coordinatorContacts) && formData.coordinatorContacts.length > 0
+          ? formData.coordinatorContacts
+              .filter((c) => Boolean(c.name?.trim()) || Boolean(c.phone?.trim()))
+              .map((c) => ({
+                id: c.id || undefined,
+                name: (c.name || "").trim(),
+                role: (c.role || "").trim(),
+                phone: (c.phone || "").trim(),
+              }))
+          : formData.coordinatorContact &&
+            (Boolean(formData.coordinatorContact.name?.trim()) || Boolean(formData.coordinatorContact.phone?.trim()))
+          ? [
+              {
+                name: (formData.coordinatorContact.name || "").trim(),
+                role: (formData.coordinatorContact.role || "").trim(),
+                phone: (formData.coordinatorContact.phone || "").trim(),
+              },
+            ]
+          : undefined,
       coordinatorContact:
-        formData.coordinatorContact &&
-        (Boolean(formData.coordinatorContact.name?.trim()) || Boolean(formData.coordinatorContact.phone?.trim()))
+        Array.isArray(formData.coordinatorContacts) && formData.coordinatorContacts.length > 0
+          ? (() => {
+              const first = formData.coordinatorContacts.find((c) => Boolean(c.name?.trim()) || Boolean(c.phone?.trim()));
+              return first
+                ? {
+                    name: (first.name || "").trim(),
+                    role: (first.role || "").trim(),
+                    phone: (first.phone || "").trim(),
+                  }
+                : undefined;
+            })()
+          : formData.coordinatorContact &&
+            (Boolean(formData.coordinatorContact.name?.trim()) || Boolean(formData.coordinatorContact.phone?.trim()))
           ? {
               name: (formData.coordinatorContact.name || "").trim(),
               role: (formData.coordinatorContact.role || "").trim(),
@@ -589,6 +620,11 @@ export default function AdminEventsPage() {
       hasPrizes: editingEvent.hasPrizes !== undefined ? editingEvent.hasPrizes : Boolean(editingEvent.prizes && editingEvent.prizes.length > 0),
       schedule: editingEvent.schedule ? JSON.parse(JSON.stringify(editingEvent.schedule)) : [],
       prizes: editingEvent.prizes ? JSON.parse(JSON.stringify(editingEvent.prizes)) : [],
+      coordinatorContacts: editingEvent.coordinatorContacts
+        ? JSON.parse(JSON.stringify(editingEvent.coordinatorContacts))
+        : editingEvent.coordinatorContact
+        ? [JSON.parse(JSON.stringify(editingEvent.coordinatorContact))]
+        : [],
       coordinatorContact: editingEvent.coordinatorContact
         ? {
             name: editingEvent.coordinatorContact.name || "",
@@ -742,9 +778,40 @@ export default function AdminEventsPage() {
       targetAudience: formData.targetAudience || "inter_college",
       isInterCollege: formData.targetAudience === "inter_college",
       isFeatured: Boolean(formData.isFeatured),
+      coordinatorContacts:
+        Array.isArray(formData.coordinatorContacts) && formData.coordinatorContacts.length > 0
+          ? formData.coordinatorContacts
+              .filter((c) => Boolean(c.name?.trim()) || Boolean(c.phone?.trim()))
+              .map((c) => ({
+                id: c.id || undefined,
+                name: (c.name || "").trim(),
+                role: (c.role || "").trim(),
+                phone: (c.phone || "").trim(),
+              }))
+          : formData.coordinatorContact &&
+            (Boolean(formData.coordinatorContact.name?.trim()) || Boolean(formData.coordinatorContact.phone?.trim()))
+          ? [
+              {
+                name: (formData.coordinatorContact.name || "").trim(),
+                role: (formData.coordinatorContact.role || "").trim(),
+                phone: (formData.coordinatorContact.phone || "").trim(),
+              },
+            ]
+          : undefined,
       coordinatorContact:
-        formData.coordinatorContact &&
-        (Boolean(formData.coordinatorContact.name?.trim()) || Boolean(formData.coordinatorContact.phone?.trim()))
+        Array.isArray(formData.coordinatorContacts) && formData.coordinatorContacts.length > 0
+          ? (() => {
+              const first = formData.coordinatorContacts.find((c) => Boolean(c.name?.trim()) || Boolean(c.phone?.trim()));
+              return first
+                ? {
+                    name: (first.name || "").trim(),
+                    role: (first.role || "").trim(),
+                    phone: (first.phone || "").trim(),
+                  }
+                : undefined;
+            })()
+          : formData.coordinatorContact &&
+            (Boolean(formData.coordinatorContact.name?.trim()) || Boolean(formData.coordinatorContact.phone?.trim()))
           ? {
               name: (formData.coordinatorContact.name || "").trim(),
               role: (formData.coordinatorContact.role || "").trim(),

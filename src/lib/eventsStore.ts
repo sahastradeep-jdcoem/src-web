@@ -110,9 +110,38 @@ export function sanitizeEventItem(event: EventItem): EventItem {
     endDate: event.endDate || undefined,
     isMultiDay: Boolean(event.isMultiDay),
     noRegistrationRequired: isNoReg,
+    coordinatorContacts: Array.isArray(event.coordinatorContacts)
+      ? event.coordinatorContacts
+          .filter((c) => c && (Boolean(c.name?.trim()) || Boolean(c.phone?.trim())))
+          .map((c) => ({
+            id: c.id || undefined,
+            name: (c.name || "").trim(),
+            role: (c.role || "").trim(),
+            phone: (c.phone || "").trim(),
+          }))
+      : event.coordinatorContact && (Boolean(event.coordinatorContact.name?.trim()) || Boolean(event.coordinatorContact.phone?.trim()))
+      ? [
+          {
+            name: (event.coordinatorContact.name || "").trim(),
+            role: (event.coordinatorContact.role || "").trim(),
+            phone: (event.coordinatorContact.phone || "").trim(),
+          },
+        ]
+      : undefined,
     coordinatorContact:
-      event.coordinatorContact &&
-      (Boolean(event.coordinatorContact.name?.trim()) || Boolean(event.coordinatorContact.phone?.trim()))
+      Array.isArray(event.coordinatorContacts) && event.coordinatorContacts.length > 0
+        ? (() => {
+            const first = event.coordinatorContacts.find((c) => c && (Boolean(c.name?.trim()) || Boolean(c.phone?.trim())));
+            return first
+              ? {
+                  name: (first.name || "").trim(),
+                  role: (first.role || "").trim(),
+                  phone: (first.phone || "").trim(),
+                }
+              : undefined;
+          })()
+        : event.coordinatorContact &&
+          (Boolean(event.coordinatorContact.name?.trim()) || Boolean(event.coordinatorContact.phone?.trim()))
         ? {
             name: (event.coordinatorContact.name || "").trim(),
             role: (event.coordinatorContact.role || "").trim(),

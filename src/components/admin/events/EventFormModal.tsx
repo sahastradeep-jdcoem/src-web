@@ -42,7 +42,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { UniversalImageUploader } from "@/components/ui/UniversalImageUploader";
 import { SrcFormsBuilder } from "@/components/admin/forms/SrcFormsBuilder";
-import { EventItem, ClubItem, SrcFormField, CustomQuestion, TargetAudience, EventScheduleItem, EventPrize } from "@/types";
+import { EventItem, ClubItem, SrcFormField, CustomQuestion, TargetAudience, EventScheduleItem, EventPrize, EventCoordinatorContact } from "@/types";
 import { cn } from "@/lib/utils";
 import { parseDateStringToTimestamp } from "@/lib/eventsStore";
 import { getStoredClubs } from "@/lib/councilStore";
@@ -78,11 +78,8 @@ export interface EventFormData {
   hasPrizes?: boolean;
   schedule: EventScheduleItem[];
   prizes: EventPrize[];
-  coordinatorContact?: {
-    name?: string;
-    role?: string;
-    phone?: string;
-  };
+  coordinatorContact?: EventCoordinatorContact;
+  coordinatorContacts: EventCoordinatorContact[];
   teamType: "Individual" | "Team" | "Both";
   minTeamSize: number;
   maxTeamSize: number;
@@ -333,6 +330,23 @@ export function EventFormModal({
       role: initialData?.coordinatorContact?.role || "",
       phone: initialData?.coordinatorContact?.phone || "",
     },
+    coordinatorContacts: Array.isArray(initialData?.coordinatorContacts) && initialData.coordinatorContacts.length > 0
+      ? JSON.parse(JSON.stringify(initialData.coordinatorContacts))
+      : initialData?.coordinatorContact && (initialData.coordinatorContact.name || initialData.coordinatorContact.phone)
+      ? [
+          {
+            name: initialData.coordinatorContact.name || "",
+            role: initialData.coordinatorContact.role || "",
+            phone: initialData.coordinatorContact.phone || "",
+          },
+        ]
+      : [
+          {
+            name: "",
+            role: "",
+            phone: "",
+          },
+        ],
     teamType: initialData?.teamType || "Both",
     minTeamSize: initialData?.minTeamSize || 2,
     maxTeamSize: initialData?.maxTeamSize || 4,
@@ -413,6 +427,23 @@ export function EventFormModal({
           role: initialData.coordinatorContact?.role || "",
           phone: initialData.coordinatorContact?.phone || "",
         },
+        coordinatorContacts: Array.isArray(initialData.coordinatorContacts) && initialData.coordinatorContacts.length > 0
+          ? JSON.parse(JSON.stringify(initialData.coordinatorContacts))
+          : initialData.coordinatorContact && (initialData.coordinatorContact.name || initialData.coordinatorContact.phone)
+          ? [
+              {
+                name: initialData.coordinatorContact.name || "",
+                role: initialData.coordinatorContact.role || "",
+                phone: initialData.coordinatorContact.phone || "",
+              },
+            ]
+          : [
+              {
+                name: "",
+                role: "",
+                phone: "",
+              },
+            ],
         whatToExpect: initialData.whatToExpect && initialData.whatToExpect.length > 0 ? initialData.whatToExpect : [""],
         rules: initialData.rules && initialData.rules.length > 0 ? initialData.rules : [""],
         hasSchedule: initialData.hasSchedule !== undefined
@@ -863,6 +894,79 @@ export function EventFormModal({
     });
   };
 
+  const handleAddCoordinatorContact = () => {
+    setForm((prev) => {
+      const list = Array.isArray(prev.coordinatorContacts) ? [...prev.coordinatorContacts] : [];
+      return {
+        ...prev,
+        coordinatorContacts: [...list, { name: "", role: "", phone: "" }],
+      };
+    });
+  };
+
+  const handleUpdateCoordinatorContact = (
+    index: number,
+    field: "name" | "role" | "phone",
+    value: string
+  ) => {
+    setForm((prev) => {
+      const list = Array.isArray(prev.coordinatorContacts) ? [...prev.coordinatorContacts] : [{ name: "", role: "", phone: "" }];
+      if (!list[index]) {
+        list[index] = { name: "", role: "", phone: "" };
+      }
+      list[index] = { ...list[index], [field]: value };
+      return {
+        ...prev,
+        coordinatorContacts: list,
+        coordinatorContact: index === 0 ? list[0] : (prev.coordinatorContact || list[0]),
+      };
+    });
+  };
+
+  const handleRemoveCoordinatorContact = (index: number) => {
+    setForm((prev) => {
+      const currentList = Array.isArray(prev.coordinatorContacts) ? prev.coordinatorContacts : [];
+      const updated = currentList.filter((_, i) => i !== index);
+      const finalList = updated.length === 0 ? [{ name: "", role: "", phone: "" }] : updated;
+      return {
+        ...prev,
+        coordinatorContacts: finalList,
+        coordinatorContact: finalList[0]?.name || finalList[0]?.phone ? finalList[0] : { name: "", role: "", phone: "" },
+      };
+    });
+  };
+
+  const handleClearAllCoordinatorContacts = () => {
+    setForm((prev) => ({
+      ...prev,
+      coordinatorContacts: [{ name: "", role: "", phone: "" }],
+      coordinatorContact: { name: "", role: "", phone: "" },
+    }));
+  };
+
+  const handleApplyPresetContact = (preset: { name: string; role: string; phone: string }) => {
+    setForm((prev) => {
+      const currentList = Array.isArray(prev.coordinatorContacts) ? [...prev.coordinatorContacts] : [];
+      if (currentList.length === 1 && !currentList[0].name?.trim() && !currentList[0].phone?.trim()) {
+        return {
+          ...prev,
+          coordinatorContacts: [preset],
+          coordinatorContact: preset,
+        };
+      }
+      const updated = [...currentList, preset];
+      return {
+        ...prev,
+        coordinatorContacts: updated,
+        coordinatorContact: updated[0],
+      };
+    });
+  };
+
+  const activeContactsCount = useMemo(() => {
+    return (form.coordinatorContacts || []).filter((c) => Boolean(c.name?.trim()) || Boolean(c.phone?.trim())).length;
+  }, [form.coordinatorContacts]);
+
   const visibleSections = useMemo(() => {
     if (form.isParentFest) {
       return SECTIONS.filter((s) => s.id === "details" || s.id === "visuals");
@@ -900,21 +1004,34 @@ export function EventFormModal({
     try {
       setIsSubmitting(true);
       setFormError(null);
-      const cleanCoordinator =
-        form.coordinatorContact &&
-        (Boolean(form.coordinatorContact.name?.trim()) || Boolean(form.coordinatorContact.phone?.trim()))
-          ? {
-              name: (form.coordinatorContact.name || "").trim(),
-              role: (form.coordinatorContact.role || "").trim(),
-              phone: (form.coordinatorContact.phone || "").trim(),
-            }
-          : undefined;
+
+      const rawContacts = Array.isArray(form.coordinatorContacts) ? form.coordinatorContacts : [];
+      const cleanedContacts = rawContacts
+        .filter((c) => Boolean(c.name?.trim()) || Boolean(c.phone?.trim()))
+        .map((c) => ({
+          id: c.id || undefined,
+          name: (c.name || "").trim(),
+          role: (c.role || "").trim(),
+          phone: (c.phone || "").trim(),
+        }));
+
+      const cleanCoordinator = cleanedContacts.length > 0
+        ? cleanedContacts[0]
+        : form.coordinatorContact &&
+          (Boolean(form.coordinatorContact.name?.trim()) || Boolean(form.coordinatorContact.phone?.trim()))
+        ? {
+            name: (form.coordinatorContact.name || "").trim(),
+            role: (form.coordinatorContact.role || "").trim(),
+            phone: (form.coordinatorContact.phone || "").trim(),
+          }
+        : undefined;
 
       const payload: EventFormData = form.isParentFest
         ? {
             ...form,
             isLive: asDraft ? false : (form.isLive !== undefined ? form.isLive : true),
             status: asDraft ? "draft" : (form.status === "draft" ? "Upcoming" : form.status),
+            coordinatorContacts: cleanedContacts,
             coordinatorContact: cleanCoordinator,
             hasSchedule: false,
             hasPrizes: false,
@@ -940,6 +1057,7 @@ export function EventFormModal({
             ...form,
             isLive: asDraft ? false : (form.isLive !== undefined ? form.isLive : true),
             status: asDraft ? "draft" : (form.status === "draft" ? "Upcoming" : form.status),
+            coordinatorContacts: cleanedContacts,
             coordinatorContact: cleanCoordinator,
             hasSchedule: Boolean(form.hasSchedule),
             hasPrizes: Boolean(form.hasPrizes),
@@ -1699,106 +1817,129 @@ export function EventFormModal({
                       </h4>
                     </div>
                     <p className="text-xs text-slate-500">
-                      Primary contact details displayed on the public festival sidebar for student queries. Leave empty to omit.
+                      Primary contact details displayed on the public festival sidebar for student queries. Add multiple contacts as needed.
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {(form.coordinatorContact?.name || form.coordinatorContact?.phone) && (
+                    {activeContactsCount > 0 && (
                       <button
                         type="button"
-                        onClick={() =>
-                          setForm((prev) => ({
-                            ...prev,
-                            coordinatorContact: { name: "", role: "", phone: "" },
-                          }))
-                        }
+                        onClick={handleClearAllCoordinatorContacts}
                         className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1 rounded-lg border border-transparent hover:border-rose-200 transition-colors font-medium cursor-pointer"
                       >
-                        Clear / Leave Empty
+                        Clear All
                       </button>
                     )}
                     <span
                       className={cn(
                         "text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border shrink-0",
-                        form.coordinatorContact?.name || form.coordinatorContact?.phone
+                        activeContactsCount > 0
                           ? "bg-amber-50 text-amber-800 border-amber-200"
                           : "bg-slate-100 text-slate-500 border-slate-200"
                       )}
                     >
-                      {form.coordinatorContact?.name || form.coordinatorContact?.phone
-                        ? "Secretariat Active"
+                      {activeContactsCount > 0
+                        ? `${activeContactsCount} ${activeContactsCount === 1 ? "Contact" : "Contacts"} Active`
                         : "Secretariat Omitted"}
                     </span>
+                    <button
+                      type="button"
+                      onClick={handleAddCoordinatorContact}
+                      className="px-3 py-1.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-[#E78023]" />
+                      <span>Add Contact</span>
+                    </button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                  {/* Coordinator Name / Desk */}
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                      Secretariat / Desk Name
-                    </label>
-                    <input
-                      type="text"
-                      value={form.coordinatorContact?.name || ""}
-                      onChange={(e) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          coordinatorContact: {
-                            ...(prev.coordinatorContact || { role: "", phone: "" }),
-                            name: e.target.value,
-                          },
-                        }))
-                      }
-                      placeholder="e.g., SRC Secretariat Desk"
-                      className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
-                    />
-                  </div>
+                <div className="space-y-3">
+                  {(form.coordinatorContacts && form.coordinatorContacts.length > 0
+                    ? form.coordinatorContacts
+                    : [{ name: "", role: "", phone: "" }]
+                  ).map((contact, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs space-y-2.5 relative group"
+                    >
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-700 pb-1 border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-mono font-extrabold flex items-center justify-center">
+                            {idx + 1}
+                          </span>
+                          <span className="text-[11px] uppercase tracking-wider text-slate-600 font-bold">
+                            {idx === 0 ? "Primary Secretariat Contact" : `Secretariat Contact #${idx + 1}`}
+                          </span>
+                        </div>
+                        {(form.coordinatorContacts || []).length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCoordinatorContact(idx)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                            title="Remove this contact"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
 
-                  {/* Designation / Role */}
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                      Role / Designation (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={form.coordinatorContact?.role || ""}
-                      onChange={(e) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          coordinatorContact: {
-                            ...(prev.coordinatorContact || { name: "", phone: "" }),
-                            role: e.target.value,
-                          },
-                        }))
-                      }
-                      placeholder="e.g., Festival Convenor"
-                      className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
-                    />
-                  </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* Secretariat / Desk Name */}
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                            Secretariat / Desk Name
+                          </label>
+                          <input
+                            type="text"
+                            value={contact.name || ""}
+                            onChange={(e) => handleUpdateCoordinatorContact(idx, "name", e.target.value)}
+                            placeholder="e.g., SRC Secretariat Desk"
+                            className="w-full px-3.5 py-2 rounded-xl bg-slate-50/70 border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20 focus:bg-white"
+                          />
+                        </div>
 
-                  {/* Phone Number */}
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
-                      <Phone className="w-3 h-3 text-[#E78023]" />
-                      <span>Contact Phone / WhatsApp</span>
-                    </label>
-                    <input
-                      type="tel"
-                      value={form.coordinatorContact?.phone || ""}
-                      onChange={(e) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          coordinatorContact: {
-                            ...(prev.coordinatorContact || { name: "", role: "" }),
-                            phone: e.target.value,
-                          },
-                        }))
-                      }
-                      placeholder="e.g., +91 9876543210"
-                      className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
-                    />
-                  </div>
+                        {/* Designation / Role */}
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                            Role / Designation (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            value={contact.role || ""}
+                            onChange={(e) => handleUpdateCoordinatorContact(idx, "role", e.target.value)}
+                            placeholder="e.g., Festival Convenor"
+                            className="w-full px-3.5 py-2 rounded-xl bg-slate-50/70 border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20 focus:bg-white"
+                          />
+                        </div>
+
+                        {/* Phone Number */}
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
+                            <Phone className="w-3 h-3 text-[#E78023]" />
+                            <span>Contact Phone / WhatsApp</span>
+                          </label>
+                          <input
+                            type="tel"
+                            value={contact.phone || ""}
+                            onChange={(e) => handleUpdateCoordinatorContact(idx, "phone", e.target.value)}
+                            placeholder="e.g., +91 9876543210"
+                            className="w-full px-3.5 py-2 rounded-xl bg-slate-50/70 border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20 focus:bg-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={handleAddCoordinatorContact}
+                    className="w-full py-2.5 rounded-xl border-2 border-dashed border-amber-300 hover:border-[#17458F] bg-white/80 hover:bg-white text-slate-700 hover:text-[#17458F] text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                  >
+                    <Plus className="w-4 h-4 text-[#E78023]" />
+                    <span>Add Another Secretariat Contact</span>
+                  </button>
                 </div>
               </div>
             )}
@@ -3018,157 +3159,160 @@ export function EventFormModal({
                     </h4>
                   </div>
                   <p className="text-xs text-slate-500">
-                    Direct support contact displayed on the public event registration card. Leave empty to omit helpdesk completely.
+                    Direct support contacts displayed on the public event registration card. Add multiple coordinators as needed.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {(form.coordinatorContact?.name || form.coordinatorContact?.phone) && (
+                  {activeContactsCount > 0 && (
                     <button
                       type="button"
-                      onClick={() =>
-                        setForm((prev) => ({
-                          ...prev,
-                          coordinatorContact: { name: "", role: "", phone: "" },
-                        }))
-                      }
+                      onClick={handleClearAllCoordinatorContacts}
                       className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1 rounded-lg border border-transparent hover:border-rose-200 transition-colors font-medium cursor-pointer"
                     >
-                      Clear / Leave Empty
+                      Clear All
                     </button>
                   )}
                   <span
                     className={cn(
                       "text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border shrink-0",
-                      form.coordinatorContact?.name || form.coordinatorContact?.phone
+                      activeContactsCount > 0
                         ? "bg-amber-50 text-amber-800 border-amber-200"
                         : "bg-slate-100 text-slate-500 border-slate-200"
                     )}
                   >
-                    {form.coordinatorContact?.name || form.coordinatorContact?.phone
-                      ? "Helpdesk Active"
+                    {activeContactsCount > 0
+                      ? `${activeContactsCount} ${activeContactsCount === 1 ? "Contact" : "Contacts"} Active`
                       : "Helpdesk Omitted"}
                   </span>
+                  <button
+                    type="button"
+                    onClick={handleAddCoordinatorContact}
+                    className="px-3 py-1.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-[#E78023]" />
+                    <span>Add Coordinator</span>
+                  </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                {/* Coordinator Name / Desk */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                    Coordinator / Desk Name
-                  </label>
-                  <input
-                    type="text"
-                    value={form.coordinatorContact?.name || ""}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        coordinatorContact: {
-                          ...(prev.coordinatorContact || { role: "", phone: "" }),
-                          name: e.target.value,
-                        },
-                      }))
-                    }
-                    placeholder="e.g., SRC Coding & Creative Desk"
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
-                  />
-                </div>
+              <div className="space-y-3">
+                {(form.coordinatorContacts && form.coordinatorContacts.length > 0
+                  ? form.coordinatorContacts
+                  : [{ name: "", role: "", phone: "" }]
+                ).map((contact, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3.5 rounded-xl bg-slate-50/80 border border-slate-200 shadow-2xs space-y-2.5 relative group"
+                  >
+                    <div className="flex items-center justify-between text-xs font-bold text-slate-700 pb-1 border-b border-slate-200/60">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-blue-100 text-[#17458F] text-[10px] font-mono font-extrabold flex items-center justify-center">
+                          {idx + 1}
+                        </span>
+                        <span className="text-[11px] uppercase tracking-wider text-slate-600 font-bold">
+                          {idx === 0 ? "Primary Event Coordinator" : `Event Coordinator #${idx + 1}`}
+                        </span>
+                      </div>
+                      {(form.coordinatorContacts || []).length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveCoordinatorContact(idx)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                          title="Remove this coordinator"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
 
-                {/* Designation / Role */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                    Role / Designation (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={form.coordinatorContact?.role || ""}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        coordinatorContact: {
-                          ...(prev.coordinatorContact || { name: "", phone: "" }),
-                          role: e.target.value,
-                        },
-                      }))
-                    }
-                    placeholder="e.g., Lead Coordinators"
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
-                  />
-                </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {/* Coordinator / Desk Name */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                          Coordinator / Desk Name
+                        </label>
+                        <input
+                          type="text"
+                          value={contact.name || ""}
+                          onChange={(e) => handleUpdateCoordinatorContact(idx, "name", e.target.value)}
+                          placeholder="e.g., SRC Coding &amp; Creative Desk"
+                          className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
+                        />
+                      </div>
 
-                {/* Phone Number */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
-                    <Phone className="w-3 h-3 text-[#E78023]" />
-                    <span>Contact Phone / WhatsApp</span>
-                  </label>
-                  <input
-                    type="tel"
-                    value={form.coordinatorContact?.phone || ""}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        coordinatorContact: {
-                          ...(prev.coordinatorContact || { name: "", role: "" }),
-                          phone: e.target.value,
-                        },
-                      }))
-                    }
-                    placeholder="e.g., 8237981028 or +91 9876543210"
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
-                  />
-                </div>
+                      {/* Designation / Role */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                          Role / Designation (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={contact.role || ""}
+                          onChange={(e) => handleUpdateCoordinatorContact(idx, "role", e.target.value)}
+                          placeholder="e.g., Lead Coordinators"
+                          className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
+                        />
+                      </div>
+
+                      {/* Phone Number */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
+                          <Phone className="w-3 h-3 text-[#E78023]" />
+                          <span>Contact Phone / WhatsApp</span>
+                        </label>
+                        <input
+                          type="tel"
+                          value={contact.phone || ""}
+                          onChange={(e) => handleUpdateCoordinatorContact(idx, "phone", e.target.value)}
+                          placeholder="e.g., 8237981028 or +91 9876543210"
+                          className="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-medium focus:outline-none focus:border-[#17458F] focus:ring-2 focus:ring-[#17458F]/20"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
 
-              {/* Quick Presets */}
-              <div className="flex items-center gap-2 flex-wrap pt-0.5">
-                <span className="text-[10px] text-slate-400 font-medium">Quick presets:</span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setForm((prev) => ({
-                      ...prev,
-                      coordinatorContact: {
-                        name: `${form.organizer || "SRC"} Helpdesk`,
-                        role: "Lead Coordinators",
-                        phone: prev.coordinatorContact?.phone || "8237981028",
-                      },
-                    }))
-                  }
-                  className="text-[10px] px-2.5 py-1 rounded-md bg-slate-100 hover:bg-amber-50 hover:text-amber-800 text-slate-600 transition-colors border border-slate-200/60 cursor-pointer"
-                >
-                  + {form.organizer || "SRC"} Helpdesk
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setForm((prev) => ({
-                      ...prev,
-                      coordinatorContact: {
-                        name: "SRC Central Secretariat",
-                        role: "Student Council",
-                        phone: prev.coordinatorContact?.phone || "8237981028",
-                      },
-                    }))
-                  }
-                  className="text-[10px] px-2.5 py-1 rounded-md bg-slate-100 hover:bg-amber-50 hover:text-amber-800 text-slate-600 transition-colors border border-slate-200/60 cursor-pointer"
-                >
-                  + SRC Central Secretariat
-                </button>
-                {(form.coordinatorContact?.name || form.coordinatorContact?.phone) && (
+              {/* Action Bar: Presets & Add More */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] text-slate-400 font-medium">Quick presets:</span>
                   <button
                     type="button"
                     onClick={() =>
-                      setForm((prev) => ({
-                        ...prev,
-                        coordinatorContact: { name: "", role: "", phone: "" },
-                      }))
+                      handleApplyPresetContact({
+                        name: `${form.organizer || "SRC"} Helpdesk`,
+                        role: "Lead Coordinators",
+                        phone: "8237981028",
+                      })
                     }
-                    className="text-[10px] px-2.5 py-1 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700 transition-colors border border-rose-200 cursor-pointer"
+                    className="text-[10px] px-2.5 py-1 rounded-md bg-slate-100 hover:bg-amber-50 hover:text-amber-800 text-slate-600 transition-colors border border-slate-200/60 cursor-pointer"
                   >
-                    ✕ Leave Empty (No Helpdesk)
+                    + {form.organizer || "SRC"} Helpdesk
                   </button>
-                )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleApplyPresetContact({
+                        name: "SRC Central Secretariat",
+                        role: "Student Council",
+                        phone: "8237981028",
+                      })
+                    }
+                    className="text-[10px] px-2.5 py-1 rounded-md bg-slate-100 hover:bg-amber-50 hover:text-amber-800 text-slate-600 transition-colors border border-slate-200/60 cursor-pointer"
+                  >
+                    + SRC Central Secretariat
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleAddCoordinatorContact}
+                  className="px-3.5 py-2 rounded-xl border-2 border-dashed border-blue-300 hover:border-[#17458F] bg-white hover:bg-blue-50/50 text-[#17458F] text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs self-start sm:self-auto"
+                >
+                  <Plus className="w-4 h-4 text-[#E78023]" />
+                  <span>Add Another Coordinator</span>
+                </button>
               </div>
             </div>
           </div>

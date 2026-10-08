@@ -888,31 +888,54 @@ export default function EventDetailPage() {
                   </div>
                 )}
 
-                {/* Coordinator Contact */}
-                {event.coordinatorContact && (event.coordinatorContact.name?.trim() || event.coordinatorContact.phone?.trim()) && (
-                  <div className="pt-4 border-t border-slate-100 text-xs space-y-1.5">
-                    <span className="text-slate-400 uppercase font-extrabold text-[10px] tracking-wider block">
-                      Festival Secretariat
-                    </span>
-                    {event.coordinatorContact.name?.trim() && (
-                      <p className="font-semibold text-slate-800 leading-snug">
-                        {event.coordinatorContact.name.trim()}
-                        {event.coordinatorContact.role?.trim() && (
-                          <span className="text-slate-500 font-normal"> ({event.coordinatorContact.role.trim()})</span>
+                {/* Coordinator Contact(s) */}
+                {(() => {
+                  const contacts = (event.coordinatorContacts && event.coordinatorContacts.length > 0)
+                    ? event.coordinatorContacts.filter((c) => Boolean(c.name?.trim()) || Boolean(c.phone?.trim()))
+                    : event.coordinatorContact && (Boolean(event.coordinatorContact.name?.trim()) || Boolean(event.coordinatorContact.phone?.trim()))
+                    ? [event.coordinatorContact]
+                    : [];
+
+                  if (contacts.length === 0) return null;
+
+                  return (
+                    <div className="pt-4 border-t border-slate-100 text-xs space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 uppercase font-extrabold text-[10px] tracking-wider block">
+                          Festival Secretariat
+                        </span>
+                        {contacts.length > 1 && (
+                          <span className="text-[10px] font-mono text-slate-500 font-bold bg-slate-100 px-2 py-0.5 rounded-md">
+                            {contacts.length} Contacts
+                          </span>
                         )}
-                      </p>
-                    )}
-                    {event.coordinatorContact.phone?.trim() && (
-                      <a
-                        href={`tel:${event.coordinatorContact.phone.trim().replace(/\s+/g, "")}`}
-                        className="text-[#E78023] hover:text-[#c46816] font-bold flex items-center gap-1.5 transition-colors group w-fit"
-                      >
-                        <Phone className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
-                        <span className="hover:underline">{event.coordinatorContact.phone.trim()}</span>
-                      </a>
-                    )}
-                  </div>
-                )}
+                      </div>
+                      <div className="space-y-2.5">
+                        {contacts.map((contact, idx) => (
+                          <div key={contact.id || idx} className={contacts.length > 1 ? "pb-2 border-b border-slate-100 last:border-b-0 last:pb-0 space-y-1" : "space-y-1"}>
+                            {contact.name?.trim() && (
+                              <p className="font-semibold text-slate-800 leading-snug">
+                                {contact.name.trim()}
+                                {contact.role?.trim() && (
+                                  <span className="text-slate-500 font-normal"> ({contact.role.trim()})</span>
+                                )}
+                              </p>
+                            )}
+                            {contact.phone?.trim() && (
+                              <a
+                                href={`tel:${contact.phone.trim().replace(/\s+/g, "")}`}
+                                className="text-[#E78023] hover:text-[#c46816] font-bold flex items-center gap-1.5 transition-colors group w-fit"
+                              >
+                                <Phone className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
+                                <span className="hover:underline">{contact.phone.trim()}</span>
+                              </a>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="pt-4 border-t border-slate-100">
                   <button
@@ -1136,31 +1159,54 @@ export default function EventDetailPage() {
                   </div>
                 )}
 
-                {/* Coordinator Contact */}
-                {event.coordinatorContact && (event.coordinatorContact.name?.trim() || event.coordinatorContact.phone?.trim()) && (
-                  <div className="pt-4 border-t border-slate-100 text-xs space-y-1.5">
-                    <span className="text-slate-400 uppercase font-extrabold text-[10px] tracking-wider block">
-                      Event Helpdesk
-                    </span>
-                    {event.coordinatorContact.name?.trim() && (
-                      <p className="font-semibold text-slate-800 leading-snug">
-                        {event.coordinatorContact.name.trim()}
-                        {event.coordinatorContact.role?.trim() && (
-                          <span className="text-slate-500 font-normal"> ({event.coordinatorContact.role.trim()})</span>
+                {/* Coordinator Contact(s) */}
+                {(() => {
+                  const contacts = (event.coordinatorContacts && event.coordinatorContacts.length > 0)
+                    ? event.coordinatorContacts.filter((c) => Boolean(c.name?.trim()) || Boolean(c.phone?.trim()))
+                    : event.coordinatorContact && (Boolean(event.coordinatorContact.name?.trim()) || Boolean(event.coordinatorContact.phone?.trim()))
+                    ? [event.coordinatorContact]
+                    : [];
+
+                  if (contacts.length === 0) return null;
+
+                  return (
+                    <div className="pt-4 border-t border-slate-100 text-xs space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 uppercase font-extrabold text-[10px] tracking-wider block">
+                          Event Helpdesk &amp; Coordinators
+                        </span>
+                        {contacts.length > 1 && (
+                          <span className="text-[10px] font-mono text-slate-500 font-bold bg-slate-100 px-2 py-0.5 rounded-md">
+                            {contacts.length} Contacts
+                          </span>
                         )}
-                      </p>
-                    )}
-                    {event.coordinatorContact.phone?.trim() && (
-                      <a
-                        href={`tel:${event.coordinatorContact.phone.trim().replace(/\s+/g, "")}`}
-                        className="text-[#E78023] hover:text-[#c46816] font-bold flex items-center gap-1.5 transition-colors group w-fit"
-                      >
-                        <Phone className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
-                        <span className="hover:underline">{event.coordinatorContact.phone.trim()}</span>
-                      </a>
-                    )}
-                  </div>
-                )}
+                      </div>
+                      <div className="space-y-2.5">
+                        {contacts.map((contact, idx) => (
+                          <div key={contact.id || idx} className={contacts.length > 1 ? "pb-2 border-b border-slate-100 last:border-b-0 last:pb-0 space-y-1" : "space-y-1"}>
+                            {contact.name?.trim() && (
+                              <p className="font-semibold text-slate-800 leading-snug">
+                                {contact.name.trim()}
+                                {contact.role?.trim() && (
+                                  <span className="text-slate-500 font-normal"> ({contact.role.trim()})</span>
+                                )}
+                              </p>
+                            )}
+                            {contact.phone?.trim() && (
+                              <a
+                                href={`tel:${contact.phone.trim().replace(/\s+/g, "")}`}
+                                className="text-[#E78023] hover:text-[#c46816] font-bold flex items-center gap-1.5 transition-colors group w-fit"
+                              >
+                                <Phone className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
+                                <span className="hover:underline">{contact.phone.trim()}</span>
+                              </a>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="pt-4 border-t border-slate-100">
                   <button

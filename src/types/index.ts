@@ -66,6 +66,13 @@ export interface SrcFormSection {
 export type SrcFormQuestion = SrcFormField;
 export type CustomQuestion = SrcFormField;
 
+export interface EventCoordinatorContact {
+  id?: string;
+  name?: string;
+  role?: string;
+  phone?: string;
+}
+
 export interface EventItem {
   id: string;
   slug: string;
@@ -113,11 +120,8 @@ export interface EventItem {
   feeAmount?: number; // Base fee per person in INR
   teamFeeAmount?: number; // Optional flat fee for entire team in INR
   feePricingModel?: "per_person" | "per_team";
-  coordinatorContact?: {
-    name?: string;
-    role?: string;
-    phone?: string;
-  };
+  coordinatorContact?: EventCoordinatorContact;
+  coordinatorContacts?: EventCoordinatorContact[];
   customQuestions?: SrcFormField[]; // SRC Forms fields
   whatsappGroupUrl?: string; // Optional WhatsApp community / group join link shown after registration
   whatsappGroupName?: string; // Optional friendly group name
