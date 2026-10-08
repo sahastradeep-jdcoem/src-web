@@ -51,7 +51,8 @@ import {
   getVisitedSectionPath, 
   getWhatsAppLinkForPath,
   getActiveRouteInfo,
-  pruneSkippedSectionAnswers
+  pruneSkippedSectionAnswers,
+  formatWhatsAppUrl
 } from "@/lib/srcFormsHelper";
 import { CancelRegistrationModal } from "@/components/registration/CancelRegistrationModal";
 import { Badge } from "@/components/ui/Badge";
@@ -2398,7 +2399,44 @@ export default function StudentDashboardPage() {
               ) : (
                 <div className="space-y-4">
                   {filteredPasses.map((pass) => {
-                    const matchedEvent = events.find((e) => e.slug === pass.eventSlug || e.id === pass.eventSlug);
+                    const cleanPassSlug = (pass.eventSlug || "").trim().toLowerCase();
+                    const cleanPassEventId = (pass.eventId || "").trim().toLowerCase();
+                    const cleanPassName = (pass.eventName || "").trim().toLowerCase();
+                    const normPassName = cleanPassName.replace(/[^a-z0-9]/g, "");
+
+                    const matchedEvent = events.find((e) => {
+                      const eSlug = (e.slug || "").trim().toLowerCase();
+                      const eId = (e.id || "").trim().toLowerCase();
+                      const eName = (e.name || "").trim().toLowerCase();
+                      const normEName = eName.replace(/[^a-z0-9]/g, "");
+
+                      return (
+                        (cleanPassSlug && (eSlug === cleanPassSlug || eId === cleanPassSlug)) ||
+                        (cleanPassEventId && (eId === cleanPassEventId || eSlug === cleanPassEventId)) ||
+                        (cleanPassName && eName === cleanPassName) ||
+                        (normPassName && normPassName.length > 2 && normEName === normPassName)
+                      );
+                    });
+
+                    const eventImage = (
+                      matchedEvent?.cardImage ||
+                      matchedEvent?.posterImage ||
+                      matchedEvent?.poster ||
+                      matchedEvent?.headerImage ||
+                      (matchedEvent as any)?.imageUrl
+                    );
+
+                    const rawGroupUrl = (
+                      matchedEvent?.whatsappGroupUrl || 
+                      (matchedEvent as any)?.groupLink ||
+                      (matchedEvent as any)?.groupUrl ||
+                      (matchedEvent as any)?.whatsappLink ||
+                      matchedEvent?.customQuestions?.find((q: any) => q.type === "whatsapp_group" && q.waGroupUrl)?.waGroupUrl ||
+                      (pass as any)?.whatsappGroupUrl ||
+                      (pass as any)?.groupLink
+                    );
+                    const groupUrl = formatWhatsAppUrl(rawGroupUrl);
+
                     const isCheckedIn = pass.status === "CHECKED_IN";
                     const isCancelled = pass.status === "CANCELLED";
 
@@ -2416,11 +2454,11 @@ export default function StudentDashboardPage() {
                         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-5">
                           
                           {/* Event Thumbnail & Details */}
-                          <div className="flex items-start gap-4 flex-1">
-                            {matchedEvent?.posterImage || matchedEvent?.cardImage || matchedEvent?.poster ? (
-                              <div className="relative h-20 w-20 sm:h-24 sm:w-24 rounded-2xl overflow-hidden shrink-0 border border-slate-200 shadow-xs">
+                          <div className="flex items-start gap-4 flex-1 min-w-0">
+                            {eventImage ? (
+                              <div className="relative h-20 w-20 sm:h-24 sm:w-24 rounded-2xl overflow-hidden shrink-0 border border-slate-200 shadow-xs bg-slate-100">
                                 <Image
-                                  src={matchedEvent.posterImage || matchedEvent.cardImage || matchedEvent.poster}
+                                  src={eventImage}
                                   alt={pass.eventName}
                                   fill
                                   unoptimized={true}
@@ -2462,10 +2500,10 @@ export default function StudentDashboardPage() {
                               </h4>
 
                               <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
-                                {matchedEvent?.date && (
+                                {(matchedEvent?.date || pass.registeredAt) && (
                                   <span className="flex items-center gap-1 font-medium">
                                     <Calendar className="w-3.5 h-3.5 text-[#17458F]" />
-                                    <span>{matchedEvent.date}</span>
+                                    <span>{matchedEvent?.date || pass.registeredAt}</span>
                                   </span>
                                 )}
                                 {matchedEvent?.venue && (
@@ -2485,22 +2523,34 @@ export default function StudentDashboardPage() {
                           </div>
 
                           {/* Quick Pass Actions */}
-                          <div className="flex sm:flex-col items-center gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                          <div className="flex flex-wrap items-center gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
                             <Button
                               onClick={() => setSelectedTicket(pass)}
                               variant="primary"
                               size="sm"
-                              className="font-bold text-xs gap-1.5 shadow-sm shadow-[#E78023]/20 cursor-pointer w-full sm:w-auto"
+                              className="font-bold text-xs gap-1.5 shadow-sm shadow-[#E78023]/20 cursor-pointer flex-1 sm:flex-initial"
                             >
                               <QrCode className="w-3.5 h-3.5" />
-                              <span>View QR Pass</span>
+                              <span>View Pass</span>
                             </Button>
+
+                            {groupUrl && (
+                              <a
+                                href={groupUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] active:bg-[#1da850] text-white font-bold text-xs shadow-xs transition-all cursor-pointer flex-1 sm:flex-initial"
+                              >
+                                <MessageCircle className="w-3.5 h-3.5 fill-white shrink-0" />
+                                <span>Join Group</span>
+                              </a>
+                            )}
 
                             {!isCheckedIn && !isCancelled && (
                               <button
                                 type="button"
                                 onClick={() => setCancellingTicket(pass)}
-                                className="text-[11px] font-semibold text-slate-400 hover:text-rose-600 transition-colors py-1 cursor-pointer"
+                                className="text-[11px] font-semibold text-slate-400 hover:text-rose-600 transition-colors py-1 cursor-pointer ml-auto sm:ml-0"
                               >
                                 Cancel Pass
                               </button>
@@ -2831,16 +2881,49 @@ export default function StudentDashboardPage() {
                 Close
               </Button>
 
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleDownloadSelectedTicket}
-                disabled={isDownloadingTicket}
-                className="w-full sm:w-auto font-bold gap-2 cursor-pointer shadow-md shadow-[#E78023]/20"
-              >
-                <Download className="w-4 h-4" />
-                <span>{isDownloadingTicket ? "Exporting PNG..." : ticketDownloadSuccess ? "Pass Saved!" : "Download Pass (PNG)"}</span>
-              </Button>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                {(() => {
+                  const modalEvent = events.find((e) => 
+                    (e.slug && (e.slug.toLowerCase() === (selectedTicket.eventSlug || "").toLowerCase() || e.slug.toLowerCase() === (selectedTicket.eventId || "").toLowerCase())) ||
+                    (e.id && (e.id.toLowerCase() === (selectedTicket.eventId || "").toLowerCase() || e.id.toLowerCase() === (selectedTicket.eventSlug || "").toLowerCase())) ||
+                    (e.name && e.name.toLowerCase().trim() === (selectedTicket.eventName || "").toLowerCase().trim())
+                  );
+                  const mRawGroup = (
+                    modalEvent?.whatsappGroupUrl || 
+                    (modalEvent as any)?.groupLink ||
+                    (modalEvent as any)?.groupUrl ||
+                    (modalEvent as any)?.whatsappLink ||
+                    modalEvent?.customQuestions?.find((q: any) => q.type === "whatsapp_group" && q.waGroupUrl)?.waGroupUrl ||
+                    (selectedTicket as any)?.whatsappGroupUrl ||
+                    (selectedTicket as any)?.groupLink
+                  );
+                  const mGroupUrl = formatWhatsAppUrl(mRawGroup);
+
+                  if (!mGroupUrl) return null;
+                  return (
+                    <a
+                      href={mGroupUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] active:bg-[#1da850] text-white font-bold text-xs shadow-xs transition-all cursor-pointer w-full sm:w-auto"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5 fill-white shrink-0" />
+                      <span>Join Group</span>
+                    </a>
+                  );
+                })()}
+
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleDownloadSelectedTicket}
+                  disabled={isDownloadingTicket}
+                  className="w-full sm:w-auto font-bold gap-2 cursor-pointer shadow-md shadow-[#E78023]/20"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>{isDownloadingTicket ? "Exporting PNG..." : ticketDownloadSuccess ? "Pass Saved!" : "Download Pass (PNG)"}</span>
+                </Button>
+              </div>
             </div>
           }
         >
