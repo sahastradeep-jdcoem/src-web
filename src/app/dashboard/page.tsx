@@ -2819,9 +2819,32 @@ export default function StudentDashboardPage() {
           title="Digital Delegate Pass"
           maxWidth="3xl"
           dialogClassName="sm:max-h-[94vh]"
-          contentClassName="p-3 sm:p-4 md:p-5 overflow-y-auto md:overflow-visible"
+          contentClassName="p-3 sm:p-5 overflow-y-auto overscroll-contain"
+          footer={
+            <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-3 w-full">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedTicket(null)}
+                className="w-full sm:w-auto cursor-pointer"
+              >
+                Close
+              </Button>
+
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleDownloadSelectedTicket}
+                disabled={isDownloadingTicket}
+                className="w-full sm:w-auto font-bold gap-2 cursor-pointer shadow-md shadow-[#E78023]/20"
+              >
+                <Download className="w-4 h-4" />
+                <span>{isDownloadingTicket ? "Exporting PNG..." : ticketDownloadSuccess ? "Pass Saved!" : "Download Pass (PNG)"}</span>
+              </Button>
+            </div>
+          }
         >
-          <div className="space-y-3">
+          <div className="w-full min-w-0">
             <TicketPass
               registrationId={selectedTicket.id}
               eventName={selectedTicket.eventName}
@@ -2851,28 +2874,6 @@ export default function StudentDashboardPage() {
               paymentId={selectedTicket.paymentId}
               mode="dashboard"
             />
-
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2.5 border-t border-slate-200">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedTicket(null)}
-                className="w-full sm:w-auto cursor-pointer"
-              >
-                Close
-              </Button>
-
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleDownloadSelectedTicket}
-                disabled={isDownloadingTicket}
-                className="w-full sm:w-auto font-bold gap-2 cursor-pointer shadow-md shadow-[#E78023]/20"
-              >
-                <Download className="w-4 h-4" />
-                <span>{isDownloadingTicket ? "Exporting PNG..." : ticketDownloadSuccess ? "Pass Saved!" : "Download Pass (PNG)"}</span>
-              </Button>
-            </div>
           </div>
         </Modal>
       )}

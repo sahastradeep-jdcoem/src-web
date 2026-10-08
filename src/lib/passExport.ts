@@ -57,6 +57,38 @@ export async function downloadPassAsImage(
           clonedEl.style.height = "auto";
           clonedEl.style.margin = "0 auto";
 
+          // Enforce desktop landscape layout on the exported card regardless of device screen width
+          const bodyEl = clonedEl.querySelector<HTMLElement>("[data-pass-body]");
+          if (bodyEl) {
+            bodyEl.style.display = "flex";
+            bodyEl.style.flexDirection = "row";
+            bodyEl.style.alignItems = "flex-start";
+            bodyEl.style.justifyContent = "space-between";
+            bodyEl.style.gap = "24px";
+            bodyEl.style.padding = "24px 28px";
+          }
+
+          const qrBlockEl = clonedEl.querySelector<HTMLElement>("[data-pass-qr-block]");
+          if (qrBlockEl) {
+            qrBlockEl.style.width = "176px";
+            qrBlockEl.style.minWidth = "176px";
+            qrBlockEl.style.maxWidth = "176px";
+          }
+
+          const footerEl = clonedEl.querySelector<HTMLElement>("[data-pass-footer]");
+          if (footerEl) {
+            footerEl.style.display = "flex";
+            footerEl.style.flexDirection = "row";
+            footerEl.style.justifyContent = "space-between";
+            footerEl.style.textAlign = "left";
+            footerEl.style.padding = "14px 28px";
+          }
+
+          const headerEl = clonedEl.querySelector<HTMLElement>("[data-pass-header]");
+          if (headerEl) {
+            headerEl.style.padding = "18px 28px";
+          }
+
           // Ensure all text elements have visible overflow in the clone to avoid canvas font clipping
           const allText = clonedEl.querySelectorAll<HTMLElement>("p, span, h1, h2, h3, h4, h5, h6, strong");
           allText.forEach((node) => {
