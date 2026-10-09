@@ -337,8 +337,11 @@ export default function AdminEventsPage() {
     const cleanWhatToExpect = isUmbrella ? [] : Array.from(new Set(formData.whatToExpect.map((s) => s.trim()).filter(Boolean)));
     const cleanRules = isUmbrella ? [] : Array.from(new Set(formData.rules.map((s) => s.trim()).filter(Boolean)));
     const isNoReg = isUmbrella || Boolean(formData.noRegistrationRequired);
+    const isDatesComingSoon = formData.status === "Dates Coming Soon (Open)";
     const regDeadlineFormatted = isNoReg
       ? "Not Required"
+      : isDatesComingSoon
+      ? (formData.registrationDeadline && formData.registrationDeadline !== formData.date ? formatDateToReadable(formData.registrationDeadline) : undefined)
       : formData.registrationDeadline
       ? formatDateToReadable(formData.registrationDeadline)
       : (formData.date || "TBD 2026");
@@ -686,12 +689,15 @@ export default function AdminEventsPage() {
       reconciledStatus = "Upcoming";
     }
 
-    let rawRegDeadline = formData.registrationDeadline;
-    if (!isNoReg && isFutureEvent) {
+    const isDatesComingSoon = reconciledStatus === "Dates Coming Soon (Open)" || formData.status === "Dates Coming Soon (Open)";
+    let rawRegDeadline: string | undefined = formData.registrationDeadline;
+    if (!isNoReg && isFutureEvent && !isDatesComingSoon) {
       const deadlineTs = rawRegDeadline ? parseDateStringToTimestamp(rawRegDeadline, true) : null;
       if (!rawRegDeadline || (deadlineTs && deadlineTs < Date.now())) {
         rawRegDeadline = formData.rawDate || formData.date;
       }
+    } else if (isDatesComingSoon && (rawRegDeadline === formData.date || rawRegDeadline === formData.rawDate)) {
+      rawRegDeadline = undefined;
     }
 
     const regDeadlineFormatted = isNoReg

@@ -53,6 +53,7 @@ export default function EventDetailPage() {
   const { user, openAuthModal } = useAuth();
 
   const [event, setEvent] = useState<EventItem | null>(null);
+  const [parentEvent, setParentEvent] = useState<EventItem | null>(null);
   const [subEvents, setSubEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -223,6 +224,16 @@ export default function EventDetailPage() {
           const cleanStreamMatch = sanitizeEventItem(streamMatch);
           setEvent(cleanStreamMatch);
           setSubEvents(findSubEvents(remoteEvents, cleanStreamMatch));
+          if (cleanStreamMatch.parentEventId || cleanStreamMatch.parentEventSlug) {
+            const parent = remoteEvents.find(
+              (e) =>
+                (cleanStreamMatch.parentEventId && (e.id === cleanStreamMatch.parentEventId || e.slug === cleanStreamMatch.parentEventId)) ||
+                (cleanStreamMatch.parentEventSlug && (e.slug === cleanStreamMatch.parentEventSlug || e.id === cleanStreamMatch.parentEventSlug))
+            );
+            setParentEvent(parent ? sanitizeEventItem(parent) : null);
+          } else {
+            setParentEvent(null);
+          }
         }
       }
     });
@@ -313,15 +324,24 @@ export default function EventDetailPage() {
     );
   }
 
+  const isParentDatesComingSoon = Boolean(
+    parentEvent && (
+      parentEvent.status === "Dates Coming Soon (Open)" ||
+      parentEvent.status === "Coming Soon" ||
+      !parentEvent.date ||
+      /\b(coming soon|to be announced|tba|to be decided|tbd)\b/i.test(parentEvent.date)
+    )
+  );
+
   const effectiveStatus = getEventEffectiveStatus(event);
-  const isDatesComingSoonOpen = effectiveStatus === "Dates Coming Soon (Open)";
-  const isComingSoon = effectiveStatus === "Coming Soon";
-  const isUpcoming = effectiveStatus === "Upcoming";
+  const isDatesComingSoonOpen = effectiveStatus === "Dates Coming Soon (Open)" || (isParentDatesComingSoon && effectiveStatus === "Registration Open");
+  const isComingSoon = effectiveStatus === "Coming Soon" || (isParentDatesComingSoon && effectiveStatus === "Upcoming");
+  const isUpcoming = effectiveStatus === "Upcoming" && !isComingSoon;
   const isCompleted = effectiveStatus === "Completed";
   const isRegistrationClosedStatus = effectiveStatus === "Registration Closed";
   const isDeadlinePassed = isRegistrationDeadlinePassed(event);
   const isRegistrationOpen = (effectiveStatus === "Registration Open" || isDatesComingSoonOpen) && !isDeadlinePassed && !isCompleted;
-  const isDateComingSoon = isComingSoon || isDatesComingSoonOpen || Boolean(
+  const isDateComingSoon = isComingSoon || isDatesComingSoonOpen || isParentDatesComingSoon || Boolean(
     !event.date ||
     /\b(coming soon|to be announced|tba|to be decided|tbd)\b/i.test(event.date)
   );
@@ -563,7 +583,7 @@ export default function EventDetailPage() {
                           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 font-medium pt-2 border-t border-slate-100">
                             <div className="flex items-center gap-1">
                               <Calendar className="w-3.5 h-3.5 text-[#E78023]" />
-                              {sub.status === "Coming Soon" || sub.status === "Dates Coming Soon (Open)" ? (
+                              {isDateComingSoon || sub.status === "Coming Soon" || sub.status === "Dates Coming Soon (Open)" || !sub.date || /\b(coming soon|to be announced|tba|to be decided|tbd)\b/i.test(sub.date) ? (
                                 <span className="font-bold text-amber-600">Coming Soon</span>
                               ) : (
                                 <span>{sub.date}</span>
@@ -1031,8 +1051,8 @@ export default function EventDetailPage() {
                     <span className="font-bold text-[#E78023]">
                       {event.noRegistrationRequired
                         ? "Not Required (Walk-in)"
-                        : isDatesComingSoonOpen
-                        ? (isDeadlinePassed ? "Closed (Deadline Passed)" : (event.registrationDeadline || "Open (Dates TBA)"))
+                        : (isDatesComingSoonOpen || isDateComingSoon)
+                        ? (isDeadlinePassed ? "Closed (Deadline Passed)" : "Open (Dates Coming Soon)")
                         : isComingSoon
                         ? "Coming Soon"
                         : isUpcoming
@@ -1041,7 +1061,9 @@ export default function EventDetailPage() {
                         ? "Concluded"
                         : isDeadlinePassed
                         ? "Closed (Deadline Passed)"
-                        : (event.registrationDeadline || "Open until slots filled")}
+                        : (event.registrationDeadline && event.registrationDeadline !== event.date
+                          ? `Open until ${event.registrationDeadline}`
+                          : "Open until slots filled")}
                     </span>
                   </div>
                   <div className="flex justify-between items-center py-1 border-b border-slate-100">
