@@ -32,6 +32,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
   const isDeadlinePassed = isRegistrationDeadlinePassed(event);
   const isRegistrationOpen = (effectiveStatus === "Registration Open" || isDatesComingSoonOpen) && !isDeadlinePassed && !isCompleted;
   const isRegistrationClosed = ((effectiveStatus === "Registration Open" || isDatesComingSoonOpen) && isDeadlinePassed) || isCompleted || isRegistrationClosedStatus;
+  const isInterCollege = !(event.targetAudience === "jdcoem_only" || event.isInterCollege === false);
 
   const statusVariant = isDatesComingSoonOpen
     ? "orange"
@@ -74,7 +75,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
       subtitle: event.description || event.tagline,
       description: event.description,
       imageUrl: heroImage,
-      badge: event.targetAudience === "jdcoem_only" || event.isInterCollege === false ? "🎓 JDCOEM Only" : "🌐 Inter-College",
+      badge: isInterCollege ? "🌐 Inter-College" : undefined,
       date: isDateComingSoon ? "Coming Soon" : event.date,
       time: isDateComingSoon ? undefined : event.time,
       venue: event.venue,
@@ -117,14 +118,11 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
                 <span>Flagship Spotlight</span>
               </span>
             ) : null}
-            <span className={cn(
-              "text-[10px] font-sans font-bold uppercase tracking-wider px-2.5 py-1 rounded-full shadow-md flex items-center gap-1",
-              event.targetAudience === "jdcoem_only" || event.isInterCollege === false
-                ? "bg-amber-500 text-white"
-                : "bg-teal-600 text-white"
-            )}>
-              {event.targetAudience === "jdcoem_only" || event.isInterCollege === false ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
-            </span>
+            {isInterCollege && (
+              <span className="text-[10px] font-sans font-bold uppercase tracking-wider px-2.5 py-1 rounded-full shadow-md flex items-center gap-1 bg-teal-600 text-white">
+                🌐 Inter-College
+              </span>
+            )}
             {event.isParentFest ? (
               (isCompleted || isComingSoon || effectiveStatus === "Cancelled") ? (
                 <Badge variant={statusVariant} size="sm">
@@ -264,14 +262,11 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
               {event.category}
             </span>
           )}
-          <span className={cn(
-            "text-[10px] font-sans font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full shadow-xs flex items-center gap-1",
-            event.targetAudience === "jdcoem_only" || event.isInterCollege === false
-              ? "bg-amber-500 text-white"
-              : "bg-teal-600 text-white"
-          )}>
-            {event.targetAudience === "jdcoem_only" || event.isInterCollege === false ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
-          </span>
+          {isInterCollege && (
+            <span className="text-[10px] font-sans font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full shadow-xs flex items-center gap-1 bg-teal-600 text-white">
+              🌐 Inter-College
+            </span>
+          )}
           {event.isParentFest ? (
             (isCompleted || isComingSoon || effectiveStatus === "Cancelled") ? (
               <Badge variant={statusVariant} size="sm">
