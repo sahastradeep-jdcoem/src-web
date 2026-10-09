@@ -124,6 +124,14 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   // If event is strictly Individual, participation/team step is skipped entirely
   const skipParticipationStep = isIndividualOnly;
 
+  const isDateComingSoon = Boolean(
+    event.status === "Coming Soon" ||
+    event.status === "Dates Coming Soon (Open)" ||
+    !event.date ||
+    /\b(coming soon|to be announced|tba|to be decided|tbd)\b/i.test(event.date)
+  );
+  const displayEventDate = isDateComingSoon ? "Dates Coming Soon" : event.date;
+
   const STEP_DETAILS = 1;
   const STEP_PARTICIPATION = skipParticipationStep ? -1 : 2;
   const STEP_QUESTIONS = hasCustomQuestions ? (skipParticipationStep ? 2 : 3) : -1;
@@ -2305,7 +2313,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                   {event.name}
                 </h4>
                 <p className="text-xs text-slate-500 font-medium">
-                  {event.date} • {event.venue}
+                  {displayEventDate} • {event.venue}
                 </p>
               </div>
               <Badge variant="orange" size="md">
@@ -2561,7 +2569,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               <TicketPass
                 registrationId={generatedTicket.registrationId}
                 eventName={event.name}
-                eventDate={event.date}
+                eventDate={displayEventDate}
                 eventVenue={event.venue}
                 participantName={generatedTicket.participantName || formData.fullName || "Delegate"}
                 department={generatedTicket.department || (isExternal ? (formData.collegeName ? `${formData.collegeName} • ${formData.department}` : formData.department) : formData.department)}

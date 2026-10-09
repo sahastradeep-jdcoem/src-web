@@ -22,6 +22,10 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
   const effectiveStatus = getEventEffectiveStatus(event);
   const isDatesComingSoonOpen = effectiveStatus === "Dates Coming Soon (Open)";
   const isComingSoon = effectiveStatus === "Coming Soon" || isDatesComingSoonOpen;
+  const isDateComingSoon = isComingSoon || Boolean(
+    !event.date ||
+    /\b(coming soon|to be announced|tba|to be decided|tbd)\b/i.test(event.date)
+  );
   const isUpcoming = effectiveStatus === "Upcoming";
   const isCompleted = effectiveStatus === "Completed";
   const isRegistrationClosedStatus = effectiveStatus === "Registration Closed";
@@ -71,8 +75,8 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
       description: event.description,
       imageUrl: heroImage,
       badge: event.targetAudience === "jdcoem_only" || event.isInterCollege === false ? "🎓 JDCOEM Only" : "🌐 Inter-College",
-      date: isComingSoon ? "Coming Soon" : event.date,
-      time: isComingSoon ? undefined : event.time,
+      date: isDateComingSoon ? "Coming Soon" : event.date,
+      time: isDateComingSoon ? undefined : event.time,
       venue: event.venue,
       organizer: event.organizer,
       entryFee: event.noRegistrationRequired ? "Open Walk-in" : event.entryFee || "Free Entry",
@@ -172,7 +176,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
             <div className="pt-3 space-y-2 text-xs text-slate-600 border-t border-slate-100 font-sans font-medium">
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-[#E78023] shrink-0" />
-                {isComingSoon ? (
+                {isDateComingSoon ? (
                   <span className="font-bold text-amber-600">Coming Soon</span>
                 ) : (
                   <>
@@ -187,7 +191,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
                   </>
                 )}
               </div>
-              {event.time && !isComingSoon && (
+              {event.time && !isDateComingSoon && (
                 <div className="flex items-center gap-2 text-slate-500">
                   <Clock className="w-4 h-4 text-slate-400 shrink-0" />
                   <span>{event.time}</span>
@@ -318,7 +322,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
         <div className="space-y-1.5 text-xs text-slate-600 pt-3 border-t border-slate-100 font-sans font-medium">
           <div className="flex items-center gap-2">
             <Calendar className="w-3.5 h-3.5 text-[#E78023] shrink-0" />
-            {isComingSoon ? (
+            {isDateComingSoon ? (
               <span className="font-bold text-amber-600">Coming Soon</span>
             ) : (
               <>
@@ -333,7 +337,7 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
               </>
             )}
           </div>
-          {event.time && !isComingSoon && (
+          {event.time && !isDateComingSoon && (
             <div className="flex items-center gap-2 text-slate-500 text-[11px]">
               <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               <span className="truncate">{event.time}</span>

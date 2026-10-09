@@ -1029,7 +1029,7 @@ export function EventFormModal({
       const payload: EventFormData = form.isParentFest
         ? {
             ...form,
-            isLive: asDraft ? false : (form.isLive !== undefined ? form.isLive : true),
+            isLive: asDraft ? false : true,
             status: asDraft ? "draft" : (form.status === "draft" ? "Upcoming" : form.status),
             coordinatorContacts: cleanedContacts,
             coordinatorContact: cleanCoordinator,
@@ -1055,7 +1055,7 @@ export function EventFormModal({
           }
         : {
             ...form,
-            isLive: asDraft ? false : (form.isLive !== undefined ? form.isLive : true),
+            isLive: asDraft ? false : true,
             status: asDraft ? "draft" : (form.status === "draft" ? "Upcoming" : form.status),
             coordinatorContacts: cleanedContacts,
             coordinatorContact: cleanCoordinator,

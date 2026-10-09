@@ -721,13 +721,15 @@ export default function AdminEventsPage() {
       ? false 
       : asDraft === false 
       ? true 
-      : (formData.isLive !== undefined ? formData.isLive : (editingEvent.isLive !== undefined ? editingEvent.isLive : true));
+      : (formData.isLive !== undefined ? formData.isLive : true);
 
     let finalStatus: EventStatus = asDraft === true
       ? "draft"
-      : asDraft === false && (reconciledStatus === "draft" || editingEvent.status === "draft")
+      : finalLive === false
+      ? "draft"
+      : reconciledStatus === "draft"
       ? (isNoReg ? "Upcoming" : "Registration Open")
-      : (finalLive === false ? "draft" : (reconciledStatus === "draft" ? "Upcoming" : (reconciledStatus as EventStatus)));
+      : (reconciledStatus as EventStatus);
 
     const editedItem: EventItem = {
       ...editingEvent,

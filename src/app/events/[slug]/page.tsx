@@ -83,6 +83,13 @@ export default function EventDetailPage() {
     const canonicalUrl = `https://www.srcjdcoem.in/events/${event.slug || slug}`;
     const heroImage = event.cardImage;
 
+    const shareIsDateComingSoon = Boolean(
+      event.status === "Coming Soon" ||
+      event.status === "Dates Coming Soon (Open)" ||
+      !event.date ||
+      /\b(coming soon|to be announced|tba|to be decided|tbd)\b/i.test(event.date)
+    );
+
     openShare({
       type: "event",
       typeLabel: event.isParentFest ? "CAMPUS FESTIVAL" : event.category ? `${event.category.toUpperCase()} EVENT` : "CAMPUS EVENT",
@@ -91,8 +98,8 @@ export default function EventDetailPage() {
       description: event.description,
       imageUrl: heroImage,
       badge: event.targetAudience === "jdcoem_only" || event.isInterCollege === false ? "🎓 JDCOEM Only" : "🌐 Inter-College",
-      date: (event.status === "Coming Soon" || event.status === "Dates Coming Soon (Open)") ? "Coming Soon" : event.date,
-      time: (event.status === "Coming Soon" || event.status === "Dates Coming Soon (Open)") ? undefined : event.time,
+      date: shareIsDateComingSoon ? "Coming Soon" : event.date,
+      time: shareIsDateComingSoon ? undefined : event.time,
       venue: event.venue,
       organizer: event.organizer,
       entryFee: event.noRegistrationRequired ? "Open Walk-in" : event.entryFee || "Free Entry",
@@ -395,7 +402,7 @@ export default function EventDetailPage() {
           <div className="flex flex-wrap items-center gap-6 sm:gap-8 pt-4 border-t border-white/20 text-xs sm:text-sm text-slate-200">
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-[#E78023] shrink-0" />
-              {isComingSoon || isDatesComingSoonOpen ? (
+              {isDateComingSoon ? (
                 <span className="font-bold text-amber-300">
                   Coming Soon
                 </span>
@@ -412,7 +419,7 @@ export default function EventDetailPage() {
                 </>
               )}
             </div>
-            {event.time && !isComingSoon && !isDatesComingSoonOpen && (
+            {event.time && !isDateComingSoon && (
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-slate-300 shrink-0" />
                 <span>{event.time}</span>
@@ -774,7 +781,7 @@ export default function EventDetailPage() {
                   <div className="flex justify-between items-center py-1 border-b border-slate-100/80">
                     <span className="text-slate-500 font-medium">Festival Date</span>
                     <span className="font-bold text-slate-900">
-                      {isComingSoon || isDatesComingSoonOpen ? <span className="text-amber-600">Coming Soon</span> : event.date}
+                      {isDateComingSoon ? <span className="text-amber-600">Coming Soon</span> : event.date}
                     </span>
                   </div>
                   <div className="flex justify-between items-center py-1 border-b border-slate-100/80">
@@ -1072,7 +1079,7 @@ export default function EventDetailPage() {
                       <span>No Registration Required</span>
                     </div>
                     <p className="text-xs text-emerald-900/90 font-medium leading-relaxed">
-                      This event is open for walk-in attendance. Simply arrive at <strong>{event.venue || "JDCOEM Campus"}</strong> on <strong>{event.date}</strong> at <strong>{event.time || "10:00 AM IST"}</strong>.
+                      This event is open for walk-in attendance. Simply arrive at <strong>{event.venue || "JDCOEM Campus"}</strong> on <strong>{isDateComingSoon ? "Dates Coming Soon" : event.date}</strong>{isDateComingSoon ? "" : <> at <strong>{event.time || "10:00 AM IST"}</strong></>}.
                     </p>
                   </div>
                 ) : isComingSoon ? (

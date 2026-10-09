@@ -228,6 +228,13 @@ export default function EventRegisterPage() {
     );
   }
 
+  const isDateComingSoon = Boolean(
+    event.status === "Coming Soon" ||
+    event.status === "Dates Coming Soon (Open)" ||
+    !event.date ||
+    /\b(coming soon|to be announced|tba|to be decided|tbd)\b/i.test(event.date)
+  );
+
   if (event.noRegistrationRequired) {
     return (
       <div className="min-h-[70vh] bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center space-y-6">
@@ -244,7 +251,7 @@ export default function EventRegisterPage() {
               Admission Notice:
             </span>
             <p className="text-xs text-slate-700 leading-relaxed font-medium">
-              This event does not require online portal registration or passes. All students and delegates are welcome to attend directly at <strong>{event.venue || "JDCOEM Campus"}</strong> on <strong>{event.date}</strong> at <strong>{event.time || "10:00 AM IST"}</strong>!
+              This event does not require online portal registration or passes. All students and delegates are welcome to attend directly at <strong>{event.venue || "JDCOEM Campus"}</strong> on <strong>{isDateComingSoon ? "Dates Coming Soon" : event.date}</strong>{isDateComingSoon ? "" : <> at <strong>{event.time || "10:00 AM IST"}</strong></>}!
             </p>
           </div>
           <p className="text-xs text-slate-500 leading-relaxed font-sans">
@@ -799,7 +806,9 @@ export default function EventRegisterPage() {
                 {selectedSubEvent ? selectedSubEvent.name : event.name}
               </h1>
               <p className="text-xs sm:text-sm text-slate-500 font-medium">
-                {selectedSubEvent ? `${selectedSubEvent.date} • Part of ${event.name}` : `${event.date} • ${event.venue}`}
+                {selectedSubEvent 
+                  ? `${(selectedSubEvent.status === "Coming Soon" || selectedSubEvent.status === "Dates Coming Soon (Open)" || !selectedSubEvent.date || /\b(coming soon|to be announced|tba|to be decided|tbd)\b/i.test(selectedSubEvent.date)) ? "Dates Coming Soon" : selectedSubEvent.date} • Part of ${event.name}` 
+                  : `${isDateComingSoon ? "Dates Coming Soon" : event.date} • ${event.venue}`}
               </p>
             </div>
 
