@@ -6,7 +6,7 @@ export type EventCategory =
   | "Workshops"
   | "Fest";
 
-export type EventStatus = "Registration Open" | "Registration Closed" | "Upcoming" | "Coming Soon" | "Completed" | "Cancelled" | "draft";
+export type EventStatus = "Registration Open" | "Registration Closed" | "Upcoming" | "Coming Soon" | "Dates Coming Soon (Open)" | "Completed" | "Cancelled" | "draft";
 
 export type TargetAudience = "jdcoem_only" | "inter_college";
 

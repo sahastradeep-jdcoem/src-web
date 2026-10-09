@@ -20,15 +20,18 @@ const DEFAULT_EVENT_IMAGE = "https://images.unsplash.com/photo-1516450360452-931
 
 export function EventCard({ event, featuredLayout = false }: EventCardProps) {
   const effectiveStatus = getEventEffectiveStatus(event);
-  const isComingSoon = effectiveStatus === "Coming Soon";
+  const isDatesComingSoonOpen = effectiveStatus === "Dates Coming Soon (Open)";
+  const isComingSoon = effectiveStatus === "Coming Soon" || isDatesComingSoonOpen;
   const isUpcoming = effectiveStatus === "Upcoming";
   const isCompleted = effectiveStatus === "Completed";
   const isRegistrationClosedStatus = effectiveStatus === "Registration Closed";
   const isDeadlinePassed = isRegistrationDeadlinePassed(event);
-  const isRegistrationOpen = effectiveStatus === "Registration Open" && !isDeadlinePassed && !isCompleted;
-  const isRegistrationClosed = (effectiveStatus === "Registration Open" && isDeadlinePassed) || isCompleted || isRegistrationClosedStatus;
+  const isRegistrationOpen = (effectiveStatus === "Registration Open" || isDatesComingSoonOpen) && !isDeadlinePassed && !isCompleted;
+  const isRegistrationClosed = ((effectiveStatus === "Registration Open" || isDatesComingSoonOpen) && isDeadlinePassed) || isCompleted || isRegistrationClosedStatus;
 
-  const statusVariant = isComingSoon
+  const statusVariant = isDatesComingSoonOpen
+    ? "orange"
+    : isComingSoon
     ? "warning"
     : isUpcoming
     ? "warning"
@@ -36,7 +39,9 @@ export function EventCard({ event, featuredLayout = false }: EventCardProps) {
     ? "orange"
     : "slate";
 
-  const statusLabel = isComingSoon
+  const statusLabel = isDatesComingSoonOpen
+    ? (isDeadlinePassed ? "Registration Closed" : "Dates TBA • Reg Open")
+    : isComingSoon
     ? "Coming Soon"
     : isUpcoming
     ? "Upcoming"

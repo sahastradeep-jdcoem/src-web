@@ -290,13 +290,13 @@ export default function AdminEventsPage() {
       if (selectedStatus === "draft") {
         if (e.isLive !== false && e.status !== "draft") return false;
       } else if (selectedStatus === "open") {
-        if (e.isCancelled || e.status !== "Registration Open" || e.noRegistrationRequired || isRegistrationDeadlinePassed(e)) return false;
+        if (e.isCancelled || (e.status !== "Registration Open" && e.status !== "Dates Coming Soon (Open)") || e.noRegistrationRequired || isRegistrationDeadlinePassed(e)) return false;
       } else if (selectedStatus === "closed") {
-        if (e.isCancelled || (e.status !== "Registration Closed" && !(e.status === "Registration Open" && isRegistrationDeadlinePassed(e)))) return false;
+        if (e.isCancelled || (e.status !== "Registration Closed" && !((e.status === "Registration Open" || e.status === "Dates Coming Soon (Open)") && isRegistrationDeadlinePassed(e)))) return false;
       } else if (selectedStatus === "walkin") {
         if (!e.noRegistrationRequired) return false;
       } else if (selectedStatus === "upcoming") {
-        if (e.isCancelled || e.status !== "Upcoming") return false;
+        if (e.isCancelled || (e.status !== "Upcoming" && e.status !== "Dates Coming Soon (Open)")) return false;
       } else if (selectedStatus === "coming_soon") {
         if (e.isCancelled || e.status !== "Coming Soon") return false;
       } else if (selectedStatus === "completed") {
@@ -1203,12 +1203,12 @@ export default function AdminEventsPage() {
             { 
               id: "open", 
               label: "Registration Open", 
-              count: tenureFilteredEvents.filter((e) => !e.isCancelled && e.status === "Registration Open" && !e.noRegistrationRequired && !isRegistrationDeadlinePassed(e)).length 
+              count: tenureFilteredEvents.filter((e) => !e.isCancelled && (e.status === "Registration Open" || e.status === "Dates Coming Soon (Open)") && !e.noRegistrationRequired && !isRegistrationDeadlinePassed(e)).length 
             },
             { 
               id: "closed", 
               label: "Registration Closed", 
-              count: tenureFilteredEvents.filter((e) => !e.isCancelled && (e.status === "Registration Closed" || (e.status === "Registration Open" && isRegistrationDeadlinePassed(e)))).length 
+              count: tenureFilteredEvents.filter((e) => !e.isCancelled && (e.status === "Registration Closed" || ((e.status === "Registration Open" || e.status === "Dates Coming Soon (Open)") && isRegistrationDeadlinePassed(e)))).length 
             },
             { 
               id: "walkin", 
@@ -1218,7 +1218,7 @@ export default function AdminEventsPage() {
             { 
               id: "upcoming", 
               label: "Upcoming", 
-              count: tenureFilteredEvents.filter((e) => !e.isCancelled && e.status === "Upcoming").length 
+              count: tenureFilteredEvents.filter((e) => !e.isCancelled && (e.status === "Upcoming" || e.status === "Dates Coming Soon (Open)")).length 
             },
             { 
               id: "coming_soon", 
@@ -1473,7 +1473,7 @@ export default function AdminEventsPage() {
                     <div className="flex items-center justify-between text-xs font-semibold text-slate-700 pt-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <CalendarIcon className="w-3.5 h-3.5 text-[#E78023]" />
-                        {evt.status === "Coming Soon" ? (
+                        {evt.status === "Coming Soon" || evt.status === "Dates Coming Soon (Open)" ? (
                           <span className="font-bold text-amber-600">Coming Soon</span>
                         ) : (
                           <>
@@ -1486,7 +1486,7 @@ export default function AdminEventsPage() {
                           </>
                         )}
                       </div>
-                      {evt.time && evt.status !== "Coming Soon" && (
+                      {evt.time && evt.status !== "Coming Soon" && evt.status !== "Dates Coming Soon (Open)" && (
                         <div className="flex items-center gap-1 text-[11px] text-slate-500">
                           <Clock className="w-3 h-3 text-slate-400" />
                           <span>{evt.time}</span>
@@ -1531,6 +1531,8 @@ export default function AdminEventsPage() {
                               ? "warning"
                               : evt.status === "Upcoming"
                               ? "warning"
+                              : evt.status === "Dates Coming Soon (Open)"
+                              ? (isRegistrationDeadlinePassed(evt) ? "slate" : "orange")
                               : evt.status === "Registration Open" && isRegistrationDeadlinePassed(evt)
                               ? "slate"
                               : evt.status === "Registration Open"
@@ -1541,6 +1543,8 @@ export default function AdminEventsPage() {
                         >
                           {isCancelled
                             ? "Cancelled"
+                            : evt.status === "Dates Coming Soon (Open)"
+                            ? (isRegistrationDeadlinePassed(evt) ? "Registration Closed" : "Dates TBA • Reg Open")
                             : evt.status === "Registration Open" && isRegistrationDeadlinePassed(evt)
                             ? "Registration Closed"
                             : evt.status}

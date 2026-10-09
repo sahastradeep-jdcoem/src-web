@@ -53,6 +53,8 @@ export function sanitizeEventItem(event: EventItem): EventItem {
     effectiveStatus = "Completed";
   } else if (event.status === "Registration Closed") {
     effectiveStatus = "Registration Closed";
+  } else if (event.status === "Dates Coming Soon (Open)") {
+    effectiveStatus = "Dates Coming Soon (Open)";
   } else if (event.status === "Completed" || event.status?.toLowerCase() === "completed") {
     effectiveStatus = isNoReg ? "Upcoming" : "Registration Open";
   }
@@ -370,7 +372,7 @@ export function isEventCompletedByDate(event: Partial<EventItem> | null | undefi
   if (!event) return false;
   if (event.status === "Cancelled" || event.isCancelled) return false;
   if (event.status === "draft") return false;
-  if (event.status === "Coming Soon") return false;
+  if (event.status === "Coming Soon" || event.status === "Dates Coming Soon (Open)") return false;
 
   const targetDateStr = event.rawEndDate || event.rawDate || event.endDate || event.date;
   if (targetDateStr) {
@@ -401,6 +403,7 @@ export function getEventEffectiveStatus(event: Partial<EventItem> | null | undef
   if (event.isCancelled || event.status === "Cancelled") return "Cancelled";
   if (event.status === "draft") return "draft";
   if (event.status === "Coming Soon") return "Coming Soon";
+  if (event.status === "Dates Coming Soon (Open)") return "Dates Coming Soon (Open)";
   if (event.status === "Registration Closed") {
     const isCompleted = isEventCompletedByDate(event);
     if (isCompleted) return "Completed";
@@ -496,7 +499,7 @@ export function hasEventGateCheckInAccess(
  */
 export function getEventDateTimestamp(event: Partial<EventItem> | null | undefined): number {
   if (!event) return Number.MAX_SAFE_INTEGER;
-  if (event.status === "Coming Soon") return Number.MAX_SAFE_INTEGER;
+  if (event.status === "Coming Soon" || event.status === "Dates Coming Soon (Open)") return Number.MAX_SAFE_INTEGER;
   const dateStr = (event.date || "").trim();
   const timeOffset = parseTimeString(event.time);
 

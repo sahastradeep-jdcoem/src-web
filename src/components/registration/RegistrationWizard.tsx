@@ -629,7 +629,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     const effectiveStatus = getEventEffectiveStatus(event);
     const isCompleted = effectiveStatus === "Completed";
     const isDeadlinePassed = isRegistrationDeadlinePassed(event);
-    if (isCompleted || isDeadlinePassed || effectiveStatus !== "Registration Open") {
+    const isAllowedToRegister = effectiveStatus === "Registration Open" || effectiveStatus === "Dates Coming Soon (Open)";
+    if (isCompleted || isDeadlinePassed || !isAllowedToRegister) {
       if (effectiveStatus === "Registration Closed") {
         alert("Registrations for this event have been closed by the event organizers.");
       } else if (effectiveStatus === "Coming Soon") {
@@ -912,7 +913,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     const effectiveStatus = getEventEffectiveStatus(event);
     const isCompleted = effectiveStatus === "Completed";
     const isDeadlinePassed = isRegistrationDeadlinePassed(event);
-    if (isCompleted || isDeadlinePassed || effectiveStatus !== "Registration Open") {
+    const isAllowedToRegister = effectiveStatus === "Registration Open" || effectiveStatus === "Dates Coming Soon (Open)";
+    if (isCompleted || isDeadlinePassed || !isAllowedToRegister) {
       if (effectiveStatus === "Registration Closed") {
         alert("Registrations for this event have been closed by the event organizers.");
       } else if (effectiveStatus === "Coming Soon") {

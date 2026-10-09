@@ -64,7 +64,7 @@ export interface EventFormData {
   organizer: string;
   organizerClubSlug: string;
   collaboratingClubs?: { id?: string; name: string; slug: string }[];
-  status: "Registration Open" | "Registration Closed" | "Upcoming" | "Coming Soon" | "Completed" | "Cancelled" | "draft";
+  status: "Registration Open" | "Registration Closed" | "Upcoming" | "Coming Soon" | "Dates Coming Soon (Open)" | "Completed" | "Cancelled" | "draft";
   gateCheckInBtIds?: string[];
   poster: string;
   cardImage: string;
@@ -1593,6 +1593,7 @@ export function EventFormModal({
                   className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
                 >
                   <option value="Registration Open">Registration Open</option>
+                  <option value="Dates Coming Soon (Open)">Dates Coming Soon (Open)</option>
                   <option value="Registration Closed">Registration Closed</option>
                   <option value="Upcoming">Upcoming</option>
                   <option value="Coming Soon">Coming Soon</option>
@@ -1762,13 +1763,18 @@ export function EventFormModal({
                       <span>Coming Soon</span>
                       <span className="text-[10px] text-amber-600 font-medium">(Date hidden on website — status is Coming Soon)</span>
                     </span>
+                  ) : form.status === "Dates Coming Soon (Open)" ? (
+                    <span className="font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-md inline-flex items-center gap-1.5">
+                      <span>Coming Soon</span>
+                      <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">(Date hidden on website — Registrations OPEN)</span>
+                    </span>
                   ) : (
                     <span className="font-bold text-[#17458F] bg-blue-50 border border-blue-100 px-2.5 py-0.5 rounded-md">
                       {form.date || "Selected Date"}
                     </span>
                   )}
                 </div>
-                {form.status !== "Coming Soon" && form.time && (
+                {form.status !== "Coming Soon" && form.status !== "Dates Coming Soon (Open)" && form.time && (
                   <div className="flex items-center gap-1.5 font-semibold text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-md">
                     <Clock className="w-3 h-3 text-[#E78023]" />
                     <span>{form.time}</span>

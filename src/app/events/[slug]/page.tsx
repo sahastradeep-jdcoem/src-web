@@ -91,8 +91,8 @@ export default function EventDetailPage() {
       description: event.description,
       imageUrl: heroImage,
       badge: event.targetAudience === "jdcoem_only" || event.isInterCollege === false ? "🎓 JDCOEM Only" : "🌐 Inter-College",
-      date: event.status === "Coming Soon" ? "Coming Soon" : event.date,
-      time: event.status === "Coming Soon" ? undefined : event.time,
+      date: (event.status === "Coming Soon" || event.status === "Dates Coming Soon (Open)") ? "Coming Soon" : event.date,
+      time: (event.status === "Coming Soon" || event.status === "Dates Coming Soon (Open)") ? undefined : event.time,
       venue: event.venue,
       organizer: event.organizer,
       entryFee: event.noRegistrationRequired ? "Open Walk-in" : event.entryFee || "Free Entry",
@@ -307,13 +307,14 @@ export default function EventDetailPage() {
   }
 
   const effectiveStatus = getEventEffectiveStatus(event);
+  const isDatesComingSoonOpen = effectiveStatus === "Dates Coming Soon (Open)";
   const isComingSoon = effectiveStatus === "Coming Soon";
   const isUpcoming = effectiveStatus === "Upcoming";
   const isCompleted = effectiveStatus === "Completed";
   const isRegistrationClosedStatus = effectiveStatus === "Registration Closed";
   const isDeadlinePassed = isRegistrationDeadlinePassed(event);
-  const isRegistrationOpen = effectiveStatus === "Registration Open" && !isDeadlinePassed && !isCompleted;
-  const isDateComingSoon = isComingSoon || Boolean(
+  const isRegistrationOpen = (effectiveStatus === "Registration Open" || isDatesComingSoonOpen) && !isDeadlinePassed && !isCompleted;
+  const isDateComingSoon = isComingSoon || isDatesComingSoonOpen || Boolean(
     !event.date ||
     /\b(coming soon|to be announced|tba|to be decided|tbd)\b/i.test(event.date)
   );
@@ -394,7 +395,7 @@ export default function EventDetailPage() {
           <div className="flex flex-wrap items-center gap-6 sm:gap-8 pt-4 border-t border-white/20 text-xs sm:text-sm text-slate-200">
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-[#E78023] shrink-0" />
-              {isComingSoon ? (
+              {isComingSoon || isDatesComingSoonOpen ? (
                 <span className="font-bold text-amber-300">
                   Coming Soon
                 </span>
@@ -411,7 +412,7 @@ export default function EventDetailPage() {
                 </>
               )}
             </div>
-            {event.time && !isComingSoon && (
+            {event.time && !isComingSoon && !isDatesComingSoonOpen && (
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-slate-300 shrink-0" />
                 <span>{event.time}</span>
@@ -555,7 +556,7 @@ export default function EventDetailPage() {
                           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 font-medium pt-2 border-t border-slate-100">
                             <div className="flex items-center gap-1">
                               <Calendar className="w-3.5 h-3.5 text-[#E78023]" />
-                              {sub.status === "Coming Soon" ? (
+                              {sub.status === "Coming Soon" || sub.status === "Dates Coming Soon (Open)" ? (
                                 <span className="font-bold text-amber-600">Coming Soon</span>
                               ) : (
                                 <span>{sub.date}</span>
@@ -773,7 +774,7 @@ export default function EventDetailPage() {
                   <div className="flex justify-between items-center py-1 border-b border-slate-100/80">
                     <span className="text-slate-500 font-medium">Festival Date</span>
                     <span className="font-bold text-slate-900">
-                      {isComingSoon ? <span className="text-amber-600">Coming Soon</span> : event.date}
+                      {isComingSoon || isDatesComingSoonOpen ? <span className="text-amber-600">Coming Soon</span> : event.date}
                     </span>
                   </div>
                   <div className="flex justify-between items-center py-1 border-b border-slate-100/80">
@@ -984,6 +985,8 @@ export default function EventDetailPage() {
                   <Badge variant={event.noRegistrationRequired ? "success" : isRegistrationOpen ? "orange" : isUpcoming ? "warning" : "slate"} size="md">
                     {event.noRegistrationRequired
                       ? "Open Attendance"
+                      : isDatesComingSoonOpen
+                      ? "Dates Coming Soon • Registrations Open"
                       : isUpcoming
                       ? "Upcoming • Opening Soon"
                       : event.status}
@@ -1021,6 +1024,8 @@ export default function EventDetailPage() {
                     <span className="font-bold text-[#E78023]">
                       {event.noRegistrationRequired
                         ? "Not Required (Walk-in)"
+                        : isDatesComingSoonOpen
+                        ? (isDeadlinePassed ? "Closed (Deadline Passed)" : (event.registrationDeadline || "Open (Dates TBA)"))
                         : isComingSoon
                         ? "Coming Soon"
                         : isUpcoming
