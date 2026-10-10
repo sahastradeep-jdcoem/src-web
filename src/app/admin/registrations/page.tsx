@@ -2293,16 +2293,9 @@ export default function AdminRegistrationsPage() {
                       return (
                         <div key={item.name} className="space-y-1">
                           <div className="flex items-center justify-between text-xs font-semibold gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="text-slate-800 truncate" title={item.name}>
-                                {item.name}
-                              </span>
-                              {item.category && item.category !== "Event" && (
-                                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 shrink-0">
-                                  {item.category}
-                                </span>
-                              )}
-                            </div>
+                            <span className="text-slate-800 truncate" title={item.name}>
+                              {item.name}
+                            </span>
                             <span className="text-slate-500 font-mono shrink-0">
                               {item.count} ({pct}%)
                             </span>
