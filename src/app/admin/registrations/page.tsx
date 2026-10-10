@@ -699,6 +699,32 @@ export default function AdminRegistrationsPage() {
     );
   }, [selectedEventSlug, allKnownEvents]);
 
+  // Child events under currently selected umbrella festival
+  const childEvents = useMemo(() => {
+    if (!currentSelectedEventObj || selectedEventSlug === "all") return [];
+    const pId = (currentSelectedEventObj.id || "").toLowerCase();
+    const pSlug = (currentSelectedEventObj.slug || "").toLowerCase();
+    const pName = (currentSelectedEventObj.name || "").toLowerCase().trim();
+
+    return allKnownEvents.filter((e) => {
+      if (e.id === currentSelectedEventObj.id || e.slug === currentSelectedEventObj.slug) return false;
+      const eParentId = (e.parentEventId || "").toLowerCase();
+      const eParentSlug = (e.parentEventSlug || "").toLowerCase();
+      const eParentName = (e.parentEventName || "").toLowerCase().trim();
+
+      return (
+        (eParentId && (eParentId === pId || eParentId === pSlug)) ||
+        (eParentSlug && (eParentSlug === pSlug || eParentSlug === pId)) ||
+        (eParentName && eParentName === pName)
+      );
+    });
+  }, [currentSelectedEventObj, selectedEventSlug, allKnownEvents]);
+
+  const isUmbrellaSelected = useMemo(() => {
+    if (!currentSelectedEventObj || selectedEventSlug === "all") return false;
+    return Boolean(currentSelectedEventObj.isParentFest || childEvents.length > 0);
+  }, [currentSelectedEventObj, selectedEventSlug, childEvents]);
+
   // Filter registrations by currently selected tenure & event (including umbrella event aggregation)
   const eventRegistrations = useMemo(() => {
     let list = registrations.filter(isRegistrationOwned);
@@ -792,17 +818,11 @@ export default function AdminRegistrationsPage() {
       const childSlugs = new Set<string>();
       const childIds = new Set<string>();
 
-      if (currentSelectedEventObj && currentSelectedEventObj.isParentFest) {
-        allKnownEvents.forEach((e) => {
-          if (
-            (e.parentEventId && (e.parentEventId === currentSelectedEventObj.id || e.parentEventId === currentSelectedEventObj.slug)) ||
-            (e.parentEventSlug && (e.parentEventSlug === currentSelectedEventObj.slug || e.parentEventSlug === currentSelectedEventObj.id)) ||
-            (e.parentEventName && e.parentEventName.toLowerCase().trim() === currentSelectedEventObj.name.toLowerCase().trim())
-          ) {
-            if (e.name) childNames.add(e.name.toLowerCase());
-            if (e.slug) childSlugs.add(e.slug.toLowerCase());
-            if (e.id) childIds.add(e.id.toLowerCase());
-          }
+      if (isUmbrellaSelected) {
+        childEvents.forEach((e) => {
+          if (e.name) childNames.add(e.name.toLowerCase());
+          if (e.slug) childSlugs.add(e.slug.toLowerCase());
+          if (e.id) childIds.add(e.id.toLowerCase());
         });
       }
 
@@ -850,7 +870,7 @@ export default function AdminRegistrationsPage() {
     });
 
     return list;
-  }, [registrations, isRegistrationOwned, selectedTenureId, tenuresList, tenureFilteredEvents, selectedEventSlug, currentSelectedEventObj, allKnownEvents]);
+  }, [registrations, isRegistrationOwned, selectedTenureId, tenuresList, tenureFilteredEvents, selectedEventSlug, currentSelectedEventObj, allKnownEvents, isUmbrellaSelected, childEvents]);
 
   // Export Excel button is enabled only after selecting a specific event filter
   const isExportDisabled = selectedEventSlug === "all" || eventRegistrations.length === 0;
@@ -931,6 +951,112 @@ export default function AdminRegistrationsPage() {
       years: Object.entries(years).sort((a, b) => b[1] - a[1]),
     };
   }, [eventRegistrations, departmentsList]);
+
+  // Sub-event / competition distribution when an umbrella festival filter is active
+  const subEventDistribution = useMemo(() => {
+    if (!isUmbrellaSelected || !currentSelectedEventObj) return [];
+
+    const countsMap = new Map<string, { name: string; count: number; category?: string; slug?: string }>();
+
+    // 1. Seed all known child events configured under this umbrella festival
+    childEvents.forEach((child) => {
+      countsMap.set(child.name, {
+        name: child.name,
+        count: 0,
+        category: child.category || "Competition",
+        slug: child.slug,
+      });
+    });
+
+    const pName = (currentSelectedEventObj.name || "").toLowerCase().trim();
+    const pSlug = (currentSelectedEventObj.slug || "").toLowerCase().trim();
+    const pId = (currentSelectedEventObj.id || "").toLowerCase().trim();
+
+    // 2. Count registrations
+    eventRegistrations.forEach((r) => {
+      const rName = (r.eventName || "").trim();
+      const rSlug = (r.eventSlug || "").trim().toLowerCase();
+      const rId = (r.eventId || "").trim().toLowerCase();
+      const rBadge = (r.subEventBadge || "").trim();
+
+      // Check if registration directly matches any known child event
+      const matchedChild = childEvents.find((c) => {
+        const cName = c.name.toLowerCase().trim();
+        const cSlug = (c.slug || "").toLowerCase().trim();
+        const cId = (c.id || "").toLowerCase().trim();
+
+        return (
+          (rName && rName.toLowerCase() === cName) ||
+          (rSlug && (rSlug === cSlug || rSlug === cId)) ||
+          (rId && (rId === cId || rId === cSlug)) ||
+          (rBadge && rBadge.toLowerCase() === cName)
+        );
+      });
+
+      if (matchedChild) {
+        const item = countsMap.get(matchedChild.name);
+        if (item) {
+          item.count += 1;
+        } else {
+          countsMap.set(matchedChild.name, {
+            name: matchedChild.name,
+            count: 1,
+            category: matchedChild.category || "Competition",
+            slug: matchedChild.slug,
+          });
+        }
+        return;
+      }
+
+      // Check if subEventBadge specifies a distinct competition
+      if (rBadge && rBadge.toLowerCase() !== pName) {
+        const item = countsMap.get(rBadge);
+        if (item) {
+          item.count += 1;
+        } else {
+          countsMap.set(rBadge, {
+            name: rBadge,
+            count: 1,
+            category: "Sub-Event",
+          });
+        }
+        return;
+      }
+
+      // Check if rName is a distinct sub-event name different from the parent festival
+      if (rName && rName.toLowerCase() !== pName) {
+        const item = countsMap.get(rName);
+        if (item) {
+          item.count += 1;
+        } else {
+          countsMap.set(rName, {
+            name: rName,
+            count: 1,
+            category: "Competition",
+          });
+        }
+        return;
+      }
+
+      // Otherwise, registration is for the umbrella festival itself (General Entry / Main Fest Pass)
+      const generalLabel = `${currentSelectedEventObj.name} (General Pass)`;
+      const item = countsMap.get(generalLabel);
+      if (item) {
+        item.count += 1;
+      } else {
+        countsMap.set(generalLabel, {
+          name: generalLabel,
+          count: 1,
+          category: "General Pass",
+        });
+      }
+    });
+
+    return Array.from(countsMap.values()).sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.name.localeCompare(b.name);
+    });
+  }, [isUmbrellaSelected, currentSelectedEventObj, childEvents, eventRegistrations]);
 
   // Helper to format question types into friendly display labels
   const getQuestionTypeLabel = (type?: string) => {
@@ -2140,6 +2266,60 @@ export default function AdminRegistrationsPage() {
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               
+              {/* Sub-Event / Competition Breakdown Card (shown when Umbrella Event filter is active) */}
+              {isUmbrellaSelected && subEventDistribution.length > 0 && (
+                <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-5 lg:col-span-2">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-[#4F46E5]" />
+                      <h3 className="font-heading font-bold text-sm text-slate-900 uppercase">
+                        Sub-Event / Competition Distribution
+                      </h3>
+                    </div>
+                    <span className="text-[11px] font-mono font-bold text-slate-400">
+                      {subEventDistribution.length} Sub-Events
+                    </span>
+                  </div>
+
+                  <div
+                    className={
+                      subEventDistribution.length > 4
+                        ? "grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3.5 max-h-[460px] overflow-y-auto pr-1"
+                        : "space-y-3 max-h-[460px] overflow-y-auto pr-1"
+                    }
+                  >
+                    {subEventDistribution.map((item) => {
+                      const pct = metrics.total > 0 ? Math.round((item.count / metrics.total) * 100) : 0;
+                      return (
+                        <div key={item.name} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs font-semibold gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-slate-800 truncate" title={item.name}>
+                                {item.name}
+                              </span>
+                              {item.category && item.category !== "Event" && (
+                                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 shrink-0">
+                                  {item.category}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-slate-500 font-mono shrink-0">
+                              {item.count} ({pct}%)
+                            </span>
+                          </div>
+                          <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                            <div
+                              className="bg-[#4F46E5] h-full rounded-full transition-all duration-500"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Department Breakdown Card */}
               <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-5">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
