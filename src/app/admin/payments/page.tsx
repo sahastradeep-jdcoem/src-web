@@ -168,7 +168,7 @@ export default function AdminPaymentsPage() {
     }
     return "tenure-2026-27";
   });
-  const [selectedEventSlug, setSelectedEventSlug] = useState<string>("all");
+  const [selectedEventSlug, setSelectedEventSlug] = useState<string>("");
 
   const scopedEventsList = useMemo(() => {
     let result = eventsList;
@@ -471,6 +471,8 @@ export default function AdminPaymentsPage() {
   }, [registrations, isRegistrationOwned, selectedTenureId, tenuresList, eventsList]);
 
   const filteredByEvent = useMemo(() => {
+    // If no event filter is chosen yet, return empty list to prevent initial load lag
+    if (!selectedEventSlug) return [];
     if (selectedEventSlug === "all") return filteredByTenure;
     const selectedEvt = allKnownEvents.find((e) => (e.slug && e.slug.toLowerCase() === selectedEventSlug.toLowerCase()) || (e.name && e.name.toLowerCase() === selectedEventSlug.toLowerCase()) || e.id === selectedEventSlug);
     
@@ -947,10 +949,10 @@ export default function AdminPaymentsPage() {
           </div>
           <div className="space-y-0.5">
             <div className="font-heading font-black text-2xl sm:text-3xl text-slate-900 tracking-tight">
-              ₹{kpiStats.totalGrossRevenue.toLocaleString("en-IN")}
+              {!selectedEventSlug ? "—" : `₹${kpiStats.totalGrossRevenue.toLocaleString("en-IN")}`}
             </div>
             <p className="text-[10px] text-slate-400 font-medium">
-              From {kpiStats.totalPaidCount} successful transactions
+              {!selectedEventSlug ? "Select an event to load records" : `From ${kpiStats.totalPaidCount} successful transactions`}
             </p>
           </div>
         </div>
@@ -965,10 +967,10 @@ export default function AdminPaymentsPage() {
           </div>
           <div className="space-y-0.5">
             <div className="font-heading font-black text-2xl sm:text-3xl text-slate-900 tracking-tight">
-              {kpiStats.totalPaidCount}
+              {!selectedEventSlug ? "—" : kpiStats.totalPaidCount}
             </div>
             <p className="text-[10px] text-slate-400 font-medium">
-              Active delegate passes issued
+              {!selectedEventSlug ? "Select an event to load records" : "Active delegate passes issued"}
             </p>
           </div>
         </div>
@@ -983,16 +985,16 @@ export default function AdminPaymentsPage() {
           </div>
           <div className="space-y-0.5 flex items-baseline justify-between">
             <div className="font-heading font-black text-2xl sm:text-3xl text-amber-900 tracking-tight">
-              {kpiStats.pendingCount}
+              {!selectedEventSlug ? "—" : kpiStats.pendingCount}
             </div>
-            {kpiStats.pendingCount > 0 && (
+            {selectedEventSlug && kpiStats.pendingCount > 0 && (
               <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full animate-pulse">
                 Action Required
               </span>
             )}
           </div>
           <p className="text-[10px] text-slate-400 font-medium">
-            Submitted UTRs awaiting admin check
+            {!selectedEventSlug ? "Select an event to load records" : "Submitted UTRs awaiting admin check"}
           </p>
         </div>
 
@@ -1006,10 +1008,10 @@ export default function AdminPaymentsPage() {
           </div>
           <div className="space-y-0.5">
             <div className="font-heading font-black text-2xl sm:text-3xl text-purple-950 tracking-tight">
-              ₹{kpiStats.totalRefundsAmount.toLocaleString("en-IN")}
+              {!selectedEventSlug ? "—" : `₹${kpiStats.totalRefundsAmount.toLocaleString("en-IN")}`}
             </div>
             <p className="text-[10px] text-slate-400 font-medium">
-              {kpiStats.refundedCount} transactions refunded &amp; voided
+              {!selectedEventSlug ? "Select an event to load records" : `${kpiStats.refundedCount} transactions refunded & voided`}
             </p>
           </div>
         </div>
@@ -1056,12 +1058,30 @@ export default function AdminPaymentsPage() {
                 <div className="flex items-center gap-2 min-w-0">
                   <Filter className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                   <span className="truncate">
-                    {selectedEventSlug === "all" 
+                    {!selectedEventSlug
+                      ? "Select Event or Fest..."
+                      : selectedEventSlug === "all" 
                       ? "All Events & Fests" 
                       : (eventsList.find((e) => e.slug === selectedEventSlug || e.id === selectedEventSlug)?.name || selectedEventSlug)}
                   </span>
                 </div>
-                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isEventDropdownOpen ? "rotate-180" : ""}`} />
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {selectedEventSlug && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedEventSlug("");
+                      }}
+                      className="p-0.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded transition-colors"
+                      title="Clear event filter"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </span>
+                  )}
+                  <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isEventDropdownOpen ? "rotate-180" : ""}`} />
+                </div>
               </button>
 
               {isEventDropdownOpen && (
@@ -1142,7 +1162,7 @@ export default function AdminPaymentsPage() {
               statusTab === "all" ? "bg-[#17458F] text-white shadow-2xs" : "text-slate-600 hover:bg-slate-100"
             }`}
           >
-            All Payments ({filteredByEvent.length})
+            All Payments ({!selectedEventSlug ? "—" : filteredByEvent.length})
           </button>
           <button
             type="button"
@@ -1151,7 +1171,7 @@ export default function AdminPaymentsPage() {
               statusTab === "completed" ? "bg-emerald-700 text-white shadow-2xs" : "text-slate-600 hover:bg-slate-100"
             }`}
           >
-            Approved / Paid ({kpiStats.totalPaidCount})
+            Approved / Paid ({!selectedEventSlug ? "—" : kpiStats.totalPaidCount})
           </button>
           <button
             type="button"
@@ -1160,7 +1180,7 @@ export default function AdminPaymentsPage() {
               statusTab === "pending" ? "bg-amber-600 text-white shadow-2xs" : "text-slate-600 hover:bg-slate-100"
             }`}
           >
-            Pending Verification ({kpiStats.pendingCount})
+            Pending Verification ({!selectedEventSlug ? "—" : kpiStats.pendingCount})
           </button>
           <button
             type="button"
@@ -1169,7 +1189,7 @@ export default function AdminPaymentsPage() {
               statusTab === "refunded" ? "bg-purple-700 text-white shadow-2xs" : "text-slate-600 hover:bg-slate-100"
             }`}
           >
-            Refunded ({kpiStats.refundedCount})
+            Refunded ({!selectedEventSlug ? "—" : kpiStats.refundedCount})
           </button>
           <button
             type="button"
@@ -1178,7 +1198,7 @@ export default function AdminPaymentsPage() {
               statusTab === "cancelled" ? "bg-rose-600 text-white shadow-2xs" : "text-slate-600 hover:bg-slate-100"
             }`}
           >
-            Cancelled ({filteredByEvent.filter((r) => r.status === "CANCELLED" || r.paymentStatus === "FAILED").length})
+            Cancelled ({!selectedEventSlug ? "—" : filteredByEvent.filter((r) => r.status === "CANCELLED" || r.paymentStatus === "FAILED").length})
           </button>
         </div>
       </div>
@@ -1198,7 +1218,39 @@ export default function AdminPaymentsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
-              {displayedPayments.length === 0 ? (
+              {!selectedEventSlug ? (
+                <tr>
+                  <td colSpan={6} className="py-16 text-center">
+                    <div className="flex flex-col items-center justify-center space-y-3 max-w-md mx-auto">
+                      <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-center text-[#17458F]">
+                        <Filter className="w-7 h-7" />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-base font-heading font-bold text-slate-800">Select an Event to View Payments</p>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Choose a specific event or competition from the filter above to view payment records and manage transactions, or load all records across the tenure.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setIsEventDropdownOpen(true)}
+                          className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 hover:border-[#17458F] text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition-all cursor-pointer"
+                        >
+                          Select Event
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedEventSlug("all")}
+                          className="px-3.5 py-2 rounded-xl bg-[#17458F] hover:bg-[#123670] text-xs font-bold text-white shadow-xs transition-all cursor-pointer"
+                        >
+                          Load All Events
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ) : displayedPayments.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center space-y-2">

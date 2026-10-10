@@ -151,7 +151,7 @@ export default function AdminRegistrationsPage() {
     return "tenure-2026-27";
   });
   const [activeTab, setActiveTab] = useState<ActiveTab>("summary");
-  const [selectedEventSlug, setSelectedEventSlug] = useState<string>("all");
+  const [selectedEventSlug, setSelectedEventSlug] = useState<string>("");
   
   // Event Autocomplete & Dropdown filter state
   const [eventSearchQuery, setEventSearchQuery] = useState("");
@@ -688,7 +688,7 @@ export default function AdminRegistrationsPage() {
 
   // Current active event object (if filtered to a specific event)
   const currentSelectedEventObj = useMemo(() => {
-    if (selectedEventSlug === "all") return null;
+    if (!selectedEventSlug || selectedEventSlug === "all") return null;
     return (
       allKnownEvents.find(
         (e) =>
@@ -701,7 +701,7 @@ export default function AdminRegistrationsPage() {
 
   // Child events under currently selected umbrella festival
   const childEvents = useMemo(() => {
-    if (!currentSelectedEventObj || selectedEventSlug === "all") return [];
+    if (!currentSelectedEventObj || !selectedEventSlug || selectedEventSlug === "all") return [];
     const pId = (currentSelectedEventObj.id || "").toLowerCase();
     const pSlug = (currentSelectedEventObj.slug || "").toLowerCase();
     const pName = (currentSelectedEventObj.name || "").toLowerCase().trim();
@@ -721,12 +721,15 @@ export default function AdminRegistrationsPage() {
   }, [currentSelectedEventObj, selectedEventSlug, allKnownEvents]);
 
   const isUmbrellaSelected = useMemo(() => {
-    if (!currentSelectedEventObj || selectedEventSlug === "all") return false;
+    if (!currentSelectedEventObj || !selectedEventSlug || selectedEventSlug === "all") return false;
     return Boolean(currentSelectedEventObj.isParentFest || childEvents.length > 0);
   }, [currentSelectedEventObj, selectedEventSlug, childEvents]);
 
   // Filter registrations by currently selected tenure & event (including umbrella event aggregation)
   const eventRegistrations = useMemo(() => {
+    // If no event filter is chosen yet, return empty list to prevent initial load lag
+    if (!selectedEventSlug) return [];
+
     let list = registrations.filter(isRegistrationOwned);
 
     // Filter by tenure
@@ -873,7 +876,7 @@ export default function AdminRegistrationsPage() {
   }, [registrations, isRegistrationOwned, selectedTenureId, tenuresList, tenureFilteredEvents, selectedEventSlug, currentSelectedEventObj, allKnownEvents, isUmbrellaSelected, childEvents]);
 
   // Export Excel button is enabled only after selecting a specific event filter
-  const isExportDisabled = selectedEventSlug === "all" || eventRegistrations.length === 0;
+  const isExportDisabled = !selectedEventSlug || selectedEventSlug === "all" || eventRegistrations.length === 0;
 
   // Filtered registrations for the Table tab (with search & status)
   const tableFilteredRegistrations = useMemo(() => {
@@ -1921,8 +1924,10 @@ export default function AdminRegistrationsPage() {
                 value={
                   isEventDropdownOpen
                     ? eventSearchQuery
-                    : selectedEventSlug === "all"
+                    : !selectedEventSlug
                     ? ""
+                    : selectedEventSlug === "all"
+                    ? (isClubOwner ? `${adminAccess?.clubName || "My Club"} Events & Forms` : "All Events & Forms")
                     : (eventsList.find(e => e.slug.toLowerCase() === selectedEventSlug.toLowerCase() || e.name.toLowerCase() === selectedEventSlug.toLowerCase())?.name || selectedEventSlug)
                 }
                 onFocus={() => {
@@ -1934,15 +1939,21 @@ export default function AdminRegistrationsPage() {
                   setIsEventDropdownOpen(true);
                 }}
                 onKeyDown={handleEventInputKeyDown}
-                placeholder={selectedEventSlug === "all" ? "Search event (use ↑↓ keys & Enter)..." : "Change event (use ↑↓ keys & Enter)..."}
+                placeholder={
+                  !selectedEventSlug 
+                    ? "Select an event or choose 'All Events'..." 
+                    : selectedEventSlug === "all" 
+                    ? "All Events selected (search to change)..." 
+                    : "Change event (use ↑↓ keys & Enter)..."
+                }
                 className="w-full pl-10 pr-9 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:outline-none focus:border-[#17458F] shadow-2xs"
               />
-              {selectedEventSlug !== "all" ? (
+              {selectedEventSlug ? (
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setSelectedEventSlug("all");
+                    setSelectedEventSlug("");
                     setEventSearchQuery("");
                     setIsEventDropdownOpen(false);
                     setIndividualIndex(0);
@@ -1967,7 +1978,7 @@ export default function AdminRegistrationsPage() {
                   const isHighlighted = highlightedIndex === idx;
                   const isCurrentActive = opt.isAll 
                     ? selectedEventSlug === "all" 
-                    : (selectedEventSlug.toLowerCase() === opt.slug.toLowerCase() || selectedEventSlug.toLowerCase() === opt.name.toLowerCase());
+                    : (Boolean(selectedEventSlug) && (selectedEventSlug.toLowerCase() === opt.slug.toLowerCase() || selectedEventSlug.toLowerCase() === opt.name.toLowerCase()));
 
                   return (
                     <button
@@ -2130,10 +2141,10 @@ export default function AdminRegistrationsPage() {
       {/* GOOGLE FORMS STYLE 4-TAB NAVIGATION */}
       <div className="flex border-b border-slate-200 bg-white rounded-2xl p-1.5 shadow-xs">
         {[
-          { id: "summary", label: "Summary", icon: BarChart3, badge: `${eventRegistrations.length}` },
-          { id: "question", label: "Question", icon: HelpCircle, badge: `${availableQuestions.length} Qs` },
-          { id: "individual", label: "Individual", icon: User, badge: eventRegistrations.length > 0 ? `${individualIndex + 1} of ${eventRegistrations.length}` : "0" },
-          { id: "table", label: "Spreadsheet / Ledger", icon: TableIcon, badge: `${tableFilteredRegistrations.length}` },
+          { id: "summary", label: "Summary", icon: BarChart3, badge: !selectedEventSlug ? "—" : `${eventRegistrations.length}` },
+          { id: "question", label: "Question", icon: HelpCircle, badge: !selectedEventSlug ? "—" : `${availableQuestions.length} Qs` },
+          { id: "individual", label: "Individual", icon: User, badge: !selectedEventSlug ? "—" : (eventRegistrations.length > 0 ? `${individualIndex + 1} of ${eventRegistrations.length}` : "0") },
+          { id: "table", label: "Spreadsheet / Ledger", icon: TableIcon, badge: !selectedEventSlug ? "—" : `${tableFilteredRegistrations.length}` },
         ].map((tab) => {
           const isActive = activeTab === tab.id;
           const Icon = tab.icon;
@@ -2159,10 +2170,47 @@ export default function AdminRegistrationsPage() {
         })}
       </div>
 
-      {/* ========================================================================= */}
-      {/* TAB 1: SUMMARY (ANALYTICS & AGGREGATE Q&N BREAKDOWNS) */}
-      {/* ========================================================================= */}
-      {activeTab === "summary" && (
+      {!selectedEventSlug ? (
+        <div className="p-16 rounded-3xl bg-white border border-slate-200 text-center space-y-4 shadow-xs animate-in fade-in duration-200">
+          <div className="mx-auto h-16 w-16 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-center text-[#17458F]">
+            <Filter className="w-8 h-8" />
+          </div>
+          <div className="space-y-1.5 max-w-md mx-auto">
+            <h3 className="font-heading font-bold text-lg text-slate-800">
+              Select an Event to View Responses
+            </h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Choose a specific competition or event from the filter above to load responses and analytics. You can also select <strong>&quot;All Events &amp; Forms&quot;</strong> to inspect the entire cohort.
+            </p>
+          </div>
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEventDropdownOpen(true)}
+              className="rounded-xl border-slate-200 text-slate-700 hover:border-[#17458F] text-xs font-bold"
+            >
+              <Search className="w-3.5 h-3.5 mr-1.5 text-slate-400" />
+              Browse Events ({filteredDropdownEvents.length})
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={() => handleSelectEventOption("all")}
+              className="rounded-xl bg-[#17458F] text-white text-xs font-bold shadow-xs hover:bg-[#123670]"
+            >
+              Load All Events ({clubScopedRegistrations.length})
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* ========================================================================= */}
+          {/* TAB 1: SUMMARY (ANALYTICS & AGGREGATE Q&N BREAKDOWNS) */}
+          {/* ========================================================================= */}
+          {activeTab === "summary" && (
         <div className="space-y-8 animate-in fade-in duration-200">
           
           {/* Key Metrics Banner */}
@@ -3203,6 +3251,8 @@ export default function AdminRegistrationsPage() {
           </div>
 
         </div>
+      )}
+        </>
       )}
 
       {/* Modal: View Participant QR & Pass Record */}
