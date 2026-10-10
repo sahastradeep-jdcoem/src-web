@@ -2076,7 +2076,7 @@ export default function AdminRegistrationsPage() {
 
             <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">
-                Revenue (Paytm / UPI)
+                Revenue
               </span>
               <div className="flex items-baseline justify-between">
                 <span className="font-heading font-extrabold text-2xl text-[#E78023]">
@@ -2102,7 +2102,7 @@ export default function AdminRegistrationsPage() {
             {(metrics.refundedCount > 0 || (currentSelectedEventObj && (currentSelectedEventObj.isCancelled || currentSelectedEventObj.status === "Cancelled"))) && (
               <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">
-                  Refunds (Paytm / UPI)
+                  Refunds
                 </span>
                 <div className="flex items-baseline justify-between">
                   <span className="font-heading font-extrabold text-2xl text-blue-600">
