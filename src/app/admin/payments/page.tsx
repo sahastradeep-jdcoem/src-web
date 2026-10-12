@@ -31,7 +31,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
-import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents } from "@/lib/eventsStore";
+import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, canUserManageEvent } from "@/lib/eventsStore";
 import { getStoredTenures, syncTenuresFromFirestore, subscribeToTenures, CouncilTenure, getLatestAvailableTenure } from "@/lib/tenureStore";
 import { 
   getAllRegistrationsFromFirestore, 
@@ -97,8 +97,9 @@ function formatTimestamp(val: any): string {
 }
 
 export default function AdminPaymentsPage() {
-  const { adminAccess, user } = useAuth();
+  const { adminAccess, user, isOwner } = useAuth();
   const isClubOwner = adminAccess?.role === "CLUB_OWNER" && adminAccess.active !== false;
+  const isScopedEventManager = !isOwner && adminAccess?.role !== "TREASURER" && (isClubOwner || adminAccess?.role === "EVENT_COORDINATOR" || Boolean(adminAccess?.hasEventCoordinatorAccess));
   const [registrations, setRegistrations] = useState<RegistrationRecord[]>([]);
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
   const [tenuresList, setTenuresList] = useState<CouncilTenure[]>([]);
@@ -121,11 +122,11 @@ export default function AdminPaymentsPage() {
     return Array.from(map.values());
   }, [eventsList, tenuresList]);
 
-  // Helper to determine if a payment/registration record strictly belongs to the club
+  // Helper to determine if a payment/registration record strictly belongs to the club or event coordinator scope
   const isRegistrationOwned = useCallback((r: any) => {
-    if (!isClubOwner) return true;
+    if (!isScopedEventManager) return true;
     if (!r) return false;
-    if (isEntityOwnedByClub(r, adminAccess)) return true;
+    if (isClubOwner && isEntityOwnedByClub(r, adminAccess)) return true;
     const rSlug = (r.eventSlug || "").toLowerCase();
     const rId = (r.eventId || "").toLowerCase();
     const rName = (r.eventName || "").toLowerCase();
@@ -140,7 +141,7 @@ export default function AdminPaymentsPage() {
       (e.name && e.name.toLowerCase() === rName)
     );
     if (directEvent) {
-      return isEntityOwnedByClub(directEvent, adminAccess);
+      return canUserManageEvent(directEvent, adminAccess, user?.btId, allKnownEvents);
     }
 
     // 2. Parent umbrella event check
@@ -151,11 +152,11 @@ export default function AdminPaymentsPage() {
         (rParentName && e.name && e.name.toLowerCase() === rParentName)
       );
       if (parentEvent) {
-        return isEntityOwnedByClub(parentEvent, adminAccess);
+        return canUserManageEvent(parentEvent, adminAccess, user?.btId, allKnownEvents);
       }
     }
     return false;
-  }, [isClubOwner, adminAccess, allKnownEvents]);
+  }, [isScopedEventManager, isClubOwner, adminAccess, user?.btId, allKnownEvents]);
 
   const [userSelectedTenure, setUserSelectedTenure] = useState(false);
   const [selectedTenureId, setSelectedTenureId] = useState<string>(() => {
@@ -182,11 +183,11 @@ export default function AdminPaymentsPage() {
         result = Array.from(map.values());
       }
     }
-    if (isClubOwner) {
-      return result.filter((event) => isEntityOwnedByClub(event, adminAccess));
+    if (isScopedEventManager) {
+      return result.filter((event) => canUserManageEvent(event, adminAccess, user?.btId, allKnownEvents));
     }
     return result;
-  }, [eventsList, selectedTenureId, tenuresList, isClubOwner, adminAccess]);
+  }, [eventsList, selectedTenureId, tenuresList, isScopedEventManager, adminAccess, user?.btId, allKnownEvents]);
   const [statusTab, setStatusTab] = useState<PaymentTabFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   
@@ -639,8 +640,8 @@ export default function AdminPaymentsPage() {
   // Approve Payment Action
   const handleApproveConfirm = async () => {
     if (!approveTargetRecord) return;
-    if (isClubOwner && !isRegistrationOwned(approveTargetRecord)) {
-      alert("Club Owners can only approve payments for their assigned club's events.");
+    if (isScopedEventManager && !isRegistrationOwned(approveTargetRecord)) {
+      alert("You can only approve payments for events assigned to your club or BT ID.");
       return;
     }
     const docId = approveTargetRecord.id;
@@ -701,8 +702,8 @@ export default function AdminPaymentsPage() {
   // Refund Payment Action
   const handleRefundConfirm = async () => {
     if (!refundTargetRecord) return;
-    if (isClubOwner && !isRegistrationOwned(refundTargetRecord)) {
-      alert("Club Owners can only refund payments for their assigned club's events.");
+    if (isScopedEventManager && !isRegistrationOwned(refundTargetRecord)) {
+      alert("You can only refund payments for events assigned to your club or BT ID.");
       return;
     }
     const regDocId = refundTargetRecord.id;
@@ -799,8 +800,8 @@ export default function AdminPaymentsPage() {
   // Cancel Transaction Action
   const handleCancelConfirm = async () => {
     if (!cancelTargetRecord) return;
-    if (isClubOwner && !isRegistrationOwned(cancelTargetRecord)) {
-      alert("Club Owners can only cancel payments for their assigned club's events.");
+    if (isScopedEventManager && !isRegistrationOwned(cancelTargetRecord)) {
+      alert("You can only cancel payments for events assigned to your club or BT ID.");
       return;
     }
     const docId = cancelTargetRecord.id;
@@ -885,13 +886,13 @@ export default function AdminPaymentsPage() {
 
         {/* Header Actions: Gateway Settings & Export Excel */}
         <div className="flex items-center gap-2.5 flex-wrap">
-          {isClubOwner && (
+          {isScopedEventManager && (
             <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-xs font-bold text-[#17458F]">
               <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
-              <span>{adminAccess?.clubName || "Assigned Club"} Only</span>
+              <span>{isClubOwner ? `${adminAccess?.clubName || "Assigned Club"} & Assigned Events` : "Assigned Events Only"}</span>
             </span>
           )}
-          {!isClubOwner && (
+          {!isScopedEventManager && (
             <button
               type="button"
               onClick={() => setIsPaymentConfigOpen(true)}

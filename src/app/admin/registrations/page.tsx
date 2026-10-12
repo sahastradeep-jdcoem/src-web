@@ -53,7 +53,8 @@ import {
   getStoredEvents, 
   syncEventsFromFirestore, 
   subscribeToEvents,
-  resolveTenureForEvent 
+  resolveTenureForEvent,
+  canUserManageEvent
 } from "@/lib/eventsStore";
 import { 
   getDepartmentShortName, 
@@ -126,8 +127,9 @@ function getRegistrationTimestampMs(r: any): number {
 }
 
 export default function AdminRegistrationsPage() {
-  const { adminAccess, user } = useAuth();
+  const { adminAccess, user, isOwner } = useAuth();
   const isClubOwner = adminAccess?.role === "CLUB_OWNER" && adminAccess.active !== false;
+  const isScopedEventManager = !isOwner && (isClubOwner || adminAccess?.role === "EVENT_COORDINATOR" || Boolean(adminAccess?.hasEventCoordinatorAccess));
   const [registrations, setRegistrations] = useState<RegistrationRecord[]>([]);
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
   const [tenuresList, setTenuresList] = useState<CouncilTenure[]>(() => {
@@ -465,11 +467,11 @@ export default function AdminRegistrationsPage() {
     }
   }, [departmentsList]);
 
-  // Helper to determine if a registration record strictly belongs to the club
+  // Helper to determine if a registration record strictly belongs to the user's club or event coordinator scope
   const isRegistrationOwned = useCallback((r: any) => {
-    if (!isClubOwner) return true;
+    if (!isScopedEventManager) return true;
     if (!r) return false;
-    if (isEntityOwnedByClub(r, adminAccess)) return true;
+    if (isClubOwner && isEntityOwnedByClub(r, adminAccess)) return true;
     const rSlug = (r.eventSlug || "").toLowerCase();
     const rId = (r.eventId || "").toLowerCase();
     const rName = (r.eventName || "").toLowerCase();
@@ -484,7 +486,7 @@ export default function AdminRegistrationsPage() {
       (e.name && e.name.toLowerCase() === rName)
     );
     if (directEvent) {
-      return isEntityOwnedByClub(directEvent, adminAccess);
+      return canUserManageEvent(directEvent, adminAccess, user?.btId, allKnownEvents);
     }
 
     // 2. Parent umbrella event check
@@ -495,11 +497,11 @@ export default function AdminRegistrationsPage() {
         (rParentName && e.name && e.name.toLowerCase() === rParentName)
       );
       if (parentEvent) {
-        return isEntityOwnedByClub(parentEvent, adminAccess);
+        return canUserManageEvent(parentEvent, adminAccess, user?.btId, allKnownEvents);
       }
     }
     return false;
-  }, [isClubOwner, adminAccess, allKnownEvents]);
+  }, [isScopedEventManager, isClubOwner, adminAccess, user?.btId, allKnownEvents]);
 
   // Events available in selected tenure
   const tenureFilteredEvents = useMemo(() => {
@@ -534,12 +536,12 @@ export default function AdminRegistrationsPage() {
       result = Array.from(map.values());
     }
 
-    // STRICT INVARIANT: If club owner, filter ALL results down strictly to their assigned club
-    if (isClubOwner) {
-      return result.filter((event) => isEntityOwnedByClub(event, adminAccess));
+    // STRICT INVARIANT: If scoped event manager (Club Owner or Event Coordinator), filter ALL results down strictly to their assigned events
+    if (isScopedEventManager) {
+      return result.filter((event) => canUserManageEvent(event, adminAccess, user?.btId, allKnownEvents));
     }
     return result;
-  }, [eventsList, selectedTenureId, tenuresList, isClubOwner, adminAccess]);
+  }, [eventsList, selectedTenureId, tenuresList, isScopedEventManager, adminAccess, user?.btId, allKnownEvents]);
 
   // Autocomplete / search filtered events for dropdown
   const filteredDropdownEvents = useMemo(() => {
@@ -1323,8 +1325,8 @@ export default function AdminRegistrationsPage() {
   };
 
   const handleGateCheckIn = async (record: RegistrationRecord) => {
-    if (isClubOwner && !isRegistrationOwned(record)) {
-      alert("Club Owners can only check in passes for their assigned club's events.");
+    if (isScopedEventManager && !isRegistrationOwned(record)) {
+      alert("You can only check in passes for events assigned to your club or BT ID.");
       return;
     }
     await checkInStudentPass(record.registrationId);
@@ -1340,8 +1342,8 @@ export default function AdminRegistrationsPage() {
 
   const handleDeleteRegistration = async (regId: string, name: string) => {
     const record = registrations.find((r) => r.id === regId || r.registrationId === regId);
-    if (isClubOwner && record && !isRegistrationOwned(record)) {
-      alert("Club Owners can only delete registrations for their assigned club's events.");
+    if (isScopedEventManager && record && !isRegistrationOwned(record)) {
+      alert("You can only delete registrations for events assigned to your club or BT ID.");
       return;
     }
     if (confirm(`Delete registration record for "${name}" (${regId})?`)) {
@@ -1361,8 +1363,8 @@ export default function AdminRegistrationsPage() {
   };
 
   const handleIndividualRefund = async (record: RegistrationRecord) => {
-    if (isClubOwner && !isRegistrationOwned(record)) {
-      alert("Club Owners can only process refunds for their assigned club's events.");
+    if (isScopedEventManager && !isRegistrationOwned(record)) {
+      alert("You can only process refunds for events assigned to your club or BT ID.");
       return;
     }
     if (!record.paymentId || record.paymentId === "N/A" || record.paymentId.includes("Free")) {
@@ -1443,8 +1445,8 @@ export default function AdminRegistrationsPage() {
   };
 
   const handleApprovePayment = async (record: RegistrationRecord) => {
-    if (isClubOwner && !isRegistrationOwned(record)) {
-      alert("Club Owners can only approve payments for their assigned club's events.");
+    if (isScopedEventManager && !isRegistrationOwned(record)) {
+      alert("You can only approve payments for events assigned to your club or BT ID.");
       return;
     }
     const regId = record.registrationId || record.id;
@@ -1484,8 +1486,8 @@ export default function AdminRegistrationsPage() {
   };
 
   const handleRejectPayment = async (record: RegistrationRecord) => {
-    if (isClubOwner && !isRegistrationOwned(record)) {
-      alert("Club Owners can only reject payments for their assigned club's events.");
+    if (isScopedEventManager && !isRegistrationOwned(record)) {
+      alert("You can only reject payments for events assigned to your club or BT ID.");
       return;
     }
     const regId = record.registrationId || record.id;
@@ -1550,8 +1552,8 @@ export default function AdminRegistrationsPage() {
   };
 
   const handleBulkRefund = async () => {
-    if (isClubOwner && currentSelectedEventObj && !isEntityOwnedByClub(currentSelectedEventObj, adminAccess)) {
-      alert("Club Owners can only process refunds for their assigned club's events.");
+    if (isScopedEventManager && currentSelectedEventObj && !canUserManageEvent(currentSelectedEventObj, adminAccess, user?.btId, allKnownEvents)) {
+      alert("You can only process refunds for events assigned to your club or BT ID.");
       return;
     }
     const eligible = metrics.eligibleForRefund;
@@ -1633,8 +1635,8 @@ export default function AdminRegistrationsPage() {
   };
 
   const handleClearAll = () => {
-    if (isClubOwner) {
-      alert("Club Owners cannot clear registrations.");
+    if (isScopedEventManager) {
+      alert("Only SRC super admins can clear all registrations.");
       return;
     }
     const label = selectedEventSlug === "all" ? "ALL registrations" : `all registrations for ${selectedEventSlug}`;

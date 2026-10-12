@@ -94,8 +94,27 @@ service cloud.firestore {
       return isOwner() || isLegacyAdmin();
     }
 
+    function isSignedIn() {
+      return isAuthenticated();
+    }
+
     function isClubOwner() {
       return hasRole('CLUB_OWNER');
+    }
+
+    function isEventCoordinator() {
+      return hasRole('EVENT_COORDINATOR') || (
+        getAdminAccess() != null &&
+        getAdminAccess().active != false &&
+        getAdminAccess().hasEventCoordinatorAccess == true
+      );
+    }
+
+    function hasEventsAccess() {
+      return isPrivilegedAdmin() || (isClubOwner() && (
+        (request.resource != null && request.resource.data.organizerClubSlug == getAdminAccess().clubSlug) ||
+        (request.resource == null && resource.data.organizerClubSlug == getAdminAccess().clubSlug)
+      ));
     }
 
     // General admin evaluation across all legacy and current scopes
@@ -136,10 +155,14 @@ service cloud.firestore {
     // Individual event documents (1 event = 1 document)
     match /events/{eventId} {
       allow read: if true;
-      allow write: if isPrivilegedAdmin() || (isClubOwner() && (
-        (request.resource != null && request.resource.data.organizerClubSlug == getAdminAccess().clubSlug) ||
-        (request.resource == null && resource.data.organizerClubSlug == getAdminAccess().clubSlug)
-      ));
+      allow create: if hasEventsAccess();
+      allow update: if hasEventsAccess() || (
+        isSignedIn() &&
+        getUserBtId() != null &&
+        resource.data.eventAccessBtIds is list &&
+        getUserBtId() in resource.data.eventAccessBtIds
+      );
+      allow delete: if hasEventsAccess();
     }
 
     // Admin authorization records
@@ -166,13 +189,13 @@ service cloud.firestore {
       allow get: if true;
 
       // Collection queries restricted: Admins can list all; authenticated users can only list queries matching their email/btId
-      allow list: if isPrivilegedAdmin() || hasRole('TREASURER') || isClubOwner() || (
+      allow list: if isPrivilegedAdmin() || hasRole('TREASURER') || isClubOwner() || isEventCoordinator() || (
         isAuthenticated() && request.auth.token.email != null
       );
 
       // Registration creation:
       // Allowed for privileged admin or club owner, or student / external applicant with valid email and valid payment state
-      allow create: if isPrivilegedAdmin() || isClubOwner() || (
+      allow create: if isPrivilegedAdmin() || isClubOwner() || isEventCoordinator() || (
         (isAuthenticated() || (request.resource.data.email is string && request.resource.data.email.size() > 0)) &&
         (
           request.resource.data.paymentStatus in ['FREE', 'PENDING'] ||
@@ -181,14 +204,34 @@ service cloud.firestore {
       );
 
       // Registration updates:
-      // Allowed for privileged admins, treasurers, club owners, or self-registered applicants without altering payment status
-      allow update: if isPrivilegedAdmin() || hasRole('TREASURER') || isClubOwner() || (
+      // Allowed for privileged admins, treasurers, club owners, event coordinators (or signed-in users with a valid BT ID), or self-registered applicants without altering payment status
+      allow update: if isPrivilegedAdmin() || hasRole('TREASURER') || isClubOwner() || isEventCoordinator() || (
+        isSignedIn() && getUserBtId() != null
+      ) || (
         isAuthenticated() &&
         request.auth.token.email != null &&
         resource.data.email == request.auth.token.email &&
         request.resource.data.paymentStatus == resource.data.paymentStatus
       );
 
+      allow delete: if isPrivilegedAdmin();
+    }
+
+    // Legacy / secondary student_registrations collection mirror
+    match /student_registrations/{regId} {
+      allow get: if true;
+      allow list: if isPrivilegedAdmin() || hasRole('TREASURER') || isClubOwner() || isEventCoordinator() || (
+        isAuthenticated() && request.auth.token.email != null
+      );
+      allow create: if isPrivilegedAdmin() || isClubOwner() || isEventCoordinator() || isAuthenticated();
+      allow update: if isPrivilegedAdmin() || hasRole('TREASURER') || isClubOwner() || isEventCoordinator() || (
+        isSignedIn() && getUserBtId() != null
+      ) || (
+        isAuthenticated() &&
+        request.auth.token.email != null &&
+        resource.data.email == request.auth.token.email &&
+        request.resource.data.paymentStatus == resource.data.paymentStatus
+      );
       allow delete: if isPrivilegedAdmin();
     }
 

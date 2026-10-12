@@ -3,7 +3,8 @@ export type AdminAccessRole =
   | "TREASURER"
   | "PROTOCOL_OFFICER"
   | "CHIEF_EDITOR"
-  | "CLUB_OWNER";
+  | "CLUB_OWNER"
+  | "EVENT_COORDINATOR";
 
 export type AdminCapability =
   | "all"
@@ -29,6 +30,7 @@ export interface AdminAccessAssignment {
   grantedBy: string;
   grantedAt: string;
   updatedAt: string;
+  hasEventCoordinatorAccess?: boolean;
 }
 
 export const ADMIN_ROLE_LABELS: Record<AdminAccessRole, string> = {
@@ -37,6 +39,7 @@ export const ADMIN_ROLE_LABELS: Record<AdminAccessRole, string> = {
   PROTOCOL_OFFICER: "Protocol Officer",
   CHIEF_EDITOR: "Chief Editor",
   CLUB_OWNER: "Club Owner",
+  EVENT_COORDINATOR: "Event Coordinator",
 };
 
 // Break-glass owner identities. The first value may be overridden at deploy time.
@@ -73,6 +76,11 @@ export const ADMIN_ROLE_CAPABILITIES: Record<AdminAccessRole, AdminCapability[]>
     "club_registrations",
     "payments",
   ],
+  EVENT_COORDINATOR: [
+    "events_manage",
+    "club_registrations",
+    "payments",
+  ],
 };
 
 export function getDefaultAdminRoute(role?: AdminAccessRole | null): string {
@@ -85,6 +93,8 @@ export function getDefaultAdminRoute(role?: AdminAccessRole | null): string {
       return "/admin/gallery";
     case "CLUB_OWNER":
       return "/admin/clubs";
+    case "EVENT_COORDINATOR":
+      return "/admin/events";
     case "OWNER":
     default:
       return "/admin";
@@ -109,6 +119,9 @@ export function hasAdminCapability(
 ): boolean {
   if (!isActiveAssignment(assignment)) return false;
   if (assignment.role === "OWNER") return true;
+  if (assignment.hasEventCoordinatorAccess && ADMIN_ROLE_CAPABILITIES.EVENT_COORDINATOR.includes(capability) && !club) {
+    return true;
+  }
   if (!ADMIN_ROLE_CAPABILITIES[assignment.role].includes(capability)) return false;
   if (assignment.role !== "CLUB_OWNER" || !club) return true;
 

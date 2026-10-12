@@ -32,6 +32,12 @@ import {
   isExternalUser 
 } from "@/lib/usersStore";
 import { resolveCanonicalDepartmentName } from "@/lib/departmentsStore";
+import { 
+  getStoredEvents, 
+  syncEventsFromFirestore, 
+  subscribeToEvents, 
+  hasAnyEventCoordinatorAccess 
+} from "@/lib/eventsStore";
 
 /**
  * Validates that all required fields for a given role are completed
@@ -706,14 +712,79 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const [hasEventCoordAccess, setHasEventCoordAccess] = useState(false);
+
+  useEffect(() => {
+    const cleanBt = user?.btId ? user.btId.trim().toUpperCase() : "";
+    if (!cleanBt) {
+      setHasEventCoordAccess(false);
+      return;
+    }
+
+    const evaluateAccess = (evts?: any[]) => {
+      const list = Array.isArray(evts) ? evts : getStoredEvents();
+      setHasEventCoordAccess(hasAnyEventCoordinatorAccess(cleanBt, list));
+    };
+
+    evaluateAccess();
+    syncEventsFromFirestore().then((synced) => {
+      if (Array.isArray(synced)) evaluateAccess(synced);
+    }).catch(() => {});
+
+    const unsubEvents = subscribeToEvents((remote) => {
+      if (Array.isArray(remote)) evaluateAccess(remote);
+    });
+
+    const handleEventsUpdated = (e: any) => {
+      evaluateAccess(e?.detail);
+    };
+
+    window.addEventListener("src_events_updated", handleEventsUpdated);
+    window.addEventListener("storage", handleEventsUpdated);
+
+    return () => {
+      unsubEvents();
+      window.removeEventListener("src_events_updated", handleEventsUpdated);
+      window.removeEventListener("storage", handleEventsUpdated);
+    };
+  }, [user?.btId]);
+
+  const effectiveAdminAccess: AdminAccessAssignment | null = React.useMemo(() => {
+    if (user?.adminAccess && user.adminAccess.active !== false) {
+      return {
+        ...user.adminAccess,
+        hasEventCoordinatorAccess: hasEventCoordAccess,
+      };
+    }
+    if (user && hasEventCoordAccess && user.btId) {
+      return {
+        uid: user.uid,
+        btId: user.btId.trim().toUpperCase(),
+        email: user.email || undefined,
+        role: "EVENT_COORDINATOR",
+        active: true,
+        grantedBy: "event_access",
+        grantedAt: new Date(0).toISOString(),
+        updatedAt: new Date().toISOString(),
+        hasEventCoordinatorAccess: true,
+      };
+    }
+    return user?.adminAccess || null;
+  }, [user, hasEventCoordAccess]);
+
   return (
     <AuthContext.Provider
       value={{
         user,
         isLoading,
-        isAdmin: isOwnerEmail(user?.email) || user?.role === "COUNCIL_ADMIN" || user?.role === "OWNER" || user?.adminAccess?.role === "OWNER" || (user?.adminAccess?.active !== false && Boolean(user?.adminAccess?.role)),
-        isOwner: isOwnerEmail(user?.email) || user?.adminAccess?.role === "OWNER" || user?.role === "OWNER",
-        adminAccess: user?.adminAccess || null,
+        isAdmin:
+          isOwnerEmail(user?.email) ||
+          user?.role === "COUNCIL_ADMIN" ||
+          user?.role === "OWNER" ||
+          effectiveAdminAccess?.role === "OWNER" ||
+          (effectiveAdminAccess?.active !== false && Boolean(effectiveAdminAccess?.role)),
+        isOwner: isOwnerEmail(user?.email) || effectiveAdminAccess?.role === "OWNER" || user?.role === "OWNER",
+        adminAccess: effectiveAdminAccess,
         isAuthModalOpen,
         openAuthModal: () => setIsAuthModalOpen(true),
         closeAuthModal: () => setIsAuthModalOpen(false),

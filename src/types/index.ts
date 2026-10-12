@@ -138,6 +138,7 @@ export interface EventItem {
   tenureId?: string;
   tenureLabel?: string;
   gateCheckInBtIds?: string[]; // Student BT IDs granted temporary pass check-in access (ends 1 day post completion)
+  eventAccessBtIds?: string[]; // Student BT IDs granted Event Coordinator console access (event details, registrations, payments)
 }
 
 export interface ClubLeader {

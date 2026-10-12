@@ -52,7 +52,8 @@ import {
   isRegistrationDeadlinePassed,
   parseDateStringToTimestamp,
   getEventEffectiveStatus,
-  resolveTenureForEvent
+  resolveTenureForEvent,
+  canUserManageEvent
 } from "@/lib/eventsStore";
 import { getStoredClubs } from "@/lib/councilStore";
 import { 
@@ -75,8 +76,10 @@ import { useAuth } from "@/context/AuthContext";
 import { isEntityOwnedByClub } from "@/types/rbac";
 
 export default function AdminEventsPage() {
-  const { adminAccess } = useAuth();
+  const { adminAccess, user, isOwner } = useAuth();
   const isClubOwner = adminAccess?.role === "CLUB_OWNER" && adminAccess.active !== false;
+  const isEventCoordinatorOnly = !isOwner && !isClubOwner && (adminAccess?.role === "EVENT_COORDINATOR" || Boolean(adminAccess?.hasEventCoordinatorAccess));
+  const isScopedEventManager = !isOwner && (isClubOwner || isEventCoordinatorOnly);
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
   const [clubsList, setClubsList] = useState<ClubItem[]>([]);
   const [tenuresList, setTenuresList] = useState<CouncilTenure[]>(() => {
@@ -266,13 +269,13 @@ export default function AdminEventsPage() {
       result = Array.from(map.values());
     }
 
-    // STRICT INVARIANT: If club owner, filter ALL results down strictly to their assigned club
-    if (isClubOwner) {
-      return result.filter((event) => isEntityOwnedByClub(event, adminAccess));
+    // STRICT INVARIANT: If scoped manager (Club Owner or Event Coordinator), filter results down to authorized events
+    if (isScopedEventManager) {
+      return result.filter((event) => canUserManageEvent(event, adminAccess, user?.btId, eventsList));
     }
 
     return result;
-  }, [eventsList, selectedTenureId, tenuresList, isClubOwner, adminAccess]);
+  }, [eventsList, selectedTenureId, tenuresList, isScopedEventManager, adminAccess, user?.btId]);
 
   const filteredEvents = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -450,6 +453,7 @@ export default function AdminEventsPage() {
       tenureId: resolvedTenure?.id || getCurrentTenure()?.id,
       tenureLabel: resolvedTenure?.label || getCurrentTenure()?.label,
       gateCheckInBtIds: formData.gateCheckInBtIds && formData.gateCheckInBtIds.length > 0 ? formData.gateCheckInBtIds : undefined,
+      eventAccessBtIds: formData.eventAccessBtIds && formData.eventAccessBtIds.length > 0 ? formData.eventAccessBtIds : undefined,
     };
 
     const updated = created.isFeatured
@@ -471,8 +475,8 @@ export default function AdminEventsPage() {
   };
 
   const handleToggleAudience = (evt: EventItem) => {
-    if (isClubOwner && !isEntityOwnedByClub(evt, adminAccess)) {
-      showNotice("Club Owners can only manage events for their assigned club.");
+    if (isScopedEventManager && !canUserManageEvent(evt, adminAccess, user?.btId, eventsList)) {
+      showNotice("You do not have permission to manage this event.");
       return;
     }
     const nextAudience: TargetAudience = evt.targetAudience === "jdcoem_only" ? "inter_college" : "jdcoem_only";
@@ -495,7 +499,7 @@ export default function AdminEventsPage() {
   };
 
   const handleToggleFeatured = async (evt: EventItem) => {
-    if (isClubOwner) {
+    if (isScopedEventManager) {
       showNotice("Only SRC administrators can designate Flagship Spotlight events.");
       return;
     }
@@ -524,8 +528,8 @@ export default function AdminEventsPage() {
   };
 
   const handleToggleLive = async (evt: EventItem) => {
-    if (isClubOwner && !isEntityOwnedByClub(evt, adminAccess)) {
-      showNotice("Club Owners can only manage events for their assigned club.");
+    if (isScopedEventManager && !canUserManageEvent(evt, adminAccess, user?.btId, eventsList)) {
+      showNotice("You do not have permission to manage this event.");
       return;
     }
     const nextLive = evt.isLive === false; // false → true, undefined/true → false
@@ -636,12 +640,13 @@ export default function AdminEventsPage() {
           }
         : undefined,
       gateCheckInBtIds: editingEvent.gateCheckInBtIds ? JSON.parse(JSON.stringify(editingEvent.gateCheckInBtIds)) : [],
+      eventAccessBtIds: editingEvent.eventAccessBtIds ? JSON.parse(JSON.stringify(editingEvent.eventAccessBtIds)) : [],
     };
   }, [editingEvent]);
 
   const handleStartEdit = (evt: EventItem) => {
-    if (isClubOwner && !isEntityOwnedByClub(evt, adminAccess)) {
-      showNotice("Club Owners can only edit events for their assigned club.");
+    if (isScopedEventManager && !canUserManageEvent(evt, adminAccess, user?.btId, eventsList)) {
+      showNotice("You do not have permission to edit this event.");
       return;
     }
     setEditingEvent(evt);
@@ -663,11 +668,11 @@ export default function AdminEventsPage() {
 
   const handleEditSubmit = async (formData: EventFormData, asDraft?: boolean) => {
     if (!editingEvent) return;
-    if (isClubOwner && !isEntityOwnedByClub(editingEvent, adminAccess)) {
-      showNotice("Club Owners can only edit events owned by their assigned club.");
+    if (isScopedEventManager && !canUserManageEvent(editingEvent, adminAccess, user?.btId, eventsList)) {
+      showNotice("You do not have permission to edit this event.");
       return;
     }
-    if (isClubOwner) {
+    if (isClubOwner && isEntityOwnedByClub(editingEvent, adminAccess)) {
       if (adminAccess?.clubSlug) formData.organizerClubSlug = adminAccess.clubSlug;
       if (adminAccess?.clubName) formData.organizer = adminAccess.clubName;
     }
@@ -829,6 +834,7 @@ export default function AdminEventsPage() {
       tenureId: resolvedTenure?.id || editingEvent.tenureId || getCurrentTenure()?.id,
       tenureLabel: resolvedTenure?.label || editingEvent.tenureLabel || getCurrentTenure()?.label,
       gateCheckInBtIds: formData.gateCheckInBtIds && formData.gateCheckInBtIds.length > 0 ? formData.gateCheckInBtIds : undefined,
+      eventAccessBtIds: formData.eventAccessBtIds && formData.eventAccessBtIds.length > 0 ? formData.eventAccessBtIds : undefined,
     };
 
     const hasItem = eventsList.some(targetMatch);
@@ -863,8 +869,8 @@ export default function AdminEventsPage() {
   };
 
   const handleDuplicate = (evt: EventItem) => {
-    if (isClubOwner && !isEntityOwnedByClub(evt, adminAccess)) {
-      showNotice("Club Owners can only duplicate events owned by their assigned club.");
+    if (isEventCoordinatorOnly || (isClubOwner && !isEntityOwnedByClub(evt, adminAccess))) {
+      showNotice("Only SRC administrators or the owning Club Owner can duplicate this event.");
       return;
     }
     const randSuffix = Math.random().toString(36).substring(2, 6);
@@ -893,8 +899,8 @@ export default function AdminEventsPage() {
 
   /** Fire immediately when user clicks the trash icon — soft-removes from UI and starts 10s undo window */
   const handleDeleteClick = (evt: EventItem) => {
-    if (isClubOwner && !isEntityOwnedByClub(evt, adminAccess)) {
-      showNotice("Club Owners can only delete events owned by their assigned club.");
+    if (isEventCoordinatorOnly || (isClubOwner && !isEntityOwnedByClub(evt, adminAccess))) {
+      showNotice("Only SRC administrators or the owning Club Owner can delete this event.");
       return;
     }
     // If there's already a pending delete for another event, fire it immediately first
@@ -939,8 +945,8 @@ export default function AdminEventsPage() {
 
   /** Actually delete — called when countdown reaches 0 or user navigates away */
   const executePermanentDelete = async (evt: EventItem) => {
-    if (isClubOwner && !isEntityOwnedByClub(evt, adminAccess)) {
-      showNotice("Club Owners can only delete events owned by their assigned club.");
+    if (isEventCoordinatorOnly || (isClubOwner && !isEntityOwnedByClub(evt, adminAccess))) {
+      showNotice("Only SRC administrators or the owning Club Owner can delete this event.");
       return;
     }
     setPendingDeleteEvent(null);
@@ -998,8 +1004,8 @@ export default function AdminEventsPage() {
 
   const confirmCancelEvent = async () => {
     if (!eventToCancel) return;
-    if (isClubOwner && !isEntityOwnedByClub(eventToCancel, adminAccess)) {
-      showNotice("Club Owners can only cancel events owned by their assigned club.");
+    if (isScopedEventManager && !canUserManageEvent(eventToCancel, adminAccess, user?.btId, eventsList)) {
+      showNotice("You can only cancel events assigned to your club or BT ID.");
       return;
     }
     const cleanNotice = cancellationNotice.trim();
@@ -1079,25 +1085,29 @@ export default function AdminEventsPage() {
             <span>{isSyncing ? "Syncing..." : "Sync Live Cloud"}</span>
           </button>
 
-          <Button
-            onClick={() => setIsCreateListingPickerOpen(true)}
-            variant="outline"
-            size="sm"
-            className="h-9 gap-1.5 text-xs font-semibold border-slate-200 hover:border-slate-300 text-slate-700 hover:text-[#17458F] shadow-2xs cursor-pointer"
-          >
-            <Layers className="w-3.5 h-3.5 text-slate-500" />
-            <span>Create Listing</span>
-          </Button>
+          {!isEventCoordinatorOnly && (
+            <>
+              <Button
+                onClick={() => setIsCreateListingPickerOpen(true)}
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5 text-xs font-semibold border-slate-200 hover:border-slate-300 text-slate-700 hover:text-[#17458F] shadow-2xs cursor-pointer"
+              >
+                <Layers className="w-3.5 h-3.5 text-slate-500" />
+                <span>Create Listing</span>
+              </Button>
 
-          <Button
-            onClick={() => setIsCreateOpen(true)}
-            variant="primary"
-            size="sm"
-            className="h-9 gap-1.5 text-xs font-semibold bg-[#17458F] hover:bg-[#123670] text-white shadow-xs px-3.5 cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>New Event</span>
-          </Button>
+              <Button
+                onClick={() => setIsCreateOpen(true)}
+                variant="primary"
+                size="sm"
+                className="h-9 gap-1.5 text-xs font-semibold bg-[#17458F] hover:bg-[#123670] text-white shadow-xs px-3.5 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Event</span>
+              </Button>
+            </>
+          )}
 
           <Link
             href="/events"
@@ -1304,15 +1314,17 @@ export default function AdminEventsPage() {
                 Reset Filters
               </Button>
             )}
-            <Button
-              onClick={() => setIsCreateOpen(true)}
-              variant="primary"
-              size="sm"
-              className="gap-1.5 bg-[#17458F]"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create New Event</span>
-            </Button>
+            {!isEventCoordinatorOnly && (
+              <Button
+                onClick={() => setIsCreateOpen(true)}
+                variant="primary"
+                size="sm"
+                className="gap-1.5 bg-[#17458F]"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create New Event</span>
+              </Button>
+            )}
           </div>
         </div>
       ) : (
@@ -1623,13 +1635,15 @@ export default function AdminEventsPage() {
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          onClick={() => handleDuplicate(evt)}
-                          className="h-8 w-8 rounded-lg bg-white hover:bg-slate-100 text-slate-700 hover:text-[#17458F] border border-slate-200 transition-all inline-flex items-center justify-center cursor-pointer shadow-2xs"
-                          title="Duplicate Event"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
+                        {!isEventCoordinatorOnly && (!isClubOwner || isEntityOwnedByClub(evt, adminAccess)) && (
+                          <button
+                            onClick={() => handleDuplicate(evt)}
+                            className="h-8 w-8 rounded-lg bg-white hover:bg-slate-100 text-slate-700 hover:text-[#17458F] border border-slate-200 transition-all inline-flex items-center justify-center cursor-pointer shadow-2xs"
+                            title="Duplicate Event"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => {
@@ -1643,14 +1657,16 @@ export default function AdminEventsPage() {
                         </button>
                       </>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteClick(evt)}
-                      className="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-all inline-flex items-center justify-center cursor-pointer shadow-2xs"
-                      title="Delete Event"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {!isEventCoordinatorOnly && (!isClubOwner || isEntityOwnedByClub(evt, adminAccess)) && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteClick(evt)}
+                        className="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-all inline-flex items-center justify-center cursor-pointer shadow-2xs"
+                        title="Delete Event"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1779,7 +1795,7 @@ export default function AdminEventsPage() {
           eventsList={eventsList}
           clubsList={clubsList}
           allClubsList={clubsList}
-          clubOwnerScope={clubOwnerScope}
+          clubOwnerScope={isClubOwner && isEntityOwnedByClub(editingEvent, adminAccess) ? clubOwnerScope : undefined}
           editingEventId={editingEvent.id}
           onSubmit={handleEditSubmit}
           pendingUploads={pendingUploads}

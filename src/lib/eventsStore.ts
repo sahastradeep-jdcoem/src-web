@@ -1,4 +1,5 @@
 import { EventItem } from "@/types";
+import { isEntityOwnedByClub, AdminAccessAssignment } from "@/types/rbac";
 import type { CouncilTenure } from "./tenureStore";
 import { 
   saveEventToFirestore,
@@ -221,6 +222,15 @@ export function sanitizeEventItem(event: EventItem): EventItem {
       ? Array.from(
           new Set(
             event.gateCheckInBtIds
+              .map((id) => (typeof id === "string" ? id.trim().toUpperCase() : ""))
+              .filter(Boolean)
+          )
+        )
+      : undefined,
+    eventAccessBtIds: Array.isArray(event.eventAccessBtIds)
+      ? Array.from(
+          new Set(
+            event.eventAccessBtIds
               .map((id) => (typeof id === "string" ? id.trim().toUpperCase() : ""))
               .filter(Boolean)
           )
@@ -492,6 +502,84 @@ export function hasEventGateCheckInAccess(
   isAdmin?: boolean
 ): boolean {
   return getGateCheckInAccessStatus(event, userBtId, isAdmin).hasAccess;
+}
+
+/**
+ * Checks if a user's BT ID is granted Event Coordinator console access for a specific event
+ * (or its parent umbrella festival).
+ */
+export function hasEventCoordinatorAccess(
+  event: Partial<EventItem> | null | undefined,
+  userBtId?: string | null,
+  allEvents?: EventItem[]
+): boolean {
+  if (!event || !userBtId) return false;
+  const normalizedUserBtId = userBtId.trim().toUpperCase();
+  if (!normalizedUserBtId) return false;
+
+  const directAllowed = Array.isArray(event.eventAccessBtIds)
+    ? event.eventAccessBtIds.map((id) => (typeof id === "string" ? id.trim().toUpperCase() : ""))
+    : [];
+  if (directAllowed.includes(normalizedUserBtId)) {
+    return true;
+  }
+
+  // If this is a sub-event of an umbrella festival, check if the parent festival grants coordinator access
+  if (Array.isArray(allEvents) && allEvents.length > 0 && (event.parentEventId || event.parentEventSlug || event.parentEventName)) {
+    const pId = (event.parentEventId || "").toLowerCase().trim();
+    const pSlug = (event.parentEventSlug || "").toLowerCase().trim();
+    const pName = (event.parentEventName || "").toLowerCase().trim();
+    const parentEvt = allEvents.find(
+      (e) =>
+        (pId && ((e.id || "").toLowerCase() === pId || (e.slug || "").toLowerCase() === pId)) ||
+        (pSlug && ((e.slug || "").toLowerCase() === pSlug || (e.id || "").toLowerCase() === pSlug)) ||
+        (pName && (e.name || "").toLowerCase().trim() === pName)
+    );
+    if (parentEvt && Array.isArray(parentEvt.eventAccessBtIds)) {
+      const parentAllowed = parentEvt.eventAccessBtIds.map((id) => (typeof id === "string" ? id.trim().toUpperCase() : ""));
+      if (parentAllowed.includes(normalizedUserBtId)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Checks if a user's BT ID has Event Coordinator access to at least one event in the catalog.
+ */
+export function hasAnyEventCoordinatorAccess(
+  userBtId?: string | null,
+  eventsList?: EventItem[]
+): boolean {
+  if (!userBtId) return false;
+  const normalizedUserBtId = userBtId.trim().toUpperCase();
+  if (!normalizedUserBtId) return false;
+  const catalog = Array.isArray(eventsList) ? eventsList : getStoredEvents();
+  return catalog.some((evt) => hasEventCoordinatorAccess(evt, normalizedUserBtId, catalog));
+}
+
+/**
+ * Unified authorization helper for scoped managers (Club Owners & Event Coordinators).
+ * Returns true if the event is owned by the user's assigned club OR if the user's BT ID
+ * is granted Event Coordinator access on the event.
+ */
+export function canUserManageEvent(
+  event: Partial<EventItem> | null | undefined,
+  adminAccess?: Partial<AdminAccessAssignment> | null,
+  userBtId?: string | null,
+  allEvents?: EventItem[]
+): boolean {
+  if (!event) return false;
+  if (adminAccess?.role === "OWNER" && adminAccess.active !== false) return true;
+  if (adminAccess?.role === "CLUB_OWNER" && adminAccess.active !== false && isEntityOwnedByClub(event, adminAccess)) {
+    return true;
+  }
+  if (userBtId && hasEventCoordinatorAccess(event, userBtId, allEvents)) {
+    return true;
+  }
+  return false;
 }
 
 /**
