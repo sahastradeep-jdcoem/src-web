@@ -179,23 +179,32 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Fallback: Check if participant is part of an existing team registration for this event
-        if (targetEventId) {
-          const qEvent = query(collection(db, "registrations"), where("eventId", "==", targetEventId));
-          const snapEvent = await getDocs(qEvent);
-          const existing = snapEvent.docs.find((d) => {
-            const data = d.data();
-            return isEventRecordMatch(data) && isStudentMatch(data);
-          });
-          if (existing) {
-            return NextResponse.json(
-              {
-                success: false,
-                error: `A confirmed pass already exists for you (or as part of a registered team) for ${eventName || "this event"}. Duplicate registrations are not allowed.`,
-              },
-              { status: 409 }
-            );
-          }
+        // Check if participant is part of an existing team registration for this event
+        const teamCandidates: any[] = [];
+        if (cleanEmail) {
+          try {
+            const qTeamEmail = query(collection(db, "registrations"), where("allMemberEmails", "array-contains", cleanEmail));
+            const snapTeamEmail = await getDocs(qTeamEmail);
+            snapTeamEmail.docs.forEach((d) => teamCandidates.push(d.data()));
+          } catch {}
+        }
+        if (cleanBt && cleanBt !== "STUDENT") {
+          try {
+            const qTeamBt = query(collection(db, "registrations"), where("allMemberBtIds", "array-contains", cleanBt));
+            const snapTeamBt = await getDocs(qTeamBt);
+            snapTeamBt.docs.forEach((d) => teamCandidates.push(d.data()));
+          } catch {}
+        }
+
+        const teamExisting = teamCandidates.find((data) => isEventRecordMatch(data) && isStudentMatch(data));
+        if (teamExisting) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: `A confirmed pass already exists for you (or as part of a registered team) for ${eventName || "this event"}. Duplicate registrations are not allowed.`,
+            },
+            { status: 409 }
+          );
         }
       } catch (dupErr) {
         console.warn("Notice: duplicate check warning in create-order:", dupErr);

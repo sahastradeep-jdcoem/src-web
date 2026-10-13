@@ -84,6 +84,7 @@ import {
   getAllRegistrationsFromFirestore, 
   getStudentRegistrationsFromFirestore,
   subscribeToRegistrationsFromFirestore, 
+  subscribeToStudentRegistrationsFromFirestore,
   isTestPassRecord,
   isHubRecord,
   StudentRegistrationRecord 
@@ -567,9 +568,15 @@ export default function StudentDashboardPage() {
 
     syncAndLoadRegistrations();
 
-    const unsubRegistrations = subscribeToRegistrationsFromFirestore((cloudRegs) => {
-      if (isCurrent) syncAndLoadRegistrations(cloudRegs);
-    });
+    const effUser = getEffectiveUser();
+    const unsubRegistrations = subscribeToStudentRegistrationsFromFirestore(
+      effUser?.email || user?.email,
+      effUser?.btId || user?.btId,
+      effUser?.uid || user?.uid,
+      (cloudRegs) => {
+        if (isCurrent) syncAndLoadRegistrations(cloudRegs);
+      }
+    );
 
     // 3. Listings & Hub Responses
     setListings(getStoredListings());

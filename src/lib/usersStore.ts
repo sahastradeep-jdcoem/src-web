@@ -1487,13 +1487,32 @@ export async function lookupUserByBtId(btId: string): Promise<RegisteredUserReco
   const localMatch = findRegisteredUserByBtId(cleanBtId);
   if (localMatch) return localMatch;
 
-  // 2. Attempt Firestore sync and re-check
+  // 2. Query Firestore targeted by BT ID (1 targeted read instead of downloading all users!)
   try {
-    const synced = await syncUsersFromFirestore();
-    const remoteMatch = synced.find(
-      (u) => u.btId && u.btId.trim().toUpperCase() === cleanBtId
-    );
-    if (remoteMatch) return remoteMatch;
+    const remoteUser = await findUserByBtIdInFirestore(cleanBtId);
+    if (remoteUser) {
+      const mappedRecord: RegisteredUserRecord = {
+        uid: remoteUser.uid,
+        email: remoteUser.email || "",
+        displayName: remoteUser.displayName || remoteUser.name || cleanBtId,
+        photoURL: remoteUser.photoURL ?? null,
+        btId: cleanBtId,
+        department: remoteUser.department,
+        year: remoteUser.year,
+        phone: remoteUser.phone,
+        role: (remoteUser.role as any) || "STUDENT",
+        isCollegeStudent: remoteUser.isCollegeStudent ?? true,
+        profileCompleted: remoteUser.profileCompleted ?? true,
+        createdAt: remoteUser.createdAt || new Date().toISOString(),
+      };
+      // Merge into local cache so subsequent checks take 0 reads
+      const current = getStoredUsers();
+      if (!current.some((u) => u.btId && u.btId.trim().toUpperCase() === cleanBtId)) {
+        const updated = [...current, mappedRecord];
+        safeStorageSet(USERS_STORAGE_KEY, updated);
+      }
+      return mappedRecord;
+    }
   } catch (e) {
     console.warn("Firestore lookup fallback", e);
   }

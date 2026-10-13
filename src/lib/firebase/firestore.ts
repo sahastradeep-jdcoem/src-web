@@ -7,6 +7,7 @@ import {
   deleteDoc,
   query, 
   where, 
+  limit,
   orderBy, 
   onSnapshot,
   Timestamp,
@@ -55,6 +56,8 @@ export interface StudentRegistrationRecord {
     email?: string;
     isLeader?: boolean;
   }>;
+  allMemberEmails?: string[]; // All participant emails (leader + teammates) for targeted queries
+  allMemberBtIds?: string[]; // All participant BT IDs (leader + teammates) for targeted queries
   status: "CONFIRMED" | "WAITLISTED" | "CHECKED_IN" | "CANCELLED";
   paymentStatus?: "FREE" | "PAID" | "PENDING" | "FAILED";
   paymentId?: string; // Gateway Payment / Transaction ID
@@ -673,6 +676,26 @@ export async function getUserProfileFromFirestore(uid: string): Promise<UserProf
 }
 
 /**
+ * Look up a student profile directly by BT ID (1 targeted read with limit(1)).
+ * Eliminates downloading the entire user collection on student devices.
+ */
+export async function getUserProfileByBtIdFromFirestore(btId: string): Promise<UserProfile | null> {
+  if (!btId || !btId.trim() || !db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return null;
+  const cleanBtId = btId.trim().toUpperCase();
+  try {
+    const q = query(collection(db, USERS_COLLECTION), where("btId", "==", cleanBtId), limit(1));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const docSnap = snap.docs[0];
+      return { uid: docSnap.id, ...docSnap.data() } as UserProfile;
+    }
+  } catch (error) {
+    console.warn("Firestore lookup by BT ID error", error);
+  }
+  return null;
+}
+
+/**
  * Deeply strips undefined values from objects and arrays so Firestore setDoc / updateDoc never throws
  */
 export function cleanUndefined<T>(obj: T): T {
@@ -817,8 +840,27 @@ export async function saveRegistrationToFirestore(
 ): Promise<StudentRegistrationRecord> {
   const nowIso = new Date().toISOString();
   const cleanData = cleanUndefined(data);
+
+  const rawMembers = Array.isArray(cleanData.teamMembers) 
+    ? cleanData.teamMembers 
+    : Array.isArray(cleanData.members) 
+    ? cleanData.members 
+    : [];
+
+  const allMemberEmails = Array.from(new Set([
+    cleanData.email ? String(cleanData.email).toLowerCase().trim() : null,
+    ...rawMembers.map((m: any) => (m?.email ? String(m.email).toLowerCase().trim() : null)),
+  ].filter(Boolean))) as string[];
+
+  const allMemberBtIds = Array.from(new Set([
+    cleanData.btId && cleanData.btId !== "STUDENT" ? String(cleanData.btId).toUpperCase().trim() : null,
+    ...rawMembers.map((m: any) => (m?.btId && m.btId !== "STUDENT" ? String(m.btId).toUpperCase().trim() : null)),
+  ].filter(Boolean))) as string[];
+
   const newRecord: StudentRegistrationRecord = {
     ...cleanData,
+    allMemberEmails: allMemberEmails.length > 0 ? allMemberEmails : undefined,
+    allMemberBtIds: allMemberBtIds.length > 0 ? allMemberBtIds : undefined,
     registeredAt: cleanData.registeredAt || nowIso,
     status: "CONFIRMED",
     createdAt: serverTimestamp(),
@@ -959,63 +1001,44 @@ export async function checkExistingStudentRegistration(
     }
   } catch {}
 
-  // 2. Query Firestore by STUDENT (email and BT ID) - Single field queries with zero composite index requirement!
+  // 2. Query Firestore strictly by STUDENT (email, BT ID, and team memberships)
+  // Strictly targets this specific student to eliminate 100k+ unbounded full-event collection scans!
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       const colRef = collection(db, REGISTRATIONS_COLLECTION);
       const candidates: any[] = [];
+      const seenIds = new Set<string>();
 
-      // Query by email
+      const addCandidates = (snap: any) => {
+        if (!snap || !snap.docs) return;
+        snap.docs.forEach((d: any) => {
+          if (!seenIds.has(d.id)) {
+            seenIds.add(d.id);
+            candidates.push({ id: d.id, ...d.data() });
+          }
+        });
+      };
+
+      const queryPromises: Promise<any>[] = [];
+
+      // Query by student email (primary & teammate)
       if (cleanEmail) {
-        try {
-          const qEmail = query(colRef, where("email", "==", cleanEmail));
-          const snapEmail = await getDocs(qEmail);
-          snapEmail.docs.forEach((d) => candidates.push({ id: d.id, ...d.data() }));
-        } catch (e) {
-          console.warn("Notice: email query in checkExistingStudentRegistration:", e);
-        }
+        queryPromises.push(getDocs(query(colRef, where("email", "==", cleanEmail))));
+        queryPromises.push(getDocs(query(colRef, where("allMemberEmails", "array-contains", cleanEmail))));
       }
 
-      // Query by btId
+      // Query by student BT ID (primary & teammate)
       if (cleanBtId && cleanBtId !== "STUDENT") {
-        try {
-          const qBt = query(colRef, where("btId", "==", cleanBtId));
-          const snapBt = await getDocs(qBt);
-          snapBt.docs.forEach((d) => {
-            if (!candidates.some((c) => c.id === d.id)) {
-              candidates.push({ id: d.id, ...d.data() });
-            }
-          });
-        } catch (e) {
-          console.warn("Notice: btId query in checkExistingStudentRegistration:", e);
+        queryPromises.push(getDocs(query(colRef, where("btId", "==", cleanBtId))));
+        queryPromises.push(getDocs(query(colRef, where("allMemberBtIds", "array-contains", cleanBtId))));
+      }
+
+      const results = await Promise.allSettled(queryPromises);
+      results.forEach((res) => {
+        if (res.status === "fulfilled") {
+          addCandidates(res.value);
         }
-      }
-
-      // Query by eventId as fallback
-      if (cleanEventId) {
-        try {
-          const qEv = query(colRef, where("eventId", "==", eventId));
-          const snapEv = await getDocs(qEv);
-          snapEv.docs.forEach((d) => {
-            if (!candidates.some((c) => c.id === d.id)) {
-              candidates.push({ id: d.id, ...d.data() });
-            }
-          });
-        } catch (e) {}
-      }
-
-      // Query by eventSlug as fallback
-      if (cleanEventSlug && cleanEventSlug !== cleanEventId) {
-        try {
-          const qSlug = query(colRef, where("eventSlug", "==", eventSlug));
-          const snapSlug = await getDocs(qSlug);
-          snapSlug.docs.forEach((d) => {
-            if (!candidates.some((c) => c.id === d.id)) {
-              candidates.push({ id: d.id, ...d.data() });
-            }
-          });
-        } catch (e) {}
-      }
+      });
 
       // Search candidates
       const matched = candidates.find(isMatch);
@@ -1170,9 +1193,11 @@ export async function getStudentRegistrationsFromFirestore(
 
     if (cleanEmail) {
       promises.push(getDocs(query(colRef, where("email", "==", cleanEmail))));
+      promises.push(getDocs(query(colRef, where("allMemberEmails", "array-contains", cleanEmail))));
     }
     if (cleanBt && cleanBt !== "STUDENT" && cleanBt !== "BT ID PENDING") {
       promises.push(getDocs(query(colRef, where("btId", "==", cleanBt))));
+      promises.push(getDocs(query(colRef, where("allMemberBtIds", "array-contains", cleanBt))));
     }
     if (cleanUid) {
       promises.push(getDocs(query(colRef, where("userId", "==", cleanUid))));
@@ -1192,6 +1217,87 @@ export async function getStudentRegistrationsFromFirestore(
   }
 
   return Array.from(recordsMap.values());
+}
+
+/**
+ * Subscribe to real-time updates of event registrations strictly scoped to a single student.
+ * Drops reads from N (entire collection) to 1-2 docs per student!
+ */
+export function subscribeToStudentRegistrationsFromFirestore(
+  email: string | null | undefined,
+  btId: string | null | undefined,
+  uid: string | null | undefined,
+  callback: (regs: StudentRegistrationRecord[]) => void
+): () => void {
+  if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    return () => {};
+  }
+
+  const cleanEmail = (email || "").trim().toLowerCase();
+  const cleanBt = (btId || "").trim().toUpperCase();
+  const cleanUid = (uid || "").trim();
+
+  if (!cleanEmail && (!cleanBt || cleanBt === "STUDENT" || cleanBt === "BT ID PENDING") && !cleanUid) {
+    return () => {};
+  }
+
+  const colRef = collection(db, REGISTRATIONS_COLLECTION);
+  const unsubs: (() => void)[] = [];
+  const studentRecordsMap = new Map<string, StudentRegistrationRecord>();
+
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  const emitResults = () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      const records = Array.from(studentRecordsMap.values()).filter(
+        (r) => !isHubRecord(r) && !isTestPassRecord(r)
+      );
+      callback(records);
+    }, 40);
+  };
+
+  const attachListener = (q: any) => {
+    try {
+      const unsub = onSnapshot(
+        q,
+        (snap: any) => {
+          snap.docChanges().forEach((change: any) => {
+            if (change.type === "removed") {
+              studentRecordsMap.delete(change.doc.id);
+            } else {
+              studentRecordsMap.set(change.doc.id, { id: change.doc.id, ...change.doc.data() } as StudentRegistrationRecord);
+            }
+          });
+          emitResults();
+        },
+        (err: any) => {
+          console.warn("Student registration listener notice:", err);
+        }
+      );
+      unsubs.push(unsub);
+    } catch (e) {
+      console.warn("Could not attach student registration listener:", e);
+    }
+  };
+
+  if (cleanEmail) {
+    attachListener(query(colRef, where("email", "==", cleanEmail)));
+    attachListener(query(colRef, where("allMemberEmails", "array-contains", cleanEmail)));
+  }
+
+  if (cleanBt && cleanBt !== "STUDENT" && cleanBt !== "BT ID PENDING") {
+    attachListener(query(colRef, where("btId", "==", cleanBt)));
+    attachListener(query(colRef, where("allMemberBtIds", "array-contains", cleanBt)));
+  }
+
+  if (cleanUid) {
+    attachListener(query(colRef, where("userId", "==", cleanUid)));
+  }
+
+  return () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    unsubs.forEach((u) => u());
+  };
 }
 
 /**
@@ -1712,30 +1818,97 @@ export async function getDocumentUpdatedAtMs(docId: string): Promise<number | nu
   return null;
 }
 
+interface SiteContentMultiplexer {
+  subscribers: Set<(data: any) => void>;
+  unsubFirestore: (() => void) | null;
+  lastData: any;
+  teardownTimer: ReturnType<typeof setTimeout> | null;
+}
+const siteContentMultiplexers = new Map<string, SiteContentMultiplexer>();
+
 /**
- * Subscribe to real-time changes of site content document
+ * Subscribe to real-time changes of site content document with multiplexed single-listener sharing
  */
 export function subscribeToSiteContent<T>(docId: string, callback: (data: T) => void): () => void {
   if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
     return () => {};
   }
-  try {
-    const docRef = doc(db, SITE_CONTENT_COLLECTION, docId);
-    return onSnapshot(
-      docRef,
-      (snapshot) => {
-        if (snapshot.exists() && snapshot.data()?.payload !== undefined) {
-          callback(snapshot.data()?.payload as T);
-        }
-      },
-      (error) => {
-        console.warn(`Firestore subscribeToSiteContent notice [${docId}]`, error);
-      }
-    );
-  } catch (e) {
-    console.warn(`Firestore subscription setup notice [${docId}]`, e);
-    return () => {};
+
+  let mux = siteContentMultiplexers.get(docId);
+  if (!mux) {
+    mux = {
+      subscribers: new Set(),
+      unsubFirestore: null,
+      lastData: undefined,
+      teardownTimer: null,
+    };
+    siteContentMultiplexers.set(docId, mux);
   }
+
+  if (mux.teardownTimer) {
+    clearTimeout(mux.teardownTimer);
+    mux.teardownTimer = null;
+  }
+
+  mux.subscribers.add(callback as (data: any) => void);
+
+  // Emit last cached payload immediately to new subscriber without hitting Firestore
+  if (mux.lastData !== undefined) {
+    try {
+      callback(mux.lastData as T);
+    } catch (e) {
+      console.warn(`Error in siteContent immediate callback [${docId}]`, e);
+    }
+  }
+
+  // Only open ONE active onSnapshot listener to Firestore for this docId
+  if (!mux.unsubFirestore) {
+    try {
+      const docRef = doc(db, SITE_CONTENT_COLLECTION, docId);
+      mux.unsubFirestore = onSnapshot(
+        docRef,
+        (snapshot) => {
+          if (snapshot.exists() && snapshot.data()?.payload !== undefined) {
+            const payload = snapshot.data()?.payload;
+            const currentMux = siteContentMultiplexers.get(docId);
+            if (currentMux) {
+              currentMux.lastData = payload;
+              currentMux.subscribers.forEach((cb) => {
+                try {
+                  cb(payload);
+                } catch (err) {
+                  console.warn(`Error in siteContent subscriber callback [${docId}]`, err);
+                }
+              });
+            }
+          }
+        },
+        (error) => {
+          console.warn(`Firestore subscribeToSiteContent notice [${docId}]`, error);
+        }
+      );
+    } catch (e) {
+      console.warn(`Firestore subscription setup notice [${docId}]`, e);
+    }
+  }
+
+  return () => {
+    const currentMux = siteContentMultiplexers.get(docId);
+    if (!currentMux) return;
+    currentMux.subscribers.delete(callback as (data: any) => void);
+    if (currentMux.subscribers.size === 0) {
+      // 30-second grace window to preserve active listener across Next.js route transitions
+      currentMux.teardownTimer = setTimeout(() => {
+        if (currentMux.subscribers.size === 0) {
+          if (currentMux.unsubFirestore) {
+            currentMux.unsubFirestore();
+            currentMux.unsubFirestore = null;
+          }
+          siteContentMultiplexers.delete(docId);
+        }
+      }, 30000);
+    }
+  };
 }
 
 // -----------------------------------------------------------------------------
@@ -2034,9 +2207,20 @@ export async function getEventFromFirestore(eventIdOrSlug: string): Promise<Even
  * We only emit after at least one SERVER snapshot has arrived from each collection.
  * A 3-second fallback timer ensures offline users still see cached data.
  */
+interface EventsMultiplexer {
+  subscribers: Set<(events: EventItem[]) => void>;
+  unsubscribers: (() => void)[];
+  lastEmittedEvents: EventItem[] | null;
+  teardownTimer: ReturnType<typeof setTimeout> | null;
+  offlineFallbackTimer: ReturnType<typeof setTimeout> | null;
+  debounceTimer: ReturnType<typeof setTimeout> | null;
+}
+
+let eventsMux: EventsMultiplexer | null = null;
+
 /**
  * Subscribe to real-time updates of events directly from the top-level /events collection.
- * Uses a single tombstone document listener for instantaneous sync with zero delay.
+ * Uses a single multiplexed listener with a 30s navigation grace window to eliminate duplicate reads across pages.
  * Strictly guarantees that any item without a valid name is rejected.
  */
 export function subscribeToEventsFromFirestore(
@@ -2046,130 +2230,174 @@ export function subscribeToEventsFromFirestore(
     return () => {};
   }
 
-  const collectionEventsMap = new Map<string, EventItem>();
-  const tombstonesMap = new Map<string, boolean>();
-
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-  let hasReceivedServerSnapshot = false;
-  let hasReceivedAnySnapshot = false;
-
-  const emitMerged = () => {
-    // Only emit if we have received a server snapshot OR if we have non-empty events from cache.
-    // Never emit an empty list from a pure cache snapshot while waiting for server response!
-    if (!hasReceivedServerSnapshot && collectionEventsMap.size === 0) {
-      return;
-    }
-
-    const validEvents: EventItem[] = [];
-    collectionEventsMap.forEach((evt, key) => {
-      const idKey = (evt.id || "").toLowerCase().trim();
-      const slugKey = (evt.slug || "").toLowerCase().trim();
-      const nameKey = (evt.name || "").toLowerCase().trim();
-
-      // Check tombstones & require valid name
-      if (
-        nameKey.length > 0 &&
-        !tombstonesMap.has(idKey) &&
-        !tombstonesMap.has(slugKey) &&
-        !tombstonesMap.has(key.toLowerCase().trim())
-      ) {
-        validEvents.push(evt);
-      }
-    });
-
-    callback(validEvents);
-  };
-
-  const scheduleEmit = () => {
-    if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      emitMerged();
-    }, 40);
-  };
-
-  // Offline fallback: if no server response arrives in 3.5 seconds, emit whatever was cached
-  const offlineFallback = setTimeout(() => {
-    if (!hasReceivedServerSnapshot && hasReceivedAnySnapshot) {
-      hasReceivedServerSnapshot = true;
-      emitMerged();
-    }
-  }, 3500);
-
-  const unsubscribers: (() => void)[] = [];
-
-  // 1. Subscribe to tombstone document
-  try {
-    const tombstoneDocRef = doc(db, SITE_CONTENT_COLLECTION, "deleted_events_tombstones");
-    const unsubTombstone = onSnapshot(
-      tombstoneDocRef,
-      (docSnap) => {
-        tombstonesMap.clear();
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          if (data) {
-            Object.keys(data).forEach((k) => {
-              if (data[k] === true) tombstonesMap.set(k.toLowerCase().trim(), true);
-            });
-          }
-        }
-        scheduleEmit();
-      },
-      (error) => {
-        console.warn("Tombstone listener notice:", error);
-      }
-    );
-    unsubscribers.push(unsubTombstone);
-  } catch (e) {
-    console.warn("Could not subscribe to event tombstones:", e);
+  if (!eventsMux) {
+    eventsMux = {
+      subscribers: new Set(),
+      unsubscribers: [],
+      lastEmittedEvents: null,
+      teardownTimer: null,
+      offlineFallbackTimer: null,
+      debounceTimer: null,
+    };
   }
 
-  // 2. Subscribe to top-level /events collection (Directive #13: 1 Event = 1 Document)
-  try {
-    const colRef = collection(db, EVENTS_COLLECTION);
-    const unsubEvents = onSnapshot(
-      colRef,
-      (snapshot) => {
-        collectionEventsMap.clear();
-        snapshot.docs.forEach((d) => {
-          const docIdLower = d.id.toLowerCase().trim();
-          if (tombstonesMap.has(docIdLower)) return;
+  if (eventsMux.teardownTimer) {
+    clearTimeout(eventsMux.teardownTimer);
+    eventsMux.teardownTimer = null;
+  }
 
-          const data = d.data();
-          const name = typeof data?.name === "string" ? data.name.trim() : "";
-          if (!name) return; // Discard corrupt/ghost items lacking title
+  eventsMux.subscribers.add(callback);
 
-          const evt = { id: d.id, ...data, name } as EventItem;
-          const idKey = (evt.id || "").toLowerCase().trim();
-          const slugKey = (evt.slug || "").toLowerCase().trim();
-          if (tombstonesMap.has(idKey) || tombstonesMap.has(slugKey)) return;
+  // If we already have fresh events in the multiplexer, emit immediately to the new subscriber
+  if (eventsMux.lastEmittedEvents && eventsMux.lastEmittedEvents.length > 0) {
+    try {
+      callback(eventsMux.lastEmittedEvents);
+    } catch (e) {
+      console.warn("Notice in immediate events callback:", e);
+    }
+  }
 
-          const key = evt.id || evt.slug || d.id;
-          collectionEventsMap.set(key, evt);
-        });
+  // If no underlying listeners active, start them
+  if (eventsMux.unsubscribers.length === 0) {
+    const collectionEventsMap = new Map<string, EventItem>();
+    const tombstonesMap = new Map<string, boolean>();
 
-        hasReceivedAnySnapshot = true;
-        if (!snapshot.metadata.fromCache) {
-          hasReceivedServerSnapshot = true;
-        }
-        scheduleEmit();
-      },
-      (error) => {
-        if (error?.code !== "permission-denied" && !error?.message?.includes("Missing or insufficient permissions")) {
-          console.warn("Firestore live events collection notice:", error);
-        }
-        hasReceivedServerSnapshot = true;
-        scheduleEmit();
+    let hasReceivedServerSnapshot = false;
+    let hasReceivedAnySnapshot = false;
+
+    const emitMerged = () => {
+      if (!hasReceivedServerSnapshot && collectionEventsMap.size === 0) {
+        return;
       }
-    );
-    unsubscribers.push(unsubEvents);
-  } catch (e) {
-    console.warn("Firestore subscription error for events collection:", e);
-    hasReceivedServerSnapshot = true;
+
+      const validEvents: EventItem[] = [];
+      collectionEventsMap.forEach((evt, key) => {
+        const idKey = (evt.id || "").toLowerCase().trim();
+        const slugKey = (evt.slug || "").toLowerCase().trim();
+        const nameKey = (evt.name || "").toLowerCase().trim();
+
+        if (
+          nameKey.length > 0 &&
+          !tombstonesMap.has(idKey) &&
+          !tombstonesMap.has(slugKey) &&
+          !tombstonesMap.has(key.toLowerCase().trim())
+        ) {
+          validEvents.push(evt);
+        }
+      });
+
+      if (eventsMux) {
+        eventsMux.lastEmittedEvents = validEvents;
+        eventsMux.subscribers.forEach((cb) => {
+          try {
+            cb(validEvents);
+          } catch (err) {
+            console.warn("Notice in events subscriber callback:", err);
+          }
+        });
+      }
+    };
+
+    const scheduleEmit = () => {
+      if (!eventsMux) return;
+      if (eventsMux.debounceTimer) clearTimeout(eventsMux.debounceTimer);
+      eventsMux.debounceTimer = setTimeout(() => {
+        emitMerged();
+      }, 40);
+    };
+
+    // Offline fallback
+    eventsMux.offlineFallbackTimer = setTimeout(() => {
+      if (!hasReceivedServerSnapshot && hasReceivedAnySnapshot) {
+        hasReceivedServerSnapshot = true;
+        emitMerged();
+      }
+    }, 3500);
+
+    // 1. Subscribe to tombstone document
+    try {
+      const tombstoneDocRef = doc(db, SITE_CONTENT_COLLECTION, "deleted_events_tombstones");
+      const unsubTombstone = onSnapshot(
+        tombstoneDocRef,
+        (docSnap) => {
+          tombstonesMap.clear();
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data) {
+              Object.keys(data).forEach((k) => {
+                if (data[k] === true) tombstonesMap.set(k.toLowerCase().trim(), true);
+              });
+            }
+          }
+          scheduleEmit();
+        },
+        (error) => {
+          console.warn("Tombstone listener notice:", error);
+        }
+      );
+      eventsMux.unsubscribers.push(unsubTombstone);
+    } catch (e) {
+      console.warn("Could not subscribe to event tombstones:", e);
+    }
+
+    // 2. Subscribe to top-level /events collection (Directive #13: 1 Event = 1 Document)
+    try {
+      const colRef = collection(db, EVENTS_COLLECTION);
+      const unsubEvents = onSnapshot(
+        colRef,
+        (snapshot) => {
+          collectionEventsMap.clear();
+          snapshot.docs.forEach((d) => {
+            const docIdLower = d.id.toLowerCase().trim();
+            if (tombstonesMap.has(docIdLower)) return;
+
+            const data = d.data();
+            const name = typeof data?.name === "string" ? data.name.trim() : "";
+            if (!name) return; // Discard corrupt/ghost items lacking title
+
+            const evt = { id: d.id, ...data, name } as EventItem;
+            const idKey = (evt.id || "").toLowerCase().trim();
+            const slugKey = (evt.slug || "").toLowerCase().trim();
+            if (tombstonesMap.has(idKey) || tombstonesMap.has(slugKey)) return;
+
+            const key = evt.id || evt.slug || d.id;
+            collectionEventsMap.set(key, evt);
+          });
+
+          hasReceivedAnySnapshot = true;
+          if (!snapshot.metadata.fromCache) {
+            hasReceivedServerSnapshot = true;
+          }
+          scheduleEmit();
+        },
+        (error) => {
+          if (error?.code !== "permission-denied" && !error?.message?.includes("Missing or insufficient permissions")) {
+            console.warn("Firestore live events collection notice:", error);
+          }
+          hasReceivedServerSnapshot = true;
+          scheduleEmit();
+        }
+      );
+      eventsMux.unsubscribers.push(unsubEvents);
+    } catch (e) {
+      console.warn("Firestore subscription error for events collection:", e);
+      hasReceivedServerSnapshot = true;
+    }
   }
 
   return () => {
-    clearTimeout(offlineFallback);
-    if (debounceTimer) clearTimeout(debounceTimer);
-    unsubscribers.forEach((fn) => fn());
+    if (!eventsMux) return;
+    eventsMux.subscribers.delete(callback);
+    if (eventsMux.subscribers.size === 0) {
+      // 30-second grace window to preserve active listener across Next.js route transitions
+      eventsMux.teardownTimer = setTimeout(() => {
+        if (eventsMux && eventsMux.subscribers.size === 0) {
+          if (eventsMux.offlineFallbackTimer) clearTimeout(eventsMux.offlineFallbackTimer);
+          if (eventsMux.debounceTimer) clearTimeout(eventsMux.debounceTimer);
+          eventsMux.unsubscribers.forEach((fn) => fn());
+          eventsMux = null;
+        }
+      }, 30000);
+    }
   };
 }

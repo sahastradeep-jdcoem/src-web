@@ -1217,8 +1217,12 @@ export async function saveStoredEvents(events: EventItem[]): Promise<void> {
   }
 }
 
+let lastSyncEventsTime = 0;
+let inFlightSyncEventsPromise: Promise<EventItem[]> | null = null;
+
 /**
- * Fetch and sync all individual event documents from Firestore (1 Event = 1 Document)
+ * Fetch and sync all individual event documents from Firestore (1 Event = 1 Document).
+ * Deduplicates in-flight parallel calls and throttles redundant back-to-back network fetches.
  */
 export async function syncEventsFromFirestore(): Promise<EventItem[]> {
   try {
@@ -1226,34 +1230,56 @@ export async function syncEventsFromFirestore(): Promise<EventItem[]> {
     if (hasPendingWritesFor("events") || getLastLocalWriteTime("events") >= requestTime) {
       return getStoredEvents();
     }
-    const remote = await getAllEventsFromFirestore();
-    // Verify no local writes occurred while waiting for network response
-    if (hasPendingWritesFor("events") || getLastLocalWriteTime("events") >= requestTime) {
-      return getStoredEvents();
+
+    // Reuse in-flight promise if multiple components trigger sync simultaneously
+    if (inFlightSyncEventsPromise) {
+      return inFlightSyncEventsPromise;
     }
-    if (remote !== null && Array.isArray(remote)) {
-      const current = getStoredEvents();
-      // If remote is empty but local has items, only preserve local data if a write was recent.
-      // If the write timestamp was cleared by markLocalDelete, the admin intentionally deleted all
-      // events — let the authoritative empty remote state apply (Directive #9: Zero Deletion Resurrection).
-      if (remote.length === 0 && current.length > 0) {
-        const hasRecentLocalWrite = getLastLocalWriteTime("events") > 0 &&
-          (Date.now() - getLastLocalWriteTime("events") < 30000);
-        if (hasRecentLocalWrite) {
-          return current;
+
+    // Throttle: If synced within the last 15 seconds and we have stored events, return cached data
+    if (Date.now() - lastSyncEventsTime < 15000) {
+      const stored = getStoredEvents();
+      if (stored.length > 0) return stored;
+    }
+
+    inFlightSyncEventsPromise = (async () => {
+      try {
+        const remote = await getAllEventsFromFirestore();
+        lastSyncEventsTime = Date.now();
+
+        // Verify no local writes occurred while waiting for network response
+        if (hasPendingWritesFor("events") || getLastLocalWriteTime("events") >= requestTime) {
+          return getStoredEvents();
         }
-        // Write timestamp cleared — allow empty remote (all events were intentionally deleted)
+        if (remote !== null && Array.isArray(remote)) {
+          const current = getStoredEvents();
+          // If remote is empty but local has items, only preserve local data if a write was recent.
+          if (remote.length === 0 && current.length > 0) {
+            const hasRecentLocalWrite = getLastLocalWriteTime("events") > 0 &&
+              (Date.now() - getLastLocalWriteTime("events") < 30000);
+            if (hasRecentLocalWrite) {
+              return current;
+            }
+          }
+          // Remote Firestore state is strictly authoritative for items & deletions (Directive #9)
+          const rawMerged = reconcileArrayDatasets(current, remote);
+          const sanitized = sanitizeEventsList(rawMerged);
+          inMemoryEvents = sanitized;
+          if (typeof window !== "undefined") {
+            safeWriteEventsToLocalStorage(sanitized);
+            window.dispatchEvent(new CustomEvent("src_events_updated", { detail: sanitized }));
+          }
+          return sanitized;
+        }
+      } catch (e) {
+        console.warn("Could not sync events from Firestore", e);
+      } finally {
+        inFlightSyncEventsPromise = null;
       }
-      // Remote Firestore state is strictly authoritative for items & deletions (Directive #9)
-      const rawMerged = reconcileArrayDatasets(current, remote);
-      const sanitized = sanitizeEventsList(rawMerged);
-      inMemoryEvents = sanitized;
-      if (typeof window !== "undefined") {
-        safeWriteEventsToLocalStorage(sanitized);
-        window.dispatchEvent(new CustomEvent("src_events_updated", { detail: sanitized }));
-      }
-      return sanitized;
-    }
+      return getStoredEvents();
+    })();
+
+    return inFlightSyncEventsPromise;
   } catch (e) {
     console.warn("Could not sync events from Firestore", e);
   }
