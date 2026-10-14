@@ -285,6 +285,28 @@ export async function createCashfreeRefund(
 }
 
 /**
+ * Retrieve all refunds issued for an order directly from Cashfree
+ */
+export async function getCashfreeOrderRefunds(
+  orderId: string,
+  customCredentials?: CashfreeCredentials
+): Promise<CashfreeRefundResponse[]> {
+  const creds = customCredentials || (await getServerCashfreeCredentials());
+  if (!creds.appId || !creds.secretKey) {
+    throw new Error("Cashfree credentials not configured.");
+  }
+  const baseUrl = getCashfreeBaseUrl(creds.environment);
+
+  const response = await fetch(`${baseUrl}/orders/${orderId}/refunds`, {
+    method: "GET",
+    headers: getCashfreeHeaders(creds),
+  });
+
+  const data = await response.json();
+  return (Array.isArray(data) ? data : []) as CashfreeRefundResponse[];
+}
+
+/**
  * Confirm and persist a paid Cashfree order to Firestore.
  * Self-heals if the client-side browser dropped out, closed, or redirected.
  */

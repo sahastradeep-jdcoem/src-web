@@ -209,9 +209,11 @@ export async function POST(req: NextRequest) {
       const orderId = refundData?.order_id || orderData?.order_id;
       const refundStatus = refundData?.refund_status || "PROCESSED";
       const refundAmount = refundData?.refund_amount;
-      console.log(`[Cashfree Webhook] Refund ${refundStatus}: RefundId=${refundId}, Order=${orderId}`);
+      const refundArn = refundData?.refund_arn;
+      const refundMode = refundData?.refund_mode;
+      console.log(`[Cashfree Webhook] Refund ${refundStatus}: RefundId=${refundId}, Order=${orderId}, ARN=${refundArn}`);
 
-      if (orderId && refundStatus === "SUCCESS") {
+      if (orderId && (refundStatus === "SUCCESS" || refundStatus === "PROCESSED")) {
         try {
           const { db } = await import("@/lib/firebase/config");
           const { collection, query, where, getDocs, updateDoc } = await import("firebase/firestore");
@@ -220,14 +222,17 @@ export async function POST(req: NextRequest) {
             const snap = await getDocs(q);
             const nowIso = new Date().toISOString();
             for (const d of snap.docs) {
-              await updateDoc(d.ref, {
+              const updateData: Record<string, any> = {
                 paymentStatus: "REFUNDED",
                 status: "CANCELLED",
                 refundStatus: "PROCESSED",
                 refundId,
                 refundAmount: Number(refundAmount || 0),
                 refundedAt: nowIso,
-              });
+              };
+              if (refundArn) updateData.refundArn = refundArn;
+              if (refundMode) updateData.refundMode = refundMode;
+              await updateDoc(d.ref, updateData);
             }
           }
         } catch (rfErr) {
@@ -240,6 +245,7 @@ export async function POST(req: NextRequest) {
         refundId,
         orderId,
         refundStatus,
+        refundArn: refundArn || null,
         message: "Refund status acknowledged",
       });
     }
@@ -249,6 +255,24 @@ export async function POST(req: NextRequest) {
       const refundId = refundData?.refund_id;
       const orderId = refundData?.order_id || orderData?.order_id;
       console.warn(`[Cashfree Webhook] Refund FAILED: RefundId=${refundId}, Order=${orderId}`);
+
+      if (orderId) {
+        try {
+          const { db } = await import("@/lib/firebase/config");
+          const { collection, query, where, getDocs, updateDoc } = await import("firebase/firestore");
+          if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+            const q = query(collection(db, "registrations"), where("orderId", "==", orderId));
+            const snap = await getDocs(q);
+            for (const d of snap.docs) {
+              await updateDoc(d.ref, {
+                refundStatus: "FAILED",
+              });
+            }
+          }
+        } catch (fErr) {
+          console.warn("Notice: refund failure sync warning:", fErr);
+        }
+      }
 
       return NextResponse.json({
         status: "REFUND_FAILED",

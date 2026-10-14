@@ -226,10 +226,11 @@ export default function PassVerificationPage() {
     );
   }
 
-  const isCancelled = record.status === "CANCELLED";
-  const isAlreadyCheckedIn = record.status === "CHECKED_IN";
-  const isPaymentPending = record.paymentStatus === "PENDING";
-  const isPaid = record.paymentStatus === "PAID" || (record.amountPaid && record.amountPaid > 0 && !isPaymentPending);
+  const isRefunded = record.refundStatus === "PROCESSED" || record.paymentStatus === "REFUNDED";
+  const isCancelled = record.status === "CANCELLED" || isRefunded;
+  const isAlreadyCheckedIn = record.status === "CHECKED_IN" && !isRefunded;
+  const isPaymentPending = record.paymentStatus === "PENDING" && !isRefunded;
+  const isPaid = (record.paymentStatus === "PAID" || (record.amountPaid && record.amountPaid > 0 && !isPaymentPending)) && !isRefunded;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col items-center justify-start p-4 sm:p-6 lg:p-10 font-sans">
@@ -256,7 +257,9 @@ export default function PassVerificationPage() {
         {/* Verification Status Hero Card */}
         <div
           className={`rounded-3xl p-6 sm:p-8 text-center space-y-4 border-2 shadow-lg relative overflow-hidden transition-all bg-white ${
-            isCancelled
+            isRefunded
+              ? "border-purple-400 shadow-purple-500/10"
+              : isCancelled
               ? "border-rose-400 shadow-rose-500/10"
               : isPaymentPending
               ? "border-amber-400 shadow-amber-500/10"
@@ -268,7 +271,9 @@ export default function PassVerificationPage() {
           {/* Subtle Color Accent Glow */}
           <div
             className={`absolute top-0 right-0 -mr-16 -mt-16 w-48 h-48 rounded-full blur-3xl opacity-15 pointer-events-none ${
-              isCancelled 
+              isRefunded
+                ? "bg-purple-400"
+                : isCancelled 
                 ? "bg-rose-400" 
                 : isPaymentPending
                 ? "bg-amber-400"
@@ -280,7 +285,9 @@ export default function PassVerificationPage() {
 
           <div
             className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto border ${
-              isCancelled
+              isRefunded
+                ? "bg-purple-50 border-purple-200 text-purple-700"
+                : isCancelled
                 ? "bg-rose-50 border-rose-200 text-rose-600"
                 : isPaymentPending
                 ? "bg-amber-50 border-amber-200 text-amber-600"
@@ -300,7 +307,11 @@ export default function PassVerificationPage() {
 
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider">
-              {isCancelled ? (
+              {isRefunded ? (
+                <span className="bg-purple-100 text-purple-900 border border-purple-300 px-3.5 py-1 rounded-full">
+                  🔴 ADMISSION VOIDED • PASS REFUNDED
+                </span>
+              ) : isCancelled ? (
                 <span className="bg-rose-100 text-rose-800 border border-rose-200 px-3.5 py-1 rounded-full">
                   🔴 PASS CANCELLED • VOID
                 </span>
@@ -320,7 +331,9 @@ export default function PassVerificationPage() {
             </div>
 
             <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-slate-900 tracking-tight">
-              {isCancelled
+              {isRefunded
+                ? "Admission Voided (Refund Processed)"
+                : isCancelled
                 ? "Registration Cancelled"
                 : isPaymentPending
                 ? "Payment Awaiting Verification"
@@ -330,7 +343,9 @@ export default function PassVerificationPage() {
             </h1>
 
             <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed font-medium">
-              {isCancelled
+              {isRefunded
+                ? "This accreditation pass was officially refunded and permanently voided. Admission through campus gates is strictly prohibited."
+                : isCancelled
                 ? "This accreditation pass was officially cancelled by the student and is no longer valid for gate entry."
                 : isPaymentPending
                 ? "This registration is recorded, but the student's Paytm payment is awaiting verification by the Treasurer. Gate admission is withheld until verified."
@@ -342,22 +357,38 @@ export default function PassVerificationPage() {
 
           {/* Cancellation details callout if cancelled */}
           {isCancelled && (
-            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-left space-y-1.5 animate-in fade-in duration-200">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-800 block">
-                Cancellation Reason:
+            <div className={`p-4 rounded-2xl border text-left space-y-1.5 animate-in fade-in duration-200 ${
+              isRefunded ? "bg-purple-50 border-purple-200" : "bg-rose-50 border-rose-200"
+            }`}>
+              <span className={`text-[10px] font-bold uppercase tracking-wider block ${
+                isRefunded ? "text-purple-800" : "text-rose-800"
+              }`}>
+                {isRefunded ? "Refund Notice:" : "Cancellation Reason:"}
               </span>
-              <p className="text-xs text-rose-900 font-medium italic">
-                &quot;{record.cancellationReason || "No specific reason provided."}&quot;
+              <p className={`text-xs font-medium italic ${
+                isRefunded ? "text-purple-900" : "text-rose-900"
+              }`}>
+                &quot;{record.cancellationReason || (isRefunded ? "Full refund processed via payment gateway" : "No specific reason provided.")}&quot;
               </p>
               {record.cancelledAt && (
-                <span className="text-[10px] text-rose-500 block pt-1 font-mono">
-                  Cancelled on {new Date(record.cancelledAt).toLocaleString()}
+                <span className={`text-[10px] block pt-1 font-mono ${
+                  isRefunded ? "text-purple-600" : "text-rose-500"
+                }`}>
+                  Processed on {new Date(record.cancelledAt).toLocaleString()}
                 </span>
               )}
-              {record.refundStatus === "PROCESSED" && (
-                <div className="pt-2 border-t border-rose-200 text-[11px] text-blue-700 font-mono font-semibold flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-blue-600" />
-                  <span>Refund of ₹{record.refundAmount || record.amountPaid} processed{record.refundId ? ` (${record.refundId})` : ""}</span>
+              {isRefunded && (
+                <div className="pt-2 border-t border-purple-200 text-[11px] text-purple-900 font-mono font-semibold space-y-1">
+                  <div className="flex items-center gap-1.5 text-purple-800">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-purple-600" />
+                    <span>Full 100% Refund (₹{record.refundAmount || record.amountPaid}) Processed</span>
+                  </div>
+                  {record.refundId && (
+                    <div className="text-[10px] text-purple-700">Refund ID: {record.refundId}</div>
+                  )}
+                  {record.refundArn && (
+                    <div className="text-[10px] text-purple-900 font-bold">Bank ARN / RRN: {record.refundArn}</div>
+                  )}
                 </div>
               )}
             </div>

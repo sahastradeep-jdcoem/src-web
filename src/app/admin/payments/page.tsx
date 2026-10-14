@@ -213,6 +213,7 @@ export default function AdminPaymentsPage() {
   const [isCancelling, setIsCancelling] = useState(false);
 
   const [copiedUtr, setCopiedUtr] = useState<string | null>(null);
+  const [checkingStatusId, setCheckingStatusId] = useState<string | null>(null);
   const [feedbackNotice, setFeedbackNotice] = useState<string | null>(null);
 
   // Payment gateway config modal
@@ -340,6 +341,10 @@ export default function AdminPaymentsPage() {
           refundId: r.refundId,
           refundStatus: r.refundStatus,
           refundAmount: r.refundAmount,
+          refundArn: r.refundArn,
+          refundNote: r.refundNote,
+          refundInitiatedBy: r.refundInitiatedBy,
+          refundMode: r.refundMode,
           refundedAt: r.refundedAt,
           cancellationReason: r.cancellationReason,
           cancelledAt: r.cancelledAt,
@@ -556,17 +561,41 @@ export default function AdminPaymentsPage() {
     });
   }, [filteredByEvent, statusTab, searchQuery]);
 
-  // KPI Metrics Calculation
+  // KPI Metrics Calculation (Strict Revenue & Refund Tracking)
   const kpiStats = useMemo(() => {
-    const paidList = filteredByEvent.filter((r) => r.paymentStatus === "PAID");
-    const totalGrossRevenue = paidList.reduce((acc, curr) => acc + (curr.amountPaid || 0), 0);
-    const pendingList = filteredByEvent.filter((r) => r.paymentStatus === "PENDING" || (r.status === "PENDING" && r.paymentStatus !== "PAID"));
-    const refundedList = filteredByEvent.filter((r) => r.refundStatus === "PROCESSED" || r.paymentStatus === "REFUNDED");
-    const totalRefundsAmount = refundedList.reduce((acc, curr) => acc + (curr.refundAmount || curr.amountPaid || 0), 0);
+    // Gross revenue: all transactions that were paid (including those subsequently refunded)
+    const allPaidRecords = filteredByEvent.filter(
+      (r) => r.paymentStatus === "PAID" || r.refundStatus === "PROCESSED" || r.paymentStatus === "REFUNDED"
+    );
+    const totalGrossRevenue = allPaidRecords.reduce((acc, curr) => acc + (curr.amountPaid || 0), 0);
+
+    // Active paid passes (strictly excluding refunded, voided, and cancelled)
+    const activePaidList = filteredByEvent.filter(
+      (r) =>
+        (r.paymentStatus === "PAID" || (r.amountPaid && r.amountPaid > 0)) &&
+        r.refundStatus !== "PROCESSED" &&
+        r.paymentStatus !== "REFUNDED" &&
+        r.status !== "CANCELLED"
+    );
+
+    const pendingList = filteredByEvent.filter(
+      (r) => r.paymentStatus === "PENDING" || (r.status === "PENDING" && r.paymentStatus !== "PAID")
+    );
+    const refundedList = filteredByEvent.filter(
+      (r) => r.refundStatus === "PROCESSED" || r.paymentStatus === "REFUNDED"
+    );
+    const totalRefundsAmount = refundedList.reduce(
+      (acc, curr) => acc + (Number(curr.refundAmount) || Number(curr.amountPaid) || 0),
+      0
+    );
+
+    // Strict Net Revenue Invariant: Net Collections = Gross - Total Refunds
+    const totalNetRevenue = Math.max(0, totalGrossRevenue - totalRefundsAmount);
 
     return {
+      totalNetRevenue,
       totalGrossRevenue,
-      totalPaidCount: paidList.length,
+      totalPaidCount: activePaidList.length,
       pendingCount: pendingList.length,
       refundedCount: refundedList.length,
       totalRefundsAmount,
@@ -603,8 +632,11 @@ export default function AdminPaymentsPage() {
       "Pass Status": r.status,
       "Date & Time": r.paidAt || r.registeredAt || "N/A",
       "Refund Status": r.refundStatus || "N/A",
-      "Refund Amount": r.refundAmount || 0,
+      "Refund Amount (INR)": r.refundAmount || (r.refundStatus === "PROCESSED" ? r.amountPaid : 0),
       "Refund ID": r.refundId || "N/A",
+      "Refund Bank ARN": r.refundArn || "N/A",
+      "Refund Reason": r.refundNote || r.cancellationReason || "N/A",
+      "Refund Initiated By": r.refundInitiatedBy || r.cancelledBy || "N/A",
       "Refund Date": r.refundedAt || "N/A",
     }));
 
@@ -624,6 +656,52 @@ export default function AdminPaymentsPage() {
     XLSX.utils.book_append_sheet(wb, ws, "Payments Ledger");
     const safeSlug = selectedEventSlug === "all" ? "All_Events" : selectedEventSlug.replace(/\s+/g, "_");
     XLSX.writeFile(wb, `SRC_Payments_${safeSlug}_${Date.now()}.xlsx`);
+  };
+
+  // Dedicated 1-Click Export for Refunds Audit Ledger
+  const handleExportRefundsExcel = async () => {
+    const refundedRecords = filteredByEvent.filter(
+      (r) => r.refundStatus === "PROCESSED" || r.paymentStatus === "REFUNDED"
+    );
+    if (refundedRecords.length === 0) {
+      alert("No refunded transactions found for this scope.");
+      return;
+    }
+
+    const XLSX = await import("xlsx");
+    const exportRows = refundedRecords.map((r, idx) => ({
+      "Sr No": idx + 1,
+      "Refund ID": r.refundId || "N/A",
+      "Bank ARN / RRN": r.refundArn || "Pending Settlement",
+      "Order ID": r.orderId || "N/A",
+      "Original UPI UTR": r.paymentId || "N/A",
+      "Participant Name": r.participantName,
+      "Phone": r.phone,
+      "Email": r.email,
+      "Department": r.department,
+      "Event Name": r.eventName,
+      "Refund Amount (INR)": r.refundAmount || r.amountPaid || 0,
+      "Refund Status": r.refundStatus || "PROCESSED",
+      "Refund Mode": r.refundMode || "ORIGINAL_PAYMENT_MODE",
+      "Refund Reason": r.refundNote || r.cancellationReason || "N/A",
+      "Refund Initiated By": r.refundInitiatedBy || r.cancelledBy || "SRC Admin",
+      "Refund Timestamp": r.refundedAt || "N/A",
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportRows);
+    const colKeys = Object.keys(exportRows[0] || {});
+    ws["!cols"] = colKeys.map((k) => {
+      const maxLen = Math.max(
+        k.length,
+        ...exportRows.map((r) => String((r as any)[k] !== undefined ? (r as any)[k] : "").length)
+      );
+      return { wch: Math.min(Math.max(maxLen + 3, 14), 45) };
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Refunds Audit Ledger");
+    const safeSlug = selectedEventSlug === "all" ? "All_Events" : selectedEventSlug.replace(/\s+/g, "_");
+    XLSX.writeFile(wb, `SRC_Refunds_Ledger_${safeSlug}_${Date.now()}.xlsx`);
   };
 
   // Approve Payment Action
@@ -688,7 +766,7 @@ export default function AdminPaymentsPage() {
     }
   };
 
-  // Refund Payment Action
+  // Refund Payment Action (Strict 100% Full Ticket Refund)
   const handleRefundConfirm = async () => {
     if (!refundTargetRecord) return;
     if (isScopedEventManager && !isRegistrationOwned(refundTargetRecord)) {
@@ -697,10 +775,10 @@ export default function AdminPaymentsPage() {
     }
     const regDocId = refundTargetRecord.id;
     const regTicketId = refundTargetRecord.registrationId || refundTargetRecord.id;
-    const amountNum = parseFloat(refundAmountInput) || (refundTargetRecord.amountPaid ?? 0);
+    const amountNum = refundTargetRecord.amountPaid ?? 0;
 
     if (amountNum <= 0) {
-      alert("Please enter a valid refund amount.");
+      alert("No valid paid amount found to refund.");
       return;
     }
 
@@ -715,6 +793,7 @@ export default function AdminPaymentsPage() {
         },
         body: JSON.stringify({
           orderId: refundTargetRecord.orderId || refundTargetRecord.paymentId,
+          registrationId: regDocId,
           refundAmount: amountNum,
           refundId: `ref_${Date.now()}`,
           note: refundReasonInput || "Refund issued via SRC Admin Payments Studio",
@@ -725,14 +804,19 @@ export default function AdminPaymentsPage() {
       if (res.ok && data.success) {
         const nowIso = new Date().toISOString();
         const reasonStr = `Refunded: ${refundReasonInput || "Event cancellation / Delegate refund"} (Refund ID: ${data.refundId})`;
+        const adminEmail = auth?.currentUser?.email || "SRC Admin / Treasurer";
 
         await updateRegistrationRefundInFirestore(regDocId, {
           refundId: data.refundId,
-          refundStatus: "PROCESSED",
+          refundStatus: data.status || "PROCESSED",
           refundAmount: amountNum,
+          refundArn: data.refundArn,
+          refundMode: data.refundMode,
+          refundNote: refundReasonInput || "Refund issued via SRC Admin Payments Studio",
+          refundInitiatedBy: adminEmail,
           refundedAt: nowIso,
           cancellationReason: reasonStr,
-          cancelledBy: "SRC Admin / Treasurer",
+          cancelledBy: adminEmail,
         });
 
         // If regTicketId !== regDocId, also attempt updating document with regTicketId
@@ -743,12 +827,16 @@ export default function AdminPaymentsPage() {
               status: "CANCELLED",
               paymentStatus: "REFUNDED",
               refundId: data.refundId,
-              refundStatus: "PROCESSED",
+              refundStatus: data.status || "PROCESSED",
               refundAmount: amountNum,
+              refundArn: data.refundArn || null,
+              refundMode: data.refundMode || null,
+              refundNote: refundReasonInput || "Refund issued via SRC Admin Payments Studio",
+              refundInitiatedBy: adminEmail,
               refundedAt: nowIso,
               cancellationReason: reasonStr,
               cancelledAt: nowIso,
-              cancelledBy: "SRC Admin / Treasurer",
+              cancelledBy: adminEmail,
             });
           } catch {}
         }
@@ -761,19 +849,23 @@ export default function AdminPaymentsPage() {
                   status: "CANCELLED",
                   paymentStatus: "REFUNDED",
                   refundId: data.refundId,
-                  refundStatus: "PROCESSED",
+                  refundStatus: data.status || "PROCESSED",
                   refundAmount: amountNum,
+                  refundArn: data.refundArn || r.refundArn,
+                  refundMode: data.refundMode || r.refundMode,
+                  refundNote: refundReasonInput || "Refund issued via SRC Admin Payments Studio",
+                  refundInitiatedBy: adminEmail,
                   refundedAt: nowIso,
                   cancellationReason: reasonStr,
                   cancelledAt: nowIso,
-                  cancelledBy: "SRC Admin / Treasurer",
+                  cancelledBy: adminEmail,
                 }
               : r
           )
         );
 
-        setFeedbackNotice(`Refund Processed: ₹${amountNum} for ${refundTargetRecord.participantName} (ID: ${data.refundId}).`);
-        setTimeout(() => setFeedbackNotice(null), 5000);
+        setFeedbackNotice(`Refund Processed: ₹${amountNum} for ${refundTargetRecord.participantName} (ID: ${data.refundId}${data.refundArn ? `, Bank ARN: ${data.refundArn}` : ""}).`);
+        setTimeout(() => setFeedbackNotice(null), 6000);
         setRefundTargetRecord(null);
       } else {
         alert(data.error || "Could not process refund.");
@@ -783,6 +875,63 @@ export default function AdminPaymentsPage() {
       alert("Error processing refund. Please try again.");
     } finally {
       setIsRefunding(false);
+    }
+  };
+
+  // Reconcile live status and bank ARN directly from Cashfree Gateway
+  const handleCheckRefundStatus = async (record: RegistrationRecord) => {
+    const orderId = record.orderId || record.paymentId;
+    if (!orderId) {
+      alert("No Order ID found to check status with Cashfree.");
+      return;
+    }
+    setCheckingStatusId(record.id);
+    try {
+      const idToken = auth?.currentUser ? await auth.currentUser.getIdToken() : "";
+      const res = await fetch(
+        `/api/cashfree/refund-status?orderId=${encodeURIComponent(orderId)}${record.refundId ? `&refundId=${encodeURIComponent(record.refundId)}` : ""}`,
+        {
+          headers: {
+            ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+          },
+        }
+      );
+      const data = await res.json();
+      if (res.ok && data.success && data.refund) {
+        const ref = data.refund;
+        await updateRegistrationRefundInFirestore(record.id, {
+          refundId: ref.refundId,
+          refundStatus: ref.status,
+          refundAmount: Number(ref.amount) || Number(record.refundAmount) || Number(record.amountPaid) || 0,
+          refundArn: ref.refundArn,
+          refundMode: ref.refundMode,
+          refundedAt: record.refundedAt || new Date().toISOString(),
+        });
+
+        setRegistrations((prev) =>
+          prev.map((r) =>
+            r.id === record.id || r.registrationId === record.registrationId
+              ? {
+                  ...r,
+                  refundId: ref.refundId,
+                  refundStatus: ref.status,
+                  refundArn: ref.refundArn || r.refundArn,
+                  refundMode: ref.refundMode || r.refundMode,
+                }
+              : r
+          )
+        );
+
+        setFeedbackNotice(`Cashfree Status Synced: ${ref.status}${ref.refundArn ? ` • Bank ARN: ${ref.refundArn}` : ""}`);
+        setTimeout(() => setFeedbackNotice(null), 5000);
+      } else {
+        alert(data.error || "No matching refund record found on Cashfree.");
+      }
+    } catch (err) {
+      console.error("Error querying refund status:", err);
+      alert("Network error checking refund status.");
+    } finally {
+      setCheckingStatusId(null);
     }
   };
 
@@ -902,6 +1051,18 @@ export default function AdminPaymentsPage() {
             <span>Sync Cashfree Order</span>
           </button>
 
+          {kpiStats.refundedCount > 0 && (
+            <button
+              type="button"
+              onClick={handleExportRefundsExcel}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold shadow-2xs transition-all cursor-pointer"
+              title="Download dedicated Refunds Audit Ledger (.xlsx) with Bank ARNs and reasons"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-purple-600" />
+              <span>Export Refunds ({kpiStats.refundedCount})</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={handleExportExcel}
@@ -929,20 +1090,20 @@ export default function AdminPaymentsPage() {
 
       {/* 2. KPI METRICS CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Gross Revenue */}
+        {/* Net Collections */}
         <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-2 relative overflow-hidden">
           <div className="flex items-center justify-between text-slate-500">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Gross Collections</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider">Net Collections</span>
             <div className="p-2 rounded-xl bg-emerald-50 text-emerald-700">
               <IndianRupee className="w-4 h-4" />
             </div>
           </div>
           <div className="space-y-0.5">
             <div className="font-heading font-black text-2xl sm:text-3xl text-slate-900 tracking-tight">
-              {!selectedEventSlug ? "—" : `₹${kpiStats.totalGrossRevenue.toLocaleString("en-IN")}`}
+              {!selectedEventSlug ? "—" : `₹${kpiStats.totalNetRevenue.toLocaleString("en-IN")}`}
             </div>
-            <p className="text-[10px] text-slate-400 font-medium">
-              {!selectedEventSlug ? "Select an event to load records" : `From ${kpiStats.totalPaidCount} successful transactions`}
+            <p className="text-[10px] text-slate-500 font-medium truncate">
+              {!selectedEventSlug ? "Select an event to load records" : `Gross: ₹${kpiStats.totalGrossRevenue.toLocaleString("en-IN")} · Refunds: ₹${kpiStats.totalRefundsAmount.toLocaleString("en-IN")}`}
             </p>
           </div>
         </div>
@@ -1193,6 +1354,37 @@ export default function AdminPaymentsPage() {
         </div>
       </div>
 
+      {/* Refunds Audit Ledger Banner */}
+      {statusTab === "refunded" && (
+        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-purple-500/10 via-purple-50 to-indigo-50 border-2 border-purple-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm animate-in fade-in duration-200">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-purple-700 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <RotateCcw className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-xs font-extrabold text-purple-950 uppercase tracking-wider flex items-center gap-2">
+                <span>Institutional Refunds Audit Ledger</span>
+                <span className="px-2 py-0.5 rounded-full bg-purple-200 text-purple-900 text-[10px] font-mono font-bold">
+                  {kpiStats.refundedCount} Refunded Pass{kpiStats.refundedCount !== 1 ? "es" : ""} (₹{kpiStats.totalRefundsAmount.toLocaleString("en-IN")})
+                </span>
+              </h4>
+              <p className="text-[11px] text-purple-800 leading-relaxed">
+                All refunded delegate passes are voided from entrance gates. Refunded amounts are strictly excluded from net revenue. Use &ldquo;Sync ARN&rdquo; on any row to reconcile live bank settlement status directly from Cashfree.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleExportRefundsExcel}
+            disabled={kpiStats.refundedCount === 0}
+            className="px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-purple-200" />
+            <span>Export Refunds Ledger (.xlsx)</span>
+          </button>
+        </div>
+      )}
+
       {/* 4. TRANSACTIONS LEDGER TABLE */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
@@ -1349,13 +1541,37 @@ export default function AdminPaymentsPage() {
                           </span>
                         )}
                         {isRefunded && (
-                          <div className="space-y-0.5">
+                          <div className="space-y-1">
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
                               <RotateCcw className="w-3 h-3 text-purple-600" />
                               Refunded
                             </span>
                             {r.refundId && (
-                              <div className="text-[9px] font-mono text-purple-600">ID: {r.refundId}</div>
+                              <div className="text-[9px] font-mono text-purple-700 font-semibold truncate max-w-[140px]" title={r.refundId}>
+                                ID: {r.refundId}
+                              </div>
+                            )}
+                            {r.refundArn ? (
+                              <div className="text-[9px] font-mono text-slate-600 flex items-center gap-1">
+                                <span>ARN:</span>
+                                <span className="font-bold text-slate-800">{r.refundArn}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopy(r.refundArn!, `arn-${r.id}`)}
+                                  title="Copy Bank ARN / RRN"
+                                  className="p-0.5 rounded text-slate-400 hover:text-slate-700 cursor-pointer"
+                                >
+                                  {copiedUtr === `arn-${r.id}` ? (
+                                    <Check className="w-2.5 h-2.5 text-emerald-600" />
+                                  ) : (
+                                    <Copy className="w-2.5 h-2.5" />
+                                  )}
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-[9px] font-mono text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60 block w-fit">
+                                ARN Pending Bank
+                              </span>
                             )}
                           </div>
                         )}
@@ -1370,6 +1586,20 @@ export default function AdminPaymentsPage() {
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* Sync ARN (For Refunded records) */}
+                          {isRefunded && (
+                            <button
+                              type="button"
+                              onClick={() => handleCheckRefundStatus(r)}
+                              disabled={checkingStatusId === r.id}
+                              title="Reconcile live bank settlement status and ARN from Cashfree"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-[11px] font-bold transition-all cursor-pointer disabled:opacity-50"
+                            >
+                              <RefreshCw className={`w-3 h-3 ${checkingStatusId === r.id ? "animate-spin" : ""}`} />
+                              <span>Sync ARN</span>
+                            </button>
+                          )}
+
                           {/* Approve (For Pending) */}
                           {isPending && (
                             <Button
@@ -1540,18 +1770,18 @@ export default function AdminPaymentsPage() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                Refund Amount (₹)
-              </label>
-              <input
-                type="number"
-                step="1"
-                max={refundTargetRecord.amountPaid ?? 0}
-                value={refundAmountInput}
-                onChange={(e) => setRefundAmountInput(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
-              />
+            <div className="p-3.5 rounded-2xl bg-purple-50/70 border border-purple-200 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold text-purple-900 uppercase tracking-wider block">
+                  Refund Amount (100% Full Ticket Refund)
+                </span>
+                <span className="font-heading font-black text-xl text-purple-950">
+                  ₹{(refundTargetRecord.amountPaid ?? 0).toFixed(2)}
+                </span>
+              </div>
+              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-200 text-purple-900">
+                Direct to Source
+              </span>
             </div>
 
             <div className="space-y-1.5">
@@ -1710,15 +1940,25 @@ export default function AdminPaymentsPage() {
               {historyRecord.refundStatus && (
                 <div className="relative">
                   <div className="absolute -left-[32px] top-1 w-3.5 h-3.5 rounded-full bg-purple-500 ring-4 ring-white shadow-2xs" />
-                  <div className="font-bold text-xs text-purple-900">Refund Processed</div>
+                  <div className="font-bold text-xs text-purple-900">Refund Processed (100% Full Refund)</div>
                   <div className="text-[11px] text-slate-600">
-                    Refund of <strong>₹{historyRecord.refundAmount || historyRecord.amountPaid || 0}</strong> issued.
+                    Full refund of <strong>₹{historyRecord.refundAmount || historyRecord.amountPaid || 0}</strong> credited back to source.
                   </div>
                   <div className="text-[10px] font-mono text-purple-700">
                     Refund ID: {historyRecord.refundId || "N/A"}
                   </div>
-                  <div className="text-[10px] text-slate-400">
-                    {historyRecord.refundedAt ? new Date(historyRecord.refundedAt).toLocaleString("en-IN") : "Processed"}
+                  {historyRecord.refundArn && (
+                    <div className="text-[10px] font-mono text-slate-700 font-bold">
+                      Bank Settlement ARN: {historyRecord.refundArn}
+                    </div>
+                  )}
+                  {historyRecord.refundNote && (
+                    <div className="text-[11px] text-slate-500 italic mt-0.5">
+                      Note: &ldquo;{historyRecord.refundNote}&rdquo;
+                    </div>
+                  )}
+                  <div className="text-[10px] text-slate-400 mt-0.5">
+                    Initiated by {historyRecord.refundInitiatedBy || historyRecord.cancelledBy || "SRC Admin"} • {historyRecord.refundedAt ? new Date(historyRecord.refundedAt).toLocaleString("en-IN") : "Processed"}
                   </div>
                 </div>
               )}

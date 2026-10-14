@@ -59,7 +59,7 @@ export interface StudentRegistrationRecord {
   allMemberEmails?: string[]; // All participant emails (leader + teammates) for targeted queries
   allMemberBtIds?: string[]; // All participant BT IDs (leader + teammates) for targeted queries
   status: "CONFIRMED" | "WAITLISTED" | "CHECKED_IN" | "CANCELLED";
-  paymentStatus?: "FREE" | "PAID" | "PENDING" | "FAILED";
+  paymentStatus?: "FREE" | "PAID" | "PENDING" | "FAILED" | "REFUNDED";
   paymentId?: string; // Gateway Payment / Transaction ID
   orderId?: string; // Gateway Order ID
   amountPaid?: number; // In INR (e.g. 150)
@@ -82,8 +82,12 @@ export interface StudentRegistrationRecord {
   cancelledAt?: string;
   cancelledBy?: string;
   refundId?: string;
-  refundStatus?: "INITIATED" | "PROCESSED" | "FAILED";
+  refundStatus?: "INITIATED" | "PROCESSED" | "FAILED" | string;
   refundAmount?: number;
+  refundArn?: string;
+  refundNote?: string;
+  refundInitiatedBy?: string;
+  refundMode?: string;
   refundedAt?: string;
 }
 
@@ -1738,33 +1742,45 @@ export async function updateRegistrationRefundInFirestore(
   registrationId: string,
   refundDetails: {
     refundId: string;
-    refundStatus: "INITIATED" | "PROCESSED" | "FAILED";
+    refundStatus: "INITIATED" | "PROCESSED" | "FAILED" | string;
     refundAmount: number;
-    refundedAt: string;
+    refundedAt?: string;
+    refundArn?: string;
+    refundNote?: string;
+    refundInitiatedBy?: string;
+    refundMode?: string;
     cancellationReason?: string;
     cancelledBy?: string;
   }
 ): Promise<boolean> {
   if (!registrationId) return false;
 
+  const finalRefundedAt = refundDetails.refundedAt || new Date().toISOString();
   const cancellationReason = refundDetails.cancellationReason || `Refund processed (ID: ${refundDetails.refundId})`;
   const cancelledBy = refundDetails.cancelledBy || "SRC Admin / Treasurer";
+
+  const refundPayload: Record<string, any> = {
+    refundId: refundDetails.refundId,
+    refundStatus: refundDetails.refundStatus,
+    refundAmount: refundDetails.refundAmount,
+    refundedAt: finalRefundedAt,
+    status: "CANCELLED",
+    paymentStatus: "REFUNDED",
+    cancellationReason,
+    cancelledAt: finalRefundedAt,
+    cancelledBy,
+  };
+
+  if (refundDetails.refundArn) refundPayload.refundArn = refundDetails.refundArn;
+  if (refundDetails.refundNote) refundPayload.refundNote = refundDetails.refundNote;
+  if (refundDetails.refundInitiatedBy) refundPayload.refundInitiatedBy = refundDetails.refundInitiatedBy;
+  if (refundDetails.refundMode) refundPayload.refundMode = refundDetails.refundMode;
 
   // 1. Update in Firestore
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       const docRef = doc(db, REGISTRATIONS_COLLECTION, registrationId);
-      await updateDoc(docRef, {
-        refundId: refundDetails.refundId,
-        refundStatus: refundDetails.refundStatus,
-        refundAmount: refundDetails.refundAmount,
-        refundedAt: refundDetails.refundedAt,
-        status: "CANCELLED",
-        paymentStatus: "REFUNDED",
-        cancellationReason,
-        cancelledAt: refundDetails.refundedAt,
-        cancelledBy,
-      });
+      await updateDoc(docRef, refundPayload);
     }
   } catch (error) {
     console.warn("Firestore refund update error for registration:", registrationId, error);
@@ -1778,15 +1794,7 @@ export async function updateRegistrationRefundInFirestore(
         r.id === registrationId || r.registrationId === registrationId
           ? {
               ...r,
-              refundId: refundDetails.refundId,
-              refundStatus: refundDetails.refundStatus,
-              refundAmount: refundDetails.refundAmount,
-              refundedAt: refundDetails.refundedAt,
-              status: "CANCELLED",
-              paymentStatus: "REFUNDED",
-              cancellationReason,
-              cancelledAt: refundDetails.refundedAt,
-              cancelledBy,
+              ...refundPayload,
             }
           : r
       );

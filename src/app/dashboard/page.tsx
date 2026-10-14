@@ -18,6 +18,7 @@ import {
   ArrowRight, 
   Sparkles, 
   AlertTriangle,
+  RotateCcw,
   Ticket,
   User,
   LogOut,
@@ -512,6 +513,9 @@ export default function StudentDashboardPage() {
           refundId: r.refundId,
           refundStatus: r.refundStatus,
           refundAmount: r.refundAmount,
+          refundArn: r.refundArn,
+          refundNote: r.refundNote,
+          refundMode: r.refundMode,
           refundedAt: r.refundedAt,
         };
       });
@@ -2578,6 +2582,7 @@ export default function StudentDashboardPage() {
 
                     const isCheckedIn = pass.status === "CHECKED_IN";
                     const isCancelled = pass.status === "CANCELLED";
+                    const isRefunded = pass.refundStatus === "PROCESSED" || pass.paymentStatus === "REFUNDED";
 
                     return (
                       <div
@@ -2585,6 +2590,8 @@ export default function StudentDashboardPage() {
                         className={`rounded-3xl border transition-all p-5 sm:p-6 bg-white shadow-xs hover:shadow-md ${
                           isCheckedIn 
                             ? "border-emerald-200 bg-emerald-50/10" 
+                            : isRefunded
+                            ? "border-purple-200 bg-purple-50/20"
                             : isCancelled 
                             ? "border-slate-200 opacity-60" 
                             : "border-slate-200"
@@ -2616,13 +2623,15 @@ export default function StudentDashboardPage() {
                             <div className="space-y-1.5 flex-1 min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${
-                                  isCheckedIn
+                                  isRefunded
+                                    ? "bg-purple-100 text-purple-900 border border-purple-300"
+                                    : isCheckedIn
                                     ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
                                     : isCancelled
                                     ? "bg-rose-100 text-rose-800"
                                     : "bg-orange-100 text-orange-900 border border-orange-300"
                                 }`}>
-                                  {isCheckedIn ? "Attended & Checked In" : isCancelled ? "Cancelled" : "Confirmed Pass"}
+                                  {isRefunded ? "Refund Completed" : isCheckedIn ? "Attended & Checked In" : isCancelled ? "Cancelled" : "Confirmed Pass"}
                                 </span>
 
                                 <span className="text-[10px] font-bold uppercase text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
@@ -2657,6 +2666,23 @@ export default function StudentDashboardPage() {
                                 <p className="text-[11px] text-slate-500 truncate pt-0.5">
                                   Squad: <strong className="text-slate-700">{pass.teamMembers.join(", ")}</strong>
                                 </p>
+                              )}
+
+                              {isRefunded && (
+                                <div className="mt-2.5 p-3 rounded-2xl bg-purple-50/90 border border-purple-200 text-purple-950 text-xs space-y-1">
+                                  <div className="flex items-center justify-between font-bold text-[11px]">
+                                    <span className="flex items-center gap-1.5 text-purple-900">
+                                      <RotateCcw className="w-3.5 h-3.5 text-purple-700" />
+                                      <span>Full 100% Refund Credited (₹{(pass.refundAmount || pass.amountPaid || 0).toFixed(2)})</span>
+                                    </span>
+                                    <span className="text-[10px] text-purple-700 font-mono">
+                                      {pass.refundedAt ? new Date(pass.refundedAt).toLocaleDateString("en-IN") : "Completed"}
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-purple-800 leading-relaxed">
+                                    Funds were refunded directly to your original payment source via Cashfree. {pass.refundArn ? `Bank ARN: ${pass.refundArn}` : "Bank settlement reference is updating."}
+                                  </p>
+                                </div>
                               )}
                             </div>
                           </div>

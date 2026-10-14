@@ -275,6 +275,10 @@ export interface RegistrationRecord {
   refundStatus?: "INITIATED" | "PROCESSED" | "FAILED";
   refundAmount?: number;
   refundedAt?: string;
+  refundArn?: string;
+  refundNote?: string;
+  refundInitiatedBy?: string;
+  refundMode?: string;
   eventId?: string;
   tenureId?: string;
   verifiedBy?: string;

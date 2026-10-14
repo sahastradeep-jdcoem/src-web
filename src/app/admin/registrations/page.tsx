@@ -883,8 +883,10 @@ export default function AdminRegistrationsPage() {
 
       const matchesStatus =
         statusFilter === "All" ||
-        r.status === statusFilter ||
-        (statusFilter === "PENDING" && (r.paymentStatus === "PENDING" || r.status === "PENDING"));
+        (statusFilter === "REFUNDED" && (r.refundStatus === "PROCESSED" || r.paymentStatus === "REFUNDED")) ||
+        (statusFilter === "CONFIRMED" && r.status === "CONFIRMED" && r.refundStatus !== "PROCESSED" && r.paymentStatus !== "REFUNDED") ||
+        (statusFilter === "PENDING" && (r.paymentStatus === "PENDING" || r.status === "PENDING")) ||
+        (statusFilter !== "REFUNDED" && statusFilter !== "CONFIRMED" && statusFilter !== "PENDING" && r.status === statusFilter);
 
       return matchesSearch && matchesStatus;
     });
@@ -894,8 +896,21 @@ export default function AdminRegistrationsPage() {
   const metrics = useMemo(() => {
     const total = eventRegistrations.length;
     const checkedIn = eventRegistrations.filter((r) => r.status === "CHECKED_IN").length;
-    const revenue = eventRegistrations.reduce((sum, r) => sum + (r.amountPaid || 0), 0);
-    const paidCount = eventRegistrations.filter((r) => r.paymentStatus === "PAID").length;
+    
+    // Strict invariant: Refunded and Cancelled transactions must NEVER be counted as revenue
+    const revenue = eventRegistrations.reduce((sum, r) => {
+      if (r.refundStatus === "PROCESSED" || r.paymentStatus === "REFUNDED" || r.status === "CANCELLED") {
+        return sum;
+      }
+      if (r.paymentStatus === "PAID") {
+        return sum + (r.amountPaid || 0);
+      }
+      return sum;
+    }, 0);
+
+    const paidCount = eventRegistrations.filter(
+      (r) => r.paymentStatus === "PAID" && r.status !== "CANCELLED" && r.refundStatus !== "PROCESSED"
+    ).length;
     const pendingPaymentCount = eventRegistrations.filter((r) => r.paymentStatus === "PENDING").length;
     const teamCount = eventRegistrations.filter((r) => r.teamType === "Team").length;
     const soloCount = total - teamCount;
@@ -914,16 +929,18 @@ export default function AdminRegistrationsPage() {
       years[y] = (years[y] || 0) + 1;
     });
 
-    const refundedCount = eventRegistrations.filter((r) => r.refundStatus === "PROCESSED").length;
+    const refundedCount = eventRegistrations.filter(
+      (r) => r.refundStatus === "PROCESSED" || r.paymentStatus === "REFUNDED"
+    ).length;
     const refundedAmount = eventRegistrations.reduce(
-      (sum, r) => sum + (r.refundStatus === "PROCESSED" ? (r.refundAmount || r.amountPaid || 0) : 0),
+      (sum, r) => sum + (r.refundStatus === "PROCESSED" || r.paymentStatus === "REFUNDED" ? (r.refundAmount || r.amountPaid || 0) : 0),
       0
     );
     const eligibleForRefund = eventRegistrations.filter(
       (r) =>
-        r.status === "CANCELLED" &&
         ((r.amountPaid && r.amountPaid > 0) || r.paymentStatus === "PAID") &&
         r.refundStatus !== "PROCESSED" &&
+        r.paymentStatus !== "REFUNDED" &&
         r.paymentId &&
         r.paymentId !== "N/A"
     );
@@ -1363,7 +1380,7 @@ export default function AdminRegistrationsPage() {
     }
 
     const refundAmount = record.amountPaid || 0;
-    const confirmMsg = `Initiate refund of ₹${refundAmount} for ${record.participantName} (${record.registrationId})?`;
+    const confirmMsg = `Initiate full 100% refund of ₹${refundAmount} for ${record.participantName} (${record.registrationId})?\n\nThis will credit the full registration fee back to the participant's original payment source via Cashfree.`;
     if (!confirm(confirmMsg)) return;
 
     setRefundingId(record.id);
@@ -1377,9 +1394,10 @@ export default function AdminRegistrationsPage() {
         },
         body: JSON.stringify({
           orderId: record.orderId || record.paymentId,
+          registrationId: record.id,
           refundAmount: refundAmount,
           refundId: `ref_${Date.now()}`,
-          note: "Refund initiated by SRC Council Admin",
+          note: `Refund for ${record.participantName} (${record.eventName}) by ${auth?.currentUser?.email || "SRC Admin"}`,
         }),
       });
 
@@ -1391,6 +1409,10 @@ export default function AdminRegistrationsPage() {
           refundStatus: data.status,
           refundAmount: data.amount || refundAmount,
           refundedAt: nowIso,
+          refundArn: data.refundArn,
+          refundMode: data.refundMode,
+          refundNote: `Refund for ${record.participantName} (${record.eventName})`,
+          refundInitiatedBy: auth?.currentUser?.email || "SRC Admin",
         });
 
         setRegistrations((prev) =>
@@ -1402,6 +1424,9 @@ export default function AdminRegistrationsPage() {
                   refundStatus: data.status,
                   refundAmount: data.amount || refundAmount,
                   refundedAt: nowIso,
+                  refundArn: data.refundArn || r.refundArn,
+                  paymentStatus: "REFUNDED",
+                  status: "CANCELLED" as any,
                 }
               : r
           )
@@ -1416,6 +1441,9 @@ export default function AdminRegistrationsPage() {
                   refundStatus: data.status,
                   refundAmount: data.amount || refundAmount,
                   refundedAt: nowIso,
+                  refundArn: data.refundArn || prev.refundArn,
+                  paymentStatus: "REFUNDED",
+                  status: "CANCELLED" as any,
                 }
               : null
           );
@@ -1442,7 +1470,7 @@ export default function AdminRegistrationsPage() {
     const regId = record.registrationId || record.id;
     if (!regId) return;
 
-    if (!confirm(`Approve Paytm UPI payment (UTR: ${record.paymentId}) of ₹${record.amountPaid || 0} for ${record.participantName}?\n\nThis will mark the pass as PAID and unlock admission gate clearance.`)) {
+    if (!confirm(`Approve payment (UTR: ${record.paymentId}) of ₹${record.amountPaid || 0} for ${record.participantName}?\n\nThis will mark the pass as PAID and unlock admission gate clearance.`)) {
       return;
     }
 
@@ -1485,7 +1513,7 @@ export default function AdminRegistrationsPage() {
 
     const reason = prompt(
       `Reject payment for ${record.participantName} (UTR: ${record.paymentId})?\nEnter cancellation reason for the student:`,
-      "Payment UTR not received or invalid in Paytm statement"
+      "Payment UTR not received or invalid in statement"
     );
     if (reason === null) return; // User pressed Cancel
 
@@ -1553,7 +1581,7 @@ export default function AdminRegistrationsPage() {
     }
 
     const totalPayout = eligible.reduce((sum, r) => sum + (r.amountPaid || 0), 0);
-    const confirmMsg = `Are you sure you want to refund all ${eligible.length} paid delegate passes for "${currentSelectedEventObj?.name || selectedEventSlug}"?\n\nTotal refund amount: ₹${totalPayout.toLocaleString("en-IN")}\n\nThis will initiate direct refunds via Paytm for Business to delegates' original payment methods.`;
+    const confirmMsg = `Are you sure you want to refund all ${eligible.length} paid delegate passes for "${currentSelectedEventObj?.name || selectedEventSlug}"?\n\nTotal refund payout: ₹${totalPayout.toLocaleString("en-IN")}\n\nThis will initiate direct refunds via Cashfree Payment Gateway back to delegates' original payment sources.`;
     if (!confirm(confirmMsg)) return;
 
     setBulkRefunding(true);
@@ -1577,9 +1605,10 @@ export default function AdminRegistrationsPage() {
           },
           body: JSON.stringify({
             orderId: record.orderId || record.paymentId,
+            registrationId: record.id,
             refundAmount: record.amountPaid || 0,
             refundId: `ref_bulk_${Date.now()}_${i}`,
-            note: `Event cancelled by SRC: ${currentSelectedEventObj?.cancellationNotice || currentSelectedEventObj?.name || "Event cancelled"}`,
+            note: `Event refund by SRC: ${currentSelectedEventObj?.cancellationNotice || currentSelectedEventObj?.name || "Event delegate refund"}`,
           }),
         });
 
@@ -1591,6 +1620,10 @@ export default function AdminRegistrationsPage() {
             refundStatus: data.status,
             refundAmount: data.amount || record.amountPaid || 0,
             refundedAt: nowIso,
+            refundArn: data.refundArn,
+            refundMode: data.refundMode,
+            refundNote: `Bulk refund for event ${currentSelectedEventObj?.name || selectedEventSlug}`,
+            refundInitiatedBy: auth?.currentUser?.email || "SRC Admin / Treasurer",
           });
 
           setRegistrations((prev) =>
@@ -1602,6 +1635,9 @@ export default function AdminRegistrationsPage() {
                     refundStatus: data.status,
                     refundAmount: data.amount || record.amountPaid || 0,
                     refundedAt: nowIso,
+                    refundArn: data.refundArn || r.refundArn,
+                    paymentStatus: "REFUNDED",
+                    status: "CANCELLED" as any,
                   }
                 : r
             )
@@ -1816,6 +1852,9 @@ export default function AdminRegistrationsPage() {
         rowData["Order ID"] = sanitizeExcelCell(r.orderId || "N/A");
         rowData["Refund Status"] = sanitizeExcelCell(r.refundStatus || "—");
         rowData["Refund ID"] = sanitizeExcelCell(r.refundId || "—");
+        rowData["Refund Bank ARN"] = sanitizeExcelCell(r.refundArn || "—");
+        rowData["Refund Note / Reason"] = sanitizeExcelCell(r.refundNote || "—");
+        rowData["Refund Initiated By"] = sanitizeExcelCell(r.refundInitiatedBy || "—");
         rowData["Refund Amount (INR)"] = r.refundAmount !== undefined ? Number(r.refundAmount) : (r.refundStatus === "PROCESSED" ? Number(r.amountPaid) : 0);
         rowData["Refunded At"] = sanitizeExcelCell(r.refundedAt ? new Date(r.refundedAt).toLocaleString() : "—");
       }
@@ -3012,7 +3051,7 @@ export default function AdminRegistrationsPage() {
             <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-xs font-bold text-slate-500 mr-1">Status:</span>
-                {["All", "CONFIRMED", "CHECKED_IN", "CANCELLED", "PENDING"].map((st) => (
+                {["All", "CONFIRMED", "CHECKED_IN", "CANCELLED", "PENDING", "REFUNDED"].map((st) => (
                   <button
                     key={st}
                     onClick={() => setStatusFilter(st)}

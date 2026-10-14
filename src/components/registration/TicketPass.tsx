@@ -158,15 +158,15 @@ export function TicketPass({
           id="src-delegate-pass-card"
           className="relative w-full sm:w-[680px] md:w-[720px] max-w-full rounded-2xl sm:rounded-3xl bg-white border border-slate-200/90 shadow-xl overflow-hidden text-left mx-auto font-sans"
         >
-          {/* Cancelled Pass Watermark Overlay */}
-          {status === "CANCELLED" && (
+          {/* Cancelled / Refunded Pass Watermark Overlay */}
+          {(status === "CANCELLED" || paymentStatus === "REFUNDED") && (
             <div className="absolute inset-0 bg-white/70 backdrop-blur-[1px] z-20 flex items-center justify-center pointer-events-none p-6">
               <div className="rotate-[-10deg] border-4 border-rose-600 px-6 sm:px-8 py-3 sm:py-4 rounded-2xl bg-rose-50/95 shadow-2xl text-center space-y-1 max-w-xs sm:max-w-sm">
                 <span className="font-heading font-black text-xl sm:text-3xl text-rose-600 tracking-widest block uppercase">
-                  CANCELLED • VOID
+                  {paymentStatus === "REFUNDED" ? "REFUNDED • VOID" : "CANCELLED • VOID"}
                 </span>
                 <span className="text-[10px] sm:text-[11px] font-bold text-rose-800 tracking-wider block uppercase font-mono">
-                  Accreditation Inactivated
+                  {paymentStatus === "REFUNDED" ? "Fee Refunded • Admission Inactivated" : "Accreditation Inactivated"}
                 </span>
               </div>
             </div>
@@ -265,11 +265,11 @@ export function TicketPass({
                     {teamType === "Team" ? teamName || "Team Entry" : "Individual Entry"}
                   </p>
                   <Badge 
-                    variant={status === "CHECKED_IN" ? "success" : status === "CANCELLED" ? "rose" : paymentStatus === "PENDING" ? "warning" : "orange"} 
+                    variant={status === "CHECKED_IN" ? "success" : (status === "CANCELLED" || paymentStatus === "REFUNDED") ? "rose" : paymentStatus === "PENDING" ? "warning" : "orange"} 
                     size="sm" 
                     className="mt-1 text-[9px] sm:text-[10px] py-0.5 px-2 sm:px-2.5 font-bold uppercase tracking-wider"
                   >
-                    {paymentStatus === "PENDING" ? "PENDING REVIEW" : (status || "CONFIRMED")}
+                    {paymentStatus === "REFUNDED" ? "REFUNDED" : paymentStatus === "PENDING" ? "PENDING REVIEW" : (status || "CONFIRMED")}
                   </Badge>
                 </div>
               </div>
@@ -312,7 +312,9 @@ export function TicketPass({
                   {ticketCode}
                 </span>
                 <p className="text-[9px] sm:text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1 leading-normal overflow-visible">
-                  {paymentStatus === "PENDING" ? (
+                  {paymentStatus === "REFUNDED" ? (
+                    <span className="text-rose-700 font-bold">Pass Voided (Refunded)</span>
+                  ) : paymentStatus === "PENDING" ? (
                     <>
                       <Clock className="w-2.5 h-2.5 text-amber-600 shrink-0" />
                       <span className="text-amber-700 font-bold">Awaiting Verification</span>
