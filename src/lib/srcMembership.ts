@@ -115,44 +115,7 @@ export function verifySrcMemberByBtId(
     };
   }
 
-  // 4. Chartered Clubs - Leaders (Heads & Co-Heads)
-  const clubs = getStoredClubs().length > 0 ? getStoredClubs() : mockClubs;
-  for (const club of clubs) {
-    const leaders = getClubLeaders(club);
-    for (const leader of leaders) {
-      if (leader.btId && clean(leader.btId) === cleanBtId) {
-        const isCoHead = leader.roleType === "coLead" || (leader.role && leader.role.toLowerCase().includes("co-head"));
-        return {
-          isSrcMember: true,
-          designationBadge: `${club.name} ${isCoHead ? "Co-Head" : "Head"}`,
-          level: "Club Leadership",
-          name: leader.name,
-          department: leader.department,
-          year: leader.year,
-          avatar: leader.avatar,
-          clubName: club.name,
-        };
-      }
-    }
-
-    // 5. Chartered Clubs - Regular Members
-    if (Array.isArray(club.members)) {
-      const matchedMember = club.members.find((m: ClubMember) => m.btId && clean(m.btId) === cleanBtId);
-      if (matchedMember) {
-        return {
-          isSrcMember: true,
-          designationBadge: `${club.name} Member`,
-          level: "Club Member",
-          name: matchedMember.name,
-          department: matchedMember.department,
-          year: matchedMember.year,
-          clubName: club.name,
-        };
-      }
-    }
-  }
-
-  // 6. Founding Council
+  // 4. Founding Council (checked before clubs to preserve executive hierarchy)
   const founders = getStoredFoundingMembers().length > 0 ? getStoredFoundingMembers() : foundingMembers;
   const matchedFounder = founders.find((m) => m.btId && clean(m.btId) === cleanBtId);
   if (matchedFounder) {
@@ -167,7 +130,8 @@ export function verifySrcMemberByBtId(
     };
   }
 
-  // 7. Active Council Tenures
+  // 5. Active Council Tenures — Executive roles only (admin council, hosting, founding)
+  // Must be checked BEFORE chartered clubs to prevent club ownership from demoting council badges.
   const tenures = getStoredTenures();
   for (const tenure of tenures) {
     const allTenureMembers: TeamMember[] = [
@@ -187,7 +151,47 @@ export function verifySrcMemberByBtId(
         avatar: foundInTenure.avatar,
       };
     }
+  }
 
+  // 6. Chartered Clubs — Leaders (Heads & Co-Heads)
+  const clubs = getStoredClubs().length > 0 ? getStoredClubs() : mockClubs;
+  for (const club of clubs) {
+    const leaders = getClubLeaders(club);
+    for (const leader of leaders) {
+      if (leader.btId && clean(leader.btId) === cleanBtId) {
+        const isCoHead = leader.roleType === "coLead" || (leader.role && leader.role.toLowerCase().includes("co-head"));
+        return {
+          isSrcMember: true,
+          designationBadge: `${club.name} ${isCoHead ? "Co-Head" : "Head"}`,
+          level: "Club Leadership",
+          name: leader.name,
+          department: leader.department,
+          year: leader.year,
+          avatar: leader.avatar,
+          clubName: club.name,
+        };
+      }
+    }
+
+    // 7. Chartered Clubs — Regular Members
+    if (Array.isArray(club.members)) {
+      const matchedMember = club.members.find((m: ClubMember) => m.btId && clean(m.btId) === cleanBtId);
+      if (matchedMember) {
+        return {
+          isSrcMember: true,
+          designationBadge: `${club.name} Member`,
+          level: "Club Member",
+          name: matchedMember.name,
+          department: matchedMember.department,
+          year: matchedMember.year,
+          clubName: club.name,
+        };
+      }
+    }
+  }
+
+  // 8. Tenure Club Leaders (from non-active or archived tenures)
+  for (const tenure of tenures) {
     if (Array.isArray(tenure.clubs)) {
       for (const club of tenure.clubs) {
         const leaders = getClubLeaders(club);

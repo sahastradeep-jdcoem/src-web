@@ -18,6 +18,7 @@ import {
   getStoredFoundingMembers,
   getClubLeaders
 } from "./councilStore";
+import { getStoredTenures } from "./tenureStore";
 import { safeStorageSet } from "@/lib/safeStorage";
 
 export const USERS_STORAGE_KEY = "src_registered_users";
@@ -527,6 +528,39 @@ export interface RosterCache {
   founders?: any[];
 }
 
+/**
+ * Fuzzy name compatibility check that handles phonetic/spelling variations
+ * (e.g., "Tanvi" vs "Tanvee", "Siddhi" vs "Siddi").
+ * Returns true if the names are likely the same person.
+ */
+function isNameCompatible(nameA: string, nameB: string): boolean {
+  const a = nameA.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  const b = nameB.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!a || !b) return true; // If either is empty, skip name check
+
+  // Direct substring match (existing logic)
+  if (a.includes(b) || b.includes(a)) return true;
+
+  // Surname match: if both share the same last token (surname)
+  const aParts = nameA.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const bParts = nameB.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (aParts.length >= 2 && bParts.length >= 2) {
+    const aSurname = aParts[aParts.length - 1].replace(/[^a-z]/g, "");
+    const bSurname = bParts[bParts.length - 1].replace(/[^a-z]/g, "");
+    if (aSurname && bSurname && aSurname === bSurname) {
+      // Same surname — check if first names share a prefix of at least 3 chars
+      const aFirst = aParts[0].replace(/[^a-z]/g, "");
+      const bFirst = bParts[0].replace(/[^a-z]/g, "");
+      const prefixLen = Math.min(3, Math.min(aFirst.length, bFirst.length));
+      if (prefixLen >= 3 && aFirst.substring(0, prefixLen) === bFirst.substring(0, prefixLen)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 export function resolveDesignationByBtId(
   btId: string, 
   userName?: string | null,
@@ -539,6 +573,16 @@ export function resolveDesignationByBtId(
   if (!btId || !btId.trim()) return null;
   const cleanBtId = btId.trim().toUpperCase();
 
+  // ── Authoritative overrides: Executive Council Officers whose BT IDs are known ──
+  // These take absolute precedence over any club ownership assignments.
+  if (cleanBtId === "BT240146CS") {
+    return {
+      designationBadge: "Strategic Planning Officer (Extra-Curricular)",
+      isCouncilOfficer: true,
+      category: "Admin Council",
+    };
+  }
+
   // Tier 1: Check Admin Council (Admins)
   const council = rosterCache?.council || getStoredCouncilMembers();
   const matchedCouncil = council.find((m) => {
@@ -548,12 +592,8 @@ export function resolveDesignationByBtId(
       return false;
     }
     // If userName is provided, verify match to prevent identity collision
-    if (userName && m.name) {
-      const uNorm = userName.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-      const mNorm = m.name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-      if (uNorm && mNorm && !uNorm.includes(mNorm) && !mNorm.includes(uNorm)) {
-        return false;
-      }
+    if (userName && m.name && !isNameCompatible(userName, m.name)) {
+      return false;
     }
     return true;
   });
@@ -569,12 +609,8 @@ export function resolveDesignationByBtId(
   const hosting = rosterCache?.hosting || getStoredHostingCommittee();
   const matchedHosting = hosting.find((m) => {
     if (!m.btId || m.btId.trim().toUpperCase() !== cleanBtId) return false;
-    if (userName && m.name) {
-      const uNorm = userName.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-      const mNorm = m.name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-      if (uNorm && mNorm && !uNorm.includes(mNorm) && !mNorm.includes(uNorm)) {
-        return false;
-      }
+    if (userName && m.name && !isNameCompatible(userName, m.name)) {
+      return false;
     }
     return true;
   });
@@ -589,12 +625,8 @@ export function resolveDesignationByBtId(
   const spokes = rosterCache?.spokes || getStoredSpokespersons();
   const matchedSpokes = spokes.find((m) => {
     if (!m.btId || m.btId.trim().toUpperCase() !== cleanBtId) return false;
-    if (userName && m.name) {
-      const uNorm = userName.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-      const mNorm = m.name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-      if (uNorm && mNorm && !uNorm.includes(mNorm) && !mNorm.includes(uNorm)) {
-        return false;
-      }
+    if (userName && m.name && !isNameCompatible(userName, m.name)) {
+      return false;
     }
     return true;
   });
@@ -604,6 +636,40 @@ export function resolveDesignationByBtId(
       isCouncilOfficer: true,
       category: "Spokesperson",
     };
+  }
+  // Tier 2.5: Cross-check ALL tenures' admin council & hosting committee
+  // Catches council members from non-active or freshly-activated tenures that may
+  // not yet appear in getStoredCouncilMembers() due to sync timing.
+  const tenures = getStoredTenures();
+  for (const tenure of tenures) {
+    const tenureCouncil = tenure.adminCouncil || [];
+    const tenureCouncilMatch = tenureCouncil.find((m) => {
+      if (!m.btId || m.btId.trim().toUpperCase() !== cleanBtId) return false;
+      if (m.name && /sarvashree|munesh/i.test(m.name)) return false;
+      if (userName && m.name && !isNameCompatible(userName, m.name)) return false;
+      return true;
+    });
+    if (tenureCouncilMatch) {
+      return {
+        designationBadge: formatDesignationBadge(tenureCouncilMatch.role),
+        isCouncilOfficer: true,
+        category: "Admin Council",
+      };
+    }
+
+    const tenureHosting = tenure.hostingCommittee || [];
+    const tenureHostingMatch = tenureHosting.find((m) => {
+      if (!m.btId || m.btId.trim().toUpperCase() !== cleanBtId) return false;
+      if (userName && m.name && !isNameCompatible(userName, m.name)) return false;
+      return true;
+    });
+    if (tenureHostingMatch) {
+      return {
+        designationBadge: formatDesignationBadge(tenureHostingMatch.role),
+        isCouncilOfficer: true,
+        category: "Hosting Committee",
+      };
+    }
   }
 
   // Tier 3 & 4: Check Chartered Clubs (Head / Co-Head)
@@ -693,12 +759,8 @@ export function resolveDesignationByBtId(
     if (m.name && /sarvashree|munesh/i.test(m.name)) {
       return false;
     }
-    if (userName && m.name) {
-      const uNorm = userName.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-      const mNorm = m.name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-      if (uNorm && mNorm && !uNorm.includes(mNorm) && !mNorm.includes(uNorm)) {
-        return false;
-      }
+    if (userName && m.name && !isNameCompatible(userName, m.name)) {
+      return false;
     }
     return true;
   });
