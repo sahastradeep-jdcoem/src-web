@@ -8,7 +8,8 @@ import {
   Sparkles, 
   History, 
   ArrowRight,
-  Archive
+  Archive,
+  HelpCircle
 } from "lucide-react";
 import { EventCard } from "@/components/events/EventCard";
 import { Badge } from "@/components/ui/Badge";
@@ -253,6 +254,15 @@ export default function EventsPage() {
             </p>
           </div>
 
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/how-to-register"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 text-xs font-bold uppercase tracking-wider transition-all shadow-xs hover:border-[#17458F]"
+            >
+              <HelpCircle className="w-4 h-4 text-[#E78023]" />
+              <span>Registration Guide &amp; Rules</span>
+            </Link>
+          </div>
         </div>
 
         {/* Search Toolbar */}

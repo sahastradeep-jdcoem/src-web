@@ -1511,6 +1511,35 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
               {!existingRegistration && (
                 <>
+                  {/* Important Non-Proxy Registration Guidance Banner */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/80 border border-amber-300 text-amber-950 space-y-2 shadow-2xs">
+                    <div className="flex items-start gap-3">
+                      <div className="h-7 w-7 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+                        <AlertCircle className="w-4 h-4" />
+                      </div>
+                      <div className="space-y-1 text-xs">
+                        <p className="font-bold text-slate-900 text-xs sm:text-sm">
+                          Registering for yourself as <span className="text-[#17458F] font-extrabold">{formData.fullName || user?.displayName}</span> {formData.btId ? `(${formData.btId})` : ""}
+                        </p>
+                        <p className="text-slate-600 leading-relaxed font-medium">
+                          <strong>⚠️ Do not register for a friend through your account.</strong> Every event pass and QR code is permanently locked to the signed-in account holder.
+                        </p>
+                        <div className="pt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500 font-medium">
+                          <span>• <strong>Solo Event:</strong> Your friend must sign in to their own Google account.</span>
+                          <span>• <strong>Team Event:</strong> Add teammates in Step 02 Squad by BT ID.</span>
+                          <Link
+                            href="/how-to-register"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-bold text-[#17458F] hover:text-[#E78023] hover:underline inline-flex items-center gap-1"
+                          >
+                            <span>Read Registration Rules &amp; Guide &rarr;</span>
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     
                     {/* Full Name */}

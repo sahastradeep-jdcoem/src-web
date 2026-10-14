@@ -23,7 +23,8 @@ import {
   GraduationCap,
   Globe,
   Share2,
-  Check
+  Check,
+  HelpCircle
 } from "lucide-react";
 import { 
   getStoredEvents, 
@@ -1144,13 +1145,26 @@ export default function EventDetailPage() {
                       </p>
                     </div>
                   ) : (
-                    <Link
-                      href={`/events/${event.slug}/register`}
-                      className="w-full py-3.5 rounded-2xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs sm:text-sm font-bold uppercase tracking-wider text-center transition-all shadow-md shadow-[#E78023]/25 flex items-center justify-center gap-2 group cursor-pointer"
-                    >
-                      <span>REGISTER NOW</span>
-                      <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-                    </Link>
+                    <div className="space-y-2">
+                      <Link
+                        href={`/events/${event.slug}/register`}
+                        className="w-full py-3.5 rounded-2xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs sm:text-sm font-bold uppercase tracking-wider text-center transition-all shadow-md shadow-[#E78023]/25 flex items-center justify-center gap-2 group cursor-pointer"
+                      >
+                        <span>REGISTER NOW</span>
+                        <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                      </Link>
+                      <div className="text-center pt-0.5">
+                        <Link
+                          href="/how-to-register"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] font-semibold text-slate-500 hover:text-[#17458F] transition-colors inline-flex items-center gap-1"
+                        >
+                          <HelpCircle className="w-3.5 h-3.5 text-[#E78023]" />
+                          <span>Registration &amp; Squad Guidelines</span>
+                        </Link>
+                      </div>
+                    </div>
                   )
                 ) : isUpcoming ? (
                   <div className="space-y-2">

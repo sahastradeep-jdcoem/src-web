@@ -238,6 +238,12 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/how-to-register" className="hover:text-[#17458F] transition-colors flex items-center gap-1.5 font-medium">
+                  <ChevronRight className="w-3 h-3 text-[#17458F]" />
+                  <span>Registration Guide &amp; Rules</span>
+                </Link>
+              </li>
+              <li>
                 <Link href="/about" className="hover:text-[#17458F] transition-colors flex items-center gap-1.5 font-medium">
                   <ChevronRight className="w-3 h-3 text-[#17458F]" />
                   <span>Constitution & Charter</span>

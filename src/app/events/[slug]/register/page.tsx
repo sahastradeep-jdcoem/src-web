@@ -18,7 +18,8 @@ import {
   LogIn,
   CheckCircle2,
   Clock,
-  ShieldCheck
+  ShieldCheck,
+  HelpCircle
 } from "lucide-react";
 import { getStoredEvents, syncEventsFromFirestore, isRegistrationDeadlinePassed, isEventCompletedByDate, getEventEffectiveStatus } from "@/lib/eventsStore";
 import { EventItem } from "@/types";
@@ -810,6 +811,17 @@ export default function EventRegisterPage() {
                   ? `${(selectedSubEvent.status === "Coming Soon" || selectedSubEvent.status === "Dates Coming Soon (Open)" || !selectedSubEvent.date || /\b(coming soon|to be announced|tba|to be decided|tbd)\b/i.test(selectedSubEvent.date)) ? "Dates Coming Soon" : selectedSubEvent.date} • Part of ${event.name}` 
                   : `${isDateComingSoon ? "Dates Coming Soon" : event.date} • ${event.venue}`}
               </p>
+              <div className="pt-1">
+                <Link
+                  href="/how-to-register"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#17458F] text-xs font-bold transition-all shadow-2xs group"
+                >
+                  <HelpCircle className="w-3.5 h-3.5 text-[#E78023]" />
+                  <span>First time registering? View Account &amp; Registration Guidelines &rarr;</span>
+                </Link>
+              </div>
             </div>
 
             {/* Multi-Step Registration Wizard Form */}

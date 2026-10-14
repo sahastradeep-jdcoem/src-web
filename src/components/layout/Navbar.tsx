@@ -17,7 +17,8 @@ import {
   ChevronRight,
   User,
   LogOut,
-  ChevronDown
+  ChevronDown,
+  HelpCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -227,6 +228,15 @@ export default function Navbar() {
                       <span>Edit Student Profile</span>
                     </button>
 
+                    <Link
+                      href="/how-to-register"
+                      onClick={() => setUserDropdownOpen(false)}
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-[#17458F] transition-colors"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5 text-[#17458F]" />
+                      <span>Registration Guide</span>
+                    </Link>
+
                     {isUserAdmin && (
                       <Link
                         href="/admin"
@@ -371,6 +381,15 @@ export default function Navbar() {
               >
                 <LayoutDashboard className="w-4 h-4 text-[#E78023]" />
                 <span>Student Dashboard</span>
+              </Link>
+
+              <Link
+                href="/how-to-register"
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full py-3 min-h-[44px] rounded-xl bg-blue-50/70 border border-blue-200 text-[#17458F] text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-blue-100 transition-colors"
+              >
+                <HelpCircle className="w-4 h-4 text-[#17458F]" />
+                <span>Registration Guide &amp; Rules</span>
               </Link>
 
               {/* ONLY visible in mobile menu if verified admin */}

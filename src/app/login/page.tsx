@@ -12,7 +12,8 @@ import {
   Sparkles, 
   ShieldCheck, 
   CheckCircle2, 
-  AlertCircle
+  AlertCircle,
+  HelpCircle
 } from "lucide-react";
 
 export default function LoginPage() {
@@ -176,6 +177,16 @@ export default function LoginPage() {
                 <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
                   Sign in with any Google account. Onboard seamlessly as a <strong>JDCOEM Student</strong> (with BT ID), <strong>Faculty Member</strong> (no BT ID required), or <strong>Visiting College Delegate</strong>.
                 </p>
+              </div>
+
+              <div className="pt-2 text-center">
+                <Link
+                  href="/how-to-register"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-[#17458F] hover:text-[#E78023] transition-colors"
+                >
+                  <HelpCircle className="w-4 h-4 text-[#E78023]" />
+                  <span>Facing difficulty? Read the Account &amp; Registration Tutorial &rarr;</span>
+                </Link>
               </div>
             </div>
 

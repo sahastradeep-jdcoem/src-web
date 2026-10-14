@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { Modal } from "@/components/ui/Modal";
 import { useAuth } from "@/context/AuthContext";
 import { 
@@ -13,7 +14,8 @@ import {
   Globe,
   ArrowRight,
   ArrowLeft,
-  CheckCircle2
+  CheckCircle2,
+  HelpCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -191,10 +193,18 @@ export function AuthModal() {
               })}
             </div>
 
-            <div className="pt-1 text-center">
+            <div className="pt-1.5 text-center flex flex-col items-center gap-1">
               <span className="text-[10px] sm:text-[11px] text-slate-400 font-medium">
                 You will be prompted to complete required details after Google sign-in.
               </span>
+              <Link
+                href="/how-to-register"
+                onClick={closeAuthModal}
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-[#17458F] hover:text-[#E78023] transition-colors"
+              >
+                <HelpCircle className="w-3 h-3 text-[#E78023]" />
+                <span>New student? Read Account Creation Guide &rarr;</span>
+              </Link>
             </div>
           </div>
         )}
@@ -271,7 +281,7 @@ export function AuthModal() {
                 </p>
               </div>
 
-              <div className="text-center pt-0.5">
+              <div className="text-center pt-0.5 flex flex-col items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => setStep("SELECT_ROLE")}
@@ -279,6 +289,14 @@ export function AuthModal() {
                 >
                   ← Back to role selection
                 </button>
+                <Link
+                  href="/how-to-register"
+                  onClick={closeAuthModal}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-[#17458F] hover:text-[#E78023] transition-colors"
+                >
+                  <HelpCircle className="w-3 h-3 text-[#E78023]" />
+                  <span>View Account &amp; Registration Tutorial</span>
+                </Link>
               </div>
             </div>
 
