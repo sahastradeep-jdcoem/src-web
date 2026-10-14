@@ -1,12 +1,14 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { AlertTriangle, ArrowRight, X, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { isExternalUser } from "@/lib/usersStore";
 import { validateStudentBtId, getDepartmentShortName } from "@/lib/departmentsStore";
 
 export function FlaggedBtIdNotification() {
+  const pathname = usePathname();
   const { user, openProfileModal } = useAuth();
   const [isDismissed, setIsDismissed] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -38,6 +40,30 @@ export function FlaggedBtIdNotification() {
       const dismissed = sessionStorage.getItem(`src_dismiss_flagged_bt_id_${user.uid}`);
       setIsDismissed(dismissed === "true");
     }
+  }, [user?.uid]);
+
+  // When user is on any event registration page, automatically re-activate the notification
+  useEffect(() => {
+    if (pathname && pathname.includes("/register")) {
+      setIsDismissed(false);
+    }
+  }, [pathname]);
+
+  // Listen for explicit event registration trigger events from anywhere in the app
+  useEffect(() => {
+    const handleForceShow = () => {
+      setIsDismissed(false);
+      if (user?.uid) {
+        try {
+          sessionStorage.removeItem(`src_dismiss_flagged_bt_id_${user.uid}`);
+        } catch {}
+      }
+    };
+
+    window.addEventListener("src_show_flagged_bt_id_notification", handleForceShow);
+    return () => {
+      window.removeEventListener("src_show_flagged_bt_id_notification", handleForceShow);
+    };
   }, [user?.uid]);
 
   const handleDismiss = () => {

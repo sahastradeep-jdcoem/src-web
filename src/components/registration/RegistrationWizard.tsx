@@ -41,7 +41,8 @@ import {
   Lock,
   ChevronRight,
   MessageCircle,
-  X
+  X,
+  AlertTriangle
 } from "lucide-react";
 import { CancelRegistrationModal } from "@/components/registration/CancelRegistrationModal";
 import confetti from "canvas-confetti";
@@ -51,7 +52,9 @@ import {
   DEFAULT_DEPARTMENTS,
   syncDepartmentsFromFirestore,
   subscribeToDepartments,
-  resolveCanonicalDepartmentName
+  resolveCanonicalDepartmentName,
+  validateStudentBtId,
+  getDepartmentShortName
 } from "@/lib/departmentsStore";
 import { 
   findRegisteredUserByBtId, 
@@ -87,7 +90,7 @@ export interface TeamMemberEntry {
 }
 
 export function RegistrationWizard({ event }: RegistrationWizardProps) {
-  const { user, openAuthModal, updateUserProfile } = useAuth();
+  const { user, openAuthModal, updateUserProfile, openProfileModal } = useAuth();
   const [departmentsList, setDepartmentsList] = useState<string[]>(DEFAULT_DEPARTMENTS);
 
   const isWhatsappField = (q: any) => {
@@ -200,6 +203,20 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     collegeName: "",
     city: "",
   });
+
+  const isJdcoemStudent = Boolean(
+    user &&
+    !user.isDeleted &&
+    user.status !== "deleted" &&
+    !isExternal &&
+    user.userType !== "EXTERNAL_STUDENT" &&
+    !isFaculty &&
+    !user.employeeId
+  );
+
+  const btValidation = isJdcoemStudent
+    ? validateStudentBtId(formData.btId || user?.btId, formData.department || user?.department)
+    : { isFlagged: false };
 
   // Team Roster State
   const [teamMembers, setTeamMembers] = useState<TeamMemberEntry[]>([]);
@@ -669,6 +686,13 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       return;
     }
 
+    if (!isNonBtIdUser) {
+      const val = validateStudentBtId(formData.btId || user?.btId, formData.department || user?.department);
+      if (val.isFlagged && typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("src_show_flagged_bt_id_notification"));
+      }
+    }
+
     // Check if user already registered for this event
     const dup = await checkExistingStudentRegistration(
       event.id,
@@ -937,6 +961,13 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       return;
     }
     setIsSubmitting(true);
+
+    if (isJdcoemStudent) {
+      const val = validateStudentBtId(formData.btId || user?.btId, formData.department || user?.department);
+      if (val.isFlagged && typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("src_show_flagged_bt_id_notification"));
+      }
+    }
 
     // Safeguard duplicate check before processing registration
     try {
@@ -1511,6 +1542,53 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
               {!existingRegistration && (
                 <>
+                  {/* Flagged BT ID Institutional Advisory Banner */}
+                  {btValidation.isFlagged && (
+                    <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 border-2 border-amber-500 text-slate-900 space-y-3 shadow-md">
+                      <div className="flex items-start gap-3">
+                        <div className="h-8 w-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+                          <AlertTriangle className="w-5 h-5" />
+                        </div>
+                        <div className="space-y-1.5 flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-heading font-black text-amber-900 text-xs sm:text-sm tracking-wide uppercase flex items-center gap-1.5">
+                              <span>⚠️ College BT ID Flagged for Review</span>
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200/80 text-amber-900 border border-amber-300">
+                              Non-Blocking Notice
+                            </span>
+                          </div>
+                          
+                          <p className="text-xs text-slate-800 leading-relaxed font-semibold">
+                            {btValidation.reason || "Your College BT ID format does not match the institutional format for your department."}
+                          </p>
+                          
+                          {btValidation.expectedExample && (
+                            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-white/90 border border-amber-300 text-xs font-mono font-bold text-slate-900 shadow-2xs">
+                              <span className="text-[11px] uppercase text-amber-800 font-sans font-bold">Standard Format:</span>
+                              <span className="text-[#17458F] font-black">{btValidation.expectedExample}</span>
+                            </div>
+                          )}
+
+                          <p className="text-[11px] text-slate-600 leading-relaxed font-medium pt-0.5">
+                            <strong>Note:</strong> You can still proceed with registering for this event. However, to guarantee your certificate generation, attendance confirmation, and leaderboard credits, please update your BT ID in your student profile.
+                          </p>
+
+                          <div className="pt-2">
+                            <button
+                              type="button"
+                              onClick={() => openProfileModal()}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+                            >
+                              <span>Fix BT ID in Profile</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Important Non-Proxy Registration Guidance Banner */}
                   <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/80 border border-amber-300 text-amber-950 space-y-2 shadow-2xs">
                     <div className="flex items-start gap-3">

@@ -47,11 +47,30 @@ import { isExternalUser } from "@/lib/usersStore";
 import { toast } from "@/lib/toastStore";
 import { useSocialShare } from "@/context/SocialShareContext";
 import { checkExistingStudentRegistration, StudentRegistrationRecord } from "@/lib/firebase/firestore";
+import { validateStudentBtId } from "@/lib/departmentsStore";
 
 export default function EventDetailPage() {
   const params = useParams();
   const slug = params?.slug as string;
   const { user, openAuthModal } = useAuth();
+
+  const handleRegistrationClick = () => {
+    if (
+      user &&
+      !user.isDeleted &&
+      user.status !== "deleted" &&
+      !isExternalUser(user) &&
+      user.userType !== "EXTERNAL_STUDENT" &&
+      user.role !== "FACULTY" &&
+      user.userType !== "FACULTY" &&
+      !user.employeeId
+    ) {
+      const val = validateStudentBtId(user.btId, user.department);
+      if (val.isFlagged && typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("src_show_flagged_bt_id_notification"));
+      }
+    }
+  };
 
   const [event, setEvent] = useState<EventItem | null>(null);
   const [parentEvent, setParentEvent] = useState<EventItem | null>(null);
@@ -636,6 +655,7 @@ export default function EventDetailPage() {
                             ) : (
                               <Link
                                 href={`/events/${sub.slug}/register`}
+                                onClick={handleRegistrationClick}
                                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-xs"
                               >
                                 <span>Register</span>
@@ -1148,6 +1168,7 @@ export default function EventDetailPage() {
                     <div className="space-y-2">
                       <Link
                         href={`/events/${event.slug}/register`}
+                        onClick={handleRegistrationClick}
                         className="w-full py-3.5 rounded-2xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs sm:text-sm font-bold uppercase tracking-wider text-center transition-all shadow-md shadow-[#E78023]/25 flex items-center justify-center gap-2 group cursor-pointer"
                       >
                         <span>REGISTER NOW</span>
@@ -1350,6 +1371,7 @@ export default function EventDetailPage() {
             </div>
             <Link
               href={`/events/${event.slug}/register`}
+              onClick={handleRegistrationClick}
               className="flex-1 py-3 px-4 rounded-xl bg-[#E78023] hover:bg-[#D26E17] text-white text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2 shadow-md shadow-[#E78023]/25 min-h-[44px]"
             >
               <span>REGISTER NOW</span>

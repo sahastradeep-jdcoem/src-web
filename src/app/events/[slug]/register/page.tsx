@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/Badge";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { isExternalUser } from "@/lib/usersStore";
+import { validateStudentBtId } from "@/lib/departmentsStore";
 import { checkExistingStudentRegistration, StudentRegistrationRecord } from "@/lib/firebase/firestore";
 
 export default function EventRegisterPage() {
@@ -42,6 +43,19 @@ export default function EventRegisterPage() {
   const [selectedSubEvent, setSelectedSubEvent] = useState<EventItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [existingRegistration, setExistingRegistration] = useState<StudentRegistrationRecord | null>(null);
+
+  // If user has a flagged BT ID, ensure notification is prominently shown when entering registration
+  useEffect(() => {
+    if (user && !isExternal && user.role !== "FACULTY" && user.userType !== "FACULTY" && !user.employeeId) {
+      const validation = validateStudentBtId(user.btId, user.department);
+      if (validation.isFlagged && typeof window !== "undefined") {
+        try {
+          sessionStorage.removeItem(`src_dismiss_flagged_bt_id_${user.uid}`);
+        } catch {}
+        window.dispatchEvent(new CustomEvent("src_show_flagged_bt_id_notification"));
+      }
+    }
+  }, [user, isExternal]);
 
   useEffect(() => {
     if (!user || !event) return;
