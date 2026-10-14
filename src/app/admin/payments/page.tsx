@@ -26,18 +26,20 @@ import {
   IndianRupee,
   RefreshCw,
   FileSpreadsheet,
+  AlertTriangle,
   X
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
-import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, canUserManageEvent } from "@/lib/eventsStore";
+import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, canUserManageEvent, saveStoredEvent } from "@/lib/eventsStore";
 import { getStoredTenures, syncTenuresFromFirestore, subscribeToTenures, CouncilTenure, getLatestAvailableTenure } from "@/lib/tenureStore";
 import { 
   getAllRegistrationsFromFirestore, 
   subscribeToRegistrationsFromFirestore, 
   updateRegistrationRefundInFirestore, 
   updateRegistrationPaymentStatus,
+  cancelEventRegistrations,
   subscribeToSiteContent,
   isTestPassRecord,
   isHubRecord,
@@ -215,6 +217,24 @@ export default function AdminPaymentsPage() {
   const [copiedUtr, setCopiedUtr] = useState<string | null>(null);
   const [checkingStatusId, setCheckingStatusId] = useState<string | null>(null);
   const [feedbackNotice, setFeedbackNotice] = useState<string | null>(null);
+
+  // Cancel Event & Bulk Refund State
+  const [isCancelEventModalOpen, setIsCancelEventModalOpen] = useState(false);
+  const [cancellationNoticeInput, setCancellationNoticeInput] = useState(
+    "Event cancelled by SRC Council. Full registration fee refunded."
+  );
+  const [isCancellingAndRefunding, setIsCancellingAndRefunding] = useState(false);
+  const [bulkRefundProgress, setBulkRefundProgress] = useState<{
+    current: number;
+    total: number;
+    currentParticipant?: string;
+  } | null>(null);
+  const [cancellationSummary, setCancellationSummary] = useState<{
+    successCount: number;
+    failedCount: number;
+    voidedFreeCount: number;
+    totalRefunded: number;
+  } | null>(null);
 
   // Payment gateway config modal
   const [isPaymentConfigOpen, setIsPaymentConfigOpen] = useState(false);
@@ -520,6 +540,52 @@ export default function AdminPaymentsPage() {
       return matchesDirect || matchesChild;
     });
   }, [filteredByTenure, selectedEventSlug, allKnownEvents]);
+
+  // Current selected event object (null if all or empty)
+  const currentSelectedEventObj = useMemo(() => {
+    if (!selectedEventSlug || selectedEventSlug === "all") return null;
+    return (
+      allKnownEvents.find(
+        (e) =>
+          (e.slug && e.slug.toLowerCase() === selectedEventSlug.toLowerCase()) ||
+          (e.name && e.name.toLowerCase() === selectedEventSlug.toLowerCase()) ||
+          e.id === selectedEventSlug
+      ) || null
+    );
+  }, [selectedEventSlug, allKnownEvents]);
+
+  // Paid delegate passes eligible for automated gateway refund
+  const eligibleForBulkRefund = useMemo(() => {
+    if (!currentSelectedEventObj) return [];
+    return filteredByEvent.filter(
+      (r) =>
+        ((r.amountPaid && r.amountPaid > 0) || r.paymentStatus === "PAID") &&
+        r.refundStatus !== "PROCESSED" &&
+        r.paymentStatus !== "REFUNDED"
+    );
+  }, [currentSelectedEventObj, filteredByEvent]);
+
+  // Complimentary / non-paid passes to mark cancelled/voided
+  const eligibleNonPaidForCancel = useMemo(() => {
+    if (!currentSelectedEventObj) return [];
+    return filteredByEvent.filter(
+      (r) =>
+        (!r.amountPaid || r.amountPaid === 0) &&
+        r.paymentStatus !== "PAID" &&
+        r.status !== "CANCELLED"
+    );
+  }, [currentSelectedEventObj, filteredByEvent]);
+
+  // Total ₹ value of unrefunded paid passes under this event
+  const totalBulkRefundAmount = useMemo(() => {
+    return eligibleForBulkRefund.reduce((sum, r) => sum + (Number(r.amountPaid) || 0), 0);
+  }, [eligibleForBulkRefund]);
+
+  // Authorization check for event cancellation
+  const canCancelCurrentEvent = useMemo(() => {
+    if (!currentSelectedEventObj) return false;
+    return canUserManageEvent(currentSelectedEventObj, adminAccess, user?.btId, allKnownEvents);
+  }, [currentSelectedEventObj, adminAccess, user?.btId, allKnownEvents]);
 
   // Primary Table Rows (Filtered by Status Tab & Search)
   const displayedPayments = useMemo(() => {
@@ -878,6 +944,181 @@ export default function AdminPaymentsPage() {
     }
   };
 
+  // Cancel Event & Bulk Refund All Registrations
+  const handleExecuteCancelAndRefund = async () => {
+    if (!currentSelectedEventObj) return;
+    if (!canCancelCurrentEvent) {
+      alert("You do not have permission to cancel this event. Only authorized SRC Admins or Event Coordinators can perform this action.");
+      return;
+    }
+
+    setIsCancellingAndRefunding(true);
+    setBulkRefundProgress({ current: 0, total: eligibleForBulkRefund.length });
+
+    let successCount = 0;
+    let failedCount = 0;
+    let totalRefunded = 0;
+    let voidedFreeCount = 0;
+    const adminEmail = auth?.currentUser?.email || "SRC Admin / Treasurer";
+    const nowIso = new Date().toISOString();
+    const noticeText = cancellationNoticeInput.trim() || "Event cancelled by SRC Council administration.";
+
+    try {
+      // 1. Mark Event as Cancelled in Firestore & local eventsStore
+      const updatedEvent: EventItem = {
+        ...currentSelectedEventObj,
+        isCancelled: true,
+        status: "Cancelled",
+        cancelledAt: nowIso,
+        cancellationNotice: noticeText,
+      };
+      await saveStoredEvent(updatedEvent);
+
+      // 2. Cascade cancel all non-paid / complimentary passes
+      try {
+        voidedFreeCount = await cancelEventRegistrations(
+          currentSelectedEventObj.id,
+          currentSelectedEventObj.slug,
+          currentSelectedEventObj.name,
+          noticeText
+        );
+      } catch (e) {
+        console.warn("Cascade cancel error for free registrations:", e);
+      }
+
+      // 3. Sequential rate-limited loop through all paid registrations eligible for refund
+      const idToken = auth?.currentUser ? await auth.currentUser.getIdToken() : "";
+
+      for (let i = 0; i < eligibleForBulkRefund.length; i++) {
+        const reg = eligibleForBulkRefund[i];
+        setBulkRefundProgress({
+          current: i + 1,
+          total: eligibleForBulkRefund.length,
+          currentParticipant: reg.participantName || reg.email || `Registration #${i + 1}`,
+        });
+
+        const refundAmount = Number(reg.amountPaid) || 0;
+        const regDocId = reg.id;
+        const regTicketId = reg.registrationId || reg.id;
+
+        try {
+          const res = await fetch("/api/cashfree/refund", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+            },
+            body: JSON.stringify({
+              orderId: reg.orderId || reg.paymentId,
+              registrationId: regDocId,
+              refundAmount,
+              refundId: `bulk_${(currentSelectedEventObj.slug || currentSelectedEventObj.id).slice(0, 10)}_${regDocId.slice(-6)}_${Date.now()}`,
+              note: noticeText,
+            }),
+          });
+
+          const data = await res.json();
+          if (res.ok && data.success) {
+            successCount++;
+            totalRefunded += refundAmount;
+
+            const refundPayload = {
+              refundId: data.refundId,
+              refundStatus: data.status || "PROCESSED",
+              refundAmount,
+              refundArn: data.refundArn || null,
+              refundMode: data.refundMode || null,
+              refundNote: noticeText,
+              refundInitiatedBy: adminEmail,
+              refundedAt: nowIso,
+              cancellationReason: `Event Cancelled: ${noticeText}`,
+              cancelledBy: adminEmail,
+            };
+
+            await updateRegistrationRefundInFirestore(regDocId, refundPayload);
+
+            if (regTicketId !== regDocId && db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+              try {
+                const docRef = doc(db, "registrations", regTicketId);
+                await updateDoc(docRef, {
+                  status: "CANCELLED",
+                  paymentStatus: "REFUNDED",
+                  ...refundPayload,
+                  cancelledAt: nowIso,
+                });
+              } catch {}
+            }
+
+            // Optimistically update local state for this item
+            setRegistrations((prev) =>
+              prev.map((r) =>
+                r.id === regDocId || r.registrationId === regTicketId
+                  ? {
+                      ...r,
+                      status: "CANCELLED",
+                      paymentStatus: "REFUNDED",
+                      ...refundPayload,
+                      cancelledAt: nowIso,
+                    }
+                  : r
+              )
+            );
+          } else {
+            console.error(`Refund failed for registration ${regDocId}:`, data.error);
+            failedCount++;
+          }
+        } catch (refundErr) {
+          console.error(`Network error refunding registration ${regDocId}:`, refundErr);
+          failedCount++;
+        }
+
+        // Small pacing pause between refund API calls to avoid gateway rate limits
+        if (i < eligibleForBulkRefund.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+      }
+
+      // Refresh cached local registrations
+      try {
+        const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+        const updatedLocal = local.map((r: any) => {
+          const matchesEvent =
+            r.id?.toLowerCase().includes(currentSelectedEventObj.id.toLowerCase()) ||
+            (r.eventId && (r.eventId === currentSelectedEventObj.id || r.eventId === currentSelectedEventObj.slug)) ||
+            (r.eventTitle && r.eventTitle.toLowerCase().trim() === currentSelectedEventObj.name.toLowerCase().trim());
+          if (matchesEvent) {
+            return {
+              ...r,
+              status: "CANCELLED",
+              paymentStatus: r.amountPaid > 0 ? "REFUNDED" : r.paymentStatus,
+              cancellationReason: `Event Cancelled: ${noticeText}`,
+            };
+          }
+          return r;
+        });
+        localStorage.setItem("src_local_registrations", JSON.stringify(updatedLocal));
+        window.dispatchEvent(new CustomEvent("src_registrations_updated", { detail: updatedLocal }));
+      } catch {}
+
+      setCancellationSummary({
+        successCount,
+        failedCount,
+        voidedFreeCount,
+        totalRefunded,
+      });
+
+      setFeedbackNotice(
+        `Event cancellation complete! ${successCount} refunds processed (₹${totalRefunded.toLocaleString("en-IN")}), ${voidedFreeCount} complimentary passes voided.`
+      );
+      setTimeout(() => setFeedbackNotice(null), 8000);
+    } catch (err: any) {
+      console.error("Bulk cancellation error:", err);
+      alert(`Error during bulk cancellation: ${err?.message || "Unknown error"}`);
+    } finally {
+      setIsCancellingAndRefunding(false);
+    }
+  };
+
   // Reconcile live status and bank ARN directly from Cashfree Gateway
   const handleCheckRefundStatus = async (record: RegistrationRecord) => {
     const orderId = record.orderId || record.paymentId;
@@ -1060,6 +1301,43 @@ export default function AdminPaymentsPage() {
             >
               <RotateCcw className="w-3.5 h-3.5 text-purple-600" />
               <span>Export Refunds ({kpiStats.refundedCount})</span>
+            </button>
+          )}
+
+          {/* Cancel Event & Bulk Refund Trigger */}
+          {currentSelectedEventObj && (
+            <button
+              type="button"
+              onClick={() => {
+                setCancellationSummary(null);
+                setIsCancelEventModalOpen(true);
+              }}
+              disabled={!canCancelCurrentEvent}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                currentSelectedEventObj.isCancelled
+                  ? eligibleForBulkRefund.length > 0
+                    ? "bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300"
+                    : "bg-slate-100 text-slate-500 border border-slate-200"
+                  : "bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300 hover:border-rose-400"
+              }`}
+              title={
+                !canCancelCurrentEvent
+                  ? "You do not have permission to cancel this event."
+                  : currentSelectedEventObj.isCancelled
+                  ? eligibleForBulkRefund.length > 0
+                    ? "Refund remaining passes for this cancelled event"
+                    : "Event is cancelled and all passes are refunded"
+                  : "Mark event as cancelled and trigger bulk refunds for all registrations"
+              }
+            >
+              <AlertTriangle className={`w-3.5 h-3.5 ${currentSelectedEventObj.isCancelled ? "text-amber-700" : "text-rose-600"}`} />
+              <span>
+                {currentSelectedEventObj.isCancelled
+                  ? eligibleForBulkRefund.length > 0
+                    ? `Refund Remaining (${eligibleForBulkRefund.length})`
+                    : "Event Cancelled"
+                  : `Cancel Event & Refund All (${eligibleForBulkRefund.length})`}
+              </span>
             </button>
           )}
 
@@ -1353,6 +1631,75 @@ export default function AdminPaymentsPage() {
           </button>
         </div>
       </div>
+
+      {/* Event Context & Cancellation Action Banner */}
+      {currentSelectedEventObj && (
+        <div className={`p-4 sm:p-5 rounded-3xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm animate-in fade-in duration-200 ${
+          currentSelectedEventObj.isCancelled
+            ? "bg-rose-50/80 border-2 border-rose-200 text-rose-950"
+            : "bg-slate-50 border border-slate-200 text-slate-800"
+        }`}>
+          <div className="flex items-start sm:items-center gap-3">
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-xs ${
+              currentSelectedEventObj.isCancelled ? "bg-rose-600 text-white" : "bg-[#17458F] text-white"
+            }`}>
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900">
+                  {currentSelectedEventObj.name}
+                </h4>
+                {currentSelectedEventObj.isCancelled ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-rose-600 text-white shadow-2xs">
+                    Event Cancelled
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    Active Event
+                  </span>
+                )}
+                {currentSelectedEventObj.isParentFest && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-100 text-amber-800 border border-amber-200">
+                    Festival Hub
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                {currentSelectedEventObj.isCancelled
+                  ? currentSelectedEventObj.cancellationNotice || "This event was cancelled by SRC Council. Gate passes are voided."
+                  : `Scope includes ${filteredByEvent.length} total registrations (${eligibleForBulkRefund.length} unrefunded paid passes, ₹${totalBulkRefundAmount.toLocaleString("en-IN")} total value).`}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+            {(!currentSelectedEventObj.isCancelled || eligibleForBulkRefund.length > 0) ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setCancellationSummary(null);
+                  setIsCancelEventModalOpen(true);
+                }}
+                disabled={!canCancelCurrentEvent}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-xs cursor-pointer disabled:cursor-not-allowed"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-white" />
+                <span>
+                  {currentSelectedEventObj.isCancelled
+                    ? `Refund Remaining (${eligibleForBulkRefund.length})`
+                    : `Cancel Event & Refund All (${eligibleForBulkRefund.length})`}
+                </span>
+              </button>
+            ) : (
+              <span className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>All Passes Refunded</span>
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Refunds Audit Ledger Banner */}
       {statusTab === "refunded" && (
@@ -1983,6 +2330,207 @@ export default function AdminPaymentsPage() {
                 Done
               </Button>
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* CANCEL EVENT & BULK REFUND MODAL */}
+      {isCancelEventModalOpen && currentSelectedEventObj && (
+        <Modal
+          isOpen={isCancelEventModalOpen}
+          onClose={() => {
+            if (!isCancellingAndRefunding) {
+              setIsCancelEventModalOpen(false);
+              setCancellationSummary(null);
+            }
+          }}
+          title={cancellationSummary ? "Event Cancellation Complete" : "Cancel Event & Refund All Registrations"}
+          subtitle={
+            cancellationSummary
+              ? `Refund operations finished for ${currentSelectedEventObj.name}`
+              : `Bulk refund and pass cancellation for ${currentSelectedEventObj.name}`
+          }
+          maxWidth="2xl"
+        >
+          <div className="space-y-5 pt-1 text-left">
+            {cancellationSummary ? (
+              // SUMMARY VIEW AFTER EXECUTION
+              <div className="space-y-4">
+                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 space-y-3 shadow-2xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                      <CheckCircle2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm text-emerald-950">
+                        Event Successfully Marked Cancelled
+                      </h4>
+                      <p className="text-xs text-emerald-800">
+                        Public status is updated and passes have been processed.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-emerald-200/60 text-xs">
+                    <div className="bg-white/80 p-2.5 rounded-xl border border-emerald-200">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Refunds Issued</span>
+                      <span className="font-heading font-black text-lg text-emerald-700">{cancellationSummary.successCount}</span>
+                    </div>
+                    <div className="bg-white/80 p-2.5 rounded-xl border border-emerald-200">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Refunded</span>
+                      <span className="font-heading font-black text-lg text-purple-700">₹{cancellationSummary.totalRefunded.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="bg-white/80 p-2.5 rounded-xl border border-emerald-200">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Free Voided</span>
+                      <span className="font-heading font-black text-lg text-slate-700">{cancellationSummary.voidedFreeCount}</span>
+                    </div>
+                    <div className="bg-white/80 p-2.5 rounded-xl border border-emerald-200">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Failed</span>
+                      <span className={`font-heading font-black text-lg ${cancellationSummary.failedCount > 0 ? "text-rose-600" : "text-slate-400"}`}>
+                        {cancellationSummary.failedCount}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-500">
+                  All processed refunds have been credited back to participants via Cashfree auto-refund, and their passes have been updated to <strong>CANCELLED / REFUNDED</strong>.
+                </p>
+
+                <div className="pt-2 flex justify-end">
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      setIsCancelEventModalOpen(false);
+                      setCancellationSummary(null);
+                    }}
+                  >
+                    Done
+                  </Button>
+                </div>
+              </div>
+            ) : isCancellingAndRefunding ? (
+              // PROCESSING VIEW WITH PROGRESS BAR
+              <div className="space-y-5 py-4 text-center">
+                <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-rose-100 text-rose-600 animate-pulse">
+                  <RotateCcw className="w-7 h-7 animate-spin" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="font-heading font-bold text-base text-slate-900">
+                    Processing Bulk Event Refunds...
+                  </h4>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    Please do not close or refresh this tab. Communicating with Cashfree Gateway and recording audit receipts in Firestore.
+                  </p>
+                </div>
+
+                {bulkRefundProgress && (
+                  <div className="space-y-2 max-w-md mx-auto bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                    <div className="flex justify-between text-xs font-bold text-slate-700">
+                      <span>Pass {bulkRefundProgress.current} of {bulkRefundProgress.total}</span>
+                      <span>
+                        {bulkRefundProgress.total > 0
+                          ? Math.round((bulkRefundProgress.current / bulkRefundProgress.total) * 100)
+                          : 100}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-rose-600 h-2.5 rounded-full transition-all duration-300"
+                        style={{
+                          width: `${bulkRefundProgress.total > 0 ? (bulkRefundProgress.current / bulkRefundProgress.total) * 100 : 100}%`,
+                        }}
+                      />
+                    </div>
+                    {bulkRefundProgress.currentParticipant && (
+                      <p className="text-[11px] text-slate-500 truncate">
+                        Refunding: <strong className="text-slate-800">{bulkRefundProgress.currentParticipant}</strong>
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              // CONFIRMATION FORM VIEW
+              <div className="space-y-4">
+                {/* Warning Alert */}
+                <div className="p-4 rounded-2xl bg-rose-50 border-2 border-rose-200 text-rose-950 flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="text-xs space-y-1">
+                    <span className="font-extrabold uppercase tracking-wide block">
+                      Critical Event Cancellation &amp; Direct Refund Action
+                    </span>
+                    <p className="text-rose-900/90 leading-relaxed">
+                      Marking <strong>{currentSelectedEventObj.name}</strong> as cancelled will update its public status to <span className="font-bold">Cancelled</span> across the portal.
+                      All eligible paid delegate registrations will receive automated 100% full Cashfree refunds directly to their original payment source.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Scope Breakdown Card */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Eligible for Cashfree Refund</span>
+                    <span className="font-heading font-black text-xl text-rose-700">
+                      {eligibleForBulkRefund.length} <span className="text-xs font-normal text-slate-500">pass{eligibleForBulkRefund.length !== 1 ? "es" : ""}</span>
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Total Refund Payout</span>
+                    <span className="font-heading font-black text-xl text-purple-700 font-mono">
+                      ₹{totalBulkRefundAmount.toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Complimentary / Free Passes</span>
+                    <span className="font-heading font-black text-xl text-slate-700">
+                      {eligibleNonPaidForCancel.length} <span className="text-xs font-normal text-slate-500">to void</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Public Cancellation Notice */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 block">
+                    Public Cancellation Notice &amp; Refund Note <span className="text-rose-500">*</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={cancellationNoticeInput}
+                    onChange={(e) => setCancellationNoticeInput(e.target.value)}
+                    placeholder="Enter the official reason for cancelling this event and issuing refunds..."
+                    className="w-full p-3 rounded-xl border border-slate-200 bg-white text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    This message will be attached to every refunded registration record in Firestore and shown to delegates on their digital passes.
+                  </p>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsCancelEventModalOpen(false)}
+                    disabled={isCancellingAndRefunding}
+                  >
+                    Keep Event Active
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={handleExecuteCancelAndRefund}
+                    disabled={isCancellingAndRefunding || !canCancelCurrentEvent}
+                    className="bg-rose-600 hover:bg-rose-700 text-white font-bold"
+                  >
+                    <AlertTriangle className="w-4 h-4 mr-1.5" />
+                    <span>
+                      {currentSelectedEventObj.isCancelled
+                        ? `Process Remaining ${eligibleForBulkRefund.length} Refunds`
+                        : `Confirm Cancellation & Refund All (${eligibleForBulkRefund.length})`}
+                    </span>
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </Modal>
       )}
