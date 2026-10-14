@@ -88,7 +88,7 @@ const FAQ_ITEMS = [
     content: (
       <div className="space-y-3">
         <p>
-          Each official JDCOEM BT ID (e.g. <code>BT22CS001</code>) can be linked to <strong>only one Google account</strong> for institutional integrity.
+          Each official JDCOEM BT ID (e.g. <code>BT210036CS</code>) can be linked to <strong>only one Google account</strong> for institutional integrity.
         </p>
         <p>
           If you encounter this error, it usually means you previously signed in with a different email address (for instance, your personal Gmail instead of your college Gmail, or vice versa).
@@ -437,7 +437,7 @@ export default function HowToRegisterPage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span>Provide your official BT ID (e.g. <code>BT22CS001</code>) with zero spaces.</span>
+                  <span>Provide your official BT ID (e.g. <code>BT210036CS</code>) with zero spaces.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
@@ -580,7 +580,7 @@ export default function HowToRegisterPage() {
               <ul className="text-xs text-slate-600 space-y-1.5 font-medium">
                 <li>• <strong>First &amp; Last Name</strong>: Official name for participation certificates.</li>
                 <li>• <strong>10-Digit WhatsApp Mobile</strong>: For instant pass alerts and urgent fest updates.</li>
-                <li>• <strong>Official BT ID</strong>: e.g., <code>BT22CS001</code> (Capital letters, no spaces).</li>
+                <li>• <strong>Official BT ID</strong>: e.g., <code>BT210036CS</code> (Capital letters, no spaces).</li>
                 <li>• <strong>Department &amp; Year</strong>: Your current branch and academic year.</li>
               </ul>
             </div>
