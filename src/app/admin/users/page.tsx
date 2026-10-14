@@ -151,10 +151,15 @@ export default function AdminUsersPage() {
     btId: "",
     employeeId: "",
     department: "",
-    year: "",
+    year: "1st Year",
     facultyDesignation: "Assistant Professor",
     title: "Prof.",
     role: "STUDENT" as "STUDENT" | "COUNCIL_ADMIN" | "FACULTY" | "OWNER",
+    userType: "JDCOEM_STUDENT" as "JDCOEM_STUDENT" | "FACULTY" | "EXTERNAL_STUDENT",
+    collegeName: "",
+    city: "",
+    degree: "",
+    customBranch: "",
   });
 
   const [editUserForm, setEditUserForm] = useState({
@@ -169,24 +174,37 @@ export default function AdminUsersPage() {
     userType: "JDCOEM_STUDENT" as "JDCOEM_STUDENT" | "FACULTY" | "EXTERNAL_STUDENT",
     facultyDesignation: "Assistant Professor",
     title: "Prof.",
+    collegeName: "JDCOEM Nagpur",
+    city: "",
+    degree: "",
+    customBranch: "",
   });
 
   const openEditModal = (u: RegisteredUserRecord) => {
-    const isFaculty = u.role === "FACULTY" || u.userType === "FACULTY";
+    const isFaculty = u.role === "FACULTY" || u.userType === "FACULTY" || Boolean(u.employeeId);
+    const isExternal = isExternalUser(u);
     const isOwner = u.role === "OWNER" || u.adminAccess?.role === "OWNER" || isOwnerEmail(u.email);
+
+    const initialUserType: "JDCOEM_STUDENT" | "FACULTY" | "EXTERNAL_STUDENT" = 
+      isFaculty ? "FACULTY" : (isExternal ? "EXTERNAL_STUDENT" : "JDCOEM_STUDENT");
+
     setUserToEdit(u);
     setEditUserForm({
       displayName: u.displayName || "",
       email: u.email || "",
-      btId: isFaculty ? "" : (u.btId || ""),
+      btId: isFaculty || isExternal ? "" : (u.btId || ""),
       employeeId: u.employeeId || "",
       department: resolveCanonicalDepartmentName(u.facultyDepartment || u.department || "Computer Science and Engineering", departments),
       year: u.year || "3rd Year",
       phone: u.phone || "",
       role: isOwner ? "OWNER" : (u.role === "COUNCIL_ADMIN" ? "COUNCIL_ADMIN" : isFaculty ? "FACULTY" : "STUDENT"),
-      userType: isFaculty ? "FACULTY" : (u.userType || "JDCOEM_STUDENT"),
+      userType: initialUserType,
       facultyDesignation: u.facultyDesignation || "Assistant Professor",
       title: u.title || "Prof.",
+      collegeName: u.collegeName || (isExternal ? "Other College" : "JDCOEM Nagpur"),
+      city: u.city || "",
+      degree: u.degree || "",
+      customBranch: u.customBranch || "",
     });
   };
 
@@ -194,12 +212,22 @@ export default function AdminUsersPage() {
     e.preventDefault();
     if (!userToEdit) return;
 
-    const isUserFaculty = editUserForm.userType === "FACULTY" || userToEdit.role === "FACULTY" || userToEdit.userType === "FACULTY";
-    const cleanBt = isUserFaculty ? "" : editUserForm.btId.trim().toUpperCase();
-    const cleanEmpId = isUserFaculty ? editUserForm.employeeId.trim().toUpperCase() : (userToEdit.employeeId || "");
+    const isUserFaculty = editUserForm.userType === "FACULTY";
+    const isUserExternal = editUserForm.userType === "EXTERNAL_STUDENT";
+    const isUserJdcoem = editUserForm.userType === "JDCOEM_STUDENT";
+
+    const cleanBt = isUserJdcoem ? editUserForm.btId.trim().toUpperCase() : "";
+    const cleanEmpId = isUserFaculty ? editUserForm.employeeId.trim().toUpperCase() : "";
     const parts = editUserForm.displayName.trim().split(" ");
-    const isJdcoem = !isUserFaculty && Boolean(cleanBt && cleanBt.length >= 3);
     const isOwner = editUserForm.role === "OWNER";
+
+    // Reconcile role with chosen userType
+    let targetRole = editUserForm.role;
+    if (isUserFaculty && targetRole === "STUDENT") {
+      targetRole = "FACULTY";
+    } else if (!isUserFaculty && targetRole === "FACULTY") {
+      targetRole = "STUDENT";
+    }
 
     const updatedRecord: RegisteredUserRecord = {
       ...userToEdit,
@@ -207,21 +235,33 @@ export default function AdminUsersPage() {
       email: editUserForm.email.trim().toLowerCase(),
       btId: cleanBt,
       employeeId: cleanEmpId || undefined,
-      department: editUserForm.department,
-      facultyDepartment: isUserFaculty ? editUserForm.department : userToEdit.facultyDepartment,
-      facultyDesignation: isUserFaculty ? editUserForm.facultyDesignation : userToEdit.facultyDesignation,
-      title: isUserFaculty ? editUserForm.title : userToEdit.title,
+      department: isUserJdcoem
+        ? editUserForm.department
+        : isUserFaculty
+        ? editUserForm.department
+        : (editUserForm.customBranch.trim() || editUserForm.department || "General Stream"),
+      facultyDepartment: isUserFaculty ? editUserForm.department : undefined,
+      facultyDesignation: isUserFaculty ? editUserForm.facultyDesignation : undefined,
+      title: isUserFaculty ? editUserForm.title : undefined,
+      facultyApprovalStatus: isUserFaculty ? (userToEdit.facultyApprovalStatus || "approved") : undefined,
       year: isUserFaculty ? "" : editUserForm.year,
       phone: editUserForm.phone.trim(),
-      role: editUserForm.role,
-      userType: isUserFaculty ? "FACULTY" : (isJdcoem ? "JDCOEM_STUDENT" : userToEdit.userType || "JDCOEM_STUDENT"),
-      isCollegeStudent: isUserFaculty ? true : (isJdcoem ? true : userToEdit.isCollegeStudent),
-      collegeName: isUserFaculty ? "JDCOEM Nagpur" : (isJdcoem ? "" : userToEdit.collegeName),
-      degree: isUserFaculty || isJdcoem ? "" : userToEdit.degree,
-      customBranch: isUserFaculty || isJdcoem ? "" : userToEdit.customBranch,
+      role: targetRole,
+      userType: editUserForm.userType,
+      isCollegeStudent: !isUserExternal,
+      collegeName: isUserExternal 
+        ? (editUserForm.collegeName.trim() || "Other College") 
+        : "JDCOEM Nagpur",
+      degree: isUserExternal ? editUserForm.degree.trim() : undefined,
+      customBranch: isUserExternal ? editUserForm.customBranch.trim() : undefined,
+      city: isUserExternal ? editUserForm.city.trim() : (userToEdit.city || undefined),
       firstName: parts[0] || userToEdit.firstName || "",
       lastName: parts.slice(1).join(" ") || userToEdit.lastName || "",
-      profileCompleted: isUserFaculty ? Boolean(editUserForm.department && editUserForm.facultyDesignation) : Boolean(cleanBt),
+      profileCompleted: isUserFaculty 
+        ? Boolean(editUserForm.department && editUserForm.facultyDesignation)
+        : isUserExternal 
+        ? Boolean(editUserForm.collegeName.trim()) 
+        : Boolean(cleanBt),
       lastActive: new Date().toISOString(),
       adminAccess: isOwner
         ? {
@@ -235,59 +275,78 @@ export default function AdminUsersPage() {
             grantedAt: userToEdit.adminAccess?.grantedAt || new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           }
-        : userToEdit.adminAccess?.role === "OWNER" && editUserForm.role !== "OWNER"
+        : userToEdit.adminAccess?.role === "OWNER" && targetRole !== "OWNER"
         ? undefined
         : userToEdit.adminAccess,
     };
 
     saveRegisteredUser(updatedRecord);
+    setUsers(getStoredUsers());
     showNotice(
       isOwner 
         ? `Successfully updated ${updatedRecord.displayName} as System Owner.`
-        : `Successfully updated profile for ${updatedRecord.displayName}.`
+        : `Successfully updated profile & account type for ${updatedRecord.displayName}.`
     );
     setUserToEdit(null);
   };
 
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
-    const isFacultyRole = newUserForm.role === "FACULTY";
-    if (!newUserForm.email.trim() || !newUserForm.displayName.trim() || !newUserForm.department.trim()) {
-      alert("Please fill in all required fields (Full Name, Email, and Department).");
+    const isFacultyRole = newUserForm.userType === "FACULTY" || newUserForm.role === "FACULTY";
+    const isExternal = newUserForm.userType === "EXTERNAL_STUDENT";
+    const isJdcoem = newUserForm.userType === "JDCOEM_STUDENT";
+
+    if (!newUserForm.email.trim() || !newUserForm.displayName.trim()) {
+      alert("Please fill in required fields (Full Name and Email).");
+      return;
+    }
+    if (isJdcoem && !newUserForm.department.trim()) {
+      alert("Please select Department for the JDCOEM student record.");
       return;
     }
     if (!isFacultyRole && !newUserForm.year.trim()) {
-      alert("Please select Academic Year for the student record.");
+      alert("Please select Academic Year.");
+      return;
+    }
+    if (isExternal && !newUserForm.collegeName.trim()) {
+      alert("Please enter the Institution / College Name for external delegate.");
       return;
     }
 
     const email = newUserForm.email.trim().toLowerCase();
-    const cleanBt = isFacultyRole ? "" : newUserForm.btId.trim().toUpperCase();
+    const cleanBt = isJdcoem ? newUserForm.btId.trim().toUpperCase() : "";
     const cleanEmpId = isFacultyRole ? newUserForm.employeeId.trim().toUpperCase() : "";
     const parts = newUserForm.displayName.trim().split(" ");
     const isOwner = newUserForm.role === "OWNER";
 
     const record: RegisteredUserRecord = {
-      uid: `${isFacultyRole ? "faculty" : "student"}-${Date.now()}`,
+      uid: `${isFacultyRole ? "faculty" : isExternal ? "external" : "student"}-${Date.now()}`,
       email: email,
       displayName: newUserForm.displayName.trim(),
       photoURL: null,
-      role: newUserForm.role,
-      userType: isFacultyRole ? "FACULTY" : "JDCOEM_STUDENT",
-      isCollegeStudent: true,
-      collegeName: isFacultyRole ? "JDCOEM Nagpur" : "",
+      role: isFacultyRole ? (newUserForm.role === "STUDENT" ? "FACULTY" : newUserForm.role) : newUserForm.role,
+      userType: newUserForm.userType,
+      isCollegeStudent: !isExternal,
+      collegeName: isExternal ? (newUserForm.collegeName.trim() || "Other College") : "JDCOEM Nagpur",
       firstName: parts[0] || "",
       lastName: parts.slice(1).join(" ") || "",
       btId: cleanBt,
       employeeId: cleanEmpId || undefined,
-      department: newUserForm.department,
+      department: isJdcoem ? newUserForm.department : (newUserForm.customBranch.trim() || newUserForm.department || "General Stream"),
       facultyDepartment: isFacultyRole ? newUserForm.department : undefined,
       facultyDesignation: isFacultyRole ? newUserForm.facultyDesignation : undefined,
       facultyApprovalStatus: isFacultyRole ? "approved" : undefined,
       title: isFacultyRole ? newUserForm.title : undefined,
       year: isFacultyRole ? "" : newUserForm.year,
+      city: isExternal ? newUserForm.city.trim() : undefined,
+      degree: isExternal ? newUserForm.degree.trim() : undefined,
+      customBranch: isExternal ? newUserForm.customBranch.trim() : undefined,
       phone: "",
-      profileCompleted: isFacultyRole ? Boolean(newUserForm.department && newUserForm.facultyDesignation) : Boolean(cleanBt && newUserForm.department && newUserForm.year),
+      profileCompleted: isFacultyRole 
+        ? Boolean(newUserForm.department && newUserForm.facultyDesignation) 
+        : isExternal 
+        ? Boolean(newUserForm.collegeName.trim()) 
+        : Boolean(cleanBt && newUserForm.department && newUserForm.year),
       lastActive: new Date().toISOString(),
       createdAt: new Date().toISOString(),
       adminAccess: isOwner
@@ -306,7 +365,8 @@ export default function AdminUsersPage() {
     };
 
     saveRegisteredUser(record);
-    showNotice(`Successfully added ${isFacultyRole ? "faculty member" : "user"}: ${record.displayName} (${record.email})`);
+    setUsers(getStoredUsers());
+    showNotice(`Successfully added ${isFacultyRole ? "faculty member" : isExternal ? "external delegate" : "student"}: ${record.displayName} (${record.email})`);
     setIsAddUserOpen(false);
     setNewUserForm({
       displayName: "",
@@ -314,10 +374,15 @@ export default function AdminUsersPage() {
       btId: "",
       employeeId: "",
       department: "",
-      year: "",
+      year: "1st Year",
       facultyDesignation: "Assistant Professor",
       title: "Prof.",
       role: "STUDENT",
+      userType: "JDCOEM_STUDENT",
+      collegeName: "",
+      city: "",
+      degree: "",
+      customBranch: "",
     });
   };
 
@@ -1554,7 +1619,7 @@ export default function AdminUsersPage() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 flex-wrap">
               <Button
                 type="button"
                 onClick={() => setSelectedUser(null)}
@@ -1562,6 +1627,20 @@ export default function AdminUsersPage() {
                 size="sm"
               >
                 Close
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  const targetUser = selectedUser;
+                  setSelectedUser(null);
+                  openEditModal(targetUser);
+                }}
+                variant="outline"
+                size="sm"
+                className="border-[#17458F]/30 text-[#17458F] hover:bg-[#17458F]/5 font-bold cursor-pointer"
+              >
+                <Edit3 className="w-3.5 h-3.5 mr-1.5" />
+                Edit Profile &amp; Account Type
               </Button>
               {selectedUser.isDeleted || selectedUser.status === "deleted" ? (
                 <Button
@@ -1678,110 +1757,297 @@ export default function AdminUsersPage() {
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {newUserForm.role === "FACULTY" ? (
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                    Staff / Employee ID (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={newUserForm.employeeId}
-                    onChange={(e) => setNewUserForm({ ...newUserForm, employeeId: e.target.value.toUpperCase() })}
-                    placeholder="e.g. EMP-1042"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold text-[#17458F] focus:outline-none focus:border-[#17458F]"
-                  />
-                </div>
-              ) : (
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                    College BT ID (Leave empty for Faculty)
-                  </label>
-                  <input
-                    type="text"
-                    value={newUserForm.btId}
-                    onChange={(e) => setNewUserForm({ ...newUserForm, btId: e.target.value.toUpperCase() })}
-                    placeholder="e.g. BT210115DS"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold text-[#E78023] focus:outline-none focus:border-[#17458F]"
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  Role
+            {/* Account Type Selector */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>Account Type</span>
+                  <span className="text-rose-500">*</span>
                 </label>
-                <select
-                  value={newUserForm.role}
-                  onChange={(e) => setNewUserForm({ ...newUserForm, role: e.target.value as any })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                <span className="text-[10px] font-medium text-slate-400">
+                  Select membership classification
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewUserForm({ ...newUserForm, userType: "JDCOEM_STUDENT", role: "STUDENT", collegeName: "JDCOEM Nagpur" })}
+                  className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition-all text-left flex items-center gap-2.5 cursor-pointer ${
+                    newUserForm.userType === "JDCOEM_STUDENT"
+                      ? "bg-white border-[#17458F] text-[#17458F] shadow-xs ring-2 ring-[#17458F]/15"
+                      : "bg-white/70 border-slate-200 text-slate-600 hover:border-slate-300"
+                  }`}
                 >
-                  <option value="STUDENT">Student (Delegate)</option>
-                  <option value="COUNCIL_ADMIN">Council Admin</option>
-                  <option value="FACULTY">Faculty Member</option>
-                  <option value="OWNER">Owner (Full Governance)</option>
-                </select>
+                  <span className="text-base leading-none">🎓</span>
+                  <div className="min-w-0">
+                    <p className="font-bold leading-tight">JDCOEM Student</p>
+                    <p className="text-[10px] font-normal text-slate-400">Regular student</p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setNewUserForm({ ...newUserForm, userType: "FACULTY", role: "FACULTY", collegeName: "JDCOEM Nagpur" })}
+                  className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition-all text-left flex items-center gap-2.5 cursor-pointer ${
+                    newUserForm.userType === "FACULTY"
+                      ? "bg-white border-[#17458F] text-[#17458F] shadow-xs ring-2 ring-[#17458F]/15"
+                      : "bg-white/70 border-slate-200 text-slate-600 hover:border-slate-300"
+                  }`}
+                >
+                  <span className="text-base leading-none">🏛️</span>
+                  <div className="min-w-0">
+                    <p className="font-bold leading-tight">Faculty Member</p>
+                    <p className="text-[10px] font-normal text-slate-400">Professor / Staff</p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setNewUserForm({ ...newUserForm, userType: "EXTERNAL_STUDENT", role: "STUDENT", collegeName: "" })}
+                  className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition-all text-left flex items-center gap-2.5 cursor-pointer ${
+                    newUserForm.userType === "EXTERNAL_STUDENT"
+                      ? "bg-white border-[#17458F] text-[#17458F] shadow-xs ring-2 ring-[#17458F]/15"
+                      : "bg-white/70 border-slate-200 text-slate-600 hover:border-slate-300"
+                  }`}
+                >
+                  <span className="text-base leading-none">🌐</span>
+                  <div className="min-w-0">
+                    <p className="font-bold leading-tight">External Delegate</p>
+                    <p className="text-[10px] font-normal text-slate-400">Other college</p>
+                  </div>
+                </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  Department / Branch <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={newUserForm.department}
-                  onChange={(e) => setNewUserForm({ ...newUserForm, department: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
-                  required
-                >
-                  <option value="" disabled>-- Click to select department --</option>
-                  {departments.map((dept) => (
-                    <option key={dept} value={dept}>
-                      {dept}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {newUserForm.userType === "EXTERNAL_STUDENT" ? (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Institution / College Name <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newUserForm.collegeName}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, collegeName: e.target.value })}
+                      placeholder="e.g. VNIT Nagpur, RCOEM, GHRCE"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      City
+                    </label>
+                    <input
+                      type="text"
+                      value={newUserForm.city}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, city: e.target.value })}
+                      placeholder="e.g. Nagpur"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                    />
+                  </div>
+                </div>
 
-              {newUserForm.role === "FACULTY" ? (
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                    Faculty Designation <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={newUserForm.facultyDesignation}
-                    onChange={(e) => setNewUserForm({ ...newUserForm, facultyDesignation: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
-                    required
-                  >
-                    {FACULTY_DESIGNATIONS.map((desig) => (
-                      <option key={desig} value={desig}>
-                        {desig}
-                      </option>
-                    ))}
-                  </select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Degree / Program
+                    </label>
+                    <input
+                      type="text"
+                      value={newUserForm.degree}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, degree: e.target.value })}
+                      placeholder="e.g. B.Tech, MBA, BCA"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Department / Branch
+                    </label>
+                    <input
+                      type="text"
+                      value={newUserForm.customBranch}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, customBranch: e.target.value })}
+                      placeholder="e.g. Computer Engineering"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                    />
+                  </div>
                 </div>
-              ) : (
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                    Year of Study <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={newUserForm.year}
-                    onChange={(e) => setNewUserForm({ ...newUserForm, year: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
-                    required
-                  >
-                    <option value="" disabled>-- Click to select year of study --</option>
-                    <option value="1st Year">1st Year</option>
-                    <option value="2nd Year">2nd Year</option>
-                    <option value="3rd Year">3rd Year</option>
-                    <option value="4th Year / Final Year">4th Year / Final Year</option>
-                  </select>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Year of Study <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={newUserForm.year}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, year: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                    >
+                      <option value="1st Year">1st Year</option>
+                      <option value="2nd Year">2nd Year</option>
+                      <option value="3rd Year">3rd Year</option>
+                      <option value="4th Year / Final Year">4th Year / Final Year</option>
+                      <option value="Postgraduate (MBA/MCA)">Postgraduate (MBA/MCA)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Role
+                    </label>
+                    <select
+                      value={newUserForm.role}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, role: e.target.value as any })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                    >
+                      <option value="STUDENT">Student (Delegate)</option>
+                      <option value="COUNCIL_ADMIN">Council Admin</option>
+                    </select>
+                  </div>
                 </div>
-              )}
-            </div>
+              </>
+            ) : newUserForm.userType === "FACULTY" ? (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Staff / Employee ID (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={newUserForm.employeeId}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, employeeId: e.target.value.toUpperCase() })}
+                      placeholder="e.g. EMP-1042"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold text-[#17458F] focus:outline-none focus:border-[#17458F]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Role
+                    </label>
+                    <select
+                      value={newUserForm.role}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, role: e.target.value as any })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                    >
+                      <option value="FACULTY">Faculty Member</option>
+                      <option value="COUNCIL_ADMIN">Council Admin (Faculty)</option>
+                      <option value="OWNER">Owner (Full Governance)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Department / Branch <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={newUserForm.department}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, department: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                      required
+                    >
+                      <option value="" disabled>-- Click to select department --</option>
+                      {departments.map((dept) => (
+                        <option key={dept} value={dept}>
+                          {dept}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Faculty Designation <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={newUserForm.facultyDesignation}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, facultyDesignation: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                      required
+                    >
+                      {FACULTY_DESIGNATIONS.map((desig) => (
+                        <option key={desig} value={desig}>
+                          {desig}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      College BT ID (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={newUserForm.btId}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, btId: e.target.value.toUpperCase() })}
+                      placeholder="e.g. BT210115DS"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold text-[#E78023] focus:outline-none focus:border-[#17458F]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Role
+                    </label>
+                    <select
+                      value={newUserForm.role}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, role: e.target.value as any })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                    >
+                      <option value="STUDENT">Student (Delegate)</option>
+                      <option value="COUNCIL_ADMIN">Council Admin</option>
+                      <option value="OWNER">Owner (Full Governance)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Department / Branch <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={newUserForm.department}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, department: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                      required
+                    >
+                      <option value="" disabled>-- Click to select department --</option>
+                      {departments.map((dept) => (
+                        <option key={dept} value={dept}>
+                          {dept}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Year of Study <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={newUserForm.year}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, year: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                      required
+                    >
+                      <option value="" disabled>-- Click to select year of study --</option>
+                      <option value="1st Year">1st Year</option>
+                      <option value="2nd Year">2nd Year</option>
+                      <option value="3rd Year">3rd Year</option>
+                      <option value="4th Year / Final Year">4th Year / Final Year</option>
+                      <option value="Postgraduate (MBA/MCA)">Postgraduate (MBA/MCA)</option>
+                    </select>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
               <Button
@@ -1794,7 +2060,13 @@ export default function AdminUsersPage() {
               </Button>
               <Button
                 type="submit"
-                disabled={!newUserForm.displayName.trim() || !newUserForm.email.trim() || !newUserForm.department.trim() || (newUserForm.role !== "FACULTY" && !newUserForm.year.trim())}
+                disabled={
+                  !newUserForm.displayName.trim() || 
+                  !newUserForm.email.trim() || 
+                  (newUserForm.userType === "JDCOEM_STUDENT" && (!newUserForm.department.trim() || !newUserForm.year.trim())) ||
+                  (newUserForm.userType === "FACULTY" && !newUserForm.department.trim()) ||
+                  (newUserForm.userType === "EXTERNAL_STUDENT" && (!newUserForm.collegeName.trim() || !newUserForm.year.trim()))
+                }
                 variant="primary"
                 size="sm"
               >
@@ -1841,9 +2113,91 @@ export default function AdminUsersPage() {
               />
             </div>
 
+            {/* Account Type Selector Card */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>Account Type / Classification</span>
+                  <span className="text-rose-500">*</span>
+                </label>
+                <span className="text-[10px] font-medium text-slate-400">
+                  Switch account category &amp; role
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditUserForm((prev) => ({
+                      ...prev,
+                      userType: "JDCOEM_STUDENT",
+                      role: prev.role === "FACULTY" ? "STUDENT" : prev.role,
+                      collegeName: "JDCOEM Nagpur",
+                    }));
+                  }}
+                  className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition-all text-left flex items-center gap-2.5 cursor-pointer ${
+                    editUserForm.userType === "JDCOEM_STUDENT"
+                      ? "bg-white border-[#17458F] text-[#17458F] shadow-xs ring-2 ring-[#17458F]/15"
+                      : "bg-white/70 border-slate-200 text-slate-600 hover:border-slate-300"
+                  }`}
+                >
+                  <span className="text-base leading-none">🎓</span>
+                  <div className="min-w-0">
+                    <p className="font-bold leading-tight">JDCOEM Student</p>
+                    <p className="text-[10px] font-normal text-slate-400">Enrolled student</p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditUserForm((prev) => ({
+                      ...prev,
+                      userType: "FACULTY",
+                      role: prev.role === "STUDENT" ? "FACULTY" : prev.role,
+                      collegeName: "JDCOEM Nagpur",
+                    }));
+                  }}
+                  className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition-all text-left flex items-center gap-2.5 cursor-pointer ${
+                    editUserForm.userType === "FACULTY"
+                      ? "bg-white border-[#17458F] text-[#17458F] shadow-xs ring-2 ring-[#17458F]/15"
+                      : "bg-white/70 border-slate-200 text-slate-600 hover:border-slate-300"
+                  }`}
+                >
+                  <span className="text-base leading-none">🏛️</span>
+                  <div className="min-w-0">
+                    <p className="font-bold leading-tight">Faculty Member</p>
+                    <p className="text-[10px] font-normal text-slate-400">Professor / Staff</p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditUserForm((prev) => ({
+                      ...prev,
+                      userType: "EXTERNAL_STUDENT",
+                      role: prev.role === "FACULTY" ? "STUDENT" : prev.role,
+                      collegeName: prev.collegeName && !prev.collegeName.toLowerCase().includes("jdcoem") ? prev.collegeName : "",
+                    }));
+                  }}
+                  className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition-all text-left flex items-center gap-2.5 cursor-pointer ${
+                    editUserForm.userType === "EXTERNAL_STUDENT"
+                      ? "bg-white border-[#17458F] text-[#17458F] shadow-xs ring-2 ring-[#17458F]/15"
+                      : "bg-white/70 border-slate-200 text-slate-600 hover:border-slate-300"
+                  }`}
+                >
+                  <span className="text-base leading-none">🌐</span>
+                  <div className="min-w-0">
+                    <p className="font-bold leading-tight">External Delegate</p>
+                    <p className="text-[10px] font-normal text-slate-400">Other institution</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+
             {(() => {
-              const isFaculty = editUserForm.userType === "FACULTY" || userToEdit.role === "FACULTY" || userToEdit.userType === "FACULTY" || Boolean(userToEdit.employeeId);
-              if (isFaculty) {
+              if (editUserForm.userType === "FACULTY") {
                 return (
                   <>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1947,19 +2301,150 @@ export default function AdminUsersPage() {
                 );
               }
 
+              if (editUserForm.userType === "EXTERNAL_STUDENT") {
+                return (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          Institution / College Name <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={editUserForm.collegeName}
+                          onChange={(e) => setEditUserForm({ ...editUserForm, collegeName: e.target.value })}
+                          placeholder="e.g. VNIT Nagpur, RCOEM, GHRCE"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          City
+                        </label>
+                        <input
+                          type="text"
+                          value={editUserForm.city}
+                          onChange={(e) => setEditUserForm({ ...editUserForm, city: e.target.value })}
+                          placeholder="e.g. Nagpur"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          Degree / Program
+                        </label>
+                        <input
+                          type="text"
+                          value={editUserForm.degree}
+                          onChange={(e) => setEditUserForm({ ...editUserForm, degree: e.target.value })}
+                          placeholder="e.g. B.Tech, MBA, BCA"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          Department / Branch
+                        </label>
+                        <input
+                          type="text"
+                          value={editUserForm.customBranch}
+                          onChange={(e) => setEditUserForm({ ...editUserForm, customBranch: e.target.value })}
+                          placeholder="e.g. Computer Science"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          Year of Study <span className="text-rose-500">*</span>
+                        </label>
+                        <select
+                          value={editUserForm.year}
+                          onChange={(e) => setEditUserForm({ ...editUserForm, year: e.target.value })}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-[#17458F] focus:outline-none focus:border-[#17458F] cursor-pointer"
+                        >
+                          <option value="1st Year">1st Year</option>
+                          <option value="2nd Year">2nd Year</option>
+                          <option value="3rd Year">3rd Year</option>
+                          <option value="4th Year / Final Year">4th Year / Final Year</option>
+                          <option value="Postgraduate (MBA/MCA)">Postgraduate (MBA/MCA)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          Contact Phone
+                        </label>
+                        <input
+                          type="text"
+                          value={editUserForm.phone}
+                          onChange={(e) => setEditUserForm({ ...editUserForm, phone: e.target.value })}
+                          placeholder="e.g. 9075828232"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-medium text-slate-900 focus:outline-none focus:border-[#17458F]"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        Access Role
+                      </label>
+                      <select
+                        value={editUserForm.role}
+                        onChange={(e) => setEditUserForm({ ...editUserForm, role: e.target.value as any })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#17458F] cursor-pointer"
+                      >
+                        <option value="STUDENT">Student (Delegate)</option>
+                        <option value="COUNCIL_ADMIN">Council Admin</option>
+                        <option value="OWNER">Owner (Full Governance)</option>
+                      </select>
+                    </div>
+                  </>
+                );
+              }
+
+              // JDCOEM Student
+              const btValidation = editUserForm.btId
+                ? validateStudentBtId(editUserForm.btId, editUserForm.department)
+                : { isFlagged: false };
+
               return (
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                        College BT ID
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold text-slate-700">
+                          College BT ID
+                        </label>
+                        {btValidation.isFlagged && (
+                          <span className="text-[10px] font-bold text-amber-700 flex items-center gap-1">
+                            <AlertTriangle className="w-2.5 h-2.5" />
+                            Format Mismatch
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="text"
                         value={editUserForm.btId}
                         onChange={(e) => setEditUserForm({ ...editUserForm, btId: e.target.value.toUpperCase() })}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold text-[#E78023] focus:outline-none focus:border-[#17458F]"
+                        placeholder="e.g. BT210036CS"
+                        className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-mono font-bold focus:outline-none ${
+                          btValidation.isFlagged
+                            ? "border-amber-400 bg-amber-50/40 text-amber-900 focus:border-amber-600"
+                            : "border-slate-200 text-[#E78023] focus:border-[#17458F]"
+                        }`}
                       />
+                      {btValidation.isFlagged && (
+                        <p className="text-[10px] text-amber-700 font-medium mt-1">
+                          ⚠️ {btValidation.reason}
+                        </p>
+                      )}
                     </div>
 
                     <div>

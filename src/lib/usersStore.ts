@@ -1169,8 +1169,13 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
     const existingIndex = current.findIndex((u) => u.uid === user.uid || (user.email && u.email === user.email));
     const existing = existingIndex >= 0 ? current[existingIndex] : null;
     
-    const isExplicitExternal = user.userType === "EXTERNAL_STUDENT";
-    const isExplicitFaculty = user.userType === "FACULTY" || user.role === "FACULTY" || existing?.userType === "FACULTY" || existing?.role === "FACULTY";
+    // Explicit userType provided in payload takes absolute precedence
+    const targetUserType = user.userType !== undefined 
+      ? user.userType 
+      : (user.role === "FACULTY" ? "FACULTY" : (existing?.userType || (existing?.role === "FACULTY" ? "FACULTY" : undefined)));
+
+    const isExplicitExternal = targetUserType === "EXTERNAL_STUDENT";
+    const isExplicitFaculty = targetUserType === "FACULTY" || user.role === "FACULTY";
 
     // Resolve designation badge based on BT ID (cleared if external or faculty)
     const cleanBtId = isExplicitExternal || isExplicitFaculty
@@ -1178,39 +1183,33 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
       : (user.btId !== undefined ? user.btId : existing?.btId || "").trim().toUpperCase();
     const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId, user.name || existing?.name || user.email) : null;
 
-    const assignedRole = user.role || existing?.role || "STUDENT";
+    const assignedRole = user.role || (isExplicitFaculty ? "FACULTY" : (existing?.role === "FACULTY" ? "STUDENT" : existing?.role || "STUDENT"));
     const assignedBadge = designationInfo 
       ? designationInfo.designationBadge 
       : (cleanBtId ? undefined : (formatDesignationBadge(user.designationBadge || existing?.designationBadge) || undefined));
     const isOfficer = designationInfo ? designationInfo.isCouncilOfficer : (cleanBtId ? false : Boolean(user.isCouncilOfficer || existing?.isCouncilOfficer));
 
     const now = new Date().toISOString();
-    const isJdcoemStudent = !isExplicitExternal && !isExplicitFaculty && (
+    const isJdcoemStudent = targetUserType === "JDCOEM_STUDENT" || (!isExplicitExternal && !isExplicitFaculty && (
       Boolean(cleanBtId && cleanBtId.length >= 3) || 
       user.userType === "JDCOEM_STUDENT"
-    );
+    ));
 
     const resolvedUserType: "JDCOEM_STUDENT" | "FACULTY" | "EXTERNAL_STUDENT" = isExplicitFaculty
       ? "FACULTY" 
       : isExplicitExternal
       ? "EXTERNAL_STUDENT"
-      : isJdcoemStudent || assignedRole === "COUNCIL_ADMIN" || assignedRole === "OWNER"
-      ? "JDCOEM_STUDENT" 
-      : (user.userType || existing?.userType || "EXTERNAL_STUDENT");
+      : "JDCOEM_STUDENT";
 
     const resolvedIsCollegeStudent = isExplicitFaculty
       ? true 
       : isExplicitExternal
       ? false
-      : isJdcoemStudent 
-      ? true 
-      : Boolean(user.isCollegeStudent !== undefined ? user.isCollegeStudent : (existing?.isCollegeStudent ?? false));
+      : true;
 
     const resolvedCollegeName = isExplicitExternal
       ? (user.collegeName || existing?.collegeName || "Other College")
-      : isJdcoemStudent 
-      ? ((user.collegeName && (user.collegeName.toLowerCase().includes("jdcoem") || user.collegeName.toLowerCase().includes("jd college"))) ? user.collegeName : "")
-      : (user.collegeName !== undefined ? user.collegeName : (existing?.collegeName || ""));
+      : "JDCOEM Nagpur";
 
     const record: RegisteredUserRecord = {
       ...(existing || {}),
@@ -1233,19 +1232,19 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
       isCouncilOfficer: isOfficer,
 
       // Faculty fields
-      title: user.title !== undefined ? user.title : existing?.title,
-      facultyDesignation: user.facultyDesignation !== undefined ? user.facultyDesignation : existing?.facultyDesignation,
-      facultyDepartment: user.facultyDepartment !== undefined ? user.facultyDepartment : existing?.facultyDepartment,
-      facultyApprovalStatus: user.facultyApprovalStatus || existing?.facultyApprovalStatus || (isExplicitFaculty ? "approved" : undefined),
-      facultyApprovedAt: user.facultyApprovedAt || existing?.facultyApprovedAt,
-      facultyApprovedBy: user.facultyApprovedBy || existing?.facultyApprovedBy,
-      employeeId: user.employeeId !== undefined ? user.employeeId : existing?.employeeId,
+      title: isExplicitFaculty ? (user.title !== undefined ? user.title : existing?.title || "Prof.") : undefined,
+      facultyDesignation: isExplicitFaculty ? (user.facultyDesignation !== undefined ? user.facultyDesignation : existing?.facultyDesignation || "Assistant Professor") : undefined,
+      facultyDepartment: isExplicitFaculty ? (user.facultyDepartment !== undefined ? user.facultyDepartment : user.department || existing?.facultyDepartment) : undefined,
+      facultyApprovalStatus: isExplicitFaculty ? (user.facultyApprovalStatus || existing?.facultyApprovalStatus || "approved") : undefined,
+      facultyApprovedAt: isExplicitFaculty ? (user.facultyApprovedAt || existing?.facultyApprovedAt || now) : undefined,
+      facultyApprovedBy: isExplicitFaculty ? (user.facultyApprovedBy || existing?.facultyApprovedBy) : undefined,
+      employeeId: isExplicitFaculty ? (user.employeeId !== undefined ? user.employeeId : existing?.employeeId) : undefined,
 
       // External student fields
       collegeName: resolvedCollegeName,
       city: isJdcoemStudent ? (user.city || existing?.city || "Nagpur") : (user.city !== undefined ? user.city : existing?.city),
-      degree: isJdcoemStudent ? "" : (user.degree || user.customBranch || existing?.degree || existing?.customBranch || ""),
-      customBranch: isJdcoemStudent ? "" : (user.customBranch || user.degree || existing?.customBranch || existing?.degree || ""),
+      degree: isJdcoemStudent ? "" : (user.degree !== undefined ? user.degree : (existing?.degree || "")),
+      customBranch: isJdcoemStudent ? "" : (user.customBranch !== undefined ? user.customBranch : (existing?.customBranch || "")),
 
       isDeleted: user.isDeleted !== undefined ? user.isDeleted : (existing?.isDeleted || false),
       deletedAt: user.deletedAt || existing?.deletedAt,
