@@ -41,7 +41,8 @@ import {
   syncDepartmentsFromFirestore,
   subscribeToDepartments,
   resolveCanonicalDepartmentName,
-  getDepartmentShortName
+  getDepartmentShortName,
+  getDepartmentBtIdExample
 } from "@/lib/departmentsStore";
 import { 
   checkBtIdAvailability, 
@@ -187,6 +188,9 @@ export function ProfileSetupModal() {
       return dept.toLowerCase().includes(query) || short.includes(query);
     });
   }, [departmentsList, deptSearchTerm]);
+
+  // Dynamic College ID format/example according to chosen department
+  const btIdExample = useMemo(() => getDepartmentBtIdExample(department), [department]);
 
   useEffect(() => {
     setDepartmentsList(getStoredDepartments());
@@ -464,12 +468,6 @@ export function ProfileSetupModal() {
     // 1. JDCOEM STUDENT FLOW
     // -------------------------------------------------------------
     if (accountType === "JDCOEM_STUDENT") {
-      const cleanBtId = btId.trim().toUpperCase();
-      if (!cleanBtId || cleanBtId.length < 3) {
-        setError("Please enter your official College BT ID (e.g. BT210115DS).");
-        return;
-      }
-
       if (!department || !department.trim()) {
         setError("Please click to unveil and select your JDCOEM Department.");
         return;
@@ -477,6 +475,12 @@ export function ProfileSetupModal() {
 
       if (!year || !year.trim()) {
         setError("Please click to unveil and select your Year of Study.");
+        return;
+      }
+
+      const cleanBtId = btId.trim().toUpperCase();
+      if (!cleanBtId || cleanBtId.length < 3) {
+        setError(`Please enter your official College BT ID (e.g. ${btIdExample}).`);
         return;
       }
 
@@ -1153,86 +1157,7 @@ export function ProfileSetupModal() {
                     </p>
                   </div>
 
-                  {/* College BT ID (Full width) */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-semibold text-slate-700">
-                        College BT ID <span className="text-rose-500">*</span>
-                      </label>
-                      <div className="flex items-center gap-2">
-                        {btIdAvailability.checking && (
-                          <span className="text-[10px] text-amber-600 font-medium flex items-center gap-1 animate-pulse">
-                            <Clock className="w-3 h-3 text-[#E78023]" />
-                            <span>Checking...</span>
-                          </span>
-                        )}
-                        {!btIdAvailability.checking && btId.trim().length >= 3 && btIdAvailability.available && (
-                          <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
-                            <Check className="w-3 h-3 text-emerald-600" />
-                            <span>Available</span>
-                          </span>
-                        )}
-                        <span className="text-[10px] text-slate-400 font-mono">Format: BT210115DS</span>
-                      </div>
-                    </div>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. BT210115DS"
-                      value={btId}
-                      onChange={(e) => handleBtIdChange(e.target.value)}
-                      onBlur={handleBtIdBlur}
-                      className={cn(
-                        "w-full px-3.5 py-2.5 rounded-xl border text-xs font-mono font-bold uppercase tracking-wider focus:outline-none transition-all min-h-[44px]",
-                        !btIdAvailability.available
-                          ? "bg-rose-50/50 border-rose-300 text-rose-700 focus:border-rose-500 ring-2 ring-rose-500/10"
-                          : "bg-slate-50/80 border-slate-200 text-[#E78023] focus:bg-white focus:border-[#17458F]"
-                      )}
-                    />
-
-                    {/* Conflict card if BT ID already linked to another Google account */}
-                    {!btIdAvailability.available && (
-                      <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 space-y-2 animate-in fade-in">
-                        <div className="flex items-start gap-2">
-                          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                          <div className="text-xs space-y-0.5">
-                            <p className="font-bold text-rose-800">College ID Already Linked</p>
-                            <p className="text-[11px] leading-relaxed text-rose-700">
-                              {btIdAvailability.isCouncilOwnerMismatch ? (
-                                <>
-                                  College ID <strong className="font-mono">{btId}</strong> is reserved for Student Council official{" "}
-                                  <strong>{btIdAvailability.linkedName || "Council Officer"}</strong>. It can only be activated with their official email{" "}
-                                  <strong className="font-mono">{maskEmail(btIdAvailability.linkedEmail || "")}</strong>.
-                                </>
-                              ) : (
-                                <>
-                                  College ID <strong className="font-mono">{btId}</strong> is already linked to another account (
-                                  <strong className="font-mono">{maskEmail(btIdAvailability.linkedEmail || "")}</strong>).
-                                  Each student BT ID can only be bound to one Google account.
-                                </>
-                              )}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between pt-1 border-t border-rose-200/60 text-[11px]">
-                          <span className="text-rose-700 font-medium">Wrong Google account?</span>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              await logout();
-                              closeProfileModal();
-                            }}
-                            className="inline-flex items-center gap-1 font-bold text-rose-700 hover:text-rose-900 hover:underline cursor-pointer"
-                          >
-                            <LogOut className="w-3 h-3" />
-                            <span>Sign Out &amp; Switch Account</span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Department & Year (2 cols on desktop, 1 on mobile) */}
+                  {/* Department & Year (2 cols on desktop, 1 on mobile) - MOVED ABOVE BT ID */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
                     {/* Department Selector */}
                     <div ref={deptDropdownRef} className="space-y-1 relative">
@@ -1402,6 +1327,85 @@ export function ProfileSetupModal() {
                         </div>
                       )}
                     </div>
+                  </div>
+
+                  {/* College BT ID (Full width) - MOVED BELOW DEPARTMENT & YEAR */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-slate-700">
+                        College BT ID <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="flex items-center gap-2">
+                        {btIdAvailability.checking && (
+                          <span className="text-[10px] text-amber-600 font-medium flex items-center gap-1 animate-pulse">
+                            <Clock className="w-3 h-3 text-[#E78023]" />
+                            <span>Checking...</span>
+                          </span>
+                        )}
+                        {!btIdAvailability.checking && btId.trim().length >= 3 && btIdAvailability.available && (
+                          <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                            <Check className="w-3 h-3 text-emerald-600" />
+                            <span>Available</span>
+                          </span>
+                        )}
+                        <span className="text-[10px] text-slate-400 font-mono">Format: {btIdExample}</span>
+                      </div>
+                    </div>
+                    <input
+                      type="text"
+                      required
+                      placeholder={`e.g. ${btIdExample}`}
+                      value={btId}
+                      onChange={(e) => handleBtIdChange(e.target.value)}
+                      onBlur={handleBtIdBlur}
+                      className={cn(
+                        "w-full px-3.5 py-2.5 rounded-xl border text-xs font-mono font-bold uppercase tracking-wider focus:outline-none transition-all min-h-[44px]",
+                        !btIdAvailability.available
+                          ? "bg-rose-50/50 border-rose-300 text-rose-700 focus:border-rose-500 ring-2 ring-rose-500/10"
+                          : "bg-slate-50/80 border-slate-200 text-[#E78023] focus:bg-white focus:border-[#17458F]"
+                      )}
+                    />
+
+                    {/* Conflict card if BT ID already linked to another Google account */}
+                    {!btIdAvailability.available && (
+                      <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 space-y-2 animate-in fade-in">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                          <div className="text-xs space-y-0.5">
+                            <p className="font-bold text-rose-800">College ID Already Linked</p>
+                            <p className="text-[11px] leading-relaxed text-rose-700">
+                              {btIdAvailability.isCouncilOwnerMismatch ? (
+                                <>
+                                  College ID <strong className="font-mono">{btId}</strong> is reserved for Student Council official{" "}
+                                  <strong>{btIdAvailability.linkedName || "Council Officer"}</strong>. It can only be activated with their official email{" "}
+                                  <strong className="font-mono">{maskEmail(btIdAvailability.linkedEmail || "")}</strong>.
+                                </>
+                              ) : (
+                                <>
+                                  College ID <strong className="font-mono">{btId}</strong> is already linked to another account (
+                                  <strong className="font-mono">{maskEmail(btIdAvailability.linkedEmail || "")}</strong>).
+                                  Each student BT ID can only be bound to one Google account.
+                                </>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between pt-1 border-t border-rose-200/60 text-[11px]">
+                          <span className="text-rose-700 font-medium">Wrong Google account?</span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await logout();
+                              closeProfileModal();
+                            }}
+                            className="inline-flex items-center gap-1 font-bold text-rose-700 hover:text-rose-900 hover:underline cursor-pointer"
+                          >
+                            <LogOut className="w-3 h-3" />
+                            <span>Sign Out &amp; Switch Account</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* WhatsApp Contact Number */}

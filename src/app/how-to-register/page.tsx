@@ -579,9 +579,9 @@ export default function HowToRegisterPage() {
               </p>
               <ul className="text-xs text-slate-600 space-y-1.5 font-medium">
                 <li>• <strong>First &amp; Last Name</strong>: Official name for participation certificates.</li>
+                <li>• <strong>Department &amp; Year</strong>: Select your enrolled branch and academic year.</li>
+                <li>• <strong>Official College BT ID</strong>: Formatted specifically for your department (e.g. <code>BT210036CS</code> for CSE, <code>BT210036AI</code> for AI, <code>JPOLY24074</code> for Diploma, etc.).</li>
                 <li>• <strong>10-Digit WhatsApp Mobile</strong>: For instant pass alerts and urgent fest updates.</li>
-                <li>• <strong>Official BT ID</strong>: e.g., <code>BT210036CS</code> (Capital letters, no spaces).</li>
-                <li>• <strong>Department &amp; Year</strong>: Your current branch and academic year.</li>
               </ul>
             </div>
 

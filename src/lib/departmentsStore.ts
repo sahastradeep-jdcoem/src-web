@@ -13,9 +13,14 @@ import { getStoredUsers, USERS_STORAGE_KEY } from "./usersStore";
 import { getStoredListingResponses, RESPONSES_STORAGE_KEY } from "./listingsStore";
 import { getStoredCouncilMembers, saveStoredCouncilMembers } from "./councilStore";
 import { getStoredTenures, saveStoredTenures } from "./tenureStore";
-import { DEFAULT_DEPARTMENTS, DEPARTMENT_SHORT_NAMES } from "@/data/departments";
+import { 
+  DEFAULT_DEPARTMENTS, 
+  DEPARTMENT_SHORT_NAMES, 
+  DEPARTMENT_BT_ID_EXAMPLES, 
+  getDepartmentBtIdExample 
+} from "@/data/departments";
 
-export { DEFAULT_DEPARTMENTS, DEPARTMENT_SHORT_NAMES };
+export { DEFAULT_DEPARTMENTS, DEPARTMENT_SHORT_NAMES, DEPARTMENT_BT_ID_EXAMPLES, getDepartmentBtIdExample };
 
 /**
  * Returns short acronym form for departments (e.g. CSE, AI, IT, DS, CY, CE, EE, ME, ETC, MBA, BBA, MCA, DIP, BCA)
