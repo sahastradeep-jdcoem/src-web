@@ -452,8 +452,8 @@ export default function AdminEventsPage() {
           : undefined,
       tenureId: resolvedTenure?.id || getCurrentTenure()?.id,
       tenureLabel: resolvedTenure?.label || getCurrentTenure()?.label,
-      gateCheckInBtIds: formData.gateCheckInBtIds && formData.gateCheckInBtIds.length > 0 ? formData.gateCheckInBtIds : undefined,
-      eventAccessBtIds: formData.eventAccessBtIds && formData.eventAccessBtIds.length > 0 ? formData.eventAccessBtIds : undefined,
+      gateCheckInBtIds: Array.isArray(formData.gateCheckInBtIds) ? formData.gateCheckInBtIds : [],
+      eventAccessBtIds: Array.isArray(formData.eventAccessBtIds) ? formData.eventAccessBtIds : [],
     };
 
     const updated = created.isFeatured
@@ -639,8 +639,8 @@ export default function AdminEventsPage() {
             phone: editingEvent.coordinatorContact.phone || "",
           }
         : undefined,
-      gateCheckInBtIds: editingEvent.gateCheckInBtIds ? JSON.parse(JSON.stringify(editingEvent.gateCheckInBtIds)) : [],
-      eventAccessBtIds: editingEvent.eventAccessBtIds ? JSON.parse(JSON.stringify(editingEvent.eventAccessBtIds)) : [],
+      gateCheckInBtIds: Array.isArray(editingEvent.gateCheckInBtIds) ? JSON.parse(JSON.stringify(editingEvent.gateCheckInBtIds)) : [],
+      eventAccessBtIds: Array.isArray(editingEvent.eventAccessBtIds) ? JSON.parse(JSON.stringify(editingEvent.eventAccessBtIds)) : [],
     };
   }, [editingEvent]);
 
@@ -833,8 +833,8 @@ export default function AdminEventsPage() {
           : undefined,
       tenureId: resolvedTenure?.id || editingEvent.tenureId || getCurrentTenure()?.id,
       tenureLabel: resolvedTenure?.label || editingEvent.tenureLabel || getCurrentTenure()?.label,
-      gateCheckInBtIds: formData.gateCheckInBtIds && formData.gateCheckInBtIds.length > 0 ? formData.gateCheckInBtIds : undefined,
-      eventAccessBtIds: formData.eventAccessBtIds && formData.eventAccessBtIds.length > 0 ? formData.eventAccessBtIds : undefined,
+      gateCheckInBtIds: Array.isArray(formData.gateCheckInBtIds) ? formData.gateCheckInBtIds : [],
+      eventAccessBtIds: Array.isArray(formData.eventAccessBtIds) ? formData.eventAccessBtIds : [],
     };
 
     const hasItem = eventsList.some(targetMatch);

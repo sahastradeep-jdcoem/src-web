@@ -226,7 +226,7 @@ export function sanitizeEventItem(event: EventItem): EventItem {
               .filter(Boolean)
           )
         )
-      : undefined,
+      : [],
     eventAccessBtIds: Array.isArray(event.eventAccessBtIds)
       ? Array.from(
           new Set(
@@ -235,7 +235,7 @@ export function sanitizeEventItem(event: EventItem): EventItem {
               .filter(Boolean)
           )
         )
-      : undefined,
+      : [],
   };
 }
 

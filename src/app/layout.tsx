@@ -7,6 +7,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { ProfileSetupModal } from "@/components/auth/ProfileSetupModal";
 import { ToastContainer } from "@/components/ui/Toast";
+import FlaggedBtIdNotification from "@/components/notifications/FlaggedBtIdNotification";
 import SEOStructuredData from "@/components/seo/SEOStructuredData";
 import { SocialShareProvider } from "@/context/SocialShareContext";
 import NavigationProgressBar from "@/components/layout/NavigationProgressBar";
@@ -88,6 +89,7 @@ export default function RootLayout({
             <Footer />
             <AuthModal />
             <ProfileSetupModal />
+            <FlaggedBtIdNotification />
             <ToastContainer />
           </SocialShareProvider>
         </AuthProvider>

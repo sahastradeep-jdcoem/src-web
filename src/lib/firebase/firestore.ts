@@ -1969,6 +1969,8 @@ export async function saveEventToFirestore(event: EventItem): Promise<void> {
         ...event,
         id: event.id || docId,
         slug: event.slug || docId,
+        gateCheckInBtIds: Array.isArray(event.gateCheckInBtIds) ? event.gateCheckInBtIds : [],
+        eventAccessBtIds: Array.isArray(event.eventAccessBtIds) ? event.eventAccessBtIds : [],
       });
 
       // Individual event document safety check (750 KB safe limit per event)

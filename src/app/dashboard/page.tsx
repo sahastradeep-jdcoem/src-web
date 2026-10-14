@@ -17,6 +17,7 @@ import {
   Users, 
   ArrowRight, 
   Sparkles, 
+  AlertTriangle,
   Ticket,
   User,
   LogOut,
@@ -56,7 +57,11 @@ import {
 } from "@/lib/srcFormsHelper";
 import { CancelRegistrationModal } from "@/components/registration/CancelRegistrationModal";
 import { Badge } from "@/components/ui/Badge";
-import { getDepartmentShortName, resolveCanonicalDepartmentName } from "@/lib/departmentsStore";
+import { 
+  getDepartmentShortName, 
+  resolveCanonicalDepartmentName,
+  validateStudentBtId 
+} from "@/lib/departmentsStore";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { RegistrationRecord, EventItem } from "@/types";
@@ -966,6 +971,18 @@ export default function StudentDashboardPage() {
   const displayBtId = user?.btId?.toUpperCase() || (isFaculty ? user?.employeeId || "STAFF" : isExternal ? "EXTERNAL" : "BT ID PENDING");
   const displayDepartment = user?.department || user?.facultyDepartment || (isExternal ? user?.collegeName || "Inter-College" : "Department Pending");
   const displayYear = user?.year || (isFaculty ? "Faculty Staff" : "Student");
+  const isJdcoemStudent = Boolean(
+    user &&
+    !user.isDeleted &&
+    user.status !== "deleted" &&
+    !isExternal &&
+    user.userType !== "EXTERNAL_STUDENT" &&
+    !isFaculty &&
+    !user.employeeId
+  );
+  const btIdValidation = isJdcoemStudent 
+    ? validateStudentBtId(user?.btId, user?.department)
+    : { isFlagged: false, reason: "", expectedExample: "" };
 
   // Dynamic time greeting
   const greeting = useMemo(() => {
@@ -1100,6 +1117,18 @@ export default function StudentDashboardPage() {
                   {copiedBtId && <span className="text-[10px] text-emerald-400 font-sans">Copied!</span>}
                 </button>
 
+                {btIdValidation.isFlagged && (
+                  <button
+                    type="button"
+                    onClick={openProfileModal}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/50 text-amber-300 text-[10px] font-bold tracking-wide transition-colors cursor-pointer"
+                    title="Your BT ID has formatting discrepancies. Click to update."
+                  >
+                    <AlertTriangle className="w-3 h-3 text-amber-400 animate-pulse" />
+                    <span>FLAGGED</span>
+                  </button>
+                )}
+
                 <span className="hidden sm:inline text-slate-600">•</span>
                 <span className="font-medium text-slate-200">{displayDepartment}</span>
                 <span className="hidden sm:inline text-slate-600">•</span>
@@ -1158,6 +1187,48 @@ export default function StudentDashboardPage() {
               </Button>
             </div>
           </div>
+
+          {/* Flagged BT ID Institutional Alert Callout */}
+          {btIdValidation.isFlagged && (
+            <div className="rounded-2xl bg-amber-500/15 border border-amber-400/40 p-4 sm:p-5 backdrop-blur-md text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-start gap-3.5">
+                <div className="h-10 w-10 rounded-2xl bg-amber-500/20 border border-amber-400/50 text-amber-400 flex items-center justify-center shrink-0 mt-0.5 shadow-inner">
+                  <AlertTriangle className="w-5 h-5 text-amber-400 animate-pulse" />
+                </div>
+                <div className="space-y-1.5 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-heading font-extrabold text-sm sm:text-base tracking-tight text-white uppercase">
+                      Action Required: College BT ID Flagged
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-[10px] font-extrabold uppercase tracking-wider">
+                      Format Discrepancy
+                    </span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-200 font-medium leading-relaxed">
+                    {btIdValidation.reason}. Expected format for your branch:{" "}
+                    <strong className="font-mono text-emerald-300 font-bold underline decoration-emerald-400/50">
+                      {btIdValidation.expectedExample || "e.g. BT210036CS"}
+                    </strong>
+                  </p>
+                  <p className="text-[11px] text-slate-300 flex items-center gap-1.5 pt-0.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Your event registrations, passes, and campus check-ins remain fully valid and active.</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0 w-full md:w-auto pt-1 md:pt-0">
+                <button
+                  type="button"
+                  onClick={openProfileModal}
+                  className="w-full md:w-auto min-h-[44px] px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#E78023] to-[#D26E17] hover:from-[#d26e17] hover:to-[#be6113] active:scale-[0.98] text-white text-xs font-bold uppercase tracking-wider shadow-lg shadow-[#E78023]/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>Fix BT ID in Profile</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 

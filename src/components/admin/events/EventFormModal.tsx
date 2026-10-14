@@ -474,8 +474,8 @@ export function EventFormModal({
         feeAmount: typeof initialData.feeAmount === "number" && initialData.feeAmount > 0 ? initialData.feeAmount : (initialData.isPaid ? 100 : 0),
         whatsappGroupUrl: initialData.whatsappGroupUrl || "",
         whatsappGroupName: initialData.whatsappGroupName || "",
-        gateCheckInBtIds: initialData.gateCheckInBtIds ? JSON.parse(JSON.stringify(initialData.gateCheckInBtIds)) : (prev.gateCheckInBtIds || []),
-        eventAccessBtIds: initialData.eventAccessBtIds ? JSON.parse(JSON.stringify(initialData.eventAccessBtIds)) : (prev.eventAccessBtIds || []),
+        gateCheckInBtIds: Array.isArray(initialData.gateCheckInBtIds) ? JSON.parse(JSON.stringify(initialData.gateCheckInBtIds)) : [],
+        eventAccessBtIds: Array.isArray(initialData.eventAccessBtIds) ? JSON.parse(JSON.stringify(initialData.eventAccessBtIds)) : [],
       }));
     }
   }, [initialData]);
