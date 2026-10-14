@@ -17,10 +17,19 @@ import {
   DEFAULT_DEPARTMENTS, 
   DEPARTMENT_SHORT_NAMES, 
   DEPARTMENT_BT_ID_EXAMPLES, 
-  getDepartmentBtIdExample 
+  getDepartmentBtIdExample,
+  validateStudentBtId,
+  type BtIdValidationResult
 } from "@/data/departments";
 
-export { DEFAULT_DEPARTMENTS, DEPARTMENT_SHORT_NAMES, DEPARTMENT_BT_ID_EXAMPLES, getDepartmentBtIdExample };
+export { 
+  DEFAULT_DEPARTMENTS, 
+  DEPARTMENT_SHORT_NAMES, 
+  DEPARTMENT_BT_ID_EXAMPLES, 
+  getDepartmentBtIdExample,
+  validateStudentBtId,
+  type BtIdValidationResult
+};
 
 /**
  * Returns short acronym form for departments (e.g. CSE, AI, IT, DS, CY, CE, EE, ME, ETC, MBA, BBA, MCA, DIP, BCA)

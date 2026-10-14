@@ -14,6 +14,7 @@ import {
   Trash2, 
   CheckCircle2, 
   AlertCircle,
+  AlertTriangle,
   UserCheck,
   Building2,
   GraduationCap,
@@ -55,7 +56,14 @@ import {
   compareUsersNewestFirst
 } from "@/lib/usersStore";
 import { subscribeToUsersFromFirestore } from "@/lib/firebase/firestore";
-import { getStoredDepartments, getDepartmentShortName, resolveCanonicalDepartmentName, syncDepartmentsFromFirestore } from "@/lib/departmentsStore";
+import { 
+  getStoredDepartments, 
+  getDepartmentShortName, 
+  resolveCanonicalDepartmentName, 
+  syncDepartmentsFromFirestore,
+  validateStudentBtId,
+  type BtIdValidationResult
+} from "@/lib/departmentsStore";
 import { FACULTY_DESIGNATIONS, FACULTY_TITLES } from "@/components/auth/ProfileSetupModal";
 import { isOwnerEmail } from "@/types/rbac";
 import { 
@@ -72,7 +80,9 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<RegisteredUserRecord[]>([]);
   const [departments, setDepartments] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<"All" | "PENDING_FACULTY" | "VERIFIED_FACULTY" | "JDCOEM_STUDENTS" | "EXTERNAL_STUDENTS" | "COUNCIL_ADMIN" | "DELETED_ACCOUNTS">("All");
+  const [categoryFilter, setCategoryFilter] = useState<
+    "All" | "PENDING_FACULTY" | "VERIFIED_FACULTY" | "JDCOEM_STUDENTS" | "EXTERNAL_STUDENTS" | "COUNCIL_ADMIN" | "DELETED_ACCOUNTS" | "FLAGGED_IDS"
+  >("All");
   const [deptFilter, setDeptFilter] = useState("All");
   const [sortBy, setSortBy] = useState<
     "newest" | "oldest" | "name_asc" | "name_desc" | "bt_asc" | "bt_desc" | "dept_asc"
@@ -441,6 +451,16 @@ export default function AdminUsersPage() {
     return users.filter((u) => u.isDeleted || u.status === "deleted");
   }, [users]);
 
+  // Flagged Student IDs for review (BT ID format or department mismatch)
+  // NOTE: In accordance with directives, flagging NEVER pauses or blocks registration.
+  const flaggedUsers = useMemo(() => {
+    return users.filter((u) => {
+      if (u.isDeleted || u.status === "deleted") return false;
+      if (isExternalUser(u) || u.role === "FACULTY" || u.userType === "FACULTY") return false;
+      return validateStudentBtId(u.btId, u.department).isFlagged;
+    });
+  }, [users]);
+
   const filteredUsers = useMemo(() => {
     const list = users.filter((u) => {
       const name = (u.displayName || "").toLowerCase();
@@ -472,6 +492,8 @@ export default function AdminUsersPage() {
         matchesCategory = !u.isDeleted && u.status !== "deleted" && isExternalUser(u);
       } else if (categoryFilter === "COUNCIL_ADMIN") {
         matchesCategory = !u.isDeleted && u.status !== "deleted" && (u.role === "COUNCIL_ADMIN" || u.role === "OWNER" || u.adminAccess?.role === "OWNER" || isOwnerEmail(u.email));
+      } else if (categoryFilter === "FLAGGED_IDS") {
+        matchesCategory = !u.isDeleted && u.status !== "deleted" && !isExternalUser(u) && u.role !== "FACULTY" && u.userType !== "FACULTY" && validateStudentBtId(u.btId, u.department).isFlagged;
       }
 
       const matchesDept =
@@ -534,21 +556,28 @@ export default function AdminUsersPage() {
 
     const XLSX = await import("xlsx");
 
-    const rows = filteredUsers.map((u) => ({
-      "User Type": u.role === "FACULTY" || u.userType === "FACULTY" ? "FACULTY" : u.userType === "EXTERNAL_STUDENT" ? "EXTERNAL STUDENT" : "JDCOEM STUDENT",
-      "Full Name": u.displayName || "",
-      "Email Address": u.email || "",
-      "College BT ID": u.btId || "N/A",
-      "College / University": u.collegeName || "JDCOEM Nagpur",
-      "City": u.city || "Nagpur",
-      "Department / Branch": u.facultyDepartment || u.department || u.customBranch || "",
-      "Academic Year / Role": u.facultyDesignation || u.year || "",
-      "Faculty Status": u.facultyApprovalStatus || "N/A",
-      "WhatsApp Contact": u.phone || "",
-      "Access Role": u.role,
-      "Profile Completed": u.profileCompleted ? "YES" : "NO",
-      "Registration Date": formatUserRegistrationDate(u.createdAt),
-    }));
+    const rows = filteredUsers.map((u) => {
+      const isStudent = !isExternalUser(u) && u.role !== "FACULTY" && u.userType !== "FACULTY" && !u.isDeleted;
+      const validation = isStudent ? validateStudentBtId(u.btId, u.department) : { isFlagged: false };
+
+      return {
+        "User Type": u.role === "FACULTY" || u.userType === "FACULTY" ? "FACULTY" : u.userType === "EXTERNAL_STUDENT" ? "EXTERNAL STUDENT" : "JDCOEM STUDENT",
+        "Full Name": u.displayName || "",
+        "Email Address": u.email || "",
+        "College BT ID": u.btId || "N/A",
+        "Flagged Status": validation.isFlagged ? "FLAGGED FOR REVIEW" : "VALID",
+        "Flag Reason": validation.isFlagged ? (validation.reason || "Format mismatch") : "N/A",
+        "College / University": u.collegeName || "JDCOEM Nagpur",
+        "City": u.city || "Nagpur",
+        "Department / Branch": u.facultyDepartment || u.department || u.customBranch || "",
+        "Academic Year / Role": u.facultyDesignation || u.year || "",
+        "Faculty Status": u.facultyApprovalStatus || "N/A",
+        "WhatsApp Contact": u.phone || "",
+        "Access Role": u.role,
+        "Profile Completed": u.profileCompleted ? "YES" : "NO",
+        "Registration Date": formatUserRegistrationDate(u.createdAt),
+      };
+    });
 
     const ws = XLSX.utils.json_to_sheet(rows);
     const colKeys = Object.keys(rows[0] || {});
@@ -661,8 +690,8 @@ export default function AdminUsersPage() {
         </div>
       )}
 
-      {/* Summary KPI Badges (6 Cards) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
+      {/* Summary KPI Badges (7 Cards) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3.5">
         <button
           type="button"
           onClick={() => setCategoryFilter("All")}
@@ -732,6 +761,25 @@ export default function AdminUsersPage() {
 
         <button
           type="button"
+          onClick={() => setCategoryFilter("FLAGGED_IDS")}
+          className={`p-4 rounded-2xl bg-white border shadow-xs space-y-1 text-left transition-all hover:border-amber-500/40 cursor-pointer ${
+            categoryFilter === "FLAGGED_IDS" ? "ring-2 ring-amber-500 border-amber-500 bg-amber-50/20" : "border-slate-200"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Flagged IDs</span>
+            {flaggedUsers.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold text-[9px] animate-pulse">
+                {flaggedUsers.length} Review
+              </span>
+            )}
+          </div>
+          <p className="font-hero font-extrabold text-2xl text-amber-600">{flaggedUsers.length}</p>
+          <span className="text-[10px] text-slate-500 font-medium block">Format / Dept Issue</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setCategoryFilter("DELETED_ACCOUNTS")}
           className={`p-4 rounded-2xl bg-white border shadow-xs space-y-1 text-left transition-all hover:border-rose-500/40 cursor-pointer ${
             categoryFilter === "DELETED_ACCOUNTS" ? "ring-2 ring-rose-600 border-rose-600" : "border-slate-200"
@@ -791,6 +839,40 @@ export default function AdminUsersPage() {
           </select>
         </div>
       </div>
+
+      {/* Flagged IDs Section Header / Explanatory Alert Banner */}
+      {categoryFilter === "FLAGGED_IDS" && (
+        <div className="p-4 sm:p-5 rounded-3xl bg-amber-50/90 border border-amber-200 text-amber-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-start gap-3">
+            <div className="h-9 w-9 rounded-2xl bg-amber-200/80 text-amber-800 flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+              <AlertTriangle className="w-5 h-5 text-amber-700" />
+            </div>
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <h4 className="font-heading font-extrabold text-sm text-amber-950">
+                  Flagged Student IDs Review ({flaggedUsers.length} Account{flaggedUsers.length === 1 ? "" : "s"})
+                </h4>
+                <span className="px-2 py-0.5 rounded-full bg-amber-200/70 text-amber-900 text-[10px] font-bold">
+                  Admin Audit
+                </span>
+              </div>
+              <p className="text-xs text-amber-800 leading-relaxed font-medium">
+                These accounts have a BT ID that does not match the department format or has a branch code discrepancy.
+                <span className="font-bold text-amber-950 block mt-0.5">
+                  🛡️ Registrations &amp; Logins are NOT paused for these accounts — students continue participating without interruption.
+                </span>
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCategoryFilter("All")}
+            className="px-3.5 py-2 rounded-xl bg-white hover:bg-amber-100 border border-amber-300 text-amber-900 text-xs font-bold transition-all shadow-2xs shrink-0 cursor-pointer self-start sm:self-center"
+          >
+            Clear Filter (Show All)
+          </button>
+        </div>
+      )}
 
       {/* Users Data Table */}
       <div className="rounded-3xl bg-white border border-slate-200 overflow-hidden shadow-xs">
@@ -866,12 +948,15 @@ export default function AdminUsersPage() {
                   const isFaculty = u.role === "FACULTY" || u.userType === "FACULTY";
                   const isExternal = isExternalUser(u);
                   const isPendingFaculty = !isDeleted && isFaculty && u.facultyApprovalStatus === "pending";
+                  const validation = !isDeleted && !isFaculty && !isExternal 
+                    ? validateStudentBtId(u.btId, u.department) 
+                    : { isFlagged: false };
 
                   return (
                     <tr 
                       key={u.uid} 
                       className={`hover:bg-slate-50 transition-colors ${
-                        isDeleted ? "bg-rose-50/30" : isPendingFaculty ? "bg-amber-50/40" : ""
+                        isDeleted ? "bg-rose-50/30" : isPendingFaculty ? "bg-amber-50/40" : validation.isFlagged ? "bg-amber-50/20" : ""
                       }`}
                     >
                       
@@ -929,13 +1014,39 @@ export default function AdminUsersPage() {
                             )}
                           </div>
                         ) : u.btId ? (
-                          <span className="font-mono font-bold text-[#17458F] px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200">
-                            {u.btId}
-                          </span>
+                          validation.isFlagged ? (
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-mono font-bold text-amber-900 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-300">
+                                  {u.btId}
+                                </span>
+                                <span 
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs"
+                                  title={validation.reason}
+                                >
+                                  <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                                  <span>Flagged</span>
+                                </span>
+                              </div>
+                              <span className="block text-[10px] font-semibold text-amber-800 leading-tight max-w-[210px]">
+                                {validation.reason}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="font-mono font-bold text-[#17458F] px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200">
+                              {u.btId}
+                            </span>
+                          )
                         ) : (
-                          <span className="text-slate-400 text-xs italic font-sans">
-                            Pending BT ID
-                          </span>
+                          <div className="space-y-1">
+                            <span className="text-slate-400 text-xs italic font-sans block">
+                              Pending BT ID
+                            </span>
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                              <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                              <span>Missing ID</span>
+                            </span>
+                          </div>
                         )}
                       </td>
 
@@ -1053,10 +1164,17 @@ export default function AdminUsersPage() {
                             <span>Verified Delegate</span>
                           </div>
                         ) : u.role === "COUNCIL_ADMIN" || u.profileCompleted ? (
-                          <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-semibold">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>Verified BT ID</span>
-                          </div>
+                          validation.isFlagged ? (
+                            <div className="flex items-center gap-1.5 text-amber-800 text-xs font-bold bg-amber-100/70 px-2.5 py-1 rounded-xl border border-amber-300 w-fit shadow-2xs">
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <span>Flagged for Review</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-semibold">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Verified BT ID</span>
+                            </div>
+                          )
                         ) : (
                           <div className="flex items-center gap-1.5 text-amber-700 text-xs font-semibold">
                             <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
@@ -1329,6 +1447,39 @@ export default function AdminUsersPage() {
               </div>
             )}
 
+            {/* Flagged Student BT ID Alert Callout */}
+            {!isExternalUser(selectedUser) &&
+              selectedUser.role !== "FACULTY" &&
+              selectedUser.userType !== "FACULTY" &&
+              !selectedUser.employeeId &&
+              (() => {
+                const validation = validateStudentBtId(selectedUser.btId, selectedUser.department);
+                if (!validation.isFlagged) return null;
+                return (
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3">
+                    <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-600 shrink-0 mt-0.5">
+                      <AlertTriangle className="w-4 h-4" />
+                    </div>
+                    <div className="text-xs space-y-0.5 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-amber-900">Student BT ID Flagged for Review</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-200/60 text-amber-800 font-semibold">
+                          Audit Warning
+                        </span>
+                      </div>
+                      <p className="text-amber-800 leading-relaxed font-medium">
+                        {validation.reason}
+                      </p>
+                      {validation.expectedExample && (
+                        <p className="text-[11px] text-amber-700/80 pt-0.5">
+                          Example format: <span className="font-mono font-semibold">{validation.expectedExample}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               {/* Box 1: Affiliation / College */}
               <div className="p-3.5 rounded-xl bg-slate-50 space-y-1 border border-slate-100">
@@ -1348,10 +1499,20 @@ export default function AdminUsersPage() {
                     ? "Staff / Employee ID"
                     : "College BT ID"}
                 </span>
-                <p className="font-mono font-bold text-[#E78023] text-sm">
+                <p className="font-mono font-bold text-[#E78023] text-sm flex items-center flex-wrap gap-1.5">
                   {selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY" || Boolean(selectedUser.employeeId)
                     ? (selectedUser.employeeId || "No ID Required")
                     : (selectedUser.btId || (selectedUser.userType === "EXTERNAL_STUDENT" ? "External Delegate" : "Not registered"))}
+                  {!isExternalUser(selectedUser) &&
+                    selectedUser.role !== "FACULTY" &&
+                    selectedUser.userType !== "FACULTY" &&
+                    !selectedUser.employeeId &&
+                    validateStudentBtId(selectedUser.btId, selectedUser.department).isFlagged && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-sans font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">
+                        <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+                        Flagged
+                      </span>
+                  )}
                 </p>
               </div>
 
