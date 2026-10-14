@@ -241,6 +241,11 @@ export async function getAllAdminAccessFromFirestore(): Promise<AdminAccessAssig
 
   // 3. If records exist from either cloud store, update local cache
   if (result.length > 0) {
+    result.sort((a, b) => {
+      const timeB = new Date(b.grantedAt || b.updatedAt || 0).getTime() || 0;
+      const timeA = new Date(a.grantedAt || a.updatedAt || 0).getTime() || 0;
+      return timeB - timeA;
+    });
     safeStorageSet("src_admin_access_cache", result);
     return result;
   }
@@ -307,6 +312,11 @@ export function subscribeToAdminAccessFromFirestore(
           });
           const result = Array.from(map.values());
           if (result.length > 0) {
+            result.sort((a, b) => {
+              const timeB = new Date(b.grantedAt || b.updatedAt || 0).getTime() || 0;
+              const timeA = new Date(a.grantedAt || a.updatedAt || 0).getTime() || 0;
+              return timeB - timeA;
+            });
             hasEmittedFromCollection = true;
             safeStorageSet("src_admin_access_cache", result);
             callback(result);

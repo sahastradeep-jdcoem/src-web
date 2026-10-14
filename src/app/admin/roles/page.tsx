@@ -183,6 +183,15 @@ export default function AdminRolesPage() {
     return map;
   }, [assignments]);
 
+  // Sorted assignments (newest granted/updated first)
+  const sortedAssignments = useMemo(() => {
+    return [...assignments].sort((a, b) => {
+      const timeB = new Date(b.grantedAt || b.updatedAt || 0).getTime() || 0;
+      const timeA = new Date(a.grantedAt || a.updatedAt || 0).getTime() || 0;
+      return timeB - timeA;
+    });
+  }, [assignments]);
+
   // Comprehensive name lookup map built from Canonical records, Club Rosters, Officers, and Registered Users
   const nameLookupMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -1318,7 +1327,7 @@ export default function AdminRolesPage() {
         </div>
 
         <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-          {assignments
+          {sortedAssignments
             .filter((assignment) => {
               if (!searchQuery.trim()) return true;
               const q = searchQuery.toLowerCase().trim();
