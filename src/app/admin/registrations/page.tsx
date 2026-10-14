@@ -416,7 +416,7 @@ export default function AdminRegistrationsPage() {
     });
   };
 
-  const loadRegistrations = async () => {
+  const loadLocalRegistrations = () => {
     try {
       const localRecords = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
       if (Array.isArray(localRecords) && localRecords.length > 0) {
@@ -424,23 +424,13 @@ export default function AdminRegistrationsPage() {
         setRegistrations(formatRecords(cleaned));
       }
     } catch {}
-
-    try {
-      const cloud = await getAllRegistrationsFromFirestore();
-      if (cloud) {
-        const cleaned = cloud.filter((r: any) => !isTestPassRecord(r) && !isHubRecord(r));
-        const formatted = formatRecords(cleaned);
-        setRegistrations(formatted);
-        try {
-          localStorage.setItem("src_local_registrations", JSON.stringify(formatted));
-        } catch {}
-      }
-    } catch {}
   };
 
   useEffect(() => {
-    loadRegistrations();
+    // 1. Instant optimistic local render
+    loadLocalRegistrations();
 
+    // 2. Real-time multiplexed Firestore subscription (delivers initial cloud snapshot & all live deltas)
     const unsubscribe = subscribeToRegistrationsFromFirestore((cloudRegs) => {
       if (cloudRegs) {
         const cleaned = cloudRegs.filter((r: any) => !isTestPassRecord(r) && !isHubRecord(r));
@@ -452,7 +442,7 @@ export default function AdminRegistrationsPage() {
       }
     });
 
-    const handleStorage = () => loadRegistrations();
+    const handleStorage = () => loadLocalRegistrations();
     window.addEventListener("storage", handleStorage);
     return () => {
       unsubscribe();

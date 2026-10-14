@@ -164,6 +164,7 @@ export default function AdminUsersSummaryPage() {
   const [hoveredDept, setHoveredDept] = useState<SliceItem | null>(null);
 
   const loadData = async () => {
+    // 1. Instant optimistic local render
     setUsers(getStoredUsers());
     setDepartments(getStoredDepartments());
 
@@ -174,10 +175,6 @@ export default function AdminUsersSummaryPage() {
     }).catch(() => {});
 
     try {
-      const synced = await syncUsersFromFirestore();
-      if (synced && synced.length > 0) {
-        setUsers(synced);
-      }
       const reconciled = await reconcileAllUserDesignations();
       if (reconciled && reconciled.length > 0) {
         setUsers(reconciled);

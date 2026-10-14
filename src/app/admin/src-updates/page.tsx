@@ -206,12 +206,6 @@ export default function AdminSrcUpdatesPage() {
       if (cloudResps && cloudResps.length > 0) setDispatchResponses(cloudResps);
     });
 
-    syncUsersFromFirestore().then((syncedUsers) => {
-      if (syncedUsers && syncedUsers.length > 0) {
-        setUsers(syncedUsers);
-      }
-    });
-
     syncTenuresFromFirestore().then((cloudTenures) => {
       if (Array.isArray(cloudTenures) && cloudTenures.length > 0) {
         setAvailableTenures(cloudTenures);

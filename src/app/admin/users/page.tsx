@@ -94,6 +94,7 @@ export default function AdminUsersPage() {
   const [isSyncing, setIsSyncing] = useState(false);
 
   const loadData = async () => {
+    // 1. Instant optimistic local render
     setUsers(getStoredUsers());
     setDepartments(getStoredDepartments());
     syncDepartmentsFromFirestore().then((remoteDepts) => {
@@ -102,10 +103,6 @@ export default function AdminUsersPage() {
       }
     }).catch(() => {});
     try {
-      const synced = await syncUsersFromFirestore();
-      if (synced && synced.length > 0) {
-        setUsers(synced);
-      }
       const reconciled = await reconcileAllUserDesignations();
       if (reconciled && reconciled.length > 0) {
         setUsers(reconciled);

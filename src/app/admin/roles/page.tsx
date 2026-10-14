@@ -117,7 +117,9 @@ export default function AdminRolesPage() {
       setOfficers(combinedOfficers);
       if (remoteAssignments && remoteAssignments.length > 0) {
         setAssignments(remoteAssignments);
-        saveSiteContentToFirestore("admin_access", remoteAssignments).catch(() => {});
+        try {
+          localStorage.setItem("src_admin_access_cache", JSON.stringify(remoteAssignments));
+        } catch {}
       } else {
         try {
           const cached = localStorage.getItem("src_admin_access_cache");
@@ -125,7 +127,6 @@ export default function AdminRolesPage() {
             const parsed = JSON.parse(cached);
             if (Array.isArray(parsed) && parsed.length > 0) {
               setAssignments(parsed);
-              saveSiteContentToFirestore("admin_access", parsed).catch(() => {});
             }
           }
         } catch {}

@@ -141,11 +141,6 @@ export default function AdminEventsPage() {
     const stored = getStoredEvents();
     setEventsList(stored);
     setClubsList(getStoredClubs());
-    syncEventsFromFirestore().then((res) => {
-      if (Array.isArray(res)) {
-        setEventsList(res);
-      }
-    });
   };
 
   const handleManualSync = async () => {

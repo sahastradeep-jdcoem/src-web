@@ -352,7 +352,7 @@ export default function AdminPaymentsPage() {
 
   // Dual-Subscription for Registrations
   useEffect(() => {
-    // 1. Local Cache
+    // 1. Local Cache (instant optimistic render)
     try {
       const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
       if (Array.isArray(local) && local.length > 0) {
@@ -360,18 +360,7 @@ export default function AdminPaymentsPage() {
       }
     } catch {}
 
-    // 2. Direct Asynchronous Fetch
-    getAllRegistrationsFromFirestore().then((cloud) => {
-      if (cloud && cloud.length > 0) {
-        const formatted = formatRecords(cloud);
-        setRegistrations(formatted);
-        try {
-          localStorage.setItem("src_local_registrations", JSON.stringify(formatted));
-        } catch {}
-      }
-    });
-
-    // 3. Real-Time Snapshot Listener
+    // 2. Real-Time Multiplexed Snapshot Listener (delivers initial cloud snapshot & all live deltas)
     const unsubscribeSnapshot = subscribeToRegistrationsFromFirestore((liveList) => {
       if (liveList && Array.isArray(liveList)) {
         const formatted = formatRecords(liveList);

@@ -98,9 +98,6 @@ export default function AdminListingsPage() {
       }
     });
     syncListingResponsesFromFirestore().then((data) => { if (data && Array.isArray(data)) setResponses(data); });
-    syncUsersFromFirestore().then(() => {
-      setResponses(getStoredListingResponses());
-    });
 
     const unsubListings = subscribeToListings((data) => {
       if (data && Array.isArray(data)) {

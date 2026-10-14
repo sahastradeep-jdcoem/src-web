@@ -235,11 +235,9 @@ export async function getAllAdminAccessFromFirestore(): Promise<AdminAccessAssig
     }
   }
 
-  // 3. If records exist from either cloud store, update local cache and ensure site_content backup is synchronized
+  // 3. If records exist from either cloud store, update local cache
   if (result.length > 0) {
     safeStorageSet("src_admin_access_cache", result);
-    // Background mirror to site_content so non-primary devices immediately have access
-    saveSiteContentToFirestore("admin_access", result).catch(() => {});
     return result;
   }
 
@@ -307,7 +305,6 @@ export function subscribeToAdminAccessFromFirestore(
           if (result.length > 0) {
             hasEmittedFromCollection = true;
             safeStorageSet("src_admin_access_cache", result);
-            saveSiteContentToFirestore("admin_access", result).catch(() => {});
             callback(result);
             return;
           }
@@ -807,29 +804,88 @@ export async function findUserByBtIdInFirestore(btId: string): Promise<UserProfi
   return null;
 }
 
+let usersMux: {
+  subscribers: Set<(users: UserProfile[]) => void>;
+  unsubscriber: (() => void) | null;
+  lastEmittedUsers: UserProfile[] | null;
+  teardownTimer: NodeJS.Timeout | null;
+} | null = null;
+
 /**
- * Subscribe to real-time updates of all registered student users in Firestore
+ * Subscribe to real-time updates of all registered student users in Firestore.
+ * Uses a singleton multiplexer with a 30s grace window across route transitions
+ * to prevent duplicate full collection reads.
  */
 export function subscribeToUsersFromFirestore(callback: (users: UserProfile[]) => void): () => void {
   if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
     return () => {};
   }
-  try {
-    const usersRef = collection(db, USERS_COLLECTION);
-    return onSnapshot(
-      usersRef, 
-      (snapshot) => {
-        const users = snapshot.docs.map((d) => ({ uid: d.id, ...d.data() } as UserProfile));
-        callback(users);
-      },
-      (error) => {
-        console.warn("Firestore live users snapshot notice", error);
-      }
-    );
-  } catch (e) {
-    console.warn("Firestore subscription error", e);
-    return () => {};
+
+  if (!usersMux) {
+    usersMux = {
+      subscribers: new Set(),
+      unsubscriber: null,
+      lastEmittedUsers: null,
+      teardownTimer: null,
+    };
   }
+
+  if (usersMux.teardownTimer) {
+    clearTimeout(usersMux.teardownTimer);
+    usersMux.teardownTimer = null;
+  }
+
+  usersMux.subscribers.add(callback);
+
+  // If fresh users are already cached in the multiplexer, emit immediately in 0ms
+  if (usersMux.lastEmittedUsers && usersMux.lastEmittedUsers.length > 0) {
+    try {
+      callback(usersMux.lastEmittedUsers);
+    } catch (e) {
+      console.warn("Notice in immediate users callback:", e);
+    }
+  }
+
+  if (!usersMux.unsubscriber) {
+    try {
+      const usersRef = collection(db, USERS_COLLECTION);
+      usersMux.unsubscriber = onSnapshot(
+        usersRef, 
+        (snapshot) => {
+          const users = snapshot.docs.map((d) => ({ uid: d.id, ...d.data() } as UserProfile));
+          if (usersMux) {
+            usersMux.lastEmittedUsers = users;
+            usersMux.subscribers.forEach((cb) => {
+              try {
+                cb(users);
+              } catch (err) {
+                console.warn("Notice in user subscriber callback:", err);
+              }
+            });
+          }
+        },
+        (error) => {
+          console.warn("Firestore live users snapshot notice", error);
+        }
+      );
+    } catch (e) {
+      console.warn("Firestore subscription error", e);
+    }
+  }
+
+  return () => {
+    if (!usersMux) return;
+    usersMux.subscribers.delete(callback);
+    if (usersMux.subscribers.size === 0) {
+      // 30-second grace window to preserve active listener across Next.js route transitions
+      usersMux.teardownTimer = setTimeout(() => {
+        if (usersMux && usersMux.subscribers.size === 0) {
+          if (usersMux.unsubscriber) usersMux.unsubscriber();
+          usersMux = null;
+        }
+      }, 30000);
+    }
+  };
 }
 
 /**
@@ -1300,8 +1356,17 @@ export function subscribeToStudentRegistrationsFromFirestore(
   };
 }
 
+let registrationsMux: {
+  subscribers: Set<(regs: StudentRegistrationRecord[]) => void>;
+  unsubscriber: (() => void) | null;
+  lastEmittedRegs: StudentRegistrationRecord[] | null;
+  teardownTimer: NodeJS.Timeout | null;
+} | null = null;
+
 /**
- * Subscribe to real-time updates of event registrations in Firestore (strictly excluding hub submissions & poll ballots)
+ * Subscribe to real-time updates of event registrations in Firestore (strictly excluding hub submissions & poll ballots).
+ * Uses a singleton multiplexer with a 30s grace window across route transitions
+ * to prevent duplicate full collection reads.
  */
 export function subscribeToRegistrationsFromFirestore(
   callback: (regs: StudentRegistrationRecord[]) => void
@@ -1309,24 +1374,74 @@ export function subscribeToRegistrationsFromFirestore(
   if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
     return () => {};
   }
-  try {
-    const colRef = collection(db, REGISTRATIONS_COLLECTION);
-    return onSnapshot(
-      colRef,
-      (snapshot) => {
-        const list = snapshot.docs
-          .filter((d) => !isHubRecord({ id: d.id, ...d.data() }) && !isTestPassRecord({ id: d.id, ...d.data() }))
-          .map((d) => ({ id: d.id, ...d.data() } as StudentRegistrationRecord));
-        callback(list);
-      },
-      (error) => {
-        console.warn("Firestore live registrations notice", error);
-      }
-    );
-  } catch (e) {
-    console.warn("Firestore subscription error for registrations", e);
-    return () => {};
+
+  if (!registrationsMux) {
+    registrationsMux = {
+      subscribers: new Set(),
+      unsubscriber: null,
+      lastEmittedRegs: null,
+      teardownTimer: null,
+    };
   }
+
+  if (registrationsMux.teardownTimer) {
+    clearTimeout(registrationsMux.teardownTimer);
+    registrationsMux.teardownTimer = null;
+  }
+
+  registrationsMux.subscribers.add(callback);
+
+  // If fresh registrations are already cached in the multiplexer, emit immediately in 0ms
+  if (registrationsMux.lastEmittedRegs && registrationsMux.lastEmittedRegs.length > 0) {
+    try {
+      callback(registrationsMux.lastEmittedRegs);
+    } catch (e) {
+      console.warn("Notice in immediate registrations callback:", e);
+    }
+  }
+
+  if (!registrationsMux.unsubscriber) {
+    try {
+      const colRef = collection(db, REGISTRATIONS_COLLECTION);
+      registrationsMux.unsubscriber = onSnapshot(
+        colRef,
+        (snapshot) => {
+          const list = snapshot.docs
+            .filter((d) => !isHubRecord({ id: d.id, ...d.data() }) && !isTestPassRecord({ id: d.id, ...d.data() }))
+            .map((d) => ({ id: d.id, ...d.data() } as StudentRegistrationRecord));
+          if (registrationsMux) {
+            registrationsMux.lastEmittedRegs = list;
+            registrationsMux.subscribers.forEach((cb) => {
+              try {
+                cb(list);
+              } catch (err) {
+                console.warn("Notice in registrations subscriber callback:", err);
+              }
+            });
+          }
+        },
+        (error) => {
+          console.warn("Firestore live registrations notice", error);
+        }
+      );
+    } catch (e) {
+      console.warn("Firestore subscription error for registrations", e);
+    }
+  }
+
+  return () => {
+    if (!registrationsMux) return;
+    registrationsMux.subscribers.delete(callback);
+    if (registrationsMux.subscribers.size === 0) {
+      // 30-second grace window to preserve active listener across Next.js route transitions
+      registrationsMux.teardownTimer = setTimeout(() => {
+        if (registrationsMux && registrationsMux.subscribers.size === 0) {
+          if (registrationsMux.unsubscriber) registrationsMux.unsubscriber();
+          registrationsMux = null;
+        }
+      }, 30000);
+    }
+  };
 }
 
 /**

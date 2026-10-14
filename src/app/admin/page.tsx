@@ -46,12 +46,13 @@ import {
   saveStoredSpokespersons
 } from "@/lib/councilStore";
 import { getStoredEvents, saveStoredEvents } from "@/lib/eventsStore";
-import { getStoredUsers, syncUsersFromFirestore, mergeRemoteUsers } from "@/lib/usersStore";
+import { getStoredUsers } from "@/lib/usersStore";
 import { getStoredTenures, saveStoredTenures } from "@/lib/tenureStore";
 import { getStoredDepartments, saveStoredDepartments } from "@/lib/departmentsStore";
 import { getStoredGalleryPhotos, saveStoredGalleryPhotos } from "@/lib/galleryStore";
 import { getStoredHeroSettings, saveStoredHeroSettings } from "@/lib/heroStore";
-import { subscribeToUsersFromFirestore } from "@/lib/firebase/firestore";
+import { db } from "@/lib/firebase/config";
+import { collection, getCountFromServer } from "firebase/firestore";
 import { 
   scanFirestoreImageStorage, 
   migrateAllLegacyImages, 
@@ -96,29 +97,40 @@ export default function AdminOverviewPage() {
 
   useEffect(() => {
     refreshCounts();
-    syncUsersFromFirestore().then((synced) => {
-      if (synced) setUsersCount(synced.length);
-    });
 
-    const unsubscribeFirestore = subscribeToUsersFromFirestore((remoteUsers) => {
-      if (remoteUsers && remoteUsers.length > 0) {
-        const merged = mergeRemoteUsers(remoteUsers as any);
-        setUsersCount(merged.length);
-      }
-    });
+    // Query aggregate counts directly from Firestore (<1 read per 1,000 documents)
+    // instead of downloading the entire database collection onto the device.
+    if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      try {
+        const usersRef = collection(db, "users");
+        getCountFromServer(usersRef).then((snap) => {
+          const count = snap.data().count;
+          if (typeof count === "number" && count > 0) setUsersCount(count);
+        }).catch(() => {});
+      } catch {}
+
+      try {
+        const regsRef = collection(db, "registrations");
+        getCountFromServer(regsRef).then((snap) => {
+          const count = snap.data().count;
+          if (typeof count === "number" && count > 0) setRegistrationsCount(count);
+        }).catch(() => {});
+      } catch {}
+    }
 
     window.addEventListener("src_council_team_updated", refreshCounts);
     window.addEventListener("src_clubs_updated", refreshCounts);
     window.addEventListener("src_events_updated", refreshCounts);
     window.addEventListener("src_users_updated", refreshCounts);
+    window.addEventListener("src_registrations_updated", refreshCounts);
     window.addEventListener("storage", refreshCounts);
 
     return () => {
-      unsubscribeFirestore();
       window.removeEventListener("src_council_team_updated", refreshCounts);
       window.removeEventListener("src_clubs_updated", refreshCounts);
       window.removeEventListener("src_events_updated", refreshCounts);
       window.removeEventListener("src_users_updated", refreshCounts);
+      window.removeEventListener("src_registrations_updated", refreshCounts);
       window.removeEventListener("storage", refreshCounts);
     };
   }, []);
