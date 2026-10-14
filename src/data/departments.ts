@@ -158,9 +158,9 @@ export function validateStudentBtId(
   // 2. Department-specific validation
   // Diploma
   if (deptLower.includes("diploma") || deptLower.includes("poly") || deptLower === "dip") {
-    const isPoly = /^(JPOLY|POLY)\d{2}\d{2,6}$/i.test(cleanBt);
+    const isPoly = /^(JPOLY|POLY)\d{4,7}$/i.test(cleanBt);
     if (!isPoly) {
-      if (/^BT\d{2}/i.test(cleanBt)) {
+      if (/^BT/i.test(cleanBt)) {
         return {
           isFlagged: true,
           reason: "Dept mismatch: Enrolled in Diploma, but ID is B.Tech (BT...)",
@@ -168,9 +168,33 @@ export function validateStudentBtId(
           expectedExample: "JPOLY24074",
         };
       }
+      if (/^BB/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Dept mismatch: Enrolled in Diploma, but ID is BBA (BB...)",
+          flagType: "DEPT_MISMATCH",
+          expectedExample: "JPOLY24074",
+        };
+      }
+      if (/^MB/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Dept mismatch: Enrolled in Diploma, but ID is MBA (MB...)",
+          flagType: "DEPT_MISMATCH",
+          expectedExample: "JPOLY24074",
+        };
+      }
+      if (/^BC/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Dept mismatch: Enrolled in Diploma, but ID is BCA (BC...)",
+          flagType: "DEPT_MISMATCH",
+          expectedExample: "JPOLY24074",
+        };
+      }
       return {
         isFlagged: true,
-        reason: "Invalid Diploma ID format (expected JPOLY...)",
+        reason: "Invalid Diploma ID format (expected e.g. JPOLY24074)",
         flagType: "FORMAT_INVALID",
         expectedExample: "JPOLY24074",
       };
@@ -180,9 +204,9 @@ export function validateStudentBtId(
 
   // MBA
   if (deptLower.includes("master of business") || deptLower === "mba") {
-    const isMba = /^MB\d{2}\d{2,6}(BA|MBA)?$/i.test(cleanBt);
+    const isMba = /^MB\d{5,7}(BA|MBA)$/i.test(cleanBt);
     if (!isMba) {
-      if (/^BT\d{2}/i.test(cleanBt)) {
+      if (/^BT/i.test(cleanBt)) {
         return {
           isFlagged: true,
           reason: "Dept mismatch: Enrolled in MBA, but ID is B.Tech (BT...)",
@@ -190,9 +214,41 @@ export function validateStudentBtId(
           expectedExample: "MB240071BA",
         };
       }
+      if (/^BB/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Dept mismatch: Enrolled in MBA, but ID is BBA (BB...)",
+          flagType: "DEPT_MISMATCH",
+          expectedExample: "MB240071BA",
+        };
+      }
+      if (/^BC/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Dept mismatch: Enrolled in MBA, but ID is BCA (BC...)",
+          flagType: "DEPT_MISMATCH",
+          expectedExample: "MB240071BA",
+        };
+      }
+      if (/^(JPOLY|POLY)/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Dept mismatch: Enrolled in MBA, but ID is Diploma (JPOLY...)",
+          flagType: "DEPT_MISMATCH",
+          expectedExample: "MB240071BA",
+        };
+      }
+      if (/^MB\d{2,6}$/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Invalid MBA ID: missing 'BA' suffix (expected e.g. MB240071BA)",
+          flagType: "FORMAT_INVALID",
+          expectedExample: "MB240071BA",
+        };
+      }
       return {
         isFlagged: true,
-        reason: "Invalid MBA ID format (expected MB...BA)",
+        reason: "Invalid MBA ID format (expected e.g. MB240071BA)",
         flagType: "FORMAT_INVALID",
         expectedExample: "MB240071BA",
       };
@@ -202,9 +258,9 @@ export function validateStudentBtId(
 
   // BBA
   if (deptLower.includes("bachelor of business") || deptLower === "bba") {
-    const isBba = /^BB\d{2}\d{2,6}(BA|BBA)?$/i.test(cleanBt);
+    const isBba = /^BB\d{5,7}(BA|BBA)$/i.test(cleanBt);
     if (!isBba) {
-      if (/^BT\d{2}/i.test(cleanBt)) {
+      if (/^BT/i.test(cleanBt)) {
         return {
           isFlagged: true,
           reason: "Dept mismatch: Enrolled in BBA, but ID is B.Tech (BT...)",
@@ -212,9 +268,41 @@ export function validateStudentBtId(
           expectedExample: "BB210028BA",
         };
       }
+      if (/^MB/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Dept mismatch: Enrolled in BBA, but ID is MBA (MB...)",
+          flagType: "DEPT_MISMATCH",
+          expectedExample: "BB210028BA",
+        };
+      }
+      if (/^BC/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Dept mismatch: Enrolled in BBA, but ID is BCA (BC...)",
+          flagType: "DEPT_MISMATCH",
+          expectedExample: "BB210028BA",
+        };
+      }
+      if (/^(JPOLY|POLY)/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Dept mismatch: Enrolled in BBA, but ID is Diploma (JPOLY...)",
+          flagType: "DEPT_MISMATCH",
+          expectedExample: "BB210028BA",
+        };
+      }
+      if (/^BB\d{2,6}$/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Invalid BBA ID: missing 'BA' suffix (expected e.g. BB210028BA)",
+          flagType: "FORMAT_INVALID",
+          expectedExample: "BB210028BA",
+        };
+      }
       return {
         isFlagged: true,
-        reason: "Invalid BBA ID format (expected BB...BA)",
+        reason: "Invalid BBA ID format (expected e.g. BB210028BA)",
         flagType: "FORMAT_INVALID",
         expectedExample: "BB210028BA",
       };
@@ -224,9 +312,9 @@ export function validateStudentBtId(
 
   // BCA
   if (deptLower.includes("bachelor of computer") || deptLower === "bca") {
-    const isBca = /^BC\d{2}\d{2,6}(CA|BCA)?$/i.test(cleanBt);
+    const isBca = /^BC\d{5,7}(CA|BCA)$/i.test(cleanBt);
     if (!isBca) {
-      if (/^BT\d{2}/i.test(cleanBt)) {
+      if (/^BT/i.test(cleanBt)) {
         return {
           isFlagged: true,
           reason: "Dept mismatch: Enrolled in BCA, but ID is B.Tech (BT...)",
@@ -234,9 +322,41 @@ export function validateStudentBtId(
           expectedExample: "BC210028CA",
         };
       }
+      if (/^MB/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Dept mismatch: Enrolled in BCA, but ID is MBA (MB...)",
+          flagType: "DEPT_MISMATCH",
+          expectedExample: "BC210028CA",
+        };
+      }
+      if (/^BB/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Dept mismatch: Enrolled in BCA, but ID is BBA (BB...)",
+          flagType: "DEPT_MISMATCH",
+          expectedExample: "BC210028CA",
+        };
+      }
+      if (/^(JPOLY|POLY)/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Dept mismatch: Enrolled in BCA, but ID is Diploma (JPOLY...)",
+          flagType: "DEPT_MISMATCH",
+          expectedExample: "BC210028CA",
+        };
+      }
+      if (/^BC\d{2,6}$/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Invalid BCA ID: missing 'CA' suffix (expected e.g. BC210028CA)",
+          flagType: "FORMAT_INVALID",
+          expectedExample: "BC210028CA",
+        };
+      }
       return {
         isFlagged: true,
-        reason: "Invalid BCA ID format (expected BC...CA)",
+        reason: "Invalid BCA ID format (expected e.g. BC210028CA)",
         flagType: "FORMAT_INVALID",
         expectedExample: "BC210028CA",
       };
@@ -246,11 +366,35 @@ export function validateStudentBtId(
 
   // MCA
   if (deptLower.includes("master of computer") || deptLower === "mca") {
-    const isMca = /^(MC|BT)\d{2}\d{2,6}(CA|CS|MCA)?$/i.test(cleanBt);
+    const isMca = /^(MC|BT)\d{5,7}(CA|CS|MCA)$/i.test(cleanBt);
     if (!isMca) {
+      if (/^BB/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Dept mismatch: Enrolled in MCA, but ID is BBA (BB...)",
+          flagType: "DEPT_MISMATCH",
+          expectedExample: "BT210036CS",
+        };
+      }
+      if (/^MB/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Dept mismatch: Enrolled in MCA, but ID is MBA (MB...)",
+          flagType: "DEPT_MISMATCH",
+          expectedExample: "BT210036CS",
+        };
+      }
+      if (/^(JPOLY|POLY)/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Dept mismatch: Enrolled in MCA, but ID is Diploma (JPOLY...)",
+          flagType: "DEPT_MISMATCH",
+          expectedExample: "BT210036CS",
+        };
+      }
       return {
         isFlagged: true,
-        reason: "Invalid MCA ID format",
+        reason: "Invalid MCA ID format (expected e.g. BT210036CS)",
         flagType: "FORMAT_INVALID",
         expectedExample: "BT210036CS",
       };
@@ -260,11 +404,43 @@ export function validateStudentBtId(
 
   // Basic Science & Humanities (1st Year)
   if (deptLower.includes("basic science") || deptLower.includes("humanities") || deptLower === "bsh" || deptLower === "bshd") {
-    const isBt = /^BT\d{2}\d{2,6}[A-Z]{0,4}$/i.test(cleanBt);
+    const isBt = /^BT\d{5,7}[A-Z]{0,4}$/i.test(cleanBt);
     if (!isBt) {
+      if (/^(JPOLY|POLY)/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Dept mismatch: Enrolled in First Year (B.Tech), but ID is Diploma (JPOLY...)",
+          flagType: "DEPT_MISMATCH",
+          expectedExample: "BT210036CS",
+        };
+      }
+      if (/^BB/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Dept mismatch: Enrolled in First Year (B.Tech), but ID is BBA (BB...)",
+          flagType: "DEPT_MISMATCH",
+          expectedExample: "BT210036CS",
+        };
+      }
+      if (/^MB/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Dept mismatch: Enrolled in First Year (B.Tech), but ID is MBA (MB...)",
+          flagType: "DEPT_MISMATCH",
+          expectedExample: "BT210036CS",
+        };
+      }
+      if (/^BC/i.test(cleanBt)) {
+        return {
+          isFlagged: true,
+          reason: "Dept mismatch: Enrolled in First Year (B.Tech), but ID is BCA (BC...)",
+          flagType: "DEPT_MISMATCH",
+          expectedExample: "BT210036CS",
+        };
+      }
       return {
         isFlagged: true,
-        reason: "Invalid First Year ID format (expected BT...)",
+        reason: "Invalid First Year ID format (expected e.g. BT210036CS)",
         flagType: "FORMAT_INVALID",
         expectedExample: "BT210036CS",
       };
@@ -273,16 +449,41 @@ export function validateStudentBtId(
   }
 
   // Standard Engineering Branches (CSE, AI, IT, DS, CY, EE, ME, ETC, CE)
-  const btechMatch = cleanBt.match(/^BT\d{2}\d{2,6}([A-Z]{2,4})?$/i);
+  if (/^(JPOLY|POLY)/i.test(cleanBt)) {
+    return {
+      isFlagged: true,
+      reason: "Dept mismatch: Enrolled in Engineering, but ID is Diploma (JPOLY...)",
+      flagType: "DEPT_MISMATCH",
+      expectedExample: example,
+    };
+  }
+  if (/^BB/i.test(cleanBt)) {
+    return {
+      isFlagged: true,
+      reason: "Dept mismatch: Enrolled in Engineering, but ID is BBA (BB...)",
+      flagType: "DEPT_MISMATCH",
+      expectedExample: example,
+    };
+  }
+  if (/^MB/i.test(cleanBt)) {
+    return {
+      isFlagged: true,
+      reason: "Dept mismatch: Enrolled in Engineering, but ID is MBA (MB...)",
+      flagType: "DEPT_MISMATCH",
+      expectedExample: example,
+    };
+  }
+  if (/^BC/i.test(cleanBt)) {
+    return {
+      isFlagged: true,
+      reason: "Dept mismatch: Enrolled in Engineering, but ID is BCA (BC...)",
+      flagType: "DEPT_MISMATCH",
+      expectedExample: example,
+    };
+  }
+
+  const btechMatch = cleanBt.match(/^BT(\d{2,7})([A-Z]{2,4})?$/i);
   if (!btechMatch) {
-    if (/^(JPOLY|POLY|BC|MB|BB)/i.test(cleanBt)) {
-      return {
-        isFlagged: true,
-        reason: `Dept mismatch: Enrolled in Engineering, but ID prefix is non-engineering`,
-        flagType: "DEPT_MISMATCH",
-        expectedExample: example,
-      };
-    }
     return {
       isFlagged: true,
       reason: `Invalid BT ID structure (expected e.g. ${example})`,
@@ -291,7 +492,17 @@ export function validateStudentBtId(
     };
   }
 
-  const actualSuffix = (btechMatch[1] || "").toUpperCase();
+  const digitsPart = btechMatch[1] || "";
+  const actualSuffix = (btechMatch[2] || "").toUpperCase();
+
+  if (digitsPart.length < 5) {
+    return {
+      isFlagged: true,
+      reason: `BT ID number is incomplete (${digitsPart.length} digits, expected 6 digits, e.g. ${example})`,
+      flagType: "FORMAT_INVALID",
+      expectedExample: example,
+    };
+  }
 
   if (!actualSuffix) {
     return {
