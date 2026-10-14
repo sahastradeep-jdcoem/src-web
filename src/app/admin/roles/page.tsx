@@ -17,7 +17,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Image as ImageIcon,
-  Trash2
+  Trash2,
+  Users
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/Button";
@@ -70,7 +71,7 @@ interface OfficerCandidate {
   name: string;
   detectedBtId: string;
   currentBtId: string;
-  role: "TREASURER" | "PROTOCOL_OFFICER" | "CHIEF_EDITOR";
+  role: "TREASURER" | "PROTOCOL_OFFICER" | "CHIEF_EDITOR" | "PUBLIC_RELATIONS_OFFICER";
   surface: string;
   source: string;
 }
@@ -413,6 +414,40 @@ export default function AdminRolesPage() {
       });
     }
 
+    // 4. Public Relations Officer (Active Users Directory & Membership)
+    const proOfficers = officers.filter((m) =>
+      /public\s*relations|pr\s*officer|pro\b|publicity|spokesperson|pr\s*lead/i.test(m.role || "")
+    );
+    if (proOfficers.length > 0) {
+      proOfficers.forEach((p, idx) => {
+        const slotKey = `officer:pro:${idx}`;
+        const detectedBt = normalizeBtId(p.btId);
+        list.push({
+          key: slotKey,
+          title: "Public Relations Officer",
+          name: p.name,
+          detectedBtId: detectedBt,
+          currentBtId: btIdOverrides[slotKey] !== undefined ? btIdOverrides[slotKey] : detectedBt,
+          role: "PUBLIC_RELATIONS_OFFICER",
+          surface: "Active Users Surface Only",
+          source: p.role || "Public Relations Officer",
+        });
+      });
+    } else {
+      // Fallback placeholder slot so owner can assign manually
+      const slotKey = "officer:pro:fallback";
+      list.push({
+        key: slotKey,
+        title: "Public Relations Officer",
+        name: "Appointed Public Relations Officer",
+        detectedBtId: "",
+        currentBtId: btIdOverrides[slotKey] || "",
+        role: "PUBLIC_RELATIONS_OFFICER",
+        surface: "Active Users Surface Only",
+        source: "Council Office",
+      });
+    }
+
     return list;
   }, [officers, btIdOverrides]);
 
@@ -696,14 +731,14 @@ export default function AdminRolesPage() {
         </div>
       )}
 
-      {/* SECTION 1: TREASURER, PROTOCOL & CHIEF EDITOR ACCESS */}
+      {/* SECTION 1: TREASURER, PROTOCOL, CHIEF EDITOR & PUBLIC RELATIONS OFFICER ACCESS */}
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-[#17458F]" />
               <h2 className="font-heading text-lg font-extrabold text-slate-900">
-                Treasurer, Protocol &amp; Chief Editor Access
+                Treasurer, Protocol, Chief Editor &amp; Public Relations Officer Access
               </h2>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -732,8 +767,10 @@ export default function AdminRolesPage() {
                           <CreditCard className="h-5 w-5 text-emerald-600" />
                         ) : officer.role === "PROTOCOL_OFFICER" ? (
                           <BellRing className="h-5 w-5 text-indigo-600" />
-                        ) : (
+                        ) : officer.role === "CHIEF_EDITOR" ? (
                           <ImageIcon className="h-5 w-5 text-purple-600" />
+                        ) : (
+                          <Users className="h-5 w-5 text-[#17458F]" />
                         )}
                       </div>
                       <div>
@@ -745,7 +782,9 @@ export default function AdminRolesPage() {
                                 ? "success"
                                 : officer.role === "PROTOCOL_OFFICER"
                                 ? "navy"
-                                : "purple"
+                                : officer.role === "CHIEF_EDITOR"
+                                ? "purple"
+                                : "navy"
                             }
                             size="sm"
                           >
@@ -1044,6 +1083,7 @@ export default function AdminRolesPage() {
               <option value="TREASURER">Treasurer</option>
               <option value="PROTOCOL_OFFICER">Protocol Officer</option>
               <option value="CHIEF_EDITOR">Chief Editor</option>
+              <option value="PUBLIC_RELATIONS_OFFICER">Public Relations Officer</option>
               <option value="OWNER">Owner (Full Governance)</option>
             </select>
           </div>
@@ -1162,6 +1202,8 @@ export default function AdminRolesPage() {
                             ? "navy"
                             : assignment.role === "CHIEF_EDITOR"
                             ? "purple"
+                            : assignment.role === "PUBLIC_RELATIONS_OFFICER"
+                            ? "navy"
                             : "slate"
                         }
                         size="sm"
