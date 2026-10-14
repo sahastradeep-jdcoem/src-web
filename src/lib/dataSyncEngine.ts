@@ -916,6 +916,19 @@ export function reconcileArrayDatasets<T extends { id?: string; slug?: string }>
           (remoteArr.length > 0 && typeof remoteArr[0] !== "object");
 
         if (isPrimitiveSubArray) {
+          // Directive #9 & Access Scoping:
+          // For authorization arrays (eventAccessBtIds, gateCheckInBtIds), remote Firestore is strictly authoritative.
+          // Never resurrect deleted coordinator or gatekeeper IDs from local storage unless THIS device has an active in-flight write.
+          if (k === "eventAccessBtIds" || k === "gateCheckInBtIds") {
+            const hasRecentWrite = isLocalWriteRecent("events", 15000) || hasPendingWritesFor("events");
+            if (remoteArr.length === 0 && !hasRecentWrite) {
+              result[k] = [];
+            } else {
+              result[k] = remoteArr.length > 0 ? Array.from(new Set(remoteArr.filter(Boolean))) : (hasRecentWrite ? Array.from(new Set(localArr.filter(Boolean))) : []);
+            }
+            continue;
+          }
+
           // Never recurse with reconcileArrayDatasets on primitive string arrays, as it causes unbounded multiplication!
           // Filter non-empty items
           const cleanRemote = remoteArr.filter((item: any) => item !== undefined && item !== null && String(item).trim() !== "");

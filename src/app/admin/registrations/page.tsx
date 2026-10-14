@@ -255,6 +255,7 @@ export default function AdminRegistrationsPage() {
       }
     };
     window.addEventListener("src_events_updated", handleEventsUpdate);
+    window.addEventListener("storage", handleEventsUpdate);
 
     const handleClickOutside = (event: MouseEvent) => {
       if (eventDropdownRef.current && !eventDropdownRef.current.contains(event.target as Node)) {
@@ -268,6 +269,7 @@ export default function AdminRegistrationsPage() {
       unsubscribeTenures();
       unsubscribeDepts();
       window.removeEventListener("src_events_updated", handleEventsUpdate);
+      window.removeEventListener("storage", handleEventsUpdate);
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);

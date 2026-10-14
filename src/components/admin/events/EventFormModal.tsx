@@ -478,7 +478,7 @@ export function EventFormModal({
         eventAccessBtIds: Array.isArray(initialData.eventAccessBtIds) ? JSON.parse(JSON.stringify(initialData.eventAccessBtIds)) : [],
       }));
     }
-  }, [initialData]);
+  }, [initialData, isOpen]);
 
   const handleStartDateChange = (val: string) => {
     setForm((prev) => {

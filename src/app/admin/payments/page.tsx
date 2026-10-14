@@ -298,9 +298,21 @@ export default function AdminPaymentsPage() {
     };
     document.addEventListener("mousedown", handleClickOutside);
 
+    const handleEventsUpdate = (e: any) => {
+      if (e?.detail && Array.isArray(e.detail)) {
+        setEventsList(e.detail);
+      } else {
+        setEventsList(getStoredEvents());
+      }
+    };
+    window.addEventListener("src_events_updated", handleEventsUpdate);
+    window.addEventListener("storage", handleEventsUpdate);
+
     return () => {
       unsubscribeEvents();
       unsubscribeTenures();
+      window.removeEventListener("src_events_updated", handleEventsUpdate);
+      window.removeEventListener("storage", handleEventsUpdate);
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
