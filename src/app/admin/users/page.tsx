@@ -828,14 +828,7 @@ export default function AdminUsersPage() {
             categoryFilter === "FLAGGED_IDS" ? "ring-2 ring-amber-500 border-amber-500 bg-amber-50/20" : "border-slate-200"
           }`}
         >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Flagged IDs</span>
-            {flaggedUsers.length > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold text-[9px] animate-pulse">
-                {flaggedUsers.length} Review
-              </span>
-            )}
-          </div>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Flagged IDs</span>
           <p className="font-hero font-extrabold text-2xl text-amber-600">{flaggedUsers.length}</p>
           <span className="text-[10px] text-slate-500 font-medium block">Format / Dept Issue</span>
         </button>
