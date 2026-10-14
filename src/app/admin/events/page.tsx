@@ -896,10 +896,22 @@ export default function AdminEventsPage() {
     if (undoIntervalRef.current) { clearInterval(undoIntervalRef.current); undoIntervalRef.current = null; }
   };
 
+  const isPrimaryClubOrganizer = (evt?: EventItem | null) => {
+    if (!isClubOwner || !evt) return true;
+    const orgSlug = (evt.organizerClubSlug || "").toLowerCase().trim();
+    const orgName = (evt.organizer || "").toLowerCase().trim();
+    if (adminAccess?.clubSlug && orgSlug === adminAccess.clubSlug.toLowerCase().trim()) return true;
+    if (adminAccess?.clubName && orgName === adminAccess.clubName.toLowerCase().trim()) return true;
+    if (Array.isArray(adminAccess?.clubSlugs) && adminAccess.clubSlugs.some((s) => s && s.toLowerCase().trim() === orgSlug)) return true;
+    if (Array.isArray(adminAccess?.clubNames) && adminAccess.clubNames.some((n) => n && n.toLowerCase().trim() === orgName)) return true;
+    if (Array.isArray(adminAccess?.clubs) && adminAccess.clubs.some((c) => (c.slug && c.slug.toLowerCase().trim() === orgSlug) || (c.name && c.name.toLowerCase().trim() === orgName))) return true;
+    return false;
+  };
+
   /** Fire immediately when user clicks the trash icon — soft-removes from UI and starts 10s undo window */
   const handleDeleteClick = (evt: EventItem) => {
-    if (isEventCoordinatorOnly || (isClubOwner && !isEntityOwnedByClub(evt, adminAccess))) {
-      showNotice("Only SRC administrators or the owning Club Owner can delete this event.");
+    if (isEventCoordinatorOnly || (isClubOwner && !isPrimaryClubOrganizer(evt))) {
+      showNotice("Only SRC administrators or the primary organizing Club Owner can delete this event.");
       return;
     }
     // If there's already a pending delete for another event, fire it immediately first
@@ -944,8 +956,8 @@ export default function AdminEventsPage() {
 
   /** Actually delete — called when countdown reaches 0 or user navigates away */
   const executePermanentDelete = async (evt: EventItem) => {
-    if (isEventCoordinatorOnly || (isClubOwner && !isEntityOwnedByClub(evt, adminAccess))) {
-      showNotice("Only SRC administrators or the owning Club Owner can delete this event.");
+    if (isEventCoordinatorOnly || (isClubOwner && !isPrimaryClubOrganizer(evt))) {
+      showNotice("Only SRC administrators or the primary organizing Club Owner can delete this event.");
       return;
     }
     setPendingDeleteEvent(null);
@@ -1656,7 +1668,7 @@ export default function AdminEventsPage() {
                         </button>
                       </>
                     )}
-                    {!isEventCoordinatorOnly && (!isClubOwner || isEntityOwnedByClub(evt, adminAccess)) && (
+                    {!isEventCoordinatorOnly && (!isClubOwner || isPrimaryClubOrganizer(evt)) && (
                       <button
                         type="button"
                         onClick={() => handleDeleteClick(evt)}
@@ -1794,7 +1806,7 @@ export default function AdminEventsPage() {
           eventsList={eventsList}
           clubsList={clubsList}
           allClubsList={clubsList}
-          clubOwnerScope={isClubOwner && isEntityOwnedByClub(editingEvent, adminAccess) ? clubOwnerScope : undefined}
+          clubOwnerScope={isClubOwner && isPrimaryClubOrganizer(editingEvent) ? clubOwnerScope : undefined}
           editingEventId={editingEvent.id}
           onSubmit={handleEditSubmit}
           pendingUploads={pendingUploads}

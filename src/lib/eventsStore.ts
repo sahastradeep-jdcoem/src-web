@@ -562,8 +562,10 @@ export function hasAnyEventCoordinatorAccess(
 
 /**
  * Unified authorization helper for scoped managers (Club Owners & Event Coordinators).
- * Returns true if the event is owned by the user's assigned club OR if the user's BT ID
- * is granted Event Coordinator access on the event.
+ * Returns true if:
+ * 1. The event is owned or collaborated by the user's assigned club(s).
+ * 2. If it is a sub-event under an umbrella fest, returns true if the parent umbrella fest is owned/collaborated by the club.
+ * 3. If the user's BT ID is granted Event Coordinator access on the event or parent fest.
  */
 export function canUserManageEvent(
   event: Partial<EventItem> | null | undefined,
@@ -573,9 +575,32 @@ export function canUserManageEvent(
 ): boolean {
   if (!event) return false;
   if (adminAccess?.role === "OWNER" && adminAccess.active !== false) return true;
-  if (adminAccess?.role === "CLUB_OWNER" && adminAccess.active !== false && isEntityOwnedByClub(event, adminAccess)) {
-    return true;
+
+  if (adminAccess?.role === "CLUB_OWNER" && adminAccess.active !== false) {
+    // 1. Direct ownership or collaboration on the event itself (standalone, sub-event, or umbrella fest)
+    if (isEntityOwnedByClub(event, adminAccess)) {
+      return true;
+    }
+
+    const catalog = Array.isArray(allEvents) && allEvents.length > 0 ? allEvents : getStoredEvents();
+
+    // 2. Sub-event under an umbrella fest: if parent umbrella fest is owned or collaborated by this club, grant access
+    if (event.parentEventId || event.parentEventSlug || event.parentEventName) {
+      const pId = (event.parentEventId || "").toLowerCase().trim();
+      const pSlug = (event.parentEventSlug || "").toLowerCase().trim();
+      const pName = (event.parentEventName || "").toLowerCase().trim();
+      const parentEvt = catalog.find(
+        (e) =>
+          (pId && ((e.id || "").toLowerCase() === pId || (e.slug || "").toLowerCase() === pId)) ||
+          (pSlug && ((e.slug || "").toLowerCase() === pSlug || (e.id || "").toLowerCase() === pSlug)) ||
+          (pName && (e.name || "").toLowerCase().trim() === pName)
+      );
+      if (parentEvt && isEntityOwnedByClub(parentEvt, adminAccess)) {
+        return true;
+      }
+    }
   }
+
   if (userBtId && hasEventCoordinatorAccess(event, userBtId, allEvents)) {
     return true;
   }
