@@ -235,6 +235,8 @@ export default function AdminPaymentsPage() {
     voidedFreeCount: number;
     totalRefunded: number;
   } | null>(null);
+  const [cancelConfirmationInput, setCancelConfirmationInput] = useState("");
+  const [hasAcknowledgedRisk, setHasAcknowledgedRisk] = useState(false);
 
   // Payment gateway config modal
   const [isPaymentConfigOpen, setIsPaymentConfigOpen] = useState(false);
@@ -1310,6 +1312,8 @@ export default function AdminPaymentsPage() {
               type="button"
               onClick={() => {
                 setCancellationSummary(null);
+                setCancelConfirmationInput("");
+                setHasAcknowledgedRisk(false);
                 setIsCancelEventModalOpen(true);
               }}
               disabled={!canCancelCurrentEvent}
@@ -1679,6 +1683,8 @@ export default function AdminPaymentsPage() {
                 type="button"
                 onClick={() => {
                   setCancellationSummary(null);
+                  setCancelConfirmationInput("");
+                  setHasAcknowledgedRisk(false);
                   setIsCancelEventModalOpen(true);
                 }}
                 disabled={!canCancelCurrentEvent}
@@ -2506,6 +2512,34 @@ export default function AdminPaymentsPage() {
                   </p>
                 </div>
 
+                {/* Safety Confirmation & Type-to-Unlock Challenge */}
+                <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200/80 space-y-3.5">
+                  <label className="flex items-start gap-2.5 cursor-pointer text-xs text-rose-950 font-medium select-none">
+                    <input
+                      type="checkbox"
+                      checked={hasAcknowledgedRisk}
+                      onChange={(e) => setHasAcknowledgedRisk(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 rounded border-rose-300 text-rose-600 focus:ring-rose-500 cursor-pointer shrink-0"
+                    />
+                    <span>
+                      I understand this action is <strong>permanent and irreversible</strong>. It will immediately cancel the event, void all delegate passes at gate check-in, and initiate automated Cashfree bank refunds totaling <strong>₹{totalBulkRefundAmount.toLocaleString("en-IN")}</strong>.
+                    </span>
+                  </label>
+
+                  <div className="space-y-1.5 pt-1 border-t border-rose-200/60">
+                    <label className="text-[11px] font-bold text-slate-700 block">
+                      To prevent accidental execution, type <span className="font-mono bg-rose-200/70 text-rose-900 px-1.5 py-0.5 rounded font-black tracking-widest">CONFIRM</span> below to unlock:
+                    </label>
+                    <input
+                      type="text"
+                      value={cancelConfirmationInput}
+                      onChange={(e) => setCancelConfirmationInput(e.target.value)}
+                      placeholder="Type CONFIRM here..."
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 uppercase tracking-widest"
+                    />
+                  </div>
+                </div>
+
                 {/* Action Buttons */}
                 <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
                   <Button
@@ -2518,12 +2552,19 @@ export default function AdminPaymentsPage() {
                   <Button
                     variant="primary"
                     onClick={handleExecuteCancelAndRefund}
-                    disabled={isCancellingAndRefunding || !canCancelCurrentEvent}
-                    className="bg-rose-600 hover:bg-rose-700 text-white font-bold"
+                    disabled={
+                      isCancellingAndRefunding ||
+                      !canCancelCurrentEvent ||
+                      !hasAcknowledgedRisk ||
+                      cancelConfirmationInput.trim().toUpperCase() !== "CONFIRM"
+                    }
+                    className="bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold"
                   >
                     <AlertTriangle className="w-4 h-4 mr-1.5" />
                     <span>
-                      {currentSelectedEventObj.isCancelled
+                      {cancelConfirmationInput.trim().toUpperCase() !== "CONFIRM" || !hasAcknowledgedRisk
+                        ? "Confirmation Required to Unlock"
+                        : currentSelectedEventObj.isCancelled
                         ? `Process Remaining ${eligibleForBulkRefund.length} Refunds`
                         : `Confirm Cancellation & Refund All (${eligibleForBulkRefund.length})`}
                     </span>
