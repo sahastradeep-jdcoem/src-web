@@ -72,9 +72,15 @@ export function AdminSidebar() {
                 LIVE
               </span>
             </div>
-            <p className="text-[10px] text-slate-500 font-medium">JDCOEM Central Council</p>
-            <p className="text-[10px] text-[#E78023] font-bold truncate max-w-[140px]">
-              {isOwner ? "Owner • Full Access" : `${adminAccess ? ADMIN_ROLE_LABELS[adminAccess.role] : "Staff"}${adminAccess?.clubName ? ` • ${adminAccess.clubName}` : ""}`}
+            <p 
+              title={adminAccess?.clubNames && adminAccess.clubNames.length > 0 ? adminAccess.clubNames.join(", ") : adminAccess?.clubName}
+              className="text-[10px] text-[#E78023] font-bold truncate max-w-[140px]"
+            >
+              {isOwner ? "Owner • Full Access" : `${adminAccess ? ADMIN_ROLE_LABELS[adminAccess.role] : "Staff"}${
+                (adminAccess?.clubNames && adminAccess.clubNames.length > 0 ? adminAccess.clubNames.join(", ") : adminAccess?.clubName)
+                  ? ` • ${adminAccess?.clubNames && adminAccess.clubNames.length > 0 ? adminAccess.clubNames.join(", ") : adminAccess?.clubName}`
+                  : ""
+              }`}
             </p>
           </div>
         </div>

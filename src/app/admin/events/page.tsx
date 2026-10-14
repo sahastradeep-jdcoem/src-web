@@ -118,11 +118,11 @@ export default function AdminEventsPage() {
   const [pendingUploads, setPendingUploads] = useState(0);
 
   const scopedClubsList = useMemo(() => isClubOwner
-    ? clubsList.filter((club) => club.slug === adminAccess?.clubSlug || club.id === adminAccess?.clubId)
-    : clubsList, [clubsList, isClubOwner, adminAccess?.clubId, adminAccess?.clubSlug]);
+    ? clubsList.filter((club) => isEntityOwnedByClub(club, adminAccess))
+    : clubsList, [clubsList, isClubOwner, adminAccess]);
 
-  const clubOwnerScope = isClubOwner && adminAccess?.clubSlug && adminAccess?.clubName
-    ? { slug: adminAccess.clubSlug, name: adminAccess.clubName, id: adminAccess.clubId }
+  const clubOwnerScope = isClubOwner && scopedClubsList.length === 1
+    ? { slug: scopedClubsList[0].slug, name: scopedClubsList[0].name, id: scopedClubsList[0].id }
     : undefined;
 
   // Undo-delete state: the event is soft-removed from UI immediately;
@@ -327,8 +327,8 @@ export default function AdminEventsPage() {
   }, [tenureFilteredEvents, searchQuery, selectedStatus, selectedCategory, selectedAudience]);
 
   const handleCreateSubmit = async (formData: EventFormData, asDraft?: boolean) => {
-    if (isClubOwner && formData.organizerClubSlug !== adminAccess?.clubSlug) {
-      showNotice("Club Owners can only create events under their assigned club.");
+    if (isClubOwner && !isEntityOwnedByClub({ organizerClubSlug: formData.organizerClubSlug }, adminAccess)) {
+      showNotice("Club Owners can only create events under their assigned clubs.");
       return;
     }
     const isUmbrella = Boolean(formData.isParentFest);
@@ -668,8 +668,12 @@ export default function AdminEventsPage() {
       return;
     }
     if (isClubOwner && isEntityOwnedByClub(editingEvent, adminAccess)) {
-      if (adminAccess?.clubSlug) formData.organizerClubSlug = adminAccess.clubSlug;
-      if (adminAccess?.clubName) formData.organizer = adminAccess.clubName;
+      if (formData.organizerClubSlug && isEntityOwnedByClub({ organizerClubSlug: formData.organizerClubSlug }, adminAccess)) {
+        // Selected club is owned by user, preserve it
+      } else {
+        formData.organizerClubSlug = editingEvent.organizerClubSlug || adminAccess?.clubSlug || "";
+        formData.organizer = editingEvent.organizer || adminAccess?.clubName || "SRC Club";
+      }
     }
 
     const isUmbrella = Boolean(formData.isParentFest);

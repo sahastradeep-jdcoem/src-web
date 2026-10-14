@@ -18,6 +18,12 @@ export type AdminCapability =
   | "engagement_manage"
   | "club_registrations";
 
+export interface AdminAccessClubScope {
+  id: string;
+  slug: string;
+  name: string;
+}
+
 export interface AdminAccessAssignment {
   uid: string;
   btId: string;
@@ -27,6 +33,10 @@ export interface AdminAccessAssignment {
   clubId?: string;
   clubSlug?: string;
   clubName?: string;
+  clubIds?: string[];
+  clubSlugs?: string[];
+  clubNames?: string[];
+  clubs?: AdminAccessClubScope[];
   tenureId?: string;
   active: boolean;
   grantedBy: string;
@@ -131,11 +141,7 @@ export function hasAdminCapability(
   if (!ADMIN_ROLE_CAPABILITIES[assignment.role].includes(capability)) return false;
   if (assignment.role !== "CLUB_OWNER" || !club) return true;
 
-  const requested = [club.id, club.slug, club.name].filter(Boolean).map((value) => value!.toLowerCase());
-  const assigned = [assignment.clubId, assignment.clubSlug, assignment.clubName]
-    .filter(Boolean)
-    .map((value) => value!.toLowerCase());
-  return requested.some((value) => assigned.includes(value));
+  return isEntityOwnedByClub(club, assignment);
 }
 
 export function adminRouteCapabilities(pathname: string): AdminCapability[] {
@@ -155,44 +161,74 @@ export function adminRouteCapabilities(pathname: string): AdminCapability[] {
 
 /**
  * Strict Club Ownership Verification
- * Checks whether an event, listing, or registration record belongs to the assigned club.
- * Matches by slug, id, or normalized organizer name.
+ * Checks whether an event, listing, or registration record belongs to any of the assigned clubs.
+ * Supports multiple clubs (clubIds, clubSlugs, clubNames, clubs). Matches by slug, id, or normalized organizer name.
  */
 export function isEntityOwnedByClub(
   entity: { organizerClubSlug?: string; organizer?: string; clubId?: string; clubSlug?: string; clubName?: string; id?: string; slug?: string; name?: string } | null | undefined,
-  assignedClub?: { clubId?: string; clubSlug?: string; clubName?: string } | null
+  assignedClub?: (Partial<AdminAccessAssignment> & { clubId?: string; clubSlug?: string; clubName?: string }) | null
 ): boolean {
   if (!entity || !assignedClub) return false;
-  const targetSlug = (assignedClub.clubSlug || "").toLowerCase().trim();
-  const targetId = (assignedClub.clubId || "").toLowerCase().trim();
-  const targetName = (assignedClub.clubName || "").toLowerCase().trim();
 
-  if (!targetSlug && !targetId && !targetName) return false;
+  const targetSlugs = new Set<string>();
+  const targetIds = new Set<string>();
+  const targetNames = new Set<string>();
+
+  if (assignedClub.clubSlug) targetSlugs.add(assignedClub.clubSlug.toLowerCase().trim());
+  if (assignedClub.clubSlugs && Array.isArray(assignedClub.clubSlugs)) {
+    assignedClub.clubSlugs.forEach((s) => s && targetSlugs.add(s.toLowerCase().trim()));
+  }
+
+  if (assignedClub.clubId) targetIds.add(assignedClub.clubId.toLowerCase().trim());
+  if (assignedClub.clubIds && Array.isArray(assignedClub.clubIds)) {
+    assignedClub.clubIds.forEach((i) => i && targetIds.add(i.toLowerCase().trim()));
+  }
+
+  if (assignedClub.clubName) targetNames.add(assignedClub.clubName.toLowerCase().trim());
+  if (assignedClub.clubNames && Array.isArray(assignedClub.clubNames)) {
+    assignedClub.clubNames.forEach((n) => n && targetNames.add(n.toLowerCase().trim()));
+  }
+
+  if (assignedClub.clubs && Array.isArray(assignedClub.clubs)) {
+    assignedClub.clubs.forEach((c) => {
+      if (c.slug) targetSlugs.add(c.slug.toLowerCase().trim());
+      if (c.id) targetIds.add(c.id.toLowerCase().trim());
+      if (c.name) targetNames.add(c.name.toLowerCase().trim());
+    });
+  }
+
+  if (targetSlugs.size === 0 && targetIds.size === 0 && targetNames.size === 0) return false;
 
   const evSlug = (entity.organizerClubSlug || entity.clubSlug || entity.slug || "").toLowerCase().trim();
   const evId = (entity.clubId || entity.id || "").toLowerCase().trim();
   const evOrg = (entity.organizer || entity.clubName || entity.name || "").toLowerCase().trim();
 
   // 1. Direct slug match
-  if (targetSlug && evSlug) {
-    if (evSlug === targetSlug) return true;
-    const cleanTarget = targetSlug.replace(/^club-/, "");
+  if (evSlug) {
+    if (targetSlugs.has(evSlug)) return true;
     const cleanEv = evSlug.replace(/^club-/, "");
-    if (cleanTarget && cleanEv && cleanTarget === cleanEv) return true;
+    for (const ts of targetSlugs) {
+      const cleanTarget = ts.replace(/^club-/, "");
+      if (cleanTarget && cleanEv && cleanTarget === cleanEv) return true;
+    }
   }
 
   // 2. Direct ID match
-  if (targetId && (evId === targetId || evSlug === targetId)) {
-    return true;
+  if (evId) {
+    if (targetIds.has(evId)) return true;
+    if (targetSlugs.has(evId)) return true;
   }
+  if (evSlug && targetIds.has(evSlug)) return true;
 
   // 3. Organizer name match (e.g. "Agentic AI", "SRC Agentic AI", "Agentic AI Club")
-  if (targetName && evOrg) {
-    if (evOrg === targetName) return true;
-    if (evOrg === `src ${targetName}`) return true;
+  if (evOrg) {
+    if (targetNames.has(evOrg)) return true;
     const cleanEvOrg = evOrg.replace(/^src\s+/i, "").replace(/\s+club$/i, "").trim();
-    const cleanTarget = targetName.replace(/^src\s+/i, "").replace(/\s+club$/i, "").trim();
-    if (cleanEvOrg && cleanTarget && cleanEvOrg === cleanTarget) return true;
+    for (const tn of targetNames) {
+      if (evOrg === `src ${tn}`) return true;
+      const cleanTarget = tn.replace(/^src\s+/i, "").replace(/\s+club$/i, "").trim();
+      if (cleanEvOrg && cleanTarget && cleanEvOrg === cleanTarget) return true;
+    }
   }
 
   return false;

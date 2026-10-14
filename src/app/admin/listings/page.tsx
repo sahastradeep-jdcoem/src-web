@@ -70,8 +70,12 @@ export default function AdminListingsPage() {
   const [pendingUploads, setPendingUploads] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const clubOwnerScope = isClubOwner && adminAccess?.clubSlug && adminAccess?.clubName
-    ? { slug: adminAccess.clubSlug, name: adminAccess.clubName }
+  const scopedClubsList = useMemo(() => isClubOwner
+    ? clubsList.filter((club) => isEntityOwnedByClub(club, adminAccess))
+    : clubsList, [clubsList, isClubOwner, adminAccess]);
+
+  const clubOwnerScope = isClubOwner && scopedClubsList.length === 1
+    ? { slug: scopedClubsList[0].slug, name: scopedClubsList[0].name }
     : undefined;
 
   // Inspection Modal for Responses (Applications / Submissions / Grievances / Polls)
@@ -154,8 +158,8 @@ export default function AdminListingsPage() {
   };
 
   const handleCreateEventSubmit = (formData: EventFormData) => {
-    if (isClubOwner && formData.organizerClubSlug !== adminAccess?.clubSlug) {
-      showToast("Club Owners can only create events under their assigned club.");
+    if (isClubOwner && !isEntityOwnedByClub({ organizerClubSlug: formData.organizerClubSlug }, adminAccess)) {
+      showToast("Club Owners can only create events under their assigned clubs.");
       return;
     }
     const cleanWhatToExpect = Array.from(new Set(formData.whatToExpect.map((s) => s.trim()).filter(Boolean)));

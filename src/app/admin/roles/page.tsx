@@ -46,7 +46,7 @@ import {
   syncSpokespersonsFromFirestore 
 } from "@/lib/councilStore";
 import { findRegisteredUserByBtId, lookupUserByBtId } from "@/lib/usersStore";
-import { AdminAccessAssignment, AdminAccessRole, ADMIN_ROLE_LABELS, normalizeBtId } from "@/types/rbac";
+import { AdminAccessAssignment, AdminAccessClubScope, AdminAccessRole, ADMIN_ROLE_LABELS, normalizeBtId, isEntityOwnedByClub } from "@/types/rbac";
 import { ClubItem, TeamMember } from "@/types";
 import { UserProfile } from "@/types/auth";
 
@@ -160,7 +160,24 @@ export default function AdminRolesPage() {
     assignments.forEach((assignment) => {
       const cleanBt = normalizeBtId(assignment.btId);
       if (cleanBt && assignment.active !== false) {
-        map.set(cleanBt, assignment);
+        const existing = map.get(cleanBt);
+        if (!existing) {
+          map.set(cleanBt, assignment);
+        } else if (existing.role === "CLUB_OWNER" && assignment.role === "CLUB_OWNER") {
+          const combinedClubs = [
+            ...(existing.clubs || (existing.clubId ? [{ id: existing.clubId, slug: existing.clubSlug || "", name: existing.clubName || "" }] : [])),
+            ...(assignment.clubs || (assignment.clubId ? [{ id: assignment.clubId, slug: assignment.clubSlug || "", name: assignment.clubName || "" }] : [])),
+          ];
+          const uniqueClubs = Array.from(new Map(combinedClubs.map((c) => [c.id || c.slug, c])).values());
+          map.set(cleanBt, {
+            ...existing,
+            clubs: uniqueClubs,
+            clubIds: uniqueClubs.map((c) => c.id).filter(Boolean),
+            clubSlugs: uniqueClubs.map((c) => c.slug).filter(Boolean),
+            clubNames: uniqueClubs.map((c) => c.name).filter(Boolean),
+            clubName: uniqueClubs.map((c) => c.name).join(", "),
+          });
+        }
       }
     });
     return map;
@@ -463,7 +480,7 @@ export default function AdminRolesPage() {
     );
   }
 
-  // Grant role access to a BT ID, Staff ID, or Email
+  // Grant role access to a BT ID, Staff ID, or Email (Supports multiple clubs per Club Owner)
   const grantAccess = async (
     rawBtId: string,
     role: AdminAccessRole,
@@ -499,18 +516,76 @@ export default function AdminRolesPage() {
         "";
 
       const now = new Date().toISOString();
+
+      // Find any existing active assignment for this user to support multiple club ownership
+      const existingAssignment = assignments.find((a) => {
+        const cleanA = normalizeBtId(a.btId);
+        return (cleanBt && cleanA === cleanBt) || (uid && a.uid === uid) || (email && a.email?.toLowerCase().trim() === email.toLowerCase().trim());
+      });
+
+      let clubId = club?.id;
+      let clubSlug = club?.slug;
+      let clubName = club?.name;
+      let clubIds: string[] | undefined = club?.id ? [club.id] : undefined;
+      let clubSlugs: string[] | undefined = club?.slug ? [club.slug] : undefined;
+      let clubNames: string[] | undefined = club?.name ? [club.name] : undefined;
+      let clubsList: AdminAccessClubScope[] | undefined = club ? [{ id: club.id, slug: club.slug, name: club.name }] : undefined;
+
+      if (role === "CLUB_OWNER" && club) {
+        const existingClubs: AdminAccessClubScope[] = [];
+        const seen = new Set<string>();
+
+        const addClubToSet = (c?: { id?: string; slug?: string; name?: string }) => {
+          if (!c || (!c.id && !c.slug)) return;
+          const key = (c.id || c.slug || "").toLowerCase().trim();
+          if (seen.has(key)) return;
+          seen.add(key);
+          existingClubs.push({
+            id: c.id || c.slug || "",
+            slug: c.slug || c.id || "",
+            name: c.name || c.slug || "Club",
+          });
+        };
+
+        if (existingAssignment && existingAssignment.role === "CLUB_OWNER" && existingAssignment.active !== false) {
+          if (existingAssignment.clubs && Array.isArray(existingAssignment.clubs)) {
+            existingAssignment.clubs.forEach(addClubToSet);
+          } else if (existingAssignment.clubId || existingAssignment.clubSlug) {
+            addClubToSet({
+              id: existingAssignment.clubId,
+              slug: existingAssignment.clubSlug,
+              name: existingAssignment.clubName,
+            });
+          }
+        }
+
+        addClubToSet(club);
+
+        clubsList = existingClubs;
+        clubIds = clubsList.map((c) => c.id).filter(Boolean);
+        clubSlugs = clubsList.map((c) => c.slug).filter(Boolean);
+        clubNames = clubsList.map((c) => c.name).filter(Boolean);
+        clubId = clubsList[0]?.id;
+        clubSlug = clubsList[0]?.slug;
+        clubName = clubNames.join(", ");
+      }
+
       await saveAdminAccessToFirestore({
         btId: isEmail ? (remoteUser?.btId || remoteUser?.employeeId || cleanBt) : cleanBt,
         uid: uid || cleanBt,
         email: email || undefined,
         role,
         name: resolvedName || undefined,
-        clubId: club?.id,
-        clubSlug: club?.slug,
-        clubName: club?.name,
+        clubId,
+        clubSlug,
+        clubName,
+        clubIds,
+        clubSlugs,
+        clubNames,
+        clubs: clubsList,
         active: true,
         grantedBy: user?.email || user?.uid || "owner",
-        grantedAt: now,
+        grantedAt: existingAssignment?.grantedAt || now,
         updatedAt: now,
       });
 
@@ -522,8 +597,12 @@ export default function AdminRolesPage() {
         });
       }
 
+      const assignedClubDisplay = clubsList && clubsList.length > 1
+        ? clubsList.map((c) => c.name).join(", ")
+        : club?.name ? ` (${club.name})` : "";
+
       setNotice({
-        message: `${ADMIN_ROLE_LABELS[role]} clearance granted to ${resolvedName ? `${resolvedName} (${cleanBt})` : cleanBt}${club?.name ? ` (${club.name})` : ""}${uid ? " (Linked to account)" : " (Awaiting user sign-in)"}.`,
+        message: `${ADMIN_ROLE_LABELS[role]} clearance granted to ${resolvedName ? `${resolvedName} (${cleanBt})` : cleanBt}${assignedClubDisplay ? ` [${assignedClubDisplay}]` : ""}${uid ? " (Linked to account)" : " (Awaiting user sign-in)"}.`,
         type: "success",
       });
       await loadData();
@@ -534,11 +613,55 @@ export default function AdminRolesPage() {
     }
   };
 
-  // Revoke role access
-  const revokeAccess = async (cleanBt: string, uid?: string, slotKey?: string) => {
+  // Revoke role access (or remove a single club from multi-club owner)
+  const revokeAccess = async (cleanBt: string, uid?: string, slotKey?: string, clubIdOrSlugToRevoke?: string) => {
     const currentBusyKey = slotKey || cleanBt;
     setBusyKey(currentBusyKey);
     try {
+      if (clubIdOrSlugToRevoke) {
+        const existing = assignments.find((a) => {
+          const aClean = normalizeBtId(a.btId);
+          return (cleanBt && aClean === cleanBt) || (uid && a.uid === uid);
+        });
+
+        if (existing && existing.role === "CLUB_OWNER" && existing.active !== false) {
+          const currentClubs: AdminAccessClubScope[] = existing.clubs && existing.clubs.length > 0
+            ? existing.clubs
+            : (existing.clubId || existing.clubSlug)
+            ? [{ id: existing.clubId || "", slug: existing.clubSlug || "", name: existing.clubName || "Club" }]
+            : [];
+
+          const remainingClubs = currentClubs.filter(
+            (c) => c.id !== clubIdOrSlugToRevoke && c.slug !== clubIdOrSlugToRevoke
+          );
+
+          if (remainingClubs.length > 0) {
+            const clubIds = remainingClubs.map((c) => c.id).filter(Boolean);
+            const clubSlugs = remainingClubs.map((c) => c.slug).filter(Boolean);
+            const clubNames = remainingClubs.map((c) => c.name).filter(Boolean);
+
+            await saveAdminAccessToFirestore({
+              ...existing,
+              clubId: remainingClubs[0].id,
+              clubSlug: remainingClubs[0].slug,
+              clubName: clubNames.join(", "),
+              clubIds,
+              clubSlugs,
+              clubNames,
+              clubs: remainingClubs,
+              updatedAt: new Date().toISOString(),
+            });
+
+            setNotice({
+              message: `Removed club access. Remaining assigned clubs: ${clubNames.join(", ")}.`,
+              type: "success",
+            });
+            await loadData();
+            return;
+          }
+        }
+      }
+
       await revokeAdminAccessFromFirestore(cleanBt, user?.email || user?.uid || "owner", uid);
       setNotice({ message: `Access revoked for ${cleanBt}.`, type: "success" });
       await loadData();
@@ -576,14 +699,20 @@ export default function AdminRolesPage() {
     }
   };
 
-  // 1-Click Global Tenure Grant
+  // 1-Click Global Tenure Grant (Aggregates multiple clubs per student)
   const handleGrantAllTenure = async () => {
     setBusyKey("bulk_tenure");
     let count = 0;
     const now = new Date().toISOString();
 
     try {
-      // 1. Grant all club leaders dynamically
+      // 1. Group all club leaders by normalized BT ID to support multi-club ownership
+      const clubAssignmentsByBt = new Map<string, {
+        uid: string;
+        name: string;
+        clubs: AdminAccessClubScope[];
+      }>();
+
       for (const group of clubCandidateGroups) {
         for (const leader of group.leaders) {
           if (leader.currentBtId) {
@@ -591,26 +720,50 @@ export default function AdminRolesPage() {
             if (cleanBt) {
               const matched = findRegisteredUserByBtId(cleanBt);
               const resolvedName = leader.name || nameLookupMap.get(cleanBt) || matched?.name || "";
-              await saveAdminAccessToFirestore({
-                btId: cleanBt,
+              const entry = clubAssignmentsByBt.get(cleanBt) || {
                 uid: matched?.uid || cleanBt,
-                role: "CLUB_OWNER",
-                name: resolvedName || undefined,
-                clubId: group.club.id,
-                clubSlug: group.club.slug,
-                clubName: group.club.name,
-                active: true,
-                grantedBy: user?.email || "owner",
-                grantedAt: now,
-                updatedAt: now,
-              });
-              count++;
+                name: resolvedName,
+                clubs: [],
+              };
+              if (!entry.clubs.some((c) => c.id === group.club.id || c.slug === group.club.slug)) {
+                entry.clubs.push({
+                  id: group.club.id,
+                  slug: group.club.slug,
+                  name: group.club.name,
+                });
+              }
+              clubAssignmentsByBt.set(cleanBt, entry);
             }
           }
         }
       }
 
-      // 2. Grant Treasurer & Protocol Officers
+      // Save unified club owner assignments
+      for (const [cleanBt, entry] of clubAssignmentsByBt.entries()) {
+        const clubIds = entry.clubs.map((c) => c.id).filter(Boolean);
+        const clubSlugs = entry.clubs.map((c) => c.slug).filter(Boolean);
+        const clubNames = entry.clubs.map((c) => c.name).filter(Boolean);
+        await saveAdminAccessToFirestore({
+          btId: cleanBt,
+          uid: entry.uid,
+          role: "CLUB_OWNER",
+          name: entry.name || undefined,
+          clubId: entry.clubs[0]?.id,
+          clubSlug: entry.clubs[0]?.slug,
+          clubName: clubNames.join(", "),
+          clubIds,
+          clubSlugs,
+          clubNames,
+          clubs: entry.clubs,
+          active: true,
+          grantedBy: user?.email || "owner",
+          grantedAt: now,
+          updatedAt: now,
+        });
+        count++;
+      }
+
+      // 2. Grant Treasurer, Protocol Officers, Chief Editor & PRO
       for (const officer of officerCandidates) {
         if (officer.currentBtId) {
           const cleanBt = normalizeBtId(officer.currentBtId);
@@ -974,7 +1127,8 @@ export default function AdminRolesPage() {
                     const isActive = Boolean(
                       activeGrant && 
                       activeGrant.role === "CLUB_OWNER" && 
-                      activeGrant.clubId === group.club.id
+                      activeGrant.active !== false &&
+                      isEntityOwnedByClub(group.club, activeGrant)
                     );
                     const isLeaderBusy = busyKey === leader.slotKey;
 
@@ -1019,7 +1173,7 @@ export default function AdminRolesPage() {
 
                           {isActive ? (
                             <Button
-                              onClick={() => revokeAccess(cleanBt, activeGrant?.uid, leader.slotKey)}
+                              onClick={() => revokeAccess(cleanBt, activeGrant?.uid, leader.slotKey, group.club.id)}
                               disabled={isLeaderBusy}
                               size="sm"
                               variant="danger"
@@ -1124,6 +1278,25 @@ export default function AdminRolesPage() {
           >
             Grant Access
           </Button>
+
+          {manualRole === "CLUB_OWNER" && manualBtId.trim() && (() => {
+            const clean = manualBtId.includes("@") ? manualBtId.toLowerCase().trim() : normalizeBtId(manualBtId);
+            const existing = activeAssignmentsByBtId.get(clean);
+            if (existing && existing.role === "CLUB_OWNER" && (existing.clubs?.length || existing.clubName)) {
+              const names = existing.clubs && existing.clubs.length > 0
+                ? existing.clubs.map((c) => c.name).join(", ")
+                : existing.clubName;
+              return (
+                <div className="sm:col-span-2 lg:col-span-4 rounded-xl bg-blue-50 border border-blue-200/80 p-2.5 text-xs text-[#17458F] flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 shrink-0 text-[#E78023]" />
+                  <span>
+                    <strong>Multi-Club Notice:</strong> This student currently owns <strong>{names}</strong>. Selecting another club will add it to their ownership portfolio without removing existing clubs.
+                  </span>
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
       </section>
 
@@ -1210,7 +1383,35 @@ export default function AdminRolesPage() {
                       >
                         {ADMIN_ROLE_LABELS[assignment.role]}
                       </Badge>
-                      {assignment.clubName && (
+                      {assignment.role === "CLUB_OWNER" && (
+                        <div className="flex flex-wrap items-center gap-1.5 ml-1">
+                          {(assignment.clubs && assignment.clubs.length > 0
+                            ? assignment.clubs
+                            : assignment.clubName
+                            ? [{ id: assignment.clubId || "", slug: assignment.clubSlug || "", name: assignment.clubName }]
+                            : []
+                          ).map((c) => (
+                            <span
+                              key={c.id || c.slug}
+                              className="inline-flex items-center gap-1 rounded-lg bg-blue-50 border border-blue-200/80 px-2 py-0.5 text-[11px] font-bold text-[#17458F]"
+                            >
+                              <span>{c.name}</span>
+                              {assignment.active !== false && (assignment.clubs?.length || 1) > 1 && (
+                                <button
+                                  type="button"
+                                  title={`Remove ${c.name} access`}
+                                  disabled={isBusy}
+                                  onClick={() => revokeAccess(cleanBt, assignment.uid, undefined, c.id || c.slug)}
+                                  className="hover:text-rose-600 transition-colors ml-0.5 cursor-pointer"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {assignment.role !== "CLUB_OWNER" && assignment.clubName && (
                         <span className="text-xs font-semibold text-slate-500">
                           • {assignment.clubName}
                         </span>

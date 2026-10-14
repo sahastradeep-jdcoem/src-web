@@ -112,8 +112,14 @@ service cloud.firestore {
 
     function hasEventsAccess() {
       return isPrivilegedAdmin() || (isClubOwner() && (
-        (request.resource != null && request.resource.data.organizerClubSlug == getAdminAccess().clubSlug) ||
-        (request.resource == null && resource.data.organizerClubSlug == getAdminAccess().clubSlug)
+        (request.resource != null && (
+          request.resource.data.organizerClubSlug == getAdminAccess().clubSlug ||
+          (getAdminAccess().clubSlugs is list && request.resource.data.organizerClubSlug in getAdminAccess().clubSlugs)
+        )) ||
+        (request.resource == null && (
+          resource.data.organizerClubSlug == getAdminAccess().clubSlug ||
+          (getAdminAccess().clubSlugs is list && resource.data.organizerClubSlug in getAdminAccess().clubSlugs)
+        ))
       ));
     }
 
