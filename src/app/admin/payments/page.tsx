@@ -1289,10 +1289,17 @@ export default function AdminPaymentsPage() {
             <button
               type="button"
               onClick={() => setIsPaymentConfigOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition-all cursor-pointer"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition-all cursor-pointer"
             >
               <Sliders className="w-3.5 h-3.5 text-[#17458F]" />
               <span>Gateway Settings</span>
+              <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold tracking-wide ${
+                paymentConfig.gateway === "paytm_business"
+                  ? "bg-indigo-100 text-indigo-900 border border-indigo-200"
+                  : "bg-blue-100 text-blue-900 border border-blue-200"
+              }`}>
+                {paymentConfig.gateway === "paytm_business" ? "Paytm UPI" : "Cashfree"}
+              </span>
             </button>
           )}
 

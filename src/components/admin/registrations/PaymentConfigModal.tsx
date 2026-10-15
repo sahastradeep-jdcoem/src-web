@@ -11,13 +11,19 @@ import {
   Zap, 
   ShieldCheck, 
   CheckCircle2, 
-  SlidersHorizontal 
+  SlidersHorizontal,
+  CreditCard,
+  QrCode,
+  Building2,
+  Sparkles,
+  ExternalLink
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { 
   PaymentConfig, 
+  PaymentGatewayType,
   getStoredPaymentConfig, 
   updatePaymentConfig, 
   subscribeToPaymentConfig 
@@ -119,13 +125,32 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
     }
   };
 
+  const handleSelectGateway = (gateway: PaymentGatewayType) => {
+    let updatedInstructions = config.instructions;
+    if (gateway === "paytm_business" && (!config.instructions || config.instructions.includes("Cashfree"))) {
+      updatedInstructions = "Direct instant UPI payment via Paytm for Business. Scan the dynamic QR code using any UPI app (GPay, PhonePe, Paytm).";
+    } else if (gateway === "cashfree" && (!config.instructions || config.instructions.includes("Paytm"))) {
+      updatedInstructions = "Instant online checkout powered by Cashfree (UPI, Cards, Netbanking).";
+    }
+
+    setConfig({
+      ...config,
+      gateway,
+      instructions: updatedInstructions,
+    });
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     try {
       await updatePaymentConfig({
+        gateway: config.gateway || "cashfree",
         isGatewayActive: config.isGatewayActive,
         instructions: config.instructions,
+        paytmUpiId: config.paytmUpiId?.trim() || "",
+        paytmMerchantName: config.paytmMerchantName?.trim() || "SRC JDCOEM",
+        paytmQrImageUrl: config.paytmQrImageUrl?.trim() || "",
       }, "Admin / Treasurer");
       setShowSavedToast(true);
       setTimeout(() => setShowSavedToast(false), 3000);
@@ -139,161 +164,426 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
 
   const activeEnv = serverStatus?.environment || "PROD";
   const isConfigured = serverStatus?.configured;
+  const isPaytm = config.gateway === "paytm_business";
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Cashfree Payment Gateway Settings"
-      subtitle="Gateway credentials and environment modes are securely handled exclusively via Vercel."
+      title="Payment Gateway & Checkout Provider Settings"
+      subtitle="Select active payment provider and configure institutional checkout parameters."
       maxWidth="3xl"
     >
       <div className="space-y-5 p-1 sm:p-2">
-        {/* Header Status Bar */}
-        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-50/90 via-indigo-50/80 to-slate-50 border border-blue-200/70 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-2xs">
-          <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-[#17458F] text-white flex items-center justify-center font-extrabold text-sm shadow-md shrink-0 uppercase tracking-wider">
-              CF
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h4 className="font-heading font-extrabold text-base text-slate-900 tracking-tight">
-                  Cashfree Payment Gateway
-                </h4>
-                <Badge variant={config.isGatewayActive ? "success" : "slate"} size="sm">
-                  {config.isGatewayActive ? "GATEWAY LIVE" : "PAUSED"}
-                </Badge>
-                <Badge variant={activeEnv === "PROD" ? "orange" : "navy"} size="sm">
-                  {activeEnv === "PROD" ? "PRODUCTION LIVE" : "TEST SANDBOX"}
-                </Badge>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/90 text-slate-700 border border-slate-200/90 shadow-2xs">
-                  <Lock className="w-3 h-3 text-emerald-600" />
-                  Vercel Managed
+        {/* PROVIDER SELECTOR TOGGLE CARDS */}
+        <div className="space-y-2">
+          <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+            Select Active Checkout Provider
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Cashfree Option */}
+            <button
+              type="button"
+              onClick={() => handleSelectGateway("cashfree")}
+              className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative flex flex-col justify-between ${
+                !isPaytm
+                  ? "bg-gradient-to-br from-blue-50/90 to-indigo-50/60 border-blue-500 ring-2 ring-blue-200/80 shadow-2xs"
+                  : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/80"
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-extrabold text-xs shadow-xs ${
+                      !isPaytm ? "bg-[#17458F] text-white" : "bg-slate-100 text-slate-600"
+                    }`}>
+                      CF
+                    </div>
+                    <div>
+                      <div className="font-heading font-extrabold text-sm text-slate-900 tracking-tight">
+                        Cashfree Payments
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-medium">Automated Gateway</div>
+                    </div>
+                  </div>
+                  {!isPaytm ? (
+                    <span className="w-5 h-5 rounded-full bg-[#17458F] text-white flex items-center justify-center text-[10px] shadow-xs">
+                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                    </span>
+                  ) : (
+                    <span className="w-5 h-5 rounded-full border border-slate-300" />
+                  )}
+                </div>
+                <p className="text-xs text-slate-600 mt-2.5 leading-relaxed font-medium">
+                  Full multi-rail checkout: UPI, Credit/Debit Cards, Netbanking &amp; auto-webhook verification.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-100 text-blue-800">
+                  Cards &amp; Netbanking
+                </span>
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
+                  Vercel Server Managed
                 </span>
               </div>
-              <p className="text-xs text-slate-500 font-medium mt-1">
-                Institutional checkout engine for UPI, Credit/Debit Cards, Netbanking & Wallets
-              </p>
-            </div>
-          </div>
+            </button>
 
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={handleTestCashfree}
-            disabled={isTestingCashfree}
-            className="text-xs border-[#17458F] text-[#17458F] hover:bg-blue-50 font-bold shrink-0 self-start md:self-center shadow-2xs"
-          >
-            {isTestingCashfree ? (
-              <>
-                <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                Testing Gateway...
-              </>
-            ) : (
-              <>
-                <Zap className="w-3.5 h-3.5 mr-1.5 text-amber-500 fill-amber-500" />
-                Test Connection
-              </>
-            )}
-          </Button>
+            {/* Paytm for Business Option */}
+            <button
+              type="button"
+              onClick={() => handleSelectGateway("paytm_business")}
+              className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative flex flex-col justify-between ${
+                isPaytm
+                  ? "bg-gradient-to-br from-indigo-50/90 to-sky-50/60 border-[#002970] ring-2 ring-indigo-200/80 shadow-2xs"
+                  : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/80"
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-extrabold text-xs shadow-xs ${
+                      isPaytm ? "bg-[#002970] text-white" : "bg-slate-100 text-slate-600"
+                    }`}>
+                      <QrCode className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="font-heading font-extrabold text-sm text-slate-900 tracking-tight">
+                        Paytm for Business
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-medium">Direct Dynamic UPI QR</div>
+                    </div>
+                  </div>
+                  {isPaytm ? (
+                    <span className="w-5 h-5 rounded-full bg-[#002970] text-white flex items-center justify-center text-[10px] shadow-xs">
+                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                    </span>
+                  ) : (
+                    <span className="w-5 h-5 rounded-full border border-slate-300" />
+                  )}
+                </div>
+                <p className="text-xs text-slate-600 mt-2.5 leading-relaxed font-medium">
+                  Direct Institutional P2M UPI QR with 0% gateway commission, no bank intent block, &amp; zero downtime.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
+                  0% Commission
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-sky-100 text-sky-800">
+                  Paytm Merchant P2M
+                </span>
+              </div>
+            </button>
+          </div>
         </div>
 
-        {/* Test Result Toast */}
-        {cashfreeTestResult && (
-          <div
-            className={`p-4 rounded-2xl border text-xs flex items-start gap-3 transition-all animate-in fade-in-50 duration-200 shadow-2xs ${
-              cashfreeTestResult.success
-                ? "bg-emerald-50 border-emerald-200 text-emerald-900"
-                : "bg-rose-50 border-rose-200 text-rose-900"
-            }`}
-          >
-            {cashfreeTestResult.success ? (
-              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-            ) : (
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+        {/* -------------------- CASHFREE PROVIDER VIEW -------------------- */}
+        {!isPaytm && (
+          <div className="space-y-4 pt-1 animate-in fade-in-50 duration-200">
+            {/* Header Status Bar */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-50/90 via-indigo-50/80 to-slate-50 border border-blue-200/70 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-2xs">
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-[#17458F] text-white flex items-center justify-center font-extrabold text-sm shadow-md shrink-0 uppercase tracking-wider">
+                  CF
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="font-heading font-extrabold text-base text-slate-900 tracking-tight">
+                      Cashfree Payment Gateway
+                    </h4>
+                    <Badge variant={config.isGatewayActive ? "success" : "slate"} size="sm">
+                      {config.isGatewayActive ? "GATEWAY LIVE" : "PAUSED"}
+                    </Badge>
+                    <Badge variant={activeEnv === "PROD" ? "orange" : "navy"} size="sm">
+                      {activeEnv === "PROD" ? "PRODUCTION LIVE" : "TEST SANDBOX"}
+                    </Badge>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/90 text-slate-700 border border-slate-200/90 shadow-2xs">
+                      <Lock className="w-3 h-3 text-emerald-600" />
+                      Vercel Managed
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium mt-1">
+                    Institutional checkout engine for UPI, Credit/Debit Cards, Netbanking &amp; Wallets
+                  </p>
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleTestCashfree}
+                disabled={isTestingCashfree}
+                className="text-xs border-[#17458F] text-[#17458F] hover:bg-blue-50 font-bold shrink-0 self-start md:self-center shadow-2xs"
+              >
+                {isTestingCashfree ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                    Testing Gateway...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-3.5 h-3.5 mr-1.5 text-amber-500 fill-amber-500" />
+                    Test Connection
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {/* Test Result Toast */}
+            {cashfreeTestResult && (
+              <div
+                className={`p-4 rounded-2xl border text-xs flex items-start gap-3 transition-all animate-in fade-in-50 duration-200 shadow-2xs ${
+                  cashfreeTestResult.success
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                    : "bg-rose-50 border-rose-200 text-rose-900"
+                }`}
+              >
+                {cashfreeTestResult.success ? (
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                )}
+                <div className="flex-1 leading-relaxed">
+                  <span className="font-bold">{cashfreeTestResult.success ? "Success: " : "Error: "}</span>
+                  {cashfreeTestResult.message}
+                </div>
+              </div>
             )}
-            <div className="flex-1 leading-relaxed">
-              <span className="font-bold">{cashfreeTestResult.success ? "Success: " : "Error: "}</span>
-              {cashfreeTestResult.message}
+
+            {/* Vercel Server Environment Panel */}
+            <div className="p-5 rounded-2xl bg-slate-950 text-white space-y-4 shadow-md border border-slate-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-800/80">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-xs uppercase tracking-wider text-slate-100 flex items-center gap-2">
+                      Credentials Source: Vercel Environment Variables
+                    </span>
+                    <span className="block text-[11px] text-slate-400 font-medium">
+                      Authoritative server configuration • Never exposed to client bundles or Firestore
+                    </span>
+                  </div>
+                </div>
+
+                {isLoadingStatus ? (
+                  <span className="text-[11px] text-slate-400 flex items-center gap-1.5 font-mono">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-400" /> Verifying Vercel env...
+                  </span>
+                ) : isConfigured ? (
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-400 bg-emerald-950/80 px-3 py-1 rounded-full border border-emerald-800/90 shadow-2xs">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Connected &amp; Authenticated
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-rose-400 bg-rose-950/80 px-3 py-1 rounded-full border border-rose-800/90 shadow-2xs">
+                    <AlertCircle className="w-3.5 h-3.5" /> Missing in Vercel
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800 space-y-1">
+                  <span className="text-slate-400 font-mono text-[10px] block uppercase tracking-wider font-semibold">
+                    CASHFREE_ENVIRONMENT
+                  </span>
+                  <div className="text-sm font-bold text-white font-mono flex items-center gap-2 pt-0.5">
+                    <span className={`w-2 h-2 rounded-full ${activeEnv === "PROD" ? "bg-amber-400 animate-pulse" : "bg-blue-400"}`} />
+                    <span>{activeEnv === "PROD" ? "PROD (Production Live)" : "TEST (Sandbox)"}</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 block pt-0.5">Managed in Vercel</span>
+                </div>
+
+                <div className="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800 space-y-1">
+                  <span className="text-slate-400 font-mono text-[10px] block uppercase tracking-wider font-semibold">
+                    CASHFREE_APP_ID
+                  </span>
+                  <div className="text-sm font-bold text-slate-200 font-mono pt-0.5 truncate" title={serverStatus?.appIdMasked}>
+                    {serverStatus?.appIdMasked || "Configured in Vercel"}
+                  </div>
+                  <span className="text-[10px] text-slate-500 block pt-0.5">Client ID</span>
+                </div>
+
+                <div className="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800 space-y-1">
+                  <span className="text-slate-400 font-mono text-[10px] block uppercase tracking-wider font-semibold">
+                    CASHFREE_SECRET_KEY
+                  </span>
+                  <div className="text-sm font-bold text-emerald-400 font-mono pt-0.5 tracking-wider">
+                    ••••••••••••••••
+                  </div>
+                  <span className="text-[10px] text-slate-500 block pt-0.5">Encrypted Server Secret</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-900/50 border border-slate-800/80 text-[11px] text-slate-400 leading-relaxed">
+                To switch environments or update API keys, visit{" "}
+                <strong className="text-slate-200">Vercel Project Dashboard → Settings → Environment Variables</strong>.
+                Credentials are encrypted at rest and never transmitted to the browser.
+              </div>
+            </div>
+
+            {/* Webhook Configuration Section */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                  <Server className="w-4 h-4 text-blue-900" />
+                  Cashfree Webhook Endpoint
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyWebhook}
+                  className="text-xs font-bold text-[#17458F] hover:text-[#11336c] flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors"
+                >
+                  {copiedWebhook ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedWebhook ? "Copied URL!" : "Copy Webhook URL"}</span>
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                Add this endpoint in your <strong className="text-slate-800">Cashfree Dashboard → Developers → Webhooks</strong> to receive sub-second payment status webhooks:
+              </p>
+
+              <div className="p-3 rounded-xl bg-white border border-slate-200 font-mono text-xs text-slate-800 select-all break-all shadow-2xs flex items-center justify-between gap-2">
+                <span className="truncate">{webhookUrl}</span>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap pt-0.5 text-[11px] text-slate-500 font-medium">
+                <span>API Version: <strong className="text-slate-700 font-mono">2023-08-01</strong></span>
+                <span>•</span>
+                <span>Subscribed Events:</span>
+                <span className="px-2 py-0.5 rounded bg-slate-200/70 text-slate-700 font-mono text-[10px]">PAYMENT_SUCCESS_WEBHOOK</span>
+                <span className="px-2 py-0.5 rounded bg-slate-200/70 text-slate-700 font-mono text-[10px]">ORDER_PAID_WEBHOOK</span>
+                <span className="px-2 py-0.5 rounded bg-slate-200/70 text-slate-700 font-mono text-[10px]">PAYMENT_FAILED_WEBHOOK</span>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Vercel Server Environment Panel */}
-        <div className="p-5 rounded-2xl bg-slate-950 text-white space-y-4 shadow-md border border-slate-800">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-800/80">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-                <Lock className="w-4 h-4" />
-              </div>
-              <div>
-                <span className="font-bold text-xs uppercase tracking-wider text-slate-100 flex items-center gap-2">
-                  Credentials Source: Vercel Environment Variables
-                </span>
-                <span className="block text-[11px] text-slate-400 font-medium">
-                  Authoritative server configuration • Never exposed to client bundles or Firestore
-                </span>
+        {/* ----------------- PAYTM FOR BUSINESS PROVIDER VIEW ----------------- */}
+        {isPaytm && (
+          <div className="space-y-4 pt-1 animate-in fade-in-50 duration-200">
+            {/* Header Status Bar */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-indigo-50/90 via-sky-50/80 to-slate-50 border border-indigo-200/70 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-2xs">
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-[#002970] text-white flex items-center justify-center font-extrabold text-sm shadow-md shrink-0">
+                  <QrCode className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="font-heading font-extrabold text-base text-slate-900 tracking-tight">
+                      Paytm for Business — Merchant Direct UPI
+                    </h4>
+                    <Badge variant={config.isGatewayActive ? "success" : "slate"} size="sm">
+                      {config.isGatewayActive ? "UPI LIVE" : "PAUSED"}
+                    </Badge>
+                    <Badge variant="navy" size="sm">
+                      {config.paytmUpiId ? "CONFIGURED" : "CONFIG REQUIRED"}
+                    </Badge>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/90 text-emerald-800 border border-emerald-200/90 shadow-2xs">
+                      <Sparkles className="w-3 h-3 text-emerald-600" />
+                      0% Commission Direct Settlement
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium mt-1">
+                    Direct P2M payments into the SRC JDCOEM institutional merchant account without third-party holds
+                  </p>
+                </div>
               </div>
             </div>
 
-            {isLoadingStatus ? (
-              <span className="text-[11px] text-slate-400 flex items-center gap-1.5 font-mono">
-                <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-400" /> Verifying Vercel env...
-              </span>
-            ) : isConfigured ? (
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-400 bg-emerald-950/80 px-3 py-1 rounded-full border border-emerald-800/90 shadow-2xs">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Connected &amp; Authenticated
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-rose-400 bg-rose-950/80 px-3 py-1 rounded-full border border-rose-800/90 shadow-2xs">
-                <AlertCircle className="w-3.5 h-3.5" /> Missing in Vercel
-              </span>
-            )}
+            {/* Direct Dynamic UPI QR Info Callout */}
+            <div className="p-4 rounded-2xl bg-sky-50/60 border border-sky-200/80 space-y-2 text-xs text-sky-950">
+              <div className="flex items-center gap-2 font-bold text-sky-900">
+                <Building2 className="w-4 h-4 text-sky-700" />
+                <span>How Paytm for Business Direct Dynamic UPI Works:</span>
+              </div>
+              <ul className="list-disc list-inside space-y-1 text-slate-700 font-medium text-[11.5px] leading-relaxed">
+                <li>
+                  <strong className="text-slate-900">0% Bank &amp; Gateway Fees:</strong> Because Paytm for Business is an institutional merchant account (P2M), payments are directly routed to the college council account with zero deductions.
+                </li>
+                <li>
+                  <strong className="text-slate-900">No Browser Intent Blocking:</strong> Unlike personal P2P UPI IDs, Paytm Business VPAs are certified with NPCI and accept payments from GPay, PhonePe, Paytm, and BHIM without risk score rejection.
+                </li>
+                <li>
+                  <strong className="text-slate-900">Dynamic Payment Encapsulation:</strong> When a student checks out, the system automatically builds an NPCI UPI specification QR containing the exact registration fee and tracking ID.
+                </li>
+              </ul>
+            </div>
+
+            {/* Paytm Merchant Configuration Fields */}
+            <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4 shadow-2xs">
+              <div className="border-b border-slate-100 pb-2">
+                <h5 className="font-heading font-extrabold text-sm text-slate-900 tracking-tight">
+                  Merchant Account Parameters
+                </h5>
+                <p className="text-[11px] text-slate-500 font-medium">
+                  Enter the details from your Paytm for Business application or soundbox merchant profile.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Paytm UPI ID / VPA */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Paytm Merchant UPI ID / VPA <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required={isPaytm}
+                    value={config.paytmUpiId || ""}
+                    onChange={(e) => setConfig({ ...config, paytmUpiId: e.target.value })}
+                    placeholder="e.g. paytmqr2810050501011@paytm or 9529441964@paytm"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-medium focus:outline-none focus:ring-2 focus:ring-[#002970] focus:border-transparent transition-all shadow-2xs"
+                  />
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    Found in Paytm for Business App → Manage QR / Profile.
+                  </p>
+                </div>
+
+                {/* Merchant Display Name */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Merchant / Payee Name <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required={isPaytm}
+                    value={config.paytmMerchantName || ""}
+                    onChange={(e) => setConfig({ ...config, paytmMerchantName: e.target.value })}
+                    placeholder="e.g. SRC JDCOEM or J D College of Engg"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#002970] focus:border-transparent transition-all shadow-2xs"
+                  />
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    Name displayed on student screens in GPay, PhonePe, and Paytm.
+                  </p>
+                </div>
+              </div>
+
+              {/* Optional Static QR Image URL */}
+              <div className="space-y-1.5 pt-1">
+                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                  Static Merchant QR Image URL (Optional)
+                </label>
+                <input
+                  type="url"
+                  value={config.paytmQrImageUrl || ""}
+                  onChange={(e) => setConfig({ ...config, paytmQrImageUrl: e.target.value })}
+                  placeholder="https://... (Optional fallback QR image / soundbox standee photo)"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#002970] focus:border-transparent transition-all shadow-2xs"
+                />
+                <p className="text-[11px] text-slate-400 font-medium">
+                  Dynamic QR will be generated automatically on the fly; this field is for an optional static banner fallback.
+                </p>
+              </div>
+            </div>
           </div>
+        )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800 space-y-1">
-              <span className="text-slate-400 font-mono text-[10px] block uppercase tracking-wider font-semibold">
-                CASHFREE_ENVIRONMENT
-              </span>
-              <div className="text-sm font-bold text-white font-mono flex items-center gap-2 pt-0.5">
-                <span className={`w-2 h-2 rounded-full ${activeEnv === "PROD" ? "bg-amber-400 animate-pulse" : "bg-blue-400"}`} />
-                <span>{activeEnv === "PROD" ? "PROD (Production Live)" : "TEST (Sandbox)"}</span>
-              </div>
-              <span className="text-[10px] text-slate-500 block pt-0.5">Managed in Vercel</span>
-            </div>
-
-            <div className="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800 space-y-1">
-              <span className="text-slate-400 font-mono text-[10px] block uppercase tracking-wider font-semibold">
-                CASHFREE_APP_ID
-              </span>
-              <div className="text-sm font-bold text-slate-200 font-mono pt-0.5 truncate" title={serverStatus?.appIdMasked}>
-                {serverStatus?.appIdMasked || "Configured in Vercel"}
-              </div>
-              <span className="text-[10px] text-slate-500 block pt-0.5">Client ID</span>
-            </div>
-
-            <div className="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800 space-y-1">
-              <span className="text-slate-400 font-mono text-[10px] block uppercase tracking-wider font-semibold">
-                CASHFREE_SECRET_KEY
-              </span>
-              <div className="text-sm font-bold text-emerald-400 font-mono pt-0.5 tracking-wider">
-                ••••••••••••••••
-              </div>
-              <span className="text-[10px] text-slate-500 block pt-0.5">Encrypted Server Secret</span>
-            </div>
-          </div>
-
-          <div className="p-3 rounded-xl bg-slate-900/50 border border-slate-800/80 text-[11px] text-slate-400 leading-relaxed">
-            To switch environments or update API keys, visit{" "}
-            <strong className="text-slate-200">Vercel Project Dashboard → Settings → Environment Variables</strong>.
-            Credentials are encrypted at rest and never transmitted to the browser.
-          </div>
-        </div>
-
-        {/* Operational Form Settings */}
-        <form onSubmit={handleSave} className="space-y-4 pt-1">
+        {/* ---------------- COMMON OPERATIONAL SETTINGS FORM ---------------- */}
+        <form onSubmit={handleSave} className="space-y-4 pt-2 border-t border-slate-200/80">
           {/* Public Checkout Status Toggle */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -341,47 +631,16 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
               type="text"
               value={config.instructions || ""}
               onChange={(e) => setConfig({ ...config, instructions: e.target.value })}
-              placeholder="e.g. Instant online checkout powered by Cashfree (UPI, Cards, Netbanking)."
+              placeholder={
+                isPaytm
+                  ? "e.g. Direct instant UPI payment via Paytm for Business. Scan the dynamic QR code using any UPI app."
+                  : "e.g. Instant online checkout powered by Cashfree (UPI, Cards, Netbanking)."
+              }
               className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#17458F] focus:border-transparent transition-all shadow-2xs"
             />
             <p className="text-[11px] text-slate-400 font-medium">
               Displayed to students directly in the checkout payment modal.
             </p>
-          </div>
-
-          {/* Webhook Configuration Section */}
-          <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                <Server className="w-4 h-4 text-blue-900" />
-                Cashfree Webhook Endpoint
-              </span>
-              <button
-                type="button"
-                onClick={handleCopyWebhook}
-                className="text-xs font-bold text-[#17458F] hover:text-[#11336c] flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors"
-              >
-                {copiedWebhook ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedWebhook ? "Copied URL!" : "Copy Webhook URL"}</span>
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-600 leading-relaxed font-medium">
-              Add this endpoint in your <strong className="text-slate-800">Cashfree Dashboard → Developers → Webhooks</strong> to receive sub-second payment status webhooks:
-            </p>
-
-            <div className="p-3 rounded-xl bg-white border border-slate-200 font-mono text-xs text-slate-800 select-all break-all shadow-2xs flex items-center justify-between gap-2">
-              <span className="truncate">{webhookUrl}</span>
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap pt-0.5 text-[11px] text-slate-500 font-medium">
-              <span>API Version: <strong className="text-slate-700 font-mono">2023-08-01</strong></span>
-              <span>•</span>
-              <span>Subscribed Events:</span>
-              <span className="px-2 py-0.5 rounded bg-slate-200/70 text-slate-700 font-mono text-[10px]">PAYMENT_SUCCESS_WEBHOOK</span>
-              <span className="px-2 py-0.5 rounded bg-slate-200/70 text-slate-700 font-mono text-[10px]">ORDER_PAID_WEBHOOK</span>
-              <span className="px-2 py-0.5 rounded bg-slate-200/70 text-slate-700 font-mono text-[10px]">PAYMENT_FAILED_WEBHOOK</span>
-            </div>
           </div>
 
           {/* Action Buttons */}
@@ -416,3 +675,4 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
     </Modal>
   );
 }
+
