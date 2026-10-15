@@ -74,6 +74,7 @@ import { getCurrentTenure, getStoredTenures } from "@/lib/tenureStore";
 import { isRegistrationDeadlinePassed, isEventCompletedByDate, getEventEffectiveStatus, resolveTenureForEvent } from "@/lib/eventsStore";
 import { loadCashfreeSDK } from "@/lib/cashfreeClient";
 import { PaytmCheckoutModal, PaytmCheckoutData } from "@/components/registration/PaytmCheckoutModal";
+import { PaymentInstructionsModal } from "@/components/registration/PaymentInstructionsModal";
 
 interface RegistrationWizardProps {
   event: EventItem;
@@ -257,6 +258,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
   // Alternate Paytm for Business / UPI state
   const [paytmCheckoutData, setPaytmCheckoutData] = useState<PaytmCheckoutData | null>(null);
+  const [isPaymentInstructionsOpen, setIsPaymentInstructionsOpen] = useState(false);
   const [isVerifyingPaytm, setIsVerifyingPaytm] = useState(false);
   const [paytmUtr, setPaytmUtr] = useState("");
   const [showManualUtr, setShowManualUtr] = useState(false);
@@ -1255,6 +1257,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           upiId: orderData.upiId || paymentConfig.paytmUpiId || "paytm.s3tuv70@pty",
           expiresAt: orderData.expiresAt,
         });
+        setIsPaymentInstructionsOpen(true);
         setIsSubmitting(false);
       } catch (err: any) {
         console.error("Paytm transaction error:", err);
@@ -2966,10 +2969,26 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         />
       )}
 
+      {/* Modal: Payment Instructions & Rules */}
+      {paytmCheckoutData && (
+        <PaymentInstructionsModal
+          isOpen={isPaymentInstructionsOpen}
+          onClose={() => {
+            setIsPaymentInstructionsOpen(false);
+            setPaytmCheckoutData(null);
+          }}
+          onProceed={() => {
+            setIsPaymentInstructionsOpen(false);
+          }}
+          formattedAmount={paytmCheckoutData.formattedAmount}
+          eventName={event.name}
+        />
+      )}
+
       {/* Modal: Paytm for Business Dynamic UPI Checkout */}
       {paytmCheckoutData && (
         <PaytmCheckoutModal
-          isOpen={Boolean(paytmCheckoutData)}
+          isOpen={Boolean(paytmCheckoutData) && !isPaymentInstructionsOpen}
           onClose={() => {
             if (!isVerifyingPaytm && !isRegeneratingQR) setPaytmCheckoutData(null);
           }}

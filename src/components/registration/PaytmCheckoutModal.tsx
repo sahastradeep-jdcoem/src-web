@@ -336,34 +336,8 @@ export function PaytmCheckoutModal({
             </div>
           )}
 
-          {/* Step Guide for Students */}
-          <div className="p-3.5 rounded-2xl bg-white border border-slate-200/90 text-left shadow-xs space-y-2.5">
-            <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-              <Camera className="w-3.5 h-3.5 text-[#1A56DB]" />
-              How to Complete Your Payment:
-            </span>
-            <div className="text-xs text-slate-600 space-y-2 font-medium leading-relaxed">
-              <div className="flex items-start gap-2">
-                <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">1</span>
-                <span><strong>Take a screenshot</strong> of the QR code above (or tap <em>Save QR to Photos</em>).</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">2</span>
-                <span>Open <strong>Google Pay, PhonePe, Paytm, or CRED</strong> &rarr; tap <strong>Scanner</strong> &rarr; select the screenshot from your gallery to complete payment of <strong>₹{paytmCheckoutData.formattedAmount}</strong>.</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="w-4 h-4 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">3</span>
-                <span>Return to this screen and <strong>wait for 30 seconds</strong>. Your official ticket pass will be generated automatically!</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="w-4 h-4 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">4</span>
-                <span>If your pass is not auto-generated after 30 seconds, copy the <strong>12-digit UTR</strong> from your payment receipt and paste it below.</span>
-              </div>
-            </div>
-          </div>
-
           {/* Live Auto-Approval Radar Screen */}
-          <div className="p-3.5 rounded-2xl bg-emerald-50/90 border border-emerald-200 text-left space-y-2 relative overflow-hidden shadow-xs">
+          <div className="p-3.5 rounded-2xl bg-emerald-50/90 border border-emerald-200 text-left space-y-1.5 relative overflow-hidden shadow-xs">
             <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-300 via-emerald-500 to-emerald-300 animate-pulse" />
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -381,23 +355,20 @@ export function PaytmCheckoutModal({
               </span>
             </div>
             <p className="text-[11px] text-emerald-900 leading-relaxed font-medium">
-              Please wait ~30 seconds after completing your payment while our system verifies the transaction.
+              If the automated webhook hasn&apos;t auto-approved after 30 seconds, students simply paste their 12-digit UTR and tap Verify UTR &amp; Issue Pass.
             </p>
           </div>
 
           {/* Mobile Manual UTR Entry Box */}
-          <div className="p-3.5 rounded-2xl bg-white border border-slate-200 text-left space-y-2.5 shadow-xs">
+          <div className="p-3.5 rounded-2xl bg-white border border-slate-200 text-left space-y-2 shadow-xs">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                <span>Pass not auto-generated after 30s?</span>
+                <span>12-Digit UPI Reference (UTR)</span>
               </label>
               <span className="text-[10px] font-mono font-bold text-slate-400">
                 {paytmUtr.length}/12 digits
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-              Copy &amp; paste the <strong>12-digit UTR / UPI Ref ID</strong> from your UPI payment receipt (GPay / PhonePe / Paytm):
-            </p>
             <div className="space-y-2">
               <input
                 type="text"
@@ -628,28 +599,6 @@ export function PaytmCheckoutModal({
               </div>
             )}
 
-            {/* Step Guide for Desktop Users */}
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/90 text-left space-y-2">
-              <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                <Camera className="w-3.5 h-3.5 text-[#2B64E2]" />
-                How to Complete Your Payment:
-              </span>
-              <div className="text-xs text-slate-600 space-y-1.5 font-medium leading-relaxed">
-                <div className="flex items-start gap-2">
-                  <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">1</span>
-                  <span>Scan the QR code above with <strong>Google Pay, PhonePe, Paytm, or CRED</strong> on your phone to pay <strong>₹{paytmCheckoutData.formattedAmount}</strong>.</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="w-4 h-4 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">2</span>
-                  <span>After payment, <strong>wait ~30 seconds</strong> on this screen. Your official ticket pass will generate automatically!</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="w-4 h-4 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">3</span>
-                  <span>If your pass is not auto-generated after 30 seconds, copy the 12-digit UTR from your receipt and enter it below.</span>
-                </div>
-              </div>
-            </div>
-
             {/* Auto-Approval Live Radar Strip */}
             <div className="px-3.5 py-2.5 rounded-xl bg-emerald-50/90 border border-emerald-200 text-left flex items-center justify-between gap-3 shadow-xs">
               <div className="flex items-center gap-2 min-w-0">
@@ -658,28 +607,29 @@ export function PaytmCheckoutModal({
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
                 </span>
                 <span className="text-xs text-emerald-950 font-medium truncate">
-                  Auto-Generation Active • Please wait ~30s after paying
+                  Auto-Generation Active • Listening live
                 </span>
               </div>
               <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-emerald-700 bg-white/90 border border-emerald-200 px-2 py-0.5 rounded-md shrink-0">
                 <Clock className="w-3 h-3 text-emerald-600 shrink-0" />
-                Listening live
+                Live Radar
               </span>
             </div>
+
+            <p className="text-[11px] text-slate-500 font-medium px-1 text-left leading-relaxed">
+              If the automated webhook hasn&apos;t auto-approved after 30 seconds, students simply paste their 12-digit UTR and tap Verify UTR &amp; Issue Pass.
+            </p>
 
             {/* Desktop Manual UTR Box */}
             <div className="p-3.5 rounded-xl bg-white border border-slate-200 text-left space-y-2 shadow-xs">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                  Pass not auto-generated after 30s?
+                  12-Digit UPI Reference (UTR)
                 </label>
                 <span className="text-[10px] text-slate-400 font-mono">
                   {paytmUtr.length}/12 digits
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                Paste the 12-digit UPI Reference (UTR) from your payment receipt:
-              </p>
               <div className="flex items-center gap-2">
                 <input
                   type="text"
@@ -701,7 +651,7 @@ export function PaytmCheckoutModal({
                   className="shrink-0 cursor-pointer bg-[#2B64E2] hover:bg-[#1E52C6] px-4 min-h-[40px] font-bold"
                 >
                   <Check className="w-4 h-4" />
-                  <span>Verify UTR</span>
+                  <span>Verify UTR &amp; Issue Pass</span>
                 </Button>
               </div>
             </div>
