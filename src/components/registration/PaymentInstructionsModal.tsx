@@ -203,15 +203,10 @@ export function PaymentInstructionsModal({
 
             {/* Registration Summary Card */}
             <div className="p-3.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/15 space-y-1.5 shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] text-blue-200/90 uppercase tracking-widest font-bold block">
+              <div>
+                <span className="text-[9px] text-blue-200/90 uppercase tracking-widest font-bold block mb-1">
                   Registration
                 </span>
-                <span className="text-[9px] font-bold text-emerald-300 bg-emerald-400/20 border border-emerald-300/30 px-1.5 py-0.2 rounded-full">
-                  Zero Fee
-                </span>
-              </div>
-              <div>
                 <h4 className="font-heading font-bold text-xs text-white leading-snug line-clamp-1">
                   {eventName}
                 </h4>

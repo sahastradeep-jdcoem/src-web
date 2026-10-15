@@ -179,7 +179,7 @@ export function PaytmCheckoutModal({
         QR-First Design with 1-Tap Save to Photos, Bank Scanner Guide, & Live Radar
         ========================================================================
       */}
-      <div className="sm:hidden flex flex-col w-full max-w-[420px] mx-auto bg-slate-50 font-sans text-left relative overflow-hidden">
+      <div className="sm:hidden flex flex-col flex-1 min-h-0 w-full max-w-[420px] mx-auto bg-slate-50 font-sans text-left relative overflow-hidden">
         {/* Mobile Header: Sleek Compact Royal Blue Bar */}
         <div className="sticky top-0 z-40 bg-gradient-to-r from-[#1A56DB] via-[#2065D6] to-[#2563EB] text-white px-4 py-2.5 shadow-sm select-none">
           <div className="flex items-center justify-between gap-2">
@@ -219,7 +219,7 @@ export function PaytmCheckoutModal({
         </div>
 
         {/* Mobile Body Content */}
-        <div className="px-3.5 py-3 space-y-2.5 flex-1">
+        <div className="px-3.5 py-3 space-y-2.5 flex-1 min-h-0 overflow-y-auto overscroll-contain">
           {!isExpired ? (
             /* Centered Large Scannable QR Code Card */
             <div className="p-3 rounded-2xl bg-white border border-slate-200 shadow-xs text-center flex flex-col items-center justify-center space-y-2">
@@ -373,15 +373,10 @@ export function PaytmCheckoutModal({
 
             {/* Registration Summary Card */}
             <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/15 space-y-1.5 text-white shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] font-bold text-blue-200 uppercase tracking-widest block">
+              <div>
+                <span className="text-[9px] font-bold text-blue-200 uppercase tracking-widest block mb-1">
                   Registration Summary
                 </span>
-                <span className="text-[9px] font-bold text-emerald-300 bg-emerald-400/20 border border-emerald-300/30 px-1.5 py-0.2 rounded-full">
-                  Zero Fee
-                </span>
-              </div>
-              <div>
                 <h4 className="font-heading font-bold text-xs text-white line-clamp-1">
                   {event.name}
                 </h4>
@@ -398,11 +393,6 @@ export function PaytmCheckoutModal({
                     ₹{paytmCheckoutData.formattedAmount}
                   </span>
                 </div>
-                {paytmCheckoutData.microPaisaOffset ? (
-                  <span className="text-[9px] font-bold text-amber-200 bg-amber-400/20 border border-amber-300/30 px-1.5 py-0.2 rounded-full">
-                    +{paytmCheckoutData.microPaisaOffset}p Instant-Verify
-                  </span>
-                ) : null}
               </div>
             </div>
 
@@ -444,17 +434,12 @@ export function PaytmCheckoutModal({
         {/* RIGHT MAIN PANEL: Dedicated QR Scan & Auto-Approval Workspace */}
         <div className="flex-1 flex flex-col min-w-0 bg-white h-full">
           
-          {/* Top Bar: Title, Surcharge Pill & Close Button */}
+          {/* Top Bar: Title & Close Button */}
           <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-heading font-black text-sm text-slate-800 tracking-tight">
-                  Scan QR Code to Pay
-                </h3>
-                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-full shrink-0">
-                  Zero Fee
-                </span>
-              </div>
+              <h3 className="font-heading font-black text-sm text-slate-800 tracking-tight">
+                Scan QR Code to Pay
+              </h3>
               <p className="text-[11px] text-slate-500 font-medium mt-0.5">
                 Scan with Google Pay, PhonePe, Paytm, CRED, or any UPI app
               </p>
@@ -488,10 +473,6 @@ export function PaytmCheckoutModal({
 
                 <div className="p-2 bg-white rounded-xl border border-slate-200/80 shadow-xs inline-block">
                   <ScannableQRCode value={paytmCheckoutData.upiLink} size={150} />
-                </div>
-
-                <div className="text-[10px] text-slate-500 font-medium">
-                  Supported: <strong className="text-slate-700">GPay • PhonePe • Paytm • CRED • BHIM</strong>
                 </div>
               </div>
             ) : (
