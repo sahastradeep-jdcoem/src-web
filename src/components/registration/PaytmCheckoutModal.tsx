@@ -6,17 +6,12 @@ import {
   ShieldCheck, 
   Lock, 
   ChevronRight, 
-  QrCode, 
   Check, 
   Clock, 
-  ArrowLeft, 
   Info, 
-  Smartphone,
   RefreshCw,
-  AlertTriangle,
   Download,
-  Camera,
-  Share2
+  Camera
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -75,8 +70,6 @@ export function PaytmCheckoutModal({
   onRegenerateQR,
   isRegeneratingQR = false,
 }: PaytmCheckoutModalProps) {
-  const [mobileSubView, setMobileSubView] = useState<"methods" | "qr">("methods");
-
   // Fallback student phone
   const studentPhone = formData.phone || "9876543210";
 
@@ -112,39 +105,7 @@ export function PaytmCheckoutModal({
 
   const isExpired = secondsRemaining <= 0;
 
-  // Detect iOS (iPhone / iPad) to prevent invalid Android intent:// errors in Safari
-  const isIOS = typeof navigator !== "undefined" && (
-    /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
-  );
-
-  const cleanQuery = paytmCheckoutData.upiLink.includes("?")
-    ? paytmCheckoutData.upiLink.split("?")[1]
-    : "";
-
-  // On iOS Safari, NEVER load intent:// package URLs which trigger "Safari cannot open page because address is invalid"
-  const gpayHref = isIOS
-    ? `tez://upi/pay?${cleanQuery}`
-    : (paytmCheckoutData.gpayLink && !paytmCheckoutData.gpayLink.startsWith("intent://")
-        ? paytmCheckoutData.gpayLink
-        : (paytmCheckoutData.gpayLink || paytmCheckoutData.upiLink));
-
-  const phonepeHref = isIOS
-    ? `phonepe://pay?${cleanQuery}`
-    : (paytmCheckoutData.phonepeLink && !paytmCheckoutData.phonepeLink.startsWith("intent://")
-        ? paytmCheckoutData.phonepeLink
-        : (paytmCheckoutData.phonepeLink || paytmCheckoutData.upiLink));
-
-  const paytmHref = isIOS
-    ? `paytmmp://pay?${cleanQuery}`
-    : (paytmCheckoutData.paytmLink && !paytmCheckoutData.paytmLink.startsWith("intent://")
-        ? paytmCheckoutData.paytmLink
-        : (paytmCheckoutData.paytmLink || paytmCheckoutData.upiLink));
-
-  const universalUpiHref = paytmCheckoutData.upiLink;
-
   const [isQrSaved, setIsQrSaved] = useState(false);
-  const [showDirectAppLinks, setShowDirectAppLinks] = useState(false);
 
   const handleDownloadQr = () => {
     try {
@@ -375,73 +336,30 @@ export function PaytmCheckoutModal({
             </div>
           )}
 
-          {/* Quick Step Guide for Students */}
-          <div className="p-3.5 rounded-2xl bg-white border border-slate-200/90 text-left shadow-xs space-y-2">
+          {/* Step Guide for Students */}
+          <div className="p-3.5 rounded-2xl bg-white border border-slate-200/90 text-left shadow-xs space-y-2.5">
             <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
               <Camera className="w-3.5 h-3.5 text-[#1A56DB]" />
-              How to scan &amp; pay:
+              How to Complete Your Payment:
             </span>
             <div className="text-xs text-slate-600 space-y-2 font-medium leading-relaxed">
               <div className="flex items-start gap-2">
                 <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">1</span>
-                <span><strong>Paying on this same phone:</strong> Tap <em>Save QR to Photos</em> above (or screenshot), open Google Pay, PhonePe, or Paytm &rarr; tap <strong>Scanner</strong> &rarr; tap the <strong>Gallery/Photo</strong> icon to select the QR image.</span>
+                <span><strong>Take a screenshot</strong> of the QR code above (or tap <em>Save QR to Photos</em>).</span>
               </div>
               <div className="flex items-start gap-2">
                 <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">2</span>
-                <span><strong>Paying from another phone:</strong> Open camera or any UPI app on the other phone and point it at the QR code above.</span>
+                <span>Open <strong>Google Pay, PhonePe, Paytm, or CRED</strong> &rarr; tap <strong>Scanner</strong> &rarr; select the screenshot from your gallery to complete payment of <strong>₹{paytmCheckoutData.formattedAmount}</strong>.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="w-4 h-4 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">3</span>
+                <span>Return to this screen and <strong>wait for 30 seconds</strong>. Your official ticket pass will be generated automatically!</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="w-4 h-4 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">4</span>
+                <span>If your pass is not auto-generated after 30 seconds, copy the <strong>12-digit UTR</strong> from your payment receipt and paste it below.</span>
               </div>
             </div>
-          </div>
-
-          {/* Optional Collapsible Direct App Launch (with Bank Policy Disclaimer) */}
-          <div className="text-center pt-0.5">
-            {!showDirectAppLinks ? (
-              <button
-                type="button"
-                onClick={() => setShowDirectAppLinks(true)}
-                className="text-[11px] text-slate-500 hover:text-slate-800 font-medium underline underline-offset-4 py-1 transition-colors cursor-pointer"
-              >
-                Prefer to try opening UPI app directly? Tap here &darr;
-              </button>
-            ) : (
-              <div className="p-3.5 rounded-2xl bg-white border border-slate-200 text-left space-y-2.5 animate-in fade-in duration-150 shadow-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                    Direct App Launch
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowDirectAppLinks(false)}
-                    className="text-[11px] text-slate-400 hover:text-slate-600 font-medium cursor-pointer"
-                  >
-                    Hide
-                  </button>
-                </div>
-                <div className="p-2 rounded-lg bg-amber-50 border border-amber-200/80 text-[11px] text-amber-900 leading-relaxed font-medium">
-                  ⚠️ Note: If your UPI app shows &quot;Cannot accept this payment as per risk policy&quot;, bank rules require scanning the QR code above instead.
-                </div>
-                <div className="grid grid-cols-3 gap-1.5">
-                  <a
-                    href={gpayHref}
-                    className="p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-center font-bold text-xs text-slate-800 no-underline active:scale-95 transition-all"
-                  >
-                    GPay
-                  </a>
-                  <a
-                    href={phonepeHref}
-                    className="p-2.5 rounded-xl border border-purple-200 bg-purple-50/60 hover:bg-purple-100 text-center font-bold text-xs text-[#5f259f] no-underline active:scale-95 transition-all"
-                  >
-                    PhonePe
-                  </a>
-                  <a
-                    href={paytmHref}
-                    className="p-2.5 rounded-xl border border-sky-200 bg-sky-50/60 hover:bg-sky-100 text-center font-bold text-xs text-[#002970] no-underline active:scale-95 transition-all"
-                  >
-                    Paytm
-                  </a>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Live Auto-Approval Radar Screen */}
@@ -454,7 +372,7 @@ export function PaytmCheckoutModal({
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-600"></span>
                 </span>
                 <span className="text-xs font-black text-emerald-950 uppercase tracking-wider">
-                  Auto-Approval Active
+                  Auto-Generation Active
                 </span>
               </div>
               <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-emerald-700 bg-white/90 border border-emerald-200 px-2 py-0.5 rounded-md">
@@ -463,58 +381,47 @@ export function PaytmCheckoutModal({
               </span>
             </div>
             <p className="text-[11px] text-emerald-900 leading-relaxed font-medium">
-              Pass activates automatically the instant payment is confirmed in your UPI app.
+              Please wait ~30 seconds after completing your payment while our system verifies the transaction.
             </p>
           </div>
 
-          {/* Mobile Manual UTR Emergency Drawer */}
-          <div className="pt-1 text-center">
-            {!showManualUtr ? (
-              <button
-                type="button"
-                onClick={() => setShowManualUtr(true)}
-                className="text-[11px] text-slate-400 hover:text-slate-700 font-medium underline underline-offset-4 py-1.5 transition-colors cursor-pointer inline-flex items-center gap-1"
+          {/* Mobile Manual UTR Entry Box */}
+          <div className="p-3.5 rounded-2xl bg-white border border-slate-200 text-left space-y-2.5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <span>Pass not auto-generated after 30s?</span>
+              </label>
+              <span className="text-[10px] font-mono font-bold text-slate-400">
+                {paytmUtr.length}/12 digits
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+              Copy &amp; paste the <strong>12-digit UTR / UPI Ref ID</strong> from your UPI payment receipt (GPay / PhonePe / Paytm):
+            </p>
+            <div className="space-y-2">
+              <input
+                type="text"
+                maxLength={12}
+                placeholder="e.g. 425512345678 (12 digits)"
+                value={paytmUtr}
+                onChange={(e) => {
+                  const onlyNums = e.target.value.replace(/\D/g, "");
+                  setPaytmUtr(onlyNums);
+                }}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-base font-mono text-slate-900 tracking-wider focus:outline-none focus:ring-2 focus:ring-[#2065D6]/30 bg-slate-50/50"
+              />
+              <Button
+                onClick={handleVerifyPaytmPayment}
+                isLoading={isVerifyingPaytm}
+                disabled={paytmUtr.length !== 12 || isVerifyingPaytm}
+                variant="primary"
+                size="md"
+                className="w-full justify-center gap-2 cursor-pointer min-h-[44px] bg-[#2065D6] hover:bg-[#1b55b8] font-bold text-xs shadow-xs"
               >
-                <span>Having trouble? Paid but pass didn&apos;t activate? Enter UTR manually &rarr;</span>
-              </button>
-            ) : (
-              <div className="p-4 rounded-2xl bg-white border border-slate-200 text-left space-y-3 animate-in fade-in duration-200 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                    12-Digit UPI Reference (UTR)
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowManualUtr(false)}
-                    className="text-[11px] text-slate-400 hover:text-slate-600 font-medium cursor-pointer"
-                  >
-                    Hide
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  maxLength={12}
-                  placeholder="e.g. 425512345678 (12 digits)"
-                  value={paytmUtr}
-                  onChange={(e) => {
-                    const onlyNums = e.target.value.replace(/\D/g, "");
-                    setPaytmUtr(onlyNums);
-                  }}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-base font-mono text-slate-900 tracking-wider focus:outline-none focus:ring-2 focus:ring-[#2065D6]/30"
-                />
-                <Button
-                  onClick={handleVerifyPaytmPayment}
-                  isLoading={isVerifyingPaytm}
-                  disabled={paytmUtr.length !== 12 || isVerifyingPaytm}
-                  variant="primary"
-                  size="md"
-                  className="w-full justify-center gap-2 cursor-pointer min-h-[44px] bg-[#2065D6] hover:bg-[#1b55b8]"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>Verify UTR &amp; Issue Pass</span>
-                </Button>
-              </div>
-            )}
+                <Check className="w-4 h-4" />
+                <span>Verify UTR &amp; Issue Pass</span>
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -721,6 +628,28 @@ export function PaytmCheckoutModal({
               </div>
             )}
 
+            {/* Step Guide for Desktop Users */}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/90 text-left space-y-2">
+              <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Camera className="w-3.5 h-3.5 text-[#2B64E2]" />
+                How to Complete Your Payment:
+              </span>
+              <div className="text-xs text-slate-600 space-y-1.5 font-medium leading-relaxed">
+                <div className="flex items-start gap-2">
+                  <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">1</span>
+                  <span>Scan the QR code above with <strong>Google Pay, PhonePe, Paytm, or CRED</strong> on your phone to pay <strong>₹{paytmCheckoutData.formattedAmount}</strong>.</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="w-4 h-4 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">2</span>
+                  <span>After payment, <strong>wait ~30 seconds</strong> on this screen. Your official ticket pass will generate automatically!</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="w-4 h-4 rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">3</span>
+                  <span>If your pass is not auto-generated after 30 seconds, copy the 12-digit UTR from your receipt and enter it below.</span>
+                </div>
+              </div>
+            </div>
+
             {/* Auto-Approval Live Radar Strip */}
             <div className="px-3.5 py-2.5 rounded-xl bg-emerald-50/90 border border-emerald-200 text-left flex items-center justify-between gap-3 shadow-xs">
               <div className="flex items-center gap-2 min-w-0">
@@ -729,7 +658,7 @@ export function PaytmCheckoutModal({
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
                 </span>
                 <span className="text-xs text-emerald-950 font-medium truncate">
-                  Pass will generate automatically once payment completes
+                  Auto-Generation Active • Please wait ~30s after paying
                 </span>
               </div>
               <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-emerald-700 bg-white/90 border border-emerald-200 px-2 py-0.5 rounded-md shrink-0">
@@ -738,59 +667,43 @@ export function PaytmCheckoutModal({
               </span>
             </div>
 
-            {/* Desktop Manual UTR Fallback Drawer */}
-            <div className="pt-0.5 text-center">
-              {!showManualUtr ? (
-                <button
-                  type="button"
-                  onClick={() => setShowManualUtr(true)}
-                  className="text-[11px] text-slate-400 hover:text-slate-700 font-medium underline underline-offset-4 py-0.5 transition-colors cursor-pointer"
+            {/* Desktop Manual UTR Box */}
+            <div className="p-3.5 rounded-xl bg-white border border-slate-200 text-left space-y-2 shadow-xs">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                  Pass not auto-generated after 30s?
+                </label>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {paytmUtr.length}/12 digits
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                Paste the 12-digit UPI Reference (UTR) from your payment receipt:
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  maxLength={12}
+                  placeholder="e.g. 425512345678 (12 digits)"
+                  value={paytmUtr}
+                  onChange={(e) => {
+                    const onlyNums = e.target.value.replace(/\D/g, "");
+                    setPaytmUtr(onlyNums);
+                  }}
+                  className="flex-1 px-3 py-2 rounded-xl border border-slate-300 text-sm font-mono text-slate-900 tracking-wider focus:outline-none focus:ring-2 focus:ring-[#2B64E2]/30 bg-slate-50/50"
+                />
+                <Button
+                  onClick={handleVerifyPaytmPayment}
+                  isLoading={isVerifyingPaytm}
+                  disabled={paytmUtr.length !== 12 || isVerifyingPaytm}
+                  variant="primary"
+                  size="sm"
+                  className="shrink-0 cursor-pointer bg-[#2B64E2] hover:bg-[#1E52C6] px-4 min-h-[40px] font-bold"
                 >
-                  Paid but pass didn&apos;t activate? Enter 12-digit UTR manually &rarr;
-                </button>
-              ) : (
-                <div className="p-3.5 rounded-2xl bg-white border border-slate-200 text-left space-y-2.5 animate-in fade-in duration-150 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                      12-Digit UPI Reference (UTR)
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowManualUtr(false)}
-                      className="text-[11px] text-slate-400 hover:text-slate-600 font-medium cursor-pointer"
-                    >
-                      Hide
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      maxLength={12}
-                      placeholder="e.g. 425512345678 (12 digits)"
-                      value={paytmUtr}
-                      onChange={(e) => {
-                        const onlyNums = e.target.value.replace(/\D/g, "");
-                        setPaytmUtr(onlyNums);
-                      }}
-                      className="flex-1 px-3 py-2 rounded-xl border border-slate-300 text-sm font-mono text-slate-900 tracking-wider focus:outline-none focus:ring-2 focus:ring-[#2B64E2]/30"
-                    />
-                    <Button
-                      onClick={handleVerifyPaytmPayment}
-                      isLoading={isVerifyingPaytm}
-                      disabled={paytmUtr.length !== 12 || isVerifyingPaytm}
-                      variant="primary"
-                      size="sm"
-                      className="shrink-0 cursor-pointer bg-[#2B64E2] hover:bg-[#1E52C6] px-4 min-h-[40px]"
-                    >
-                      <Check className="w-4 h-4" />
-                      <span>Verify UTR</span>
-                    </Button>
-                  </div>
-                  <div className="text-[10px] text-slate-400 font-mono">
-                    Digits: {paytmUtr.length}/12 {paytmUtr.length === 12 && <span className="text-emerald-600 font-bold ml-1">✓ Ready</span>}
-                  </div>
-                </div>
-              )}
+                  <Check className="w-4 h-4" />
+                  <span>Verify UTR</span>
+                </Button>
+              </div>
             </div>
           </div>
         </div>
