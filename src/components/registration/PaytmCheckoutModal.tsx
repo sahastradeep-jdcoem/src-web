@@ -13,7 +13,10 @@ import {
   Info, 
   Smartphone,
   RefreshCw,
-  AlertTriangle
+  AlertTriangle,
+  Download,
+  Camera,
+  Share2
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -140,6 +143,64 @@ export function PaytmCheckoutModal({
 
   const universalUpiHref = paytmCheckoutData.upiLink;
 
+  const [isQrSaved, setIsQrSaved] = useState(false);
+  const [showDirectAppLinks, setShowDirectAppLinks] = useState(false);
+
+  const handleDownloadQr = () => {
+    try {
+      const canvas = document.querySelector("#paytm-checkout-mobile-qr canvas") as HTMLCanvasElement;
+      if (canvas) {
+        const dataUrl = canvas.toDataURL("image/png");
+        const a = document.createElement("a");
+        a.href = dataUrl;
+        a.download = `SRC-Paytm-QR-₹${paytmCheckoutData.formattedAmount}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setIsQrSaved(true);
+        setTimeout(() => setIsQrSaved(false), 4000);
+      }
+    } catch (e) {
+      console.warn("Could not download QR canvas:", e);
+    }
+  };
+
+  const handleShareOrDownloadQr = async () => {
+    try {
+      const canvas = document.querySelector("#paytm-checkout-mobile-qr canvas") as HTMLCanvasElement;
+      if (!canvas) {
+        handleDownloadQr();
+        return;
+      }
+
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          handleDownloadQr();
+          return;
+        }
+        const file = new File([blob], `SRC-Payment-QR-₹${paytmCheckoutData.formattedAmount}.png`, { type: "image/png" });
+
+        if (typeof navigator !== "undefined" && navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: `Payment QR ₹${paytmCheckoutData.formattedAmount}`,
+              text: `SRC JDCOEM Payment QR for ₹${paytmCheckoutData.formattedAmount}`,
+            });
+            setIsQrSaved(true);
+            setTimeout(() => setIsQrSaved(false), 4000);
+            return;
+          } catch {
+            // User cancelled or share dismissed, fall back to direct download
+          }
+        }
+        handleDownloadQr();
+      }, "image/png");
+    } catch {
+      handleDownloadQr();
+    }
+  };
+
   return (
     <Modal
       isOpen={isOpen}
@@ -151,7 +212,7 @@ export function PaytmCheckoutModal({
       {/* 
         ========================================================================
         MOBILE VIEWPORT (sm:hidden)
-        Direct 1-Tap UPI Apps Grid, collapsible QR, Live Radar, and UTR Drawer
+        QR-First Design with 1-Tap Save to Photos, Bank Scanner Guide, & Live Radar
         ========================================================================
       */}
       <div className="sm:hidden flex flex-col w-full max-w-[420px] mx-auto bg-slate-50 font-sans text-left relative overflow-hidden">
@@ -159,17 +220,6 @@ export function PaytmCheckoutModal({
         <div className="sticky top-0 z-40 bg-gradient-to-r from-[#1A56DB] via-[#2065D6] to-[#2563EB] text-white p-4 shadow-sm select-none">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
-              {mobileSubView === "qr" ? (
-                <button
-                  type="button"
-                  onClick={() => setMobileSubView("methods")}
-                  className="p-1 -ml-1 text-white/90 hover:text-white rounded-lg active:scale-95 transition-all cursor-pointer"
-                  aria-label="Back to methods"
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                </button>
-              ) : null}
-
               {/* Monogram Crest */}
               <div className="w-9 h-9 rounded-xl bg-white/20 border border-white/25 flex items-center justify-center font-black text-sm text-white shrink-0 shadow-inner">
                 S
@@ -236,201 +286,163 @@ export function PaytmCheckoutModal({
         </div>
 
         {/* Mobile Body Content */}
-        <div className="p-4 space-y-4 flex-1">
-          {mobileSubView === "qr" ? (
-            /* Subview: QR Code View on Mobile */
-            <div className="p-5 rounded-2xl bg-white border border-slate-200 text-center shadow-sm space-y-3.5 animate-in fade-in duration-150">
-              <div className="flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-wider">
-                <span>Scan &amp; Pay</span>
-                {isExpired ? (
-                  <span className="text-rose-600 font-bold uppercase tracking-wider">Expired</span>
-                ) : (
-                  <span className="text-blue-600 font-semibold lowercase">any upi app</span>
-                )}
+        <div className="p-4 space-y-3 flex-1">
+          {!isExpired ? (
+            /* Centered Large Scannable QR Code Card */
+            <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs text-center flex flex-col items-center justify-center space-y-2.5">
+              {/* 5-minute live countdown pill */}
+              <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold border transition-colors ${
+                secondsRemaining < 60
+                  ? "bg-rose-50 border-rose-200 text-rose-700 animate-pulse"
+                  : "bg-amber-50 border-amber-200 text-amber-900"
+              }`}>
+                <Clock className={`w-3.5 h-3.5 ${secondsRemaining < 60 ? "text-rose-600" : "text-amber-600"}`} />
+                <span>QR Code expires in <strong>{formatTimer(secondsRemaining)}</strong></span>
               </div>
 
-              {!isExpired ? (
-                <>
-                  <div className="p-3 bg-white rounded-2xl inline-block border-2 border-slate-100 shadow-inner">
-                    <ScannableQRCode value={paytmCheckoutData.upiLink} size={180} />
-                  </div>
+              {/* Dynamic QR Canvas */}
+              <div id="paytm-checkout-mobile-qr" className="p-2.5 bg-white rounded-2xl border border-slate-100 shadow-inner inline-block">
+                <ScannableQRCode value={paytmCheckoutData.upiLink} size={180} />
+              </div>
 
-                  {/* 5-minute live countdown badge */}
-                  <div>
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-mono font-bold border transition-colors ${
-                      secondsRemaining < 60
-                        ? "bg-rose-50 border-rose-200 text-rose-700 animate-pulse"
-                        : "bg-amber-50 border-amber-200 text-amber-900"
-                    }`}>
-                      <Clock className={`w-3.5 h-3.5 ${secondsRemaining < 60 ? "text-rose-600" : "text-amber-600"}`} />
-                      <span>QR expires in <strong>{formatTimer(secondsRemaining)}</strong></span>
-                    </span>
-                  </div>
+              {/* Supported Apps Brand Strip */}
+              <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-500 font-medium flex-wrap">
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-[10px]">
+                  <span className="text-[#4285F4]">G</span>
+                  <span className="text-[#EA4335]">P</span>
+                  <span className="text-[#FBBC05]">a</span>
+                  <span className="text-[#34A853]">y</span>
+                </span>
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-purple-50 border border-purple-200 text-[#5f259f] font-bold text-[10px]">
+                  PhonePe
+                </span>
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-sky-50 border border-sky-200 text-[#002970] font-bold text-[10px]">
+                  Paytm
+                </span>
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-600 font-medium text-[10px]">
+                  CRED / BHIM / Banks
+                </span>
+              </div>
 
-                  <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                    Scan with <strong>Google Pay, PhonePe, Paytm</strong>, or any UPI app on your other phone
-                  </p>
-                </>
-              ) : (
-                /* Expired QR State on Mobile */
-                <div className="py-6 px-4 rounded-xl bg-slate-50 border-2 border-dashed border-slate-200 space-y-3">
-                  <div className="w-12 h-12 mx-auto rounded-full bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600">
-                    <Clock className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h4 className="font-heading font-black text-sm text-slate-800">
-                      Payment QR Code Expired
-                    </h4>
-                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                      For your payment security, QR codes are valid for 5 minutes only. This QR has expired and will no longer accept payments.
-                    </p>
-                  </div>
-                  {onRegenerateQR && (
-                    <Button
-                      onClick={onRegenerateQR}
-                      isLoading={isRegeneratingQR}
-                      variant="primary"
-                      size="md"
-                      className="w-full justify-center gap-2 cursor-pointer min-h-[44px] bg-[#2065D6] hover:bg-[#1b55b8] font-bold"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                      <span>Generate New QR Code</span>
-                    </Button>
+              {/* Save QR to Photos Button */}
+              <div className="w-full pt-1">
+                <Button
+                  onClick={handleShareOrDownloadQr}
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-center gap-2 cursor-pointer font-bold text-xs py-2.5 bg-blue-50/70 border-blue-200 text-blue-700 hover:bg-blue-100 hover:text-blue-800 rounded-xl transition-all shadow-2xs min-h-[40px]"
+                >
+                  {isQrSaved ? (
+                    <>
+                      <Check className="w-4 h-4 text-emerald-600" />
+                      <span>QR Saved! Open UPI App to Scan</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4 text-blue-600" />
+                      <span>Save QR to Photos / Gallery</span>
+                    </>
                   )}
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => setMobileSubView("methods")}
-                className="text-xs text-blue-600 font-bold hover:underline py-1 block mx-auto cursor-pointer"
-              >
-                &larr; Return to UPI Apps
-              </button>
+                </Button>
+              </div>
             </div>
           ) : (
-            <>
-              {/* Payment Methods Sub-header & Countdown */}
-              <div className="flex items-center justify-between text-xs font-bold text-slate-700 uppercase tracking-wider px-1">
-                <span>Select UPI App to Pay</span>
-                {!isExpired ? (
-                  <span className={`inline-flex items-center gap-1 font-mono text-[11px] font-bold px-2 py-0.5 rounded-full border ${
-                    secondsRemaining < 60 
-                      ? "bg-rose-50 border-rose-200 text-rose-700 animate-pulse" 
-                      : "bg-amber-50 border-amber-200 text-amber-800"
-                  }`}>
-                    ⏱ {formatTimer(secondsRemaining)}
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
-                    Expired
-                  </span>
-                )}
+            /* Expired Desktop Card */
+            <div className="p-6 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-300 text-center flex flex-col items-center justify-center space-y-3.5 animate-in fade-in duration-150">
+              <div className="w-12 h-12 rounded-full bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600">
+                <Clock className="w-6 h-6" />
               </div>
-
-              {/* UPI 1-Tap App Launcher Cards */}
-              <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 shadow-xs overflow-hidden">
-                {/* Google Pay */}
-                <a
-                  href={gpayHref}
-                  className="group flex items-center justify-between p-3.5 hover:bg-slate-50 transition-all no-underline active:bg-blue-50/50"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center font-black text-xs shrink-0 shadow-2xs">
-                      <span className="text-[#4285F4]">G</span>
-                      <span className="text-[#EA4335]">P</span>
-                      <span className="text-[#FBBC05]">a</span>
-                      <span className="text-[#34A853]">y</span>
-                    </div>
-                    <div>
-                      <span className="text-sm font-bold text-slate-800 group-hover:text-[#4285F4] transition-colors block">
-                        Google Pay
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-medium">Fast 1-Tap UPI Transfer</span>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-[#4285F4] transition-colors" />
-                </a>
-
-                {/* PhonePe */}
-                <a
-                  href={phonepeHref}
-                  className="group flex items-center justify-between p-3.5 hover:bg-slate-50 transition-all no-underline active:bg-purple-50/50"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-[#5f259f]/10 border border-[#5f259f]/20 flex items-center justify-center font-black text-xs text-[#5f259f] shrink-0 shadow-2xs">
-                      पे
-                    </div>
-                    <div>
-                      <span className="text-sm font-bold text-slate-800 group-hover:text-[#5f259f] transition-colors block">
-                        PhonePe
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-medium">Instant UPI Settlement</span>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-[#5f259f] transition-colors" />
-                </a>
-
-                {/* Paytm */}
-                <a
-                  href={paytmHref}
-                  className="group flex items-center justify-between p-3.5 hover:bg-slate-50 transition-all no-underline active:bg-sky-50/50"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-[#00b9f5]/10 border border-[#00b9f5]/25 flex items-center justify-center font-black text-xs text-[#002970] shrink-0 shadow-2xs">
-                      PTM
-                    </div>
-                    <div>
-                      <span className="text-sm font-bold text-slate-800 group-hover:text-[#002970] transition-colors block">
-                        Paytm UPI
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-medium">Fast 1-Tap UPI Settlement</span>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-[#002970] transition-colors" />
-                </a>
-
-                {/* Any UPI App / Default */}
-                <a
-                  href={universalUpiHref}
-                  className="group flex items-center justify-between p-3.5 hover:bg-slate-50 transition-all no-underline active:bg-slate-100"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 shrink-0">
-                      <Smartphone className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <span className="text-sm font-bold text-slate-800 block">Any UPI App / Default</span>
-                      <span className="text-[10px] text-slate-400 font-medium">Open in your device&apos;s default UPI handler</span>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400" />
-                </a>
+              <div>
+                <h4 className="font-heading font-black text-base text-slate-800">
+                  Payment QR Code Expired
+                </h4>
+                <p className="text-xs text-slate-500 max-w-sm mt-1 leading-relaxed">
+                  For your payment safety, QR codes expire after 5 minutes. This QR code will no longer accept payments.
+                </p>
               </div>
+              {onRegenerateQR && (
+                <Button
+                  onClick={onRegenerateQR}
+                  isLoading={isRegeneratingQR}
+                  variant="primary"
+                  size="md"
+                  className="w-full cursor-pointer bg-[#2B64E2] hover:bg-[#1E52C6] px-5 py-2.5 font-bold shadow-sm inline-flex items-center justify-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Generate New QR Code</span>
+                </Button>
+              )}
+            </div>
+          )}
 
-              {/* Mobile QR Button Card */}
+          {/* Quick Step Guide for Students */}
+          <div className="p-3.5 rounded-2xl bg-white border border-slate-200/90 text-left shadow-xs space-y-2">
+            <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+              <Camera className="w-3.5 h-3.5 text-[#1A56DB]" />
+              How to scan &amp; pay:
+            </span>
+            <div className="text-xs text-slate-600 space-y-2 font-medium leading-relaxed">
+              <div className="flex items-start gap-2">
+                <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">1</span>
+                <span><strong>Paying on this same phone:</strong> Tap <em>Save QR to Photos</em> above (or screenshot), open Google Pay, PhonePe, or Paytm &rarr; tap <strong>Scanner</strong> &rarr; tap the <strong>Gallery/Photo</strong> icon to select the QR image.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">2</span>
+                <span><strong>Paying from another phone:</strong> Open camera or any UPI app on the other phone and point it at the QR code above.</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Optional Collapsible Direct App Launch (with Bank Policy Disclaimer) */}
+          <div className="text-center pt-0.5">
+            {!showDirectAppLinks ? (
               <button
                 type="button"
-                onClick={() => setMobileSubView("qr")}
-                className="w-full p-3.5 rounded-2xl bg-white border border-slate-200 hover:border-blue-400 flex items-center justify-between text-left shadow-xs transition-all cursor-pointer group active:scale-[0.99]"
+                onClick={() => setShowDirectAppLinks(true)}
+                className="text-[11px] text-slate-500 hover:text-slate-800 font-medium underline underline-offset-4 py-1 transition-colors cursor-pointer"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shrink-0">
-                    <QrCode className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="text-sm font-bold text-slate-800 group-hover:text-blue-600 transition-colors block">
-                      Paying from another phone?
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-medium">Show Scannable QR Code</span>
-                  </div>
-                </div>
-                <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg">
-                  Show QR
-                </span>
+                Prefer to try opening UPI app directly? Tap here &darr;
               </button>
-            </>
-          )}
+            ) : (
+              <div className="p-3.5 rounded-2xl bg-white border border-slate-200 text-left space-y-2.5 animate-in fade-in duration-150 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Direct App Launch
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowDirectAppLinks(false)}
+                    className="text-[11px] text-slate-400 hover:text-slate-600 font-medium cursor-pointer"
+                  >
+                    Hide
+                  </button>
+                </div>
+                <div className="p-2 rounded-lg bg-amber-50 border border-amber-200/80 text-[11px] text-amber-900 leading-relaxed font-medium">
+                  ⚠️ Note: If your UPI app shows &quot;Cannot accept this payment as per risk policy&quot;, bank rules require scanning the QR code above instead.
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <a
+                    href={gpayHref}
+                    className="p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-center font-bold text-xs text-slate-800 no-underline active:scale-95 transition-all"
+                  >
+                    GPay
+                  </a>
+                  <a
+                    href={phonepeHref}
+                    className="p-2.5 rounded-xl border border-purple-200 bg-purple-50/60 hover:bg-purple-100 text-center font-bold text-xs text-[#5f259f] no-underline active:scale-95 transition-all"
+                  >
+                    PhonePe
+                  </a>
+                  <a
+                    href={paytmHref}
+                    className="p-2.5 rounded-xl border border-sky-200 bg-sky-50/60 hover:bg-sky-100 text-center font-bold text-xs text-[#002970] no-underline active:scale-95 transition-all"
+                  >
+                    Paytm
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Live Auto-Approval Radar Screen */}
           <div className="p-3.5 rounded-2xl bg-emerald-50/90 border border-emerald-200 text-left space-y-2 relative overflow-hidden shadow-xs">
