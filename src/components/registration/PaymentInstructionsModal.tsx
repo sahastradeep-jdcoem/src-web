@@ -9,10 +9,8 @@ import {
   X,
   Smartphone,
   QrCode,
-  CheckCircle2,
   Clock,
-  Lock,
-  Sparkles
+  Lock
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -37,8 +35,8 @@ export function PaymentInstructionsModal({
       isOpen={isOpen}
       onClose={onClose}
       showCloseButton={false}
-      maxWidth="3xl"
-      dialogClassName="max-h-[92dvh] sm:max-h-[85vh] flex flex-col overflow-hidden"
+      maxWidth="2xl"
+      dialogClassName="max-h-[calc(100dvh-2rem)] sm:max-h-[520px] flex flex-col overflow-hidden"
       contentClassName="p-0 flex flex-col flex-1 min-h-0 overflow-hidden"
     >
       {/* 
@@ -57,7 +55,7 @@ export function PaymentInstructionsModal({
               </div>
               <div className="min-w-0">
                 <h3 className="font-heading font-black text-sm text-white uppercase tracking-wide truncate">
-                  Payment Instructions
+                  Payment Guide
                 </h3>
                 <div className="flex items-center gap-1 text-[10px] text-emerald-300 font-semibold mt-0.5">
                   <ShieldCheck className="w-3 h-3 text-emerald-300 shrink-0" />
@@ -180,94 +178,89 @@ export function PaymentInstructionsModal({
       {/* 
         ========================================================================
         DESKTOP VIEWPORT (hidden sm:flex)
-        High-End 2-Column Split: Direct Phone-to-Screen Scanning Workflow
+        High-End 2-Column Split: Balanced proportions, zero empty space, direct scan
         ========================================================================
       */}
       <div className="hidden sm:flex flex-row flex-1 min-h-0 w-full bg-white font-sans text-left overflow-hidden">
-        {/* Left Column: Royal Navy Summary Sidebar (w-72) */}
-        <div className="w-72 bg-gradient-to-b from-[#1A56DB] via-[#2065D6] to-[#1E40AF] text-white p-6 flex flex-col justify-between shrink-0 shadow-md">
+        {/* Left Column: Royal Navy Summary Sidebar (w-64) */}
+        <div className="w-64 bg-gradient-to-b from-[#1A56DB] via-[#2065D6] to-[#1E40AF] text-white p-5 flex flex-col justify-between shrink-0 shadow-md">
           {/* Top Brand & Event Info */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-white/20 border border-white/30 backdrop-blur-md flex items-center justify-center font-black text-lg text-white shadow-inner">
+          <div className="space-y-3.5">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-white/20 border border-white/30 backdrop-blur-md flex items-center justify-center font-black text-base text-white shadow-inner shrink-0">
                 S
               </div>
               <div className="min-w-0">
-                <div className="font-heading font-black text-base text-white tracking-wide uppercase truncate">
+                <div className="font-heading font-black text-sm text-white tracking-wide uppercase truncate">
                   SRC JDCOEM
                 </div>
-                <div className="flex items-center gap-1 text-[11px] text-emerald-300 font-semibold">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
-                  <span>Council Verified Gateway</span>
+                <div className="flex items-center gap-1 text-[10px] text-emerald-300 font-semibold">
+                  <ShieldCheck className="w-3 h-3 text-emerald-300 shrink-0" />
+                  <span>Verified Gateway</span>
                 </div>
               </div>
             </div>
 
             {/* Registration Summary Card */}
-            <div className="p-4 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 space-y-2.5 shadow-xs">
-              <span className="text-[10px] text-blue-200/90 uppercase tracking-widest font-bold block">
-                Registration Summary
-              </span>
+            <div className="p-3.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/15 space-y-2 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-blue-200/90 uppercase tracking-widest font-bold block">
+                  Registration
+                </span>
+                <span className="text-[9px] font-bold text-emerald-300 bg-emerald-400/20 border border-emerald-300/30 px-1.5 py-0.2 rounded-full">
+                  Zero Fee
+                </span>
+              </div>
               <div>
-                <h4 className="font-heading font-bold text-sm text-white leading-snug line-clamp-2">
+                <h4 className="font-heading font-bold text-xs text-white leading-snug line-clamp-2">
                   {eventName}
                 </h4>
-                <span className="text-[11px] text-blue-100/70 font-medium">
+                <span className="text-[10px] text-blue-100/70 font-medium">
                   Official Delegate Pass
                 </span>
               </div>
               <div className="pt-2 border-t border-white/15 flex items-baseline justify-between">
                 <div>
-                  <span className="text-[10px] text-blue-200 block uppercase font-bold tracking-wider">
+                  <span className="text-[9px] text-blue-200 block uppercase font-bold tracking-wider">
                     Total Amount
                   </span>
-                  <span className="font-heading font-black text-2xl text-white">
+                  <span className="font-heading font-black text-xl text-white">
                     ₹{formattedAmount}
                   </span>
                 </div>
-                <span className="text-[10px] font-bold text-emerald-300 bg-emerald-400/20 border border-emerald-300/30 px-2 py-0.5 rounded-full">
-                  Zero Fee
-                </span>
               </div>
             </div>
-          </div>
 
-          {/* Bottom Security Card */}
-          <div className="space-y-3 pt-4">
+            {/* Security Alert Card - Sits naturally in flow */}
             <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-300/25 text-rose-100 text-xs space-y-1">
-              <div className="flex items-center gap-1.5 font-bold text-white text-[11px]">
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+              <div className="flex items-center gap-1.5 font-bold text-white text-[10px]">
+                <AlertTriangle className="w-3 h-3 text-amber-300 shrink-0" />
                 <span>Do NOT Share This QR</span>
               </div>
               <p className="text-[10px] text-blue-100/80 leading-relaxed font-medium">
-                This QR is uniquely generated for your pass. Scan it only from your personal UPI app.
+                Uniquely generated for your registration. Scan only from your personal UPI app.
               </p>
             </div>
+          </div>
 
-            <div className="flex items-center justify-between text-[11px] text-blue-100/70 pt-1">
-              <div className="flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-emerald-300" />
-                <span>256-Bit SSL Encrypted</span>
-              </div>
-              <span className="text-[10px] font-mono text-white/50">JDCOEM-SRC</span>
+          {/* Bottom Security Trust Signature */}
+          <div className="pt-3 border-t border-white/10 flex items-center justify-between text-[10px] text-blue-100/70">
+            <div className="flex items-center gap-1.5">
+              <Lock className="w-3 h-3 text-emerald-300" />
+              <span>256-Bit SSL Encrypted</span>
             </div>
+            <span className="font-mono text-[9px] text-white/50">JDCOEM-SRC</span>
           </div>
         </div>
 
         {/* Right Column: Direct Camera Scan Guide & Action Buttons */}
-        <div className="flex-1 flex flex-col justify-between p-6 bg-white min-w-0">
-          {/* Top Bar with Close Button */}
-          <div className="flex items-start justify-between gap-4 pb-3 border-b border-slate-100">
+        <div className="flex-1 flex flex-col justify-between p-5 sm:p-6 bg-white min-w-0">
+          {/* Top Bar with Title & Close Button */}
+          <div className="flex items-start justify-between gap-4 pb-3 border-b border-slate-100 shrink-0">
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-heading font-black text-lg text-slate-800 tracking-tight">
-                  Desktop / Laptop Payment Guide
-                </h3>
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
-                  <Sparkles className="w-3 h-3 text-blue-600" />
-                  Instant Direct Scan
-                </span>
-              </div>
+              <h3 className="font-heading font-black text-base sm:text-lg text-slate-800 tracking-tight">
+                Payment Guide
+              </h3>
               <p className="text-xs text-slate-500 font-medium mt-0.5">
                 Pay in seconds using any UPI app on your mobile phone — no screenshots needed!
               </p>
@@ -282,60 +275,60 @@ export function PaymentInstructionsModal({
           </div>
 
           {/* Desktop 3-Step Scan Workflow Cards */}
-          <div className="space-y-3 my-auto py-3">
+          <div className="space-y-2.5 my-auto py-2">
             {/* Step 1 */}
-            <div className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200 hover:border-blue-200 transition-colors">
-              <div className="w-9 h-9 rounded-xl bg-blue-100 text-[#1A56DB] flex items-center justify-center shrink-0 shadow-2xs">
-                <Smartphone className="w-5 h-5" />
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50/80 border border-slate-200 hover:border-blue-200 transition-colors">
+              <div className="w-8 h-8 rounded-lg bg-blue-100 text-[#1A56DB] flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
+                <Smartphone className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <h5 className="font-heading font-bold text-sm text-slate-800">
+                <h5 className="font-heading font-bold text-xs text-slate-800">
                   1. Open any UPI app on your phone
                 </h5>
-                <p className="text-xs text-slate-600 mt-0.5 leading-relaxed font-medium">
-                  Launch <strong>Google Pay</strong>, <strong>PhonePe</strong>, <strong>Paytm</strong>, <strong>CRED</strong>, or <strong>BHIM</strong> on your mobile device.
+                <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed font-medium">
+                  Launch <strong>Google Pay</strong>, <strong>PhonePe</strong>, <strong>Paytm</strong>, <strong>CRED</strong>, or <strong>BHIM</strong>.
                 </p>
               </div>
             </div>
 
             {/* Step 2 */}
-            <div className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200 hover:border-blue-200 transition-colors">
-              <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 shadow-2xs">
-                <QrCode className="w-5 h-5" />
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50/80 border border-slate-200 hover:border-blue-200 transition-colors">
+              <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
+                <QrCode className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <h5 className="font-heading font-bold text-sm text-slate-800">
+                <h5 className="font-heading font-bold text-xs text-slate-800">
                   2. Point your phone camera at this screen
                 </h5>
-                <p className="text-xs text-slate-600 mt-0.5 leading-relaxed font-medium">
-                  Tap the <strong>Scanner icon</strong> in your app and simply scan the QR code that appears on your computer screen.
+                <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed font-medium">
+                  Tap the <strong>Scanner icon</strong> in your app and simply scan the QR code on your computer screen.
                 </p>
               </div>
             </div>
 
             {/* Step 3 */}
-            <div className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200/80 hover:border-emerald-300 transition-colors">
-              <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 shadow-2xs">
-                <Clock className="w-5 h-5" />
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-emerald-50/80 border border-emerald-200/80 hover:border-emerald-300 transition-colors">
+              <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
+                <Clock className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <h5 className="font-heading font-bold text-sm text-emerald-950">
+                <h5 className="font-heading font-bold text-xs text-emerald-950">
                   3. Pay ₹{formattedAmount} &amp; wait 30 seconds
                 </h5>
-                <p className="text-xs text-emerald-900 mt-0.5 leading-relaxed font-medium">
-                  Complete the payment on your phone. Keep this tab open — your official ticket pass will be generated automatically!
+                <p className="text-[11px] text-emerald-900 mt-0.5 leading-relaxed font-medium">
+                  Approve payment on your phone. Keep this tab open — your official ticket pass will be generated automatically!
                 </p>
               </div>
             </div>
           </div>
 
           {/* Action Button Footer */}
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3 shrink-0">
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5 shrink-0">
             <Button
               onClick={onClose}
               variant="outline"
               size="md"
-              className="cursor-pointer font-bold text-xs px-5 min-h-[42px]"
+              className="cursor-pointer font-bold text-xs px-4 min-h-[40px]"
             >
               Cancel
             </Button>
@@ -344,7 +337,7 @@ export function PaymentInstructionsModal({
               onClick={onProceed}
               variant="primary"
               size="md"
-              className="cursor-pointer bg-[#1A56DB] hover:bg-[#1546b8] font-bold text-xs px-6 min-h-[42px] inline-flex items-center gap-2 shadow-sm"
+              className="cursor-pointer bg-[#1A56DB] hover:bg-[#1546b8] font-bold text-xs px-5 min-h-[40px] inline-flex items-center gap-2 shadow-sm"
             >
               <span>OK, Proceed to Pay</span>
               <ArrowRight className="w-4 h-4" />

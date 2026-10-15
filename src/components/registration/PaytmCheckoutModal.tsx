@@ -169,8 +169,9 @@ export function PaytmCheckoutModal({
       isOpen={isOpen}
       onClose={onClose}
       showCloseButton={false}
-      contentClassName="p-0 overflow-y-auto sm:overflow-hidden overscroll-contain"
-      maxWidth="4xl"
+      maxWidth="3xl"
+      dialogClassName="max-h-[calc(100dvh-2rem)] sm:max-h-[580px] flex flex-col overflow-hidden"
+      contentClassName="p-0 flex flex-col flex-1 min-h-0 overflow-hidden"
     >
       {/* 
         ========================================================================
@@ -349,56 +350,56 @@ export function PaytmCheckoutModal({
         Optimized for laptops: Dedicated Phone-to-Screen scan flow with zero cut-off
         ========================================================================
       */}
-      <div className="hidden sm:flex flex-row w-full bg-white font-sans text-left relative overflow-hidden select-none">
+      <div className="hidden sm:flex flex-row w-full flex-1 min-h-0 bg-white font-sans text-left relative overflow-hidden select-none">
         
-        {/* LEFT SIDEBAR: Vibrant Royal Navy Panel (w-80) */}
-        <div className="w-80 bg-gradient-to-b from-[#1A56DB] via-[#2065D6] to-[#1E40AF] text-white p-6 flex flex-col justify-between relative shrink-0 shadow-lg">
+        {/* LEFT SIDEBAR: Vibrant Royal Navy Panel (w-68) */}
+        <div className="w-68 bg-gradient-to-b from-[#1A56DB] via-[#2065D6] to-[#1E40AF] text-white p-4.5 flex flex-col justify-between shrink-0 shadow-md overflow-hidden">
           {/* Top Merchant Identity & Price */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-white/20 border border-white/30 backdrop-blur-md flex items-center justify-center font-black text-lg text-white shadow-inner">
+          <div className="space-y-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-white/20 border border-white/30 backdrop-blur-md flex items-center justify-center font-black text-base text-white shadow-inner shrink-0">
                 S
               </div>
               <div className="min-w-0">
-                <div className="font-heading font-black text-base text-white uppercase tracking-wider truncate">
+                <div className="font-heading font-black text-sm text-white uppercase tracking-wider truncate">
                   SRC JDCOEM
                 </div>
-                <div className="flex items-center gap-1 text-[11px] text-emerald-300 font-semibold mt-0.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
-                  <span>Council Verified Portal</span>
+                <div className="flex items-center gap-1 text-[10px] text-emerald-300 font-semibold mt-0.5">
+                  <ShieldCheck className="w-3 h-3 text-emerald-300 shrink-0" />
+                  <span>Verified Portal</span>
                 </div>
               </div>
             </div>
 
             {/* Registration Summary Card */}
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/15 space-y-2 text-white shadow-xs">
+            <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/15 space-y-1.5 text-white shadow-xs">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-blue-200 uppercase tracking-widest block">
+                <span className="text-[9px] font-bold text-blue-200 uppercase tracking-widest block">
                   Registration Summary
                 </span>
-                <span className="text-[10px] font-bold text-emerald-300 bg-emerald-400/20 border border-emerald-300/30 px-2 py-0.5 rounded-full">
+                <span className="text-[9px] font-bold text-emerald-300 bg-emerald-400/20 border border-emerald-300/30 px-1.5 py-0.2 rounded-full">
                   Zero Fee
                 </span>
               </div>
               <div>
-                <h4 className="font-heading font-bold text-sm text-white line-clamp-1">
+                <h4 className="font-heading font-bold text-xs text-white line-clamp-1">
                   {event.name}
                 </h4>
-                <p className="text-[11px] text-blue-100/70 font-medium">
+                <p className="text-[10px] text-blue-100/70 font-medium">
                   Official Delegate Pass
                 </p>
               </div>
-              <div className="pt-2 border-t border-white/15 flex items-baseline justify-between">
+              <div className="pt-1.5 border-t border-white/15 flex items-baseline justify-between">
                 <div>
-                  <span className="text-[10px] text-blue-200 block uppercase font-bold tracking-wider">
+                  <span className="text-[9px] text-blue-200 block uppercase font-bold tracking-wider">
                     Total Payable
                   </span>
-                  <span className="font-heading font-black text-2xl text-white">
+                  <span className="font-heading font-black text-xl text-white">
                     ₹{paytmCheckoutData.formattedAmount}
                   </span>
                 </div>
                 {paytmCheckoutData.microPaisaOffset ? (
-                  <span className="text-[10px] font-bold text-amber-200 bg-amber-400/20 border border-amber-300/30 px-2 py-0.5 rounded-full">
+                  <span className="text-[9px] font-bold text-amber-200 bg-amber-400/20 border border-amber-300/30 px-1.5 py-0.2 rounded-full">
                     +{paytmCheckoutData.microPaisaOffset}p Instant-Verify
                   </span>
                 ) : null}
@@ -406,35 +407,35 @@ export function PaytmCheckoutModal({
             </div>
 
             {/* User Profile Capsule */}
-            <div className="bg-white/10 backdrop-blur-md rounded-xl px-3.5 py-2.5 border border-white/15 flex items-center justify-between text-xs font-medium text-white/90 shadow-xs">
+            <div className="bg-white/10 backdrop-blur-md rounded-xl px-3 py-2 border border-white/15 flex items-center justify-between text-xs font-medium text-white/90 shadow-xs">
               <div className="flex items-center gap-2 truncate">
-                <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-white shrink-0 text-xs">
+                <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-white shrink-0 text-[10px]">
                   👤
                 </div>
-                <span className="truncate">Using as +91 {studentPhone}</span>
+                <span className="truncate text-[11px]">Using as +91 {studentPhone}</span>
               </div>
-              <ChevronRight className="w-3.5 h-3.5 text-white/70 shrink-0" />
+              <ChevronRight className="w-3 h-3 text-white/70 shrink-0" />
             </div>
           </div>
 
           {/* Bottom Security Footer */}
-          <div className="space-y-3 pt-4">
-            <div className="p-3 rounded-xl bg-white/10 border border-white/15 text-blue-100 text-xs space-y-1">
-              <div className="flex items-center gap-1.5 font-bold text-white text-[11px]">
-                <Smartphone className="w-3.5 h-3.5 text-blue-200 shrink-0" />
+          <div className="space-y-2 pt-2">
+            <div className="p-2.5 rounded-xl bg-white/10 border border-white/15 text-blue-100 text-xs space-y-0.5">
+              <div className="flex items-center gap-1.5 font-bold text-white text-[10px]">
+                <Smartphone className="w-3 h-3 text-blue-200 shrink-0" />
                 <span>Direct Phone Camera Scan</span>
               </div>
-              <p className="text-[10px] text-blue-100/80 leading-relaxed font-medium">
+              <p className="text-[9px] text-blue-100/80 leading-relaxed font-medium">
                 Point your phone&apos;s camera directly at the QR code on this screen to pay.
               </p>
             </div>
 
-            <div className="flex items-center justify-between text-[11px] font-medium text-white/70 pt-1 border-t border-white/10">
-              <div className="flex items-center gap-1.5">
+            <div className="flex items-center justify-between text-[10px] font-medium text-white/70 pt-1 border-t border-white/10">
+              <div className="flex items-center gap-1">
                 <Lock className="w-3 h-3 text-emerald-300" />
                 <span>256-Bit SSL Encrypted</span>
               </div>
-              <span className="font-mono text-[10px] text-white/50">
+              <span className="font-mono text-[9px] text-white/50">
                 {paytmCheckoutData.orderId.slice(-8)}
               </span>
             </div>
@@ -442,20 +443,20 @@ export function PaytmCheckoutModal({
         </div>
 
         {/* RIGHT MAIN PANEL: Dedicated QR Scan & Auto-Approval Workspace */}
-        <div className="flex-1 flex flex-col min-w-0 bg-white">
+        <div className="flex-1 flex flex-col min-w-0 bg-white h-full">
           
           {/* Top Bar: Title, Surcharge Pill & Close Button */}
-          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+          <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-heading font-black text-base text-slate-800 tracking-tight">
+                <h3 className="font-heading font-black text-sm text-slate-800 tracking-tight">
                   Scan QR Code to Pay
                 </h3>
-                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full shrink-0">
+                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-full shrink-0">
                   Zero Fee
                 </span>
               </div>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5">
                 Scan with Google Pay, PhonePe, Paytm, CRED, or any UPI app
               </p>
             </div>
@@ -471,41 +472,41 @@ export function PaytmCheckoutModal({
             </button>
           </div>
 
-          {/* QR Workspace Content */}
-          <div className="flex-1 p-5 space-y-3.5 overflow-y-auto">
+          {/* QR Workspace Content - Fully scrollable if limited viewport height */}
+          <div className="flex-1 min-h-0 p-4 space-y-2.5 overflow-y-auto overscroll-contain">
             {!isExpired ? (
               /* Centered Large Scannable QR Code Card */
-              <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/90 shadow-2xs text-center flex flex-col items-center justify-center space-y-2.5">
+              <div className="p-3 rounded-xl bg-slate-50/70 border border-slate-200/90 shadow-2xs text-center flex flex-col items-center justify-center space-y-2">
                 {/* 5-minute live countdown pill */}
-                <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold border transition-colors ${
+                <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold border transition-colors ${
                   secondsRemaining < 60
                     ? "bg-rose-50 border-rose-200 text-rose-700 animate-pulse"
                     : "bg-amber-50 border-amber-200 text-amber-900"
                 }`}>
-                  <Clock className={`w-3.5 h-3.5 ${secondsRemaining < 60 ? "text-rose-600" : "text-amber-600"}`} />
+                  <Clock className={`w-3 h-3 ${secondsRemaining < 60 ? "text-rose-600" : "text-amber-600"}`} />
                   <span>QR Code expires in <strong>{formatTimer(secondsRemaining)}</strong></span>
                 </div>
 
-                <div className="p-2.5 bg-white rounded-2xl border border-slate-200/80 shadow-xs inline-block">
-                  <ScannableQRCode value={paytmCheckoutData.upiLink} size={180} />
+                <div className="p-2 bg-white rounded-xl border border-slate-200/80 shadow-xs inline-block">
+                  <ScannableQRCode value={paytmCheckoutData.upiLink} size={155} />
                 </div>
 
-                <div className="text-[11px] text-slate-500 font-medium">
+                <div className="text-[10px] text-slate-500 font-medium">
                   Supported: <strong className="text-slate-700">GPay • PhonePe • Paytm • CRED • BHIM</strong>
                 </div>
               </div>
             ) : (
               /* Expired Desktop Card */
-              <div className="p-6 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-300 text-center flex flex-col items-center justify-center space-y-3.5 animate-in fade-in duration-150">
-                <div className="w-12 h-12 rounded-full bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600">
-                  <Clock className="w-6 h-6" />
+              <div className="p-5 rounded-xl bg-slate-50 border-2 border-dashed border-slate-300 text-center flex flex-col items-center justify-center space-y-2.5 animate-in fade-in duration-150">
+                <div className="w-10 h-10 rounded-full bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600">
+                  <Clock className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="font-heading font-black text-base text-slate-800">
+                  <h4 className="font-heading font-black text-sm text-slate-800">
                     Payment QR Code Expired
                   </h4>
-                  <p className="text-xs text-slate-500 max-w-sm mt-1 leading-relaxed">
-                    For your payment safety and accurate verification, QR codes expire after 5 minutes. This QR code will no longer accept payments.
+                  <p className="text-[11px] text-slate-500 max-w-sm mt-0.5 leading-relaxed">
+                    For payment safety and verification, QR codes expire after 5 minutes.
                   </p>
                 </div>
                 {onRegenerateQR && (
@@ -513,10 +514,10 @@ export function PaytmCheckoutModal({
                     onClick={onRegenerateQR}
                     isLoading={isRegeneratingQR}
                     variant="primary"
-                    size="md"
-                    className="cursor-pointer bg-[#1A56DB] hover:bg-[#1546b8] px-5 py-2.5 font-bold shadow-sm inline-flex items-center gap-2"
+                    size="sm"
+                    className="cursor-pointer bg-[#1A56DB] hover:bg-[#1546b8] px-4 py-2 font-bold text-xs shadow-sm inline-flex items-center gap-2"
                   >
-                    <RefreshCw className="w-4 h-4" />
+                    <RefreshCw className="w-3.5 h-3.5" />
                     <span>Generate New QR Code</span>
                   </Button>
                 )}
@@ -524,32 +525,32 @@ export function PaytmCheckoutModal({
             )}
 
             {/* Auto-Approval Live Radar Strip */}
-            <div className="p-3 rounded-xl bg-emerald-50/90 border border-emerald-200 text-left space-y-1 shadow-xs">
+            <div className="p-2.5 rounded-xl bg-emerald-50/90 border border-emerald-200 text-left space-y-0.5 shadow-xs">
               <div className="flex items-center gap-2">
                 <span className="relative flex h-2 w-2 shrink-0">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
                 </span>
-                <span className="text-xs text-emerald-950 font-bold uppercase tracking-wider">
+                <span className="text-[11px] text-emerald-950 font-bold uppercase tracking-wider">
                   Auto-Generation Active
                 </span>
               </div>
-              <p className="text-[11px] text-emerald-900 font-medium leading-relaxed">
+              <p className="text-[10px] text-emerald-900 font-medium leading-relaxed">
                 After payment, wait for 30 seconds for pass generation. If the pass is not autogenerated, simply paste your 12-digit UTR and tap Verify UTR &amp; Issue Pass.
               </p>
             </div>
 
-            {/* Desktop Manual UTR Box */}
-            <div className="p-3.5 rounded-xl bg-white border border-slate-200 text-left space-y-2 shadow-xs">
+            {/* Desktop Manual UTR Box - Guaranteed visible & accessible */}
+            <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-left space-y-1.5 shadow-xs">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                <label className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
                   12-Digit UPI Reference (UTR)
                 </label>
                 <span className="text-[10px] text-slate-400 font-mono">
                   {paytmUtr.length}/12 digits
                 </span>
               </div>
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 <input
                   type="text"
                   maxLength={12}
@@ -559,17 +560,17 @@ export function PaytmCheckoutModal({
                     const onlyNums = e.target.value.replace(/\D/g, "");
                     setPaytmUtr(onlyNums);
                   }}
-                  className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono text-slate-900 tracking-wider focus:outline-none focus:ring-2 focus:ring-[#1A56DB]/30 bg-slate-50/50"
+                  className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-mono text-slate-900 tracking-wider focus:outline-none focus:ring-2 focus:ring-[#1A56DB]/30 bg-slate-50/50"
                 />
                 <Button
                   onClick={handleVerifyPaytmPayment}
                   isLoading={isVerifyingPaytm}
                   disabled={paytmUtr.length !== 12 || isVerifyingPaytm}
                   variant="primary"
-                  size="md"
-                  className="shrink-0 cursor-pointer bg-[#1A56DB] hover:bg-[#1546b8] px-5 py-2.5 min-h-[42px] font-bold text-xs shadow-sm"
+                  size="sm"
+                  className="shrink-0 cursor-pointer bg-[#1A56DB] hover:bg-[#1546b8] px-3.5 py-1.5 min-h-[36px] font-bold text-xs shadow-sm"
                 >
-                  <Check className="w-4 h-4" />
+                  <Check className="w-3.5 h-3.5" />
                   <span>Verify UTR &amp; Issue Pass</span>
                 </Button>
               </div>
