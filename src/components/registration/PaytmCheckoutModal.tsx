@@ -109,6 +109,37 @@ export function PaytmCheckoutModal({
 
   const isExpired = secondsRemaining <= 0;
 
+  // Detect iOS (iPhone / iPad) to prevent invalid Android intent:// errors in Safari
+  const isIOS = typeof navigator !== "undefined" && (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+
+  const cleanQuery = paytmCheckoutData.upiLink.includes("?")
+    ? paytmCheckoutData.upiLink.split("?")[1]
+    : "";
+
+  // On iOS Safari, NEVER load intent:// package URLs which trigger "Safari cannot open page because address is invalid"
+  const gpayHref = isIOS
+    ? `tez://upi/pay?${cleanQuery}`
+    : (paytmCheckoutData.gpayLink && !paytmCheckoutData.gpayLink.startsWith("intent://")
+        ? paytmCheckoutData.gpayLink
+        : (paytmCheckoutData.gpayLink || paytmCheckoutData.upiLink));
+
+  const phonepeHref = isIOS
+    ? `phonepe://pay?${cleanQuery}`
+    : (paytmCheckoutData.phonepeLink && !paytmCheckoutData.phonepeLink.startsWith("intent://")
+        ? paytmCheckoutData.phonepeLink
+        : (paytmCheckoutData.phonepeLink || paytmCheckoutData.upiLink));
+
+  const paytmHref = isIOS
+    ? `paytmmp://pay?${cleanQuery}`
+    : (paytmCheckoutData.paytmLink && !paytmCheckoutData.paytmLink.startsWith("intent://")
+        ? paytmCheckoutData.paytmLink
+        : (paytmCheckoutData.paytmLink || paytmCheckoutData.upiLink));
+
+  const universalUpiHref = paytmCheckoutData.upiLink;
+
   return (
     <Modal
       isOpen={isOpen}
@@ -301,7 +332,7 @@ export function PaytmCheckoutModal({
               <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 shadow-xs overflow-hidden">
                 {/* Google Pay */}
                 <a
-                  href={paytmCheckoutData.gpayLink || paytmCheckoutData.upiLink}
+                  href={gpayHref}
                   className="group flex items-center justify-between p-3.5 hover:bg-slate-50 transition-all no-underline active:bg-blue-50/50"
                 >
                   <div className="flex items-center gap-3">
@@ -323,7 +354,7 @@ export function PaytmCheckoutModal({
 
                 {/* PhonePe */}
                 <a
-                  href={paytmCheckoutData.phonepeLink || paytmCheckoutData.upiLink}
+                  href={phonepeHref}
                   className="group flex items-center justify-between p-3.5 hover:bg-slate-50 transition-all no-underline active:bg-purple-50/50"
                 >
                   <div className="flex items-center gap-3">
@@ -342,7 +373,7 @@ export function PaytmCheckoutModal({
 
                 {/* Paytm */}
                 <a
-                  href={paytmCheckoutData.paytmLink || paytmCheckoutData.upiLink}
+                  href={paytmHref}
                   className="group flex items-center justify-between p-3.5 hover:bg-slate-50 transition-all no-underline active:bg-sky-50/50"
                 >
                   <div className="flex items-center gap-3">
@@ -359,9 +390,9 @@ export function PaytmCheckoutModal({
                   <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-[#002970] transition-colors" />
                 </a>
 
-                {/* Other UPI Apps */}
+                {/* Any UPI App / Default */}
                 <a
-                  href={paytmCheckoutData.upiLink}
+                  href={universalUpiHref}
                   className="group flex items-center justify-between p-3.5 hover:bg-slate-50 transition-all no-underline active:bg-slate-100"
                 >
                   <div className="flex items-center gap-3">
@@ -369,8 +400,8 @@ export function PaytmCheckoutModal({
                       <Smartphone className="w-4 h-4" />
                     </div>
                     <div>
-                      <span className="text-sm font-bold text-slate-800 block">Other UPI Apps</span>
-                      <span className="text-[10px] text-slate-400 font-medium">CRED, BHIM, WhatsApp, Banks</span>
+                      <span className="text-sm font-bold text-slate-800 block">Any UPI App / Default</span>
+                      <span className="text-[10px] text-slate-400 font-medium">Open in your device&apos;s default UPI handler</span>
                     </div>
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-400" />

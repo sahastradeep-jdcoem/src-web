@@ -146,12 +146,24 @@ export async function POST(req: NextRequest) {
     // Core parameters for locked payment: pa (VPA), pn (Payee Name), am (Amount), cu (Currency), tn (Transaction Note)
     const baseUpiParams = `pa=${encodeURIComponent(upiId)}&pn=${sanitizedPayee}&am=${formattedAmount}&cu=INR&tn=${note}`;
 
+    const userAgent = req.headers.get("user-agent") || "";
+    const isIOS = /iPhone|iPad|iPod/i.test(userAgent) || (/Macintosh/i.test(userAgent) && /Mobile/i.test(userAgent));
+
     const upiLink = `upi://pay?${baseUpiParams}`;
-    // Package-targeted Android intents that open directly in each respective app from mobile Chrome
-    const gpayLink = `intent://pay?${baseUpiParams}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`;
-    const phonepeLink = `intent://pay?${baseUpiParams}#Intent;scheme=upi;package=com.phonepe.app;end`;
-    const paytmLink = `intent://pay?${baseUpiParams}#Intent;scheme=upi;package=net.one97.paytm;end`;
-    const bhimLink = `intent://pay?${baseUpiParams}#Intent;scheme=upi;package=in.org.npci.upiapp;end`;
+    
+    // For iOS Safari: use native iOS registered schemes (tez://, phonepe://, paytmmp://)
+    // For Android Chrome: use package-targeted Android intents to launch apps directly
+    let gpayLink = `intent://pay?${baseUpiParams}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`;
+    let phonepeLink = `intent://pay?${baseUpiParams}#Intent;scheme=upi;package=com.phonepe.app;end`;
+    let paytmLink = `intent://pay?${baseUpiParams}#Intent;scheme=upi;package=net.one97.paytm;end`;
+    let bhimLink = `intent://pay?${baseUpiParams}#Intent;scheme=upi;package=in.org.npci.upiapp;end`;
+
+    if (isIOS) {
+      gpayLink = `tez://upi/pay?${baseUpiParams}`;
+      phonepeLink = `phonepe://pay?${baseUpiParams}`;
+      paytmLink = `paytmmp://pay?${baseUpiParams}`;
+      bhimLink = `upi://pay?${baseUpiParams}`;
+    }
 
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
