@@ -177,24 +177,26 @@ export function PaytmCheckoutModal({
         ========================================================================
       */}
       <div className="sm:hidden flex flex-col w-full max-w-[420px] mx-auto bg-slate-50 font-sans text-left relative overflow-hidden">
-        {/* Mobile Header: Royal Blue Bar */}
-        <div className="sticky top-0 z-40 bg-gradient-to-r from-[#1A56DB] via-[#2065D6] to-[#2563EB] text-white p-4 shadow-sm select-none">
+        {/* Mobile Header: Sleek Compact Royal Blue Bar */}
+        <div className="sticky top-0 z-40 bg-gradient-to-r from-[#1A56DB] via-[#2065D6] to-[#2563EB] text-white px-4 py-2.5 shadow-sm select-none">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
               {/* Monogram Crest */}
-              <div className="w-9 h-9 rounded-xl bg-white/20 border border-white/25 flex items-center justify-center font-black text-sm text-white shrink-0 shadow-inner">
+              <div className="w-8 h-8 rounded-lg bg-white/20 border border-white/25 flex items-center justify-center font-black text-xs text-white shrink-0 shadow-inner">
                 S
               </div>
 
               <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-heading font-extrabold text-sm text-white uppercase tracking-wide truncate">
-                    SRC JDCOEM
+                <div className="flex items-baseline gap-1.5 truncate">
+                  <span className="font-heading font-black text-lg text-white tracking-tight">
+                    ₹{paytmCheckoutData.formattedAmount}
+                  </span>
+                  <span className="text-xs text-blue-100/80 font-medium truncate">
+                    • {event.name}
                   </span>
                 </div>
-                <div className="flex items-center gap-1 text-[10px] text-emerald-300 font-semibold mt-0.5">
-                  <ShieldCheck className="w-3 h-3 text-emerald-400 shrink-0" />
-                  <span>Council Verified Portal</span>
+                <div className="text-[10px] text-blue-100/70 font-semibold uppercase tracking-wider truncate">
+                  SRC JDCOEM Payment
                 </div>
               </div>
             </div>
@@ -206,51 +208,18 @@ export function PaytmCheckoutModal({
               }}
               aria-label="Close checkout"
               disabled={isVerifyingPaytm || isRegeneratingQR}
-              className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white/90 transition-all cursor-pointer flex items-center justify-center shrink-0 active:scale-95 disabled:opacity-50"
+              className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/90 transition-all cursor-pointer flex items-center justify-center shrink-0 active:scale-95 disabled:opacity-50"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
-
-          {/* Amount Overview Banner */}
-          <div className="mt-3 pt-2.5 border-t border-white/15 flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[10px] text-blue-100/80 uppercase tracking-wider font-semibold">
-                  Total Amount
-                </span>
-                <span className="text-[10px] text-emerald-300 font-bold bg-emerald-400/15 border border-emerald-300/25 px-1.5 py-0.2 rounded">
-                  Zero Fee
-                </span>
-                {paytmCheckoutData.microPaisaOffset ? (
-                  <span className="text-[10px] text-amber-200 font-bold bg-amber-400/20 border border-amber-300/30 px-1.5 py-0.2 rounded">
-                    +{paytmCheckoutData.microPaisaOffset}p Instant-Verify
-                  </span>
-                ) : null}
-              </div>
-              <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="font-heading font-black text-2xl text-white tracking-tight">
-                  ₹{paytmCheckoutData.formattedAmount}
-                </span>
-                <span className="text-[11px] text-blue-100/70 font-medium truncate max-w-[140px]">
-                  • {event.name}
-                </span>
-              </div>
-            </div>
-            <div className="text-right">
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/15 border border-white/20 text-[10px] font-semibold text-blue-100 backdrop-blur-xs">
-                <Lock className="w-2.5 h-2.5 text-emerald-300" />
-                256-Bit SSL
-              </span>
-            </div>
-          </div>
         </div>
 
         {/* Mobile Body Content */}
-        <div className="p-4 space-y-3 flex-1">
+        <div className="px-3.5 py-3 space-y-2.5 flex-1">
           {!isExpired ? (
             /* Centered Large Scannable QR Code Card */
-            <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs text-center flex flex-col items-center justify-center space-y-2.5">
+            <div className="p-3 rounded-2xl bg-white border border-slate-200 shadow-xs text-center flex flex-col items-center justify-center space-y-2">
               {/* 5-minute live countdown pill */}
               <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold border transition-colors ${
                 secondsRemaining < 60
@@ -262,36 +231,17 @@ export function PaytmCheckoutModal({
               </div>
 
               {/* Dynamic QR Canvas */}
-              <div id="paytm-checkout-mobile-qr" className="p-2.5 bg-white rounded-2xl border border-slate-100 shadow-inner inline-block">
+              <div id="paytm-checkout-mobile-qr" className="p-2 bg-white rounded-2xl border border-slate-100 shadow-inner inline-block">
                 <ScannableQRCode value={paytmCheckoutData.upiLink} size={180} />
               </div>
 
-              {/* Supported Apps Brand Strip */}
-              <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-500 font-medium flex-wrap">
-                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-[10px]">
-                  <span className="text-[#4285F4]">G</span>
-                  <span className="text-[#EA4335]">P</span>
-                  <span className="text-[#FBBC05]">a</span>
-                  <span className="text-[#34A853]">y</span>
-                </span>
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-purple-50 border border-purple-200 text-[#5f259f] font-bold text-[10px]">
-                  PhonePe
-                </span>
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-sky-50 border border-sky-200 text-[#002970] font-bold text-[10px]">
-                  Paytm
-                </span>
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-600 font-medium text-[10px]">
-                  CRED / BHIM / Banks
-                </span>
-              </div>
-
               {/* Save QR to Photos Button */}
-              <div className="w-full pt-1">
+              <div className="w-full pt-0.5">
                 <Button
                   onClick={handleShareOrDownloadQr}
                   variant="outline"
                   size="sm"
-                  className="w-full justify-center gap-2 cursor-pointer font-bold text-xs py-2.5 bg-blue-50/70 border-blue-200 text-blue-700 hover:bg-blue-100 hover:text-blue-800 rounded-xl transition-all shadow-2xs min-h-[40px]"
+                  className="w-full justify-center gap-2 cursor-pointer font-bold text-xs py-2 bg-blue-50/70 border-blue-200 text-blue-700 hover:bg-blue-100 hover:text-blue-800 rounded-xl transition-all shadow-2xs min-h-[38px]"
                 >
                   {isQrSaved ? (
                     <>
@@ -337,21 +287,15 @@ export function PaytmCheckoutModal({
           )}
 
           {/* Live Auto-Approval Radar Screen */}
-          <div className="p-3.5 rounded-2xl bg-emerald-50/90 border border-emerald-200 text-left space-y-1.5 relative overflow-hidden shadow-xs">
+          <div className="p-3 rounded-2xl bg-emerald-50/90 border border-emerald-200 text-left space-y-1 relative overflow-hidden shadow-xs">
             <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-300 via-emerald-500 to-emerald-300 animate-pulse" />
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-600"></span>
-                </span>
-                <span className="text-xs font-black text-emerald-950 uppercase tracking-wider">
-                  Auto-Generation Active
-                </span>
-              </div>
-              <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-emerald-700 bg-white/90 border border-emerald-200 px-2 py-0.5 rounded-md">
-                <Clock className="w-3 h-3 text-emerald-600 shrink-0" />
-                Listening live
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-600"></span>
+              </span>
+              <span className="text-xs font-black text-emerald-950 uppercase tracking-wider">
+                Auto-Generation Active
               </span>
             </div>
             <p className="text-[11px] text-emerald-900 leading-relaxed font-medium">
@@ -550,25 +494,6 @@ export function PaytmCheckoutModal({
                 <div className="p-2 bg-white rounded-xl border border-slate-100 shadow-inner inline-block">
                   <ScannableQRCode value={paytmCheckoutData.upiLink} size={165} />
                 </div>
-
-                {/* Supported Apps Brand Strip */}
-                <div className="flex items-center justify-center gap-2 pt-1 text-[11px] text-slate-500 font-medium flex-wrap">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-[10px]">
-                    <span className="text-[#4285F4]">G</span>
-                    <span className="text-[#EA4335]">P</span>
-                    <span className="text-[#FBBC05]">a</span>
-                    <span className="text-[#34A853]">y</span>
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 border border-purple-200 text-[#5f259f] font-bold text-[10px]">
-                    PhonePe
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-50 border border-sky-200 text-[#002970] font-bold text-[10px]">
-                    Paytm
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-600 font-medium text-[10px]">
-                    CRED / BHIM / Bank UPI
-                  </span>
-                </div>
               </div>
             ) : (
               /* Expired Desktop Card */
@@ -600,19 +525,13 @@ export function PaytmCheckoutModal({
             )}
 
             {/* Auto-Approval Live Radar Strip */}
-            <div className="px-3.5 py-2.5 rounded-xl bg-emerald-50/90 border border-emerald-200 text-left flex items-center justify-between gap-3 shadow-xs">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="relative flex h-2 w-2 shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
-                </span>
-                <span className="text-xs text-emerald-950 font-medium truncate">
-                  Auto-Generation Active • Listening live
-                </span>
-              </div>
-              <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-emerald-700 bg-white/90 border border-emerald-200 px-2 py-0.5 rounded-md shrink-0">
-                <Clock className="w-3 h-3 text-emerald-600 shrink-0" />
-                Live Radar
+            <div className="px-3.5 py-2.5 rounded-xl bg-emerald-50/90 border border-emerald-200 text-left flex items-center gap-2 shadow-xs">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
+              </span>
+              <span className="text-xs text-emerald-950 font-bold uppercase tracking-wider">
+                Auto-Generation Active
               </span>
             </div>
 
