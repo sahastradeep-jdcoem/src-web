@@ -35,9 +35,9 @@ export function PaymentInstructionsModal({
       isOpen={isOpen}
       onClose={onClose}
       showCloseButton={false}
-      maxWidth="2xl"
-      dialogClassName="max-h-[calc(100dvh-2rem)] sm:max-h-[520px] flex flex-col overflow-hidden"
-      contentClassName="p-0 flex flex-col flex-1 min-h-0 overflow-hidden"
+      maxWidth="3xl"
+      dialogClassName="max-h-[calc(100dvh-2rem)] sm:max-h-[85vh] flex flex-col overflow-hidden"
+      contentClassName="p-0 sm:p-0 flex flex-col flex-1 min-h-0 overflow-hidden"
     >
       {/* 
         ========================================================================
@@ -167,10 +167,10 @@ export function PaymentInstructionsModal({
             onClick={onProceed}
             variant="primary"
             size="md"
-            className="cursor-pointer bg-[#1A56DB] hover:bg-[#1546b8] font-bold text-xs px-5 min-h-[42px] inline-flex items-center gap-2 shadow-sm"
+            className="cursor-pointer bg-[#1A56DB] hover:bg-[#1546b8] font-bold text-xs px-5 min-h-[42px] inline-flex items-center gap-2 shadow-sm whitespace-nowrap"
           >
             <span>OK, Proceed to Pay</span>
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRight className="w-4 h-4 shrink-0" />
           </Button>
         </div>
       </div>
@@ -182,10 +182,10 @@ export function PaymentInstructionsModal({
         ========================================================================
       */}
       <div className="hidden sm:flex flex-row flex-1 min-h-0 w-full bg-white font-sans text-left overflow-hidden">
-        {/* Left Column: Royal Navy Summary Sidebar (w-64) */}
-        <div className="w-64 bg-gradient-to-b from-[#1A56DB] via-[#2065D6] to-[#1E40AF] text-white p-5 flex flex-col justify-between shrink-0 shadow-md">
+        {/* Left Column: Royal Navy Summary Sidebar (w-72) */}
+        <div className="w-72 bg-gradient-to-b from-[#1A56DB] via-[#2065D6] to-[#1E40AF] text-white p-5 flex flex-col shrink-0 shadow-md">
           {/* Top Brand & Event Info */}
-          <div className="space-y-3.5">
+          <div className="space-y-3">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-white/20 border border-white/30 backdrop-blur-md flex items-center justify-center font-black text-base text-white shadow-inner shrink-0">
                 S
@@ -202,9 +202,9 @@ export function PaymentInstructionsModal({
             </div>
 
             {/* Registration Summary Card */}
-            <div className="p-3.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/15 space-y-2 shadow-xs">
+            <div className="p-3.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/15 space-y-1.5 shadow-xs">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] text-blue-200/90 uppercase tracking-widest font-bold block">
+                <span className="text-[9px] text-blue-200/90 uppercase tracking-widest font-bold block">
                   Registration
                 </span>
                 <span className="text-[9px] font-bold text-emerald-300 bg-emerald-400/20 border border-emerald-300/30 px-1.5 py-0.2 rounded-full">
@@ -212,14 +212,14 @@ export function PaymentInstructionsModal({
                 </span>
               </div>
               <div>
-                <h4 className="font-heading font-bold text-xs text-white leading-snug line-clamp-2">
+                <h4 className="font-heading font-bold text-xs text-white leading-snug line-clamp-1">
                   {eventName}
                 </h4>
                 <span className="text-[10px] text-blue-100/70 font-medium">
                   Official Delegate Pass
                 </span>
               </div>
-              <div className="pt-2 border-t border-white/15 flex items-baseline justify-between">
+              <div className="pt-1.5 border-t border-white/15 flex items-baseline justify-between">
                 <div>
                   <span className="text-[9px] text-blue-200 block uppercase font-bold tracking-wider">
                     Total Amount
@@ -234,7 +234,7 @@ export function PaymentInstructionsModal({
             {/* Security Alert Card - Sits naturally in flow */}
             <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-300/25 text-rose-100 text-xs space-y-1">
               <div className="flex items-center gap-1.5 font-bold text-white text-[10px]">
-                <AlertTriangle className="w-3 h-3 text-amber-300 shrink-0" />
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-300 shrink-0" />
                 <span>Do NOT Share This QR</span>
               </div>
               <p className="text-[10px] text-blue-100/80 leading-relaxed font-medium">
@@ -244,7 +244,7 @@ export function PaymentInstructionsModal({
           </div>
 
           {/* Bottom Security Trust Signature */}
-          <div className="pt-3 border-t border-white/10 flex items-center justify-between text-[10px] text-blue-100/70">
+          <div className="mt-auto pt-4 border-t border-white/10 flex items-center justify-between text-[10px] text-blue-100/70">
             <div className="flex items-center gap-1.5">
               <Lock className="w-3 h-3 text-emerald-300" />
               <span>256-Bit SSL Encrypted</span>
@@ -328,7 +328,7 @@ export function PaymentInstructionsModal({
               onClick={onClose}
               variant="outline"
               size="md"
-              className="cursor-pointer font-bold text-xs px-4 min-h-[40px]"
+              className="cursor-pointer font-bold text-xs px-4 min-h-[38px]"
             >
               Cancel
             </Button>
@@ -337,10 +337,10 @@ export function PaymentInstructionsModal({
               onClick={onProceed}
               variant="primary"
               size="md"
-              className="cursor-pointer bg-[#1A56DB] hover:bg-[#1546b8] font-bold text-xs px-5 min-h-[40px] inline-flex items-center gap-2 shadow-sm"
+              className="cursor-pointer bg-[#1A56DB] hover:bg-[#1546b8] font-bold text-xs px-5 min-h-[38px] inline-flex items-center gap-2 shadow-sm whitespace-nowrap shrink-0"
             >
               <span>OK, Proceed to Pay</span>
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-3.5 h-3.5 shrink-0" />
             </Button>
           </div>
         </div>

@@ -170,8 +170,8 @@ export function PaytmCheckoutModal({
       onClose={onClose}
       showCloseButton={false}
       maxWidth="3xl"
-      dialogClassName="max-h-[calc(100dvh-2rem)] sm:max-h-[580px] flex flex-col overflow-hidden"
-      contentClassName="p-0 flex flex-col flex-1 min-h-0 overflow-hidden"
+      dialogClassName="max-h-[calc(100dvh-2rem)] sm:max-h-[88vh] flex flex-col overflow-hidden"
+      contentClassName="p-0 sm:p-0 flex flex-col flex-1 min-h-0 overflow-hidden"
     >
       {/* 
         ========================================================================
@@ -352,8 +352,8 @@ export function PaytmCheckoutModal({
       */}
       <div className="hidden sm:flex flex-row w-full flex-1 min-h-0 bg-white font-sans text-left relative overflow-hidden select-none">
         
-        {/* LEFT SIDEBAR: Vibrant Royal Navy Panel (w-68) */}
-        <div className="w-68 bg-gradient-to-b from-[#1A56DB] via-[#2065D6] to-[#1E40AF] text-white p-4.5 flex flex-col justify-between shrink-0 shadow-md overflow-hidden">
+        {/* LEFT SIDEBAR: Vibrant Royal Navy Panel (w-72) */}
+        <div className="w-72 bg-gradient-to-b from-[#1A56DB] via-[#2065D6] to-[#1E40AF] text-white p-5 flex flex-col shrink-0 shadow-md overflow-hidden">
           {/* Top Merchant Identity & Price */}
           <div className="space-y-3">
             <div className="flex items-center gap-2.5">
@@ -414,12 +414,10 @@ export function PaytmCheckoutModal({
                 </div>
                 <span className="truncate text-[11px]">Using as +91 {studentPhone}</span>
               </div>
-              <ChevronRight className="w-3 h-3 text-white/70 shrink-0" />
+              <ChevronRight className="w-3.5 h-3.5 text-white/70 shrink-0" />
             </div>
-          </div>
 
-          {/* Bottom Security Footer */}
-          <div className="space-y-2 pt-2">
+            {/* Direct Phone Camera Scan Card */}
             <div className="p-2.5 rounded-xl bg-white/10 border border-white/15 text-blue-100 text-xs space-y-0.5">
               <div className="flex items-center gap-1.5 font-bold text-white text-[10px]">
                 <Smartphone className="w-3 h-3 text-blue-200 shrink-0" />
@@ -429,16 +427,17 @@ export function PaytmCheckoutModal({
                 Point your phone&apos;s camera directly at the QR code on this screen to pay.
               </p>
             </div>
+          </div>
 
-            <div className="flex items-center justify-between text-[10px] font-medium text-white/70 pt-1 border-t border-white/10">
-              <div className="flex items-center gap-1">
-                <Lock className="w-3 h-3 text-emerald-300" />
-                <span>256-Bit SSL Encrypted</span>
-              </div>
-              <span className="font-mono text-[9px] text-white/50">
-                {paytmCheckoutData.orderId.slice(-8)}
-              </span>
+          {/* Bottom Security Footer */}
+          <div className="mt-auto pt-4 border-t border-white/10 flex items-center justify-between text-[10px] font-medium text-white/70">
+            <div className="flex items-center gap-1">
+              <Lock className="w-3 h-3 text-emerald-300" />
+              <span>256-Bit SSL Encrypted</span>
             </div>
+            <span className="font-mono text-[9px] text-white/50">
+              {paytmCheckoutData.orderId.slice(-8)}
+            </span>
           </div>
         </div>
 
@@ -488,7 +487,7 @@ export function PaytmCheckoutModal({
                 </div>
 
                 <div className="p-2 bg-white rounded-xl border border-slate-200/80 shadow-xs inline-block">
-                  <ScannableQRCode value={paytmCheckoutData.upiLink} size={155} />
+                  <ScannableQRCode value={paytmCheckoutData.upiLink} size={150} />
                 </div>
 
                 <div className="text-[10px] text-slate-500 font-medium">
@@ -540,7 +539,7 @@ export function PaytmCheckoutModal({
               </p>
             </div>
 
-            {/* Desktop Manual UTR Box - Guaranteed visible & accessible */}
+            {/* Desktop Manual UTR Box - Guaranteed visible & accessible without truncation */}
             <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-left space-y-1.5 shadow-xs">
               <div className="flex items-center justify-between">
                 <label className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
@@ -560,7 +559,7 @@ export function PaytmCheckoutModal({
                     const onlyNums = e.target.value.replace(/\D/g, "");
                     setPaytmUtr(onlyNums);
                   }}
-                  className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-mono text-slate-900 tracking-wider focus:outline-none focus:ring-2 focus:ring-[#1A56DB]/30 bg-slate-50/50"
+                  className="flex-1 min-w-0 px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-mono text-slate-900 tracking-wider focus:outline-none focus:ring-2 focus:ring-[#1A56DB]/30 bg-slate-50/50"
                 />
                 <Button
                   onClick={handleVerifyPaytmPayment}
@@ -568,9 +567,9 @@ export function PaytmCheckoutModal({
                   disabled={paytmUtr.length !== 12 || isVerifyingPaytm}
                   variant="primary"
                   size="sm"
-                  className="shrink-0 cursor-pointer bg-[#1A56DB] hover:bg-[#1546b8] px-3.5 py-1.5 min-h-[36px] font-bold text-xs shadow-sm"
+                  className="shrink-0 whitespace-nowrap cursor-pointer bg-[#1A56DB] hover:bg-[#1546b8] px-3.5 py-1.5 min-h-[36px] font-bold text-xs shadow-sm inline-flex items-center justify-center gap-1.5"
                 >
-                  <Check className="w-3.5 h-3.5" />
+                  <Check className="w-3.5 h-3.5 shrink-0" />
                   <span>Verify UTR &amp; Issue Pass</span>
                 </Button>
               </div>

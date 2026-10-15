@@ -274,7 +274,8 @@ export function Modal({
         {/* Content - strictly scrollable and overscroll-contained */}
         <div 
           className={cn(
-            "p-5 sm:p-7 overflow-y-auto flex-1 min-h-0 overscroll-contain min-w-0 max-w-full", 
+            contentClassName?.includes("p-0") ? "" : "p-5 sm:p-7",
+            "overflow-y-auto flex-1 min-h-0 overscroll-contain min-w-0 max-w-full", 
             contentClassName
           )}
         >
