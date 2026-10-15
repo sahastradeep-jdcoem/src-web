@@ -15,7 +15,8 @@ export interface PublicPaymentConfig {
   cashfreeAppId?: string;
   cashfreeEnvironment?: "TEST" | "PROD";
 
-  // Paytm for Business / Direct Merchant UPI QR Settings
+  // Paytm for Business Credentials
+  paytmMid?: string;
   paytmUpiId?: string;
   paytmMerchantName?: string;
   paytmQrImageUrl?: string;
@@ -35,7 +36,8 @@ export const PAYMENT_CONFIG_CHANGE_EVENT = "src_payment_config_changed";
 export const DEFAULT_PAYMENT_CONFIG: PaymentConfig = {
   gateway: "cashfree",
   isGatewayActive: true,
-  paytmUpiId: "",
+  paytmMid: "YICGYk78325672706387",
+  paytmUpiId: "paytm.s3tuv70@pty",
   paytmMerchantName: "SRC JDCOEM",
   paytmQrImageUrl: "",
   instructions: "Instant online checkout powered by Cashfree (UPI, Cards, Netbanking).",
@@ -62,7 +64,8 @@ export function getStoredPaymentConfig(): PaymentConfig {
           ...parsed,
           gateway: (parsed.gateway === "paytm_business" ? "paytm_business" : "cashfree") as PaymentGatewayType,
           isGatewayActive: parsed.isGatewayActive !== undefined ? parsed.isGatewayActive : true,
-          paytmUpiId: parsed.paytmUpiId || "",
+          paytmMid: parsed.paytmMid || "YICGYk78325672706387",
+          paytmUpiId: parsed.paytmUpiId || "paytm.s3tuv70@pty",
           paytmMerchantName: parsed.paytmMerchantName || "SRC JDCOEM",
           paytmQrImageUrl: parsed.paytmQrImageUrl || "",
         };
@@ -85,7 +88,8 @@ export function saveStoredPaymentConfig(config: PaymentConfig): void {
     const cleanConfig: PaymentConfig = {
       gateway: (config.gateway === "paytm_business" ? "paytm_business" : "cashfree") as PaymentGatewayType,
       isGatewayActive: config.isGatewayActive !== undefined ? config.isGatewayActive : true,
-      paytmUpiId: config.paytmUpiId || "",
+      paytmMid: config.paytmMid || "YICGYk78325672706387",
+      paytmUpiId: config.paytmUpiId || "paytm.s3tuv70@pty",
       paytmMerchantName: config.paytmMerchantName || "SRC JDCOEM",
       paytmQrImageUrl: config.paytmQrImageUrl || "",
       instructions: config.instructions || DEFAULT_PAYMENT_CONFIG.instructions,

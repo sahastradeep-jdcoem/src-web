@@ -148,9 +148,10 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
         gateway: config.gateway || "cashfree",
         isGatewayActive: config.isGatewayActive,
         instructions: config.instructions,
-        paytmUpiId: config.paytmUpiId?.trim() || "",
+        paytmMid: config.paytmMid?.trim() || "YICGYk78325672706387",
         paytmMerchantName: config.paytmMerchantName?.trim() || "SRC JDCOEM",
         paytmQrImageUrl: config.paytmQrImageUrl?.trim() || "",
+        paytmUpiId: config.paytmUpiId?.trim() || "",
       }, "Admin / Treasurer");
       setShowSavedToast(true);
       setTimeout(() => setShowSavedToast(false), 3000);
@@ -480,7 +481,7 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                       {config.isGatewayActive ? "UPI LIVE" : "PAUSED"}
                     </Badge>
                     <Badge variant="navy" size="sm">
-                      {config.paytmUpiId ? "CONFIGURED" : "CONFIG REQUIRED"}
+                      {config.paytmMid ? "CONFIGURED" : "CONFIG REQUIRED"}
                     </Badge>
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/90 text-emerald-800 border border-emerald-200/90 shadow-2xs">
                       <Sparkles className="w-3 h-3 text-emerald-600" />
@@ -505,7 +506,7 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                   <strong className="text-slate-900">0% Bank &amp; Gateway Fees:</strong> Because Paytm for Business is an institutional merchant account (P2M), payments are directly routed to the college council account with zero deductions.
                 </li>
                 <li>
-                  <strong className="text-slate-900">No Browser Intent Blocking:</strong> Unlike personal P2P UPI IDs, Paytm Business VPAs are certified with NPCI and accept payments from GPay, PhonePe, Paytm, and BHIM without risk score rejection.
+                  <strong className="text-slate-900">No Browser Intent Blocking:</strong> Institutional merchant accounts are exempt from personal P2P limits and allow 1-tap app launch in GPay, PhonePe, Paytm, and BHIM.
                 </li>
                 <li>
                   <strong className="text-slate-900">Dynamic Payment Encapsulation:</strong> When a student checks out, the system automatically builds an NPCI UPI specification QR containing the exact registration fee and tracking ID.
@@ -520,26 +521,26 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                   Merchant Account Parameters
                 </h5>
                 <p className="text-[11px] text-slate-500 font-medium">
-                  Enter the details from your Paytm for Business application or soundbox merchant profile.
+                  Verified credentials from your official Paytm for Business dashboard.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Paytm UPI ID / VPA */}
+                {/* Paytm Merchant ID (MID) */}
                 <div className="space-y-1.5">
                   <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                    Paytm Merchant UPI ID / VPA <span className="text-rose-500">*</span>
+                    Paytm Merchant ID (MID) <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
                     required={isPaytm}
-                    value={config.paytmUpiId || ""}
-                    onChange={(e) => setConfig({ ...config, paytmUpiId: e.target.value })}
-                    placeholder="e.g. paytmqr2810050501011@paytm or 9529441964@paytm"
+                    value={config.paytmMid || "YICGYk78325672706387"}
+                    onChange={(e) => setConfig({ ...config, paytmMid: e.target.value })}
+                    placeholder="e.g. YICGYk78325672706387"
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-medium focus:outline-none focus:ring-2 focus:ring-[#002970] focus:border-transparent transition-all shadow-2xs"
                   />
                   <p className="text-[11px] text-slate-400 font-medium">
-                    Found in Paytm for Business App → Manage QR / Profile.
+                    Found in dashboard.paytm.com → Developer Settings → API Keys.
                   </p>
                 </div>
 
@@ -551,9 +552,9 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                   <input
                     type="text"
                     required={isPaytm}
-                    value={config.paytmMerchantName || ""}
+                    value={config.paytmMerchantName || "SRC JDCOEM"}
                     onChange={(e) => setConfig({ ...config, paytmMerchantName: e.target.value })}
-                    placeholder="e.g. SRC JDCOEM or J D College of Engg"
+                    placeholder="e.g. SRC JDCOEM"
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#002970] focus:border-transparent transition-all shadow-2xs"
                   />
                   <p className="text-[11px] text-slate-400 font-medium">
@@ -562,21 +563,28 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                 </div>
               </div>
 
-              {/* Optional Static QR Image URL */}
-              <div className="space-y-1.5 pt-1">
-                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                  Static Merchant QR Image URL (Optional)
-                </label>
-                <input
-                  type="url"
-                  value={config.paytmQrImageUrl || ""}
-                  onChange={(e) => setConfig({ ...config, paytmQrImageUrl: e.target.value })}
-                  placeholder="https://... (Optional fallback QR image / soundbox standee photo)"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#002970] focus:border-transparent transition-all shadow-2xs"
-                />
-                <p className="text-[11px] text-slate-400 font-medium">
-                  Dynamic QR will be generated automatically on the fly; this field is for an optional static banner fallback.
+              {/* MacroDroid / Phone Webhook Notification Setup */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/90 space-y-2.5 mt-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Server className="w-3.5 h-3.5 text-[#002970]" />
+                    MacroDroid / Soundbox Webhook Listener
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md">
+                    Live Endpoint Ready
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 leading-relaxed font-medium">
+                  When payments arrive in the Paytm for Business app or soundbox, MacroDroid pushes notification alerts to this endpoint to auto-issue passes in real time.
                 </p>
+                <div className="p-2.5 rounded-lg bg-white border border-slate-200 font-mono text-[11px] text-slate-700 select-all break-all shadow-2xs">
+                  {typeof window !== "undefined" ? `${window.location.origin}/api/upi/webhook` : "https://www.srcjdcoem.in/api/upi/webhook"}
+                </div>
+                <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                  <span>Secret Key: <code className="bg-slate-200/80 px-1.5 py-0.5 rounded text-slate-800 font-bold">SRC_UPI_2026_GATEWAY</code></span>
+                  <span>•</span>
+                  <span>Header: <code className="bg-slate-200/80 px-1.5 py-0.5 rounded text-slate-800">x-src-webhook-signature</code></span>
+                </div>
               </div>
             </div>
           </div>

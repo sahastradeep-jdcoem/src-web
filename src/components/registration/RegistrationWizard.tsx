@@ -73,6 +73,7 @@ import {
 import { getCurrentTenure, getStoredTenures } from "@/lib/tenureStore";
 import { isRegistrationDeadlinePassed, isEventCompletedByDate, getEventEffectiveStatus, resolveTenureForEvent } from "@/lib/eventsStore";
 import { loadCashfreeSDK } from "@/lib/cashfreeClient";
+import { PaytmCheckoutModal, PaytmCheckoutData } from "@/components/registration/PaytmCheckoutModal";
 
 interface RegistrationWizardProps {
   event: EventItem;
@@ -253,6 +254,15 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     teamMembers?: any[];
   } | null>(null);
   const pendingRegistrationDraftRef = useRef<{ regId: string; tkCode: string; payload: any } | null>(null);
+
+  // Alternate Paytm for Business / UPI state
+  const [paytmCheckoutData, setPaytmCheckoutData] = useState<PaytmCheckoutData | null>(null);
+  const [isVerifyingPaytm, setIsVerifyingPaytm] = useState(false);
+  const [paytmUtr, setPaytmUtr] = useState("");
+  const [showManualUtr, setShowManualUtr] = useState(false);
+  const [isRegeneratingQR, setIsRegeneratingQR] = useState(false);
+  const [isAutoDetectingPayment, setIsAutoDetectingPayment] = useState(false);
+  const autoDetectCompletedRef = useRef(false);
 
   // Realtime synchronization of Payment Gateway and Treasurer UPI settings
   useEffect(() => {
@@ -940,6 +950,189 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     }, 500);
   };
 
+  const handleRegenerateQR = async () => {
+    if (!paytmCheckoutData) return;
+    setIsRegeneratingQR(true);
+    try {
+      const orderRes = await fetch("/api/paytm/initiate-transaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: totalPayableAmount,
+          eventId: event.id,
+          eventName: event.name,
+          participantName: formData.fullName,
+          email: formData.email,
+          phone: formData.phone,
+          btId: formData.btId,
+          teamType: formData.teamType,
+          teamSize: formData.teamType === "Team" ? teamMembers.length : 1,
+          tenureId: getCurrentTenure()?.id || "tenure-2025-26",
+          upiId: paymentConfig.paytmUpiId,
+          payeeName: paymentConfig.paytmMerchantName,
+          paytmMid: paymentConfig.paytmMid,
+          registrationId: pendingRegistrationDraftRef.current?.regId,
+          registrationData: pendingRegistrationDraftRef.current?.payload,
+        }),
+      });
+
+      if (!orderRes.ok) {
+        const errJson = await orderRes.json().catch(() => ({}));
+        throw new Error(errJson.error || "Could not regenerate payment QR code.");
+      }
+
+      const orderData = await orderRes.json();
+      if (!orderData.success) {
+        throw new Error(orderData.error || "Failed to generate payment payload.");
+      }
+
+      setShowManualUtr(false);
+      setPaytmUtr("");
+      autoDetectCompletedRef.current = false;
+      setPaytmCheckoutData({
+        orderId: orderData.orderId,
+        amount: orderData.amount,
+        baseAmount: orderData.baseAmount || orderData.amount,
+        microPaisaOffset: orderData.microPaisaOffset || 0,
+        formattedAmount: orderData.formattedAmount,
+        upiLink: orderData.upiLink,
+        gpayLink: orderData.gpayLink,
+        phonepeLink: orderData.phonepeLink,
+        paytmLink: orderData.paytmLink,
+        bhimLink: orderData.bhimLink,
+        payeeName: orderData.payeeName || paymentConfig.paytmMerchantName || "SRC JDCOEM",
+        upiId: orderData.upiId || paymentConfig.paytmUpiId || "paytm.s3tuv70@pty",
+        expiresAt: orderData.expiresAt,
+      });
+    } catch (err: any) {
+      console.error("Payment QR regeneration error:", err);
+      alert(err?.message || "Failed to refresh payment QR code. Please check your connection.");
+    } finally {
+      setIsRegeneratingQR(false);
+    }
+  };
+
+  const handleVerifyPaytmPayment = async () => {
+    if (!paytmCheckoutData) return;
+
+    const cleanedUtr = paytmUtr.trim();
+    if (!cleanedUtr) {
+      alert("Please enter the 12-digit UPI Reference (UTR) Number from your Google Pay, PhonePe, or Paytm receipt.");
+      return;
+    }
+
+    if (!/^\d{12}$/.test(cleanedUtr)) {
+      alert(`Invalid UTR: "${cleanedUtr}". All Indian UPI payment receipts provide an exact 12-digit numeric reference (e.g. 425512345678).`);
+      return;
+    }
+
+    setIsVerifyingPaytm(true);
+    try {
+      const verifyRes = await fetch("/api/paytm/verify-transaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: paytmCheckoutData.orderId,
+          txnId: cleanedUtr,
+          amount: paytmCheckoutData.amount,
+        }),
+      });
+
+      const verifyData = await verifyRes.json();
+      if (verifyData.verified) {
+        autoDetectCompletedRef.current = true;
+        const targetPaymentStatus = (verifyData.paymentStatus as "PAID" | "PENDING") || "PENDING";
+
+        await completeRegistration({
+          paymentStatus: targetPaymentStatus,
+          paymentId: verifyData.paymentId || cleanedUtr,
+          orderId: paytmCheckoutData.orderId,
+          amountPaid: totalPayableAmount,
+        });
+        setPaytmCheckoutData(null);
+      } else {
+        alert(verifyData.error || "Payment verification failed. Please check your transaction details.");
+      }
+    } catch (err: any) {
+      console.error("Payment verification error:", err);
+      alert("Error verifying payment. Please ensure your transaction completed successfully.");
+    } finally {
+      setIsVerifyingPaytm(false);
+    }
+  };
+
+  // Hands-Free Auto-Detection: Listen for incoming MacroDroid webhook payment confirmation
+  useEffect(() => {
+    if (!paytmCheckoutData?.orderId) {
+      setIsAutoDetectingPayment(false);
+      return;
+    }
+
+    setIsAutoDetectingPayment(true);
+    autoDetectCompletedRef.current = false;
+    const currentOrderId = paytmCheckoutData.orderId;
+    const currentAmount = paytmCheckoutData.amount;
+
+    const handleAutoSuccess = async (completedUtr: string) => {
+      if (autoDetectCompletedRef.current) return;
+      autoDetectCompletedRef.current = true;
+      setIsAutoDetectingPayment(false);
+
+      await completeRegistration({
+        paymentStatus: "PAID",
+        paymentId: completedUtr || `UPI-AUTO-${Date.now().toString().slice(-8)}`,
+        orderId: currentOrderId,
+        amountPaid: currentAmount,
+      });
+      setPaytmCheckoutData(null);
+    };
+
+    let unsubscribeSnapshot: (() => void) | null = null;
+    (async () => {
+      try {
+        const { db } = await import("@/lib/firebase/config");
+        const { doc, onSnapshot } = await import("firebase/firestore");
+        if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+          unsubscribeSnapshot = onSnapshot(doc(db, "active_checkout_sessions", currentOrderId), (docSnap) => {
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              if (data?.status === "PAID" && !autoDetectCompletedRef.current) {
+                handleAutoSuccess(data.utr || "");
+              }
+            }
+          });
+        }
+      } catch (err) {
+        console.warn("Real-time checkout session snapshot error:", err);
+      }
+    })();
+
+    // Polling fallback every 2.5 seconds to /api/upi/check-status
+    const pollInterval = setInterval(async () => {
+      if (autoDetectCompletedRef.current) {
+        clearInterval(pollInterval);
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/upi/check-status?orderId=${encodeURIComponent(currentOrderId)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.status === "PAID" && !autoDetectCompletedRef.current) {
+            handleAutoSuccess(data.utr || "");
+          }
+        }
+      } catch (e) {
+        // Silent polling error catch
+      }
+    }, 2500);
+
+    return () => {
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
+      clearInterval(pollInterval);
+    };
+  }, [paytmCheckoutData?.orderId]);
+
   const handleConfirmRegistration = async () => {
     if (isSubmitting) return;
     const effectiveStatus = getEventEffectiveStatus(event);
@@ -1009,7 +1202,69 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     });
     pendingRegistrationDraftRef.current = { regId: draftRegId, tkCode: draftTkCode, payload: draftPayload };
 
-    // 2. Cashfree Payment Gateway Flow (Instant Auto-Checkout Modal)
+    // 2. Alternate Payment Gateway: Paytm for Business Dynamic UPI
+    if (paymentConfig.gateway === "paytm_business") {
+      try {
+        const orderRes = await fetch("/api/paytm/initiate-transaction", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: totalPayableAmount,
+            eventId: event.id,
+            eventName: event.name,
+            participantName: formData.fullName,
+            email: formData.email,
+            phone: formData.phone,
+            btId: formData.btId,
+            teamType: formData.teamType,
+            teamSize: formData.teamType === "Team" ? teamMembers.length : 1,
+            tenureId: getCurrentTenure()?.id || "tenure-2025-26",
+            upiId: paymentConfig.paytmUpiId,
+            payeeName: paymentConfig.paytmMerchantName,
+            paytmMid: paymentConfig.paytmMid,
+            registrationId: draftRegId,
+            registrationData: draftPayload,
+          }),
+        });
+
+        if (!orderRes.ok) {
+          const errJson = await orderRes.json().catch(() => ({}));
+          throw new Error(errJson.error || "Failed to initialize Paytm payment gateway.");
+        }
+
+        const orderData = await orderRes.json();
+        if (!orderData.success) {
+          throw new Error(orderData.error || "Failed to generate payment payload.");
+        }
+
+        setShowManualUtr(false);
+        setPaytmUtr("");
+        autoDetectCompletedRef.current = false;
+        setPaytmCheckoutData({
+          orderId: orderData.orderId,
+          amount: orderData.amount,
+          baseAmount: orderData.baseAmount || orderData.amount,
+          microPaisaOffset: orderData.microPaisaOffset || 0,
+          formattedAmount: orderData.formattedAmount,
+          upiLink: orderData.upiLink,
+          gpayLink: orderData.gpayLink,
+          phonepeLink: orderData.phonepeLink,
+          paytmLink: orderData.paytmLink,
+          bhimLink: orderData.bhimLink,
+          payeeName: orderData.payeeName || paymentConfig.paytmMerchantName || "SRC JDCOEM",
+          upiId: orderData.upiId || paymentConfig.paytmUpiId || "paytm.s3tuv70@pty",
+          expiresAt: orderData.expiresAt,
+        });
+        setIsSubmitting(false);
+      } catch (err: any) {
+        console.error("Paytm transaction error:", err);
+        alert(err?.message || "Failed to initiate Paytm payment. Please try again.");
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
+    // 3. Cashfree Payment Gateway Flow (Instant Auto-Checkout Modal)
     try {
       const orderRes = await fetch("/api/cashfree/create-order", {
         method: "POST",
@@ -2711,7 +2966,26 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         />
       )}
 
-
+      {/* Modal: Paytm for Business Dynamic UPI Checkout */}
+      {paytmCheckoutData && (
+        <PaytmCheckoutModal
+          isOpen={Boolean(paytmCheckoutData)}
+          onClose={() => {
+            if (!isVerifyingPaytm && !isRegeneratingQR) setPaytmCheckoutData(null);
+          }}
+          paytmCheckoutData={paytmCheckoutData}
+          event={event}
+          formData={formData}
+          isVerifyingPaytm={isVerifyingPaytm}
+          paytmUtr={paytmUtr}
+          setPaytmUtr={setPaytmUtr}
+          handleVerifyPaytmPayment={handleVerifyPaytmPayment}
+          showManualUtr={showManualUtr}
+          setShowManualUtr={setShowManualUtr}
+          onRegenerateQR={handleRegenerateQR}
+          isRegeneratingQR={isRegeneratingQR}
+        />
+      )}
 
     </div>
   );
