@@ -182,7 +182,7 @@ export default function EventsPage() {
     };
   }, []);
 
-  // Derive calendar events: automatically includes older events if current tenure has < 3 completed events
+  // Derive calendar events: automatically includes older events if current tenure has < 3 published events
   const { 
     events: baseCalendarEvents 
   } = useMemo(() => {

@@ -921,24 +921,29 @@ export function getMainCalendarEvents(
   events: EventItem[];
   isShowingOlderEvents: boolean;
   currentTenureCompletedCount: number;
+  currentTenurePublishedCount: number;
 } {
   const validEvents = sanitizeEventsList(Array.isArray(eventsList) ? eventsList : []);
   const validTenures = Array.isArray(tenuresList) ? tenuresList.filter((t) => !t.isDraft) : [];
 
   if (validTenures.length === 0) {
-    const standaloneEvents = validEvents.filter((e) => !isSubEvent(e, validEvents));
-    const currentCompleted = standaloneEvents.filter(
+    const standaloneEvents = validEvents.filter(
       (e) =>
+        Boolean(e?.name && typeof e.name === "string" && e.name.trim().length > 0) &&
         e.isLive !== false &&
         e.status !== "draft" &&
         !e.isCancelled &&
         e.status !== "Cancelled" &&
-        getEventEffectiveStatus(e) === "Completed"
+        !isSubEvent(e, validEvents)
+    );
+    const currentCompleted = standaloneEvents.filter(
+      (e) => getEventEffectiveStatus(e) === "Completed"
     );
     return {
       events: standaloneEvents,
       isShowingOlderEvents: false,
       currentTenureCompletedCount: currentCompleted.length,
+      currentTenurePublishedCount: standaloneEvents.length,
     };
   }
 
@@ -974,27 +979,36 @@ export function getMainCalendarEvents(
     }
   }
 
-  // Count completed events in current tenure (top-level, live, non-cancelled)
-  const currentTenureCompleted = currentTenureEvents.filter(
+  // Count published (top-level, live, non-cancelled) events in current tenure
+  const currentTenurePublished = currentTenureEvents.filter(
     (e) =>
+      Boolean(e?.name && typeof e.name === "string" && e.name.trim().length > 0) &&
       e.isLive !== false &&
       e.status !== "draft" &&
       !e.isCancelled &&
       e.status !== "Cancelled" &&
-      !isSubEvent(e, validEvents) &&
-      getEventEffectiveStatus(e) === "Completed"
+      !isSubEvent(e, validEvents)
+  );
+  const currentTenurePublishedCount = currentTenurePublished.length;
+
+  // Count completed events in current tenure (top-level, live, non-cancelled)
+  const currentTenureCompleted = currentTenurePublished.filter(
+    (e) => getEventEffectiveStatus(e) === "Completed"
   );
   const currentTenureCompletedCount = currentTenureCompleted.length;
 
-  // Invariant: Until a new tenure completes at least 3 events, keep older events visible
-  // on the main events page too, so that the page does not look empty.
-  const shouldIncludeOlderEvents = currentTenureCompletedCount < 3;
+  // Invariant: If current tenure has published at least 3 events (upcoming, active, or completed),
+  // strictly exclude older tenure events from the main calendar.
+  // Only include older events if the current tenure has fewer than 3 published events so that
+  // a newly activated council does not look completely empty.
+  const shouldIncludeOlderEvents = currentTenurePublishedCount < 3;
 
   if (!shouldIncludeOlderEvents) {
     return {
       events: sortEventsByDate(currentTenureEvents),
       isShowingOlderEvents: false,
       currentTenureCompletedCount,
+      currentTenurePublishedCount,
     };
   }
 
@@ -1068,6 +1082,7 @@ export function getMainCalendarEvents(
     events: sortEventsByDate(combined),
     isShowingOlderEvents: olderEventsToInclude.length > 0,
     currentTenureCompletedCount,
+    currentTenurePublishedCount,
   };
 }
 

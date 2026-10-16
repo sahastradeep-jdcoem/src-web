@@ -11,13 +11,30 @@ import {
   subscribeToEvents, 
   sortEventsByDate, 
   isSubEvent,
-  isEventCompletedByDate 
+  isEventCompletedByDate,
+  getMainCalendarEvents
 } from "@/lib/eventsStore";
+import {
+  getStoredTenures,
+  syncTenuresFromFirestore,
+  subscribeToTenures,
+  CouncilTenure,
+  initialDefaultTenures
+} from "@/lib/tenureStore";
 import { StaggerGrid, StaggerItem } from "@/components/ui/StaggerContainer";
 import LeadershipSpotlightSection from "./LeadershipSpotlightSection";
 
 export default function HomeEventsSection() {
   const [eventsList, setEventsList] = useState<EventItem[]>([]);
+  const [tenuresList, setTenuresList] = useState<CouncilTenure[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = getStoredTenures();
+        if (stored && stored.length > 0) return stored;
+      } catch {}
+    }
+    return initialDefaultTenures;
+  });
   const [isSyncing, setIsSyncing] = useState(true);
 
   useEffect(() => {
@@ -34,11 +51,19 @@ export default function HomeEventsSection() {
       setIsSyncing(false);
     });
 
+    syncTenuresFromFirestore().then((res) => {
+      if (res && res.length > 0) setTenuresList(res);
+    }).catch(() => {});
+
     const unsubscribe = subscribeToEvents((remoteEvents) => {
       if (remoteEvents && remoteEvents.length > 0) {
         setEventsList(remoteEvents);
       }
       setIsSyncing(false);
+    });
+
+    const unsubscribeTenures = subscribeToTenures((remote) => {
+      if (remote && remote.length > 0) setTenuresList(remote);
     });
 
     const handleUpdate = (e: any) => {
@@ -50,27 +75,46 @@ export default function HomeEventsSection() {
       setIsSyncing(false);
     };
 
+    const handleTenuresUpdate = (e: any) => {
+      if (e?.detail && Array.isArray(e.detail)) {
+        setTenuresList(e.detail);
+      } else {
+        setTenuresList(getStoredTenures());
+      }
+    };
+
     window.addEventListener("src_events_updated", handleUpdate);
     window.addEventListener("storage", handleUpdate);
+    window.addEventListener("src_tenures_updated", handleTenuresUpdate);
+    window.addEventListener("src_tenure_changed", handleTenuresUpdate);
 
     return () => {
       unsubscribe();
+      unsubscribeTenures();
       window.removeEventListener("src_events_updated", handleUpdate);
       window.removeEventListener("storage", handleUpdate);
+      window.removeEventListener("src_tenures_updated", handleTenuresUpdate);
+      window.removeEventListener("src_tenure_changed", handleTenuresUpdate);
     };
   }, []);
 
-  const allLiveEvents = sortEventsByDate(
-    eventsList.filter(
-      (e) =>
-        Boolean(e?.name && typeof e.name === "string" && e.name.trim().length > 0) &&
-        e.isLive !== false &&
-        e.status !== "draft" &&
-        !e.isCancelled &&
-        e.status !== "Cancelled" &&
-        !isSubEvent(e, eventsList)
-    )
-  );
+  const { events: calendarEvents } = React.useMemo(() => {
+    return getMainCalendarEvents(eventsList, tenuresList);
+  }, [eventsList, tenuresList]);
+
+  const allLiveEvents = React.useMemo(() => {
+    return sortEventsByDate(
+      calendarEvents.filter(
+        (e) =>
+          Boolean(e?.name && typeof e.name === "string" && e.name.trim().length > 0) &&
+          e.isLive !== false &&
+          e.status !== "draft" &&
+          !e.isCancelled &&
+          e.status !== "Cancelled" &&
+          !isSubEvent(e, eventsList)
+      )
+    );
+  }, [calendarEvents, eventsList]);
 
   // 1. Separate upcoming active events from completed ones
   const upcomingEvents = allLiveEvents.filter(
