@@ -30,8 +30,8 @@ function extractUtrFromText(text: string): string | null {
     decoded = text;
   }
 
-  // Pattern 1: Explicit labels like "UPI Ref: 425612345678", "UTR: 425612345678", "Ref No: 425612345678", "Ref no. 425612345678", "Txn ID: 425612345678", "rrn: 425612345678"
-  const labeledMatch = decoded.match(/(?:upi\s*(?:ref|reference|txn)?(?:\s*no\.?)?[:\-\s]*|utr[:\-\s]*|ref[:\-\s]*|txn\s*(?:id)?[:\-\s]*|rrn[:\-\s]*)(\d{12})/i);
+  // Pattern 1: Explicit labels like "UPI Ref: 425612345678", "UTR: 425612345678", "Ref No: 425612345678", "Ref no. 425612345678", "Txn ID: 425612345678", "rrn: 425612345678", "UPI/425512345678", "UPI/CR/425512345678"
+  const labeledMatch = decoded.match(/(?:upi[\/:\-\s]*(?:cr[\/:\-\s]*)?|utr[\/:\-\s]*|ref(?:\s*no\.?)?[\/:\-\s]*|txn\s*(?:id)?[\/:\-\s]*|rrn[\/:\-\s]*|imps[\/:\-\s]*(?:p2a[\/:\-\s]*)?)(\d{12})/i);
   if (labeledMatch && labeledMatch[1]) {
     return labeledMatch[1];
   }
@@ -85,8 +85,8 @@ function extractAmountFromText(text: string): number | null {
     if (!isNaN(val) && val > 0) return val;
   }
 
-  // Pattern 1: "Received ₹150.00" or "Received Rs. 150" or "credited with INR 150" or "Payment of ₹1.02" or "paid ₹1.02"
-  const receivedMatch = clean.match(/(?:received|credited|payment\s+of|paid|accepted)\s+(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  // Pattern 1: "Received ₹150.00" or "Received Rs. 150" or "credited with INR 150" or "credited by Rs 150" or "Payment of ₹1.02" or "paid ₹1.02"
+  const receivedMatch = clean.match(/(?:received|credited|payment\s+of|paid|accepted)\s+(?:with\s+|by\s+)?(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)/i);
   if (receivedMatch && receivedMatch[1]) {
     const val = parseFloat(receivedMatch[1].replace(/,/g, ""));
     if (!isNaN(val) && val > 0) return val;
@@ -239,8 +239,8 @@ export async function POST(req: NextRequest) {
           rawBody = JSON.parse(sanitized);
         } catch {
           // Still failed? Extract known fields via regex directly
-          const notifMatch = trimmedText.match(/"(?:notificationText|text|message|body|content|notification_text)"\s*:\s*"([\s\S]*?)"(?:\s*,|\s*})/i);
-          const titleMatch = trimmedText.match(/"(?:title|heading|subject)"\s*:\s*"([\s\S]*?)"(?:\s*,|\s*})/i);
+          const notifMatch = trimmedText.match(/"(?:notificationText|text|message|body|content|notification_text|smsBody|sms_body|smsMessage|sms_message|sms)"\s*:\s*"([\s\S]*?)"(?:\s*,|\s*})/i);
+          const titleMatch = trimmedText.match(/"(?:title|heading|subject|sender|from)"\s*:\s*"([\s\S]*?)"(?:\s*,|\s*})/i);
           const amtMatch = trimmedText.match(/"(?:amount|amt)"\s*:\s*"?([\d.]+)"?/i);
           const utrMatch = trimmedText.match(/"(?:utr|ref)"\s*:\s*"?(\d{12})"?/i);
 
@@ -282,11 +282,17 @@ export async function POST(req: NextRequest) {
       rawBody.body || 
       rawBody.content || 
       rawBody.notification_text ||
+      rawBody.smsBody ||
+      rawBody.sms_body ||
+      rawBody.smsMessage ||
+      rawBody.sms_message ||
+      rawBody.sms ||
       headerText ||
       queryText ||
       ""
     );
-    const combinedText = `${title} ${text || trimmedText}`.trim();
+    const sender = String(rawBody.sender || rawBody.from || rawBody.smsNumber || rawBody.sms_number || "");
+    const combinedText = `${title} ${sender} ${text || trimmedText}`.trim();
 
     // 1. Resolve UTR (either passed explicitly or extracted from text)
     let utr = rawBody.utr ? String(rawBody.utr).trim() : (queryUtr || null);
