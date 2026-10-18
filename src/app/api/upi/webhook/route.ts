@@ -219,14 +219,14 @@ export async function POST(req: NextRequest) {
       decodedRawText = rawText;
     }
 
-    // Auto-strip any accidental {notification} tokens if user had them typed in MacroDroid
+    // Auto-strip any accidental unexpanded tokens if MacroDroid sent them literally
     const cleanedRawText = (decodedRawText || rawText || "")
-      .replace(/\{notification\}/gi, "")
+      .replace(/\{notification\}|\{not_title\}|\{not_text_big\}|\{sms_message\}|\[notif_text\]|\[notif_title\]|\[sms_message\]|\[sms_number\]/gi, " ")
       .trim();
 
     // Parse body safely regardless of Content-Type or malformed formatting
     const trimmedText = cleanedRawText || decodedRawText.trim() || rawText.trim();
-    if (trimmedText.startsWith("{")) {
+    if (trimmedText.startsWith("{") && trimmedText.includes(":") && trimmedText.includes("}")) {
       // 1. Try standard JSON parsing
       try {
         rawBody = JSON.parse(trimmedText);
