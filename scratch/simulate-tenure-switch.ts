@@ -59,13 +59,19 @@ if (activeEvents.length !== 1 || activeEvents[0].id !== "e1") {
 // Step 3: Simulate Activation of 2026-27 Tenure
 console.log("\n-> Simulating activation of Tenure 2026-27...");
 const beginIso = "2026-07-01T00:00:00.000Z";
+const beginDateObj = new Date(beginIso);
+const oneDayBefore = new Date(beginDateObj);
+oneDayBefore.setDate(oneDayBefore.getDate() - 1);
+oneDayBefore.setHours(23, 59, 59, 999);
+const oldEndDate = oneDayBefore.toISOString();
+
 const updatedTenures = tenures.map((t) => {
   if (t.id === "tenure-2025-26") {
     return {
       ...t,
       isCurrent: false,
       status: "archived" as const,
-      endDate: beginIso,
+      endDate: oldEndDate,
       events: [events[0]],
     };
   }

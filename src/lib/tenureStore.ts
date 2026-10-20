@@ -694,7 +694,13 @@ export async function switchActiveTenure(targetTenureId: string, tenureBeginDate
     ? new Date(tenureBeginDate).toISOString() 
     : new Date().toISOString();
   const beginTs = new Date(beginIso).getTime();
-  const endIso = beginIso;
+
+  // Directive: Old tenure end date is one day before the next tenure commence date
+  const beginDateObj = new Date(beginIso);
+  const oneDayBefore = new Date(beginDateObj);
+  oneDayBefore.setDate(oneDayBefore.getDate() - 1);
+  oneDayBefore.setHours(23, 59, 59, 999);
+  const oldTenureEndDateIso = oneDayBefore.toISOString();
 
   // Attempt atomic server-side switch first (Directive: atomic backend execution)
   try {
@@ -782,7 +788,7 @@ export async function switchActiveTenure(targetTenureId: string, tenureBeginDate
         isCurrent: false,
         isDraft: false,
         status: "archived" as const,
-        endDate: beginIso,
+        endDate: oldTenureEndDateIso,
         adminCouncil: currentActiveTeam,
         hostingCommittee: currentActiveHosting,
         foundingMembers: currentActiveFounders,

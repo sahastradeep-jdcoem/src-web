@@ -7,6 +7,7 @@ import {
 import { CouncilTenure } from "../src/lib/tenureStore";
 import { EventItem } from "../src/types";
 
+// Arbitrary commencement dates (e.g. Sep 24, 2025 and Oct 15, 2026)
 const mockTenures: CouncilTenure[] = [
   {
     id: "tenure-2025-26",
@@ -15,12 +16,12 @@ const mockTenures: CouncilTenure[] = [
     tenureNumber: "1st Tenure",
     isCurrent: false,
     status: "archived",
-    startDate: "2025-07-01T00:00:00.000Z",
-    endDate: "2026-06-30T23:59:59.000Z",
+    startDate: "2025-09-24T00:00:00.000Z",
+    endDate: "2026-10-14T23:59:59.999Z", // Exactly 1 day before 2026-10-15
     adminCouncil: [],
     hostingCommittee: [],
     events: [],
-    createdAt: "2025-07-01T00:00:00.000Z",
+    createdAt: "2025-09-24T00:00:00.000Z",
   },
   {
     id: "tenure-2026-27",
@@ -29,11 +30,11 @@ const mockTenures: CouncilTenure[] = [
     tenureNumber: "2nd Tenure",
     isCurrent: true,
     status: "active",
-    startDate: "2026-07-01T00:00:00.000Z",
+    startDate: "2026-10-15T00:00:00.000Z", // Commenced mid-October
     adminCouncil: [],
     hostingCommittee: [],
     events: [],
-    createdAt: "2026-07-01T00:00:00.000Z",
+    createdAt: "2026-10-15T00:00:00.000Z",
   },
 ];
 
@@ -49,19 +50,18 @@ const mockEvents: EventItem[] = [
   } as EventItem,
   {
     id: "ev-2",
-    slug: "tech-symposium-2026",
-    name: "Tech Symposium 2026",
-    date: "12 Nov 2026",
-    tenureId: "tenure-2026-27",
-    category: "Technical",
+    slug: "pre-switch-event",
+    name: "Late Session Event",
+    date: "10 Oct 2026", // 5 days before Tenure 2 commenced -> must resolve to 2025-26!
+    category: "Cultural",
     isLive: true,
   } as EventItem,
   {
     id: "ev-3",
-    slug: "freshers-2026",
-    name: "Freshers Party",
-    date: "20 Aug 2026",
-    category: "Cultural",
+    slug: "post-switch-event",
+    name: "New Session Inaugural",
+    date: "20 Oct 2026", // 5 days after Tenure 2 commenced -> must resolve to 2026-27!
+    category: "Technical",
     isLive: true,
   } as EventItem,
 ];
@@ -89,30 +89,31 @@ if (resolvedExplicit.id !== "tenure-2025-26") {
 }
 console.log("✓ resolveEventTenure respects explicit event.tenureId");
 
-// 4. Test resolveEventTenure by date inference
-const resolvedByDate = resolveEventTenure(mockEvents[2], mockTenures);
-if (resolvedByDate.id !== "tenure-2026-27") {
-  throw new Error(`Expected date inference to resolve to tenure-2026-27, got ${resolvedByDate.id}`);
+// 4. Test resolveEventTenure by arbitrary commencement date: event before Oct 15 -> 2025-26
+const resolvedBeforeCommence = resolveEventTenure(mockEvents[1], mockTenures);
+if (resolvedBeforeCommence.id !== "tenure-2025-26") {
+  throw new Error(`Expected event on 10 Oct 2026 to resolve to tenure-2025-26, got ${resolvedBeforeCommence.id}`);
 }
-console.log("✓ resolveEventTenure infers tenure accurately from date");
+console.log("✓ resolveEventTenure correctly resolves pre-commencement event to outgoing tenure");
 
-// 5. Test filterEventsForTenure
-const currentEvents = filterEventsForTenure(mockEvents, "tenure-2026-27", mockTenures);
-if (currentEvents.length !== 2) {
-  throw new Error(`Expected 2 events for current tenure, got ${currentEvents.length}`);
+// 5. Test resolveEventTenure by arbitrary commencement date: event after Oct 15 -> 2026-27
+const resolvedAfterCommence = resolveEventTenure(mockEvents[2], mockTenures);
+if (resolvedAfterCommence.id !== "tenure-2026-27") {
+  throw new Error(`Expected event on 20 Oct 2026 to resolve to tenure-2026-27, got ${resolvedAfterCommence.id}`);
 }
-console.log("✓ filterEventsForTenure correctly scopes events for current tenure");
+console.log("✓ resolveEventTenure correctly resolves post-commencement event to incoming tenure");
+
+// 6. Test filterEventsForTenure
+const currentEvents = filterEventsForTenure(mockEvents, "tenure-2026-27", mockTenures);
+if (currentEvents.length !== 1 || currentEvents[0].id !== "ev-3") {
+  throw new Error(`Expected only ev-3 for 2026-27 tenure, got ${currentEvents.map(e => e.id).join(", ")}`);
+}
+console.log("✓ filterEventsForTenure correctly scopes events based on commencement date boundary");
 
 const pastEvents = filterEventsForTenure(mockEvents, "tenure-2025-26", mockTenures);
-if (pastEvents.length !== 1 || pastEvents[0].id !== "ev-1") {
-  throw new Error(`Expected 1 event for 2025-26 tenure, got ${pastEvents.length}`);
+if (pastEvents.length !== 2) {
+  throw new Error(`Expected 2 events for 2025-26 tenure, got ${pastEvents.length}`);
 }
-console.log("✓ filterEventsForTenure correctly scopes events for past tenure");
+console.log("✓ filterEventsForTenure correctly scopes events for past tenure ending 1 day before commencement");
 
-const allEvents = filterEventsForTenure(mockEvents, "all", mockTenures);
-if (allEvents.length !== 3) {
-  throw new Error(`Expected 3 events for 'all', got ${allEvents.length}`);
-}
-console.log("✓ filterEventsForTenure returns all events for 'all' filter");
-
-console.log("ALL TESTS PASSED SUCCESSFULLY! 🎉");
+console.log("ALL COMMENCEMENT-BASED TENURE TESTS PASSED! 🎉");

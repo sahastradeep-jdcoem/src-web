@@ -51,11 +51,31 @@ export function getTenureById(id: string, tenuresList?: CouncilTenure[]): Counci
 }
 
 /**
- * Resolves which tenure an event belongs to.
- * 1. Checks explicit event.tenureId against known tenures
- * 2. Checks explicit event.tenureLabel against known tenures
- * 3. Compares event date timestamp against tenure start/end bounds or academic year
- * 4. Fallback: defaults to current active tenure
+ * Resolves the effective commencement timestamp for a tenure.
+ * Authoritative source is tenure.startDate.
+ * For unactivated draft tenures, falls back to createdAt or year in label.
+ */
+export function getTenureCommencementTimestamp(t: CouncilTenure): number | null {
+  if (t.startDate) {
+    const ts = new Date(t.startDate).getTime();
+    if (!isNaN(ts)) return ts;
+  }
+  if (t.createdAt) {
+    const ts = new Date(t.createdAt).getTime();
+    if (!isNaN(ts)) return ts;
+  }
+  const match = (t.label || t.academicYear || "").match(/\d{4}/);
+  if (match) {
+    const year = parseInt(match[0], 10);
+    return new Date(`${year}-07-01T00:00:00.000Z`).getTime();
+  }
+  return null;
+}
+
+/**
+ * Resolves which tenure an event belongs to based on dynamic commencement dates.
+ * Directive: Zero hardcoded tenure period. Uses tenure commencement date as begin,
+ * and old tenure end date is one day before the next tenure commence date.
  */
 export function resolveEventTenure(
   event: Partial<EventItem>, 
@@ -81,32 +101,45 @@ export function resolveEventTenure(
     if (matched) return matched;
   }
 
-  // 3. Date inference
+  // 3. Date inference based on dynamic tenure commencement dates
   const dateStr = event.rawDate || event.date;
   if (dateStr) {
     const ts = parseDateStringToTimestamp(dateStr);
     if (ts !== null && !isNaN(ts)) {
-      // Academic year in India runs June/July (month 5/6) to May (month 4 next year)
-      const d = new Date(ts);
-      const eventYear = d.getFullYear();
-      const eventMonth = d.getMonth(); // 0-11
-      const academicStartYear = eventMonth >= 5 ? eventYear : eventYear - 1;
+      // Sort tenures by effective commencement date chronologically
+      const sortedTenures = [...list]
+        .map((t) => ({ tenure: t, commenceTs: getTenureCommencementTimestamp(t) }))
+        .filter((entry): entry is { tenure: CouncilTenure; commenceTs: number } => entry.commenceTs !== null)
+        .sort((a, b) => a.commenceTs - b.commenceTs);
 
-      // 3a. Check calendar academic year against tenure label (e.g. 2026 for "2026-27")
-      const matchedByYear = list.find((t) => {
-        const match = (t.label || t.academicYear || "").match(/\d{4}/);
-        return match && parseInt(match[0], 10) === academicStartYear;
-      });
-      if (matchedByYear) return matchedByYear;
+      if (sortedTenures.length > 0) {
+        for (let i = 0; i < sortedTenures.length; i++) {
+          const currentEntry = sortedTenures[i];
+          const startTs = currentEntry.commenceTs;
+          let endTs: number;
 
-      // 3b. Check bounded date ranges if explicitly configured
-      for (const t of list) {
-        if (t.startDate && t.endDate) {
-          const startTs = new Date(t.startDate).getTime();
-          const endTs = new Date(t.endDate).getTime();
-          if (ts >= startTs && ts <= endTs) {
-            return t;
+          if (currentEntry.tenure.endDate) {
+            endTs = new Date(currentEntry.tenure.endDate).getTime();
+          } else if (i < sortedTenures.length - 1) {
+            // Directive: Old tenure end date is one day before the next tenure commence date
+            const nextStart = new Date(sortedTenures[i + 1].commenceTs);
+            const oneDayBefore = new Date(nextStart);
+            oneDayBefore.setDate(oneDayBefore.getDate() - 1);
+            oneDayBefore.setHours(23, 59, 59, 999);
+            endTs = oneDayBefore.getTime();
+          } else {
+            // Current / latest active tenure
+            endTs = Infinity;
           }
+
+          if (ts >= startTs && ts <= endTs) {
+            return currentEntry.tenure;
+          }
+        }
+
+        // If event date is earlier than earliest commencement, assign to earliest tenure
+        if (ts < sortedTenures[0].commenceTs) {
+          return sortedTenures[0].tenure;
         }
       }
     }

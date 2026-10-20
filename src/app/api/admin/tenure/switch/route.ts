@@ -60,6 +60,13 @@ export async function POST(req: NextRequest) {
       : new Date().toISOString();
     const beginTs = new Date(beginIso).getTime();
 
+    // Directive: Old tenure end date is one day before the next tenure commence date
+    const beginDateObj = new Date(beginIso);
+    const oneDayBefore = new Date(beginDateObj);
+    oneDayBefore.setDate(oneDayBefore.getDate() - 1);
+    oneDayBefore.setHours(23, 59, 59, 999);
+    const oldTenureEndDateIso = oneDayBefore.toISOString();
+
     // 2. Fetch current active council, hosting, and clubs to archive into previous tenure
     let currentCouncil: TeamMember[] = [];
     let currentHosting: TeamMember[] = [];
@@ -132,7 +139,7 @@ export async function POST(req: NextRequest) {
           isCurrent: false,
           isDraft: false,
           status: "archived" as const,
-          endDate: beginIso,
+          endDate: oldTenureEndDateIso,
           adminCouncil: currentCouncil.length > 0 ? currentCouncil : tenure.adminCouncil,
           hostingCommittee: currentHosting.length > 0 ? currentHosting : tenure.hostingCommittee,
           clubs: currentClubs.length > 0 ? currentClubs : tenure.clubs,
