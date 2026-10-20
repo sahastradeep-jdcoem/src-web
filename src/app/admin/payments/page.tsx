@@ -32,7 +32,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
-import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, canUserManageEvent, saveStoredEvent } from "@/lib/eventsStore";
+import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, canUserManageEvent, saveStoredEvent, resolveTenureForEvent } from "@/lib/eventsStore";
 import { getStoredTenures, syncTenuresFromFirestore, subscribeToTenures, CouncilTenure, getLatestAvailableTenure } from "@/lib/tenureStore";
 import { 
   getAllRegistrationsFromFirestore, 
@@ -174,22 +174,55 @@ export default function AdminPaymentsPage() {
   const [selectedEventSlug, setSelectedEventSlug] = useState<string>("");
 
   const scopedEventsList = useMemo(() => {
-    let result = eventsList;
-    if (selectedTenureId !== "all") {
-      const currentTenure = tenuresList.find((t) => t.id === selectedTenureId);
-      if (currentTenure && currentTenure.events && Array.isArray(currentTenure.events)) {
-        const map = new Map<string, EventItem>();
-        [...currentTenure.events, ...eventsList].forEach((ev) => {
-          if (ev && (ev.id || ev.slug)) map.set(ev.id || ev.slug, ev);
+    let result: EventItem[] = [];
+    const matchedTenure = tenuresList.find((t) => t.id === selectedTenureId);
+    if (selectedTenureId === "all" || !matchedTenure) {
+      if (selectedTenureId === "all") {
+        result = eventsList;
+      } else {
+        result = eventsList.filter((e) => {
+          const resolved = resolveTenureForEvent(e, tenuresList);
+          return resolved ? resolved.id === selectedTenureId : e.tenureId === selectedTenureId;
         });
-        result = Array.from(map.values());
       }
+    } else if (matchedTenure.isCurrent || matchedTenure.status === "active") {
+      result = eventsList.filter((e) => {
+        const resolved = resolveTenureForEvent(e, tenuresList);
+        return resolved ? resolved.id === matchedTenure.id : (e.tenureId === matchedTenure.id || !e.tenureId);
+      });
+    } else {
+      // Past tenure: load past tenure events only when user changes the filter manually
+      const snapshotEvents = Array.isArray(matchedTenure.events) ? matchedTenure.events : [];
+      const pastFromStore = eventsList.filter((e) => {
+        const resolved = resolveTenureForEvent(e, tenuresList);
+        return resolved ? resolved.id === matchedTenure.id : e.tenureId === matchedTenure.id;
+      });
+
+      const map = new Map<string, EventItem>();
+      [...snapshotEvents, ...pastFromStore].forEach((ev) => {
+        if (ev && (ev.id || ev.slug)) map.set(ev.id || ev.slug, ev);
+      });
+      result = Array.from(map.values());
     }
+
+    // STRICT INVARIANT: If scoped event manager (Club Owner or Event Coordinator), filter ALL results down strictly to their assigned events
     if (isScopedEventManager) {
       return result.filter((event) => canUserManageEvent(event, adminAccess, user?.btId, allKnownEvents));
     }
     return result;
   }, [eventsList, selectedTenureId, tenuresList, isScopedEventManager, adminAccess, user?.btId, allKnownEvents]);
+
+  // Cleanly deselect event filter if current selected event is not in scopedEventsList
+  useEffect(() => {
+    if (selectedEventSlug && selectedEventSlug !== "all" && scopedEventsList.length > 0) {
+      const existsInScope = scopedEventsList.some(
+        (e) => (e.slug && e.slug.toLowerCase() === selectedEventSlug.toLowerCase()) || e.id === selectedEventSlug
+      );
+      if (!existsInScope) {
+        setSelectedEventSlug("");
+      }
+    }
+  }, [scopedEventsList, selectedEventSlug]);
   const [statusTab, setStatusTab] = useState<PaymentTabFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   
@@ -1487,6 +1520,7 @@ export default function AdminPaymentsPage() {
                   onChange={(e) => {
                     setUserSelectedTenure(true);
                     setSelectedTenureId(e.target.value);
+                    setSelectedEventSlug("");
                   }}
                   className="bg-transparent text-xs font-bold text-slate-800 focus:outline-none cursor-pointer pr-1"
                 >
