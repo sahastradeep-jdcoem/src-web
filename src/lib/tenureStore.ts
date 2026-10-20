@@ -696,6 +696,23 @@ export async function switchActiveTenure(targetTenureId: string, tenureBeginDate
   const beginTs = new Date(beginIso).getTime();
   const endIso = beginIso;
 
+  // Attempt atomic server-side switch first (Directive: atomic backend execution)
+  try {
+    const apiRes = await fetch("/api/admin/tenure/switch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetTenureId, tenureBeginDate }),
+    });
+    if (apiRes.ok) {
+      const json = await apiRes.json();
+      if (json.success) {
+        console.log("[TenureEngine] Server-side atomic tenure switch succeeded:", json.message);
+      }
+    }
+  } catch (apiErr) {
+    console.warn("[TenureEngine] Server API switch failed or offline, falling back to client dual-write:", apiErr);
+  }
+
   // Find currently active tenure to know its ID and preserve for Undo capability
   const currentlyActive = tenures.find((t) => t.isCurrent);
   const targetOriginal = tenures.find((t) => t.id === targetTenureId);
@@ -1181,9 +1198,37 @@ export async function syncTenuresFromFirestore(): Promise<CouncilTenure[]> {
       }
       
       // Directive #9: Remote Firestore is strictly authoritative for tenure contents & deletions.
-      // Synchronize dedicated draft caches with remote tenure state when no local write is in-flight.
+      // Detect if remote Firestore updated the active tenure and auto-reconcile live stores
+      const previousActive = current.find((t) => t.isCurrent || t.status === "active");
+      const remoteActive = merged.find((t) => t.isCurrent || t.status === "active");
+      const activeChanged = remoteActive && previousActive && remoteActive.id !== previousActive.id;
+
       const hasRecentTenureWrite = isLocalWriteRecent("council_tenures", 15000) || hasPendingWritesFor("council_tenures");
       if (!hasRecentTenureWrite && typeof window !== "undefined") {
+        if (activeChanged && remoteActive) {
+          console.log(`[TenureEngine] Active tenure changed remotely to ${remoteActive.label}. Reconciling live stores...`);
+          if (Array.isArray(remoteActive.adminCouncil) && remoteActive.adminCouncil.length > 0) {
+            try {
+              safeStorageSet("src_council_team", remoteActive.adminCouncil);
+              window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: remoteActive.adminCouncil }));
+            } catch {}
+          }
+          if (Array.isArray(remoteActive.hostingCommittee)) {
+            try {
+              safeStorageSet("src_hosting_committee", remoteActive.hostingCommittee);
+              window.dispatchEvent(new CustomEvent("src_hosting_updated", { detail: remoteActive.hostingCommittee }));
+            } catch {}
+          }
+          if (Array.isArray(remoteActive.clubs) && remoteActive.clubs.length > 0) {
+            try {
+              safeStorageSet("src_clubs", remoteActive.clubs);
+              window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: remoteActive.clubs }));
+            } catch {}
+          }
+          window.dispatchEvent(new CustomEvent("src_tenure_changed", { detail: remoteActive }));
+          window.dispatchEvent(new CustomEvent("src_events_updated"));
+        }
+
         merged.forEach((tenure) => {
           if (!tenure.isCurrent) {
             try {
@@ -1229,9 +1274,37 @@ export function subscribeToTenures(callback: (tenures: CouncilTenure[]) => void)
       }
 
       // Directive #9: Remote Firestore is strictly authoritative for tenure contents & deletions.
-      // Synchronize dedicated draft caches with remote tenure state when no local write is in-flight.
+      // Detect if remote Firestore updated the active tenure and auto-reconcile live stores
+      const previousActive = current.find((t) => t.isCurrent || t.status === "active");
+      const remoteActive = merged.find((t) => t.isCurrent || t.status === "active");
+      const activeChanged = remoteActive && previousActive && remoteActive.id !== previousActive.id;
+
       const hasRecentTenureWrite = isLocalWriteRecent("council_tenures", 15000) || hasPendingWritesFor("council_tenures");
       if (!hasRecentTenureWrite && typeof window !== "undefined") {
+        if (activeChanged && remoteActive) {
+          console.log(`[TenureEngine] Active tenure changed remotely to ${remoteActive.label}. Reconciling live stores...`);
+          if (Array.isArray(remoteActive.adminCouncil) && remoteActive.adminCouncil.length > 0) {
+            try {
+              safeStorageSet("src_council_team", remoteActive.adminCouncil);
+              window.dispatchEvent(new CustomEvent("src_council_team_updated", { detail: remoteActive.adminCouncil }));
+            } catch {}
+          }
+          if (Array.isArray(remoteActive.hostingCommittee)) {
+            try {
+              safeStorageSet("src_hosting_committee", remoteActive.hostingCommittee);
+              window.dispatchEvent(new CustomEvent("src_hosting_updated", { detail: remoteActive.hostingCommittee }));
+            } catch {}
+          }
+          if (Array.isArray(remoteActive.clubs) && remoteActive.clubs.length > 0) {
+            try {
+              safeStorageSet("src_clubs", remoteActive.clubs);
+              window.dispatchEvent(new CustomEvent("src_clubs_updated", { detail: remoteActive.clubs }));
+            } catch {}
+          }
+          window.dispatchEvent(new CustomEvent("src_tenure_changed", { detail: remoteActive }));
+          window.dispatchEvent(new CustomEvent("src_events_updated"));
+        }
+
         merged.forEach((tenure) => {
           if (!tenure.isCurrent) {
             try {
