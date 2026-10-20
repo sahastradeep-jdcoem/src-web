@@ -170,9 +170,9 @@ export async function createCashfreeOrder(
       customer_phone: cleanPhone,
     },
     order_meta: {
-      return_url: params.orderMeta?.returnUrl || null,
-      notify_url: params.orderMeta?.notifyUrl || null,
-      payment_methods: params.orderMeta?.paymentMethods || null,
+      ...(params.orderMeta?.returnUrl ? { return_url: params.orderMeta.returnUrl } : {}),
+      ...(params.orderMeta?.notifyUrl ? { notify_url: params.orderMeta.notifyUrl } : {}),
+      ...(params.orderMeta?.paymentMethods ? { payment_methods: params.orderMeta.paymentMethods } : {}),
     },
     order_note: params.orderNote || "SRC JDCOEM Event Registration",
     order_tags: params.orderTags || null,

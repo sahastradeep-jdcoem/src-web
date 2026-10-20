@@ -31,6 +31,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 0. Instant Admin Connection Health Ping Support
+    const isTestPing = registrationId === "TEST-PING" || Boolean(body.isTestPing);
+    if (isTestPing) {
+      const creds = await getServerCashfreeCredentials();
+      const testOrderId = `TEST_PING_${Date.now()}_${randomBytes(2).toString("hex").toUpperCase()}`;
+      const cashfreeOrder = await createCashfreeOrder({
+        orderId: testOrderId,
+        orderAmount: 1,
+        orderCurrency: "INR",
+        customerDetails: {
+          customerId: "test_admin",
+          customerName: "SRC Gateway Verification",
+          customerEmail: email || "srcjdcoem@gmail.com",
+          customerPhone: phone || "9999999999",
+        },
+        orderNote: "SRC JDCOEM Cashfree Connectivity Test",
+      }, creds);
+
+      return NextResponse.json({
+        success: true,
+        isTestPing: true,
+        orderId: cashfreeOrder.order_id,
+        paymentSessionId: cashfreeOrder.payment_session_id,
+        environment: creds.environment,
+      });
+    }
+
     // 1. Authoritative Event Lookup & Server-Side Fee Verification
     const lookupTarget = eventId || eventSlug;
     let authoritativeEvent = lookupTarget ? await getEventFromFirestore(lookupTarget) : null;

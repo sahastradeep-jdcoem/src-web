@@ -6,7 +6,7 @@ const WEBHOOK_MAX_SKEW_SECONDS = 5 * 60;
 function isValidSignature(req: NextRequest, rawBody: string): boolean {
   const timestamp = req.headers.get("x-webhook-timestamp");
   const signature = req.headers.get("x-webhook-signature");
-  const secret = process.env.CASHFREE_SECRET_KEY;
+  const secret = (process.env.CASHFREE_SECRET_KEY || "").trim();
 
   if (!timestamp || !signature || !secret || !/^\d+$/.test(timestamp)) return false;
 

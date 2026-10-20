@@ -1362,13 +1362,23 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       setIsSubmitting(false);
 
       // Open official Cashfree checkout dropin modal
-      await cashfreeInstance.checkout({
+      const checkoutResult = await cashfreeInstance.checkout({
         paymentSessionId: orderData.paymentSessionId,
         redirectTarget: "_modal",
       });
 
-      // Check verification after modal interaction
-      setTimeout(async () => {
+      // Handle Cashfree Web SDK v3 terminal states
+      if (checkoutResult?.error) {
+        // Modal dismissed or network error - allow user to retry without resetting form
+        console.warn("Cashfree checkout modal dismissed:", checkoutResult.error);
+        setIsSubmitting(false);
+      } else if (checkoutResult?.redirect) {
+        // Navigating away to 3DS / return_url
+        return;
+      }
+
+      // Check verification immediately after modal payment submission
+      const triggerFinalVerification = async () => {
         if (isPolledAndCompleted) return;
         try {
           const finalCheck = await fetch("/api/cashfree/verify-order", {
@@ -1414,7 +1424,13 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         } catch (e) {
           console.warn("Post-modal verification notice:", e);
         }
-      }, 1500);
+      };
+
+      // If user submitted payment in modal, verify immediately, and also re-check after brief delay
+      if (checkoutResult?.paymentDetails) {
+        await triggerFinalVerification();
+      }
+      setTimeout(triggerFinalVerification, 1500);
 
       return;
     } catch (cfErr: any) {
