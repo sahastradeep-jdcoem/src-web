@@ -64,6 +64,7 @@ import {
   syncDepartmentsFromFirestore 
 } from "@/lib/departmentsStore";
 import { getStoredTenures, syncTenuresFromFirestore, subscribeToTenures, getCurrentTenure, getLatestAvailableTenure, CouncilTenure } from "@/lib/tenureStore";
+import { getActiveTenure } from "@/lib/tenureEngine";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { db, auth } from "@/lib/firebase/config";
 import { doc, updateDoc } from "firebase/firestore";
@@ -143,14 +144,7 @@ export default function AdminRegistrationsPage() {
   const [departmentsList, setDepartmentsList] = useState<string[]>([]);
   const [userSelectedTenure, setUserSelectedTenure] = useState(false);
   const [selectedTenureId, setSelectedTenureId] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = getStoredTenures();
-        const latest = getLatestAvailableTenure(stored);
-        if (latest) return latest.id;
-      } catch {}
-    }
-    return "tenure-2026-27";
+    return getActiveTenure().id;
   });
   const [activeTab, setActiveTab] = useState<ActiveTab>("summary");
   const [selectedEventSlug, setSelectedEventSlug] = useState<string>("");

@@ -55,11 +55,13 @@ export default function ClubsDirectoryPage() {
     };
 
     window.addEventListener("src_clubs_updated", handleUpdate);
+    window.addEventListener("src_tenure_changed", handleUpdate);
     window.addEventListener("storage", handleUpdate);
 
     return () => {
       unsubscribe();
       window.removeEventListener("src_clubs_updated", handleUpdate);
+      window.removeEventListener("src_tenure_changed", handleUpdate);
       window.removeEventListener("storage", handleUpdate);
     };
   }, []);

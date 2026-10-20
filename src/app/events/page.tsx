@@ -33,6 +33,7 @@ import {
   getCurrentTenure,
   CouncilTenure 
 } from "@/lib/tenureStore";
+import { getActiveTenure } from "@/lib/tenureEngine";
 import { EventItem } from "@/types";
 
 export default function EventsPage() {
@@ -56,11 +57,11 @@ export default function EventsPage() {
   const [currentTenureLabel, setCurrentTenureLabel] = useState(() => {
     if (typeof window !== "undefined") {
       try {
-        const curr = getCurrentTenure();
+        const curr = getActiveTenure();
         if (curr?.label) return curr.label;
       } catch {}
     }
-    return "2025–26";
+    return "Current Tenure";
   });
   const [searchQuery, setSearchQuery] = useState("");
   const deferredSearch = useDeferredValue(searchQuery);
@@ -77,7 +78,7 @@ export default function EventsPage() {
   const refreshTenures = () => {
     const pub = getPublicTenures();
     setTenuresList(pub);
-    const curr = getCurrentTenure();
+    const curr = getActiveTenure();
     if (curr?.label) {
       setCurrentTenureLabel(curr.label);
     }

@@ -72,6 +72,7 @@ import {
   subscribeToTenures,
   getLatestAvailableTenure 
 } from "@/lib/tenureStore";
+import { getActiveTenure } from "@/lib/tenureEngine";
 import { useAuth } from "@/context/AuthContext";
 import { isEntityOwnedByClub } from "@/types/rbac";
 
@@ -92,14 +93,7 @@ export default function AdminEventsPage() {
   });
   const [userSelectedTenure, setUserSelectedTenure] = useState(false);
   const [selectedTenureId, setSelectedTenureId] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = getStoredTenures();
-        const latest = getLatestAvailableTenure(stored);
-        if (latest) return latest.id;
-      } catch {}
-    }
-    return "tenure-2026-27";
+    return getActiveTenure().id;
   });
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");

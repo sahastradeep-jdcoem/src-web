@@ -82,6 +82,7 @@ import {
   DRAFT_CLUBS_PREFIX,
   CouncilTenure 
 } from "@/lib/tenureStore";
+import { getActiveTenure } from "@/lib/tenureEngine";
 import { getStoredDepartments, syncDepartmentsFromFirestore, getDepartmentShortName } from "@/lib/departmentsStore";
 import { adminCouncilMembers, hostingCommitteeMembers, foundingMembers as defaultFoundingMembers } from "@/data/team";
 import { mockClubs } from "@/data/clubs";
@@ -318,7 +319,7 @@ export default function AdminTeamPage() {
     } else if (selectedTenureId && list.some((t) => t.id === selectedTenureId)) {
       currentId = selectedTenureId;
     } else {
-      currentId = active?.id || "tenure-2025-26";
+      currentId = active?.id || getActiveTenure().id;
     }
       
     if (selectedTenureId !== currentId) {

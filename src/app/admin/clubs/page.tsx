@@ -37,6 +37,7 @@ import {
   syncDraftClubsFromFirestore,
   CouncilTenure 
 } from "@/lib/tenureStore";
+import { getActiveTenure } from "@/lib/tenureEngine";
 import { getStoredDepartments, syncDepartmentsFromFirestore, getDepartmentShortName } from "@/lib/departmentsStore";
 import { mockClubs } from "@/data/clubs";
 import { ClubItem } from "@/types";
@@ -100,7 +101,7 @@ export default function AdminClubsPage() {
     const active = tenureList.find((t) => t.isCurrent) || tenureList[0];
     const currentId = selectedTenureId && tenureList.some((t) => t.id === selectedTenureId)
       ? selectedTenureId
-      : active?.id || "tenure-2025-26";
+      : active?.id || getActiveTenure().id;
     setSelectedTenureId(currentId);
 
     const targetTenure = tenureList.find((t) => t.id === currentId) || active;

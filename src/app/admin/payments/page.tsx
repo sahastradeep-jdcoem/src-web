@@ -34,6 +34,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
 import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, canUserManageEvent, saveStoredEvent, resolveTenureForEvent } from "@/lib/eventsStore";
 import { getStoredTenures, syncTenuresFromFirestore, subscribeToTenures, CouncilTenure, getLatestAvailableTenure } from "@/lib/tenureStore";
+import { getActiveTenure } from "@/lib/tenureEngine";
 import { 
   getAllRegistrationsFromFirestore, 
   subscribeToRegistrationsFromFirestore, 
@@ -162,14 +163,7 @@ export default function AdminPaymentsPage() {
 
   const [userSelectedTenure, setUserSelectedTenure] = useState(false);
   const [selectedTenureId, setSelectedTenureId] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = getStoredTenures();
-        const latest = getLatestAvailableTenure(stored);
-        if (latest) return latest.id;
-      } catch {}
-    }
-    return "tenure-2026-27";
+    return getActiveTenure().id;
   });
   const [selectedEventSlug, setSelectedEventSlug] = useState<string>("");
 

@@ -1,13 +1,8 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
 import { EventItem, RegistrationRecord, TeamMember, ClubItem } from "@/types";
 import { 
   CouncilTenure, 
   getStoredTenures, 
-  subscribeToTenures, 
-  syncTenuresFromFirestore,
-  getLatestAvailableTenure,
-  switchActiveTenure as storeSwitchActiveTenure,
-  undoActiveTenure as storeUndoActiveTenure
+  getLatestAvailableTenure 
 } from "@/lib/tenureStore";
 import { parseDateStringToTimestamp, canUserManageEvent } from "@/lib/eventsStore";
 
@@ -91,27 +86,29 @@ export function resolveEventTenure(
   if (dateStr) {
     const ts = parseDateStringToTimestamp(dateStr);
     if (ts !== null && !isNaN(ts)) {
-      // Check bounded date ranges
-      for (const t of list) {
-        if (t.startDate) {
-          const startTs = new Date(t.startDate).getTime();
-          const endTs = t.endDate ? new Date(t.endDate).getTime() : Infinity;
-          if (ts >= startTs && ts <= endTs) {
-            return t;
-          }
-        }
-      }
-
-      // Check calendar year against tenure label (e.g., 2025 against "2025-26")
-      const eventYear = new Date(ts).getFullYear();
-      const eventMonth = new Date(ts).getMonth(); // 0-11
-      // Academic year in India generally runs July (month 6) to June (month 5 next year)
+      // Academic year in India runs June/July (month 5/6) to May (month 4 next year)
+      const d = new Date(ts);
+      const eventYear = d.getFullYear();
+      const eventMonth = d.getMonth(); // 0-11
       const academicStartYear = eventMonth >= 5 ? eventYear : eventYear - 1;
+
+      // 3a. Check calendar academic year against tenure label (e.g. 2026 for "2026-27")
       const matchedByYear = list.find((t) => {
         const match = (t.label || t.academicYear || "").match(/\d{4}/);
         return match && parseInt(match[0], 10) === academicStartYear;
       });
       if (matchedByYear) return matchedByYear;
+
+      // 3b. Check bounded date ranges if explicitly configured
+      for (const t of list) {
+        if (t.startDate && t.endDate) {
+          const startTs = new Date(t.startDate).getTime();
+          const endTs = new Date(t.endDate).getTime();
+          if (ts >= startTs && ts <= endTs) {
+            return t;
+          }
+        }
+      }
     }
   }
 
@@ -174,84 +171,4 @@ export function filterEventsForTenure(
   return result;
 }
 
-/**
- * React Hook for consuming and orchestrating the active tenure universally.
- */
-export function useActiveTenure() {
-  const [tenures, setTenures] = useState<CouncilTenure[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        return getStoredTenures();
-      } catch {}
-    }
-    return [];
-  });
 
-  const [isLoading, setIsLoading] = useState(true);
-
-  const activeTenure = useMemo(() => {
-    return getActiveTenure(tenures);
-  }, [tenures]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const initial = getStoredTenures();
-    if (initial && initial.length > 0) {
-      setTenures(initial);
-      setIsLoading(false);
-    }
-
-    // Sync from Firestore
-    syncTenuresFromFirestore()
-      .then((remote) => {
-        if (remote && Array.isArray(remote) && remote.length > 0) {
-          setTenures(remote);
-        }
-      })
-      .finally(() => setIsLoading(false));
-
-    // Real-time listener
-    const unsubscribe = subscribeToTenures((updated) => {
-      if (Array.isArray(updated) && updated.length > 0) {
-        setTenures(updated);
-        setIsLoading(false);
-      }
-    });
-
-    const handleCustomChange = (e: any) => {
-      const list = getStoredTenures();
-      setTenures(list);
-    };
-
-    window.addEventListener("src_tenure_changed", handleCustomChange);
-    window.addEventListener("src_tenures_updated", handleCustomChange);
-
-    return () => {
-      unsubscribe();
-      window.removeEventListener("src_tenure_changed", handleCustomChange);
-      window.removeEventListener("src_tenures_updated", handleCustomChange);
-    };
-  }, []);
-
-  const switchTenure = useCallback(async (targetTenureId: string, beginDate?: string) => {
-    await storeSwitchActiveTenure(targetTenureId, beginDate);
-    const updated = getStoredTenures();
-    setTenures(updated);
-  }, []);
-
-  const undoTenure = useCallback(async (tenureId: string) => {
-    const result = await storeUndoActiveTenure(tenureId);
-    const updated = getStoredTenures();
-    setTenures(updated);
-    return result;
-  }, []);
-
-  return {
-    activeTenure,
-    tenures,
-    isLoading,
-    switchTenure,
-    undoTenure,
-  };
-}

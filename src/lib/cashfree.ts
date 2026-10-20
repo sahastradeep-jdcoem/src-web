@@ -4,6 +4,7 @@
  */
 
 import { randomBytes } from "node:crypto";
+import { getActiveTenure } from "@/lib/tenureEngine";
 
 export interface CashfreeCredentials {
   appId: string;
@@ -453,7 +454,7 @@ export async function confirmCashfreeOrderRegistration(
     const parentEventId = resolvedEvent?.parentEventId || draft.parentEventId || sessionData?.parentEventId || null;
     const parentEventName = resolvedEvent?.parentEventName || draft.parentEventName || sessionData?.parentEventName || null;
     const subEventBadge = resolvedEvent?.subEventBadge || draft.subEventBadge || sessionData?.subEventBadge || null;
-    const tenureId = resolvedEvent?.tenureId || draft.tenureId || sessionData?.tenureId || "tenure-2026-27";
+    const tenureId = resolvedEvent?.tenureId || draft.tenureId || sessionData?.tenureId || getActiveTenure().id;
 
     // 4.5. Underpayment Shield: Verify paid amount against authoritative fee
     let expectedFee = Number(sessionData?.expectedAmount || sessionData?.authoritativeFee || 0);
@@ -511,7 +512,7 @@ export async function confirmCashfreeOrderRegistration(
         parentEventId: parentEventId || existingRegDoc.parentEventId || null,
         parentEventName: parentEventName || existingRegDoc.parentEventName || null,
         subEventBadge: subEventBadge || existingRegDoc.subEventBadge || null,
-        tenureId: tenureId || existingRegDoc.tenureId || "tenure-2026-27",
+        tenureId: tenureId || existingRegDoc.tenureId || getActiveTenure().id,
         ticketCode: tkCode,
         verifiedBy: "Cashfree Payment Gateway (Verified)",
         verifiedAt: nowIso,

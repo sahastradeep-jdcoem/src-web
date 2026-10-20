@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { getStoredCouncilMembers, subscribeToCouncilMembers, syncCouncilMembersFromFirestore } from "@/lib/councilStore";
 import { getCurrentTenure, getStoredTenures } from "@/lib/tenureStore";
+import { getActiveTenure } from "@/lib/tenureEngine";
 import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { TeamMember } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -31,7 +32,7 @@ export default function LeadershipSpotlightSection() {
   const refresh = () => {
     const members = getStoredCouncilMembers();
     setCouncilMembers(members);
-    const tenure = getCurrentTenure();
+    const tenure = getActiveTenure();
     if (tenure) {
       setCurrentTenureLabel(tenure.label);
     }
