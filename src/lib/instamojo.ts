@@ -147,10 +147,18 @@ export async function createInstamojoPaymentRequest(
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok || !data.success || !data.payment_request) {
-    const errorMsg =
-      typeof data.message === "object"
-        ? JSON.stringify(data.message)
-        : data.message || `Instamojo API Error (HTTP ${response.status})`;
+    let errorMsg = "Instamojo payment request creation failed.";
+    if (typeof data.message === "object" && data.message !== null) {
+      const messages = Object.entries(data.message).map(([field, errs]) => {
+        const text = Array.isArray(errs) ? errs.join(", ") : String(errs);
+        return field === "amount" ? `Amount error: ${text}` : text;
+      });
+      errorMsg = messages.join(" | ");
+    } else if (typeof data.message === "string") {
+      errorMsg = data.message;
+    } else {
+      errorMsg = `Instamojo API Error (HTTP ${response.status})`;
+    }
     throw new Error(errorMsg);
   }
 

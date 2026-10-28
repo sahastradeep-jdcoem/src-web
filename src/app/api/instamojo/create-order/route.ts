@@ -125,6 +125,17 @@ export async function POST(req: NextRequest) {
 
     if (expectedFee <= 0) expectedFee = parsedAmount;
 
+    // Instamojo hard platform policy requires minimum transaction of ₹9.00
+    if (expectedFee < 9) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Instamojo requires a minimum payment amount of ₹9.00 per transaction. Please set the event fee to at least ₹9 or ₹10 (or use Cashfree for ₹1 tests).",
+        },
+        { status: 400 }
+      );
+    }
+
     // 2. Duplicate Registration Prevention
     const { db } = await import("@/lib/firebase/config");
     const { doc, setDoc } = await import("firebase/firestore");
