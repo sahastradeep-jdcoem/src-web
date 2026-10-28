@@ -286,18 +286,23 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     };
   }, []);
 
-  // Realtime detection of returnUrl order_id if user was redirected back after Cashfree payment
+  // Realtime detection of returnUrl order_id if user was redirected back after Cashfree / Instamojo payment
   useEffect(() => {
     if (typeof window === "undefined") return;
     const urlParams = new URLSearchParams(window.location.search);
     const returnOrderId = urlParams.get("order_id");
+    const gatewayParam = urlParams.get("gateway");
     if (!returnOrderId || generatedTicket) return;
 
     setIsSubmitting(true);
-    fetch("/api/cashfree/verify-order", {
+    const verifyEndpoint = gatewayParam === "instamojo"
+      ? "/api/instamojo/verify-order"
+      : "/api/cashfree/verify-order";
+
+    fetch(verifyEndpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orderId: returnOrderId }),
+      body: JSON.stringify({ orderId: returnOrderId, paymentRequestId: returnOrderId }),
     })
       .then((res) => res.json())
       .then((data) => {
@@ -317,7 +322,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             teamName: reg.teamName,
             teamMembers: reg.teamMembers,
             paymentStatus: "PAID",
-            paymentId: data.payment?.utr || reg.paymentId || `CF_${returnOrderId}`,
+            paymentId: data.payment?.utr || data.payment?.paymentId || reg.paymentId || `${gatewayParam === "instamojo" ? "IM" : "CF"}_${returnOrderId}`,
             orderId: returnOrderId,
           });
           setCurrentStep(STEP_PASS);
@@ -1263,6 +1268,100 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       } catch (err: any) {
         console.error("Paytm transaction error:", err);
         alert(err?.message || "Failed to initiate Paytm payment. Please try again.");
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
+    // 2.5. Instamojo Payment Gateway Flow (UPI, Cards, Netbanking, QR)
+    if (paymentConfig.gateway === "instamojo") {
+      try {
+        const orderRes = await fetch("/api/instamojo/create-order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: totalPayableAmount,
+            eventId: event.id,
+            eventName: event.name,
+            eventSlug: event.slug,
+            parentEventId: event.parentEventId,
+            parentEventName: event.parentEventName,
+            subEventBadge: event.subEventBadge,
+            tenureId: event.tenureId,
+            participantName: formData.fullName,
+            email: formData.email,
+            phone: formData.phone,
+            btId: formData.btId,
+            registrationId: draftRegId,
+            registrationDraft: draftPayload,
+          }),
+        });
+
+        if (!orderRes.ok) {
+          const errData = await orderRes.json().catch(() => ({}));
+          throw new Error(errData.error || "Failed to initialize Instamojo checkout order.");
+        }
+
+        const orderData = await orderRes.json();
+        if (!orderData.success || !orderData.longUrl) {
+          throw new Error(orderData.error || "Could not retrieve Instamojo payment link.");
+        }
+
+        // Active polling on verify-order so if user returns after paying, it auto-detects
+        let isPolledAndCompleted = false;
+        const pollInterval = setInterval(async () => {
+          if (isPolledAndCompleted) return;
+          try {
+            const verifyCheck = await fetch("/api/instamojo/verify-order", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ orderId: orderData.orderId }),
+            });
+            const vData = await verifyCheck.json();
+            if (vData.isPaid) {
+              isPolledAndCompleted = true;
+              clearInterval(pollInterval);
+
+              const confirmedReg = vData.registration;
+              const finalRegId = confirmedReg?.id || draftRegId;
+              const finalTkCode = confirmedReg?.ticketCode || draftTkCode;
+
+              setGeneratedTicket({
+                id: finalRegId,
+                registrationId: finalRegId,
+                ticketCode: finalTkCode,
+                participantName: confirmedReg?.participantName || formData.fullName,
+                department: confirmedReg?.department || formData.department,
+                year: confirmedReg?.year || formData.year,
+                teamType: confirmedReg?.teamType || formData.teamType,
+                teamName: confirmedReg?.teamName || formData.teamName,
+                teamMembers: confirmedReg?.teamMembers || teamMembers,
+                paymentStatus: "PAID",
+                paymentId: vData.payment?.paymentId || confirmedReg?.paymentId || `IM_${orderData.orderId}`,
+                orderId: orderData.orderId,
+              });
+              setIsSubmitting(false);
+              setHasJoinedWhatsApp(false);
+              setCurrentStep(STEP_PASS);
+              try {
+                confetti({
+                  particleCount: 100,
+                  spread: 70,
+                  origin: { y: 0.6 },
+                  colors: ["#E78023", "#17458F", "#FFFFFF", "#3D406B"],
+                });
+              } catch {}
+            }
+          } catch (e) {}
+        }, 2500);
+
+        setTimeout(() => clearInterval(pollInterval), 300000);
+
+        // Redirect directly to Instamojo checkout
+        window.location.href = orderData.longUrl;
+      } catch (err: any) {
+        console.error("Instamojo transaction error:", err);
+        alert(err?.message || "Failed to initialize Instamojo payment. Please try again.");
         setIsSubmitting(false);
       }
       return;

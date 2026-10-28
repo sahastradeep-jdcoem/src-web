@@ -5,7 +5,7 @@ import {
 } from "./firebase/firestore";
 import { enqueueCloudWrite } from "./dataSyncEngine";
 
-export type PaymentGatewayType = "cashfree" | "paytm_business";
+export type PaymentGatewayType = "cashfree" | "instamojo" | "paytm_business";
 
 export interface PublicPaymentConfig {
   gateway: PaymentGatewayType;
@@ -14,6 +14,12 @@ export interface PublicPaymentConfig {
   // Cashfree PG Settings (Handled securely via Vercel server environment)
   cashfreeAppId?: string;
   cashfreeEnvironment?: "TEST" | "PROD";
+
+  // Instamojo PG Settings
+  instamojoApiKey?: string;
+  instamojoAuthToken?: string;
+  instamojoSalt?: string;
+  instamojoEnvironment?: "TEST" | "PROD";
 
   // Paytm for Business Credentials
   paytmMid?: string;
@@ -33,9 +39,20 @@ export const PAYMENT_CONFIG_STORAGE_KEY = "src_payment_config";
 export const PAYMENT_CONFIG_DOC_ID = "payment_config";
 export const PAYMENT_CONFIG_CHANGE_EVENT = "src_payment_config_changed";
 
+export function sanitizeGateway(gateway: any): PaymentGatewayType {
+  if (gateway === "instamojo") return "instamojo";
+  if (gateway === "paytm_business") return "paytm_business";
+  return "cashfree";
+}
+
 export const DEFAULT_PAYMENT_CONFIG: PaymentConfig = {
   gateway: "cashfree",
   isGatewayActive: true,
+  cashfreeEnvironment: "PROD",
+  instamojoApiKey: "23202cf45d3e1a695e8b003c7b4dada3",
+  instamojoAuthToken: "29fc0a17dad486ae928d63b2245d97fb",
+  instamojoSalt: "70488dd63d14427998b1cc7a65f371e0",
+  instamojoEnvironment: "PROD",
   paytmMid: "YICGYk78325672706387",
   paytmUpiId: "paytm.s3tuv70@pty",
   paytmMerchantName: "SRC JDCOEM",
@@ -62,8 +79,12 @@ export function getStoredPaymentConfig(): PaymentConfig {
         return {
           ...DEFAULT_PAYMENT_CONFIG,
           ...parsed,
-          gateway: (parsed.gateway === "paytm_business" ? "paytm_business" : "cashfree") as PaymentGatewayType,
+          gateway: sanitizeGateway(parsed.gateway),
           isGatewayActive: parsed.isGatewayActive !== undefined ? parsed.isGatewayActive : true,
+          instamojoApiKey: parsed.instamojoApiKey || DEFAULT_PAYMENT_CONFIG.instamojoApiKey,
+          instamojoAuthToken: parsed.instamojoAuthToken || DEFAULT_PAYMENT_CONFIG.instamojoAuthToken,
+          instamojoSalt: parsed.instamojoSalt || DEFAULT_PAYMENT_CONFIG.instamojoSalt,
+          instamojoEnvironment: parsed.instamojoEnvironment || "PROD",
           paytmMid: parsed.paytmMid || "YICGYk78325672706387",
           paytmUpiId: parsed.paytmUpiId || "paytm.s3tuv70@pty",
           paytmMerchantName: parsed.paytmMerchantName || "SRC JDCOEM",
@@ -86,8 +107,14 @@ export function saveStoredPaymentConfig(config: PaymentConfig): void {
 
   try {
     const cleanConfig: PaymentConfig = {
-      gateway: (config.gateway === "paytm_business" ? "paytm_business" : "cashfree") as PaymentGatewayType,
+      gateway: sanitizeGateway(config.gateway),
       isGatewayActive: config.isGatewayActive !== undefined ? config.isGatewayActive : true,
+      cashfreeAppId: config.cashfreeAppId,
+      cashfreeEnvironment: config.cashfreeEnvironment || "PROD",
+      instamojoApiKey: config.instamojoApiKey || DEFAULT_PAYMENT_CONFIG.instamojoApiKey,
+      instamojoAuthToken: config.instamojoAuthToken || DEFAULT_PAYMENT_CONFIG.instamojoAuthToken,
+      instamojoSalt: config.instamojoSalt || DEFAULT_PAYMENT_CONFIG.instamojoSalt,
+      instamojoEnvironment: config.instamojoEnvironment || "PROD",
       paytmMid: config.paytmMid || "YICGYk78325672706387",
       paytmUpiId: config.paytmUpiId || "paytm.s3tuv70@pty",
       paytmMerchantName: config.paytmMerchantName || "SRC JDCOEM",
@@ -116,7 +143,7 @@ export async function updatePaymentConfig(
   const updated: PaymentConfig = {
     ...current,
     ...config,
-    gateway: (config.gateway ?? current.gateway ?? "cashfree") as PaymentGatewayType,
+    gateway: sanitizeGateway(config.gateway ?? current.gateway),
     updatedAt: new Date().toISOString(),
     updatedBy,
   };
@@ -145,7 +172,7 @@ export async function syncPaymentConfigFromFirestore(): Promise<PaymentConfig> {
       const merged: PaymentConfig = {
         ...DEFAULT_PAYMENT_CONFIG,
         ...remote,
-        gateway: (remote.gateway === "paytm_business" ? "paytm_business" : "cashfree") as PaymentGatewayType,
+        gateway: sanitizeGateway(remote.gateway),
       };
       saveStoredPaymentConfig(merged);
       return merged;
@@ -182,7 +209,7 @@ export function subscribeToPaymentConfig(
         const merged: PaymentConfig = {
           ...DEFAULT_PAYMENT_CONFIG,
           ...remoteData,
-          gateway: (remoteData.gateway === "paytm_business" ? "paytm_business" : "cashfree") as PaymentGatewayType,
+          gateway: sanitizeGateway(remoteData.gateway),
         };
         saveStoredPaymentConfig(merged);
         callback(merged);

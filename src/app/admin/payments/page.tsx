@@ -1321,11 +1321,17 @@ export default function AdminPaymentsPage() {
               <Sliders className="w-3.5 h-3.5 text-[#17458F]" />
               <span>Gateway Settings</span>
               <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold tracking-wide ${
-                paymentConfig.gateway === "paytm_business"
+                paymentConfig.gateway === "instamojo"
+                  ? "bg-purple-100 text-purple-900 border border-purple-200"
+                  : paymentConfig.gateway === "paytm_business"
                   ? "bg-indigo-100 text-indigo-900 border border-indigo-200"
                   : "bg-blue-100 text-blue-900 border border-blue-200"
               }`}>
-                {paymentConfig.gateway === "paytm_business" ? "Paytm UPI" : "Cashfree"}
+                {paymentConfig.gateway === "instamojo"
+                  ? "Instamojo"
+                  : paymentConfig.gateway === "paytm_business"
+                  ? "Paytm UPI"
+                  : "Cashfree"}
               </span>
             </button>
           )}

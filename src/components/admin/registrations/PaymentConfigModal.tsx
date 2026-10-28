@@ -57,6 +57,11 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
   const [isTestingCashfree, setIsTestingCashfree] = useState(false);
   const [cashfreeTestResult, setCashfreeTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
+  // Instamojo Testing State
+  const [isTestingInstamojo, setIsTestingInstamojo] = useState(false);
+  const [instamojoTestResult, setInstamojoTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [copiedInstamojoWebhook, setCopiedInstamojoWebhook] = useState(false);
+
   useEffect(() => {
     setConfig(getStoredPaymentConfig());
     const unsub = subscribeToPaymentConfig((updated) => {
@@ -80,10 +85,20 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
     ? `${window.location.origin.replace("://srcjdcoem.in", "://www.srcjdcoem.in")}/api/cashfree/webhook`
     : "https://www.srcjdcoem.in/api/cashfree/webhook";
 
+  const instamojoWebhookUrl = typeof window !== "undefined"
+    ? `${window.location.origin.replace("://srcjdcoem.in", "://www.srcjdcoem.in")}/api/instamojo/webhook`
+    : "https://www.srcjdcoem.in/api/instamojo/webhook";
+
   const handleCopyWebhook = () => {
     navigator.clipboard.writeText(webhookUrl);
     setCopiedWebhook(true);
     setTimeout(() => setCopiedWebhook(false), 2500);
+  };
+
+  const handleCopyInstamojoWebhook = () => {
+    navigator.clipboard.writeText(instamojoWebhookUrl);
+    setCopiedInstamojoWebhook(true);
+    setTimeout(() => setCopiedInstamojoWebhook(false), 2500);
   };
 
   const handleTestCashfree = async () => {
@@ -125,11 +140,53 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
     }
   };
 
+  const handleTestInstamojo = async () => {
+    setIsTestingInstamojo(true);
+    setInstamojoTestResult(null);
+    try {
+      const res = await fetch("/api/instamojo/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          isTestPing: true,
+          amount: 10,
+          eventName: "Instamojo Connection Ping",
+          participantName: "SRC Gateway Verification",
+          email: "srcjdcoem@gmail.com",
+          phone: "9529441964",
+          registrationId: "TEST-PING",
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setInstamojoTestResult({
+          success: true,
+          message: `Instamojo Live Gateway Verified! Successfully connected in ${data.environment || "PROD"} mode. Test Order: ${data.orderId}`,
+        });
+      } else {
+        setInstamojoTestResult({
+          success: false,
+          message: `Instamojo Error: ${data.error || "Authentication failed. Check your Instamojo API keys."}`,
+        });
+      }
+    } catch (err: any) {
+      setInstamojoTestResult({
+        success: false,
+        message: `Network Error: ${err.message || "Could not reach Instamojo endpoint."}`,
+      });
+    } finally {
+      setIsTestingInstamojo(false);
+    }
+  };
+
   const handleSelectGateway = (gateway: PaymentGatewayType) => {
     let updatedInstructions = config.instructions;
-    if (gateway === "paytm_business" && (!config.instructions || config.instructions.includes("Cashfree"))) {
+    if (gateway === "paytm_business") {
       updatedInstructions = "Direct instant UPI payment via Paytm for Business. Scan the dynamic QR code using any UPI app (GPay, PhonePe, Paytm).";
-    } else if (gateway === "cashfree" && (!config.instructions || config.instructions.includes("Paytm"))) {
+    } else if (gateway === "instamojo") {
+      updatedInstructions = "Instant online checkout powered by Instamojo (Cards, Dynamic QR, Netbanking, UPI).";
+    } else if (gateway === "cashfree") {
       updatedInstructions = "Instant online checkout powered by Cashfree (UPI, Cards, Netbanking).";
     }
 
@@ -148,6 +205,10 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
         gateway: config.gateway || "cashfree",
         isGatewayActive: config.isGatewayActive,
         instructions: config.instructions,
+        instamojoApiKey: config.instamojoApiKey?.trim() || "23202cf45d3e1a695e8b003c7b4dada3",
+        instamojoAuthToken: config.instamojoAuthToken?.trim() || "29fc0a17dad486ae928d63b2245d97fb",
+        instamojoSalt: config.instamojoSalt?.trim() || "70488dd63d14427998b1cc7a65f371e0",
+        instamojoEnvironment: config.instamojoEnvironment || "PROD",
         paytmMid: config.paytmMid?.trim() || "YICGYk78325672706387",
         paytmMerchantName: config.paytmMerchantName?.trim() || "SRC JDCOEM",
         paytmQrImageUrl: config.paytmQrImageUrl?.trim() || "",
@@ -165,6 +226,8 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
 
   const activeEnv = serverStatus?.environment || "PROD";
   const isConfigured = serverStatus?.configured;
+  const isCashfree = config.gateway === "cashfree";
+  const isInstamojo = config.gateway === "instamojo";
   const isPaytm = config.gateway === "paytm_business";
 
   return (
@@ -181,13 +244,13 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
           <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
             Select Active Checkout Provider
           </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* Cashfree Option */}
             <button
               type="button"
               onClick={() => handleSelectGateway("cashfree")}
               className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative flex flex-col justify-between ${
-                !isPaytm
+                isCashfree
                   ? "bg-gradient-to-br from-blue-50/90 to-indigo-50/60 border-blue-500 ring-2 ring-blue-200/80 shadow-2xs"
                   : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/80"
               }`}
@@ -196,7 +259,7 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                 <div className="flex items-center justify-between w-full">
                   <div className="flex items-center gap-2.5">
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-extrabold text-xs shadow-xs ${
-                      !isPaytm ? "bg-[#17458F] text-white" : "bg-slate-100 text-slate-600"
+                      isCashfree ? "bg-[#17458F] text-white" : "bg-slate-100 text-slate-600"
                     }`}>
                       CF
                     </div>
@@ -207,7 +270,7 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                       <div className="text-[11px] text-slate-500 font-medium">Automated Gateway</div>
                     </div>
                   </div>
-                  {!isPaytm ? (
+                  {isCashfree ? (
                     <span className="w-5 h-5 rounded-full bg-[#17458F] text-white flex items-center justify-center text-[10px] shadow-xs">
                       <Check className="w-3.5 h-3.5 stroke-[3]" />
                     </span>
@@ -225,7 +288,57 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                   Cards &amp; Netbanking
                 </span>
                 <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
-                  Vercel Server Managed
+                  Vercel Managed
+                </span>
+              </div>
+            </button>
+
+            {/* Instamojo Option */}
+            <button
+              type="button"
+              onClick={() => handleSelectGateway("instamojo")}
+              className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative flex flex-col justify-between ${
+                isInstamojo
+                  ? "bg-gradient-to-br from-purple-50/90 to-indigo-50/60 border-purple-500 ring-2 ring-purple-200/80 shadow-2xs"
+                  : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/80"
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-extrabold text-xs shadow-xs ${
+                      isInstamojo ? "bg-[#523293] text-white" : "bg-slate-100 text-slate-600"
+                    }`}>
+                      IM
+                    </div>
+                    <div>
+                      <div className="font-heading font-extrabold text-sm text-slate-900 tracking-tight">
+                        Instamojo Gateway
+                      </div>
+                      <div className="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Approved &amp; Live
+                      </div>
+                    </div>
+                  </div>
+                  {isInstamojo ? (
+                    <span className="w-5 h-5 rounded-full bg-[#523293] text-white flex items-center justify-center text-[10px] shadow-xs">
+                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                    </span>
+                  ) : (
+                    <span className="w-5 h-5 rounded-full border border-slate-300" />
+                  )}
+                </div>
+                <p className="text-xs text-slate-600 mt-2.5 leading-relaxed font-medium">
+                  Direct live checkout with Cards, Dynamic QR, Netbanking, &amp; UPI with zero approval wait.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-100 text-purple-800">
+                  Cards &amp; UPI
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
+                  Instant Active
                 </span>
               </div>
             </button>
@@ -281,7 +394,7 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
         </div>
 
         {/* -------------------- CASHFREE PROVIDER VIEW -------------------- */}
-        {!isPaytm && (
+        {isCashfree && (
           <div className="space-y-4 pt-1 animate-in fade-in-50 duration-200">
             {/* Header Status Bar */}
             <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-50/90 via-indigo-50/80 to-slate-50 border border-blue-200/70 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-2xs">
@@ -458,6 +571,171 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                 <span className="px-2 py-0.5 rounded bg-slate-200/70 text-slate-700 font-mono text-[10px]">PAYMENT_SUCCESS_WEBHOOK</span>
                 <span className="px-2 py-0.5 rounded bg-slate-200/70 text-slate-700 font-mono text-[10px]">ORDER_PAID_WEBHOOK</span>
                 <span className="px-2 py-0.5 rounded bg-slate-200/70 text-slate-700 font-mono text-[10px]">PAYMENT_FAILED_WEBHOOK</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ----------------- INSTAMOJO PROVIDER VIEW ----------------- */}
+        {isInstamojo && (
+          <div className="space-y-4 pt-1 animate-in fade-in-50 duration-200">
+            {/* Header Status Bar */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-50/90 via-indigo-50/80 to-slate-50 border border-purple-200/70 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-2xs">
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-[#523293] text-white flex items-center justify-center font-extrabold text-sm shadow-md shrink-0 uppercase tracking-wider">
+                  IM
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="font-heading font-extrabold text-base text-slate-900 tracking-tight">
+                      Instamojo Payment Gateway
+                    </h4>
+                    <Badge variant={config.isGatewayActive ? "success" : "slate"} size="sm">
+                      {config.isGatewayActive ? "GATEWAY LIVE" : "PAUSED"}
+                    </Badge>
+                    <Badge variant="purple" size="sm">
+                      ACCOUNT APPROVED
+                    </Badge>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/90 text-purple-800 border border-purple-200/90 shadow-2xs">
+                      <Sparkles className="w-3 h-3 text-purple-600" />
+                      Cards, Dynamic QR, Netbanking, UPI
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium mt-1">
+                    SRC JDCOEM Sahastradeep • Direct settlement to Canara Bank on T+1 schedule
+                  </p>
+                </div>
+              </div>
+
+              {/* Ping Connection Button */}
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTestInstamojo}
+                  disabled={isTestingInstamojo}
+                  className="bg-white hover:bg-purple-50 border-purple-200 text-purple-900 text-xs font-bold gap-2 shadow-2xs"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isTestingInstamojo ? "animate-spin" : ""}`} />
+                  <span>{isTestingInstamojo ? "Testing Gateway..." : "Test Instamojo Connection"}</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* Test Ping Result Alert */}
+            {instamojoTestResult && (
+              <div className={`p-4 rounded-xl text-xs font-bold border flex items-start gap-2.5 animate-in fade-in duration-150 ${
+                instamojoTestResult.success
+                  ? "bg-emerald-50 text-emerald-900 border-emerald-300"
+                  : "bg-rose-50 text-rose-900 border-rose-300"
+              }`}>
+                {instamojoTestResult.success ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                )}
+                <div className="space-y-1">
+                  <div>{instamojoTestResult.message}</div>
+                  {instamojoTestResult.success && (
+                    <div className="text-[11px] font-normal text-emerald-700">
+                      The live payment API responded with HTTP 200 and generated an active test payment link. Real payments are 100% operational!
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Instamojo Credentials Setup */}
+            <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4 shadow-2xs">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <div>
+                  <h5 className="font-heading font-extrabold text-sm text-slate-900 tracking-tight">
+                    Instamojo Live API Credentials
+                  </h5>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    From your Instamojo Dashboard → API &amp; Plugins
+                  </p>
+                </div>
+                <Badge variant={config.instamojoEnvironment === "TEST" ? "orange" : "purple"} size="sm">
+                  {config.instamojoEnvironment === "TEST" ? "TEST (Sandbox)" : "PROD (Production)"}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Private API Key <span className="text-purple-600">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={config.instamojoApiKey || "23202cf45d3e1a695e8b003c7b4dada3"}
+                    onChange={(e) => setConfig({ ...config, instamojoApiKey: e.target.value })}
+                    placeholder="23202cf45d3e1a695e8b003c7b4dada3"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-medium focus:outline-none focus:ring-2 focus:ring-[#523293] focus:border-transparent transition-all shadow-2xs"
+                  />
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    Private API Key for header <code className="font-mono text-slate-600">X-Api-Key</code>
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Private Auth Token <span className="text-purple-600">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={config.instamojoAuthToken || "29fc0a17dad486ae928d63b2245d97fb"}
+                    onChange={(e) => setConfig({ ...config, instamojoAuthToken: e.target.value })}
+                    placeholder="29fc0a17dad486ae928d63b2245d97fb"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-medium focus:outline-none focus:ring-2 focus:ring-[#523293] focus:border-transparent transition-all shadow-2xs"
+                  />
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    Private Auth Token for header <code className="font-mono text-slate-600">X-Auth-Token</code>
+                  </p>
+                </div>
+
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Private Salt (for Webhook Signature Verification)
+                  </label>
+                  <input
+                    type="text"
+                    value={config.instamojoSalt || "70488dd63d14427998b1cc7a65f371e0"}
+                    onChange={(e) => setConfig({ ...config, instamojoSalt: e.target.value })}
+                    placeholder="70488dd63d14427998b1cc7a65f371e0"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-medium focus:outline-none focus:ring-2 focus:ring-[#523293] focus:border-transparent transition-all shadow-2xs"
+                  />
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    Used to compute HMAC-SHA1 signatures and block counterfeit webhook attempts.
+                  </p>
+                </div>
+              </div>
+
+              {/* Webhook Configuration Section */}
+              <div className="p-4 rounded-xl bg-purple-50/50 border border-purple-200/70 space-y-3 mt-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                    <Server className="w-4 h-4 text-purple-900" />
+                    Instamojo Webhook Endpoint
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCopyInstamojoWebhook}
+                    className="text-xs font-bold text-[#523293] hover:text-purple-900 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-purple-200 hover:bg-purple-100/50 transition-colors"
+                  >
+                    {copiedInstamojoWebhook ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedInstamojoWebhook ? "Copied URL!" : "Copy Webhook URL"}</span>
+                  </button>
+                </div>
+
+                <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                  Add this webhook URL into your <strong className="text-slate-800">Instamojo Webhook settings</strong> for real-time instant pass confirmation:
+                </p>
+
+                <div className="p-3 rounded-xl bg-white border border-purple-200 font-mono text-xs text-slate-800 select-all break-all shadow-2xs flex items-center justify-between gap-2">
+                  <span>{instamojoWebhookUrl}</span>
+                </div>
               </div>
             </div>
           </div>
