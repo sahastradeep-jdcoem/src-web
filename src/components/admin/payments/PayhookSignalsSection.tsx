@@ -43,6 +43,7 @@ export interface WebhookLogItem {
   matchedStudentName?: string | null;
   source?: string;
   status: "TEST_PING" | "MATCHED" | "UNCLAIMED" | string;
+  isDuplicate?: boolean;
 }
 
 interface PayhookSignalsSectionProps {
@@ -402,7 +403,10 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
                         ) : isMatched ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
                             <CheckCheck className="w-3 h-3 text-emerald-600" />
-                            MATCHED &amp; PAID
+                            <span>MATCHED &amp; PAID</span>
+                            {log.isDuplicate && (
+                              <span className="text-[9px] font-mono text-emerald-600 ml-0.5 opacity-80">(DUP)</span>
+                            )}
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">

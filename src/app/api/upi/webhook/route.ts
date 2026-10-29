@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual, createHash } from "node:crypto";
 import { db } from "@/lib/firebase/config";
 import { 
   collection, 
@@ -116,6 +116,62 @@ function extractAmountFromText(text: string): number | null {
   }
 
   return null;
+}
+
+/**
+ * Helper to extract sender/payer name from incoming UPI notification banner
+ * e.g. "₹5.02 Received from ATHANG SHAILESHKUMAR DUSAWAR" -> "ATHANG SHAILESHKUMAR DUSAWAR"
+ */
+function extractSenderName(text: string): string | null {
+  if (!text) return null;
+  const clean = text
+    .replace(/&nbsp;/gi, " ")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "");
+
+  const m = clean.match(/(?:received\s+from|from|paid\s+by|sent\s+by)\s+([A-Za-z\s]{3,45}?)(?:\s+(?:received|rs|inr|on\s+paytm|via|using|\.|\d|\()|$)/i);
+  if (m && m[1]) {
+    const cleaned = m[1].trim().replace(/\s+/g, " ");
+    if (cleaned.length >= 3 && !/^(the|a|an|account|bank|upi|paytm|phonepe|gpay|customer|payment)$/i.test(cleaned)) {
+      return cleaned;
+    }
+  }
+  return null;
+}
+
+/**
+ * Checks if a candidate student name matches or is compatible with notification sender name.
+ * If notification specifies a sender name, candidate name MUST share at least one name token (length >= 3).
+ */
+function isNameCompatible(senderName: string | null, candidateName: string | null): boolean {
+  if (!senderName || !candidateName) return true; // Cannot disqualify if sender is not in notification
+  const sParts = senderName.toLowerCase().split(/[\s,.-]+/).filter(p => p.length >= 3);
+  const cParts = candidateName.toLowerCase().split(/[\s,.-]+/).filter(p => p.length >= 3);
+  if (sParts.length === 0 || cParts.length === 0) return true;
+  return sParts.some(sp => cParts.some(cp => cp.includes(sp) || sp.includes(cp)));
+}
+
+/**
+ * Generates a deterministic deduplication UTR for Paytm/UPI notifications that lack an explicit 12-digit UTR.
+ * Any identical notifications received within the same 10-minute sliding window produce the exact same UTR.
+ */
+function generateDeterministicSyntheticUtr(sender: string, amount: number, text: string): string {
+  const cleanAmount = (amount || 0).toFixed(2);
+  const cleanSender = (sender || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  
+  // Extract essential alphanumeric words ignoring variable timestamp numbers
+  const textKeywords = text
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, " ")
+    .split(/\s+/)
+    .filter(w => w.length > 2)
+    .slice(0, 15)
+    .join("");
+
+  // 10-minute sliding window (any re-post within 10 minutes gets the exact same UTR)
+  const timeBucket = Math.floor(Date.now() / (10 * 60 * 1000));
+  const rawKey = `${cleanAmount}_${cleanSender}_${textKeywords}_${timeBucket}`;
+  const hash = createHash("sha256").update(rawKey).digest("hex").slice(0, 10).toUpperCase();
+  return `AUTO-PTM-${hash}`;
 }
 
 /**
@@ -346,10 +402,11 @@ export async function POST(req: NextRequest) {
     }
 
     // If UTR is missing from the notification banner (common in Paytm for Business push notifications),
-    // but amount is valid: generate an automated reference ID for the session
+    // generate a deterministic deduplication UTR based on amount, sender, text, and 10-minute time window.
+    const extractedSender = extractSenderName(combinedText) || sender;
     const isSyntheticUtr = !utr || !/^\d{12}$/.test(utr);
     if (isSyntheticUtr) {
-      utr = `AUTO-PTM-${Date.now().toString().slice(-8)}${Math.floor(10 + Math.random() * 90)}`;
+      utr = generateDeterministicSyntheticUtr(extractedSender, amount, combinedText);
     }
 
     // 3. Save to verified_upi_payments ledger & match active sessions / registrations
@@ -359,6 +416,47 @@ export async function POST(req: NextRequest) {
 
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       const paymentDocRef = doc(db, "verified_upi_payments", utr!);
+
+      // IDEMPOTENCY CHECK: Did we already record & process this exact payment notification?
+      const existingPaymentSnap = await getDoc(paymentDocRef);
+      if (existingPaymentSnap.exists()) {
+        const existingData = existingPaymentSnap.data();
+        const existingStatus = existingData?.status || "MATCHED";
+        const existingStudent = existingData?.matchedStudentName || null;
+        const existingRegId = existingData?.matchedRegistrationId || null;
+        const existingOrderId = existingData?.matchedOrderId || null;
+
+        // Log duplicate signal in audit feed without consuming another student's session or creating unclaimed payment!
+        try {
+          const logId = `SIG-${Date.now()}`;
+          await setDoc(doc(db, "upi_webhook_logs", logId), {
+            id: logId,
+            receivedAt: now,
+            combinedText: combinedText.slice(0, 500),
+            extractedUtr: utr,
+            extractedAmount: amount,
+            matchedOrderId: existingOrderId,
+            matchedRegistrationId: existingRegId,
+            matchedStudentName: existingStudent,
+            status: existingStatus,
+            isDuplicate: true,
+          });
+        } catch {}
+
+        return NextResponse.json({
+          success: true,
+          isDuplicate: true,
+          utr,
+          amount,
+          matched: Boolean(existingRegId || existingOrderId),
+          matchedRegistrationId: existingRegId,
+          matchedOrderId: existingOrderId,
+          matchedStudentName: existingStudent,
+          message: existingStudent
+            ? `Duplicate payment notification acknowledged for ${existingStudent}. Already verified as PAID.`
+            : `Duplicate payment notification acknowledged for UTR ${utr}. Already recorded.`,
+        });
+      }
 
       // 3A. Match active checkout session (for zero-touch hands-free auto-approval on the student's checkout screen)
       const orderIdRegex = combinedText.match(/SRC-PTM-\d+-\d+/i);
@@ -424,8 +522,14 @@ export async function POST(req: NextRequest) {
               return tB - tA;
             };
 
+            // Filter allWaiting by strict name compatibility with notification sender
+            const nameCompatibleWaiting = allWaiting.filter((d) => {
+              const studentName = d.data.participantName || d.data.leaderName || "";
+              return isNameCompatible(extractedSender, studentName);
+            });
+
             // 1. EXACT MICRO-PAISA MATCH (< 0.005) - Mathematical 1:1 Identity
-            const exactPaisaCandidates = allWaiting
+            const exactPaisaCandidates = nameCompatibleWaiting
               .filter((d) => {
                 const expectedAmt = Number(d.data.amount) || 0;
                 return Math.abs(expectedAmt - Number(amount)) < 0.005;
@@ -437,10 +541,18 @@ export async function POST(req: NextRequest) {
             if (exactPaisaCandidates.length > 0) {
               bestMatch = exactPaisaCandidates[0];
             } else {
-              // 2. FALLBACK LOOSE MATCH (< 0.99) - in case a student rounded off manually
-              const looseCandidates = allWaiting
+              // 2. FALLBACK LOOSE MATCH (< 0.99)
+              // CRITICAL INVARIANT: NEVER use loose matching if the session has a microPaisaOffset!
+              // Micro-paisa amounts (e.g. 5.01, 5.02) are uniquely generated per checkout.
+              // Loose matching is ONLY permitted for standard round-figure fees without micro-paisa,
+              // AND ONLY if the student name is strictly compatible with the notification sender!
+              const looseCandidates = nameCompatibleWaiting
                 .filter((d) => {
                   const expectedAmt = Number(d.data.amount) || 0;
+                  const hasMicroPaisa = (d.data.microPaisaOffset && d.data.microPaisaOffset > 0) || (expectedAmt !== Math.floor(expectedAmt));
+                  if (hasMicroPaisa) {
+                    return false; // Micro-paisa must match exactly with < 0.005
+                  }
                   return Math.abs(expectedAmt - Number(amount)) < 0.99;
                 })
                 .sort(sortCandidates);
@@ -520,6 +632,14 @@ export async function POST(req: NextRequest) {
           const customSnap = await getDocs(customRegQuery);
           if (!customSnap.empty) {
             matchingDoc = customSnap.docs[0];
+          }
+        }
+
+        if (matchingDoc && extractedSender) {
+          const regName = matchingDoc.data()?.participantName || matchingDoc.data()?.leaderName || "";
+          if (!isNameCompatible(extractedSender, regName)) {
+            console.warn(`Payer mismatch: notification sender '${extractedSender}' contradicts registration student '${regName}'.`);
+            matchingDoc = null;
           }
         }
 
