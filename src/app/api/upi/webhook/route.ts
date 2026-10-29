@@ -316,10 +316,28 @@ export async function POST(req: NextRequest) {
 
     // If neither amount nor UTR can be detected: handle as connectivity test/ping
     if ((!utr || !/^\d{12}$/.test(utr)) && (!amount || amount <= 0)) {
+      // 1. Record test ping into upi_webhook_logs in Firestore so admin console reflects it in real time
+      try {
+        if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+          const logId = `PING-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+          await setDoc(doc(db, "upi_webhook_logs", logId), {
+            id: logId,
+            receivedAt: now,
+            combinedText: (combinedText || trimmedText || "Connectivity Test Ping").slice(0, 500),
+            extractedUtr: "TEST_PING",
+            extractedAmount: 0,
+            source: rawBody.packageName || req.headers.get("user-agent") || "SRC PayHook Android",
+            status: "TEST_PING",
+          });
+        }
+      } catch (logErr) {
+        console.warn("Notice: upi_webhook_logs test ping write error:", logErr);
+      }
+
       return NextResponse.json({
         success: true,
         isPing: true,
-        message: "Connectivity test ping received successfully from MacroDroid!",
+        message: "Connectivity test ping received and logged successfully!",
         receivedText: combinedText || trimmedText || "(empty body)",
         hint: "Ready to receive live payment notifications.",
       });

@@ -27,8 +27,10 @@ import {
   RefreshCw,
   FileSpreadsheet,
   AlertTriangle,
+  Radio,
   X
 } from "lucide-react";
+import { PayhookSignalsSection } from "@/components/admin/payments/PayhookSignalsSection";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
@@ -59,7 +61,7 @@ import { EventItem, RegistrationRecord } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { isEntityOwnedByClub } from "@/types/rbac";
 
-type PaymentTabFilter = "all" | "completed" | "pending" | "refunded" | "cancelled";
+type PaymentTabFilter = "all" | "completed" | "pending" | "refunded" | "cancelled" | "signals";
 
 function getTimestampMs(val: any): number {
   if (!val) return NaN;
@@ -1399,6 +1401,19 @@ export default function AdminPaymentsPage() {
 
           <button
             type="button"
+            onClick={() => setStatusTab(statusTab === "signals" ? "all" : "signals")}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              statusTab === "signals"
+                ? "bg-[#17458F] text-white shadow-xs"
+                : "bg-blue-50 text-[#17458F] hover:bg-blue-100 border border-blue-200/80"
+            }`}
+          >
+            <Radio className={`w-3.5 h-3.5 ${statusTab === "signals" ? "text-cyan-300" : "text-[#17458F]"} animate-pulse`} />
+            <span>{statusTab === "signals" ? "← Back to Payments" : "📡 PayHook Live Signals"}</span>
+          </button>
+
+          <button
+            type="button"
             onClick={handleExportExcel}
             disabled={displayedPayments.length === 0}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-xs font-bold text-white shadow-xs transition-all cursor-pointer disabled:cursor-not-allowed"
@@ -1686,6 +1701,18 @@ export default function AdminPaymentsPage() {
           >
             Cancelled ({!selectedEventSlug ? "—" : filteredByEvent.filter((r) => r.status === "CANCELLED" || r.paymentStatus === "FAILED").length})
           </button>
+          <button
+            type="button"
+            onClick={() => setStatusTab("signals")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${
+              statusTab === "signals"
+                ? "bg-[#17458F] text-white shadow-2xs"
+                : "text-slate-600 hover:bg-slate-100 border border-slate-200/80"
+            }`}
+          >
+            <Radio className={`w-3.5 h-3.5 ${statusTab === "signals" ? "text-cyan-300" : "text-[#17458F]"} animate-pulse`} />
+            <span>📡 PayHook Signals</span>
+          </button>
         </div>
       </div>
 
@@ -1791,8 +1818,11 @@ export default function AdminPaymentsPage() {
         </div>
       )}
 
-      {/* 4. TRANSACTIONS LEDGER TABLE */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+      {/* 4. TRANSACTIONS LEDGER TABLE OR PAYHOOK SIGNALS */}
+      {statusTab === "signals" ? (
+        <PayhookSignalsSection userEmail={user?.email} />
+      ) : (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
@@ -2083,6 +2113,7 @@ export default function AdminPaymentsPage() {
           </table>
         </div>
       </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 5. ACTION MODALS */}
