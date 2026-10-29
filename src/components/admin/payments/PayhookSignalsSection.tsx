@@ -15,7 +15,9 @@ import {
   Terminal,
   Activity,
   Zap,
-  CheckCheck
+  CheckCheck,
+  Trash2,
+  Loader2
 } from "lucide-react";
 import { db } from "@/lib/firebase/config";
 import { 
@@ -51,6 +53,8 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
   const [pingResult, setPingResult] = useState<{ ok: boolean; message: string; latency?: number } | null>(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [selectedLog, setSelectedLog] = useState<WebhookLogItem | null>(null);
+  const [isClearing, setIsClearing] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const webhookUrl = typeof window !== "undefined"
     ? `${window.location.origin}/api/upi/webhook?secret=SRC_UPI_2026_GATEWAY`
@@ -138,6 +142,45 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
     navigator.clipboard.writeText(webhookUrl);
     setCopiedUrl(true);
     setTimeout(() => setCopiedUrl(false), 2000);
+  };
+
+  const handleClearAllLogs = async () => {
+    setIsClearing(true);
+    try {
+      const res = await fetch("/api/upi/webhook?secret=SRC_UPI_2026_GATEWAY", {
+        method: "DELETE",
+        headers: {
+          "x-src-webhook-key": "SRC_UPI_2026_GATEWAY"
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to clear logs");
+      }
+      setShowClearConfirm(false);
+      setSelectedLog(null);
+    } catch (err: any) {
+      alert("Could not clear logs: " + (err.message || "Unknown error"));
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
+  const handleDeleteSingleLog = async (logId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      await fetch(`/api/upi/webhook?secret=SRC_UPI_2026_GATEWAY&logId=${encodeURIComponent(logId)}`, {
+        method: "DELETE",
+        headers: {
+          "x-src-webhook-key": "SRC_UPI_2026_GATEWAY"
+        }
+      });
+      if (selectedLog?.id === logId) {
+        setSelectedLog(null);
+      }
+    } catch (err: any) {
+      console.error("Failed to delete log:", err);
+    }
   };
 
   return (
@@ -256,16 +299,31 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
 
       {/* ── Real-Time Signal Stream Table ── */}
       <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Activity className="w-4 h-4 text-[#17458F]" />
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
               Received Signals &amp; Heartbeats ({logs.length})
             </h4>
           </div>
-          <span className="text-[11px] font-medium text-slate-400">
-            Auto-refreshes in real time via Firestore
-          </span>
+
+          <div className="flex items-center gap-3">
+            <span className="hidden sm:inline text-[11px] font-medium text-slate-400">
+              Auto-refreshes in real time via Firestore
+            </span>
+
+            {logs.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowClearConfirm(true)}
+                disabled={isClearing}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition-all cursor-pointer shadow-2xs hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                <span>Clear Logs</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {loading ? (
@@ -295,6 +353,7 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
                   <th className="py-3 px-4">Source / Package</th>
                   <th className="py-3 px-4">Amount &amp; UTR</th>
                   <th className="py-3 px-4">Notification Content</th>
+                  <th className="py-3 px-4 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -375,6 +434,18 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
                           </span>
                         )}
                       </td>
+
+                      {/* Actions */}
+                      <td className="py-3 px-4 text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          title="Delete this signal"
+                          onClick={(e) => handleDeleteSingleLog(log.id, e)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -447,12 +518,80 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
               </div>
             </div>
 
-            <button
-              onClick={() => setSelectedLog(null)}
-              className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition-colors cursor-pointer"
-            >
-              Close
-            </button>
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => handleDeleteSingleLog(selectedLog.id)}
+                className="flex-1 py-2.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                <span>Delete Signal</span>
+              </button>
+              <button
+                onClick={() => setSelectedLog(null)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Clear All Confirmation Modal ── */}
+      {showClearConfirm && (
+        <div 
+          className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => !isClearing && setShowClearConfirm(false)}
+        >
+          <div 
+            className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-200 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h3 className="text-base font-bold text-slate-900">
+                Clear All Webhook Signals?
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                This will permanently remove all {logs.length} logged webhook heartbeats, pings, and test signals from Firestore.
+                <br />
+                <span className="font-semibold text-slate-700">Verified student payments and registrations will NOT be affected.</span>
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isClearing}
+                onClick={() => setShowClearConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-semibold text-xs hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={isClearing}
+                onClick={handleClearAllLogs}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-900/20 transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {isClearing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Clearing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Yes, Clear All ({logs.length})</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

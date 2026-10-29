@@ -9,7 +9,9 @@ import {
   getDocs, 
   query, 
   where, 
-  updateDoc 
+  updateDoc,
+  deleteDoc,
+  writeBatch
 } from "firebase/firestore";
 
 const WEBHOOK_MAX_SKEW_SECONDS = 5 * 60;
@@ -691,4 +693,55 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({ status: "ONLINE", message: "Webhook is live and ready." });
+}
+
+/**
+ * DELETE: Clear all upi_webhook_logs or a single specific log entry
+ */
+export async function DELETE(req: NextRequest) {
+  const secretKey = process.env.UPI_WEBHOOK_SECRET || "SRC_UPI_2026_GATEWAY";
+  const url = new URL(req.url);
+  const secret = url.searchParams.get("secret");
+  const authHeader = req.headers.get("x-src-webhook-key");
+
+  if (secret !== secretKey && authHeader !== secretKey) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    if (!db) {
+      return NextResponse.json({ error: "Database unavailable" }, { status: 503 });
+    }
+
+    const logId = url.searchParams.get("logId");
+
+    // Case 1: Delete a single specific log
+    if (logId) {
+      await deleteDoc(doc(db, "upi_webhook_logs", logId));
+      return NextResponse.json({ success: true, deleted: 1, logId });
+    }
+
+    // Case 2: Batch delete all logs in upi_webhook_logs
+    const snap = await getDocs(collection(db, "upi_webhook_logs"));
+    if (snap.empty) {
+      return NextResponse.json({ success: true, deleted: 0 });
+    }
+
+    const docs = snap.docs;
+    let totalDeleted = 0;
+    for (let i = 0; i < docs.length; i += 400) {
+      const chunk = docs.slice(i, i + 400);
+      const batch = writeBatch(db);
+      for (const d of chunk) {
+        batch.delete(d.ref);
+      }
+      await batch.commit();
+      totalDeleted += chunk.length;
+    }
+
+    return NextResponse.json({ success: true, deleted: totalDeleted });
+  } catch (err: any) {
+    console.error("Error clearing upi_webhook_logs:", err);
+    return NextResponse.json({ error: err.message || "Failed to clear logs" }, { status: 500 });
+  }
 }
