@@ -688,13 +688,11 @@ export async function POST(req: NextRequest) {
         if (matchingDoc && extractedSender) {
           const regName = matchingDoc.data()?.participantName || matchingDoc.data()?.leaderName || "";
           if (!isNameCompatible(extractedSender, regName)) {
-            // Friend account payment: if orderId was already matched via micro-paisa, keep matchingDoc
-            if (!matchedOrderId) {
-              console.warn(`Payer mismatch: notification sender '${extractedSender}' contradicts registration student '${regName}'.`);
-              matchingDoc = null;
-            } else {
-              isFriendPayment = true;
-            }
+            // Friend account payment:
+            // If matched by exact 12-digit bank UTR or verified checkout orderId,
+            // the payment reference is genuine. Mark as friend payment with actual payer name.
+            isFriendPayment = true;
+            payerName = extractedSender;
           }
         }
 
