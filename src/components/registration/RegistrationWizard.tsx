@@ -1069,7 +1069,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     }
   };
 
-  // Hands-Free Auto-Detection: Listen for incoming MacroDroid webhook payment confirmation
+  // Hands-Free Auto-Detection: Listen for incoming SRC PayHook webhook payment confirmation
   useEffect(() => {
     if (!paytmCheckoutData?.orderId) {
       setIsAutoDetectingPayment(false);

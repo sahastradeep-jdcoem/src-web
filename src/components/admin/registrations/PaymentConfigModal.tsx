@@ -841,27 +841,37 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                 </div>
               </div>
 
-              {/* MacroDroid / Phone Webhook Notification Setup */}
+              {/* SRC PayHook Native Android App Setup */}
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/90 space-y-2.5 mt-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                     <Server className="w-3.5 h-3.5 text-[#002970]" />
-                    MacroDroid / Soundbox Webhook Listener
+                    SRC PayHook Native App Listener
                   </span>
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md">
-                    Live Endpoint Ready
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href="/guide/payhook"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] font-bold text-[#002970] hover:underline bg-[#002970]/10 px-2 py-0.5 rounded-md"
+                    >
+                      Setup Guide &rarr;
+                    </a>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md">
+                      Live Endpoint Ready
+                    </span>
+                  </div>
                 </div>
                 <p className="text-[11px] text-slate-600 leading-relaxed font-medium">
-                  When payments arrive in the Paytm for Business app or soundbox, MacroDroid pushes notification alerts to this endpoint to auto-issue passes in real time.
+                  When payments arrive in Paytm for Business, PhonePe, or Bank SMS, the dedicated <strong>SRC PayHook</strong> Android app forwards notification alerts to this endpoint to auto-issue passes in real time.
                 </p>
                 <div className="p-2.5 rounded-lg bg-white border border-slate-200 font-mono text-[11px] text-slate-700 select-all break-all shadow-2xs">
-                  {typeof window !== "undefined" ? `${window.location.origin}/api/upi/webhook` : "https://www.srcjdcoem.in/api/upi/webhook"}
+                  {typeof window !== "undefined" ? `${window.location.origin}/api/upi/webhook?secret=SRC_UPI_2026_GATEWAY` : "https://www.srcjdcoem.in/api/upi/webhook?secret=SRC_UPI_2026_GATEWAY"}
                 </div>
                 <div className="flex items-center gap-2 text-[10px] text-slate-500">
                   <span>Secret Key: <code className="bg-slate-200/80 px-1.5 py-0.5 rounded text-slate-800 font-bold">SRC_UPI_2026_GATEWAY</code></span>
                   <span>•</span>
-                  <span>Header: <code className="bg-slate-200/80 px-1.5 py-0.5 rounded text-slate-800">x-src-webhook-signature</code></span>
+                  <span>Header / Query: <code className="bg-slate-200/80 px-1.5 py-0.5 rounded text-slate-800">x-src-webhook-key</code></span>
                 </div>
               </div>
             </div>
