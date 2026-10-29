@@ -38,3 +38,4 @@ next-env.d.ts
 /brag-video
 *.mov
 /scratch
+/android-payhook
