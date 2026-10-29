@@ -15,7 +15,7 @@ export default function PayhookGuidePage() {
         <div className="max-w-3xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#E78023] text-white text-xs font-semibold mb-4 shadow-sm">
             <Sparkles className="w-3.5 h-3.5" />
-            Official Internal Tool v1.2
+            Official Internal Tool v1.3
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-3">
             SRC PayHook Setup Guide
@@ -132,6 +132,26 @@ export default function PayhookGuidePage() {
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
                 <span>Tap <b>&quot;Simulate Test Payment&quot;</b>. You will hear an audible confirmation chime and feel a double vibration buzz.</span>
               </div>
+            </div>
+          </div>
+
+          {/* Step 4 */}
+          <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-black flex items-center justify-center text-sm">
+                4
+              </div>
+              <h2 className="text-lg font-bold text-slate-900">
+                Configure Monitored Apps (v1.3 Filter)
+              </h2>
+            </div>
+
+            <p className="text-sm text-slate-600 mb-3">
+              In Card 3 (<span className="font-semibold text-slate-900">MONITORED PAYMENT APPS</span>), select only the UPI apps your festival registration desk accepts (Paytm Business, PhonePe, GPay, etc.).
+            </p>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs sm:text-sm text-slate-600 space-y-1.5">
+              <p><b>🛡️ Anti-Promotional Shielding:</b> Shopping and sale alerts (Meesho, Amazon, WhatsApp ads) are automatically filtered out even if they display ₹ prices.</p>
             </div>
           </div>
         </div>
