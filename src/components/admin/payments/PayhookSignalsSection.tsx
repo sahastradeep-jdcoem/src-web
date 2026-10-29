@@ -25,7 +25,11 @@ import {
   onSnapshot, 
   query, 
   orderBy, 
-  limit 
+  limit,
+  doc,
+  deleteDoc,
+  writeBatch,
+  getDocs
 } from "firebase/firestore";
 
 export interface WebhookLogItem {
@@ -145,21 +149,32 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
   };
 
   const handleClearAllLogs = async () => {
+    if (!db) {
+      alert("Database unavailable.");
+      return;
+    }
+
     setIsClearing(true);
     try {
-      const res = await fetch("/api/upi/webhook?secret=SRC_UPI_2026_GATEWAY", {
-        method: "DELETE",
-        headers: {
-          "x-src-webhook-key": "SRC_UPI_2026_GATEWAY"
+      // 1. Fetch all documents in upi_webhook_logs using the authenticated client session
+      const snap = await getDocs(collection(db, "upi_webhook_logs"));
+      if (!snap.empty) {
+        const docs = snap.docs;
+        // Batch delete (max 400 operations per Firestore batch)
+        for (let i = 0; i < docs.length; i += 400) {
+          const chunk = docs.slice(i, i + 400);
+          const batch = writeBatch(db);
+          for (const d of chunk) {
+            batch.delete(d.ref);
+          }
+          await batch.commit();
         }
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to clear logs");
       }
+
       setShowClearConfirm(false);
       setSelectedLog(null);
     } catch (err: any) {
+      console.error("Error clearing webhook logs:", err);
       alert("Could not clear logs: " + (err.message || "Unknown error"));
     } finally {
       setIsClearing(false);
@@ -168,18 +183,16 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
 
   const handleDeleteSingleLog = async (logId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    if (!db || !logId) return;
+
     try {
-      await fetch(`/api/upi/webhook?secret=SRC_UPI_2026_GATEWAY&logId=${encodeURIComponent(logId)}`, {
-        method: "DELETE",
-        headers: {
-          "x-src-webhook-key": "SRC_UPI_2026_GATEWAY"
-        }
-      });
+      await deleteDoc(doc(db, "upi_webhook_logs", logId));
       if (selectedLog?.id === logId) {
         setSelectedLog(null);
       }
     } catch (err: any) {
       console.error("Failed to delete log:", err);
+      alert("Could not delete log: " + (err.message || "Unknown error"));
     }
   };
 
