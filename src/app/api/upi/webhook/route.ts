@@ -413,6 +413,8 @@ export async function POST(req: NextRequest) {
     let matchedRegistrationId: string | null = null;
     let matchedOrderId: string | null = null;
     let matchedStudentName: string | null = null;
+    let payerName: string | null = extractedSender || null;
+    let isFriendPayment = false;
 
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       const paymentDocRef = doc(db, "verified_upi_payments", utr!);
@@ -425,6 +427,8 @@ export async function POST(req: NextRequest) {
         const existingStudent = existingData?.matchedStudentName || null;
         const existingRegId = existingData?.matchedRegistrationId || null;
         const existingOrderId = existingData?.matchedOrderId || null;
+        const existingPayer = existingData?.payerName || payerName || null;
+        const existingIsFriend = Boolean(existingData?.isFriendPayment ?? isFriendPayment);
 
         // Log duplicate signal in audit feed without consuming another student's session or creating unclaimed payment!
         try {
@@ -438,6 +442,8 @@ export async function POST(req: NextRequest) {
             matchedOrderId: existingOrderId,
             matchedRegistrationId: existingRegId,
             matchedStudentName: existingStudent,
+            payerName: existingPayer,
+            isFriendPayment: existingIsFriend,
             status: existingStatus,
             isDuplicate: true,
           });
@@ -452,6 +458,8 @@ export async function POST(req: NextRequest) {
           matchedRegistrationId: existingRegId,
           matchedOrderId: existingOrderId,
           matchedStudentName: existingStudent,
+          payerName: existingPayer,
+          isFriendPayment: existingIsFriend,
           message: existingStudent
             ? `Duplicate payment notification acknowledged for ${existingStudent}. Already verified as PAID.`
             : `Duplicate payment notification acknowledged for UTR ${utr}. Already recorded.`,
@@ -470,12 +478,17 @@ export async function POST(req: NextRequest) {
             matchedOrderId = sessionSnap.id;
             const sData = sessionSnap.data();
             matchedStudentName = sData?.participantName || sData?.leaderName || sData?.email || "Student";
+            if (extractedSender && !isNameCompatible(extractedSender, matchedStudentName)) {
+              isFriendPayment = true;
+            }
             await updateDoc(sessionRef, {
               status: "COMPLETED",
               utr,
               receivedAmount: amount,
               paidAt: now,
               rawNotification: combinedText,
+              payerName: payerName || null,
+              isFriendPayment,
             });
           }
         } catch (sessErr) {
@@ -522,43 +535,78 @@ export async function POST(req: NextRequest) {
               return tB - tA;
             };
 
-            // Filter allWaiting by strict name compatibility with notification sender
-            const nameCompatibleWaiting = allWaiting.filter((d) => {
-              const studentName = d.data.participantName || d.data.leaderName || "";
-              return isNameCompatible(extractedSender, studentName);
-            });
-
-            // 1. EXACT MICRO-PAISA MATCH (< 0.005) - Mathematical 1:1 Identity
-            const exactPaisaCandidates = nameCompatibleWaiting
-              .filter((d) => {
-                const expectedAmt = Number(d.data.amount) || 0;
-                return Math.abs(expectedAmt - Number(amount)) < 0.005;
-              })
-              .sort(sortCandidates);
-
+            const hasFractionalPaise = Math.round(amount * 100) % 100 !== 0;
             let bestMatch: any = null;
 
-            if (exactPaisaCandidates.length > 0) {
-              bestMatch = exactPaisaCandidates[0];
-            } else {
-              // 2. FALLBACK LOOSE MATCH (< 0.99)
-              // CRITICAL INVARIANT: NEVER use loose matching if the session has a microPaisaOffset!
-              // Micro-paisa amounts (e.g. 5.01, 5.02) are uniquely generated per checkout.
-              // Loose matching is ONLY permitted for standard round-figure fees without micro-paisa,
-              // AND ONLY if the student name is strictly compatible with the notification sender!
-              const looseCandidates = nameCompatibleWaiting
+            if (hasFractionalPaise) {
+              // ─────────────────────────────────────────────────────────────
+              // TIER 2: UNIQUE MICRO-PAISA 1:1 MATHEMATICAL IDENTITY MATCH
+              // Every active student checkout has a mathematically unique paisa offset (e.g. ₹50.02).
+              // Even if a friend or parent paid ("Rohan Sharma" for "Athang Dusawar"),
+              // ₹50.02 belongs unambiguously to Athang within the active 5-minute window!
+              // ─────────────────────────────────────────────────────────────
+              const exactPaisaCandidates = allWaiting
                 .filter((d) => {
                   const expectedAmt = Number(d.data.amount) || 0;
-                  const hasMicroPaisa = (d.data.microPaisaOffset && d.data.microPaisaOffset > 0) || (expectedAmt !== Math.floor(expectedAmt));
-                  if (hasMicroPaisa) {
-                    return false; // Micro-paisa must match exactly with < 0.005
-                  }
-                  return Math.abs(expectedAmt - Number(amount)) < 0.99;
+                  return Math.abs(expectedAmt - Number(amount)) < 0.005;
                 })
                 .sort(sortCandidates);
 
-              if (looseCandidates.length > 0) {
-                bestMatch = looseCandidates[0];
+              if (exactPaisaCandidates.length > 0) {
+                bestMatch = exactPaisaCandidates[0];
+                const studentName = bestMatch.data.participantName || bestMatch.data.leaderName || "Student";
+                if (extractedSender && !isNameCompatible(extractedSender, studentName)) {
+                  isFriendPayment = true;
+                  payerName = extractedSender;
+                }
+              }
+            } else {
+              // ─────────────────────────────────────────────────────────────
+              // TIER 3: ROUND-FIGURE DISAMBIGUATION (e.g. ₹50.00 exactly)
+              // Multiple students could simultaneously pay round amounts.
+              // ─────────────────────────────────────────────────────────────
+              const roundCandidates = allWaiting
+                .filter((d) => {
+                  const expectedAmt = Number(d.data.amount) || 0;
+                  const hasMicroOffset = (d.data.microPaisaOffset && d.data.microPaisaOffset > 0) || (Math.round(expectedAmt * 100) % 100 !== 0);
+                  if (hasMicroOffset) return false; // Do not mix with micro-paisa sessions
+                  return Math.abs(expectedAmt - Number(amount)) < 0.005;
+                })
+                .sort(sortCandidates);
+
+              if (roundCandidates.length > 0) {
+                // Step 3A: Payer Name Match
+                const nameMatches = roundCandidates.filter(c => {
+                  const sName = c.data.participantName || c.data.leaderName || "";
+                  return isNameCompatible(extractedSender, sName);
+                });
+
+                if (nameMatches.length > 0) {
+                  bestMatch = nameMatches[0];
+                } else {
+                  // Step 3B: Phone Number Match in notification
+                  const phoneMatches = roundCandidates.filter(c => {
+                    const phone = String(c.data.phone || "").replace(/\D/g, "").slice(-6);
+                    return phone.length >= 6 && combinedText.includes(phone);
+                  });
+
+                  if (phoneMatches.length > 0) {
+                    bestMatch = phoneMatches[0];
+                    if (extractedSender) isFriendPayment = true;
+                  } else if (roundCandidates.length === 1) {
+                    // Step 3C: Single Active Session (Friend paid, but NO OTHER student is waiting for this round amount)
+                    bestMatch = roundCandidates[0];
+                    if (extractedSender) {
+                      isFriendPayment = true;
+                      payerName = extractedSender;
+                    }
+                  } else {
+                    // Step 3D: Conflict Protection! Multiple sessions waiting for ₹50.00 and payer is unknown friend.
+                    // Do NOT guess blindly. Let it fall through to UNCLAIMED so student can enter UTR.
+                    console.warn(`Ambiguity: ${roundCandidates.length} sessions waiting for ₹${amount}. Payer '${extractedSender}' matches none.`);
+                    bestMatch = null;
+                  }
+                }
               }
             }
             if (bestMatch) {
@@ -586,6 +634,8 @@ export async function POST(req: NextRequest) {
                   receivedAmount: amount,
                   paidAt: now,
                   rawNotification: combinedText,
+                  payerName: payerName || null,
+                  isFriendPayment: Boolean(isFriendPayment),
                 }, { merge: true });
               }
             }
@@ -638,8 +688,13 @@ export async function POST(req: NextRequest) {
         if (matchingDoc && extractedSender) {
           const regName = matchingDoc.data()?.participantName || matchingDoc.data()?.leaderName || "";
           if (!isNameCompatible(extractedSender, regName)) {
-            console.warn(`Payer mismatch: notification sender '${extractedSender}' contradicts registration student '${regName}'.`);
-            matchingDoc = null;
+            // Friend account payment: if orderId was already matched via micro-paisa, keep matchingDoc
+            if (!matchedOrderId) {
+              console.warn(`Payer mismatch: notification sender '${extractedSender}' contradicts registration student '${regName}'.`);
+              matchingDoc = null;
+            } else {
+              isFriendPayment = true;
+            }
           }
         }
 
@@ -654,6 +709,8 @@ export async function POST(req: NextRequest) {
             paidAt: now,
             verifiedBy: "Paytm Auto-Gateway (MacroDroid Webhook)",
             verifiedAt: now,
+            payerName: payerName || null,
+            isFriendPayment: Boolean(isFriendPayment),
           });
         } else if (matchedOrderId) {
           // Self-Healing Invariant: If student closed browser, auto-create their registration from session draft!
@@ -681,6 +738,8 @@ export async function POST(req: NextRequest) {
                   createdAt: now,
                   verifiedBy: "Paytm Auto-Gateway (MacroDroid Webhook)",
                   verifiedAt: now,
+                  payerName: payerName || null,
+                  isFriendPayment: Boolean(isFriendPayment),
                 };
 
                 await setDoc(doc(db, "registrations", regId), newRecord, { merge: true });
@@ -708,6 +767,8 @@ export async function POST(req: NextRequest) {
           matchedRegistrationId: matchedRegistrationId || null,
           matchedOrderId: matchedOrderId || null,
           matchedStudentName: matchedStudentName || null,
+          payerName: payerName || null,
+          isFriendPayment: Boolean(isFriendPayment),
           receivedAt: now,
           matchedAt: isMatched ? now : null,
         }, { merge: true });
@@ -727,7 +788,10 @@ export async function POST(req: NextRequest) {
           matchedOrderId: matchedOrderId || null,
           matchedRegistrationId: matchedRegistrationId || null,
           matchedStudentName: matchedStudentName || null,
+          payerName: payerName || null,
+          isFriendPayment: Boolean(isFriendPayment),
           status: isMatched ? "MATCHED" : "UNCLAIMED",
+          isDuplicate: false,
         });
       } catch (auditErr) {
         console.warn("Notice: upi_webhook_logs audit warning:", auditErr);
@@ -742,10 +806,14 @@ export async function POST(req: NextRequest) {
       matchedRegistrationId,
       matchedOrderId,
       matchedStudentName,
+      payerName: payerName || null,
+      isFriendPayment: Boolean(isFriendPayment),
       message: matchedRegistrationId
         ? `Payment matched and pass auto-approved for ${matchedStudentName} (${matchedRegistrationId}).`
         : matchedOrderId
-        ? `Active checkout session auto-approved for ${matchedStudentName} (${matchedOrderId}). Instant pass rendered on device.`
+        ? (isFriendPayment
+            ? `Friend payment by ${payerName} auto-approved for ${matchedStudentName} (${matchedOrderId}). Instant pass rendered on device.`
+            : `Active checkout session auto-approved for ${matchedStudentName} (${matchedOrderId}). Instant pass rendered on device.`)
         : "Payment verified and recorded in ledger. Awaiting student registration submit.",
     });
 

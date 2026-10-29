@@ -41,6 +41,8 @@ export interface WebhookLogItem {
   matchedOrderId?: string | null;
   matchedRegistrationId?: string | null;
   matchedStudentName?: string | null;
+  payerName?: string | null;
+  isFriendPayment?: boolean;
   source?: string;
   status: "TEST_PING" | "MATCHED" | "UNCLAIMED" | string;
   isDuplicate?: boolean;
@@ -446,9 +448,16 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
                           {log.combinedText || "(empty text)"}
                         </p>
                         {log.matchedStudentName && (
-                          <span className="text-[10px] text-[#17458F] font-semibold">
-                            Matched Student: {log.matchedStudentName}
-                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                            <span className="text-[10px] text-[#17458F] font-semibold">
+                              Student: {log.matchedStudentName}
+                            </span>
+                            {log.isFriendPayment && log.payerName && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 font-medium">
+                                Paid via: {log.payerName} (Friend)
+                              </span>
+                            )}
+                          </div>
                         )}
                       </td>
 
@@ -524,6 +533,27 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Extracted Amount:</span>
                   <p className="font-bold text-slate-900">₹{selectedLog.extractedAmount}</p>
+                </div>
+              )}
+
+              {selectedLog.matchedStudentName && (
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Matched Student:</span>
+                  <p className="font-semibold text-slate-900">{selectedLog.matchedStudentName}</p>
+                </div>
+              )}
+
+              {selectedLog.payerName && (
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Bank Payer (Account Holder):</span>
+                  <p className="font-semibold text-slate-800">
+                    {selectedLog.payerName}
+                    {selectedLog.isFriendPayment && (
+                      <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold">
+                        Friend / 3rd Party Account
+                      </span>
+                    )}
+                  </p>
                 </div>
               )}
 
