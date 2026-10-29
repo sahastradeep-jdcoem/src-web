@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:background="#F8FAFC">
+
+    <!-- Header -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="SRC JDCOEM PayHook"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:textColor="#002970" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Real-time UPI payment forwarding service (Paytm, GPay, PhonePe, SMS)"
+        android:textSize="12sp"
+        android:textColor="#64748B"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Status Card -->
+    <LinearLayout
+        android:id="@+id/statusCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="#EEF2FF"
+        android:layout_marginBottom="16dp">
+
+        <TextView
+            android:id="@+id/tvStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Checking Status..."
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#1E1B4B" />
+
+        <TextView
+            android:id="@+id/tvStatusDesc"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Listening for incoming student registrations in background."
+            android:textSize="12sp"
+            android:textColor="#4338CA"
+            android:layout_marginTop="4dp" />
+    </LinearLayout>
+
+    <!-- Action Buttons -->
+    <Button
+        android:id="@+id/btnGrantPermission"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Grant Notification Access"
+        android:textColor="#FFFFFF"
+        android:backgroundTint="#002970"
+        android:layout_marginBottom="8dp" />
+
+    <Button
+        android:id="@+id/btnBatteryOpt"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Disable Battery Optimization"
+        android:textColor="#002970"
+        android:backgroundTint="#E0E7FF"
+        android:layout_marginBottom="8dp" />
+
+    <Button
+        android:id="@+id/btnTestPing"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Send Test Ping to Website"
+        android:textColor="#065F46"
+        android:backgroundTint="#D1FAE5"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Logs Header -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Forwarding Activity Logs"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:textColor="#334155"
+        android:layout_marginBottom="6dp" />
+
+    <!-- Logs ScrollView -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#FFFFFF"
+        android:padding="12dp">
+
+        <TextView
+            android:id="@+id/tvLogs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:textSize="11sp"
+            android:textColor="#1E293B"
+            android:text="Ready and waiting for notifications..." />
+    </ScrollView>
+
+</LinearLayout>
