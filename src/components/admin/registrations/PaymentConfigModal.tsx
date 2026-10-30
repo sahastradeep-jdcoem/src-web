@@ -850,12 +850,10 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                   </span>
                   <div className="flex items-center gap-2">
                     <a
-                      href="/guide/payhook"
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      href="/admin/payments"
                       className="text-[10px] font-bold text-[#002970] hover:underline bg-[#002970]/10 px-2 py-0.5 rounded-md"
                     >
-                      Setup Guide &rarr;
+                      Payments Studio &rarr;
                     </a>
                     <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md">
                       Live Endpoint Ready

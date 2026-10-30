@@ -31,6 +31,7 @@ import {
   writeBatch,
   getDocs
 } from "firebase/firestore";
+import { PayhookGuideModal } from "./PayhookGuideModal";
 
 export interface WebhookLogItem {
   id: string;
@@ -62,6 +63,7 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
   const [selectedLog, setSelectedLog] = useState<WebhookLogItem | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
 
   const webhookUrl = typeof window !== "undefined"
     ? `${window.location.origin}/api/upi/webhook?secret=SRC_UPI_2026_GATEWAY`
@@ -236,16 +238,14 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
               <span>{isSendingPing ? "Pushing Ping..." : "Push Test Ping to Server"}</span>
             </button>
 
-            <a
-              href="/guide/payhook"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
+            <button
+              type="button"
+              onClick={() => setIsGuideModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
             >
               <Smartphone className="w-3.5 h-3.5 text-slate-500" />
               <span>App Guide</span>
-              <ExternalLink className="w-3 h-3 text-slate-400" />
-            </a>
+            </button>
 
             <a
               href="/download/src-payhook-v1.3.apk"
@@ -642,6 +642,12 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
           </div>
         </div>
       )}
+
+      {/* Internal Admin Operator Guide Modal */}
+      <PayhookGuideModal
+        isOpen={isGuideModalOpen}
+        onClose={() => setIsGuideModalOpen(false)}
+      />
     </div>
   );
 }
