@@ -248,8 +248,8 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
             </a>
 
             <a
-              href="/download/src-payhook-release.apk"
-              download
+              href="/download/src-payhook-v1.3.apk"
+              download="src-payhook-v1.3.apk"
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#E78023] border border-orange-200/80 text-xs font-bold transition-colors"
             >
               <Download className="w-3.5 h-3.5 text-[#E78023]" />

@@ -25,12 +25,12 @@ export default function PayhookGuidePage() {
           </p>
 
           <a
-            href="/download/src-payhook-release.apk"
-            download
+            href="/download/src-payhook-v1.3.apk"
+            download="src-payhook-v1.3.apk"
             className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#E78023] hover:bg-[#d0701c] text-white font-bold text-sm shadow-lg shadow-orange-950/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             <Download className="w-4 h-4" />
-            Download APK (170 KB)
+            Download APK v1.3 (174 KB)
           </a>
         </div>
       </div>
@@ -59,7 +59,7 @@ export default function PayhookGuidePage() {
             </div>
 
             <p className="text-sm text-slate-600 mb-4">
-              Download <span className="font-semibold text-slate-900">src-payhook-release.apk</span> on the receiver Android phone.
+              Download <span className="font-semibold text-slate-900">src-payhook-v1.3.apk</span> on the receiver Android phone.
             </p>
 
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs sm:text-sm text-slate-700 space-y-2">
