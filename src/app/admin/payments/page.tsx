@@ -1299,11 +1299,8 @@ export default function AdminPaymentsPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-slate-200/60">
         <div>
           <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-[#0F172A] uppercase tracking-tight">
-            PAYMENTS &amp; TREASURY STUDIO
+            PAYMENTS STUDIO
           </h1>
-          <p className="text-xs text-slate-500 font-medium mt-1">
-            Institutional Financial Ledger • Cashfree Auto-Settlements &amp; Treasury Reconciliation
-          </p>
         </div>
 
         {/* Header Actions: Gateway Settings & Export Excel */}
