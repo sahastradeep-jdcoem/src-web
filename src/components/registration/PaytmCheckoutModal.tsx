@@ -87,6 +87,7 @@ export function PaytmCheckoutModal({
   const [secondsRemaining, setSecondsRemaining] = useState<number>(calculateSecondsRemaining);
 
   useEffect(() => {
+    if (!isOpen) return;
     setSecondsRemaining(calculateSecondsRemaining());
     const interval = setInterval(() => {
       setSecondsRemaining((prev) => {
@@ -99,7 +100,7 @@ export function PaytmCheckoutModal({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [paytmCheckoutData?.orderId, paytmCheckoutData?.expiresAt]);
+  }, [isOpen, paytmCheckoutData?.orderId, paytmCheckoutData?.expiresAt]);
 
   const formatTimer = (totalSeconds: number) => {
     const mins = Math.floor(totalSeconds / 60);
@@ -169,12 +170,13 @@ export function PaytmCheckoutModal({
   // 30-Second live auto-detection window
   const [autoWindowSeconds, setAutoWindowSeconds] = useState(30);
   useEffect(() => {
+    if (!isOpen) return;
     setAutoWindowSeconds(30);
     const timer = setInterval(() => {
       setAutoWindowSeconds((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
     return () => clearInterval(timer);
-  }, [paytmCheckoutData?.orderId]);
+  }, [isOpen, paytmCheckoutData?.orderId]);
 
   // 1-Tap Clipboard paste UTR handler
   const [pastedFeedback, setPastedFeedback] = useState(false);

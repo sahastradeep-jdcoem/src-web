@@ -1087,7 +1087,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
   // Hands-Free Auto-Detection: Listen for incoming SRC PayHook webhook payment confirmation
   useEffect(() => {
-    if (!paytmCheckoutData?.orderId) {
+    if (!paytmCheckoutData?.orderId || isPaymentInstructionsOpen) {
       setIsAutoDetectingPayment(false);
       return;
     }
@@ -1155,7 +1155,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       if (unsubscribeSnapshot) unsubscribeSnapshot();
       clearInterval(pollInterval);
     };
-  }, [paytmCheckoutData?.orderId]);
+  }, [paytmCheckoutData?.orderId, isPaymentInstructionsOpen]);
 
   const handleConfirmRegistration = async () => {
     if (isSubmitting) return;
@@ -3109,8 +3109,24 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             setIsPaymentInstructionsOpen(false);
             setPaytmCheckoutData(null);
           }}
-          onProceed={() => {
+          onProceed={async () => {
+            const newExpiryIso = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+            setPaytmCheckoutData((prev) => (prev ? { ...prev, expiresAt: newExpiryIso } : null));
             setIsPaymentInstructionsOpen(false);
+
+            if (paytmCheckoutData?.orderId) {
+              try {
+                const { db } = await import("@/lib/firebase/config");
+                const { doc, updateDoc } = await import("firebase/firestore");
+                if (db) {
+                  updateDoc(doc(db, "active_checkout_sessions", paytmCheckoutData.orderId), {
+                    expiresAt: newExpiryIso,
+                  }).catch(() => {});
+                }
+              } catch (e) {
+                // Non-blocking
+              }
+            }
           }}
           formattedAmount={paytmCheckoutData.formattedAmount}
           eventName={event.name}
@@ -3118,9 +3134,9 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       )}
 
       {/* Modal: Paytm for Business Dynamic UPI Checkout */}
-      {paytmCheckoutData && (
+      {paytmCheckoutData && !isPaymentInstructionsOpen && (
         <PaytmCheckoutModal
-          isOpen={Boolean(paytmCheckoutData) && !isPaymentInstructionsOpen}
+          isOpen={true}
           onClose={() => {
             if (!isVerifyingPaytm && !isRegeneratingQR) setPaytmCheckoutData(null);
           }}
