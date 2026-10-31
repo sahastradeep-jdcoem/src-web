@@ -52,7 +52,7 @@ export function PayhookGuideModal({ isOpen, onClose }: PayhookGuideModalProps) {
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-bold">SRC PayHook Setup &amp; Operator Guide</h2>
                 <span className="text-[10px] font-bold bg-[#E78023] px-2 py-0.5 rounded-full uppercase tracking-wider">
-                  Internal v1.3
+                  Internal v1.4
                 </span>
               </div>
               <p className="text-xs text-slate-300 mt-0.5">
@@ -83,15 +83,15 @@ export function PayhookGuideModal({ isOpen, onClose }: PayhookGuideModalProps) {
           <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-200">
             <div>
               <div className="font-bold text-slate-900 text-sm">Download Native App</div>
-              <div className="text-xs text-slate-500 font-mono">src-payhook-v1.3.apk (174 KB • Signed Production)</div>
+              <div className="text-xs text-slate-500 font-mono">src-payhook-v1.4.apk (174 KB • Signed Production)</div>
             </div>
             <a
-              href="/download/src-payhook-v1.3.apk"
-              download="src-payhook-v1.3.apk"
+              href="/download/src-payhook-v1.4.apk"
+              download="src-payhook-v1.4.apk"
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#E78023] hover:bg-[#d0701c] text-white font-bold text-xs shadow-md shadow-orange-950/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               <Download className="w-4 h-4" />
-              Download APK v1.3
+              Download APK v1.4
             </a>
           </div>
 
@@ -102,7 +102,7 @@ export function PayhookGuideModal({ isOpen, onClose }: PayhookGuideModalProps) {
               <h3 className="font-bold text-slate-900">Install APK &amp; Play Protect Bypass</h3>
             </div>
             <p className="text-xs text-slate-600">
-              Download <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-800 font-bold">src-payhook-v1.3.apk</code> directly onto the organizer phone.
+              Download <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-800 font-bold">src-payhook-v1.4.apk</code> directly onto the organizer phone.
             </p>
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 space-y-1.5">
               <div className="font-semibold text-slate-800 flex items-center gap-1.5">
