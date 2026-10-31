@@ -274,7 +274,7 @@ export default function AdminPaymentsPage() {
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(getStoredPaymentConfig());
 
   // Real-time verified UPI ledger map for instant reconciliation
-  const [verifiedUpiMap, setVerifiedUpiMap] = useState<Map<string, { utr: string; amount: number; status: string; receivedAt?: string; payerName?: string }>>(new Map());
+  const [verifiedUpiMap, setVerifiedUpiMap] = useState<Map<string, { utr: string; amount: number; status: string; receivedAt?: string; payerName?: string; matchedOrderId?: string; matchedRegistrationId?: string }>>(new Map());
 
   // 1. Initial Load & Subscriptions
   useEffect(() => {
@@ -466,7 +466,7 @@ export default function AdminPaymentsPage() {
         if (db) {
           const q = query(collection(db, "verified_upi_payments"), orderBy("receivedAt", "desc"), limit(150));
           unsub = onSnapshot(q, (snap) => {
-            const map = new Map<string, { utr: string; amount: number; status: string; receivedAt?: string; payerName?: string }>();
+            const map = new Map<string, { utr: string; amount: number; status: string; receivedAt?: string; payerName?: string; matchedOrderId?: string; matchedRegistrationId?: string }>();
             snap.forEach((d) => {
               const data = d.data();
               if (data?.utr) {
@@ -476,6 +476,8 @@ export default function AdminPaymentsPage() {
                   status: data.status || "UNCLAIMED",
                   receivedAt: data.receivedAt,
                   payerName: data.payerName,
+                  matchedOrderId: data.matchedOrderId,
+                  matchedRegistrationId: data.matchedRegistrationId,
                 });
               }
             });
@@ -2068,24 +2070,70 @@ export default function AdminPaymentsPage() {
                             )}
                           </button>
                         </div>
-                        {r.paymentId && (
-                          <div className="flex items-center gap-1 text-[11px] font-mono text-slate-500">
-                            <span>UTR:</span>
-                            <span className="font-semibold text-slate-700">{r.paymentId}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleCopy(r.paymentId!, `utr-${r.id}`)}
-                              title="Copy UTR"
-                              className="p-0.5 rounded text-slate-400 hover:text-slate-700 cursor-pointer"
-                            >
-                              {copiedUtr === `utr-${r.id}` ? (
-                                <Check className="w-2.5 h-2.5 text-emerald-600" />
-                              ) : (
-                                <Copy className="w-2.5 h-2.5" />
-                              )}
-                            </button>
-                          </div>
-                        )}
+                        {(() => {
+                          const isSynth = r.paymentId?.startsWith("AUTO-PTM-");
+                          const regAmt = Number(r.amountPaid || 0);
+                          const realBankMatch = isSynth
+                            ? Array.from(verifiedUpiMap.values()).find((v) => {
+                                if (v.utr.startsWith("AUTO-PTM-") || !/^\d{12}$/.test(v.utr)) return false;
+                                if (v.matchedRegistrationId === r.id || (r.orderId && v.matchedOrderId === r.orderId)) return true;
+                                const isSameAmt = Math.abs(v.amount - regAmt) < 0.005;
+                                const hasMicroPaisa = Math.round(regAmt * 100) % 100 !== 0;
+                                return isSameAmt && hasMicroPaisa;
+                              })
+                            : undefined;
+
+                          if (realBankMatch) {
+                            return (
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-1.5 text-[11px] font-mono text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md w-fit">
+                                  <span>UTR:</span>
+                                  <span className="font-bold">{realBankMatch.utr}</span>
+                                  <span className="text-[9px] font-bold bg-emerald-600 text-white px-1 rounded-sm uppercase tracking-wider font-sans">
+                                    BANK SMS
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopy(realBankMatch.utr, `utr-${r.id}`)}
+                                    title="Copy Bank UTR"
+                                    className="p-0.5 rounded text-emerald-700 hover:text-emerald-950 cursor-pointer"
+                                  >
+                                    {copiedUtr === `utr-${r.id}` ? (
+                                      <Check className="w-2.5 h-2.5 text-emerald-700" />
+                                    ) : (
+                                      <Copy className="w-2.5 h-2.5" />
+                                    )}
+                                  </button>
+                                </div>
+                                <div className="text-[10px] text-slate-400 font-mono">
+                                  Replaced: <span className="line-through">{r.paymentId}</span>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          if (r.paymentId) {
+                            return (
+                              <div className="flex items-center gap-1 text-[11px] font-mono text-slate-500">
+                                <span>UTR:</span>
+                                <span className="font-semibold text-slate-700">{r.paymentId}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopy(r.paymentId!, `utr-${r.id}`)}
+                                  title="Copy UTR"
+                                  className="p-0.5 rounded text-slate-400 hover:text-slate-700 cursor-pointer"
+                                >
+                                  {copiedUtr === `utr-${r.id}` ? (
+                                    <Check className="w-2.5 h-2.5 text-emerald-600" />
+                                  ) : (
+                                    <Copy className="w-2.5 h-2.5" />
+                                  )}
+                                </button>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
                         <div className="text-[10px] text-slate-400">
                           {r.paidAt ? new Date(r.paidAt).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }) : (r.registeredAt ? new Date(r.registeredAt).toLocaleDateString("en-IN") : "N/A")}
                         </div>
