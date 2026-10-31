@@ -36,6 +36,8 @@ import { PayhookGuideModal } from "./PayhookGuideModal";
 export interface WebhookLogItem {
   id: string;
   receivedAt: string;
+  transactionTimestamp?: string | null;
+  notificationTimestamp?: number | null;
   combinedText: string;
   extractedUtr?: string;
   extractedAmount?: number;
@@ -48,6 +50,70 @@ export interface WebhookLogItem {
   status: "TEST_PING" | "MATCHED" | "UNCLAIMED" | string;
   isDuplicate?: boolean;
   burstCount?: number;
+}
+
+/**
+ * Extracts or parses transaction timestamp directly from notification content text
+ * e.g. "credited with INR 2.01 on 31/10/26 19:52:00" -> exact epoch ms
+ */
+function parseNotificationContentTimestamp(log: WebhookLogItem): number {
+  if (log.transactionTimestamp) {
+    const t = new Date(log.transactionTimestamp).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  if (log.notificationTimestamp && Number(log.notificationTimestamp) > 0) {
+    return Number(log.notificationTimestamp);
+  }
+
+  // Fallback: parse transaction timestamp from notification text content
+  const text = log.combinedText || "";
+  const dateMatch = text.match(/(?:on\s+)?(\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b)/i);
+  const timeMatch = text.match(/(?:at\s+)?(\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM|am|pm)?\b)/i);
+
+  if (dateMatch || timeMatch) {
+    try {
+      const base = new Date(log.receivedAt);
+      let year = base.getFullYear();
+      let month = base.getMonth();
+      let day = base.getDate();
+      let hours = base.getHours();
+      let minutes = base.getMinutes();
+      let seconds = base.getSeconds();
+
+      if (dateMatch && dateMatch[1]) {
+        const parts = dateMatch[1].split(/[/-]/);
+        if (parts.length === 3) {
+          day = parseInt(parts[0], 10);
+          month = parseInt(parts[1], 10) - 1;
+          const y = parseInt(parts[2], 10);
+          year = y < 100 ? (2000 + y) : y;
+        }
+      }
+
+      if (timeMatch && timeMatch[1]) {
+        const tStr = timeMatch[1].trim();
+        const isPm = /pm/i.test(tStr);
+        const isAm = /am/i.test(tStr);
+        const numPart = tStr.replace(/[^\d:]/g, "");
+        const tParts = numPart.split(":");
+        if (tParts.length >= 2) {
+          let h = parseInt(tParts[0], 10);
+          minutes = parseInt(tParts[1], 10);
+          seconds = tParts.length >= 3 ? parseInt(tParts[2], 10) : 0;
+          if (isPm && h < 12) h += 12;
+          if (isAm && h === 12) h = 0;
+          hours = h;
+        }
+      }
+
+      const parsed = new Date(year, month, day, hours, minutes, seconds);
+      if (!isNaN(parsed.getTime())) {
+        return parsed.getTime();
+      }
+    } catch {}
+  }
+
+  return new Date(log.receivedAt).getTime();
 }
 
 interface PayhookSignalsSectionProps {
@@ -79,27 +145,35 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
         continue;
       }
 
-      const logTime = new Date(log.receivedAt).getTime();
+      const logContentTime = parseNotificationContentTimestamp(log);
 
       // Check if there is an existing group matching:
-      // 1. Same explicit UTR
-      // 2. OR same micro-paisa amount (fractional paise provides 1:1 mathematical identity!)
-      // 3. OR same round amount within a 90-second burst window
+      // 1. Same explicit 12-digit UTR (always same payment)
+      // 2. OR same matched order ID (always same transaction session)
+      // 3. OR same amount AND parsed content timestamps within 180s burst window
       const existing = result.find((r) => {
         if (!r.extractedAmount || r.status === "TEST_PING") return false;
-        if (r.extractedUtr && log.extractedUtr && r.extractedUtr === log.extractedUtr) return true;
 
-        const sameAmount = Math.abs((r.extractedAmount || 0) - (log.extractedAmount || 0)) < 0.005;
-        if (!sameAmount) return false;
-
-        const hasFractionalPaise = Math.round((log.extractedAmount || 0) * 100) % 100 !== 0;
-        if (hasFractionalPaise) {
-          // Mathematical 1:1 Identity: Same micro-paisa amount belongs to the exact same student payment!
+        // 1. Same explicit 12-digit UTR
+        if (r.extractedUtr && log.extractedUtr && r.extractedUtr === log.extractedUtr) {
           return true;
         }
 
-        const rTime = new Date(r.receivedAt).getTime();
-        const withinBurstWindow = Math.abs(rTime - logTime) <= 90 * 1000;
+        // 2. Same matched Order ID
+        if (r.matchedOrderId && log.matchedOrderId && r.matchedOrderId === log.matchedOrderId) {
+          return true;
+        }
+
+        // 3. Exact same amount
+        const sameAmount = Math.abs((r.extractedAmount || 0) - (log.extractedAmount || 0)) < 0.005;
+        if (!sameAmount) return false;
+
+        // 4. Strict Temporal Content-Timestamp Burst Window (<= 180 seconds):
+        // Two notifications for the same transaction (e.g. app notification + bank SMS)
+        // have timestamps within 1-2 minutes of each other.
+        // Separate payments hours apart (even with identical fractional paise) MUST NEVER MERGE!
+        const rContentTime = parseNotificationContentTimestamp(r);
+        const withinBurstWindow = Math.abs(rContentTime - logContentTime) <= 180 * 1000;
         return withinBurstWindow;
       });
 
@@ -124,7 +198,8 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
         }
 
         // Keep the latest timestamp
-        if (logTime > new Date(existing.receivedAt).getTime()) {
+        const currentLogReceivedMs = new Date(log.receivedAt).getTime();
+        if (currentLogReceivedMs > new Date(existing.receivedAt).getTime()) {
           existing.receivedAt = log.receivedAt;
         }
       } else {
@@ -391,12 +466,12 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
             </button>
 
             <a
-              href="/download/src-payhook-v1.4.apk"
-              download="src-payhook-v1.4.apk"
+              href="/download/src-payhook-v1.5.apk"
+              download="src-payhook-v1.5.apk"
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#E78023] border border-orange-200/80 text-xs font-bold transition-colors"
             >
               <Download className="w-3.5 h-3.5 text-[#E78023]" />
-              <span>APK v1.4</span>
+              <span>APK v1.5</span>
             </a>
           </div>
         </div>

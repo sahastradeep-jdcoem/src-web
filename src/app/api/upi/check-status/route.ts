@@ -59,6 +59,20 @@ export async function GET(req: NextRequest) {
             }
 
             if (data?.status === "EXPIRED") {
+              // Check if registration was completed or auto-revived by delayed webhook
+              try {
+                const regCheck = await getDocs(query(collection(db, "registrations"), where("orderId", "==", orderId)));
+                if (!regCheck.empty && regCheck.docs[0].data().paymentStatus === "PAID") {
+                  const r = regCheck.docs[0].data();
+                  return NextResponse.json({
+                    status: "PAID",
+                    orderId,
+                    utr: r.paymentId || r.paymentDetails?.utr,
+                    amount: r.amountPaid || data.amount,
+                    paidAt: r.paidAt || data.paidAt,
+                  });
+                }
+              } catch {}
               return NextResponse.json({ status: "EXPIRED", orderId });
             }
 

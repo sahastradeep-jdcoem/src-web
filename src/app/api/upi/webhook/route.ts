@@ -151,15 +151,74 @@ function isNameCompatible(senderName: string | null, candidateName: string | nul
 }
 
 /**
- * Generates a deterministic deduplication UTR for Paytm/UPI notifications that lack an explicit 12-digit UTR.
- * Normalizes amount, sender, and 10-minute time window so duplicate bursts of the exact same payment produce the identical UTR.
+ * Helper to extract transaction date & time from notification text content
+ * e.g. "credited with INR 2.01 on 31/10/26 from HARSH" -> 2026-10-31
+ * e.g. "Paid at 09:30 PM, 31 Oct 2026"
+ * e.g. "on 31/10/26 19:52:00"
  */
-function generateDeterministicSyntheticUtr(sender: string, amount: number, text: string): string {
+function extractTimestampFromNotificationContent(text: string, fallbackEpochMs?: number): Date {
+  const defaultDate = fallbackEpochMs && fallbackEpochMs > 0 ? new Date(fallbackEpochMs) : new Date();
+  if (!text) return defaultDate;
+
+  try {
+    // 1. Look for Date: DD/MM/YY or DD/MM/YYYY or DD-MM-YYYY or DD-MMM-YYYY
+    const dateMatch = text.match(/(?:on\s+)?(\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b)/i);
+    // 2. Look for Time: HH:MM:SS or HH:MM AM/PM
+    const timeMatch = text.match(/(?:at\s+)?(\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM|am|pm)?\b)/i);
+
+    let year = defaultDate.getFullYear();
+    let month = defaultDate.getMonth();
+    let day = defaultDate.getDate();
+    let hours = defaultDate.getHours();
+    let minutes = defaultDate.getMinutes();
+    let seconds = defaultDate.getSeconds();
+
+    if (dateMatch && dateMatch[1]) {
+      const parts = dateMatch[1].split(/[/-]/);
+      if (parts.length === 3) {
+        day = parseInt(parts[0], 10);
+        month = parseInt(parts[1], 10) - 1;
+        const y = parseInt(parts[2], 10);
+        year = y < 100 ? (2000 + y) : y;
+      }
+    }
+
+    if (timeMatch && timeMatch[1]) {
+      const tStr = timeMatch[1].trim();
+      const isPm = /pm/i.test(tStr);
+      const isAm = /am/i.test(tStr);
+      const numPart = tStr.replace(/[^\d:]/g, "");
+      const tParts = numPart.split(":");
+      if (tParts.length >= 2) {
+        let h = parseInt(tParts[0], 10);
+        minutes = parseInt(tParts[1], 10);
+        seconds = tParts.length >= 3 ? parseInt(tParts[2], 10) : 0;
+        if (isPm && h < 12) h += 12;
+        if (isAm && h === 12) h = 0;
+        hours = h;
+      }
+    }
+
+    const parsed = new Date(year, month, day, hours, minutes, seconds);
+    if (!isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  } catch {}
+
+  return defaultDate;
+}
+
+/**
+ * Generates a deterministic deduplication UTR for Paytm/UPI notifications that lack an explicit 12-digit UTR.
+ * Normalizes amount, sender, and 3-minute transaction time window so duplicate bursts of the exact same payment produce the identical UTR.
+ */
+function generateDeterministicSyntheticUtr(sender: string, amount: number, text: string, transactionTimeMs?: number): string {
   const cleanAmount = (amount || 0).toFixed(2);
   const cleanSender = (sender || "").toLowerCase().replace(/[^a-z0-9]/g, "");
   
-  // 10-minute sliding window (any re-post within 10 minutes gets the exact same UTR)
-  const timeBucket = Math.floor(Date.now() / (10 * 60 * 1000));
+  // 3-minute sliding window based on actual transaction time
+  const refTime = transactionTimeMs && transactionTimeMs > 0 ? transactionTimeMs : Date.now();
+  const timeBucket = Math.floor(refTime / (3 * 60 * 1000));
   const rawKey = `${cleanAmount}_${cleanSender || "direct"}_${timeBucket}`;
   const hash = createHash("sha256").update(rawKey).digest("hex").slice(0, 10).toUpperCase();
   return `AUTO-PTM-${hash}`;
@@ -416,6 +475,9 @@ export async function POST(req: NextRequest) {
     }
 
     const now = new Date().toISOString();
+    const rawPostTime = Number(rawBody.postTime || rawBody.notificationTimestamp || 0);
+    const contentDate = extractTimestampFromNotificationContent(combinedText, rawPostTime > 0 ? rawPostTime : undefined);
+    const transactionTimestamp = contentDate.toISOString();
 
     // If neither amount nor UTR can be detected: handle as connectivity test/ping
     if ((!utr || !/^\d{12}$/.test(utr)) && (!amount || amount <= 0)) {
@@ -426,6 +488,8 @@ export async function POST(req: NextRequest) {
           await setDoc(doc(db, "upi_webhook_logs", logId), {
             id: logId,
             receivedAt: now,
+            transactionTimestamp,
+            notificationTimestamp: rawPostTime || contentDate.getTime(),
             combinedText: (combinedText || trimmedText || "Connectivity Test Ping").slice(0, 500),
             extractedUtr: "TEST_PING",
             extractedAmount: 0,
@@ -447,11 +511,11 @@ export async function POST(req: NextRequest) {
     }
 
     // If UTR is missing from the notification banner (common in Paytm for Business push notifications),
-    // generate a deterministic deduplication UTR based on amount, sender, text, and 10-minute time window.
+    // generate a deterministic deduplication UTR based on amount, sender, text, and transaction time window.
     const extractedSender = extractSenderName(combinedText) || sender;
     const isSyntheticUtr = !utr || !/^\d{12}$/.test(utr);
     if (isSyntheticUtr) {
-      utr = generateDeterministicSyntheticUtr(extractedSender, amount, combinedText);
+      utr = generateDeterministicSyntheticUtr(extractedSender, amount, combinedText, contentDate.getTime());
     }
 
     // 3. Save to verified_upi_payments ledger & match active sessions / registrations
@@ -748,13 +812,62 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Tier 2B: Delayed Offline Backlog Revival:
+      // If the phone was offline or switched off during checkout, the student's 5-minute session expired.
+      // Now that the phone sent the delayed signal, revive the expired session to COMPLETED and issue the pass!
+      if (!matchedOrderId && amount > 0) {
+        try {
+          const expiredSessionsQuery = query(
+            collection(db, "active_checkout_sessions"),
+            where("status", "==", "EXPIRED")
+          );
+          const expiredSnap = await getDocs(expiredSessionsQuery);
+          if (!expiredSnap.empty) {
+            const allExpired = expiredSnap.docs.map(d => ({ ref: d.ref, id: d.id, data: d.data() }));
+
+            // Filter expired sessions created within last 24 hours with matching amount
+            const matchingExpired = allExpired.filter(d => {
+              const expectedAmt = Number(d.data.amount) || 0;
+              if (Math.abs(expectedAmt - Number(amount)) >= 0.005) return false;
+              const cTime = new Date(d.data.createdAt || 0).getTime();
+              return (Date.now() - cTime) < 24 * 60 * 60 * 1000;
+            });
+
+            if (matchingExpired.length > 0) {
+              // Sort newest first
+              matchingExpired.sort((a, b) => new Date(b.data.createdAt || 0).getTime() - new Date(a.data.createdAt || 0).getTime());
+              const recovered = matchingExpired[0];
+              matchedOrderId = recovered.id;
+              matchedStudentName = recovered.data.participantName || recovered.data.leaderName || recovered.data.email || "Student";
+              if (extractedSender && !isNameCompatible(extractedSender, matchedStudentName)) {
+                isFriendPayment = true;
+                payerName = extractedSender;
+              }
+              await setDoc(doc(db, "active_checkout_sessions", recovered.id), {
+                status: "COMPLETED",
+                utr,
+                receivedAmount: amount,
+                paidAt: now,
+                transactionTimestamp,
+                rawNotification: combinedText,
+                payerName: payerName || null,
+                isFriendPayment: Boolean(isFriendPayment),
+                recoveredFromExpired: true,
+              }, { merge: true });
+            }
+          }
+        } catch (expReviveErr) {
+          console.warn("Notice: expired session revival warning:", expReviveErr);
+        }
+      }
+
       // Secondary Deduplication & Bank SMS UTR Upgrade Check:
-      // Did a session or registration for this exact transaction complete with a synthetic UTR?
+      // Did a session or registration for this exact transaction complete with a synthetic UTR within the burst window?
       if (!matchedOrderId && amount > 0) {
         try {
           let matchedCompletedData: any = null;
 
-          // Check 1: Completed active checkout sessions
+          // Check 1: Completed active checkout sessions (Strict <= 180s burst window or exact UTR match)
           const completedQuery = query(
             collection(db, "active_checkout_sessions"),
             where("status", "==", "COMPLETED")
@@ -766,6 +879,17 @@ export async function POST(req: NextRequest) {
               const data = d.data();
               const expectedAmt = Number(data.amount) || 0;
               if (Math.abs(expectedAmt - Number(amount)) >= 0.005) return false;
+
+              // Exact explicit UTR match is always the same payment
+              if (data.utr && utr && data.utr === utr) return true;
+
+              // Temporal Content-Timestamp Boundary (<= 180s)
+              const sessionTimeMs = new Date(data.transactionTimestamp || data.paidAt || data.createdAt || 0).getTime();
+              const incomingTimeMs = contentDate.getTime();
+              if (Math.abs(incomingTimeMs - sessionTimeMs) > 180 * 1000) {
+                return false; // Separate payment hours apart; never absorb!
+              }
+
               // If incoming has real UTR and session already has a different real UTR, don't collide
               if (!isSyntheticUtr && data.utr && !data.utr.startsWith("AUTO-PTM-") && data.utr !== utr) {
                 return false;
@@ -795,6 +919,14 @@ export async function POST(req: NextRequest) {
                 const data = d.data();
                 const expectedAmt = Number(data.amountPaid || data.paymentDetails?.amount || 0);
                 if (Math.abs(expectedAmt - Number(amount)) >= 0.005) return false;
+
+                // Temporal Content-Timestamp Boundary (<= 180s)
+                const regTimeMs = new Date(data.paidAt || data.registeredAt || data.createdAt || 0).getTime();
+                const incomingTimeMs = contentDate.getTime();
+                if (Math.abs(incomingTimeMs - regTimeMs) > 180 * 1000) {
+                  return false; // Do not absorb registrations from hours ago!
+                }
+
                 const regUtr = String(data.paymentId || data.paymentDetails?.utr || "");
                 // Must have been created with a synthetic UTR or lacking official bank UTR
                 return regUtr.startsWith("AUTO-PTM-") || data.paymentDetails?.syntheticUtr;
@@ -1107,6 +1239,8 @@ export async function POST(req: NextRequest) {
           payerName: payerName || null,
           isFriendPayment: Boolean(isFriendPayment),
           receivedAt: now,
+          transactionTimestamp,
+          notificationTimestamp: rawPostTime || contentDate.getTime(),
           matchedAt: isMatched ? now : null,
         }, { merge: true });
       } catch (ledgerErr) {
@@ -1124,6 +1258,8 @@ export async function POST(req: NextRequest) {
           id: logId,
           receivedAt: logSnap.exists() ? (logSnap.data()?.receivedAt || now) : now,
           lastReceivedAt: now,
+          transactionTimestamp,
+          notificationTimestamp: rawPostTime || contentDate.getTime(),
           combinedText: combinedText.slice(0, 500),
           extractedUtr: utr,
           extractedAmount: amount,
