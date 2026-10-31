@@ -28,6 +28,7 @@ import {
   FileSpreadsheet,
   AlertTriangle,
   Radio,
+  Zap,
   X
 } from "lucide-react";
 import { PayhookSignalsSection } from "@/components/admin/payments/PayhookSignalsSection";
@@ -272,6 +273,9 @@ export default function AdminPaymentsPage() {
   const [isSyncCashfreeOpen, setIsSyncCashfreeOpen] = useState(false);
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(getStoredPaymentConfig());
 
+  // Real-time verified UPI ledger map for instant reconciliation
+  const [verifiedUpiMap, setVerifiedUpiMap] = useState<Map<string, { utr: string; amount: number; status: string; receivedAt?: string; payerName?: string }>>(new Map());
+
   // 1. Initial Load & Subscriptions
   useEffect(() => {
     setPaymentConfig(getStoredPaymentConfig());
@@ -449,6 +453,43 @@ export default function AdminPaymentsPage() {
     return () => {
       unsubscribeSnapshot();
       window.removeEventListener("src_registrations_updated", handleLocalUpdate);
+    };
+  }, []);
+
+  // Dual-Subscription for verified incoming UPI payments ledger
+  useEffect(() => {
+    let unsub: (() => void) | null = null;
+    (async () => {
+      try {
+        const { db } = await import("@/lib/firebase/config");
+        const { collection, onSnapshot, query, limit, orderBy } = await import("firebase/firestore");
+        if (db) {
+          const q = query(collection(db, "verified_upi_payments"), orderBy("receivedAt", "desc"), limit(150));
+          unsub = onSnapshot(q, (snap) => {
+            const map = new Map<string, { utr: string; amount: number; status: string; receivedAt?: string; payerName?: string }>();
+            snap.forEach((d) => {
+              const data = d.data();
+              if (data?.utr) {
+                map.set(String(data.utr).trim(), {
+                  utr: String(data.utr).trim(),
+                  amount: Number(data.amount || 0),
+                  status: data.status || "UNCLAIMED",
+                  receivedAt: data.receivedAt,
+                  payerName: data.payerName,
+                });
+              }
+            });
+            setVerifiedUpiMap(map);
+          }, (err) => {
+            console.warn("Notice: verified_upi_payments subscription warning:", err);
+          });
+        }
+      } catch (e) {
+        console.warn("Notice: verified_upi_payments init error:", e);
+      }
+    })();
+    return () => {
+      if (unsub) unsub();
     };
   }, []);
 
@@ -670,6 +711,16 @@ export default function AdminPaymentsPage() {
     });
   }, [filteredByEvent, statusTab, searchQuery]);
 
+  // Registrations with Pending UTR that have a matching signal in verified_upi_payments
+  const pendingVerifiedMatches = useMemo(() => {
+    return filteredByEvent.filter(
+      (r) =>
+        (r.paymentStatus === "PENDING" || (r.status === "PENDING" && r.paymentStatus !== "PAID")) &&
+        r.paymentId &&
+        verifiedUpiMap.has(r.paymentId.trim())
+    );
+  }, [filteredByEvent, verifiedUpiMap]);
+
   // KPI Metrics Calculation (Strict Revenue & Refund Tracking)
   const kpiStats = useMemo(() => {
     // Gross revenue: all transactions that were paid (including those subsequently refunded)
@@ -870,6 +921,79 @@ export default function AdminPaymentsPage() {
     } catch (err) {
       console.error("Failed to approve payment:", err);
       alert("Error approving payment. Please check your connection.");
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  // Instant 1-Tap Auto-Reconciliation with Verified Bank Signal
+  const handle1TapAutoApprove = async (
+    targetRecord: RegistrationRecord,
+    verifiedPay: { utr: string; amount: number; payerName?: string }
+  ) => {
+    const docId = targetRecord.id;
+    const regTicketId = targetRecord.registrationId || targetRecord.id;
+    const finalUtr = verifiedPay.utr;
+    const nowIso = new Date().toISOString();
+
+    setIsApproving(true);
+    try {
+      await updateRegistrationPaymentStatus(docId, "PAID", "SRC Auto-Reconciliation (PayHook)");
+      if (regTicketId !== docId) {
+        await updateRegistrationPaymentStatus(regTicketId, "PAID", "SRC Auto-Reconciliation (PayHook)");
+      }
+
+      const { db } = await import("@/lib/firebase/config");
+      if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+        const { doc, updateDoc, setDoc } = await import("firebase/firestore");
+        try {
+          await updateDoc(doc(db, "registrations", docId), {
+            paymentStatus: "PAID",
+            status: "CONFIRMED",
+            paymentId: finalUtr,
+            paidAt: nowIso,
+            verifiedBy: "Paytm Auto-Gateway (SRC PayHook)",
+            verifiedAt: nowIso,
+            payerName: verifiedPay.payerName || null,
+          });
+        } catch (e) {
+          console.warn("Direct doc update warning:", e);
+        }
+
+        try {
+          await setDoc(doc(db, "verified_upi_payments", finalUtr), {
+            status: "MATCHED",
+            matchedRegistrationId: docId,
+            matchedOrderId: targetRecord.orderId || null,
+            matchedStudentName: targetRecord.participantName,
+            matchedAt: nowIso,
+          }, { merge: true });
+        } catch (e) {
+          console.warn("Verified payment update warning:", e);
+        }
+      }
+
+      setRegistrations((prev) =>
+        prev.map((r) =>
+          r.id === docId || r.registrationId === regTicketId
+            ? {
+                ...r,
+                paymentStatus: "PAID",
+                status: "CONFIRMED",
+                paymentId: finalUtr,
+                paidAt: nowIso,
+                verifiedBy: "Paytm Auto-Gateway (SRC PayHook)",
+                verifiedAt: nowIso,
+              }
+            : r
+        )
+      );
+
+      setFeedbackNotice(`Reconciled & Approved! Pass issued for ${targetRecord.participantName} (Verified UTR: ${finalUtr}).`);
+      setTimeout(() => setFeedbackNotice(null), 5000);
+    } catch (err) {
+      console.error("1-Tap Auto-Approve error:", err);
+      alert("Could not complete auto-approval. Please try manual approval.");
     } finally {
       setIsApproving(false);
     }
@@ -1819,9 +1943,47 @@ export default function AdminPaymentsPage() {
       {statusTab === "signals" ? (
         <PayhookSignalsSection userEmail={user?.email} />
       ) : (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+        <div className="space-y-4">
+          {pendingVerifiedMatches.length > 0 && (
+            <div className="p-4 rounded-3xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-emerald-500/10 border border-emerald-300/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <Zap className="w-5 h-5 text-amber-300 fill-amber-300" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                    <span>{pendingVerifiedMatches.length} Verified Bank Payment{pendingVerifiedMatches.length !== 1 ? "s" : ""} Awaiting Final Approval</span>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-mono">
+                      PayHook Verified
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-600 mt-0.5">
+                    Phone notifications arrived for: <strong>{pendingVerifiedMatches.map((m) => `${m.participantName} (₹${(m.amountPaid ?? 0).toFixed(2)})`).join(", ")}</strong>.
+                  </p>
+                </div>
+              </div>
+
+              <Button
+                size="sm"
+                onClick={async () => {
+                  for (const reg of pendingVerifiedMatches) {
+                    if (!reg.paymentId) continue;
+                    const vPay = verifiedUpiMap.get(reg.paymentId.trim());
+                    if (vPay) await handle1TapAutoApprove(reg, vPay);
+                  }
+                }}
+                isLoading={isApproving}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 h-auto shadow-xs shrink-0"
+              >
+                <Zap className="w-3.5 h-3.5 mr-1 text-amber-300 fill-amber-300" />
+                <span>Auto-Approve {pendingVerifiedMatches.length === 1 ? "Pass" : "All Passes"}</span>
+              </Button>
+            </div>
+          )}
+
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200/80 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
                 <th className="py-3.5 px-4">Order &amp; Reference</th>
@@ -1883,6 +2045,7 @@ export default function AdminPaymentsPage() {
                   const isPending = r.paymentStatus === "PENDING" || (r.status === "PENDING" && r.paymentStatus !== "PAID");
                   const isRefunded = r.refundStatus === "PROCESSED" || r.paymentStatus === "REFUNDED";
                   const isCancelled = r.status === "CANCELLED" || r.paymentStatus === "FAILED";
+                  const verifiedMatch = r.paymentId ? verifiedUpiMap.get(r.paymentId.trim()) : undefined;
 
                   return (
                     <tr key={r.id} className="hover:bg-slate-50/75 transition-colors">
@@ -1968,10 +2131,18 @@ export default function AdminPaymentsPage() {
                           </span>
                         )}
                         {isPending && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                            <Clock className="w-3 h-3 text-amber-600" />
-                            Pending UTR
-                          </span>
+                          <div className="space-y-1">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                              <Clock className="w-3 h-3 text-amber-600" />
+                              Pending UTR
+                            </span>
+                            {verifiedMatch && (
+                              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
+                                <Zap className="w-2.5 h-2.5 text-emerald-600" />
+                                <span>Signal Recvd (₹{verifiedMatch.amount.toFixed(2)})</span>
+                              </div>
+                            )}
+                          </div>
                         )}
                         {isRefunded && (
                           <div className="space-y-1">
@@ -2035,18 +2206,31 @@ export default function AdminPaymentsPage() {
 
                           {/* Approve (For Pending) */}
                           {isPending && (
-                            <Button
-                              onClick={() => {
-                                setApproveTargetRecord(r);
-                                setApproveUtrInput(r.paymentId || "");
-                              }}
-                              variant="primary"
-                              size="sm"
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] px-2.5 py-1 h-auto"
-                            >
-                              <Check className="w-3 h-3 mr-1" />
-                              <span>Approve</span>
-                            </Button>
+                            verifiedMatch ? (
+                              <Button
+                                onClick={() => handle1TapAutoApprove(r, verifiedMatch)}
+                                variant="primary"
+                                size="sm"
+                                isLoading={isApproving}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] px-2.5 py-1 h-auto shadow-xs shrink-0"
+                              >
+                                <Zap className="w-3 h-3 mr-1 text-amber-300 fill-amber-300" />
+                                <span>Auto-Approve</span>
+                              </Button>
+                            ) : (
+                              <Button
+                                onClick={() => {
+                                  setApproveTargetRecord(r);
+                                  setApproveUtrInput(r.paymentId || "");
+                                }}
+                                variant="primary"
+                                size="sm"
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] px-2.5 py-1 h-auto"
+                              >
+                                <Check className="w-3 h-3 mr-1" />
+                                <span>Approve</span>
+                              </Button>
+                            )
                           )}
 
                           {/* Refund (For Paid records) */}
@@ -2110,7 +2294,8 @@ export default function AdminPaymentsPage() {
           </table>
         </div>
       </div>
-      )}
+    </div>
+    )}
 
       {/* ========================================================================= */}
       {/* 5. ACTION MODALS */}

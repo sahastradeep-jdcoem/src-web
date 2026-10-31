@@ -1050,6 +1050,22 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       if (verifyData.verified) {
         autoDetectCompletedRef.current = true;
         const targetPaymentStatus = (verifyData.paymentStatus as "PAID" | "PENDING") || "PENDING";
+        const targetRegId = pendingRegistrationDraftRef.current?.regId;
+
+        // Bridge manual UTR to checkout session so late-arriving webhook signals can instantly link
+        try {
+          const { db } = await import("@/lib/firebase/config");
+          const { doc, setDoc } = await import("firebase/firestore");
+          if (db && paytmCheckoutData?.orderId) {
+            await setDoc(doc(db, "active_checkout_sessions", paytmCheckoutData.orderId), {
+              submittedUtr: cleanedUtr,
+              registrationId: targetRegId || null,
+              status: targetPaymentStatus === "PAID" ? "COMPLETED" : "WAITING",
+            }, { merge: true });
+          }
+        } catch (e) {
+          console.warn("Notice: could not record submittedUtr on checkout session:", e);
+        }
 
         await completeRegistration({
           paymentStatus: targetPaymentStatus,
@@ -1104,7 +1120,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           unsubscribeSnapshot = onSnapshot(doc(db, "active_checkout_sessions", currentOrderId), (docSnap) => {
             if (docSnap.exists()) {
               const data = docSnap.data();
-              if (data?.status === "PAID" && !autoDetectCompletedRef.current) {
+              if ((data?.status === "PAID" || data?.status === "COMPLETED") && !autoDetectCompletedRef.current) {
                 handleAutoSuccess(data.utr || "");
               }
             }
@@ -1126,7 +1142,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         const res = await fetch(`/api/upi/check-status?orderId=${encodeURIComponent(currentOrderId)}`);
         if (res.ok) {
           const data = await res.json();
-          if (data?.status === "PAID" && !autoDetectCompletedRef.current) {
+          if ((data?.status === "PAID" || data?.status === "COMPLETED") && !autoDetectCompletedRef.current) {
             handleAutoSuccess(data.utr || "");
           }
         }

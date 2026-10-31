@@ -100,8 +100,8 @@ export async function GET(req: NextRequest) {
                     return false;
                   }
 
-                  // 4. Payment must have been received BEFORE session expiration + 60s grace
-                  if (expiresAtMs > 0 && paymentTime > expiresAtMs + 60000) {
+                  // 4. Payment must have been received within 30 minutes of session creation (protects against delayed bank alerts)
+                  if (sessionCreatedTime > 0 && paymentTime > sessionCreatedTime + 30 * 60 * 1000) {
                     return false;
                   }
 

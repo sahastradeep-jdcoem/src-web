@@ -144,7 +144,7 @@ service cloud.firestore {
         // Case 2: Verified via verified incoming UPI payments ledger
         (request.resource.data.paymentId != null &&
          exists(/databases/$(database)/documents/verified_upi_payments/$(request.resource.data.paymentId)) &&
-         get(/databases/$(database)/documents/verified_upi_payments/$(request.resource.data.paymentId)).data.status == 'MATCHED')
+         get(/databases/$(database)/documents/verified_upi_payments/$(request.resource.data.paymentId)).data.status in ['MATCHED', 'UNCLAIMED'])
       );
     }
 
@@ -210,7 +210,7 @@ service cloud.firestore {
       );
 
       // Registration updates:
-      // Allowed for privileged admins, treasurers, club owners, event coordinators (or signed-in users with a valid BT ID), or self-registered applicants without altering payment status
+      // Allowed for privileged admins, treasurers, club owners, event coordinators (or signed-in users with a valid BT ID), self-registered applicants without altering payment status, or verified paid registration
       allow update: if isPrivilegedAdmin() || hasRole('TREASURER') || isClubOwner() || isEventCoordinator() || (
         isSignedIn() && getUserBtId() != null
       ) || (
@@ -218,7 +218,7 @@ service cloud.firestore {
         request.auth.token.email != null &&
         resource.data.email == request.auth.token.email &&
         request.resource.data.paymentStatus == resource.data.paymentStatus
-      );
+      ) || isVerifiedPaidRegistration();
 
       allow delete: if isPrivilegedAdmin();
     }
@@ -237,7 +237,7 @@ service cloud.firestore {
         request.auth.token.email != null &&
         resource.data.email == request.auth.token.email &&
         request.resource.data.paymentStatus == resource.data.paymentStatus
-      );
+      ) || isVerifiedPaidRegistration();
       allow delete: if isPrivilegedAdmin();
     }
 

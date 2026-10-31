@@ -515,6 +515,33 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // If not matched by explicit order ID in notification text, check if any session submitted this exact UTR
+      if (!matchedOrderId && utr) {
+        try {
+          const utrSessionQuery = query(
+            collection(db, "active_checkout_sessions"),
+            where("submittedUtr", "==", utr)
+          );
+          const utrSessionSnap = await getDocs(utrSessionQuery);
+          if (!utrSessionSnap.empty) {
+            const sessDoc = utrSessionSnap.docs[0];
+            matchedOrderId = sessDoc.id;
+            matchedStudentName = sessDoc.data().participantName || sessDoc.data().leaderName || sessDoc.data().email || "Student";
+            await setDoc(sessDoc.ref, {
+              status: "COMPLETED",
+              utr,
+              receivedAmount: amount,
+              paidAt: now,
+              rawNotification: combinedText,
+              payerName: payerName || null,
+              isFriendPayment: Boolean(isFriendPayment),
+            }, { merge: true });
+          }
+        } catch (utrSessErr) {
+          console.warn("Notice: submittedUtr session lookup warning:", utrSessErr);
+        }
+      }
+
       // If not matched by explicit order ID, match by amount from recent WAITING sessions (within last 30 min)
       if (!matchedOrderId && amount > 0) {
         try {
@@ -562,7 +589,7 @@ export async function POST(req: NextRequest) {
               // TIER 2: UNIQUE MICRO-PAISA 1:1 MATHEMATICAL IDENTITY MATCH
               // Every active student checkout has a mathematically unique paisa offset (e.g. ₹50.02).
               // Even if a friend or parent paid ("Rohan Sharma" for "Athang Dusawar"),
-              // ₹50.02 belongs unambiguously to Athang within the active 5-minute window!
+              // ₹50.02 belongs unambiguously to Athang within the active 30-minute window!
               // ─────────────────────────────────────────────────────────────
               const exactPaisaCandidates = allWaiting
                 .filter((d) => {
@@ -629,15 +656,12 @@ export async function POST(req: NextRequest) {
               }
             }
             if (bestMatch) {
-              const expiresAtMs = bestMatch.data.expiresAt 
-                ? new Date(bestMatch.data.expiresAt).getTime() 
-                : (bestMatch.data.createdAt ? new Date(bestMatch.data.createdAt).getTime() + 5 * 60 * 1000 : 0);
-
-              // 60-second grace period for in-flight bank network notification delay
-              const isSessionExpired = expiresAtMs > 0 && (Date.now() > expiresAtMs + 60 * 1000);
+              const createdAtMs = bestMatch.data.createdAt ? new Date(bestMatch.data.createdAt).getTime() : 0;
+              // 30-minute grace window for delayed bank SMS notifications (never drop in-flight payments)
+              const isSessionExpired = createdAtMs > 0 && (Date.now() > createdAtMs + 30 * 60 * 1000);
 
               if (isSessionExpired) {
-                // Expired: Mark session as EXPIRED in Firestore and do not activate pass
+                // Expired past 30 minutes
                 await setDoc(doc(db, "active_checkout_sessions", bestMatch.id), {
                   status: "EXPIRED",
                   expiredAt: now,
@@ -668,40 +692,64 @@ export async function POST(req: NextRequest) {
       try {
         let matchingDoc: any = null;
 
-        // Query by paymentId (UTR)
-        if (!isSyntheticUtr) {
-          const regQuery = query(
-            collection(db, "registrations"),
-            where("paymentId", "==", utr)
-          );
-          let regSnap = await getDocs(regQuery);
-          if (!regSnap.empty) {
-            matchingDoc = regSnap.docs[0];
+        // Direct single-document lookup via session's registrationId (100% compliant with allow get: if true)
+        if (!matchingDoc && matchedOrderId) {
+          try {
+            const sessSnap = await getDoc(doc(db, "active_checkout_sessions", matchedOrderId));
+            if (sessSnap.exists()) {
+              const directRegId = sessSnap.data()?.registrationId;
+              if (directRegId) {
+                const directSnap = await getDoc(doc(db, "registrations", directRegId));
+                if (directSnap.exists()) {
+                  matchingDoc = directSnap;
+                }
+              }
+            }
+          } catch (sessRegErr) {
+            console.warn("Notice: direct session registration lookup warning:", sessRegErr);
           }
+        }
+
+        // Query by paymentId (UTR)
+        if (!matchingDoc && !isSyntheticUtr) {
+          try {
+            const regQuery = query(
+              collection(db, "registrations"),
+              where("paymentId", "==", utr)
+            );
+            let regSnap = await getDocs(regQuery);
+            if (!regSnap.empty) {
+              matchingDoc = regSnap.docs[0];
+            }
+          } catch {}
         }
 
         // Fallback: Query by matchedOrderId
         if (!matchingDoc && matchedOrderId) {
-          const orderRegQuery = query(
-            collection(db, "registrations"),
-            where("orderId", "==", matchedOrderId)
-          );
-          const orderSnap = await getDocs(orderRegQuery);
-          if (!orderSnap.empty) {
-            matchingDoc = orderSnap.docs[0];
-          }
+          try {
+            const orderRegQuery = query(
+              collection(db, "registrations"),
+              where("orderId", "==", matchedOrderId)
+            );
+            const orderSnap = await getDocs(orderRegQuery);
+            if (!orderSnap.empty) {
+              matchingDoc = orderSnap.docs[0];
+            }
+          } catch {}
         }
 
         // Fallback: Query by customAnswers.upiUtr
         if (!matchingDoc && !isSyntheticUtr) {
-          const customRegQuery = query(
-            collection(db, "registrations"),
-            where("customAnswers.upiUtr", "==", utr)
-          );
-          const customSnap = await getDocs(customRegQuery);
-          if (!customSnap.empty) {
-            matchingDoc = customSnap.docs[0];
-          }
+          try {
+            const customRegQuery = query(
+              collection(db, "registrations"),
+              where("customAnswers.upiUtr", "==", utr)
+            );
+            const customSnap = await getDocs(customRegQuery);
+            if (!customSnap.empty) {
+              matchingDoc = customSnap.docs[0];
+            }
+          } catch {}
         }
 
         if (matchingDoc && extractedSender) {
