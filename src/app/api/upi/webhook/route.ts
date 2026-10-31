@@ -168,10 +168,12 @@ function generateDeterministicSyntheticUtr(sender: string, amount: number, text:
 /**
  * Resolves user-friendly payment app name from Android package name or User-Agent
  */
-function resolveSourceAppName(packageName?: string | null, userAgent?: string | null): string {
+function resolveSourceAppName(packageName?: string | null, userAgent?: string | null, text?: string): string {
   const pkg = (packageName || "").toLowerCase().trim();
   const ua = (userAgent || "").toLowerCase().trim();
+  const t = (text || "").toLowerCase();
 
+  // 1. Direct package name detection
   if (pkg.includes("messaging") || pkg.includes("mms") || pkg.includes("sms") || ua.includes("messaging")) {
     return "Google Messages (SMS)";
   }
@@ -196,7 +198,22 @@ function resolveSourceAppName(packageName?: string | null, userAgent?: string | 
   if (ua.includes("macrodroid")) {
     return "MacroDroid";
   }
-  if (pkg.length > 0) {
+
+  // 2. Text heuristics fallback (essential when package is generic or notification header is in text)
+  if (t.includes("canbnk") || t.includes("canara") || t.includes("hdfc") || t.includes("sbi") || t.includes("icici") || t.includes("axis") || t.includes("acct xxx") || t.includes("dear customer")) {
+    return "Google Messages (SMS)";
+  }
+  if (t.includes("received on") || t.includes("received from") || t.includes("paytm") || t.includes("soundbox") || t.includes("auto-ptm")) {
+    return "Paytm for Business";
+  }
+  if (t.includes("phonepe") || t.includes("@ybl") || t.includes("@ibl")) {
+    return "PhonePe";
+  }
+  if (t.includes("gpay") || t.includes("google pay") || t.includes("@ok")) {
+    return "Google Pay";
+  }
+
+  if (pkg.length > 0 && pkg !== "in.srcjdcoem.payhook") {
     return pkg;
   }
   return "SRC PayHook";
@@ -438,7 +455,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Save to verified_upi_payments ledger & match active sessions / registrations
-    const sourceAppName = resolveSourceAppName(rawBody.packageName, req.headers.get("user-agent"));
+    const sourceAppName = resolveSourceAppName(rawBody.packageName, req.headers.get("user-agent"), combinedText);
     let isDuplicateNotification = false;
     let matchedRegistrationId: string | null = null;
     let matchedOrderId: string | null = null;
@@ -461,24 +478,35 @@ export async function POST(req: NextRequest) {
           const existingPayer = existingData?.payerName || payerName || null;
           const existingIsFriend = Boolean(existingData?.isFriendPayment ?? isFriendPayment);
 
-          // Log duplicate signal in audit feed without consuming another student's session or creating unclaimed payment!
+          // Update burst count on the primary signal document instead of creating duplicate rows
           try {
-            const logId = `SIG-${Date.now()}`;
-            await setDoc(doc(db, "upi_webhook_logs", logId), {
-              id: logId,
-              receivedAt: now,
-              combinedText: combinedText.slice(0, 500),
-              extractedUtr: utr,
-              extractedAmount: amount,
-              matchedOrderId: existingOrderId,
-              matchedRegistrationId: existingRegId,
-              matchedStudentName: existingStudent,
-              payerName: existingPayer,
-              isFriendPayment: existingIsFriend,
-              source: sourceAppName,
-              status: existingStatus,
-              isDuplicate: true,
-            });
+            const logId = utr ? (isSyntheticUtr ? utr : `UTR-${utr}`) : `SIG-${Date.now()}`;
+            const logRef = doc(db, "upi_webhook_logs", logId);
+            const logSnap = await getDoc(logRef);
+            if (logSnap.exists()) {
+              await setDoc(logRef, {
+                burstCount: (logSnap.data()?.burstCount || 1) + 1,
+                lastBurstAt: now,
+                lastReceivedAt: now,
+              }, { merge: true });
+            } else {
+              await setDoc(logRef, {
+                id: logId,
+                receivedAt: now,
+                combinedText: combinedText.slice(0, 500),
+                extractedUtr: utr,
+                extractedAmount: amount,
+                matchedOrderId: existingOrderId,
+                matchedRegistrationId: existingRegId,
+                matchedStudentName: existingStudent,
+                payerName: existingPayer,
+                isFriendPayment: existingIsFriend,
+                source: sourceAppName,
+                status: existingStatus,
+                isDuplicate: true,
+                burstCount: 2,
+              });
+            }
           } catch {}
 
           return NextResponse.json({
@@ -720,8 +748,8 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Secondary Deduplication Check: Did a session for this exact micro-paisa amount complete in the last 2 minutes?
-      // Catches re-posted notifications / bursts from Android without creating orphaned UNCLAIMED rows
+      // Secondary Deduplication & Bank SMS UTR Upgrade Check:
+      // Did a session for this exact micro-paisa amount complete in the last 20 minutes?
       if (!matchedOrderId && amount > 0) {
         try {
           const completedQuery = query(
@@ -735,7 +763,8 @@ export async function POST(req: NextRequest) {
               const expectedAmt = Number(data.amount) || 0;
               if (Math.abs(expectedAmt - Number(amount)) >= 0.005) return false;
               const paidAtMs = data.paidAt ? new Date(data.paidAt).getTime() : 0;
-              return paidAtMs > 0 && (Date.now() - paidAtMs < 2 * 60 * 1000);
+              // 20-minute sliding window for late-arriving bank SMS receipts
+              return paidAtMs > 0 && (Date.now() - paidAtMs < 20 * 60 * 1000);
             });
 
             if (recentMatch) {
@@ -743,7 +772,44 @@ export async function POST(req: NextRequest) {
               matchedOrderId = recentMatch.id;
               matchedStudentName = rData.participantName || rData.leaderName || "Student";
               matchedRegistrationId = rData.registrationId || null;
-              isDuplicateNotification = true;
+
+              // If this incoming notification is a genuine 12-digit Bank SMS UTR, upgrade the session and registration
+              if (!isSyntheticUtr && utr) {
+                try {
+                  // 1. Upgrade session with official bank UTR
+                  await setDoc(doc(db, "active_checkout_sessions", matchedOrderId), {
+                    bankUtr: utr,
+                    realUtr: utr,
+                    utr: utr,
+                    reconciledViaBankSms: true,
+                    bankSmsText: combinedText,
+                    reconciledAt: now,
+                  }, { merge: true });
+
+                  // 2. Upgrade registration with official bank UTR
+                  if (matchedRegistrationId) {
+                    await setDoc(doc(db, "registrations", matchedRegistrationId), {
+                      paymentId: utr,
+                      "paymentDetails.utr": utr,
+                      "paymentDetails.bankUtr": utr,
+                      "paymentDetails.reconciledFromBankSms": true,
+                      "paymentDetails.syntheticUtrReplaced": rData.utr || null,
+                    }, { merge: true });
+                  }
+
+                  // 3. Mark previous synthetic ledger entry as reconciled if present
+                  if (rData.utr && rData.utr !== utr) {
+                    await setDoc(doc(db, "verified_upi_payments", rData.utr), {
+                      reconciledToBankUtr: utr,
+                      note: `Reconciled with official Bank SMS UTR ${utr}`,
+                    }, { merge: true });
+                  }
+                } catch (reconcileErr) {
+                  console.warn("Notice: Bank SMS UTR reconciliation note:", reconcileErr);
+                }
+              } else {
+                isDuplicateNotification = true;
+              }
             }
           }
         } catch (recentErr) {
@@ -907,10 +973,15 @@ export async function POST(req: NextRequest) {
 
       // 3D. Save diagnostic audit entry in upi_webhook_logs
       try {
-        const logId = `SIG-${Date.now()}`;
-        await setDoc(doc(db, "upi_webhook_logs", logId), {
+        const logId = utr ? (isSyntheticUtr ? utr : `UTR-${utr}`) : `SIG-${Date.now()}`;
+        const logRef = doc(db, "upi_webhook_logs", logId);
+        const logSnap = await getDoc(logRef);
+        const prevBursts = logSnap.exists() ? (logSnap.data()?.burstCount || 1) : 0;
+
+        await setDoc(logRef, {
           id: logId,
-          receivedAt: now,
+          receivedAt: logSnap.exists() ? (logSnap.data()?.receivedAt || now) : now,
+          lastReceivedAt: now,
           combinedText: combinedText.slice(0, 500),
           extractedUtr: utr,
           extractedAmount: amount,
@@ -921,8 +992,9 @@ export async function POST(req: NextRequest) {
           isFriendPayment: Boolean(isFriendPayment),
           source: sourceAppName,
           status: isMatched ? "MATCHED" : "UNCLAIMED",
-          isDuplicate: isDuplicateNotification,
-        });
+          isDuplicate: isDuplicateNotification || prevBursts > 0,
+          burstCount: prevBursts + 1,
+        }, { merge: true });
       } catch (auditErr) {
         console.warn("Notice: upi_webhook_logs audit warning:", auditErr);
       }

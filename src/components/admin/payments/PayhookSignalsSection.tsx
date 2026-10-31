@@ -71,35 +71,64 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
   const displayedLogs = React.useMemo(() => {
     if (!groupDuplicates) return logs;
 
-    const seenUtrs = new Set<string>();
     const result: (WebhookLogItem & { burstCount?: number })[] = [];
 
     for (const log of logs) {
-      const utrKey = log.extractedUtr && log.extractedUtr !== "TEST_PING"
-        ? log.extractedUtr
-        : null;
-
-      if (!utrKey) {
+      if (log.status === "TEST_PING" || log.extractedUtr === "TEST_PING" || !log.extractedAmount) {
         result.push(log);
         continue;
       }
 
-      if (seenUtrs.has(utrKey)) {
-        const existing = result.find((r) => r.extractedUtr === utrKey);
-        if (existing) {
-          existing.burstCount = (existing.burstCount || 1) + 1;
+      const logTime = new Date(log.receivedAt).getTime();
+
+      // Check if there is an existing group matching either the same UTR OR the same amount within a 90-second burst window
+      const existing = result.find((r) => {
+        if (!r.extractedAmount || r.status === "TEST_PING") return false;
+        if (r.extractedUtr && log.extractedUtr && r.extractedUtr === log.extractedUtr) return true;
+
+        const rTime = new Date(r.receivedAt).getTime();
+        const sameAmount = Math.abs(r.extractedAmount - (log.extractedAmount || 0)) < 0.005;
+        const withinBurstWindow = Math.abs(rTime - logTime) <= 90 * 1000;
+        return sameAmount && withinBurstWindow;
+      });
+
+      if (existing) {
+        existing.burstCount = (existing.burstCount || 1) + (log.burstCount || 1);
+        // If this log was the matched one, ensure the grouped item shows MATCHED and preserves student info
+        if (log.status === "MATCHED" && existing.status !== "MATCHED") {
+          existing.status = "MATCHED";
+          existing.matchedOrderId = log.matchedOrderId;
+          existing.matchedRegistrationId = log.matchedRegistrationId;
+          existing.matchedStudentName = log.matchedStudentName;
+          if (log.extractedUtr) existing.extractedUtr = log.extractedUtr;
         }
       } else {
-        seenUtrs.add(utrKey);
-        result.push({ ...log, burstCount: 1 });
+        result.push({ ...log, burstCount: log.burstCount || 1 });
       }
     }
 
     return result;
   }, [logs, groupDuplicates]);
 
-  const renderSourceBadge = (source?: string) => {
-    const s = (source || "").toLowerCase();
+  const renderSourceBadge = (source?: string, combinedText?: string) => {
+    let s = (source || "").toLowerCase().trim();
+    const t = (combinedText || "").toLowerCase();
+
+    // If source is missing, undefined, or generic PayHook wrapper, infer from the actual notification text
+    if (!s || s === "src payhook" || s === "in.srcjdcoem.payhook") {
+      if (t.includes("canbnk") || t.includes("canara") || t.includes("hdfc") || t.includes("sbi") || t.includes("icici") || t.includes("axis") || t.includes("acct xxx") || t.includes("dear customer")) {
+        s = "messaging";
+      } else if (t.includes("received on") || t.includes("received from") || t.includes("paytm") || t.includes("soundbox") || t.includes("auto-ptm")) {
+        s = "paytm";
+      } else if (t.includes("phonepe") || t.includes("@ybl") || t.includes("@ibl")) {
+        s = "phonepe";
+      } else if (t.includes("gpay") || t.includes("google pay") || t.includes("@ok")) {
+        s = "gpay";
+      } else if (t.includes("truecaller")) {
+        s = "truecaller";
+      }
+    }
+
     if (s.includes("paytm")) {
       return (
         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-800 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-md">
@@ -532,7 +561,7 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
 
                       {/* Source */}
                       <td className="py-3 px-4 whitespace-nowrap">
-                        {renderSourceBadge(log.source)}
+                        {renderSourceBadge(log.source, log.combinedText)}
                       </td>
 
                       {/* Extracted Amount & UTR */}
@@ -630,7 +659,7 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
 
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Source:</span>
-                <p className="font-mono text-slate-800">{selectedLog.source || "in.srcjdcoem.payhook"}</p>
+                <div className="mt-0.5">{renderSourceBadge(selectedLog.source, selectedLog.combinedText)}</div>
               </div>
 
               {selectedLog.extractedUtr && (
