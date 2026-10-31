@@ -285,8 +285,11 @@ service cloud.firestore {
 
     // Verified incoming UPI payments ledger (from phone webhook / MacroDroid)
     match /verified_upi_payments/{utr} {
-      // Authenticated users and admins can read; prevents anonymous scraping of bank records
-      allow read: if isAuthenticated() || isPrivilegedAdmin();
+      // Single pass / transaction lookup permitted by exact UTR key
+      allow get: if true;
+
+      // Collection queries restricted to authenticated users & admins to prevent scraping
+      allow list: if isAuthenticated() || isPrivilegedAdmin();
 
       // Server routes connect via Client SDK without request.auth:
       // Must contain valid immutable ledger fields (utr, amount, receivedAt)

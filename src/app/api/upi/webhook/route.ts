@@ -420,50 +420,69 @@ export async function POST(req: NextRequest) {
       const paymentDocRef = doc(db, "verified_upi_payments", utr!);
 
       // IDEMPOTENCY CHECK: Did we already record & process this exact payment notification?
-      const existingPaymentSnap = await getDoc(paymentDocRef);
-      if (existingPaymentSnap.exists()) {
-        const existingData = existingPaymentSnap.data();
-        const existingStatus = existingData?.status || "MATCHED";
-        const existingStudent = existingData?.matchedStudentName || null;
-        const existingRegId = existingData?.matchedRegistrationId || null;
-        const existingOrderId = existingData?.matchedOrderId || null;
-        const existingPayer = existingData?.payerName || payerName || null;
-        const existingIsFriend = Boolean(existingData?.isFriendPayment ?? isFriendPayment);
+      try {
+        const existingPaymentSnap = await getDoc(paymentDocRef);
+        if (existingPaymentSnap.exists()) {
+          const existingData = existingPaymentSnap.data();
+          const existingStatus = existingData?.status || "MATCHED";
+          const existingStudent = existingData?.matchedStudentName || null;
+          const existingRegId = existingData?.matchedRegistrationId || null;
+          const existingOrderId = existingData?.matchedOrderId || null;
+          const existingPayer = existingData?.payerName || payerName || null;
+          const existingIsFriend = Boolean(existingData?.isFriendPayment ?? isFriendPayment);
 
-        // Log duplicate signal in audit feed without consuming another student's session or creating unclaimed payment!
-        try {
-          const logId = `SIG-${Date.now()}`;
-          await setDoc(doc(db, "upi_webhook_logs", logId), {
-            id: logId,
-            receivedAt: now,
-            combinedText: combinedText.slice(0, 500),
-            extractedUtr: utr,
-            extractedAmount: amount,
-            matchedOrderId: existingOrderId,
+          // Log duplicate signal in audit feed without consuming another student's session or creating unclaimed payment!
+          try {
+            const logId = `SIG-${Date.now()}`;
+            await setDoc(doc(db, "upi_webhook_logs", logId), {
+              id: logId,
+              receivedAt: now,
+              combinedText: combinedText.slice(0, 500),
+              extractedUtr: utr,
+              extractedAmount: amount,
+              matchedOrderId: existingOrderId,
+              matchedRegistrationId: existingRegId,
+              matchedStudentName: existingStudent,
+              payerName: existingPayer,
+              isFriendPayment: existingIsFriend,
+              status: existingStatus,
+              isDuplicate: true,
+            });
+          } catch {}
+
+          return NextResponse.json({
+            success: true,
+            isDuplicate: true,
+            utr,
+            amount,
+            matched: Boolean(existingRegId || existingOrderId),
             matchedRegistrationId: existingRegId,
+            matchedOrderId: existingOrderId,
             matchedStudentName: existingStudent,
             payerName: existingPayer,
             isFriendPayment: existingIsFriend,
-            status: existingStatus,
-            isDuplicate: true,
+            message: existingStudent
+              ? `Duplicate payment notification acknowledged for ${existingStudent}. Already verified as PAID.`
+              : `Duplicate payment notification acknowledged for UTR ${utr}. Already recorded.`,
           });
-        } catch {}
+        }
+      } catch (idempotencyErr) {
+        console.warn("Notice: idempotency lookup warning (proceeding):", idempotencyErr);
+      }
 
-        return NextResponse.json({
-          success: true,
-          isDuplicate: true,
+      // Initial ledger write: record incoming payment before active session transition evaluation
+      try {
+        await setDoc(paymentDocRef, {
           utr,
           amount,
-          matched: Boolean(existingRegId || existingOrderId),
-          matchedRegistrationId: existingRegId,
-          matchedOrderId: existingOrderId,
-          matchedStudentName: existingStudent,
-          payerName: existingPayer,
-          isFriendPayment: existingIsFriend,
-          message: existingStudent
-            ? `Duplicate payment notification acknowledged for ${existingStudent}. Already verified as PAID.`
-            : `Duplicate payment notification acknowledged for UTR ${utr}. Already recorded.`,
-        });
+          rawNotification: combinedText,
+          status: "UNCLAIMED",
+          isSyntheticUtr,
+          receivedAt: now,
+          payerName: payerName || null,
+        }, { merge: true });
+      } catch (initLedgerErr) {
+        console.warn("Notice: initial ledger write warning:", initLedgerErr);
       }
 
       // 3A. Match active checkout session (for zero-touch hands-free auto-approval on the student's checkout screen)
