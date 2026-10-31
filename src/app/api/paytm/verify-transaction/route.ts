@@ -148,6 +148,52 @@ export async function POST(req: NextRequest) {
             });
           }
         }
+
+        // Check for UNCLAIMED synthetic payment record (e.g. Paytm push notification without UTR that arrived earlier)
+        if (!autoVerifiedViaWebhook && amount) {
+          try {
+            const { collection, query, where, getDocs, setDoc } = await import("firebase/firestore");
+            const unclaimedQuery = query(
+              collection(db, "verified_upi_payments"),
+              where("status", "==", "UNCLAIMED")
+            );
+            const unclaimedSnap = await getDocs(unclaimedQuery);
+            if (!unclaimedSnap.empty) {
+              const expectedAmount = Number(amount || 0);
+              const unclaimedMatch = unclaimedSnap.docs.find((d) => {
+                const data = d.data();
+                const payAmt = Number(data.amount) || 0;
+                // Micro-paisa exact match
+                return Math.abs(payAmt - expectedAmount) < 0.005;
+              });
+
+              if (unclaimedMatch) {
+                autoVerifiedViaWebhook = true;
+                const mData = unclaimedMatch.data();
+                const now = new Date().toISOString();
+
+                // Upgrade synthetic record with the student's submitted 12-digit UTR!
+                await setDoc(doc(db, "verified_upi_payments", utr), {
+                  ...mData,
+                  utr,
+                  status: "MATCHED",
+                  matchedOrderId: orderId,
+                  matchedAt: now,
+                  reconciledFromSynthetic: mData.utr || null,
+                }, { merge: true });
+
+                if (mData.utr && mData.utr !== utr) {
+                  await setDoc(unclaimedMatch.ref, {
+                    status: "MERGED",
+                    reconciledToBankUtr: utr,
+                  }, { merge: true });
+                }
+              }
+            }
+          } catch (unclaimedErr) {
+            console.warn("Notice: unclaimed verified_upi_payments lookup note:", unclaimedErr);
+          }
+        }
       }
     } catch (whErr) {
       console.warn("Notice: could not query verified_upi_payments:", whErr);

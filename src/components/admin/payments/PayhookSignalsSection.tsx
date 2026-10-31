@@ -81,26 +81,51 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
 
       const logTime = new Date(log.receivedAt).getTime();
 
-      // Check if there is an existing group matching either the same UTR OR the same amount within a 90-second burst window
+      // Check if there is an existing group matching:
+      // 1. Same explicit UTR
+      // 2. OR same micro-paisa amount (fractional paise provides 1:1 mathematical identity!)
+      // 3. OR same round amount within a 90-second burst window
       const existing = result.find((r) => {
         if (!r.extractedAmount || r.status === "TEST_PING") return false;
         if (r.extractedUtr && log.extractedUtr && r.extractedUtr === log.extractedUtr) return true;
 
+        const sameAmount = Math.abs((r.extractedAmount || 0) - (log.extractedAmount || 0)) < 0.005;
+        if (!sameAmount) return false;
+
+        const hasFractionalPaise = Math.round((log.extractedAmount || 0) * 100) % 100 !== 0;
+        if (hasFractionalPaise) {
+          // Mathematical 1:1 Identity: Same micro-paisa amount belongs to the exact same student payment!
+          return true;
+        }
+
         const rTime = new Date(r.receivedAt).getTime();
-        const sameAmount = Math.abs(r.extractedAmount - (log.extractedAmount || 0)) < 0.005;
         const withinBurstWindow = Math.abs(rTime - logTime) <= 90 * 1000;
-        return sameAmount && withinBurstWindow;
+        return withinBurstWindow;
       });
 
       if (existing) {
         existing.burstCount = (existing.burstCount || 1) + (log.burstCount || 1);
-        // If this log was the matched one, ensure the grouped item shows MATCHED and preserves student info
-        if (log.status === "MATCHED" && existing.status !== "MATCHED") {
+
+        // If log has a real 12-digit Bank UTR and existing had a synthetic UTR, upgrade the UTR!
+        const logHasRealUtr = log.extractedUtr && !log.extractedUtr.startsWith("AUTO-PTM-") && /^\d{12}$/.test(log.extractedUtr);
+        if (logHasRealUtr) {
+          existing.extractedUtr = log.extractedUtr;
+          existing.combinedText = log.combinedText; // Prefer official bank SMS notification text
+          existing.source = log.source || existing.source;
+        }
+
+        // If either is MATCHED, the whole merged item is MATCHED & PAID!
+        if (log.status === "MATCHED" || existing.status === "MATCHED") {
           existing.status = "MATCHED";
-          existing.matchedOrderId = log.matchedOrderId;
-          existing.matchedRegistrationId = log.matchedRegistrationId;
-          existing.matchedStudentName = log.matchedStudentName;
-          if (log.extractedUtr) existing.extractedUtr = log.extractedUtr;
+          existing.matchedOrderId = existing.matchedOrderId || log.matchedOrderId;
+          existing.matchedRegistrationId = existing.matchedRegistrationId || log.matchedRegistrationId;
+          existing.matchedStudentName = existing.matchedStudentName || log.matchedStudentName;
+          existing.payerName = existing.payerName || log.payerName;
+        }
+
+        // Keep the latest timestamp
+        if (logTime > new Date(existing.receivedAt).getTime()) {
+          existing.receivedAt = log.receivedAt;
         }
       } else {
         result.push({ ...log, burstCount: log.burstCount || 1 });

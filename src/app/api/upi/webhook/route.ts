@@ -749,34 +749,79 @@ export async function POST(req: NextRequest) {
       }
 
       // Secondary Deduplication & Bank SMS UTR Upgrade Check:
-      // Did a session for this exact micro-paisa amount complete in the last 20 minutes?
+      // Did a session or registration for this exact transaction complete with a synthetic UTR?
       if (!matchedOrderId && amount > 0) {
         try {
+          let matchedCompletedData: any = null;
+
+          // Check 1: Completed active checkout sessions
           const completedQuery = query(
             collection(db, "active_checkout_sessions"),
             where("status", "==", "COMPLETED")
           );
           const completedSnap = await getDocs(completedQuery);
+
           if (!completedSnap.empty) {
             const recentMatch = completedSnap.docs.find((d) => {
               const data = d.data();
               const expectedAmt = Number(data.amount) || 0;
               if (Math.abs(expectedAmt - Number(amount)) >= 0.005) return false;
-              const paidAtMs = data.paidAt ? new Date(data.paidAt).getTime() : 0;
-              // 20-minute sliding window for late-arriving bank SMS receipts
-              return paidAtMs > 0 && (Date.now() - paidAtMs < 20 * 60 * 1000);
+              // If incoming has real UTR and session already has a different real UTR, don't collide
+              if (!isSyntheticUtr && data.utr && !data.utr.startsWith("AUTO-PTM-") && data.utr !== utr) {
+                return false;
+              }
+              return true;
             });
 
             if (recentMatch) {
-              const rData = recentMatch.data();
-              matchedOrderId = recentMatch.id;
-              matchedStudentName = rData.participantName || rData.leaderName || "Student";
-              matchedRegistrationId = rData.registrationId || null;
+              matchedCompletedData = {
+                id: recentMatch.id,
+                ref: recentMatch.ref,
+                data: recentMatch.data(),
+                isSession: true,
+              };
+            }
+          }
 
-              // If this incoming notification is a genuine 12-digit Bank SMS UTR, upgrade the session and registration
-              if (!isSyntheticUtr && utr) {
-                try {
-                  // 1. Upgrade session with official bank UTR
+          // Check 2: Canonical registrations completed with synthetic UTR (e.g. AUTO-PTM-xxx)
+          if (!matchedCompletedData) {
+            const paidRegsQuery = query(
+              collection(db, "registrations"),
+              where("paymentStatus", "==", "PAID")
+            );
+            const paidRegsSnap = await getDocs(paidRegsQuery);
+            if (!paidRegsSnap.empty) {
+              const synthMatch = paidRegsSnap.docs.find((d) => {
+                const data = d.data();
+                const expectedAmt = Number(data.amountPaid || data.paymentDetails?.amount || 0);
+                if (Math.abs(expectedAmt - Number(amount)) >= 0.005) return false;
+                const regUtr = String(data.paymentId || data.paymentDetails?.utr || "");
+                // Must have been created with a synthetic UTR or lacking official bank UTR
+                return regUtr.startsWith("AUTO-PTM-") || data.paymentDetails?.syntheticUtr;
+              });
+
+              if (synthMatch) {
+                matchedCompletedData = {
+                  id: synthMatch.id,
+                  ref: synthMatch.ref,
+                  data: synthMatch.data(),
+                  isRegistration: true,
+                };
+              }
+            }
+          }
+
+          if (matchedCompletedData) {
+            const rData = matchedCompletedData.data;
+            matchedOrderId = matchedCompletedData.isSession ? matchedCompletedData.id : (rData.orderId || null);
+            matchedRegistrationId = matchedCompletedData.isRegistration ? matchedCompletedData.id : (rData.registrationId || null);
+            matchedStudentName = rData.participantName || rData.leaderName || "Student";
+
+            // If incoming signal is a genuine 12-digit Bank SMS UTR, UPGRADE the records!
+            if (!isSyntheticUtr && utr) {
+              try {
+                // 1. Upgrade session with official bank UTR
+                if (matchedOrderId) {
                   await setDoc(doc(db, "active_checkout_sessions", matchedOrderId), {
                     bankUtr: utr,
                     realUtr: utr,
@@ -785,31 +830,34 @@ export async function POST(req: NextRequest) {
                     bankSmsText: combinedText,
                     reconciledAt: now,
                   }, { merge: true });
-
-                  // 2. Upgrade registration with official bank UTR
-                  if (matchedRegistrationId) {
-                    await setDoc(doc(db, "registrations", matchedRegistrationId), {
-                      paymentId: utr,
-                      "paymentDetails.utr": utr,
-                      "paymentDetails.bankUtr": utr,
-                      "paymentDetails.reconciledFromBankSms": true,
-                      "paymentDetails.syntheticUtrReplaced": rData.utr || null,
-                    }, { merge: true });
-                  }
-
-                  // 3. Mark previous synthetic ledger entry as reconciled if present
-                  if (rData.utr && rData.utr !== utr) {
-                    await setDoc(doc(db, "verified_upi_payments", rData.utr), {
-                      reconciledToBankUtr: utr,
-                      note: `Reconciled with official Bank SMS UTR ${utr}`,
-                    }, { merge: true });
-                  }
-                } catch (reconcileErr) {
-                  console.warn("Notice: Bank SMS UTR reconciliation note:", reconcileErr);
                 }
-              } else {
-                isDuplicateNotification = true;
+
+                // 2. Upgrade registration with official bank UTR
+                if (matchedRegistrationId) {
+                  await setDoc(doc(db, "registrations", matchedRegistrationId), {
+                    paymentId: utr,
+                    "paymentDetails.utr": utr,
+                    "paymentDetails.bankUtr": utr,
+                    "paymentDetails.reconciledFromBankSms": true,
+                    "paymentDetails.syntheticUtrReplaced": rData.paymentId || rData.utr || null,
+                    "paymentDetails.bankPayer": payerName || null,
+                  }, { merge: true });
+                }
+
+                // 3. Mark previous synthetic ledger entry as MERGED
+                const prevSynthUtr = rData.paymentId || rData.utr;
+                if (prevSynthUtr && prevSynthUtr !== utr) {
+                  await setDoc(doc(db, "verified_upi_payments", prevSynthUtr), {
+                    status: "MERGED",
+                    reconciledToBankUtr: utr,
+                    note: `Merged into official Bank SMS UTR ${utr}`,
+                  }, { merge: true });
+                }
+              } catch (reconcileErr) {
+                console.warn("Notice: Bank SMS UTR reconciliation note:", reconcileErr);
               }
+            } else {
+              isDuplicateNotification = true;
             }
           }
         } catch (recentErr) {
@@ -881,6 +929,86 @@ export async function POST(req: NextRequest) {
           } catch {}
         }
 
+        // 5. Multi-Factor Reconciliation for "PENDING REVIEW" registrations:
+        // When PayHook was delayed/offline, student registered with manual UTR or is awaiting payment approval.
+        if (!matchingDoc && amount > 0) {
+          try {
+            const pendingRegsQuery = query(
+              collection(db, "registrations"),
+              where("paymentStatus", "==", "PENDING")
+            );
+            const pendingRegsSnap = await getDocs(pendingRegsQuery);
+            if (!pendingRegsSnap.empty) {
+              const pendingCandidates = pendingRegsSnap.docs.map((d) => ({
+                ref: d.ref,
+                id: d.id,
+                data: d.data(),
+              }));
+
+              // Multi-Factor Matching Hierarchy:
+              // Tier 1: Direct 12-Digit UTR Match (student submitted UTR or stored in paymentDetails/customAnswers)
+              let candidateMatch = pendingCandidates.find((c) => {
+                if (isSyntheticUtr || !utr) return false;
+                const regUtr = String(c.data.paymentId || c.data.paymentDetails?.utr || c.data.customAnswers?.upiUtr || "").trim();
+                return regUtr === utr;
+              });
+
+              // Tier 2: Unique Micro-Paisa Exact Match (e.g. ₹50.01, ₹50.02, ₹2.01)
+              const hasFractionalPaise = Math.round(amount * 100) % 100 !== 0;
+              if (!candidateMatch && hasFractionalPaise) {
+                const microMatches = pendingCandidates.filter((c) => {
+                  const regAmount = Number(c.data.amountPaid || c.data.paymentDetails?.amount || 0);
+                  return Math.abs(regAmount - Number(amount)) < 0.005;
+                });
+                if (microMatches.length === 1) {
+                  candidateMatch = microMatches[0];
+                } else if (microMatches.length > 1 && extractedSender) {
+                  candidateMatch = microMatches.find((c) => {
+                    const studentName = c.data.participantName || c.data.leaderName || "";
+                    return isNameCompatible(extractedSender, studentName);
+                  }) || microMatches[0];
+                }
+              }
+
+              // Tier 3: Round Amount + Student / Account Name Match
+              if (!candidateMatch && extractedSender) {
+                const roundNameMatches = pendingCandidates.filter((c) => {
+                  const regAmount = Number(c.data.amountPaid || c.data.paymentDetails?.amount || 0);
+                  const isSameAmount = Math.abs(regAmount - Number(amount)) < 0.005;
+                  if (!isSameAmount) return false;
+                  const studentName = c.data.participantName || c.data.leaderName || "";
+                  return isNameCompatible(extractedSender, studentName);
+                });
+                if (roundNameMatches.length === 1) {
+                  candidateMatch = roundNameMatches[0];
+                }
+              }
+
+              // Tier 4: Round Amount + Phone Number Match
+              if (!candidateMatch) {
+                const roundPhoneMatches = pendingCandidates.filter((c) => {
+                  const regAmount = Number(c.data.amountPaid || c.data.paymentDetails?.amount || 0);
+                  const isSameAmount = Math.abs(regAmount - Number(amount)) < 0.005;
+                  if (!isSameAmount) return false;
+                  const phone = String(c.data.phone || "").replace(/\D/g, "").slice(-6);
+                  return phone.length >= 6 && combinedText.includes(phone);
+                });
+                if (roundPhoneMatches.length === 1) {
+                  candidateMatch = roundPhoneMatches[0];
+                }
+              }
+
+              if (candidateMatch) {
+                matchingDoc = candidateMatch;
+                matchedRegistrationId = candidateMatch.id;
+                matchedStudentName = candidateMatch.data.participantName || candidateMatch.data.leaderName || "Student";
+              }
+            }
+          } catch (pendingErr) {
+            console.warn("Notice: pending review registrations lookup warning:", pendingErr);
+          }
+        }
+
         if (matchingDoc && extractedSender) {
           const regName = matchingDoc.data()?.participantName || matchingDoc.data()?.leaderName || "";
           if (!isNameCompatible(extractedSender, regName)) {
@@ -896,16 +1024,30 @@ export async function POST(req: NextRequest) {
           matchedRegistrationId = matchingDoc.id;
           matchedStudentName = matchingDoc.data()?.participantName || matchingDoc.data()?.leaderName || matchedStudentName || "Student";
 
-          await updateDoc(matchingDoc.ref, {
+          const updatePayload: Record<string, any> = {
             paymentStatus: "PAID",
             status: "CONFIRMED",
             paymentId: utr,
             paidAt: now,
-            verifiedBy: "Paytm Auto-Gateway (SRC PayHook)",
+            verifiedBy: "Auto-Gateway (SRC PayHook)",
             verifiedAt: now,
             payerName: payerName || null,
             isFriendPayment: Boolean(isFriendPayment),
-          });
+            "paymentDetails.paymentStatus": "PAID",
+            "paymentDetails.utr": utr,
+            "paymentDetails.amount": amount,
+            "paymentDetails.payerName": payerName || null,
+            "paymentDetails.isFriendPayment": Boolean(isFriendPayment),
+            "paymentDetails.verifiedAt": now,
+          };
+
+          if (isSyntheticUtr) {
+            updatePayload["paymentDetails.syntheticUtr"] = utr;
+          } else {
+            updatePayload["paymentDetails.bankUtr"] = utr;
+          }
+
+          await updateDoc(matchingDoc.ref, updatePayload);
         } else if (matchedOrderId) {
           // Self-Healing Invariant: If student closed browser, auto-create their registration from session draft!
           try {
