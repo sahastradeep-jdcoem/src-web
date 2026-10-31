@@ -152,26 +152,54 @@ function isNameCompatible(senderName: string | null, candidateName: string | nul
 
 /**
  * Generates a deterministic deduplication UTR for Paytm/UPI notifications that lack an explicit 12-digit UTR.
- * Any identical notifications received within the same 10-minute sliding window produce the exact same UTR.
+ * Normalizes amount, sender, and 10-minute time window so duplicate bursts of the exact same payment produce the identical UTR.
  */
 function generateDeterministicSyntheticUtr(sender: string, amount: number, text: string): string {
   const cleanAmount = (amount || 0).toFixed(2);
   const cleanSender = (sender || "").toLowerCase().replace(/[^a-z0-9]/g, "");
   
-  // Extract essential alphanumeric words ignoring variable timestamp numbers
-  const textKeywords = text
-    .toLowerCase()
-    .replace(/[^a-z\s]/g, " ")
-    .split(/\s+/)
-    .filter(w => w.length > 2)
-    .slice(0, 15)
-    .join("");
-
   // 10-minute sliding window (any re-post within 10 minutes gets the exact same UTR)
   const timeBucket = Math.floor(Date.now() / (10 * 60 * 1000));
-  const rawKey = `${cleanAmount}_${cleanSender}_${textKeywords}_${timeBucket}`;
+  const rawKey = `${cleanAmount}_${cleanSender || "direct"}_${timeBucket}`;
   const hash = createHash("sha256").update(rawKey).digest("hex").slice(0, 10).toUpperCase();
   return `AUTO-PTM-${hash}`;
+}
+
+/**
+ * Resolves user-friendly payment app name from Android package name or User-Agent
+ */
+function resolveSourceAppName(packageName?: string | null, userAgent?: string | null): string {
+  const pkg = (packageName || "").toLowerCase().trim();
+  const ua = (userAgent || "").toLowerCase().trim();
+
+  if (pkg.includes("messaging") || pkg.includes("mms") || pkg.includes("sms") || ua.includes("messaging")) {
+    return "Google Messages (SMS)";
+  }
+  if (pkg.includes("paytm") || ua.includes("paytm")) {
+    return "Paytm for Business";
+  }
+  if (pkg.includes("phonepe") || ua.includes("phonepe")) {
+    return "PhonePe";
+  }
+  if (pkg.includes("paisa") || (pkg.includes("google") && pkg.includes("pay")) || ua.includes("gpay")) {
+    return "Google Pay";
+  }
+  if (pkg.includes("truecaller")) {
+    return "Truecaller";
+  }
+  if (pkg.includes("bhim") || pkg.includes("npci")) {
+    return "BHIM UPI";
+  }
+  if (pkg.includes("diagnostics")) {
+    return "PayHook Diagnostics";
+  }
+  if (ua.includes("macrodroid")) {
+    return "MacroDroid";
+  }
+  if (pkg.length > 0) {
+    return pkg;
+  }
+  return "SRC PayHook";
 }
 
 /**
@@ -410,6 +438,8 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Save to verified_upi_payments ledger & match active sessions / registrations
+    const sourceAppName = resolveSourceAppName(rawBody.packageName, req.headers.get("user-agent"));
+    let isDuplicateNotification = false;
     let matchedRegistrationId: string | null = null;
     let matchedOrderId: string | null = null;
     let matchedStudentName: string | null = null;
@@ -445,6 +475,7 @@ export async function POST(req: NextRequest) {
               matchedStudentName: existingStudent,
               payerName: existingPayer,
               isFriendPayment: existingIsFriend,
+              source: sourceAppName,
               status: existingStatus,
               isDuplicate: true,
             });
@@ -478,6 +509,7 @@ export async function POST(req: NextRequest) {
           rawNotification: combinedText,
           status: "UNCLAIMED",
           isSyntheticUtr,
+          source: sourceAppName,
           receivedAt: now,
           payerName: payerName || null,
         }, { merge: true });
@@ -688,6 +720,37 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Secondary Deduplication Check: Did a session for this exact micro-paisa amount complete in the last 2 minutes?
+      // Catches re-posted notifications / bursts from Android without creating orphaned UNCLAIMED rows
+      if (!matchedOrderId && amount > 0) {
+        try {
+          const completedQuery = query(
+            collection(db, "active_checkout_sessions"),
+            where("status", "==", "COMPLETED")
+          );
+          const completedSnap = await getDocs(completedQuery);
+          if (!completedSnap.empty) {
+            const recentMatch = completedSnap.docs.find((d) => {
+              const data = d.data();
+              const expectedAmt = Number(data.amount) || 0;
+              if (Math.abs(expectedAmt - Number(amount)) >= 0.005) return false;
+              const paidAtMs = data.paidAt ? new Date(data.paidAt).getTime() : 0;
+              return paidAtMs > 0 && (Date.now() - paidAtMs < 2 * 60 * 1000);
+            });
+
+            if (recentMatch) {
+              const rData = recentMatch.data();
+              matchedOrderId = recentMatch.id;
+              matchedStudentName = rData.participantName || rData.leaderName || "Student";
+              matchedRegistrationId = rData.registrationId || null;
+              isDuplicateNotification = true;
+            }
+          }
+        } catch (recentErr) {
+          console.warn("Notice: recently completed session check warning:", recentErr);
+        }
+      }
+
       // 3B. Check if registration exists in canonical 'registrations' collection
       try {
         let matchingDoc: any = null;
@@ -829,6 +892,7 @@ export async function POST(req: NextRequest) {
           rawNotification: combinedText,
           status: isMatched ? "MATCHED" : "UNCLAIMED",
           isSyntheticUtr,
+          source: sourceAppName,
           matchedRegistrationId: matchedRegistrationId || null,
           matchedOrderId: matchedOrderId || null,
           matchedStudentName: matchedStudentName || null,
@@ -855,8 +919,9 @@ export async function POST(req: NextRequest) {
           matchedStudentName: matchedStudentName || null,
           payerName: payerName || null,
           isFriendPayment: Boolean(isFriendPayment),
+          source: sourceAppName,
           status: isMatched ? "MATCHED" : "UNCLAIMED",
-          isDuplicate: false,
+          isDuplicate: isDuplicateNotification,
         });
       } catch (auditErr) {
         console.warn("Notice: upi_webhook_logs audit warning:", auditErr);

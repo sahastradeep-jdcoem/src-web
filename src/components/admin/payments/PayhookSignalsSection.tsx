@@ -47,6 +47,7 @@ export interface WebhookLogItem {
   source?: string;
   status: "TEST_PING" | "MATCHED" | "UNCLAIMED" | string;
   isDuplicate?: boolean;
+  burstCount?: number;
 }
 
 interface PayhookSignalsSectionProps {
@@ -64,6 +65,94 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
   const [isClearing, setIsClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
+  const [groupDuplicates, setGroupDuplicates] = useState(true);
+
+  // Group duplicate bursts under the primary approved signal
+  const displayedLogs = React.useMemo(() => {
+    if (!groupDuplicates) return logs;
+
+    const seenUtrs = new Set<string>();
+    const result: (WebhookLogItem & { burstCount?: number })[] = [];
+
+    for (const log of logs) {
+      const utrKey = log.extractedUtr && log.extractedUtr !== "TEST_PING"
+        ? log.extractedUtr
+        : null;
+
+      if (!utrKey) {
+        result.push(log);
+        continue;
+      }
+
+      if (seenUtrs.has(utrKey)) {
+        const existing = result.find((r) => r.extractedUtr === utrKey);
+        if (existing) {
+          existing.burstCount = (existing.burstCount || 1) + 1;
+        }
+      } else {
+        seenUtrs.add(utrKey);
+        result.push({ ...log, burstCount: 1 });
+      }
+    }
+
+    return result;
+  }, [logs, groupDuplicates]);
+
+  const renderSourceBadge = (source?: string) => {
+    const s = (source || "").toLowerCase();
+    if (s.includes("paytm")) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-800 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-md">
+          <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+          Paytm for Business
+        </span>
+      );
+    }
+    if (s.includes("messaging") || s.includes("sms")) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          Google Messages (SMS)
+        </span>
+      );
+    }
+    if (s.includes("phonepe")) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-800 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-md">
+          <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+          PhonePe
+        </span>
+      );
+    }
+    if (s.includes("gpay") || s.includes("google") || s.includes("paisa")) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-800 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+          Google Pay
+        </span>
+      );
+    }
+    if (s.includes("truecaller")) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-800 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md">
+          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+          Truecaller
+        </span>
+      );
+    }
+    if (s.includes("diagnostics")) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+          PayHook Diagnostics
+        </span>
+      );
+    }
+    return (
+      <span className="text-[11px] font-mono text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
+        {source || "SRC PayHook"}
+      </span>
+    );
+  };
 
   const webhookUrl = typeof window !== "undefined"
     ? `${window.location.origin}/api/upi/webhook?secret=SRC_UPI_2026_GATEWAY`
@@ -319,11 +408,21 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
           <div className="flex items-center gap-2">
             <Activity className="w-4 h-4 text-[#17458F]" />
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-              Received Signals &amp; Heartbeats ({logs.length})
+              Received Signals &amp; Heartbeats ({displayedLogs.length}{logs.length !== displayedLogs.length ? ` / ${logs.length} raw` : ""})
             </h4>
           </div>
 
           <div className="flex items-center gap-3">
+            <label className="inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={groupDuplicates}
+                onChange={(e) => setGroupDuplicates(e.target.checked)}
+                className="rounded border-slate-300 text-[#17458F] focus:ring-[#17458F]"
+              />
+              <span className="font-semibold text-slate-700">Merge Duplicates</span>
+            </label>
+
             <span className="hidden sm:inline text-[11px] font-medium text-slate-400">
               Auto-refreshes in real time via Firestore
             </span>
@@ -373,7 +472,7 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {logs.map((log) => {
+                {displayedLogs.map((log) => {
                   const isTestPing = log.status === "TEST_PING" || log.extractedUtr === "TEST_PING";
                   const isMatched = log.status === "MATCHED";
 
@@ -403,25 +502,37 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
                             TEST PING
                           </span>
                         ) : isMatched ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                            <CheckCheck className="w-3 h-3 text-emerald-600" />
-                            <span>MATCHED &amp; PAID</span>
-                            {log.isDuplicate && (
-                              <span className="text-[9px] font-mono text-emerald-600 ml-0.5 opacity-80">(DUP)</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                              <CheckCheck className="w-3 h-3 text-emerald-600" />
+                              <span>MATCHED &amp; PAID</span>
+                              {log.isDuplicate && (
+                                <span className="text-[9px] font-mono text-emerald-600 ml-0.5 opacity-80">(DUP)</span>
+                              )}
+                            </span>
+                            {log.burstCount && log.burstCount > 1 && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200 font-mono font-bold">
+                                {log.burstCount} bursts
+                              </span>
                             )}
-                          </span>
+                          </div>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                            UNCLAIMED PAYMENT
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                              UNCLAIMED PAYMENT
+                            </span>
+                            {log.burstCount && log.burstCount > 1 && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200 font-mono font-bold">
+                                {log.burstCount} bursts
+                              </span>
+                            )}
+                          </div>
                         )}
                       </td>
 
                       {/* Source */}
                       <td className="py-3 px-4 whitespace-nowrap">
-                        <span className="text-xs font-mono text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
-                          {log.source || "in.srcjdcoem.payhook"}
-                        </span>
+                        {renderSourceBadge(log.source)}
                       </td>
 
                       {/* Extracted Amount & UTR */}
