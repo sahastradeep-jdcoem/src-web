@@ -568,6 +568,41 @@ export default function StudentDashboardPage() {
         if (isCurrent) {
           setRegistrations(formatted);
           setIsInitialLoading(false);
+
+          // Zero-Touch Self-Healing: Check if any pending registration has completed checkout session
+          const pendingWithOrders = formatted.filter((r) => r.paymentStatus === "PENDING" && r.orderId);
+          for (const pending of pendingWithOrders) {
+            (async () => {
+              try {
+                const res = await fetch(`/api/upi/check-status?orderId=${encodeURIComponent(pending.orderId!)}`);
+                if (res.ok) {
+                  const data = await res.json();
+                  if (data.status === "PAID") {
+                    const { db } = await import("@/lib/firebase/config");
+                    const { doc, updateDoc } = await import("firebase/firestore");
+                    if (db && pending.id) {
+                      await updateDoc(doc(db, "registrations", pending.id), {
+                        paymentStatus: "PAID",
+                        status: "CONFIRMED",
+                        paymentId: data.utr || pending.paymentId,
+                        paidAt: data.paidAt || new Date().toISOString(),
+                        verifiedBy: "SRC PayHook Auto-Gateway",
+                      });
+                    }
+                    if (isCurrent) {
+                      setRegistrations((prev) =>
+                        prev.map((item) =>
+                          item.id === pending.id
+                            ? { ...item, paymentStatus: "PAID", status: "CONFIRMED", paymentId: data.utr || item.paymentId }
+                            : item
+                        )
+                      );
+                    }
+                  }
+                }
+              } catch {}
+            })();
+          }
         }
       } catch (e) {
         console.warn("Registrations sync error on student dashboard", e);
