@@ -38,6 +38,7 @@ import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import { findBestMultiDimensionalMatch, PaymentCandidateSignal, MultiDimensionalMatch } from "@/lib/payments";
 import { MultiDimensionalMatchBadge } from "@/components/payments/MultiDimensionalMatchBadge";
+import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, canUserManageEvent, saveStoredEvent, resolveTenureForEvent } from "@/lib/eventsStore";
 import { getStoredTenures, syncTenuresFromFirestore, subscribeToTenures, CouncilTenure, getLatestAvailableTenure } from "@/lib/tenureStore";
 import { getActiveTenure } from "@/lib/tenureEngine";
@@ -1914,7 +1915,7 @@ export default function AdminPaymentsPage() {
         {/* Completed Transactions */}
         <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-2">
           <div className="flex items-center justify-between text-slate-500">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Completed / Approved</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider">Paid Passes</span>
             <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
               <CheckCircle2 className="w-4 h-4" />
             </div>
@@ -2126,7 +2127,7 @@ export default function AdminPaymentsPage() {
               statusTab === "completed" ? "bg-emerald-700 text-white shadow-2xs" : "text-slate-600 hover:bg-slate-100"
             }`}
           >
-            Approved / Paid ({!selectedEventSlug ? "—" : kpiStats.totalPaidCount})
+            Paid ({!selectedEventSlug ? "—" : kpiStats.totalPaidCount})
           </button>
           <button
             type="button"
@@ -2135,7 +2136,7 @@ export default function AdminPaymentsPage() {
               statusTab === "pending" ? "bg-amber-600 text-white shadow-2xs" : "text-slate-600 hover:bg-slate-100"
             }`}
           >
-            Pending Verification ({!selectedEventSlug ? "—" : kpiStats.pendingCount})
+            Pending ({!selectedEventSlug ? "—" : kpiStats.pendingCount})
           </button>
           <button
             type="button"
@@ -2543,7 +2544,17 @@ export default function AdminPaymentsPage() {
 
                       {/* Participant */}
                       <td className="py-3.5 px-4 space-y-0.5">
-                        <div className="font-bold text-slate-900">{r.participantName}</div>
+                        <div className="font-bold text-slate-900 leading-snug">{r.participantName}</div>
+                        {r.department && (
+                          <div className="pt-0.5">
+                            <span 
+                              className="inline-block text-[10px] font-bold text-slate-750 bg-slate-100 border border-slate-200/90 px-1.5 py-0.2 rounded font-sans tracking-wide"
+                              title={r.department}
+                            >
+                              {getDepartmentShortName(r.department)}
+                            </span>
+                          </div>
+                        )}
                         <div className="text-[11px] text-slate-500">{r.phone}</div>
                         <div className="text-[10px] text-slate-400 truncate max-w-[180px]">{r.email}</div>
                       </td>
@@ -2551,18 +2562,13 @@ export default function AdminPaymentsPage() {
                       {/* Event / Fee */}
                       <td className="py-3.5 px-4 space-y-1">
                         <div className="font-semibold text-slate-800 line-clamp-1">{r.eventName}</div>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {r.teamType === "Team" && (
+                        {r.teamType === "Team" && (
+                          <div>
                             <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-1.5 py-0.2 rounded">
                               Team
                             </span>
-                          )}
-                          {r.department && (
-                            <span className="text-[9px] text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded">
-                              {r.department}
-                            </span>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </td>
 
                       {/* Amount */}
@@ -2577,14 +2583,14 @@ export default function AdminPaymentsPage() {
                         {isPaid && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                             <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            Approved / Paid
+                            Paid
                           </span>
                         )}
                         {isPending && (
                           <div className="space-y-1">
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
                               <Clock className="w-3 h-3 text-amber-600" />
-                              Pending UTR
+                              Pending
                             </span>
                             {verifiedMatch && (
                               <MultiDimensionalMatchBadge match={verifiedMatch} />

@@ -56,7 +56,7 @@ export function getDepartmentShortName(deptName?: string | null): string {
   if (lower.includes("bachelor of computer") || lower === "bca") return "BCA";
   if (lower.includes("master of computer") || lower === "mca") return "MCA";
   if (lower.includes("diploma") || lower === "dip") return "DIP";
-  if (lower.includes("basic science") || lower.includes("humanities") || lower === "bsh") return "BSH";
+  if (lower.includes("basic science") || lower.includes("humanities") || lower === "bsh" || lower === "bshd") return "BSHD";
 
   return trimmed;
 }
