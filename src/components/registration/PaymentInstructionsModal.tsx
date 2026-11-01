@@ -308,7 +308,7 @@ export function PaymentInstructionsModal({
               </div>
               <div className="min-w-0">
                 <h5 className="font-heading font-bold text-xs text-emerald-950">
-                  3. Pay ₹{formattedAmount} &amp; wait 30 seconds
+                  3. Pay ₹{formattedAmount} &amp; wait 1 minute
                 </h5>
                 <p className="text-[11px] text-emerald-900 mt-0.5 leading-relaxed font-medium">
                   Approve payment on your phone. Keep this tab open — your official ticket pass will be generated automatically!
