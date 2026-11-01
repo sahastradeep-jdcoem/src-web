@@ -112,6 +112,78 @@ function formatTimestamp(val: any): string {
   return String(val);
 }
 
+function getApprovalBadgeInfo(r: any, verifiedUpiMap: Map<string, any>) {
+  const verifiedBy = String(r.verifiedBy || "").toLowerCase();
+  const paymentId = String(r.paymentId || "").trim();
+  const synthUtr = String(r.paymentDetails?.syntheticUtr || r.paymentDetails?.gatewaySignalId || "").trim();
+  const orderId = String(r.orderId || "").trim();
+
+  // Find corresponding signal in verifiedUpiMap if any
+  const upiSignal = (paymentId ? verifiedUpiMap.get(paymentId) : null)
+    || (synthUtr ? verifiedUpiMap.get(synthUtr) : null)
+    || (orderId ? Array.from(verifiedUpiMap.values()).find((v: any) => v.matchedOrderId === orderId) : null)
+    || Array.from(verifiedUpiMap.values()).find((v: any) => v.matchedRegistrationId === r.id);
+
+  const signalSource = String(upiSignal?.source || "").toLowerCase();
+
+  // Determine Mode: Auto vs Manual
+  const isExplicitManual = verifiedBy.includes("manual") || verifiedBy.includes("treasurer") || verifiedBy.includes("admin");
+  const isAuto = !isExplicitManual && Boolean(
+    paymentId.startsWith("AUTO-PTM-") ||
+    synthUtr.startsWith("AUTO-PTM-") ||
+    verifiedBy.includes("auto") ||
+    verifiedBy.includes("payhook") ||
+    verifiedBy.includes("gateway")
+  );
+  const mode: "Auto" | "Manual" = isAuto ? "Auto" : "Manual";
+
+  // Determine Source: Paytm vs SMS vs Cashfree vs Instamojo
+  let source = "Paytm";
+  if (
+    signalSource.includes("sms") ||
+    signalSource.includes("messages") ||
+    signalSource.includes("canara") ||
+    verifiedBy.includes("sms") ||
+    (upiSignal && !signalSource.includes("paytm") && /^\d{12}$/.test(paymentId))
+  ) {
+    source = "SMS";
+  } else if (
+    paymentId.startsWith("AUTO-PTM-") ||
+    synthUtr.startsWith("AUTO-PTM-") ||
+    signalSource.includes("paytm") ||
+    verifiedBy.includes("paytm") ||
+    orderId.startsWith("SRC-PTM-")
+  ) {
+    source = "Paytm";
+  } else if (orderId.startsWith("CF_") || verifiedBy.includes("cashfree")) {
+    source = "Cashfree";
+  } else if (orderId.startsWith("IM_") || verifiedBy.includes("instamojo")) {
+    source = "Instamojo";
+  }
+
+  const badgeText = `(${source}, ${mode})`;
+
+  // Styling based on source and mode:
+  // (Paytm, Auto): crisp blue
+  // (SMS, Auto): crisp emerald
+  // (Paytm, Manual): crisp amber
+  // (SMS, Manual): crisp teal
+  let badgeStyle = "bg-blue-50 text-blue-700 border-blue-200/80";
+  if (source === "SMS" && mode === "Auto") {
+    badgeStyle = "bg-emerald-50 text-emerald-700 border-emerald-200/80";
+  } else if (source === "Paytm" && mode === "Auto") {
+    badgeStyle = "bg-blue-50 text-blue-700 border-blue-200/80";
+  } else if (source === "SMS" && mode === "Manual") {
+    badgeStyle = "bg-teal-50 text-teal-800 border-teal-200/80";
+  } else if (source === "Paytm" && mode === "Manual") {
+    badgeStyle = "bg-amber-50 text-amber-800 border-amber-200/80";
+  } else {
+    badgeStyle = "bg-slate-100 text-slate-700 border-slate-200/80";
+  }
+
+  return { source, mode, badgeText, badgeStyle };
+}
+
 export default function AdminPaymentsPage() {
   const { adminAccess, user, isOwner } = useAuth();
   const isClubOwner = adminAccess?.role === "CLUB_OWNER" && adminAccess.active !== false;
@@ -248,6 +320,7 @@ export default function AdminPaymentsPage() {
 
   const [approveTargetRecord, setApproveTargetRecord] = useState<RegistrationRecord | null>(null);
   const [approveUtrInput, setApproveUtrInput] = useState<string>("");
+  const [approveSourceInput, setApproveSourceInput] = useState<"Paytm" | "SMS">("Paytm");
   const [isApproving, setIsApproving] = useState(false);
 
   const [cancelTargetRecord, setCancelTargetRecord] = useState<RegistrationRecord | null>(null);
@@ -1199,9 +1272,10 @@ export default function AdminPaymentsPage() {
     setIsApproving(true);
     try {
       const nowIso = new Date().toISOString();
-      await updateRegistrationPaymentStatus(docId, "PAID", "SRC Admin / Treasurer");
+      const verifiedByStr = `${approveSourceInput} (Manual)`;
+      await updateRegistrationPaymentStatus(docId, "PAID", verifiedByStr);
       if (regTicketId !== docId) {
-        await updateRegistrationPaymentStatus(regTicketId, "PAID", "SRC Admin / Treasurer");
+        await updateRegistrationPaymentStatus(regTicketId, "PAID", verifiedByStr);
       }
 
       if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
@@ -1212,8 +1286,12 @@ export default function AdminPaymentsPage() {
             status: "CONFIRMED",
             paymentId: finalUtr,
             paidAt: nowIso,
-            verifiedBy: "SRC Admin / Treasurer",
+            verifiedBy: verifiedByStr,
             verifiedAt: nowIso,
+            "paymentDetails.paymentStatus": "PAID",
+            "paymentDetails.utr": finalUtr,
+            "paymentDetails.bankUtr": finalUtr,
+            "paymentDetails.verifiedBy": verifiedByStr,
           });
         } catch (e) {
           console.warn("Direct doc update warning:", e);
@@ -1229,7 +1307,7 @@ export default function AdminPaymentsPage() {
                 status: "CONFIRMED",
                 paymentId: finalUtr,
                 paidAt: nowIso,
-                verifiedBy: "SRC Admin / Treasurer",
+                verifiedBy: verifiedByStr,
                 verifiedAt: nowIso,
               }
             : r
@@ -2334,6 +2412,8 @@ export default function AdminPaymentsPage() {
                             return v.matchedRegistrationId === r.id || (Boolean(r.orderId) && v.matchedOrderId === r.orderId);
                           });
 
+                          const { badgeText, badgeStyle } = getApprovalBadgeInfo(r, verifiedUpiMap);
+
                           // Case 1: Genuine Bank SMS specifically matched to this student
                           if (realBankMatch) {
                             return (
@@ -2341,8 +2421,8 @@ export default function AdminPaymentsPage() {
                                 <div className="flex items-center gap-1.5 text-[11px] font-mono text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md w-fit">
                                   <span>UTR:</span>
                                   <span className="font-bold">{realBankMatch.utr}</span>
-                                  <span className="text-[9px] font-bold bg-emerald-600 text-white px-1 rounded-sm uppercase tracking-wider font-sans">
-                                    BANK SMS
+                                  <span className={`text-[10px] font-bold font-sans px-1.5 py-0.2 rounded border uppercase tracking-wider ${badgeStyle}`}>
+                                    {badgeText}
                                   </span>
                                   <button
                                     type="button"
@@ -2370,17 +2450,17 @@ export default function AdminPaymentsPage() {
                           if (hasValidStudentUtr && synthUtr) {
                             return (
                               <div className="space-y-0.5">
-                                <div className="flex items-center gap-1.5 text-[11px] font-mono text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md w-fit">
+                                <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-800 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md w-fit">
                                   <span>UTR:</span>
                                   <span className="font-bold">{studentClaimedUtr}</span>
-                                  <span className="text-[9px] font-bold bg-indigo-600 text-white px-1 rounded-sm uppercase tracking-wider font-sans">
-                                    STUDENT ENTERED
+                                  <span className={`text-[10px] font-bold font-sans px-1.5 py-0.2 rounded border uppercase tracking-wider ${badgeStyle}`}>
+                                    {badgeText}
                                   </span>
                                   <button
                                     type="button"
                                     onClick={() => handleCopy(studentClaimedUtr, `utr-${r.id}`)}
                                     title="Copy Student UTR"
-                                    className="p-0.5 rounded text-indigo-700 hover:text-indigo-950 cursor-pointer"
+                                    className="p-0.5 rounded text-slate-500 hover:text-slate-900 cursor-pointer"
                                   >
                                     {copiedUtr === `utr-${r.id}` ? (
                                       <Check className="w-2.5 h-2.5 text-indigo-700" />
@@ -2390,7 +2470,7 @@ export default function AdminPaymentsPage() {
                                   </button>
                                 </div>
                                 <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
-                                  <span>Paytm Signal:</span>
+                                  <span>Signal:</span>
                                   <span className="text-slate-600 font-medium">{synthUtr}</span>
                                 </div>
                               </div>
@@ -2403,8 +2483,8 @@ export default function AdminPaymentsPage() {
                               <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md w-fit">
                                 <span>REF:</span>
                                 <span className="font-semibold text-slate-800">{rawPaymentId}</span>
-                                <span className="text-[9px] font-bold bg-blue-600 text-white px-1 rounded-sm uppercase tracking-wider font-sans">
-                                  PAYTM APP
+                                <span className={`text-[10px] font-bold font-sans px-1.5 py-0.2 rounded border uppercase tracking-wider ${badgeStyle}`}>
+                                  {badgeText}
                                 </span>
                                 <button
                                   type="button"
@@ -2425,19 +2505,13 @@ export default function AdminPaymentsPage() {
                           // Case 4: Standard 12-digit Bank UTR / SMS
                           if (rawPaymentId || studentClaimedUtr) {
                             const displayUtr = hasValidStudentUtr ? studentClaimedUtr : rawPaymentId;
-                            const isBankSms = /^\d{12}$/.test(displayUtr) && (
-                              (r as any).verifiedBy?.toLowerCase().includes("sms") ||
-                              Array.from(verifiedUpiMap.values()).some((v) => v.utr === displayUtr)
-                            );
                             return (
-                              <div className="flex items-center gap-1 text-[11px] font-mono text-slate-500">
+                              <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-600 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md w-fit">
                                 <span>UTR:</span>
-                                <span className="font-semibold text-slate-700">{displayUtr}</span>
-                                {isBankSms && (
-                                  <span className="text-[9px] font-bold bg-emerald-600 text-white px-1 rounded-sm uppercase tracking-wider font-sans">
-                                    BANK SMS
-                                  </span>
-                                )}
+                                <span className="font-semibold text-slate-800">{displayUtr}</span>
+                                <span className={`text-[10px] font-bold font-sans px-1.5 py-0.2 rounded border uppercase tracking-wider ${badgeStyle}`}>
+                                  {badgeText}
+                                </span>
                                 <button
                                   type="button"
                                   onClick={() => handleCopy(displayUtr, `utr-${r.id}`)}
@@ -2694,6 +2768,39 @@ export default function AdminPaymentsPage() {
 
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                Verification Source
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setApproveSourceInput("Paytm")}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                    approveSourceInput === "Paytm"
+                      ? "bg-blue-50 border-blue-500 text-blue-700 ring-2 ring-blue-500/20 shadow-xs"
+                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  Paytm Statement
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setApproveSourceInput("SMS")}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                    approveSourceInput === "SMS"
+                      ? "bg-emerald-50 border-emerald-500 text-emerald-700 ring-2 ring-emerald-500/20 shadow-xs"
+                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  Bank SMS
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400">
+                Marks payment badge as {approveSourceInput === "Paytm" ? "(Paytm, Manual)" : "(SMS, Manual)"} in payments ledger.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
                 12-Digit Bank Reference (UTR)
               </label>
               <input
@@ -2704,7 +2811,7 @@ export default function AdminPaymentsPage() {
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
               />
               <p className="text-[10px] text-slate-400">
-                Confirm this UTR matches your Paytm for Business statement.
+                Confirm this UTR matches your {approveSourceInput === "Paytm" ? "Paytm for Business statement" : "Bank SMS alert"}.
               </p>
             </div>
 
