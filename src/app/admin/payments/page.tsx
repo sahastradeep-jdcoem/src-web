@@ -384,6 +384,13 @@ export default function AdminPaymentsPage() {
         const enrichedParentName = r.parentEventName || matchedEvt?.parentEventName || undefined;
         const enrichedSubBadge = r.subEventBadge || matchedEvt?.subEventBadge || undefined;
 
+        const rawPaymentAmount = (r as any).paymentDetails?.amount;
+        const resolvedAmount = Number(
+          rawPaymentAmount !== undefined && Number(rawPaymentAmount) > 0
+            ? rawPaymentAmount
+            : ((r as any).amountPaid !== undefined ? (r as any).amountPaid : ((r as any).receivedAmount || 0))
+        );
+
         return {
           id: r.id,
           registrationId: r.registrationId || r.id,
@@ -403,10 +410,10 @@ export default function AdminPaymentsPage() {
           createdAt: r.createdAt || cleanRegisteredAt,
           paidAt: r.paidAt || (r.paymentStatus === "PAID" ? cleanRegisteredAt : undefined),
           status: r.status || "CONFIRMED",
-          paymentStatus: r.paymentStatus || (r.amountPaid > 0 ? "PAID" : "FREE"),
+          paymentStatus: r.paymentStatus || (resolvedAmount > 0 ? "PAID" : "FREE"),
           paymentId: r.paymentId || r.customAnswers?.upiUtr || "",
           orderId: r.orderId || "",
-          amountPaid: Number(r.amountPaid || 0),
+          amountPaid: resolvedAmount,
           ticketCode: r.ticketCode || `${r.id.slice(0, 7)}-TK`,
           qrPayload: r.qrPayload || `SRC:PASS:${r.id}`,
           customAnswers: r.customAnswers || {},
@@ -825,9 +832,9 @@ export default function AdminPaymentsPage() {
 
     setIsApproving(true);
     try {
-      await updateRegistrationPaymentStatus(docId, "PAID", "SRC Auto-Reconciliation (PayHook)");
+      await updateRegistrationPaymentStatus(docId, "PAID", "SRC Auto-Reconciliation (PayHook)", verifiedPay.amount);
       if (regTicketId !== docId) {
-        await updateRegistrationPaymentStatus(regTicketId, "PAID", "SRC Auto-Reconciliation (PayHook)");
+        await updateRegistrationPaymentStatus(regTicketId, "PAID", "SRC Auto-Reconciliation (PayHook)", verifiedPay.amount);
       }
 
       const { db } = await import("@/lib/firebase/config");
@@ -839,9 +846,11 @@ export default function AdminPaymentsPage() {
             status: "CONFIRMED",
             paymentId: resolvedPaymentId,
             paidAt: nowIso,
+            amountPaid: Number(verifiedPay.amount || targetRecord.amountPaid || 0),
             verifiedBy: "Paytm Auto-Gateway (SRC PayHook)",
             verifiedAt: nowIso,
             payerName: verifiedPay.payerName || null,
+            "paymentDetails.amount": verifiedPay.amount,
           };
           if (isSynth) {
             updatePayload["paymentDetails.syntheticUtr"] = finalUtr;
@@ -860,6 +869,7 @@ export default function AdminPaymentsPage() {
               status: "COMPLETED",
               registrationId: docId,
               utr: finalUtr,
+              receivedAmount: verifiedPay.amount,
             }, { merge: true });
           } catch {}
         }
@@ -886,6 +896,7 @@ export default function AdminPaymentsPage() {
                 status: "CONFIRMED",
                 paymentId: resolvedPaymentId,
                 paidAt: nowIso,
+                amountPaid: Number(verifiedPay.amount || r.amountPaid || 0),
                 verifiedBy: "Paytm Auto-Gateway (SRC PayHook)",
                 verifiedAt: nowIso,
                 payerName: verifiedPay.payerName || (r as any).payerName,

@@ -578,6 +578,7 @@ export default function StudentDashboardPage() {
                 if (res.ok) {
                   const data = await res.json();
                   if (data.status === "PAID") {
+                    const resolvedAmount = Number(data.amount || pending.amountPaid || 0);
                     const { db } = await import("@/lib/firebase/config");
                     const { doc, updateDoc } = await import("firebase/firestore");
                     if (db && pending.id) {
@@ -586,6 +587,7 @@ export default function StudentDashboardPage() {
                         status: "CONFIRMED",
                         paymentId: data.utr || pending.paymentId,
                         paidAt: data.paidAt || new Date().toISOString(),
+                        ...(resolvedAmount > 0 ? { amountPaid: resolvedAmount, "paymentDetails.amount": resolvedAmount } : {}),
                         verifiedBy: "SRC PayHook Auto-Gateway",
                       });
                     }
@@ -593,7 +595,13 @@ export default function StudentDashboardPage() {
                       setRegistrations((prev) =>
                         prev.map((item) =>
                           item.id === pending.id
-                            ? { ...item, paymentStatus: "PAID", status: "CONFIRMED", paymentId: data.utr || item.paymentId }
+                            ? { 
+                                ...item, 
+                                paymentStatus: "PAID", 
+                                status: "CONFIRMED", 
+                                paymentId: data.utr || item.paymentId,
+                                amountPaid: resolvedAmount > 0 ? resolvedAmount : item.amountPaid,
+                              }
                             : item
                         )
                       );

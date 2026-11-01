@@ -371,6 +371,13 @@ export default function AdminRegistrationsPage() {
       const enrichedParentName = r.parentEventName || matchedEvt?.parentEventName || undefined;
       const enrichedSubBadge = r.subEventBadge || matchedEvt?.subEventBadge || undefined;
 
+      const rawPaymentAmount = (r as any).paymentDetails?.amount;
+      const resolvedAmount = Number(
+        rawPaymentAmount !== undefined && Number(rawPaymentAmount) > 0
+          ? rawPaymentAmount
+          : ((r as any).amountPaid !== undefined ? (r as any).amountPaid : ((r as any).receivedAmount || 0))
+      );
+
       return {
         ...r,
         id: r.id,
@@ -393,10 +400,10 @@ export default function AdminRegistrationsPage() {
         createdAt: r.createdAt || fullIsoTime,
         paidAt: r.paidAt || (cleanRegisteredAt.includes("T") ? cleanRegisteredAt : undefined),
         status: r.status || "CONFIRMED",
-        paymentStatus: r.paymentStatus || (r.amountPaid > 0 ? "PAID" : "FREE"),
+        paymentStatus: r.paymentStatus || (resolvedAmount > 0 ? "PAID" : "FREE"),
         paymentId: r.paymentId,
         orderId: r.orderId,
-        amountPaid: r.amountPaid || 0,
+        amountPaid: resolvedAmount,
         ticketCode: r.ticketCode || `${r.id.slice(0, 7)}-TK`,
         qrPayload: r.qrPayload || `SRC:PASS:${r.id}`,
         btId: r.btId,

@@ -184,7 +184,11 @@ export async function POST(req: NextRequest) {
           phone: phone || "",
           btId: btId || "",
           registrationId: registrationId || null,
-          registrationData: registrationData || null,
+          registrationData: registrationData ? {
+            ...registrationData,
+            amountPaid: finalPayableAmount,
+            orderId,
+          } : null,
           status: "WAITING",
           createdAt: new Date().toISOString(),
           expiresAt,

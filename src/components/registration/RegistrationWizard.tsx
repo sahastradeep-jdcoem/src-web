@@ -248,6 +248,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     paymentStatus?: string;
     paymentId?: string;
     orderId?: string;
+    amountPaid?: number;
     participantName?: string;
     department?: string;
     year?: string;
@@ -939,6 +940,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         paymentStatus: paymentDetails?.paymentStatus,
         paymentId: paymentDetails?.paymentId,
         orderId: paymentDetails?.orderId,
+        amountPaid: paymentDetails?.amountPaid,
       });
       setIsSubmitting(false);
       setHasJoinedWhatsApp(false);
@@ -994,12 +996,18 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         throw new Error(orderData.error || "Failed to generate payment payload.");
       }
 
+      const actualPayableAmount = Number(orderData.amount || totalPayableAmount);
+      if (pendingRegistrationDraftRef.current?.payload) {
+        pendingRegistrationDraftRef.current.payload.amountPaid = actualPayableAmount;
+        pendingRegistrationDraftRef.current.payload.orderId = orderData.orderId;
+      }
+
       setShowManualUtr(false);
       setPaytmUtr("");
       autoDetectCompletedRef.current = false;
       setPaytmCheckoutData({
         orderId: orderData.orderId,
-        amount: orderData.amount,
+        amount: actualPayableAmount,
         baseAmount: orderData.baseAmount || orderData.amount,
         microPaisaOffset: orderData.microPaisaOffset || 0,
         formattedAmount: orderData.formattedAmount,
@@ -1203,10 +1211,12 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
             if (snap.exists()) {
               const sData = snap.data();
               if (sData?.status === "COMPLETED") {
+                const completedAmt = Number(sData.amount || sData.receivedAmount || generatedTicket?.amountPaid || 0);
                 setGeneratedTicket((prev) => prev ? {
                   ...prev,
                   paymentStatus: "PAID",
                   paymentId: sData.utr || prev.paymentId,
+                  amountPaid: completedAmt > 0 ? completedAmt : prev.amountPaid,
                 } : null);
 
                 // Update localStorage
@@ -1214,7 +1224,13 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                   const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
                   const updated = local.map((r: any) =>
                     r.id === regId || r.registrationId === regId
-                      ? { ...r, paymentStatus: "PAID", status: "CONFIRMED", paymentId: sData.utr || r.paymentId }
+                      ? { 
+                          ...r, 
+                          paymentStatus: "PAID", 
+                          status: "CONFIRMED", 
+                          paymentId: sData.utr || r.paymentId,
+                          amountPaid: completedAmt > 0 ? completedAmt : r.amountPaid,
+                        }
                       : r
                   );
                   localStorage.setItem("src_local_registrations", JSON.stringify(updated));
@@ -1229,6 +1245,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                       status: "CONFIRMED",
                       paymentId: sData.utr || generatedTicket.paymentId,
                       paidAt: sData.paidAt || new Date().toISOString(),
+                      ...(completedAmt > 0 ? { amountPaid: completedAmt, "paymentDetails.amount": completedAmt } : {}),
                       verifiedBy: "SRC PayHook Auto-Gateway",
                     });
                   }
@@ -1386,12 +1403,18 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           throw new Error(orderData.error || "Failed to generate payment payload.");
         }
 
+        const actualPayableAmount = Number(orderData.amount || totalPayableAmount);
+        if (pendingRegistrationDraftRef.current?.payload) {
+          pendingRegistrationDraftRef.current.payload.amountPaid = actualPayableAmount;
+          pendingRegistrationDraftRef.current.payload.orderId = orderData.orderId;
+        }
+
         setShowManualUtr(false);
         setPaytmUtr("");
         autoDetectCompletedRef.current = false;
         setPaytmCheckoutData({
           orderId: orderData.orderId,
-          amount: orderData.amount,
+          amount: actualPayableAmount,
           baseAmount: orderData.baseAmount || orderData.amount,
           microPaisaOffset: orderData.microPaisaOffset || 0,
           formattedAmount: orderData.formattedAmount,

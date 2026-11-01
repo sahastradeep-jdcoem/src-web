@@ -903,6 +903,7 @@ export async function POST(req: NextRequest) {
             status: "CONFIRMED",
             paymentId: utr,
             paidAt: now,
+            amountPaid: Number(amount || matchingDoc.data()?.amountPaid || 0),
             verifiedBy: "Auto-Gateway (SRC PayHook)",
             verifiedAt: now,
             payerName: payerName || null,

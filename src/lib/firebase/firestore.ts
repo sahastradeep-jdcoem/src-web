@@ -1825,7 +1825,8 @@ export async function updateRegistrationRefundInFirestore(
 export async function updateRegistrationPaymentStatus(
   registrationId: string,
   paymentStatus: "PAID" | "PENDING" | "FAILED",
-  verifiedBy: string = "Admin / Treasurer"
+  verifiedBy: string = "Admin / Treasurer",
+  amountPaid?: number
 ): Promise<boolean> {
   if (!registrationId) return false;
 
@@ -1835,12 +1836,17 @@ export async function updateRegistrationPaymentStatus(
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       const docRef = doc(db, REGISTRATIONS_COLLECTION, registrationId);
-      await updateDoc(docRef, {
+      const updateData: Record<string, any> = {
         paymentStatus,
         paidAt: paymentStatus === "PAID" ? now : undefined,
         verifiedBy,
         verifiedAt: now,
-      });
+      };
+      if (typeof amountPaid === "number" && amountPaid > 0) {
+        updateData.amountPaid = amountPaid;
+        updateData["paymentDetails.amount"] = amountPaid;
+      }
+      await updateDoc(docRef, updateData);
     }
   } catch (error) {
     console.warn("Firestore payment status update error for registration:", registrationId, error);
@@ -1856,6 +1862,7 @@ export async function updateRegistrationPaymentStatus(
               ...r,
               paymentStatus,
               paidAt: paymentStatus === "PAID" ? now : r.paidAt,
+              amountPaid: typeof amountPaid === "number" && amountPaid > 0 ? amountPaid : r.amountPaid,
               verifiedBy,
               verifiedAt: now,
             }
