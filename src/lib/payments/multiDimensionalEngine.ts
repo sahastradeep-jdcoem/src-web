@@ -91,12 +91,30 @@ export function evaluateCandidateAgainstRegistration(
     matchedDims.push("Pass ID");
   }
 
-  // Dimension 3: Bank UTR Reference Match (+45)
-  if (regPaymentId && candUtr) {
-    if (regPaymentId === candUtr || (cand.submittedUtr && regPaymentId === cand.submittedUtr)) {
-      score += DIMENSION_WEIGHTS.BANK_UTR;
-      matchedDims.push("Bank UTR");
-    }
+  // Dimension 3: Bank UTR Reference Match
+  // Invariant: If manually entered 12-digit UTR matches a Bank SMS 12-digit UTR, it is an unequivocal 100% match!
+  const studentManualUtr = (
+    (reg as any).submittedUtr ||
+    (reg as any).paymentDetails?.bankUtr ||
+    (reg as any).customAnswers?.upiUtr ||
+    regPaymentId ||
+    ""
+  ).trim();
+
+  const is12DigitBankUtrMatch = Boolean(
+    candUtr &&
+    /^\d{12}$/.test(candUtr) &&
+    studentManualUtr &&
+    /^\d{12}$/.test(studentManualUtr) &&
+    candUtr === studentManualUtr
+  );
+
+  if (is12DigitBankUtrMatch) {
+    score += 100;
+    matchedDims.push("100% Bank UTR Match");
+  } else if (regPaymentId && candUtr && (regPaymentId === candUtr || (cand.submittedUtr && regPaymentId === cand.submittedUtr))) {
+    score += DIMENSION_WEIGHTS.BANK_UTR;
+    matchedDims.push("Bank UTR");
   }
 
   // Dimension 4: Amount / Micro-Paisa Match (+35 for exact micro-paisa, +25 for base offset, +20 for round)
@@ -156,11 +174,22 @@ export function evaluateCandidateAgainstRegistration(
   const dimsCount = matchedDims.length;
   if (dimsCount === 0 || score < 20) return null;
 
-  const confidence = Math.min(100, Math.round((score / AUTO_APPROVE_CRITERIA.MAX_SCORE_BASELINE) * 100));
-  const isEligible = dimsCount >= AUTO_APPROVE_CRITERIA.MIN_DIMENSIONS && score >= AUTO_APPROVE_CRITERIA.MIN_SCORE;
+  // Invariant: Exact 12-digit UTR match with Bank SMS is a guaranteed 100% confidence match
+  const confidence = is12DigitBankUtrMatch
+    ? 100
+    : Math.min(100, Math.round((score / AUTO_APPROVE_CRITERIA.MAX_SCORE_BASELINE) * 100));
+
+  const isEligible = is12DigitBankUtrMatch || (
+    dimsCount >= AUTO_APPROVE_CRITERIA.MIN_DIMENSIONS && score >= AUTO_APPROVE_CRITERIA.MIN_SCORE
+  );
+
+  // Invariant: If student manually entered a genuine 12-digit UTR, NEVER replace it with a synthetic AUTO-PTM- reference!
+  const finalResolvedUtr = (/^\d{12}$/.test(studentManualUtr) && candUtr.startsWith("AUTO-PTM-"))
+    ? studentManualUtr
+    : (candUtr || studentManualUtr || regPaymentId || "AUTO-APPROVED");
 
   return {
-    utr: candUtr || regPaymentId || "AUTO-APPROVED",
+    utr: finalResolvedUtr,
     amount: candAmount || regAmt,
     payerName: cand.payerName,
     source: cand.source,

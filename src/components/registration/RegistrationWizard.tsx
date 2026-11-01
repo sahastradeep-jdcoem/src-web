@@ -1212,27 +1212,39 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
               const sData = snap.data();
               if (sData?.status === "COMPLETED") {
                 const completedAmt = Number(sData.amount || sData.receivedAmount || generatedTicket?.amountPaid || 0);
-                setGeneratedTicket((prev) => prev ? {
-                  ...prev,
-                  paymentStatus: "PAID",
-                  paymentId: sData.utr || prev.paymentId,
-                  amountPaid: completedAmt > 0 ? completedAmt : prev.amountPaid,
-                } : null);
+                const isIncomingSynth = String(sData.utr || "").startsWith("AUTO-PTM-");
+
+                setGeneratedTicket((prev) => {
+                  if (!prev) return null;
+                  const prevUtr = String(prev.paymentId || "").trim();
+                  const hasValidPrevUtr = /^\d{12}$/.test(prevUtr);
+                  const finalUtr = (isIncomingSynth && hasValidPrevUtr) ? prevUtr : (sData.utr || prevUtr);
+                  return {
+                    ...prev,
+                    paymentStatus: "PAID",
+                    paymentId: finalUtr,
+                    amountPaid: completedAmt > 0 ? completedAmt : prev.amountPaid,
+                  };
+                });
 
                 // Update localStorage
                 try {
                   const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
-                  const updated = local.map((r: any) =>
-                    r.id === regId || r.registrationId === regId
-                      ? { 
-                          ...r, 
-                          paymentStatus: "PAID", 
-                          status: "CONFIRMED", 
-                          paymentId: sData.utr || r.paymentId,
-                          amountPaid: completedAmt > 0 ? completedAmt : r.amountPaid,
-                        }
-                      : r
-                  );
+                  const updated = local.map((r: any) => {
+                    if (r.id === regId || r.registrationId === regId) {
+                      const rUtr = String(r.paymentId || "").trim();
+                      const hasValidRUtr = /^\d{12}$/.test(rUtr);
+                      const finalUtr = (isIncomingSynth && hasValidRUtr) ? rUtr : (sData.utr || rUtr);
+                      return { 
+                        ...r, 
+                        paymentStatus: "PAID", 
+                        status: "CONFIRMED", 
+                        paymentId: finalUtr,
+                        amountPaid: completedAmt > 0 ? completedAmt : r.amountPaid,
+                      };
+                    }
+                    return r;
+                  });
                   localStorage.setItem("src_local_registrations", JSON.stringify(updated));
                   window.dispatchEvent(new CustomEvent("src_registrations_updated", { detail: updated }));
                 } catch {}
@@ -1240,13 +1252,19 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                 // Attempt to update registration directly from authenticated student browser
                 try {
                   if (db && regId) {
+                    const existingRegUtr = String(generatedTicket?.paymentId || "").trim();
+                    const hasValidExisting = /^\d{12}$/.test(existingRegUtr);
+                    const finalUtr = (isIncomingSynth && hasValidExisting) ? existingRegUtr : (sData.utr || existingRegUtr);
+
                     await updateDoc(doc(db, "registrations", regId), {
                       paymentStatus: "PAID",
                       status: "CONFIRMED",
-                      paymentId: sData.utr || generatedTicket.paymentId,
+                      paymentId: finalUtr,
                       paidAt: sData.paidAt || new Date().toISOString(),
                       ...(completedAmt > 0 ? { amountPaid: completedAmt, "paymentDetails.amount": completedAmt } : {}),
-                      verifiedBy: "SRC PayHook Auto-Gateway",
+                      verifiedBy: isIncomingSynth ? "SRC PayHook Auto-Gateway (Paytm Notification)" : "SRC PayHook Auto-Gateway (Bank SMS)",
+                      ...(isIncomingSynth ? { "paymentDetails.syntheticUtr": sData.utr } : { "paymentDetails.bankUtr": sData.utr }),
+                      ...(hasValidExisting ? { "paymentDetails.bankUtr": existingRegUtr } : {}),
                     });
                   }
                 } catch {}
@@ -1274,11 +1292,18 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                 const data = await res.json();
                 if (data.status === "PAID") {
                   clearInterval(pollInterval);
-                  setGeneratedTicket((prev) => prev ? {
-                    ...prev,
-                    paymentStatus: "PAID",
-                    paymentId: data.utr || prev.paymentId,
-                  } : null);
+                  const isIncomingSynth = String(data.utr || "").startsWith("AUTO-PTM-");
+                  setGeneratedTicket((prev) => {
+                    if (!prev) return null;
+                    const prevUtr = String(prev.paymentId || "").trim();
+                    const hasValidPrevUtr = /^\d{12}$/.test(prevUtr);
+                    const finalUtr = (isIncomingSynth && hasValidPrevUtr) ? prevUtr : (data.utr || prevUtr);
+                    return {
+                      ...prev,
+                      paymentStatus: "PAID",
+                      paymentId: finalUtr,
+                    };
+                  });
                   try {
                     confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
                   } catch {}

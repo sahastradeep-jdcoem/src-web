@@ -896,20 +896,40 @@ export async function POST(req: NextRequest) {
 
         if (matchingDoc) {
           matchedRegistrationId = matchingDoc.id;
-          matchedStudentName = matchingDoc.data()?.participantName || matchingDoc.data()?.leaderName || matchedStudentName || "Student";
+          const regData = (typeof matchingDoc.data === "function" ? matchingDoc.data() : matchingDoc.data) || {};
+          matchedStudentName = regData.participantName || regData.leaderName || matchedStudentName || "Student";
+
+          // Invariant: If student manually entered a 12-digit UTR, NEVER overwrite it with a synthetic AUTO-PTM- reference!
+          const rawExistingPaymentId = String(regData.paymentId || "").trim();
+          const rawExistingBankUtr = String(
+            regData.paymentDetails?.bankUtr ||
+            regData.paymentDetails?.utr ||
+            regData.customAnswers?.upiUtr ||
+            regData.submittedUtr ||
+            ""
+          ).trim();
+
+          const existingManualUtr = /^\d{12}$/.test(rawExistingPaymentId)
+            ? rawExistingPaymentId
+            : (/^\d{12}$/.test(rawExistingBankUtr) ? rawExistingBankUtr : "");
+
+          let finalPaymentId = utr;
+          if (isSyntheticUtr && existingManualUtr) {
+            finalPaymentId = existingManualUtr;
+          }
 
           const updatePayload: Record<string, any> = {
             paymentStatus: "PAID",
             status: "CONFIRMED",
-            paymentId: utr,
+            paymentId: finalPaymentId,
             paidAt: now,
-            amountPaid: Number(amount || matchingDoc.data()?.amountPaid || 0),
-            verifiedBy: "Auto-Gateway (SRC PayHook)",
+            amountPaid: Number(amount || regData.amountPaid || 0),
+            verifiedBy: isSyntheticUtr ? "Auto-Gateway (SRC PayHook - Paytm Notification)" : "Auto-Gateway (SRC PayHook - Bank SMS)",
             verifiedAt: now,
             payerName: payerName || null,
             isFriendPayment: Boolean(isFriendPayment),
             "paymentDetails.paymentStatus": "PAID",
-            "paymentDetails.utr": utr,
+            "paymentDetails.utr": finalPaymentId,
             "paymentDetails.amount": amount,
             "paymentDetails.payerName": payerName || null,
             "paymentDetails.isFriendPayment": Boolean(isFriendPayment),
@@ -918,11 +938,16 @@ export async function POST(req: NextRequest) {
 
           if (isSyntheticUtr) {
             updatePayload["paymentDetails.syntheticUtr"] = utr;
+            updatePayload["paymentDetails.gatewaySignalId"] = utr;
+            if (existingManualUtr) {
+              updatePayload["paymentDetails.bankUtr"] = existingManualUtr;
+            }
           } else {
             updatePayload["paymentDetails.bankUtr"] = utr;
           }
 
-          await updateDoc(matchingDoc.ref, updatePayload);
+          const docRef = matchingDoc.ref || doc(db, "registrations", matchingDoc.id);
+          await updateDoc(docRef, updatePayload);
         } else if (matchedOrderId) {
           // Self-Healing Invariant: If student closed browser, auto-create their registration from session draft!
           try {
@@ -934,23 +959,42 @@ export async function POST(req: NextRequest) {
                 const regId = sData.registrationId || draft.id || `SRC-${String(sData.eventId || "EVT").slice(0, 3).toUpperCase()}-26-${Math.floor(10000 + Math.random() * 90000)}`;
                 const tkCode = draft.ticketCode || `${String(sData.eventId || "EVT").slice(0, 3).toUpperCase()}26-TK-${Math.floor(1000 + Math.random() * 9000)}`;
 
+                const sDataSubmittedUtr = String(
+                  sData.submittedUtr ||
+                  draft.paymentId ||
+                  draft.paymentDetails?.bankUtr ||
+                  draft.customAnswers?.upiUtr ||
+                  ""
+                ).trim();
+                const hasValidSubmittedUtr = /^\d{12}$/.test(sDataSubmittedUtr);
+                const finalDraftPaymentId = (isSyntheticUtr && hasValidSubmittedUtr) ? sDataSubmittedUtr : utr;
+
                 const newRecord = {
                   ...draft,
                   id: regId,
                   orderId: matchedOrderId,
                   paymentStatus: "PAID",
                   status: "CONFIRMED",
-                  paymentId: utr,
+                  paymentId: finalDraftPaymentId,
                   amountPaid: Number(amount || sData.amount || draft.amountPaid || 0),
                   ticketCode: tkCode,
                   qrPayload: draft.qrPayload || `SRC:PASS:${regId}:${tkCode}:${sData.eventId}`,
                   paidAt: now,
                   registeredAt: draft.registeredAt || now,
                   createdAt: now,
-                  verifiedBy: "Paytm Auto-Gateway (SRC PayHook)",
+                  verifiedBy: isSyntheticUtr ? "Paytm Auto-Gateway (SRC PayHook)" : "Bank SMS Auto-Gateway (SRC PayHook)",
                   verifiedAt: now,
                   payerName: payerName || null,
                   isFriendPayment: Boolean(isFriendPayment),
+                  paymentDetails: {
+                    ...(draft.paymentDetails || {}),
+                    paymentStatus: "PAID",
+                    utr: finalDraftPaymentId,
+                    amount: Number(amount || sData.amount || draft.amountPaid || 0),
+                    ...(isSyntheticUtr ? { syntheticUtr: utr } : { bankUtr: utr }),
+                    ...(hasValidSubmittedUtr ? { bankUtr: sDataSubmittedUtr } : {}),
+                    verifiedAt: now,
+                  },
                 };
 
                 await setDoc(doc(db, "registrations", regId), newRecord, { merge: true });

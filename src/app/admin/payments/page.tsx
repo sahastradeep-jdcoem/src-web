@@ -622,6 +622,27 @@ export default function AdminPaymentsPage() {
           })();
         }
       }
+
+      // Self-Healing Invariant: If registration paymentId was overwritten with synthetic AUTO-PTM-
+      // but student had manually entered a 12-digit UTR, restore paymentId to the student's entered UTR!
+      const rawReg = registrations.find((item) => item.id === r.id);
+      const studentBankUtr = String((rawReg as any)?.paymentDetails?.bankUtr || (rawReg as any)?.customAnswers?.upiUtr || "").trim();
+      if (rawReg?.paymentId?.startsWith("AUTO-PTM-") && /^\d{12}$/.test(studentBankUtr)) {
+        (async () => {
+          try {
+            const { db } = await import("@/lib/firebase/config");
+            const { doc, updateDoc } = await import("firebase/firestore");
+            if (db && r.id) {
+              await updateDoc(doc(db, "registrations", r.id), {
+                paymentId: studentBankUtr,
+                "paymentDetails.utr": studentBankUtr,
+                "paymentDetails.bankUtr": studentBankUtr,
+                "paymentDetails.syntheticUtr": rawReg.paymentId,
+              });
+            }
+          } catch {}
+        })();
+      }
     }
   }, [enrichedRegistrations, registrations, completedSessionsMap, verifiedUpiMap]);
 
@@ -898,10 +919,16 @@ export default function AdminPaymentsPage() {
     const regTicketId = targetRecord.registrationId || targetRecord.id;
     const finalUtr = verifiedPay.utr;
     const isSynth = finalUtr.startsWith("AUTO-PTM-");
-    const existingUtr = targetRecord.paymentId?.trim();
+    const rawStudentManualUtr = String(
+      (targetRecord as any).paymentDetails?.bankUtr ||
+      (targetRecord as any).customAnswers?.upiUtr ||
+      targetRecord.paymentId ||
+      ""
+    ).trim();
+    const hasValidManualUtr = /^\d{12}$/.test(rawStudentManualUtr);
     const resolvedPaymentId = (!isSynth && /^\d{12}$/.test(finalUtr))
       ? finalUtr
-      : (existingUtr && /^\d{12}$/.test(existingUtr) ? existingUtr : finalUtr);
+      : (hasValidManualUtr ? rawStudentManualUtr : finalUtr);
     const nowIso = new Date().toISOString();
 
     setIsApproving(true);
@@ -921,16 +948,20 @@ export default function AdminPaymentsPage() {
             paymentId: resolvedPaymentId,
             paidAt: nowIso,
             amountPaid: Number(verifiedPay.amount || targetRecord.amountPaid || 0),
-            verifiedBy: "Paytm Auto-Gateway (SRC PayHook)",
+            verifiedBy: isSynth ? "Paytm Auto-Gateway (SRC PayHook - Paytm Notification)" : "Bank SMS Auto-Gateway (SRC PayHook)",
             verifiedAt: nowIso,
             payerName: verifiedPay.payerName || null,
             "paymentDetails.amount": verifiedPay.amount,
+            "paymentDetails.utr": resolvedPaymentId,
           };
           if (isSynth) {
             updatePayload["paymentDetails.syntheticUtr"] = finalUtr;
+            updatePayload["paymentDetails.gatewaySignalId"] = finalUtr;
           }
-          if (resolvedPaymentId && /^\d{12}$/.test(resolvedPaymentId)) {
-            updatePayload["paymentDetails.bankUtr"] = resolvedPaymentId;
+          if (hasValidManualUtr) {
+            updatePayload["paymentDetails.bankUtr"] = rawStudentManualUtr;
+          } else if (!isSynth && /^\d{12}$/.test(finalUtr)) {
+            updatePayload["paymentDetails.bankUtr"] = finalUtr;
           }
           await updateDoc(doc(db, "registrations", docId), updatePayload);
         } catch (e) {
@@ -2284,23 +2315,24 @@ export default function AdminPaymentsPage() {
                           </button>
                         </div>
                         {(() => {
-                          const isSynth = Boolean(r.paymentId?.startsWith("AUTO-PTM-"));
-                          const studentClaimedUtr = (
-                            (r as any).paymentDetails?.bankUtr ||
-                            (r as any).customAnswers?.upiUtr ||
-                            (r as any).submittedUtr ||
-                            ""
+                          const rawPaymentId = String(r.paymentId || "").trim();
+                          const isDirectSynth = rawPaymentId.startsWith("AUTO-PTM-");
+                          const synthUtr = isDirectSynth
+                            ? rawPaymentId
+                            : String((r as any).paymentDetails?.syntheticUtr || (r as any).paymentDetails?.gatewaySignalId || "").trim();
+
+                          const studentClaimedUtr = String(
+                            (!isDirectSynth && /^\d{12}$/.test(rawPaymentId))
+                              ? rawPaymentId
+                              : ((r as any).paymentDetails?.bankUtr || (r as any).customAnswers?.upiUtr || (r as any).submittedUtr || "")
                           ).trim();
                           const hasValidStudentUtr = /^\d{12}$/.test(studentClaimedUtr);
 
                           // Strict Invariant: A genuine Bank SMS match must strictly belong to THIS registration or order.
-                          // Never loosely match across unrelated registrations by amount alone!
-                          const realBankMatch = isSynth
-                            ? Array.from(verifiedUpiMap.values()).find((v) => {
-                                if (v.utr.startsWith("AUTO-PTM-") || !/^\d{12}$/.test(v.utr)) return false;
-                                return v.matchedRegistrationId === r.id || (Boolean(r.orderId) && v.matchedOrderId === r.orderId);
-                              })
-                            : undefined;
+                          const realBankMatch = Array.from(verifiedUpiMap.values()).find((v) => {
+                            if (v.utr.startsWith("AUTO-PTM-") || !/^\d{12}$/.test(v.utr)) return false;
+                            return v.matchedRegistrationId === r.id || (Boolean(r.orderId) && v.matchedOrderId === r.orderId);
+                          });
 
                           // Case 1: Genuine Bank SMS specifically matched to this student
                           if (realBankMatch) {
@@ -2325,15 +2357,17 @@ export default function AdminPaymentsPage() {
                                     )}
                                   </button>
                                 </div>
-                                <div className="text-[10px] text-slate-400 font-mono">
-                                  Replaced: <span className="line-through">{r.paymentId}</span>
-                                </div>
+                                {synthUtr && synthUtr !== realBankMatch.utr && (
+                                  <div className="text-[10px] text-slate-400 font-mono">
+                                    Signal: <span className="text-slate-500">{synthUtr}</span>
+                                  </div>
+                                )}
                               </div>
                             );
                           }
 
-                          // Case 2: Auto-approved via Paytm notification, with student-submitted genuine UTR
-                          if (isSynth && hasValidStudentUtr) {
+                          // Case 2: Student manually entered genuine 12-digit UTR, confirmed by Paytm notification signal
+                          if (hasValidStudentUtr && synthUtr) {
                             return (
                               <div className="space-y-0.5">
                                 <div className="flex items-center gap-1.5 text-[11px] font-mono text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md w-fit">
@@ -2357,24 +2391,24 @@ export default function AdminPaymentsPage() {
                                 </div>
                                 <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
                                   <span>Paytm Signal:</span>
-                                  <span className="text-slate-600 font-medium">{r.paymentId}</span>
+                                  <span className="text-slate-600 font-medium">{synthUtr}</span>
                                 </div>
                               </div>
                             );
                           }
 
-                          // Case 3: Auto-approved via Paytm notification directly (Paytm notifications do not contain 12-digit UTR)
-                          if (isSynth) {
+                          // Case 3: Only synthetic Paytm notification exists (no student-entered 12-digit UTR)
+                          if (isDirectSynth) {
                             return (
                               <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md w-fit">
                                 <span>REF:</span>
-                                <span className="font-semibold text-slate-800">{r.paymentId}</span>
+                                <span className="font-semibold text-slate-800">{rawPaymentId}</span>
                                 <span className="text-[9px] font-bold bg-blue-600 text-white px-1 rounded-sm uppercase tracking-wider font-sans">
                                   PAYTM APP
                                 </span>
                                 <button
                                   type="button"
-                                  onClick={() => handleCopy(r.paymentId!, `utr-${r.id}`)}
+                                  onClick={() => handleCopy(rawPaymentId, `utr-${r.id}`)}
                                   title="Copy Paytm Signal Ref"
                                   className="p-0.5 rounded text-slate-400 hover:text-slate-700 cursor-pointer"
                                 >
@@ -2389,15 +2423,16 @@ export default function AdminPaymentsPage() {
                           }
 
                           // Case 4: Standard 12-digit Bank UTR / SMS
-                          if (r.paymentId) {
-                            const isBankSms = /^\d{12}$/.test(r.paymentId) && (
+                          if (rawPaymentId || studentClaimedUtr) {
+                            const displayUtr = hasValidStudentUtr ? studentClaimedUtr : rawPaymentId;
+                            const isBankSms = /^\d{12}$/.test(displayUtr) && (
                               (r as any).verifiedBy?.toLowerCase().includes("sms") ||
-                              Array.from(verifiedUpiMap.values()).some((v) => v.utr === r.paymentId)
+                              Array.from(verifiedUpiMap.values()).some((v) => v.utr === displayUtr)
                             );
                             return (
                               <div className="flex items-center gap-1 text-[11px] font-mono text-slate-500">
                                 <span>UTR:</span>
-                                <span className="font-semibold text-slate-700">{r.paymentId}</span>
+                                <span className="font-semibold text-slate-700">{displayUtr}</span>
                                 {isBankSms && (
                                   <span className="text-[9px] font-bold bg-emerald-600 text-white px-1 rounded-sm uppercase tracking-wider font-sans">
                                     BANK SMS
@@ -2405,7 +2440,7 @@ export default function AdminPaymentsPage() {
                                 )}
                                 <button
                                   type="button"
-                                  onClick={() => handleCopy(r.paymentId!, `utr-${r.id}`)}
+                                  onClick={() => handleCopy(displayUtr, `utr-${r.id}`)}
                                   title="Copy UTR"
                                   className="p-0.5 rounded text-slate-400 hover:text-slate-700 cursor-pointer"
                                 >
