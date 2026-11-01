@@ -274,10 +274,10 @@ export default function AdminPaymentsPage() {
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(getStoredPaymentConfig());
 
   // Real-time verified UPI ledger map for instant reconciliation
-  const [verifiedUpiMap, setVerifiedUpiMap] = useState<Map<string, { utr: string; amount: number; status: string; receivedAt?: string; payerName?: string; matchedOrderId?: string; matchedRegistrationId?: string }>>(new Map());
+  const [verifiedUpiMap, setVerifiedUpiMap] = useState<Map<string, { utr: string; amount: number; status: string; receivedAt?: string; transactionTimestamp?: string; payerName?: string; matchedOrderId?: string; matchedRegistrationId?: string }>>(new Map());
 
   // Real-time completed checkout sessions map (orderId -> session)
-  const [completedSessionsMap, setCompletedSessionsMap] = useState<Map<string, { orderId: string; registrationId?: string; utr: string; submittedUtr?: string; amount: number; receivedAmount?: number; payerName?: string; paidAt?: string; status: string }>>(new Map());
+  const [completedSessionsMap, setCompletedSessionsMap] = useState<Map<string, { orderId: string; registrationId?: string; utr: string; submittedUtr?: string; amount: number; receivedAmount?: number; payerName?: string; paidAt?: string; transactionTimestamp?: string; status: string }>>(new Map());
 
   // 1. Initial Load & Subscriptions
   useEffect(() => {
@@ -469,7 +469,7 @@ export default function AdminPaymentsPage() {
         if (db) {
           const q = query(collection(db, "verified_upi_payments"), orderBy("receivedAt", "desc"), limit(150));
           unsub = onSnapshot(q, (snap) => {
-            const map = new Map<string, { utr: string; amount: number; status: string; receivedAt?: string; payerName?: string; matchedOrderId?: string; matchedRegistrationId?: string }>();
+            const map = new Map<string, { utr: string; amount: number; status: string; receivedAt?: string; transactionTimestamp?: string; payerName?: string; matchedOrderId?: string; matchedRegistrationId?: string }>();
             snap.forEach((d) => {
               const data = d.data();
               if (data?.utr) {
@@ -478,6 +478,7 @@ export default function AdminPaymentsPage() {
                   amount: Number(data.amount || 0),
                   status: data.status || "UNCLAIMED",
                   receivedAt: data.receivedAt,
+                  transactionTimestamp: data.transactionTimestamp || (data.notificationTimestamp ? new Date(data.notificationTimestamp).toISOString() : data.receivedAt),
                   payerName: data.payerName,
                   matchedOrderId: data.matchedOrderId,
                   matchedRegistrationId: data.matchedRegistrationId,
@@ -521,6 +522,7 @@ export default function AdminPaymentsPage() {
                   receivedAmount: Number(data.receivedAmount || data.amount || 0),
                   payerName: data.payerName,
                   paidAt: data.paidAt,
+                  transactionTimestamp: data.transactionTimestamp || data.paidAt || data.createdAt,
                   status: data.status,
                 });
               }
@@ -846,6 +848,35 @@ export default function AdminPaymentsPage() {
             payerName: v.payerName,
             source: "verified_upi_payments",
           };
+        }
+      }
+    }
+
+    // 7. Notification Transaction Timestamp & Micro-Paisa Correlation (Temporal Dimension):
+    // Matches when the notification's true transaction time (e.g. 03:59 PM)
+    // occurred within ±45 minutes of the registration creation time (04:00 PM).
+    const regTimeMs = new Date(r.registeredAt || (r as any).createdAt || 0).getTime();
+    if (regTimeMs > 0 && regAmt > 0) {
+      for (const v of verifiedUpiMap.values()) {
+        const vTimeMs = new Date(v.transactionTimestamp || v.receivedAt || 0).getTime();
+        if (vTimeMs > 0) {
+          const deltaSecs = Math.abs(vTimeMs - regTimeMs) / 1000;
+          if (deltaSecs <= 45 * 60) {
+            const diff = Math.abs(v.amount - regAmt);
+            const isAmountMatch = diff <= 1.00;
+            const vPayer = (v.payerName || "").toLowerCase();
+            const isNameMatch = Boolean(vPayer && regName && (vPayer.includes(regName.split(" ")[0]) || regName.includes(vPayer.split(" ")[0])));
+
+            if (isAmountMatch && (isNameMatch || diff < 0.005)) {
+              return {
+                utr: v.utr,
+                amount: v.amount,
+                payerName: v.payerName,
+                source: "temporal_notification_time",
+                timeDeltaSeconds: Math.round(deltaSecs),
+              };
+            }
+          }
         }
       }
     }
@@ -2369,6 +2400,11 @@ export default function AdminPaymentsPage() {
                               <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
                                 <Zap className="w-2.5 h-2.5 text-emerald-600" />
                                 <span>Signal Recvd (₹{verifiedMatch.amount.toFixed(2)})</span>
+                                {(verifiedMatch as any).timeDeltaSeconds !== undefined && (
+                                  <span className="text-[8px] text-emerald-600 font-medium">
+                                    • Δ{Math.round((verifiedMatch as any).timeDeltaSeconds / 60)}m
+                                  </span>
+                                )}
                               </div>
                             )}
                           </div>

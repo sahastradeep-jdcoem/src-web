@@ -161,47 +161,61 @@ function extractTimestampFromNotificationContent(text: string, fallbackEpochMs?:
   if (!text) return defaultDate;
 
   try {
-    // 1. Look for Date: DD/MM/YY or DD/MM/YYYY or DD-MM-YYYY or DD-MMM-YYYY
-    const dateMatch = text.match(/(?:on\s+)?(\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b)/i);
-    // 2. Look for Time: HH:MM:SS or HH:MM AM/PM
-    const timeMatch = text.match(/(?:at\s+)?(\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM|am|pm)?\b)/i);
-
-    let year = defaultDate.getFullYear();
-    let month = defaultDate.getMonth();
+    const monthMap: Record<string, number> = {
+      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+    };
     let day = defaultDate.getDate();
+    let month = defaultDate.getMonth();
+    let year = defaultDate.getFullYear();
     let hours = defaultDate.getHours();
     let minutes = defaultDate.getMinutes();
     let seconds = defaultDate.getSeconds();
+    let hasDate = false;
+    let hasTime = false;
 
-    if (dateMatch && dateMatch[1]) {
-      const parts = dateMatch[1].split(/[/-]/);
-      if (parts.length === 3) {
-        day = parseInt(parts[0], 10);
-        month = parseInt(parts[1], 10) - 1;
-        const y = parseInt(parts[2], 10);
+    // 1. Look for Date with Named Month: e.g. "01 Nov 2026", "1 November 2026", "01-Nov-2026", "01-Nov-26"
+    const namedDate = text.match(/\b(\d{1,2})[\s\-]+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-]+(\d{2,4})\b/i);
+    if (namedDate) {
+      day = parseInt(namedDate[1], 10);
+      const mStr = namedDate[2].slice(0, 3).toLowerCase();
+      if (monthMap[mStr] !== undefined) month = monthMap[mStr];
+      const y = parseInt(namedDate[3], 10);
+      year = y < 100 ? (2000 + y) : y;
+      hasDate = true;
+    } else {
+      // 2. Look for Numeric Date: DD/MM/YY or DD/MM/YYYY or DD-MM-YYYY
+      const numDate = text.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/);
+      if (numDate) {
+        day = parseInt(numDate[1], 10);
+        month = parseInt(numDate[2], 10) - 1;
+        const y = parseInt(numDate[3], 10);
         year = y < 100 ? (2000 + y) : y;
+        hasDate = true;
       }
     }
 
-    if (timeMatch && timeMatch[1]) {
-      const tStr = timeMatch[1].trim();
-      const isPm = /pm/i.test(tStr);
-      const isAm = /am/i.test(tStr);
-      const numPart = tStr.replace(/[^\d:]/g, "");
-      const tParts = numPart.split(":");
-      if (tParts.length >= 2) {
-        let h = parseInt(tParts[0], 10);
-        minutes = parseInt(tParts[1], 10);
-        seconds = tParts.length >= 3 ? parseInt(tParts[2], 10) : 0;
-        if (isPm && h < 12) h += 12;
-        if (isAm && h === 12) h = 0;
-        hours = h;
-      }
+    // 3. Look for Time: HH:MM:SS AM/PM or HH:MM AM/PM or 24-hr HH:MM:SS
+    const timeMatch = text.match(/\b(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM|am|pm)?\b/);
+    if (timeMatch) {
+      let h = parseInt(timeMatch[1], 10);
+      minutes = parseInt(timeMatch[2], 10);
+      seconds = timeMatch[3] ? parseInt(timeMatch[3], 10) : 0;
+      const ampm = timeMatch[4] ? timeMatch[4].toUpperCase() : null;
+      if (ampm === "PM" && h < 12) h += 12;
+      if (ampm === "AM" && h === 12) h = 0;
+      hours = h;
+      hasTime = true;
     }
 
-    const parsed = new Date(year, month, day, hours, minutes, seconds);
-    if (!isNaN(parsed.getTime())) {
-      return parsed;
+    if (hasDate || hasTime) {
+      // Format as ISO with Indian Standard Time (+05:30) offset
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const isoString = `${year}-${pad(month + 1)}-${pad(day)}T${pad(hours)}:${pad(minutes)}:${pad(seconds)}+05:30`;
+      const parsed = new Date(isoString);
+      if (!isNaN(parsed.getTime())) {
+        return parsed;
+      }
     }
   } catch {}
 
@@ -1066,11 +1080,17 @@ export async function POST(req: NextRequest) {
             );
             const pendingRegsSnap = await getDocs(pendingRegsQuery);
             if (!pendingRegsSnap.empty) {
+              const notifTimeMs = contentDate.getTime();
               const pendingCandidates = pendingRegsSnap.docs.map((d) => ({
                 ref: d.ref,
                 id: d.id,
                 data: d.data(),
-              }));
+              })).sort((a, b) => {
+                // Temporal Priority: Closest to notification transaction time (contentDate)
+                const tA = new Date(a.data.registeredAt || a.data.createdAt || 0).getTime();
+                const tB = new Date(b.data.registeredAt || b.data.createdAt || 0).getTime();
+                return Math.abs(tA - notifTimeMs) - Math.abs(tB - notifTimeMs);
+              });
 
               // Multi-Factor Matching Hierarchy:
               // Tier 1: Direct 12-Digit UTR Match (student submitted UTR or stored in paymentDetails/customAnswers)
