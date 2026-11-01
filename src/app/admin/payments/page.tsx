@@ -2284,18 +2284,25 @@ export default function AdminPaymentsPage() {
                           </button>
                         </div>
                         {(() => {
-                          const isSynth = r.paymentId?.startsWith("AUTO-PTM-");
-                          const regAmt = Number(r.amountPaid || 0);
+                          const isSynth = Boolean(r.paymentId?.startsWith("AUTO-PTM-"));
+                          const studentClaimedUtr = (
+                            (r as any).paymentDetails?.bankUtr ||
+                            (r as any).customAnswers?.upiUtr ||
+                            (r as any).submittedUtr ||
+                            ""
+                          ).trim();
+                          const hasValidStudentUtr = /^\d{12}$/.test(studentClaimedUtr);
+
+                          // Strict Invariant: A genuine Bank SMS match must strictly belong to THIS registration or order.
+                          // Never loosely match across unrelated registrations by amount alone!
                           const realBankMatch = isSynth
                             ? Array.from(verifiedUpiMap.values()).find((v) => {
                                 if (v.utr.startsWith("AUTO-PTM-") || !/^\d{12}$/.test(v.utr)) return false;
-                                if (v.matchedRegistrationId === r.id || (r.orderId && v.matchedOrderId === r.orderId)) return true;
-                                const isSameAmt = Math.abs(v.amount - regAmt) < 0.005;
-                                const hasMicroPaisa = Math.round(regAmt * 100) % 100 !== 0;
-                                return isSameAmt && hasMicroPaisa;
+                                return v.matchedRegistrationId === r.id || (Boolean(r.orderId) && v.matchedOrderId === r.orderId);
                               })
                             : undefined;
 
+                          // Case 1: Genuine Bank SMS specifically matched to this student
                           if (realBankMatch) {
                             return (
                               <div className="space-y-0.5">
@@ -2325,11 +2332,77 @@ export default function AdminPaymentsPage() {
                             );
                           }
 
+                          // Case 2: Auto-approved via Paytm notification, with student-submitted genuine UTR
+                          if (isSynth && hasValidStudentUtr) {
+                            return (
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-1.5 text-[11px] font-mono text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md w-fit">
+                                  <span>UTR:</span>
+                                  <span className="font-bold">{studentClaimedUtr}</span>
+                                  <span className="text-[9px] font-bold bg-indigo-600 text-white px-1 rounded-sm uppercase tracking-wider font-sans">
+                                    STUDENT ENTERED
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopy(studentClaimedUtr, `utr-${r.id}`)}
+                                    title="Copy Student UTR"
+                                    className="p-0.5 rounded text-indigo-700 hover:text-indigo-950 cursor-pointer"
+                                  >
+                                    {copiedUtr === `utr-${r.id}` ? (
+                                      <Check className="w-2.5 h-2.5 text-indigo-700" />
+                                    ) : (
+                                      <Copy className="w-2.5 h-2.5" />
+                                    )}
+                                  </button>
+                                </div>
+                                <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
+                                  <span>Paytm Signal:</span>
+                                  <span className="text-slate-600 font-medium">{r.paymentId}</span>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          // Case 3: Auto-approved via Paytm notification directly (Paytm notifications do not contain 12-digit UTR)
+                          if (isSynth) {
+                            return (
+                              <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md w-fit">
+                                <span>REF:</span>
+                                <span className="font-semibold text-slate-800">{r.paymentId}</span>
+                                <span className="text-[9px] font-bold bg-blue-600 text-white px-1 rounded-sm uppercase tracking-wider font-sans">
+                                  PAYTM APP
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopy(r.paymentId!, `utr-${r.id}`)}
+                                  title="Copy Paytm Signal Ref"
+                                  className="p-0.5 rounded text-slate-400 hover:text-slate-700 cursor-pointer"
+                                >
+                                  {copiedUtr === `utr-${r.id}` ? (
+                                    <Check className="w-2.5 h-2.5 text-emerald-600" />
+                                  ) : (
+                                    <Copy className="w-2.5 h-2.5" />
+                                  )}
+                                </button>
+                              </div>
+                            );
+                          }
+
+                          // Case 4: Standard 12-digit Bank UTR / SMS
                           if (r.paymentId) {
+                            const isBankSms = /^\d{12}$/.test(r.paymentId) && (
+                              (r as any).verifiedBy?.toLowerCase().includes("sms") ||
+                              Array.from(verifiedUpiMap.values()).some((v) => v.utr === r.paymentId)
+                            );
                             return (
                               <div className="flex items-center gap-1 text-[11px] font-mono text-slate-500">
                                 <span>UTR:</span>
                                 <span className="font-semibold text-slate-700">{r.paymentId}</span>
+                                {isBankSms && (
+                                  <span className="text-[9px] font-bold bg-emerald-600 text-white px-1 rounded-sm uppercase tracking-wider font-sans">
+                                    BANK SMS
+                                  </span>
+                                )}
                                 <button
                                   type="button"
                                   onClick={() => handleCopy(r.paymentId!, `utr-${r.id}`)}

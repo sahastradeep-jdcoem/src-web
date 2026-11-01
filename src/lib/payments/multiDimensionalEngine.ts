@@ -54,15 +54,38 @@ export function evaluateCandidateAgainstRegistration(
   const candAmount = cand.receivedAmount || cand.amount || 0;
   const candUtr = (cand.utr || cand.submittedUtr || "").trim();
 
-  // Dimension 1: Exact Order ID Match (+40)
   const candOrderId = (cand.orderId || cand.matchedOrderId || "").trim();
+  const candRegId = (cand.registrationId || cand.matchedRegistrationId || "").trim();
+
+  // Strict Invariant: If candidate is explicitly tied to another registration or order, DISQUALIFY
+  if (candRegId && regDocId && candRegId !== regDocId && candRegId !== regTicketId) {
+    return null;
+  }
+  if (candOrderId && regOrderId && candOrderId !== regOrderId) {
+    return null;
+  }
+
+  // Strict Invariant: If candidate has a payer name that contradicts student name,
+  // do not match unless there is an explicit Order ID or Pass ID link
+  const candPayer = (cand.payerName || "").trim();
+  if (candPayer && regName) {
+    const isNameMatch = isNameCompatible(candPayer, regName);
+    const hasExplicitIdLink = Boolean(
+      (regOrderId && candOrderId && regOrderId === candOrderId) ||
+      (candRegId && (candRegId === regDocId || candRegId === regTicketId))
+    );
+    if (!isNameMatch && !hasExplicitIdLink) {
+      return null;
+    }
+  }
+
+  // Dimension 1: Exact Order ID Match (+40)
   if (regOrderId && candOrderId && regOrderId === candOrderId) {
     score += DIMENSION_WEIGHTS.ORDER_ID;
     matchedDims.push("Order ID");
   }
 
   // Dimension 2: Exact Registration / Pass ID Match (+35)
-  const candRegId = (cand.registrationId || cand.matchedRegistrationId || "").trim();
   if (candRegId && (candRegId === regDocId || candRegId === regTicketId)) {
     score += DIMENSION_WEIGHTS.PASS_ID;
     matchedDims.push("Pass ID");
@@ -114,10 +137,10 @@ export function evaluateCandidateAgainstRegistration(
   }
 
   // Dimension 6: Student Name Token Match (+25)
-  const candPayer = (cand.payerName || "").toLowerCase();
-  if (candPayer && regName) {
+  const candPayerLower = candPayer.toLowerCase();
+  if (candPayerLower && regName) {
     const regTokens = regName.split(/\s+/).filter((t: string) => t.length >= 3);
-    const payerTokens = candPayer.split(/\s+/).filter((t: string) => t.length >= 3);
+    const payerTokens = candPayerLower.split(/\s+/).filter((t: string) => t.length >= 3);
     if (regTokens.length > 0 && payerTokens.some((pt: string) => regTokens.some((rt: string) => rt.includes(pt) || pt.includes(rt)))) {
       score += DIMENSION_WEIGHTS.STUDENT_NAME;
       matchedDims.push("Student Name");
