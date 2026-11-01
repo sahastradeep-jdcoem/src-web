@@ -542,36 +542,31 @@ export async function POST(req: NextRequest) {
           const existingPayer = existingData?.payerName || payerName || null;
           const existingIsFriend = Boolean(existingData?.isFriendPayment ?? isFriendPayment);
 
-          // Update burst count on the primary signal document instead of creating duplicate rows
+          // Log duplicate signal in audit feed without blocking pre-reads
           try {
-            const logId = utr ? (isSyntheticUtr ? utr : `UTR-${utr}`) : `SIG-${Date.now()}`;
+            const logId = `SIG-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
             const logRef = doc(db, "upi_webhook_logs", logId);
-            const logSnap = await getDoc(logRef);
-            if (logSnap.exists()) {
-              await setDoc(logRef, {
-                burstCount: (logSnap.data()?.burstCount || 1) + 1,
-                lastBurstAt: now,
-                lastReceivedAt: now,
-              }, { merge: true });
-            } else {
-              await setDoc(logRef, {
-                id: logId,
-                receivedAt: now,
-                combinedText: combinedText.slice(0, 500),
-                extractedUtr: utr,
-                extractedAmount: amount,
-                matchedOrderId: existingOrderId,
-                matchedRegistrationId: existingRegId,
-                matchedStudentName: existingStudent,
-                payerName: existingPayer,
-                isFriendPayment: existingIsFriend,
-                source: sourceAppName,
-                status: existingStatus,
-                isDuplicate: true,
-                burstCount: 2,
-              });
-            }
-          } catch {}
+            await setDoc(logRef, {
+              id: logId,
+              receivedAt: now,
+              transactionTimestamp,
+              notificationTimestamp: rawPostTime || contentDate.getTime(),
+              combinedText: combinedText.slice(0, 500),
+              extractedUtr: utr,
+              extractedAmount: amount,
+              matchedOrderId: existingOrderId,
+              matchedRegistrationId: existingRegId,
+              matchedStudentName: existingStudent,
+              payerName: existingPayer,
+              isFriendPayment: existingIsFriend,
+              source: sourceAppName,
+              status: existingStatus,
+              isDuplicate: true,
+              burstCount: 1,
+            });
+          } catch (dupLogErr) {
+            console.warn("Notice: upi_webhook_logs duplicate write note:", dupLogErr);
+          }
 
           return NextResponse.json({
             success: true,
@@ -1247,16 +1242,14 @@ export async function POST(req: NextRequest) {
         console.warn("Notice: verified_upi_payments ledger write warning:", ledgerErr);
       }
 
-      // 3D. Save diagnostic audit entry in upi_webhook_logs
+      // 3D. Save diagnostic audit entry in upi_webhook_logs (atomic unique write; zero blocking pre-reads)
       try {
-        const logId = utr ? (isSyntheticUtr ? utr : `UTR-${utr}`) : `SIG-${Date.now()}`;
+        const logId = `SIG-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
         const logRef = doc(db, "upi_webhook_logs", logId);
-        const logSnap = await getDoc(logRef);
-        const prevBursts = logSnap.exists() ? (logSnap.data()?.burstCount || 1) : 0;
 
         await setDoc(logRef, {
           id: logId,
-          receivedAt: logSnap.exists() ? (logSnap.data()?.receivedAt || now) : now,
+          receivedAt: now,
           lastReceivedAt: now,
           transactionTimestamp,
           notificationTimestamp: rawPostTime || contentDate.getTime(),
@@ -1270,9 +1263,9 @@ export async function POST(req: NextRequest) {
           isFriendPayment: Boolean(isFriendPayment),
           source: sourceAppName,
           status: isMatched ? "MATCHED" : "UNCLAIMED",
-          isDuplicate: isDuplicateNotification || prevBursts > 0,
-          burstCount: prevBursts + 1,
-        }, { merge: true });
+          isDuplicate: Boolean(isDuplicateNotification),
+          burstCount: 1,
+        });
       } catch (auditErr) {
         console.warn("Notice: upi_webhook_logs audit warning:", auditErr);
       }

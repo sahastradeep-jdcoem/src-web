@@ -313,8 +313,10 @@ service cloud.firestore {
 
     // Incoming webhook diagnostic logs
     match /upi_webhook_logs/{logId} {
-      allow create: if isPrivilegedAdmin() || (request.resource.data.receivedAt != null);
-      allow read, update, delete: if isPrivilegedAdmin();
+      allow get: if true;
+      allow list: if isPrivilegedAdmin();
+      allow create, update: if isPrivilegedAdmin() || (request.resource.data.receivedAt != null);
+      allow delete: if isPrivilegedAdmin();
     }
 
     // Contact form submissions
