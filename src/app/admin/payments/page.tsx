@@ -118,6 +118,17 @@ function getApprovalBadgeInfo(r: any, verifiedUpiMap: Map<string, any>) {
   const synthUtr = String(r.paymentDetails?.syntheticUtr || r.paymentDetails?.gatewaySignalId || "").trim();
   const orderId = String(r.orderId || "").trim();
 
+  // 1. Explicit Admin / Human Manual Approval: (Admin, Manual)
+  const isExplicitManual = verifiedBy.includes("admin") || verifiedBy.includes("treasurer") || verifiedBy.includes("manual");
+  if (isExplicitManual) {
+    return {
+      source: "Admin",
+      mode: "Manual",
+      badgeText: "(Admin, Manual)",
+      badgeStyle: "bg-amber-50 text-amber-800 border-amber-200/80",
+    };
+  }
+
   // Find corresponding signal in verifiedUpiMap if any
   const upiSignal = (paymentId ? verifiedUpiMap.get(paymentId) : null)
     || (synthUtr ? verifiedUpiMap.get(synthUtr) : null)
@@ -126,25 +137,22 @@ function getApprovalBadgeInfo(r: any, verifiedUpiMap: Map<string, any>) {
 
   const signalSource = String(upiSignal?.source || "").toLowerCase();
 
-  // Determine Mode: Auto vs Manual
-  const isExplicitManual = verifiedBy.includes("manual") || verifiedBy.includes("treasurer") || verifiedBy.includes("admin");
-  const isAuto = !isExplicitManual && Boolean(
-    paymentId.startsWith("AUTO-PTM-") ||
-    synthUtr.startsWith("AUTO-PTM-") ||
-    verifiedBy.includes("auto") ||
-    verifiedBy.includes("payhook") ||
-    verifiedBy.includes("gateway")
-  );
-  const mode: "Auto" | "Manual" = isAuto ? "Auto" : "Manual";
+  // 2. Determine if student manually entered a UTR
+  const studentClaimedUtr = String(
+    r.paymentDetails?.bankUtr ||
+    r.customAnswers?.upiUtr ||
+    r.submittedUtr ||
+    ""
+  ).trim();
+  const hasManualUtr = /^\d{12}$/.test(studentClaimedUtr) || (/^\d{12}$/.test(paymentId) && Boolean(synthUtr));
 
-  // Determine Source: Paytm vs SMS vs Cashfree vs Instamojo
+  // 3. Determine Source: Paytm vs SMS vs Cashfree vs Instamojo
   let source = "Paytm";
   if (
     signalSource.includes("sms") ||
     signalSource.includes("messages") ||
     signalSource.includes("canara") ||
-    verifiedBy.includes("sms") ||
-    (upiSignal && !signalSource.includes("paytm") && /^\d{12}$/.test(paymentId))
+    verifiedBy.includes("sms")
   ) {
     source = "SMS";
   } else if (
@@ -161,27 +169,25 @@ function getApprovalBadgeInfo(r: any, verifiedUpiMap: Map<string, any>) {
     source = "Instamojo";
   }
 
-  const badgeText = `(${source}, ${mode})`;
+  // 4. Format mode label: "Manual UTR" vs "Auto"
+  const modeLabel = hasManualUtr ? "Manual UTR" : "Auto";
+  const badgeText = `(${source}, ${modeLabel})`;
 
-  // Styling based on source and mode:
-  // (Paytm, Auto): crisp blue
-  // (SMS, Auto): crisp emerald
-  // (Paytm, Manual): crisp amber
-  // (SMS, Manual): crisp teal
+  // 5. Crisp visual styling
   let badgeStyle = "bg-blue-50 text-blue-700 border-blue-200/80";
-  if (source === "SMS" && mode === "Auto") {
+  if (source === "SMS" && !hasManualUtr) {
     badgeStyle = "bg-emerald-50 text-emerald-700 border-emerald-200/80";
-  } else if (source === "Paytm" && mode === "Auto") {
-    badgeStyle = "bg-blue-50 text-blue-700 border-blue-200/80";
-  } else if (source === "SMS" && mode === "Manual") {
+  } else if (source === "SMS" && hasManualUtr) {
     badgeStyle = "bg-teal-50 text-teal-800 border-teal-200/80";
-  } else if (source === "Paytm" && mode === "Manual") {
-    badgeStyle = "bg-amber-50 text-amber-800 border-amber-200/80";
+  } else if (source === "Paytm" && hasManualUtr) {
+    badgeStyle = "bg-indigo-50 text-indigo-700 border-indigo-200/80";
+  } else if (source === "Paytm" && !hasManualUtr) {
+    badgeStyle = "bg-blue-50 text-blue-700 border-blue-200/80";
   } else {
     badgeStyle = "bg-slate-100 text-slate-700 border-slate-200/80";
   }
 
-  return { source, mode, badgeText, badgeStyle };
+  return { source, mode: modeLabel, badgeText, badgeStyle };
 }
 
 export default function AdminPaymentsPage() {
@@ -357,7 +363,7 @@ export default function AdminPaymentsPage() {
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(getStoredPaymentConfig());
 
   // Real-time verified UPI ledger map for instant reconciliation
-  const [verifiedUpiMap, setVerifiedUpiMap] = useState<Map<string, { utr: string; amount: number; status: string; receivedAt?: string; transactionTimestamp?: string; payerName?: string; matchedOrderId?: string; matchedRegistrationId?: string }>>(new Map());
+  const [verifiedUpiMap, setVerifiedUpiMap] = useState<Map<string, { utr: string; amount: number; status: string; receivedAt?: string; transactionTimestamp?: string; payerName?: string; matchedOrderId?: string; matchedRegistrationId?: string; source?: string }>>(new Map());
 
   // Real-time completed checkout sessions map (orderId -> session)
   const [completedSessionsMap, setCompletedSessionsMap] = useState<Map<string, { orderId: string; registrationId?: string; utr: string; submittedUtr?: string; amount: number; receivedAmount?: number; payerName?: string; paidAt?: string; transactionTimestamp?: string; status: string }>>(new Map());
@@ -559,7 +565,7 @@ export default function AdminPaymentsPage() {
         if (db) {
           const q = query(collection(db, "verified_upi_payments"), orderBy("receivedAt", "desc"), limit(150));
           unsub = onSnapshot(q, (snap) => {
-            const map = new Map<string, { utr: string; amount: number; status: string; receivedAt?: string; transactionTimestamp?: string; payerName?: string; matchedOrderId?: string; matchedRegistrationId?: string }>();
+            const map = new Map<string, { utr: string; amount: number; status: string; receivedAt?: string; transactionTimestamp?: string; payerName?: string; matchedOrderId?: string; matchedRegistrationId?: string; source?: string }>();
             snap.forEach((d) => {
               const data = d.data();
               if (data?.utr) {
@@ -572,6 +578,7 @@ export default function AdminPaymentsPage() {
                   payerName: data.payerName,
                   matchedOrderId: data.matchedOrderId,
                   matchedRegistrationId: data.matchedRegistrationId,
+                  source: data.source || data.sender || "",
                 });
               }
             });
@@ -2421,7 +2428,7 @@ export default function AdminPaymentsPage() {
                                 <div className="flex items-center gap-1.5 text-[11px] font-mono text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md w-fit">
                                   <span>UTR:</span>
                                   <span className="font-bold">{realBankMatch.utr}</span>
-                                  <span className={`text-[10px] font-bold font-sans px-1.5 py-0.2 rounded border uppercase tracking-wider ${badgeStyle}`}>
+                                  <span className={`text-[10px] font-semibold font-sans px-1.5 py-0.5 rounded border normal-case tracking-normal ${badgeStyle}`}>
                                     {badgeText}
                                   </span>
                                   <button
@@ -2453,7 +2460,7 @@ export default function AdminPaymentsPage() {
                                 <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-800 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md w-fit">
                                   <span>UTR:</span>
                                   <span className="font-bold">{studentClaimedUtr}</span>
-                                  <span className={`text-[10px] font-bold font-sans px-1.5 py-0.2 rounded border uppercase tracking-wider ${badgeStyle}`}>
+                                  <span className={`text-[10px] font-semibold font-sans px-1.5 py-0.5 rounded border normal-case tracking-normal ${badgeStyle}`}>
                                     {badgeText}
                                   </span>
                                   <button
@@ -2483,7 +2490,7 @@ export default function AdminPaymentsPage() {
                               <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md w-fit">
                                 <span>REF:</span>
                                 <span className="font-semibold text-slate-800">{rawPaymentId}</span>
-                                <span className={`text-[10px] font-bold font-sans px-1.5 py-0.2 rounded border uppercase tracking-wider ${badgeStyle}`}>
+                                <span className={`text-[10px] font-semibold font-sans px-1.5 py-0.5 rounded border normal-case tracking-normal ${badgeStyle}`}>
                                   {badgeText}
                                 </span>
                                 <button
@@ -2509,7 +2516,7 @@ export default function AdminPaymentsPage() {
                               <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-600 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md w-fit">
                                 <span>UTR:</span>
                                 <span className="font-semibold text-slate-800">{displayUtr}</span>
-                                <span className={`text-[10px] font-bold font-sans px-1.5 py-0.2 rounded border uppercase tracking-wider ${badgeStyle}`}>
+                                <span className={`text-[10px] font-semibold font-sans px-1.5 py-0.5 rounded border normal-case tracking-normal ${badgeStyle}`}>
                                   {badgeText}
                                 </span>
                                 <button
@@ -2795,7 +2802,7 @@ export default function AdminPaymentsPage() {
                 </button>
               </div>
               <p className="text-[10px] text-slate-400">
-                Marks payment badge as {approveSourceInput === "Paytm" ? "(Paytm, Manual)" : "(SMS, Manual)"} in payments ledger.
+                Marks payment badge as <span className="font-semibold text-amber-800 bg-amber-50 px-1 py-0.5 rounded border border-amber-200">(Admin, Manual)</span> in payments ledger.
               </p>
             </div>
 
