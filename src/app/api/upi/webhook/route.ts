@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHmac, timingSafeEqual, createHash } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { db } from "@/lib/firebase/config";
 import { 
   collection, 
@@ -13,284 +13,18 @@ import {
   deleteDoc,
   writeBatch
 } from "firebase/firestore";
+import {
+  extractUtrFromText,
+  extractAmountFromText,
+  extractTimestampFromNotificationContent,
+  extractSenderName,
+  isNameCompatible,
+  generateDeterministicSyntheticUtr,
+  resolveSourceAppName,
+  evaluateCandidateAgainstRegistration,
+} from "@/lib/payments";
 
 const WEBHOOK_MAX_SKEW_SECONDS = 5 * 60;
-
-/**
- * Helper to extract 12-digit numeric UTR from raw notification text
- */
-function extractUtrFromText(text: string): string | null {
-  if (!text) return null;
-
-  // URL-decode if needed (in case payload arrived form-encoded)
-  let decoded = text;
-  try {
-    if (text.includes("%")) {
-      decoded = decodeURIComponent(text.replace(/\+/g, " "));
-    }
-  } catch {
-    decoded = text;
-  }
-
-  // Pattern 1: Explicit labels like "UPI Ref: 425612345678", "UTR: 425612345678", "Ref No: 425612345678", "Ref no. 425612345678", "Txn ID: 425612345678", "rrn: 425612345678", "UPI/425512345678", "UPI/CR/425512345678"
-  const labeledMatch = decoded.match(/(?:upi[\/:\-\s]*(?:cr[\/:\-\s]*)?|utr[\/:\-\s]*|ref(?:\s*no\.?)?[\/:\-\s]*|txn\s*(?:id)?[\/:\-\s]*|rrn[\/:\-\s]*|imps[\/:\-\s]*(?:p2a[\/:\-\s]*)?)(\d{12})/i);
-  if (labeledMatch && labeledMatch[1]) {
-    return labeledMatch[1];
-  }
-
-  // Pattern 2: Key-value / JSON like "utr": "425612345678" or utr=425612345678
-  const kvMatch = decoded.match(/(?:utr|reference|ref_no)[\s"':=]+(\d{12})/i);
-  if (kvMatch && kvMatch[1]) {
-    return kvMatch[1];
-  }
-
-  // Pattern 3: Standalone 12-digit number (UPI UTRs are 12 digits; skip 12-digit numbers that look like Indian phone numbers with +91)
-  const standaloneMatches = decoded.matchAll(/\b(\d{12})\b/g);
-  for (const m of standaloneMatches) {
-    const candidate = m[1];
-    // Exclude numbers starting with 91 followed by 6, 7, 8, or 9 (Indian mobile numbers prefixed with 91)
-    if (/^91[6-9]\d{9}$/.test(candidate)) {
-      continue;
-    }
-    return candidate;
-  }
-
-  return null;
-}
-
-/**
- * Helper to extract transaction amount from notification text
- */
-function extractAmountFromText(text: string): number | null {
-  if (!text) return null;
-
-  // URL-decode if needed (in case payload arrived form-encoded)
-  let decoded = text;
-  try {
-    if (text.includes("%")) {
-      decoded = decodeURIComponent(text.replace(/\+/g, " "));
-    }
-  } catch {
-    decoded = text;
-  }
-
-  // Clean HTML entities or zero-width unicode
-  const clean = decoded
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&#8377;/g, "₹")
-    .replace(/[\u200B-\u200D\uFEFF]/g, "");
-
-  // Pattern 0: Explicit JSON / URL / Form key e.g. "amount": 1.02 or amount=1.02 or amt: 1.02
-  const explicitKeyMatch = clean.match(/(?:amount|amt|total)[\s"':=]+([\d,]+(?:\.\d{1,2})?)/i);
-  if (explicitKeyMatch && explicitKeyMatch[1]) {
-    const val = parseFloat(explicitKeyMatch[1].replace(/,/g, ""));
-    if (!isNaN(val) && val > 0) return val;
-  }
-
-  // Pattern 1: "Received ₹150.00" or "Received Rs. 150" or "credited with INR 150" or "credited by Rs 150" or "Payment of ₹1.02" or "paid ₹1.02"
-  const receivedMatch = clean.match(/(?:received|credited|payment\s+of|paid|accepted)\s+(?:with\s+|by\s+)?(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)/i);
-  if (receivedMatch && receivedMatch[1]) {
-    const val = parseFloat(receivedMatch[1].replace(/,/g, ""));
-    if (!isNaN(val) && val > 0) return val;
-  }
-
-  // Pattern 2: "₹150.00" or "Rs 150" or "₹ 10" or "₹ 1.02" or "INR 1.02"
-  const currencyMatch = clean.match(/(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)/i);
-  if (currencyMatch && currencyMatch[1]) {
-    const val = parseFloat(currencyMatch[1].replace(/,/g, ""));
-    if (!isNaN(val) && val > 0) return val;
-  }
-
-  // Pattern 3: "10 rupees" or "10 rs" or "10.00 received" or "1.02 received"
-  const rupeesMatch = clean.match(/([\d,]+(?:\.\d{1,2})?)\s*(?:rs\.?|rupees|inr|₹|received|credited|paid)/i);
-  if (rupeesMatch && rupeesMatch[1]) {
-    const val = parseFloat(rupeesMatch[1].replace(/,/g, ""));
-    if (!isNaN(val) && val > 0) return val;
-  }
-
-  // Pattern 4: "amount of INR 1.02 has been CREDITED" (standard Indian bank alert)
-  const bankAlertMatch = clean.match(/(?:amount\s+of\s+)?(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)\s+(?:has\s+been\s+)?(?:credited|received)/i);
-  if (bankAlertMatch && bankAlertMatch[1]) {
-    const val = parseFloat(bankAlertMatch[1].replace(/,/g, ""));
-    if (!isNaN(val) && val > 0) return val;
-  }
-
-  return null;
-}
-
-/**
- * Helper to extract sender/payer name from incoming UPI notification banner
- * e.g. "₹5.02 Received from ATHANG SHAILESHKUMAR DUSAWAR" -> "ATHANG SHAILESHKUMAR DUSAWAR"
- */
-function extractSenderName(text: string): string | null {
-  if (!text) return null;
-  const clean = text
-    .replace(/&nbsp;/gi, " ")
-    .replace(/[\u200B-\u200D\uFEFF]/g, "");
-
-  const m = clean.match(/(?:received\s+from|from|paid\s+by|sent\s+by)\s+([A-Za-z\s]{3,45}?)(?:\s+(?:received|rs|inr|on\s+paytm|via|using|\.|\d|\()|$)/i);
-  if (m && m[1]) {
-    const cleaned = m[1].trim().replace(/\s+/g, " ");
-    if (cleaned.length >= 3 && !/^(the|a|an|account|bank|upi|paytm|phonepe|gpay|customer|payment)$/i.test(cleaned)) {
-      return cleaned;
-    }
-  }
-  return null;
-}
-
-/**
- * Checks if a candidate student name matches or is compatible with notification sender name.
- * If notification specifies a sender name, candidate name MUST share at least one name token (length >= 3).
- */
-function isNameCompatible(senderName: string | null, candidateName: string | null): boolean {
-  if (!senderName || !candidateName) return true; // Cannot disqualify if sender is not in notification
-  const sParts = senderName.toLowerCase().split(/[\s,.-]+/).filter(p => p.length >= 3);
-  const cParts = candidateName.toLowerCase().split(/[\s,.-]+/).filter(p => p.length >= 3);
-  if (sParts.length === 0 || cParts.length === 0) return true;
-  return sParts.some(sp => cParts.some(cp => cp.includes(sp) || sp.includes(cp)));
-}
-
-/**
- * Helper to extract transaction date & time from notification text content
- * e.g. "credited with INR 2.01 on 31/10/26 from HARSH" -> 2026-10-31
- * e.g. "Paid at 09:30 PM, 31 Oct 2026"
- * e.g. "on 31/10/26 19:52:00"
- */
-function extractTimestampFromNotificationContent(text: string, fallbackEpochMs?: number): Date {
-  const defaultDate = fallbackEpochMs && fallbackEpochMs > 0 ? new Date(fallbackEpochMs) : new Date();
-  if (!text) return defaultDate;
-
-  try {
-    const monthMap: Record<string, number> = {
-      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
-    };
-    let day = defaultDate.getDate();
-    let month = defaultDate.getMonth();
-    let year = defaultDate.getFullYear();
-    let hours = defaultDate.getHours();
-    let minutes = defaultDate.getMinutes();
-    let seconds = defaultDate.getSeconds();
-    let hasDate = false;
-    let hasTime = false;
-
-    // 1. Look for Date with Named Month: e.g. "01 Nov 2026", "1 November 2026", "01-Nov-2026", "01-Nov-26"
-    const namedDate = text.match(/\b(\d{1,2})[\s\-]+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-]+(\d{2,4})\b/i);
-    if (namedDate) {
-      day = parseInt(namedDate[1], 10);
-      const mStr = namedDate[2].slice(0, 3).toLowerCase();
-      if (monthMap[mStr] !== undefined) month = monthMap[mStr];
-      const y = parseInt(namedDate[3], 10);
-      year = y < 100 ? (2000 + y) : y;
-      hasDate = true;
-    } else {
-      // 2. Look for Numeric Date: DD/MM/YY or DD/MM/YYYY or DD-MM-YYYY
-      const numDate = text.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/);
-      if (numDate) {
-        day = parseInt(numDate[1], 10);
-        month = parseInt(numDate[2], 10) - 1;
-        const y = parseInt(numDate[3], 10);
-        year = y < 100 ? (2000 + y) : y;
-        hasDate = true;
-      }
-    }
-
-    // 3. Look for Time: HH:MM:SS AM/PM or HH:MM AM/PM or 24-hr HH:MM:SS
-    const timeMatch = text.match(/\b(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM|am|pm)?\b/);
-    if (timeMatch) {
-      let h = parseInt(timeMatch[1], 10);
-      minutes = parseInt(timeMatch[2], 10);
-      seconds = timeMatch[3] ? parseInt(timeMatch[3], 10) : 0;
-      const ampm = timeMatch[4] ? timeMatch[4].toUpperCase() : null;
-      if (ampm === "PM" && h < 12) h += 12;
-      if (ampm === "AM" && h === 12) h = 0;
-      hours = h;
-      hasTime = true;
-    }
-
-    if (hasDate || hasTime) {
-      // Format as ISO with Indian Standard Time (+05:30) offset
-      const pad = (n: number) => String(n).padStart(2, "0");
-      const isoString = `${year}-${pad(month + 1)}-${pad(day)}T${pad(hours)}:${pad(minutes)}:${pad(seconds)}+05:30`;
-      const parsed = new Date(isoString);
-      if (!isNaN(parsed.getTime())) {
-        return parsed;
-      }
-    }
-  } catch {}
-
-  return defaultDate;
-}
-
-/**
- * Generates a deterministic deduplication UTR for Paytm/UPI notifications that lack an explicit 12-digit UTR.
- * Normalizes amount, sender, and 3-minute transaction time window so duplicate bursts of the exact same payment produce the identical UTR.
- */
-function generateDeterministicSyntheticUtr(sender: string, amount: number, text: string, transactionTimeMs?: number): string {
-  const cleanAmount = (amount || 0).toFixed(2);
-  const cleanSender = (sender || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  
-  // 3-minute sliding window based on actual transaction time
-  const refTime = transactionTimeMs && transactionTimeMs > 0 ? transactionTimeMs : Date.now();
-  const timeBucket = Math.floor(refTime / (3 * 60 * 1000));
-  const rawKey = `${cleanAmount}_${cleanSender || "direct"}_${timeBucket}`;
-  const hash = createHash("sha256").update(rawKey).digest("hex").slice(0, 10).toUpperCase();
-  return `AUTO-PTM-${hash}`;
-}
-
-/**
- * Resolves user-friendly payment app name from Android package name or User-Agent
- */
-function resolveSourceAppName(packageName?: string | null, userAgent?: string | null, text?: string): string {
-  const pkg = (packageName || "").toLowerCase().trim();
-  const ua = (userAgent || "").toLowerCase().trim();
-  const t = (text || "").toLowerCase();
-
-  // 1. Direct package name detection
-  if (pkg.includes("messaging") || pkg.includes("mms") || pkg.includes("sms") || ua.includes("messaging")) {
-    return "Google Messages (SMS)";
-  }
-  if (pkg.includes("paytm") || ua.includes("paytm")) {
-    return "Paytm for Business";
-  }
-  if (pkg.includes("phonepe") || ua.includes("phonepe")) {
-    return "PhonePe";
-  }
-  if (pkg.includes("paisa") || (pkg.includes("google") && pkg.includes("pay")) || ua.includes("gpay")) {
-    return "Google Pay";
-  }
-  if (pkg.includes("truecaller")) {
-    return "Truecaller";
-  }
-  if (pkg.includes("bhim") || pkg.includes("npci")) {
-    return "BHIM UPI";
-  }
-  if (pkg.includes("diagnostics")) {
-    return "PayHook Diagnostics";
-  }
-  if (ua.includes("macrodroid")) {
-    return "MacroDroid";
-  }
-
-  // 2. Text heuristics fallback (essential when package is generic or notification header is in text)
-  if (t.includes("canbnk") || t.includes("canara") || t.includes("hdfc") || t.includes("sbi") || t.includes("icici") || t.includes("axis") || t.includes("acct xxx") || t.includes("dear customer")) {
-    return "Google Messages (SMS)";
-  }
-  if (t.includes("received on") || t.includes("received from") || t.includes("paytm") || t.includes("soundbox") || t.includes("auto-ptm")) {
-    return "Paytm for Business";
-  }
-  if (t.includes("phonepe") || t.includes("@ybl") || t.includes("@ibl")) {
-    return "PhonePe";
-  }
-  if (t.includes("gpay") || t.includes("google pay") || t.includes("@ok")) {
-    return "Google Pay";
-  }
-
-  if (pkg.length > 0 && pkg !== "in.srcjdcoem.payhook") {
-    return pkg;
-  }
-  return "SRC PayHook";
-}
 
 /**
  * Validate incoming webhook authentication token
@@ -1080,121 +814,61 @@ export async function POST(req: NextRequest) {
             );
             const pendingRegsSnap = await getDocs(pendingRegsQuery);
             if (!pendingRegsSnap.empty) {
-              const notifTimeMs = contentDate.getTime();
-              
-              // Multi-Dimensional Convergence Engine:
-              // Scores every candidate registration across all 7 dimensions and selects the one with MAXIMUM matching dimensions
-              interface ScoredRegCandidate {
-                ref: any;
-                id: string;
-                data: any;
-                score: number;
-                matchedDimensionsCount: number;
-                matchedDimensions: string[];
-                timeDeltaSeconds: number;
-              }
+              const candSignal = {
+                orderId: matchedOrderId || undefined,
+                registrationId: matchedRegistrationId || undefined,
+                matchedOrderId: matchedOrderId || undefined,
+                matchedRegistrationId: matchedRegistrationId || undefined,
+                utr: isSyntheticUtr ? undefined : utr || undefined,
+                submittedUtr: utr || undefined,
+                amount,
+                payerName: extractedSender || undefined,
+                timestamp: contentDate.toISOString(),
+                source: sourceAppName,
+              };
 
-              const scoredRegCandidates: ScoredRegCandidate[] = pendingRegsSnap.docs.map((d) => {
+              const scoredRegCandidates = pendingRegsSnap.docs.map((d) => {
                 const data = d.data();
-                let score = 0;
-                const matchedDims: string[] = [];
-                const regAmt = Number(data.amountPaid || data.paymentDetails?.amount || 0);
-                const regUtr = String(data.paymentId || data.paymentDetails?.utr || data.customAnswers?.upiUtr || "").trim();
-                const regName = String(data.participantName || data.leaderName || "").trim();
-                const regPhone = String(data.phone || "").replace(/\D/g, "").slice(-6);
-                const regTimeMs = new Date(data.registeredAt || data.createdAt || 0).getTime();
-                const timeDeltaSeconds = Math.round(Math.abs(regTimeMs - notifTimeMs) / 1000);
-
-                // Dimension 1: 12-Digit Bank UTR Match (+45)
-                if (!isSyntheticUtr && utr && regUtr && regUtr === utr) {
-                  score += 45;
-                  matchedDims.push("Bank UTR");
-                }
-
-                // Dimension 2: Order ID Match (+40)
-                if (matchedOrderId && data.orderId && data.orderId === matchedOrderId) {
-                  score += 40;
-                  matchedDims.push("Order ID");
-                }
-
-                // Dimension 3: Pass ID Match (+35)
-                if (matchedRegistrationId && (d.id === matchedRegistrationId || data.registrationId === matchedRegistrationId)) {
-                  score += 35;
-                  matchedDims.push("Pass ID");
-                }
-
-                // Dimension 4: Amount / Micro-Paisa Match (+35 for exact micro-paisa, +20 for round, +25 for base offset)
-                if (regAmt > 0 && amount > 0) {
-                  const diff = Math.abs(regAmt - amount);
-                  if (diff < 0.005) {
-                    const hasPaise = Math.round(amount * 100) % 100 !== 0;
-                    if (hasPaise) {
-                      score += 35;
-                      matchedDims.push("Micro-Paisa");
-                    } else {
-                      score += 20;
-                      matchedDims.push("Exact Amount");
-                    }
-                  } else if (diff <= 1.00) {
-                    score += 25;
-                    matchedDims.push("Base Fee Match");
-                  }
-                }
-
-                // Dimension 5: Temporal Window Correlation (+30 for ≤3m, +20 for ≤15m, +10 for ≤45m)
-                if (timeDeltaSeconds <= 180) {
-                  score += 30;
-                  matchedDims.push("Time (≤3m)");
-                } else if (timeDeltaSeconds <= 900) {
-                  score += 20;
-                  matchedDims.push("Time (≤15m)");
-                } else if (timeDeltaSeconds <= 2700) {
-                  score += 10;
-                  matchedDims.push("Time (≤45m)");
-                }
-
-                // Dimension 6: Student Name Token Match (+25)
-                if (extractedSender && regName && isNameCompatible(extractedSender, regName)) {
-                  score += 25;
-                  matchedDims.push("Student Name");
-                }
-
-                // Dimension 7: Phone Match (+20)
-                if (regPhone.length >= 6 && combinedText.includes(regPhone)) {
-                  score += 20;
-                  matchedDims.push("Phone");
-                }
+                const evalMatch = evaluateCandidateAgainstRegistration(candSignal, {
+                  id: d.id,
+                  registrationId: data.registrationId,
+                  orderId: data.orderId,
+                  paymentId: data.paymentId || data.paymentDetails?.utr || data.customAnswers?.upiUtr,
+                  amountPaid: Number(data.amountPaid || data.paymentDetails?.amount || 0),
+                  participantName: data.participantName,
+                  leaderName: data.leaderName,
+                  phone: data.phone,
+                  registeredAt: data.registeredAt,
+                  createdAt: data.createdAt,
+                });
 
                 return {
                   ref: d.ref,
                   id: d.id,
                   data,
-                  score,
-                  matchedDimensionsCount: matchedDims.length,
-                  matchedDimensions: matchedDims,
-                  timeDeltaSeconds,
+                  evalMatch,
                 };
-              });
+              }).filter((c): c is typeof c & { evalMatch: NonNullable<typeof c.evalMatch> } => Boolean(c.evalMatch));
 
               // Rank by MAXIMUM matched dimensions first, then highest score, then closest time delta
               scoredRegCandidates.sort((a, b) => {
-                if (b.matchedDimensionsCount !== a.matchedDimensionsCount) {
-                  return b.matchedDimensionsCount - a.matchedDimensionsCount;
+                if (b.evalMatch.matchedDimensionsCount !== a.evalMatch.matchedDimensionsCount) {
+                  return b.evalMatch.matchedDimensionsCount - a.evalMatch.matchedDimensionsCount;
                 }
-                if (b.score !== a.score) {
-                  return b.score - a.score;
+                if (b.evalMatch.score !== a.evalMatch.score) {
+                  return b.evalMatch.score - a.evalMatch.score;
                 }
-                return a.timeDeltaSeconds - b.timeDeltaSeconds;
+                return (a.evalMatch.timeDeltaSeconds || 999999) - (b.evalMatch.timeDeltaSeconds || 999999);
               });
 
               // Strict Convergence Gate: Requires matching AT LEAST 2 independent dimensions AND score >= 60
               let candidateMatch: any = null;
               if (scoredRegCandidates.length > 0) {
                 const best = scoredRegCandidates[0];
-                if (best.matchedDimensionsCount >= 2 && best.score >= 60) {
+                if (best.evalMatch.isEligibleForAutoApproval) {
                   candidateMatch = best;
                 } else {
-                  console.warn(`Webhook Auto-Approve Skipped: Best candidate ${best.id} matched only ${best.matchedDimensionsCount} dimensions (Score: ${best.score}). Requires >= 2 dimensions and score >= 60.`);
+                  console.warn(`Webhook Auto-Approve Skipped: Best candidate ${best.id} matched only ${best.evalMatch.matchedDimensionsCount} dimensions (Score: ${best.evalMatch.score}). Requires >= 2 dimensions and score >= 60.`);
                 }
               }
 
