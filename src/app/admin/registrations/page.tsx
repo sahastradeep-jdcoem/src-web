@@ -91,6 +91,13 @@ import { isEntityOwnedByClub } from "@/types/rbac";
 
 type ActiveTab = "summary" | "question" | "individual" | "table";
 
+function formatIndianCurrency(amount: number): string {
+  if (amount % 1 !== 0) {
+    return amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  return amount.toLocaleString("en-IN");
+}
+
 function getRegistrationTimestampMs(r: any): number {
   if (!r) return 0;
   const candidates = [
@@ -460,6 +467,85 @@ export default function AdminRegistrationsPage() {
     }
   }, [departmentsList]);
 
+  // Dual-Subscription for active checkout sessions to resolve exact gateway amounts (micro-paisa offsets)
+  const [completedSessionsMap, setCompletedSessionsMap] = useState<Map<string, number>>(new Map());
+
+  useEffect(() => {
+    let unsub: (() => void) | null = null;
+    (async () => {
+      try {
+        const { db } = await import("@/lib/firebase/config");
+        const { collection, onSnapshot, query, limit, orderBy } = await import("firebase/firestore");
+        if (db) {
+          const q = query(collection(db, "active_checkout_sessions"), orderBy("createdAt", "desc"), limit(100));
+          unsub = onSnapshot(q, (snap) => {
+            const map = new Map<string, number>();
+            snap.forEach((d) => {
+              const data = d.data();
+              if (data?.status === "COMPLETED" && (data.orderId || d.id)) {
+                const amt = Number(data.receivedAmount || data.amount || 0);
+                if (amt > 0) map.set(String(data.orderId || d.id).trim(), amt);
+              }
+            });
+            setCompletedSessionsMap(map);
+          });
+        }
+      } catch (e) {
+        console.warn("Notice: active_checkout_sessions subscription note in registrations:", e);
+      }
+    })();
+    return () => {
+      if (unsub) unsub();
+    };
+  }, []);
+
+  // Enriched registrations resolving exact micro-paisa gateway revenue
+  const enrichedRegistrations = useMemo(() => {
+    return registrations.map((r) => {
+      const sessionAmt = r.orderId ? completedSessionsMap.get(r.orderId) : undefined;
+      const actualAmt = Number(sessionAmt || (r as any).paymentDetails?.amount || r.amountPaid || 0);
+      if (actualAmt > 0 && Math.abs((r.amountPaid || 0) - actualAmt) > 0.005) {
+        return {
+          ...r,
+          amountPaid: actualAmt,
+          paymentDetails: {
+            ...((r as any).paymentDetails || {}),
+            amount: actualAmt,
+          },
+        };
+      }
+      return r;
+    });
+  }, [registrations, completedSessionsMap]);
+
+  // Self-heal Firestore registration amount if discrepancy exists
+  const selfHealedIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (enrichedRegistrations.length === 0) return;
+    for (const r of enrichedRegistrations) {
+      if (selfHealedIdsRef.current.has(r.id)) continue;
+      const sessionAmt = r.orderId ? completedSessionsMap.get(r.orderId) : undefined;
+      if (sessionAmt && sessionAmt > 0 && Math.abs((r.amountPaid || 0) - sessionAmt) < 0.005) {
+        const rawReg = registrations.find((item) => item.id === r.id);
+        if (rawReg && Math.abs((rawReg.amountPaid || 0) - sessionAmt) > 0.005) {
+          selfHealedIdsRef.current.add(r.id);
+          (async () => {
+            try {
+              const { db } = await import("@/lib/firebase/config");
+              const { doc, updateDoc } = await import("firebase/firestore");
+              if (db && r.id) {
+                await updateDoc(doc(db, "registrations", r.id), {
+                  amountPaid: sessionAmt,
+                  "paymentDetails.amount": sessionAmt,
+                });
+              }
+            } catch {}
+          })();
+        }
+      }
+    }
+  }, [enrichedRegistrations, registrations, completedSessionsMap]);
+
   // Helper to determine if a registration record strictly belongs to the user's club or event coordinator scope
   const isRegistrationOwned = useCallback((r: any) => {
     if (!isScopedEventManager) return true;
@@ -725,7 +811,7 @@ export default function AdminRegistrationsPage() {
     // If no event filter is chosen yet, return empty list to prevent initial load lag
     if (!selectedEventSlug) return [];
 
-    let list = registrations.filter(isRegistrationOwned);
+    let list = enrichedRegistrations.filter(isRegistrationOwned);
 
     // Filter by tenure
     if (selectedTenureId !== "all") {
@@ -868,7 +954,7 @@ export default function AdminRegistrationsPage() {
     });
 
     return list;
-  }, [registrations, isRegistrationOwned, selectedTenureId, tenuresList, tenureFilteredEvents, selectedEventSlug, currentSelectedEventObj, allKnownEvents, isUmbrellaSelected, childEvents]);
+  }, [enrichedRegistrations, isRegistrationOwned, selectedTenureId, tenuresList, tenureFilteredEvents, selectedEventSlug, currentSelectedEventObj, allKnownEvents, isUmbrellaSelected, childEvents]);
 
   // Export Excel button is enabled only after selecting a specific event filter
   const isExportDisabled = !selectedEventSlug || selectedEventSlug === "all" || eventRegistrations.length === 0;
@@ -2160,7 +2246,7 @@ export default function AdminRegistrationsPage() {
                 <span className="font-bold font-mono text-rose-900">
                   {metrics.refundedCount} of {metrics.paidCount} refunded
                 </span>
-                <span>(₹{metrics.refundedAmount.toLocaleString("en-IN")} of ₹{metrics.revenue.toLocaleString("en-IN")})</span>
+                <span>({formatIndianCurrency(metrics.refundedAmount)} of ₹{formatIndianCurrency(metrics.revenue)})</span>
               </div>
               {metrics.eligibleForRefundCount === 0 && metrics.paidCount > 0 && (
                 <span className="text-emerald-700 font-bold inline-flex items-center gap-1 text-[11px]">
@@ -2288,7 +2374,7 @@ export default function AdminRegistrationsPage() {
               </span>
               <div className="flex items-baseline justify-between">
                 <span className="font-heading font-extrabold text-2xl text-[#E78023]">
-                  ₹{metrics.revenue.toLocaleString("en-IN")}
+                  ₹{formatIndianCurrency(metrics.revenue)}
                 </span>
                 <span className="text-xs text-slate-500 font-semibold">{metrics.paidCount} Paid</span>
               </div>

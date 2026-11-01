@@ -67,6 +67,13 @@ import { isEntityOwnedByClub } from "@/types/rbac";
 
 type PaymentTabFilter = "all" | "completed" | "pending" | "refunded" | "cancelled" | "signals";
 
+function formatIndianCurrency(amount: number): string {
+  if (amount % 1 !== 0) {
+    return amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  return amount.toLocaleString("en-IN");
+}
+
 function getTimestampMs(val: any): number {
   if (!val) return NaN;
   if (typeof val === "number") return val > 1e11 ? val : val * 1000;
@@ -551,9 +558,76 @@ export default function AdminPaymentsPage() {
     };
   }, []);
 
+  // Reconcile and enrich each registration record with the actual gateway received amount
+  const enrichedRegistrations = useMemo(() => {
+    return registrations.map((r) => {
+      // 1. Cross-reference against completed active checkout session (stores micro-paisa amount)
+      const session = r.orderId ? completedSessionsMap.get(r.orderId) : null;
+      const sessionAmt = Number(session?.receivedAmount || session?.amount || 0);
+
+      // 2. Cross-reference against verified incoming UPI ledger
+      const upiSignal = (r.paymentId ? verifiedUpiMap.get(r.paymentId) : null)
+        || (r.orderId ? Array.from(verifiedUpiMap.values()).find((v) => v.matchedOrderId === r.orderId) : null)
+        || Array.from(verifiedUpiMap.values()).find((v) => v.matchedRegistrationId === r.id || v.matchedRegistrationId === r.registrationId);
+      const signalAmt = Number(upiSignal?.amount || 0);
+
+      const gatewayActualAmount = sessionAmt > 0 ? sessionAmt : (signalAmt > 0 ? signalAmt : 0);
+
+      if (gatewayActualAmount > 0 && Math.abs((r.amountPaid || 0) - gatewayActualAmount) > 0.005) {
+        return {
+          ...r,
+          amountPaid: gatewayActualAmount,
+          paymentDetails: {
+            ...((r as any).paymentDetails || {}),
+            amount: gatewayActualAmount,
+            receivedAmount: gatewayActualAmount,
+          },
+        };
+      }
+      return r;
+    });
+  }, [registrations, completedSessionsMap, verifiedUpiMap]);
+
+  // Self-Healing Invariant: Automatically synchronize Firestore registration records with exact gateway received amounts
+  const selfHealedIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (enrichedRegistrations.length === 0) return;
+    for (const r of enrichedRegistrations) {
+      if (selfHealedIdsRef.current.has(r.id)) continue;
+      const session = r.orderId ? completedSessionsMap.get(r.orderId) : null;
+      const sessionAmt = Number(session?.receivedAmount || session?.amount || 0);
+      const upiSignal = (r.paymentId ? verifiedUpiMap.get(r.paymentId) : null)
+        || (r.orderId ? Array.from(verifiedUpiMap.values()).find((v) => v.matchedOrderId === r.orderId) : null);
+      const signalAmt = Number(upiSignal?.amount || 0);
+      const actualAmt = sessionAmt > 0 ? sessionAmt : (signalAmt > 0 ? signalAmt : 0);
+
+      if (actualAmt > 0 && r.amountPaid === actualAmt) {
+        const rawReg = registrations.find((item) => item.id === r.id);
+        if (rawReg && Math.abs((rawReg.amountPaid || 0) - actualAmt) > 0.005) {
+          selfHealedIdsRef.current.add(r.id);
+          (async () => {
+            try {
+              const { db } = await import("@/lib/firebase/config");
+              const { doc, updateDoc } = await import("firebase/firestore");
+              if (db && r.id) {
+                await updateDoc(doc(db, "registrations", r.id), {
+                  amountPaid: actualAmt,
+                  "paymentDetails.amount": actualAmt,
+                  "paymentDetails.receivedAmount": actualAmt,
+                });
+              }
+            } catch (err) {
+              console.warn("Notice: Self-healing Firestore amount update note:", err);
+            }
+          })();
+        }
+      }
+    }
+  }, [enrichedRegistrations, registrations, completedSessionsMap, verifiedUpiMap]);
+
   // Filter Payments by Tenure & Event
   const filteredByTenure = useMemo(() => {
-    const scopedRegistrations = registrations.filter(isRegistrationOwned);
+    const scopedRegistrations = enrichedRegistrations.filter(isRegistrationOwned);
     if (selectedTenureId === "all") return scopedRegistrations;
     const currentTenure = tenuresList.find((t) => t.id === selectedTenureId);
     if (!currentTenure) return scopedRegistrations;
@@ -1713,10 +1787,10 @@ export default function AdminPaymentsPage() {
           </div>
           <div className="space-y-0.5">
             <div className="font-heading font-black text-2xl sm:text-3xl text-slate-900 tracking-tight">
-              {!selectedEventSlug ? "—" : `₹${kpiStats.totalNetRevenue.toLocaleString("en-IN")}`}
+              {!selectedEventSlug ? "—" : `₹${formatIndianCurrency(kpiStats.totalNetRevenue)}`}
             </div>
             <p className="text-[10px] text-slate-500 font-medium truncate">
-              {!selectedEventSlug ? "Select an event to load records" : `Gross: ₹${kpiStats.totalGrossRevenue.toLocaleString("en-IN")} · Refunds: ₹${kpiStats.totalRefundsAmount.toLocaleString("en-IN")}`}
+              {!selectedEventSlug ? "Select an event to load records" : `Gross: ₹${formatIndianCurrency(kpiStats.totalGrossRevenue)} · Refunds: ₹${formatIndianCurrency(kpiStats.totalRefundsAmount)}`}
             </p>
           </div>
         </div>
@@ -2016,7 +2090,7 @@ export default function AdminPaymentsPage() {
               <p className="text-[11px] text-slate-600 leading-relaxed">
                 {currentSelectedEventObj.isCancelled
                   ? currentSelectedEventObj.cancellationNotice || "This event was cancelled by SRC Council. Gate passes are voided."
-                  : `Scope includes ${filteredByEvent.length} total registrations (${eligibleForBulkRefund.length} unrefunded paid passes, ₹${totalBulkRefundAmount.toLocaleString("en-IN")} total value).`}
+                  : `Scope includes ${filteredByEvent.length} total registrations (${eligibleForBulkRefund.length} unrefunded paid passes, ₹${formatIndianCurrency(totalBulkRefundAmount)} total value).`}
               </p>
             </div>
           </div>
