@@ -38,7 +38,6 @@ import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import { findBestMultiDimensionalMatch, PaymentCandidateSignal, MultiDimensionalMatch } from "@/lib/payments";
 import { MultiDimensionalMatchBadge } from "@/components/payments/MultiDimensionalMatchBadge";
-import { getDepartmentShortName } from "@/lib/departmentsStore";
 import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, canUserManageEvent, saveStoredEvent, resolveTenureForEvent } from "@/lib/eventsStore";
 import { getStoredTenures, syncTenuresFromFirestore, subscribeToTenures, CouncilTenure, getLatestAvailableTenure } from "@/lib/tenureStore";
 import { getActiveTenure } from "@/lib/tenureEngine";
@@ -111,6 +110,30 @@ function formatTimestamp(val: any): string {
     return new Date(val.seconds * 1000).toLocaleString("en-IN");
   }
   return String(val);
+}
+
+function getPaymentDepartmentShort(deptName?: string | null): string {
+  if (!deptName) return "";
+  const trimmed = deptName.trim();
+  const lower = trimmed.toLowerCase();
+
+  if (lower.includes("basic science") || lower.includes("humanities") || lower === "bsh" || lower === "bshd") return "BSHD";
+  if (lower.includes("diploma") || lower === "dip") return "DIP";
+  if (lower.includes("data science") || lower === "ds") return "DS";
+  if (lower.includes("cyber security") || lower.includes("cyber") || lower === "cy") return "CY";
+  if (lower.includes("artificial intelligence") || lower === "ai") return "AI";
+  if (lower.includes("computer science") || lower === "cse") return "CSE";
+  if (lower.includes("information tech") || lower === "it") return "IT";
+  if (lower.includes("civil") || lower === "ce") return "CE";
+  if (lower.includes("electrical") || lower === "ee") return "EE";
+  if (lower.includes("mechanical") || lower === "me") return "ME";
+  if (lower.includes("telecommunication") || lower.includes("etc") || lower.includes("extc")) return "ETC";
+  if (lower.includes("master of business") || lower === "mba") return "MBA";
+  if (lower.includes("bachelor of business") || lower === "bba") return "BBA";
+  if (lower.includes("bachelor of computer") || lower === "bca") return "BCA";
+  if (lower.includes("master of computer") || lower === "mca") return "MCA";
+
+  return trimmed;
 }
 
 function getApprovalBadgeInfo(r: any, verifiedUpiMap: Map<string, any>) {
@@ -2551,7 +2574,7 @@ export default function AdminPaymentsPage() {
                               className="inline-block text-[10px] font-bold text-slate-750 bg-slate-100 border border-slate-200/90 px-1.5 py-0.2 rounded font-sans tracking-wide"
                               title={r.department}
                             >
-                              {getDepartmentShortName(r.department)}
+                              {getPaymentDepartmentShort(r.department)}
                             </span>
                           </div>
                         )}
