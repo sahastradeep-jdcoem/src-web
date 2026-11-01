@@ -1846,7 +1846,7 @@ export default function AdminPaymentsPage() {
           </div>
           <div className="space-y-0.5">
             <div className="font-heading font-black text-2xl sm:text-3xl text-purple-950 tracking-tight">
-              {!selectedEventSlug ? "—" : `₹${kpiStats.totalRefundsAmount.toLocaleString("en-IN")}`}
+              {!selectedEventSlug ? "—" : `₹${formatIndianCurrency(kpiStats.totalRefundsAmount)}`}
             </div>
             <p className="text-[10px] text-slate-400 font-medium">
               {!selectedEventSlug ? "Select an event to load records" : `${kpiStats.refundedCount} transactions refunded & voided`}

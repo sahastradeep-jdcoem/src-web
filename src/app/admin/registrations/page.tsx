@@ -2400,7 +2400,7 @@ export default function AdminRegistrationsPage() {
                 </span>
                 <div className="flex items-baseline justify-between">
                   <span className="font-heading font-extrabold text-2xl text-blue-600">
-                    ₹{metrics.refundedAmount.toLocaleString("en-IN")}
+                    ₹{formatIndianCurrency(metrics.refundedAmount)}
                   </span>
                   <span className="text-xs text-blue-700 font-semibold">
                     {metrics.refundedCount} / {metrics.paidCount}
