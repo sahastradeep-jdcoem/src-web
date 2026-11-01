@@ -35,6 +35,7 @@ import { PayhookSignalsSection } from "@/components/admin/payments/PayhookSignal
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
+import { cn } from "@/lib/utils";
 import { getStoredEvents, syncEventsFromFirestore, subscribeToEvents, canUserManageEvent, saveStoredEvent, resolveTenureForEvent } from "@/lib/eventsStore";
 import { getStoredTenures, syncTenuresFromFirestore, subscribeToTenures, CouncilTenure, getLatestAvailableTenure } from "@/lib/tenureStore";
 import { getActiveTenure } from "@/lib/tenureEngine";
@@ -759,7 +760,8 @@ export default function AdminPaymentsPage() {
     });
   }, [filteredByEvent, statusTab, searchQuery]);
 
-  // Robust Multi-Factor Matcher between Registration and (active_checkout_sessions / verified_upi_payments)
+  // Multi-Dimensional Convergence Scoring Engine between Registration and Incoming Payment Signals
+  // Selects the payment matching the MAXIMUM number of dimensions and meeting strict confidence criteria
   const getVerifiedMatchForRecord = useCallback((r: RegistrationRecord) => {
     const regDocId = (r.id || "").trim();
     const regTicketId = (r.registrationId || r.id || "").trim();
@@ -767,121 +769,186 @@ export default function AdminPaymentsPage() {
     const regPaymentId = (r.paymentId || "").trim();
     const regAmt = Number(r.amountPaid || 0);
     const regName = (r.participantName || (r as any).leaderName || "").trim().toLowerCase();
-
-    // 1. Match by completed active checkout session (orderId)
-    if (regOrderId && completedSessionsMap.has(regOrderId)) {
-      const sess = completedSessionsMap.get(regOrderId)!;
-      return {
-        utr: sess.utr || sess.submittedUtr || regPaymentId || "AUTO-APPROVED",
-        amount: sess.receivedAmount || sess.amount || regAmt,
-        payerName: sess.payerName,
-        source: "active_checkout_session",
-      };
-    }
-
-    // 2. Match by completed active checkout session (registrationId)
-    for (const sess of completedSessionsMap.values()) {
-      if (sess.registrationId && (sess.registrationId === regDocId || sess.registrationId === regTicketId)) {
-        return {
-          utr: sess.utr || sess.submittedUtr || regPaymentId || "AUTO-APPROVED",
-          amount: sess.receivedAmount || sess.amount || regAmt,
-          payerName: sess.payerName,
-          source: "active_checkout_session",
-        };
-      }
-    }
-
-    // 3. Match by completed active checkout session (submittedUtr)
-    if (regPaymentId) {
-      for (const sess of completedSessionsMap.values()) {
-        if (sess.submittedUtr && sess.submittedUtr === regPaymentId) {
-          return {
-            utr: sess.utr || sess.submittedUtr,
-            amount: sess.receivedAmount || sess.amount || regAmt,
-            payerName: sess.payerName,
-            source: "active_checkout_session",
-          };
-        }
-      }
-    }
-
-    // 4. Direct match in verifiedUpiMap by exact UTR
-    if (regPaymentId && verifiedUpiMap.has(regPaymentId)) {
-      const v = verifiedUpiMap.get(regPaymentId)!;
-      return {
-        utr: v.utr,
-        amount: v.amount,
-        payerName: v.payerName,
-        source: "verified_upi_payments",
-      };
-    }
-
-    // 5. Match in verifiedUpiMap by matchedOrderId or matchedRegistrationId
-    for (const v of verifiedUpiMap.values()) {
-      if (regOrderId && v.matchedOrderId === regOrderId) {
-        return {
-          utr: v.utr,
-          amount: v.amount,
-          payerName: v.payerName,
-          source: "verified_upi_payments",
-        };
-      }
-      if (v.matchedRegistrationId && (v.matchedRegistrationId === regDocId || v.matchedRegistrationId === regTicketId)) {
-        return {
-          utr: v.utr,
-          amount: v.amount,
-          payerName: v.payerName,
-          source: "verified_upi_payments",
-        };
-      }
-    }
-
-    // 6. Micro-paisa exact amount match in verifiedUpiMap (within ₹1.00 offset)
-    for (const v of verifiedUpiMap.values()) {
-      const diff = Math.abs(v.amount - regAmt);
-      if (diff <= 1.00 && diff > 0.0001) {
-        const vPayer = (v.payerName || "").toLowerCase();
-        if (vPayer && regName && (vPayer.includes(regName.split(" ")[0]) || regName.includes(vPayer.split(" ")[0]))) {
-          return {
-            utr: v.utr,
-            amount: v.amount,
-            payerName: v.payerName,
-            source: "verified_upi_payments",
-          };
-        }
-      }
-    }
-
-    // 7. Notification Transaction Timestamp & Micro-Paisa Correlation (Temporal Dimension):
-    // Matches when the notification's true transaction time (e.g. 03:59 PM)
-    // occurred within ±45 minutes of the registration creation time (04:00 PM).
+    const regPhone = (r.phone || "").replace(/\D/g, "").slice(-6);
     const regTimeMs = new Date(r.registeredAt || (r as any).createdAt || 0).getTime();
-    if (regTimeMs > 0 && regAmt > 0) {
-      for (const v of verifiedUpiMap.values()) {
-        const vTimeMs = new Date(v.transactionTimestamp || v.receivedAt || 0).getTime();
-        if (vTimeMs > 0) {
-          const deltaSecs = Math.abs(vTimeMs - regTimeMs) / 1000;
-          if (deltaSecs <= 45 * 60) {
-            const diff = Math.abs(v.amount - regAmt);
-            const isAmountMatch = diff <= 1.00;
-            const vPayer = (v.payerName || "").toLowerCase();
-            const isNameMatch = Boolean(vPayer && regName && (vPayer.includes(regName.split(" ")[0]) || regName.includes(vPayer.split(" ")[0])));
 
-            if (isAmountMatch && (isNameMatch || diff < 0.005)) {
-              return {
-                utr: v.utr,
-                amount: v.amount,
-                payerName: v.payerName,
-                source: "temporal_notification_time",
-                timeDeltaSeconds: Math.round(deltaSecs),
-              };
-            }
+    interface ScoredCandidate {
+      utr: string;
+      amount: number;
+      payerName?: string;
+      source: string;
+      score: number;
+      matchedDimensionsCount: number;
+      matchedDimensions: string[];
+      confidence: number;
+      isEligibleForAutoApproval: boolean;
+      timeDeltaSeconds?: number;
+    }
+
+    const scoredCandidates: ScoredCandidate[] = [];
+
+    // Helper to evaluate a candidate against this registration
+    const evaluateCandidate = (c: {
+      orderId?: string;
+      registrationId?: string;
+      matchedOrderId?: string;
+      matchedRegistrationId?: string;
+      utr?: string;
+      submittedUtr?: string;
+      amount: number;
+      receivedAmount?: number;
+      payerName?: string;
+      phone?: string;
+      timestamp?: string;
+      source: string;
+    }) => {
+      let score = 0;
+      const matchedDims: string[] = [];
+      const candAmount = c.receivedAmount || c.amount || 0;
+      const candUtr = (c.utr || c.submittedUtr || "").trim();
+
+      // Dimension 1: Exact Order ID Match (+40)
+      const candOrderId = (c.orderId || c.matchedOrderId || "").trim();
+      if (regOrderId && candOrderId && regOrderId === candOrderId) {
+        score += 40;
+        matchedDims.push("Order ID");
+      }
+
+      // Dimension 2: Exact Registration / Pass ID Match (+35)
+      const candRegId = (c.registrationId || c.matchedRegistrationId || "").trim();
+      if (candRegId && (candRegId === regDocId || candRegId === regTicketId)) {
+        score += 35;
+        matchedDims.push("Pass ID");
+      }
+
+      // Dimension 3: Bank UTR Reference Match (+45)
+      if (regPaymentId && candUtr) {
+        if (regPaymentId === candUtr || (c.submittedUtr && regPaymentId === c.submittedUtr)) {
+          score += 45;
+          matchedDims.push("Bank UTR");
+        }
+      }
+
+      // Dimension 4: Amount / Micro-Paisa Match (+35 for exact micro-paisa, +25 for base offset, +20 for round)
+      if (regAmt > 0 && candAmount > 0) {
+        const diff = Math.abs(candAmount - regAmt);
+        if (diff < 0.005) {
+          const hasMicroPaise = Math.round(candAmount * 100) % 100 !== 0;
+          if (hasMicroPaise) {
+            score += 35;
+            matchedDims.push("Micro-Paisa");
+          } else {
+            score += 20;
+            matchedDims.push("Exact Amount");
+          }
+        } else if (diff <= 1.00) {
+          score += 25;
+          matchedDims.push("Fee Match (±₹1)");
+        }
+      }
+
+      // Dimension 5: Temporal Window Correlation (+30 for ≤3m, +20 for ≤15m, +10 for ≤45m)
+      let timeDeltaSecs: number | undefined = undefined;
+      if (c.timestamp && regTimeMs > 0) {
+        const cTime = new Date(c.timestamp).getTime();
+        if (cTime > 0) {
+          timeDeltaSecs = Math.round(Math.abs(cTime - regTimeMs) / 1000);
+          if (timeDeltaSecs <= 180) {
+            score += 30;
+            matchedDims.push("Time (≤3m)");
+          } else if (timeDeltaSecs <= 900) {
+            score += 20;
+            matchedDims.push("Time (≤15m)");
+          } else if (timeDeltaSecs <= 2700) {
+            score += 10;
+            matchedDims.push("Time (≤45m)");
           }
         }
       }
+
+      // Dimension 6: Student Name Token Match (+25)
+      const candPayer = (c.payerName || "").toLowerCase();
+      if (candPayer && regName) {
+        const regTokens = regName.split(/\s+/).filter((t: string) => t.length >= 3);
+        const payerTokens = candPayer.split(/\s+/).filter((t: string) => t.length >= 3);
+        if (regTokens.length > 0 && payerTokens.some((pt: string) => regTokens.some((rt: string) => rt.includes(pt) || pt.includes(rt)))) {
+          score += 25;
+          matchedDims.push("Student Name");
+        }
+      }
+
+      // Dimension 7: Phone Match (+20)
+      if (regPhone.length >= 6 && c.phone && c.phone.includes(regPhone)) {
+        score += 20;
+        matchedDims.push("Phone");
+      }
+
+      const dimsCount = matchedDims.length;
+      // Confidence percentage based on multi-dimensional convergence (120 pts = 100% confidence)
+      const confidence = Math.min(100, Math.round((score / 120) * 100));
+      // Strict Convergence Rule: Must match AT LEAST 2 independent dimensions AND score >= 60
+      const isEligible = dimsCount >= 2 && score >= 60;
+
+      if (dimsCount > 0 && score >= 20) {
+        scoredCandidates.push({
+          utr: candUtr || regPaymentId || "AUTO-APPROVED",
+          amount: candAmount || regAmt,
+          payerName: c.payerName,
+          source: c.source,
+          score,
+          matchedDimensionsCount: dimsCount,
+          matchedDimensions: matchedDims,
+          confidence,
+          isEligibleForAutoApproval: isEligible,
+          timeDeltaSeconds: timeDeltaSecs,
+        });
+      }
+    };
+
+    // 1. Evaluate all completed active checkout sessions
+    for (const sess of completedSessionsMap.values()) {
+      evaluateCandidate({
+        orderId: sess.orderId,
+        registrationId: sess.registrationId,
+        utr: sess.utr,
+        submittedUtr: sess.submittedUtr,
+        amount: sess.amount,
+        receivedAmount: sess.receivedAmount,
+        payerName: sess.payerName,
+        timestamp: sess.transactionTimestamp || sess.paidAt,
+        source: "active_checkout_session",
+      });
     }
 
-    return undefined;
+    // 2. Evaluate all verified incoming UPI ledger payments
+    for (const v of verifiedUpiMap.values()) {
+      evaluateCandidate({
+        orderId: v.matchedOrderId,
+        registrationId: v.matchedRegistrationId,
+        matchedOrderId: v.matchedOrderId,
+        matchedRegistrationId: v.matchedRegistrationId,
+        utr: v.utr,
+        amount: v.amount,
+        payerName: v.payerName,
+        timestamp: v.transactionTimestamp || v.receivedAt,
+        source: "verified_upi_payments",
+      });
+    }
+
+    if (scoredCandidates.length === 0) return undefined;
+
+    // Rank candidates: Maximum matched dimensions FIRST, then highest score, then smallest time delta
+    scoredCandidates.sort((a, b) => {
+      if (b.matchedDimensionsCount !== a.matchedDimensionsCount) {
+        return b.matchedDimensionsCount - a.matchedDimensionsCount;
+      }
+      if (b.score !== a.score) {
+        return b.score - a.score;
+      }
+      return (a.timeDeltaSeconds || 999999) - (b.timeDeltaSeconds || 999999);
+    });
+
+    return scoredCandidates[0];
   }, [completedSessionsMap, verifiedUpiMap]);
 
   // Registrations with Pending UTR that have a matching signal in verified_upi_payments or completed checkout sessions
@@ -2397,14 +2464,24 @@ export default function AdminPaymentsPage() {
                               Pending UTR
                             </span>
                             {verifiedMatch && (
-                              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
-                                <Zap className="w-2.5 h-2.5 text-emerald-600" />
-                                <span>Signal Recvd (₹{verifiedMatch.amount.toFixed(2)})</span>
-                                {(verifiedMatch as any).timeDeltaSeconds !== undefined && (
-                                  <span className="text-[8px] text-emerald-600 font-medium">
-                                    • Δ{Math.round((verifiedMatch as any).timeDeltaSeconds / 60)}m
-                                  </span>
-                                )}
+                              <div className="space-y-0.5">
+                                <div className={cn(
+                                  "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold border",
+                                  verifiedMatch.isEligibleForAutoApproval
+                                    ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                    : "bg-amber-50 text-amber-800 border-amber-300"
+                                )}>
+                                  <Zap className="w-2.5 h-2.5 text-emerald-600" />
+                                  <span>{verifiedMatch.matchedDimensionsCount} Dims ({verifiedMatch.confidence}% Match)</span>
+                                  {verifiedMatch.timeDeltaSeconds !== undefined && (
+                                    <span className="text-[8px] text-emerald-600 font-medium">
+                                      • Δ{Math.round(verifiedMatch.timeDeltaSeconds / 60)}m
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[9px] text-slate-500 font-medium truncate max-w-[150px]" title={verifiedMatch.matchedDimensions?.join(" + ")}>
+                                  {verifiedMatch.matchedDimensions?.join(" + ")}
+                                </div>
                               </div>
                             )}
                           </div>

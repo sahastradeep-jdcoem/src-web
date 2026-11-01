@@ -1081,67 +1081,120 @@ export async function POST(req: NextRequest) {
             const pendingRegsSnap = await getDocs(pendingRegsQuery);
             if (!pendingRegsSnap.empty) {
               const notifTimeMs = contentDate.getTime();
-              const pendingCandidates = pendingRegsSnap.docs.map((d) => ({
-                ref: d.ref,
-                id: d.id,
-                data: d.data(),
-              })).sort((a, b) => {
-                // Temporal Priority: Closest to notification transaction time (contentDate)
-                const tA = new Date(a.data.registeredAt || a.data.createdAt || 0).getTime();
-                const tB = new Date(b.data.registeredAt || b.data.createdAt || 0).getTime();
-                return Math.abs(tA - notifTimeMs) - Math.abs(tB - notifTimeMs);
-              });
-
-              // Multi-Factor Matching Hierarchy:
-              // Tier 1: Direct 12-Digit UTR Match (student submitted UTR or stored in paymentDetails/customAnswers)
-              let candidateMatch = pendingCandidates.find((c) => {
-                if (isSyntheticUtr || !utr) return false;
-                const regUtr = String(c.data.paymentId || c.data.paymentDetails?.utr || c.data.customAnswers?.upiUtr || "").trim();
-                return regUtr === utr;
-              });
-
-              // Tier 2: Unique Micro-Paisa Exact Match (e.g. ₹50.01, ₹50.02, ₹2.01)
-              const hasFractionalPaise = Math.round(amount * 100) % 100 !== 0;
-              if (!candidateMatch && hasFractionalPaise) {
-                const microMatches = pendingCandidates.filter((c) => {
-                  const regAmount = Number(c.data.amountPaid || c.data.paymentDetails?.amount || 0);
-                  return Math.abs(regAmount - Number(amount)) < 0.005;
-                });
-                if (microMatches.length === 1) {
-                  candidateMatch = microMatches[0];
-                } else if (microMatches.length > 1 && extractedSender) {
-                  candidateMatch = microMatches.find((c) => {
-                    const studentName = c.data.participantName || c.data.leaderName || "";
-                    return isNameCompatible(extractedSender, studentName);
-                  }) || microMatches[0];
-                }
+              
+              // Multi-Dimensional Convergence Engine:
+              // Scores every candidate registration across all 7 dimensions and selects the one with MAXIMUM matching dimensions
+              interface ScoredRegCandidate {
+                ref: any;
+                id: string;
+                data: any;
+                score: number;
+                matchedDimensionsCount: number;
+                matchedDimensions: string[];
+                timeDeltaSeconds: number;
               }
 
-              // Tier 3: Round Amount + Student / Account Name Match
-              if (!candidateMatch && extractedSender) {
-                const roundNameMatches = pendingCandidates.filter((c) => {
-                  const regAmount = Number(c.data.amountPaid || c.data.paymentDetails?.amount || 0);
-                  const isSameAmount = Math.abs(regAmount - Number(amount)) < 0.005;
-                  if (!isSameAmount) return false;
-                  const studentName = c.data.participantName || c.data.leaderName || "";
-                  return isNameCompatible(extractedSender, studentName);
-                });
-                if (roundNameMatches.length === 1) {
-                  candidateMatch = roundNameMatches[0];
-                }
-              }
+              const scoredRegCandidates: ScoredRegCandidate[] = pendingRegsSnap.docs.map((d) => {
+                const data = d.data();
+                let score = 0;
+                const matchedDims: string[] = [];
+                const regAmt = Number(data.amountPaid || data.paymentDetails?.amount || 0);
+                const regUtr = String(data.paymentId || data.paymentDetails?.utr || data.customAnswers?.upiUtr || "").trim();
+                const regName = String(data.participantName || data.leaderName || "").trim();
+                const regPhone = String(data.phone || "").replace(/\D/g, "").slice(-6);
+                const regTimeMs = new Date(data.registeredAt || data.createdAt || 0).getTime();
+                const timeDeltaSeconds = Math.round(Math.abs(regTimeMs - notifTimeMs) / 1000);
 
-              // Tier 4: Round Amount + Phone Number Match
-              if (!candidateMatch) {
-                const roundPhoneMatches = pendingCandidates.filter((c) => {
-                  const regAmount = Number(c.data.amountPaid || c.data.paymentDetails?.amount || 0);
-                  const isSameAmount = Math.abs(regAmount - Number(amount)) < 0.005;
-                  if (!isSameAmount) return false;
-                  const phone = String(c.data.phone || "").replace(/\D/g, "").slice(-6);
-                  return phone.length >= 6 && combinedText.includes(phone);
-                });
-                if (roundPhoneMatches.length === 1) {
-                  candidateMatch = roundPhoneMatches[0];
+                // Dimension 1: 12-Digit Bank UTR Match (+45)
+                if (!isSyntheticUtr && utr && regUtr && regUtr === utr) {
+                  score += 45;
+                  matchedDims.push("Bank UTR");
+                }
+
+                // Dimension 2: Order ID Match (+40)
+                if (matchedOrderId && data.orderId && data.orderId === matchedOrderId) {
+                  score += 40;
+                  matchedDims.push("Order ID");
+                }
+
+                // Dimension 3: Pass ID Match (+35)
+                if (matchedRegistrationId && (d.id === matchedRegistrationId || data.registrationId === matchedRegistrationId)) {
+                  score += 35;
+                  matchedDims.push("Pass ID");
+                }
+
+                // Dimension 4: Amount / Micro-Paisa Match (+35 for exact micro-paisa, +20 for round, +25 for base offset)
+                if (regAmt > 0 && amount > 0) {
+                  const diff = Math.abs(regAmt - amount);
+                  if (diff < 0.005) {
+                    const hasPaise = Math.round(amount * 100) % 100 !== 0;
+                    if (hasPaise) {
+                      score += 35;
+                      matchedDims.push("Micro-Paisa");
+                    } else {
+                      score += 20;
+                      matchedDims.push("Exact Amount");
+                    }
+                  } else if (diff <= 1.00) {
+                    score += 25;
+                    matchedDims.push("Base Fee Match");
+                  }
+                }
+
+                // Dimension 5: Temporal Window Correlation (+30 for ≤3m, +20 for ≤15m, +10 for ≤45m)
+                if (timeDeltaSeconds <= 180) {
+                  score += 30;
+                  matchedDims.push("Time (≤3m)");
+                } else if (timeDeltaSeconds <= 900) {
+                  score += 20;
+                  matchedDims.push("Time (≤15m)");
+                } else if (timeDeltaSeconds <= 2700) {
+                  score += 10;
+                  matchedDims.push("Time (≤45m)");
+                }
+
+                // Dimension 6: Student Name Token Match (+25)
+                if (extractedSender && regName && isNameCompatible(extractedSender, regName)) {
+                  score += 25;
+                  matchedDims.push("Student Name");
+                }
+
+                // Dimension 7: Phone Match (+20)
+                if (regPhone.length >= 6 && combinedText.includes(regPhone)) {
+                  score += 20;
+                  matchedDims.push("Phone");
+                }
+
+                return {
+                  ref: d.ref,
+                  id: d.id,
+                  data,
+                  score,
+                  matchedDimensionsCount: matchedDims.length,
+                  matchedDimensions: matchedDims,
+                  timeDeltaSeconds,
+                };
+              });
+
+              // Rank by MAXIMUM matched dimensions first, then highest score, then closest time delta
+              scoredRegCandidates.sort((a, b) => {
+                if (b.matchedDimensionsCount !== a.matchedDimensionsCount) {
+                  return b.matchedDimensionsCount - a.matchedDimensionsCount;
+                }
+                if (b.score !== a.score) {
+                  return b.score - a.score;
+                }
+                return a.timeDeltaSeconds - b.timeDeltaSeconds;
+              });
+
+              // Strict Convergence Gate: Requires matching AT LEAST 2 independent dimensions AND score >= 60
+              let candidateMatch: any = null;
+              if (scoredRegCandidates.length > 0) {
+                const best = scoredRegCandidates[0];
+                if (best.matchedDimensionsCount >= 2 && best.score >= 60) {
+                  candidateMatch = best;
+                } else {
+                  console.warn(`Webhook Auto-Approve Skipped: Best candidate ${best.id} matched only ${best.matchedDimensionsCount} dimensions (Score: ${best.score}). Requires >= 2 dimensions and score >= 60.`);
                 }
               }
 
