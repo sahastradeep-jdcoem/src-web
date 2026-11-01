@@ -1071,7 +1071,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           paymentStatus: targetPaymentStatus,
           paymentId: verifyData.paymentId || cleanedUtr,
           orderId: paytmCheckoutData.orderId,
-          amountPaid: totalPayableAmount,
+          amountPaid: paytmCheckoutData.amount || totalPayableAmount,
         });
         setPaytmCheckoutData(null);
       } else {
@@ -1156,6 +1156,131 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       clearInterval(pollInterval);
     };
   }, [paytmCheckoutData?.orderId, isPaymentInstructionsOpen]);
+
+  // Real-Time Pass Auto-Approval Listener:
+  // When a student is viewing their pass on STEP_PASS with paymentStatus === "PENDING"
+  // (e.g. when PayHook app was offline and student submitted manual UTR),
+  // automatically flip the pass to PAID the moment the webhook delivers the delayed notification!
+  useEffect(() => {
+    if (currentStep !== STEP_PASS || !generatedTicket || generatedTicket.paymentStatus === "PAID") {
+      return;
+    }
+
+    const regId = generatedTicket.registrationId || generatedTicket.id;
+    const orderId = generatedTicket.orderId;
+
+    let unsubReg: (() => void) | null = null;
+    let unsubSess: (() => void) | null = null;
+    let pollInterval: any = null;
+
+    (async () => {
+      try {
+        const { db } = await import("@/lib/firebase/config");
+        const { doc, onSnapshot, updateDoc } = await import("firebase/firestore");
+
+        // 1. Real-time listener on the registration document
+        if (db && regId) {
+          unsubReg = onSnapshot(doc(db, "registrations", regId), (snap) => {
+            if (snap.exists()) {
+              const data = snap.data();
+              if (data?.paymentStatus === "PAID" && generatedTicket.paymentStatus !== "PAID") {
+                setGeneratedTicket((prev) => prev ? {
+                  ...prev,
+                  paymentStatus: "PAID",
+                  paymentId: data.paymentId || prev.paymentId,
+                } : null);
+                try {
+                  confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                } catch {}
+              }
+            }
+          });
+        }
+
+        // 2. Real-time listener on active_checkout_sessions
+        if (db && orderId) {
+          unsubSess = onSnapshot(doc(db, "active_checkout_sessions", orderId), async (snap) => {
+            if (snap.exists()) {
+              const sData = snap.data();
+              if (sData?.status === "COMPLETED") {
+                setGeneratedTicket((prev) => prev ? {
+                  ...prev,
+                  paymentStatus: "PAID",
+                  paymentId: sData.utr || prev.paymentId,
+                } : null);
+
+                // Update localStorage
+                try {
+                  const local = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+                  const updated = local.map((r: any) =>
+                    r.id === regId || r.registrationId === regId
+                      ? { ...r, paymentStatus: "PAID", status: "CONFIRMED", paymentId: sData.utr || r.paymentId }
+                      : r
+                  );
+                  localStorage.setItem("src_local_registrations", JSON.stringify(updated));
+                  window.dispatchEvent(new CustomEvent("src_registrations_updated", { detail: updated }));
+                } catch {}
+
+                // Attempt to update registration directly from authenticated student browser
+                try {
+                  if (db && regId) {
+                    await updateDoc(doc(db, "registrations", regId), {
+                      paymentStatus: "PAID",
+                      status: "CONFIRMED",
+                      paymentId: sData.utr || generatedTicket.paymentId,
+                      paidAt: sData.paidAt || new Date().toISOString(),
+                      verifiedBy: "SRC PayHook Auto-Gateway",
+                    });
+                  }
+                } catch {}
+
+                try {
+                  confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                } catch {}
+              }
+            }
+          });
+        }
+
+        // 3. Fallback polling via check-status API every 3.5 seconds
+        let pollCount = 0;
+        pollInterval = setInterval(async () => {
+          pollCount++;
+          if (pollCount > 35) {
+            clearInterval(pollInterval);
+            return;
+          }
+          if (orderId) {
+            try {
+              const res = await fetch(`/api/upi/check-status?orderId=${encodeURIComponent(orderId)}`);
+              if (res.ok) {
+                const data = await res.json();
+                if (data.status === "PAID") {
+                  clearInterval(pollInterval);
+                  setGeneratedTicket((prev) => prev ? {
+                    ...prev,
+                    paymentStatus: "PAID",
+                    paymentId: data.utr || prev.paymentId,
+                  } : null);
+                  try {
+                    confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                  } catch {}
+                }
+              }
+            } catch {}
+          }
+        }, 3500);
+      } catch (e) {
+        console.warn("Notice: pass view listener init error:", e);
+      }
+    })();
+
+    return () => {
+      if (unsubReg) unsubReg();
+      if (unsubSess) unsubSess();
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [currentStep, generatedTicket?.paymentStatus, generatedTicket?.orderId, generatedTicket?.registrationId]);
 
   const handleConfirmRegistration = async () => {
     if (isSubmitting) return;

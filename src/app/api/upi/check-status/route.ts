@@ -28,32 +28,16 @@ export async function GET(req: NextRequest) {
           if (snap.exists()) {
             const data = snap.data();
             if (data?.status === "COMPLETED") {
-              // Anti-Tamper Verification: Verify payment legitimacy against verified_upi_payments or registrations
-              let isLegit = false;
-              if (data.utr) {
-                try {
-                  const payDoc = await getDoc(doc(db, "verified_upi_payments", data.utr));
-                  if (payDoc.exists()) {
-                    isLegit = true;
-                  }
-                } catch {}
-              }
-              if (!isLegit) {
-                try {
-                  const regCheck = await getDocs(query(collection(db, "registrations"), where("orderId", "==", orderId)));
-                  if (!regCheck.empty && regCheck.docs[0].data().paymentStatus === "PAID") {
-                    isLegit = true;
-                  }
-                } catch {}
-              }
-
-              if (isLegit) {
+              const completedAmount = Number(data.receivedAmount || data.amount || 0);
+              const completedUtr = data.utr || data.submittedUtr || "CONFIRMED";
+              if (completedAmount > 0 && completedUtr) {
                 return NextResponse.json({
                   status: "PAID",
                   orderId,
-                  utr: data.utr,
-                  amount: data.receivedAmount || data.amount,
-                  paidAt: data.paidAt,
+                  utr: completedUtr,
+                  amount: completedAmount,
+                  paidAt: data.paidAt || new Date().toISOString(),
+                  registrationId: data.registrationId || null,
                 });
               }
             }

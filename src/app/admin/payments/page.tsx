@@ -276,6 +276,9 @@ export default function AdminPaymentsPage() {
   // Real-time verified UPI ledger map for instant reconciliation
   const [verifiedUpiMap, setVerifiedUpiMap] = useState<Map<string, { utr: string; amount: number; status: string; receivedAt?: string; payerName?: string; matchedOrderId?: string; matchedRegistrationId?: string }>>(new Map());
 
+  // Real-time completed checkout sessions map (orderId -> session)
+  const [completedSessionsMap, setCompletedSessionsMap] = useState<Map<string, { orderId: string; registrationId?: string; utr: string; submittedUtr?: string; amount: number; receivedAmount?: number; payerName?: string; paidAt?: string; status: string }>>(new Map());
+
   // 1. Initial Load & Subscriptions
   useEffect(() => {
     setPaymentConfig(getStoredPaymentConfig());
@@ -488,6 +491,47 @@ export default function AdminPaymentsPage() {
         }
       } catch (e) {
         console.warn("Notice: verified_upi_payments init error:", e);
+      }
+    })();
+    return () => {
+      if (unsub) unsub();
+    };
+  }, []);
+
+  // Dual-Subscription for active checkout sessions (for zero-touch instant match across late webhooks)
+  useEffect(() => {
+    let unsub: (() => void) | null = null;
+    (async () => {
+      try {
+        const { db } = await import("@/lib/firebase/config");
+        const { collection, onSnapshot, query, limit, orderBy } = await import("firebase/firestore");
+        if (db) {
+          const q = query(collection(db, "active_checkout_sessions"), orderBy("createdAt", "desc"), limit(100));
+          unsub = onSnapshot(q, (snap) => {
+            const map = new Map<string, any>();
+            snap.forEach((d) => {
+              const data = d.data();
+              if (data?.status === "COMPLETED" && (data.orderId || d.id)) {
+                map.set(String(data.orderId || d.id).trim(), {
+                  orderId: String(data.orderId || d.id).trim(),
+                  registrationId: data.registrationId ? String(data.registrationId).trim() : undefined,
+                  utr: data.utr ? String(data.utr).trim() : "",
+                  submittedUtr: data.submittedUtr ? String(data.submittedUtr).trim() : undefined,
+                  amount: Number(data.amount || 0),
+                  receivedAmount: Number(data.receivedAmount || data.amount || 0),
+                  payerName: data.payerName,
+                  paidAt: data.paidAt,
+                  status: data.status,
+                });
+              }
+            });
+            setCompletedSessionsMap(map);
+          }, (err) => {
+            console.warn("Notice: active_checkout_sessions subscription warning:", err);
+          });
+        }
+      } catch (e) {
+        console.warn("Notice: active_checkout_sessions init error:", e);
       }
     })();
     return () => {
@@ -713,15 +757,227 @@ export default function AdminPaymentsPage() {
     });
   }, [filteredByEvent, statusTab, searchQuery]);
 
-  // Registrations with Pending UTR that have a matching signal in verified_upi_payments
+  // Robust Multi-Factor Matcher between Registration and (active_checkout_sessions / verified_upi_payments)
+  const getVerifiedMatchForRecord = useCallback((r: RegistrationRecord) => {
+    const regDocId = (r.id || "").trim();
+    const regTicketId = (r.registrationId || r.id || "").trim();
+    const regOrderId = (r.orderId || "").trim();
+    const regPaymentId = (r.paymentId || "").trim();
+    const regAmt = Number(r.amountPaid || 0);
+    const regName = (r.participantName || (r as any).leaderName || "").trim().toLowerCase();
+
+    // 1. Match by completed active checkout session (orderId)
+    if (regOrderId && completedSessionsMap.has(regOrderId)) {
+      const sess = completedSessionsMap.get(regOrderId)!;
+      return {
+        utr: sess.utr || sess.submittedUtr || regPaymentId || "AUTO-APPROVED",
+        amount: sess.receivedAmount || sess.amount || regAmt,
+        payerName: sess.payerName,
+        source: "active_checkout_session",
+      };
+    }
+
+    // 2. Match by completed active checkout session (registrationId)
+    for (const sess of completedSessionsMap.values()) {
+      if (sess.registrationId && (sess.registrationId === regDocId || sess.registrationId === regTicketId)) {
+        return {
+          utr: sess.utr || sess.submittedUtr || regPaymentId || "AUTO-APPROVED",
+          amount: sess.receivedAmount || sess.amount || regAmt,
+          payerName: sess.payerName,
+          source: "active_checkout_session",
+        };
+      }
+    }
+
+    // 3. Match by completed active checkout session (submittedUtr)
+    if (regPaymentId) {
+      for (const sess of completedSessionsMap.values()) {
+        if (sess.submittedUtr && sess.submittedUtr === regPaymentId) {
+          return {
+            utr: sess.utr || sess.submittedUtr,
+            amount: sess.receivedAmount || sess.amount || regAmt,
+            payerName: sess.payerName,
+            source: "active_checkout_session",
+          };
+        }
+      }
+    }
+
+    // 4. Direct match in verifiedUpiMap by exact UTR
+    if (regPaymentId && verifiedUpiMap.has(regPaymentId)) {
+      const v = verifiedUpiMap.get(regPaymentId)!;
+      return {
+        utr: v.utr,
+        amount: v.amount,
+        payerName: v.payerName,
+        source: "verified_upi_payments",
+      };
+    }
+
+    // 5. Match in verifiedUpiMap by matchedOrderId or matchedRegistrationId
+    for (const v of verifiedUpiMap.values()) {
+      if (regOrderId && v.matchedOrderId === regOrderId) {
+        return {
+          utr: v.utr,
+          amount: v.amount,
+          payerName: v.payerName,
+          source: "verified_upi_payments",
+        };
+      }
+      if (v.matchedRegistrationId && (v.matchedRegistrationId === regDocId || v.matchedRegistrationId === regTicketId)) {
+        return {
+          utr: v.utr,
+          amount: v.amount,
+          payerName: v.payerName,
+          source: "verified_upi_payments",
+        };
+      }
+    }
+
+    // 6. Micro-paisa exact amount match in verifiedUpiMap (within ₹1.00 offset)
+    for (const v of verifiedUpiMap.values()) {
+      const diff = Math.abs(v.amount - regAmt);
+      if (diff <= 1.00 && diff > 0.0001) {
+        const vPayer = (v.payerName || "").toLowerCase();
+        if (vPayer && regName && (vPayer.includes(regName.split(" ")[0]) || regName.includes(vPayer.split(" ")[0]))) {
+          return {
+            utr: v.utr,
+            amount: v.amount,
+            payerName: v.payerName,
+            source: "verified_upi_payments",
+          };
+        }
+      }
+    }
+
+    return undefined;
+  }, [completedSessionsMap, verifiedUpiMap]);
+
+  // Registrations with Pending UTR that have a matching signal in verified_upi_payments or completed checkout sessions
   const pendingVerifiedMatches = useMemo(() => {
-    return filteredByEvent.filter(
-      (r) =>
-        (r.paymentStatus === "PENDING" || (r.status === "PENDING" && r.paymentStatus !== "PAID")) &&
-        r.paymentId &&
-        verifiedUpiMap.has(r.paymentId.trim())
-    );
-  }, [filteredByEvent, verifiedUpiMap]);
+    return filteredByEvent
+      .filter((r) => r.paymentStatus === "PENDING" || (r.status === "PENDING" && r.paymentStatus !== "PAID"))
+      .map((r) => ({ record: r, match: getVerifiedMatchForRecord(r) }))
+      .filter((item): item is { record: RegistrationRecord; match: NonNullable<ReturnType<typeof getVerifiedMatchForRecord>> } => Boolean(item.match));
+  }, [filteredByEvent, getVerifiedMatchForRecord]);
+
+  // Instant 1-Tap Auto-Reconciliation with Verified Bank Signal
+  const handle1TapAutoApprove = useCallback(async (
+    targetRecord: RegistrationRecord,
+    verifiedPay: { utr: string; amount: number; payerName?: string }
+  ) => {
+    const docId = targetRecord.id;
+    const regTicketId = targetRecord.registrationId || targetRecord.id;
+    const finalUtr = verifiedPay.utr;
+    const isSynth = finalUtr.startsWith("AUTO-PTM-");
+    const existingUtr = targetRecord.paymentId?.trim();
+    const resolvedPaymentId = (!isSynth && /^\d{12}$/.test(finalUtr))
+      ? finalUtr
+      : (existingUtr && /^\d{12}$/.test(existingUtr) ? existingUtr : finalUtr);
+    const nowIso = new Date().toISOString();
+
+    setIsApproving(true);
+    try {
+      await updateRegistrationPaymentStatus(docId, "PAID", "SRC Auto-Reconciliation (PayHook)");
+      if (regTicketId !== docId) {
+        await updateRegistrationPaymentStatus(regTicketId, "PAID", "SRC Auto-Reconciliation (PayHook)");
+      }
+
+      const { db } = await import("@/lib/firebase/config");
+      if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+        const { doc, updateDoc, setDoc } = await import("firebase/firestore");
+        try {
+          const updatePayload: Record<string, any> = {
+            paymentStatus: "PAID",
+            status: "CONFIRMED",
+            paymentId: resolvedPaymentId,
+            paidAt: nowIso,
+            verifiedBy: "Paytm Auto-Gateway (SRC PayHook)",
+            verifiedAt: nowIso,
+            payerName: verifiedPay.payerName || null,
+          };
+          if (isSynth) {
+            updatePayload["paymentDetails.syntheticUtr"] = finalUtr;
+          }
+          if (resolvedPaymentId && /^\d{12}$/.test(resolvedPaymentId)) {
+            updatePayload["paymentDetails.bankUtr"] = resolvedPaymentId;
+          }
+          await updateDoc(doc(db, "registrations", docId), updatePayload);
+        } catch (e) {
+          console.warn("Direct doc update warning:", e);
+        }
+
+        if (targetRecord.orderId) {
+          try {
+            await setDoc(doc(db, "active_checkout_sessions", targetRecord.orderId), {
+              status: "COMPLETED",
+              registrationId: docId,
+              utr: finalUtr,
+            }, { merge: true });
+          } catch {}
+        }
+
+        try {
+          await setDoc(doc(db, "verified_upi_payments", finalUtr), {
+            status: "MATCHED",
+            matchedRegistrationId: docId,
+            matchedOrderId: targetRecord.orderId || null,
+            matchedStudentName: targetRecord.participantName,
+            matchedAt: nowIso,
+          }, { merge: true });
+        } catch (e) {
+          console.warn("Verified payment update warning:", e);
+        }
+      }
+
+      setRegistrations((prev) =>
+        prev.map((r) =>
+          r.id === docId || r.registrationId === regTicketId
+            ? {
+                ...r,
+                paymentStatus: "PAID",
+                status: "CONFIRMED",
+                paymentId: resolvedPaymentId,
+                paidAt: nowIso,
+                verifiedBy: "Paytm Auto-Gateway (SRC PayHook)",
+                verifiedAt: nowIso,
+                payerName: verifiedPay.payerName || (r as any).payerName,
+              }
+            : r
+        )
+      );
+
+      setFeedbackNotice(`Reconciled & Approved! Pass issued for ${targetRecord.participantName} (UTR: ${resolvedPaymentId}).`);
+      setTimeout(() => setFeedbackNotice(null), 5000);
+    } catch (err) {
+      console.error("1-Tap Auto-Approve error:", err);
+    } finally {
+      setIsApproving(false);
+    }
+  }, []);
+
+  // Automatic Zero-Touch Reconciler:
+  // When an admin opens or views this page and pending registrations have verified matches,
+  // automatically approve them in Firestore without requiring manual clicking!
+  const autoApprovedIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (pendingVerifiedMatches.length === 0 || isApproving) return;
+
+    const toApprove = pendingVerifiedMatches.filter(({ record }) => !autoApprovedIdsRef.current.has(record.id));
+    if (toApprove.length === 0) return;
+
+    toApprove.forEach(({ record }) => autoApprovedIdsRef.current.add(record.id));
+
+    (async () => {
+      for (const { record, match } of toApprove) {
+        try {
+          await handle1TapAutoApprove(record, match);
+        } catch (e) {
+          console.warn("Auto-reconciliation error for", record.id, e);
+        }
+      }
+    })();
+  }, [pendingVerifiedMatches, isApproving]);
 
   // KPI Metrics Calculation (Strict Revenue & Refund Tracking)
   const kpiStats = useMemo(() => {
@@ -923,79 +1179,6 @@ export default function AdminPaymentsPage() {
     } catch (err) {
       console.error("Failed to approve payment:", err);
       alert("Error approving payment. Please check your connection.");
-    } finally {
-      setIsApproving(false);
-    }
-  };
-
-  // Instant 1-Tap Auto-Reconciliation with Verified Bank Signal
-  const handle1TapAutoApprove = async (
-    targetRecord: RegistrationRecord,
-    verifiedPay: { utr: string; amount: number; payerName?: string }
-  ) => {
-    const docId = targetRecord.id;
-    const regTicketId = targetRecord.registrationId || targetRecord.id;
-    const finalUtr = verifiedPay.utr;
-    const nowIso = new Date().toISOString();
-
-    setIsApproving(true);
-    try {
-      await updateRegistrationPaymentStatus(docId, "PAID", "SRC Auto-Reconciliation (PayHook)");
-      if (regTicketId !== docId) {
-        await updateRegistrationPaymentStatus(regTicketId, "PAID", "SRC Auto-Reconciliation (PayHook)");
-      }
-
-      const { db } = await import("@/lib/firebase/config");
-      if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-        const { doc, updateDoc, setDoc } = await import("firebase/firestore");
-        try {
-          await updateDoc(doc(db, "registrations", docId), {
-            paymentStatus: "PAID",
-            status: "CONFIRMED",
-            paymentId: finalUtr,
-            paidAt: nowIso,
-            verifiedBy: "Paytm Auto-Gateway (SRC PayHook)",
-            verifiedAt: nowIso,
-            payerName: verifiedPay.payerName || null,
-          });
-        } catch (e) {
-          console.warn("Direct doc update warning:", e);
-        }
-
-        try {
-          await setDoc(doc(db, "verified_upi_payments", finalUtr), {
-            status: "MATCHED",
-            matchedRegistrationId: docId,
-            matchedOrderId: targetRecord.orderId || null,
-            matchedStudentName: targetRecord.participantName,
-            matchedAt: nowIso,
-          }, { merge: true });
-        } catch (e) {
-          console.warn("Verified payment update warning:", e);
-        }
-      }
-
-      setRegistrations((prev) =>
-        prev.map((r) =>
-          r.id === docId || r.registrationId === regTicketId
-            ? {
-                ...r,
-                paymentStatus: "PAID",
-                status: "CONFIRMED",
-                paymentId: finalUtr,
-                paidAt: nowIso,
-                verifiedBy: "Paytm Auto-Gateway (SRC PayHook)",
-                verifiedAt: nowIso,
-              }
-            : r
-        )
-      );
-
-      setFeedbackNotice(`Reconciled & Approved! Pass issued for ${targetRecord.participantName} (Verified UTR: ${finalUtr}).`);
-      setTimeout(() => setFeedbackNotice(null), 5000);
-    } catch (err) {
-      console.error("1-Tap Auto-Approve error:", err);
-      alert("Could not complete auto-approval. Please try manual approval.");
     } finally {
       setIsApproving(false);
     }
@@ -1960,7 +2143,7 @@ export default function AdminPaymentsPage() {
                     </span>
                   </h4>
                   <p className="text-[11px] text-slate-600 mt-0.5">
-                    Phone notifications arrived for: <strong>{pendingVerifiedMatches.map((m) => `${m.participantName} (₹${(m.amountPaid ?? 0).toFixed(2)})`).join(", ")}</strong>.
+                    Phone notifications arrived for: <strong>{pendingVerifiedMatches.map((m) => `${m.record.participantName} (₹${(m.match.amount ?? m.record.amountPaid ?? 0).toFixed(2)})`).join(", ")}</strong>.
                   </p>
                 </div>
               </div>
@@ -1968,10 +2151,8 @@ export default function AdminPaymentsPage() {
               <Button
                 size="sm"
                 onClick={async () => {
-                  for (const reg of pendingVerifiedMatches) {
-                    if (!reg.paymentId) continue;
-                    const vPay = verifiedUpiMap.get(reg.paymentId.trim());
-                    if (vPay) await handle1TapAutoApprove(reg, vPay);
+                  for (const { record, match } of pendingVerifiedMatches) {
+                    await handle1TapAutoApprove(record, match);
                   }
                 }}
                 isLoading={isApproving}
@@ -2047,7 +2228,7 @@ export default function AdminPaymentsPage() {
                   const isPending = r.paymentStatus === "PENDING" || (r.status === "PENDING" && r.paymentStatus !== "PAID");
                   const isRefunded = r.refundStatus === "PROCESSED" || r.paymentStatus === "REFUNDED";
                   const isCancelled = r.status === "CANCELLED" || r.paymentStatus === "FAILED";
-                  const verifiedMatch = r.paymentId ? verifiedUpiMap.get(r.paymentId.trim()) : undefined;
+                  const verifiedMatch = getVerifiedMatchForRecord(r);
 
                   return (
                     <tr key={r.id} className="hover:bg-slate-50/75 transition-colors">
