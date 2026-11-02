@@ -60,6 +60,9 @@ export function resolveSourceAppName(
   const t = (text || "").toLowerCase();
 
   // 1. Direct package name detection
+  if (pkg.includes("gmail") || pkg.includes("google.android.gm") || ua.includes("gmail") || ua.includes("apps-script") || ua.includes("google-apps-script")) {
+    return "Gmail (Bank Alert)";
+  }
   if (pkg.includes("messaging") || pkg.includes("mms") || pkg.includes("sms") || ua.includes("messaging")) {
     return "Google Messages (SMS)";
   }

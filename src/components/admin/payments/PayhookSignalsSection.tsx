@@ -17,7 +17,8 @@ import {
   Zap,
   CheckCheck,
   Trash2,
-  Loader2
+  Loader2,
+  Mail
 } from "lucide-react";
 import { db } from "@/lib/firebase/config";
 import { 
@@ -32,6 +33,7 @@ import {
   getDocs
 } from "firebase/firestore";
 import { PayhookGuideModal } from "./PayhookGuideModal";
+import { GmailHookModal } from "./GmailHookModal";
 
 export interface WebhookLogItem {
   id: string;
@@ -131,6 +133,7 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
   const [isClearing, setIsClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
+  const [isGmailModalOpen, setIsGmailModalOpen] = useState(false);
   const [groupDuplicates, setGroupDuplicates] = useState(true);
 
   // Group duplicate bursts under the primary approved signal
@@ -229,6 +232,14 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
       }
     }
 
+    if (s.includes("gmail") || s.includes("google.android.gm") || s.includes("email") || s.includes("apps-script")) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-800 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md">
+          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+          Gmail (Bank Alert)
+        </span>
+      );
+    }
     if (s.includes("paytm")) {
       return (
         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-800 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-md">
@@ -463,6 +474,15 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
             >
               <Smartphone className="w-3.5 h-3.5 text-slate-500" />
               <span>App Guide</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsGmailModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 text-xs font-bold transition-colors cursor-pointer"
+            >
+              <Mail className="w-3.5 h-3.5 text-rose-600" />
+              <span>Gmail Hook (Free)</span>
             </button>
 
             <a
@@ -887,6 +907,13 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
       <PayhookGuideModal
         isOpen={isGuideModalOpen}
         onClose={() => setIsGuideModalOpen(false)}
+      />
+
+      {/* Zero-Cost Gmail Bank Alert Hook Modal */}
+      <GmailHookModal
+        isOpen={isGmailModalOpen}
+        onClose={() => setIsGmailModalOpen(false)}
+        webhookUrl={webhookUrl}
       />
     </div>
   );

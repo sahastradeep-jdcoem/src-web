@@ -170,9 +170,15 @@ function getApprovalBadgeInfo(r: any, verifiedUpiMap: Map<string, any>) {
   ).trim();
   const hasManualUtr = /^\d{12}$/.test(studentClaimedUtr) || (/^\d{12}$/.test(paymentId) && Boolean(synthUtr));
 
-  // 3. Determine Source: Paytm vs SMS vs Cashfree vs Instamojo
+  // 3. Determine Source: Gmail vs SMS vs Paytm vs Cashfree vs Instamojo
   let source = "Paytm";
   if (
+    signalSource.includes("gmail") ||
+    signalSource.includes("email") ||
+    verifiedBy.includes("gmail")
+  ) {
+    source = "Gmail";
+  } else if (
     signalSource.includes("sms") ||
     signalSource.includes("messages") ||
     signalSource.includes("canara") ||
@@ -199,7 +205,11 @@ function getApprovalBadgeInfo(r: any, verifiedUpiMap: Map<string, any>) {
 
   // 5. Crisp visual styling
   let badgeStyle = "bg-blue-50 text-blue-700 border-blue-200/80";
-  if (source === "SMS" && !hasManualUtr) {
+  if (source === "Gmail" && !hasManualUtr) {
+    badgeStyle = "bg-rose-50 text-rose-700 border-rose-200/80";
+  } else if (source === "Gmail" && hasManualUtr) {
+    badgeStyle = "bg-rose-100 text-rose-800 border-rose-300/80";
+  } else if (source === "SMS" && !hasManualUtr) {
     badgeStyle = "bg-emerald-50 text-emerald-700 border-emerald-200/80";
   } else if (source === "SMS" && hasManualUtr) {
     badgeStyle = "bg-teal-50 text-teal-800 border-teal-200/80";

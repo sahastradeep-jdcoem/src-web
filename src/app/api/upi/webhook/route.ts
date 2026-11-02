@@ -267,7 +267,8 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Save to verified_upi_payments ledger & match active sessions / registrations
-    const sourceAppName = resolveSourceAppName(rawBody.packageName, req.headers.get("user-agent"), combinedText);
+    const incomingSourceParam = req.nextUrl.searchParams.get("source") || rawBody.source;
+    const sourceAppName = resolveSourceAppName(rawBody.packageName || incomingSourceParam, req.headers.get("user-agent"), combinedText);
     let isDuplicateNotification = false;
     let matchedRegistrationId: string | null = null;
     let matchedOrderId: string | null = null;
