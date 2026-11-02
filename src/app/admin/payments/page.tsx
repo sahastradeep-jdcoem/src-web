@@ -1826,15 +1826,6 @@ export default function AdminPaymentsPage() {
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={() => setIsSyncCashfreeOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition-all cursor-pointer"
-            title="Recover or sync missing passes using Cashfree Order ID"
-          >
-            <RefreshCw className="w-3.5 h-3.5 text-[#17458F]" />
-            <span>Sync Cashfree Order</span>
-          </button>
 
           {kpiStats.refundedCount > 0 && (
             <button

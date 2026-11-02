@@ -14,7 +14,6 @@ import {
   Download,
   Terminal,
   Activity,
-  Zap,
   CheckCheck,
   Trash2,
   Loader2,
@@ -461,10 +460,9 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
               type="button"
               onClick={handlePushTestPing}
               disabled={isSendingPing}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] disabled:opacity-50 text-white font-bold text-xs shadow-xs transition-all cursor-pointer disabled:cursor-not-allowed"
+              className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] disabled:opacity-50 text-white font-bold text-xs shadow-xs transition-all cursor-pointer disabled:cursor-not-allowed"
             >
-              <Zap className={`w-3.5 h-3.5 text-amber-300 ${isSendingPing ? "animate-spin" : ""}`} />
-              <span>{isSendingPing ? "Pushing Ping..." : "Push Test Ping to Server"}</span>
+              <span>{isSendingPing ? "Testing..." : "Test Ping"}</span>
             </button>
 
             <button
@@ -603,7 +601,7 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
             <div className="space-y-1">
               <p className="text-sm font-bold text-slate-800">No Webhook Signals Yet</p>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Tap <b>&quot;Push Test Ping to Server&quot;</b> above or tap <b>&quot;Send Test Ping&quot;</b> inside the SRC PayHook app on your phone.
+                Tap <b>&quot;Test Ping&quot;</b> above or tap <b>&quot;Send Test Ping&quot;</b> inside the SRC PayHook app on your phone.
               </p>
             </div>
           </div>
