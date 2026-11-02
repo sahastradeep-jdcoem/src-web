@@ -803,7 +803,7 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Paytm Merchant ID (MID) */}
                 <div className="space-y-1.5">
                   <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
@@ -818,7 +818,25 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-medium focus:outline-none focus:ring-2 focus:ring-[#002970] focus:border-transparent transition-all shadow-2xs"
                   />
                   <p className="text-[11px] text-slate-400 font-medium">
-                    Found in dashboard.paytm.com → Developer Settings → API Keys.
+                    Found in dashboard.paytm.com → API Keys.
+                  </p>
+                </div>
+
+                {/* Paytm Merchant UPI ID (VPA) */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Merchant UPI ID (VPA) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required={isPaytm}
+                    value={config.paytmUpiId ?? ""}
+                    onChange={(e) => setConfig({ ...config, paytmUpiId: e.target.value })}
+                    placeholder="e.g. paytm.s3tuv70@pty"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-medium focus:outline-none focus:ring-2 focus:ring-[#002970] focus:border-transparent transition-all shadow-2xs"
+                  />
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    Paytm Business UPI ID receiving funds.
                   </p>
                 </div>
 
@@ -836,7 +854,7 @@ export function PaymentConfigModal({ isOpen, onClose }: PaymentConfigModalProps)
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#002970] focus:border-transparent transition-all shadow-2xs"
                   />
                   <p className="text-[11px] text-slate-400 font-medium">
-                    Name displayed on student screens in GPay, PhonePe, and Paytm.
+                    Name displayed on student screens in GPay &amp; PhonePe.
                   </p>
                 </div>
               </div>
