@@ -1,0 +1,42 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getGmailOAuthConfig, getStoredGmailConnection, saveGmailOAuthConfig } from "@/lib/payments/gmailOAuth";
+
+export async function GET(req: NextRequest) {
+  try {
+    const config = await getGmailOAuthConfig();
+    const connection = await getStoredGmailConnection();
+
+    return NextResponse.json({
+      success: true,
+      hasCredentials: Boolean(config?.clientId && config?.clientSecret),
+      clientId: config?.clientId ? `${config.clientId.slice(0, 12)}...` : null,
+      connection: {
+        connected: Boolean(connection?.connected && connection?.refreshToken),
+        email: connection?.email || null,
+        name: connection?.name || null,
+        avatar: connection?.avatar || null,
+        connectedAt: connection?.connectedAt || null,
+        lastSyncedAt: connection?.lastSyncedAt || null,
+        tenureId: connection?.tenureId || null
+      }
+    });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { clientId, clientSecret } = body;
+
+    if (!clientId || !clientSecret) {
+      return NextResponse.json({ success: false, error: "Missing Client ID or Client Secret" }, { status: 400 });
+    }
+
+    const saved = await saveGmailOAuthConfig(clientId, clientSecret);
+    return NextResponse.json({ success: saved });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}

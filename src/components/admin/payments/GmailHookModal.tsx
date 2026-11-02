@@ -4,17 +4,17 @@ import React, { useState, useEffect } from "react";
 import { 
   X, 
   Mail, 
-  Copy, 
-  Check, 
   ExternalLink, 
   ShieldCheck, 
   Sparkles, 
-  Clock, 
   Send, 
   CheckCircle2, 
   AlertCircle,
   Zap,
-  ArrowRight
+  RefreshCw,
+  LogOut,
+  Sliders,
+  ChevronDown
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
@@ -25,11 +25,61 @@ interface GmailHookModalProps {
 }
 
 export function GmailHookModal({ isOpen, onClose, webhookUrl }: GmailHookModalProps) {
-  const [copiedScript, setCopiedScript] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState(true);
+  const [hasCredentials, setHasCredentials] = useState(false);
+  const [connection, setConnection] = useState<{
+    connected: boolean;
+    email?: string | null;
+    name?: string | null;
+    connectedAt?: string | null;
+    lastSyncedAt?: string | null;
+  }>({ connected: false });
+
+  // Credentials config inputs
+  const [clientIdInput, setClientIdInput] = useState("");
+  const [clientSecretInput, setClientSecretInput] = useState("");
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [showConfigAccordion, setShowConfigAccordion] = useState(false);
+
+  // Syncing / Disconnecting state
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
+
+  // Simulator state
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [selectedBank, setSelectedBank] = useState<"canara" | "hdfc" | "paytm" | "sbi">("canara");
   const [isSimulating, setIsSimulating] = useState(false);
-  const [simulationResult, setSimulationResult] = useState<{ ok: boolean; message: string; latency?: number } | null>(null);
+  const [simulationResult, setSimulationResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const redirectUri = typeof window !== "undefined" 
+    ? `${window.location.origin}/api/gmail/oauth/callback`
+    : "https://www.srcjdcoem.in/api/gmail/oauth/callback";
+
+  const fetchStatus = async () => {
+    try {
+      setLoadingStatus(true);
+      const res = await fetch("/api/gmail/oauth/status");
+      const data = await res.json();
+      if (data.success) {
+        setHasCredentials(Boolean(data.hasCredentials));
+        setConnection(data.connection || { connected: false });
+        if (!data.hasCredentials) {
+          setShowConfigAccordion(true);
+        }
+      }
+    } catch (e) {
+      console.warn("Could not fetch Gmail OAuth status:", e);
+    } finally {
+      setLoadingStatus(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchStatus();
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -47,53 +97,78 @@ export function GmailHookModal({ isOpen, onClose, webhookUrl }: GmailHookModalPr
 
   if (!isOpen) return null;
 
-  const targetWebhookUrl = webhookUrl || "https://www.srcjdcoem.in/api/upi/webhook?secret=SRC_UPI_2026_GATEWAY";
+  const handleConnectWithGoogle = () => {
+    window.location.href = "/api/gmail/oauth/connect?redirect=true";
+  };
 
-  const googleAppsScriptCode = `/**
- * SRC Bank Alert Gmail Observer
- * Runs in your Google account on Google Cloud infrastructure.
- * Checks unread bank credit emails every 1 minute and auto-forwards to SRC PayHook.
- */
-function processBankCreditEmails() {
-  const WEBHOOK_URL = "${targetWebhookUrl}";
-  
-  // Search for unread credit alerts from Indian banks & Paytm
-  const searchQuery = 'label:unread (from:canarabank OR from:hdfcbank OR from:paytm OR from:sbi OR from:icicibank OR from:axisbank) ("credited" OR "received" OR "credit alert" OR "UPI Ref")';
-  const threads = GmailApp.search(searchQuery, 0, 15);
-  
-  for (let i = 0; i < threads.length; i++) {
-    const messages = threads[i].getMessages();
-    for (let j = 0; j < messages.length; j++) {
-      const msg = messages[j];
-      if (msg.isUnread()) {
-        const payload = {
-          packageName: "com.google.android.gm",
-          sender: msg.getFrom(),
-          subject: msg.getSubject(),
-          body: msg.getPlainBody(),
-          postTime: msg.getDate().getTime(),
-          notificationText: msg.getSubject() + " " + msg.getPlainBody()
-        };
-        
-        try {
-          const response = UrlFetchApp.fetch(WEBHOOK_URL, {
-            method: "post",
-            contentType: "application/json",
-            payload: JSON.stringify(payload),
-            muteHttpExceptions: true
-          });
-          
-          if (response.getResponseCode() >= 200 && response.getResponseCode() < 300) {
-            msg.markRead();
-            Logger.log("Successfully forwarded bank alert email: " + msg.getSubject());
-          }
-        } catch (err) {
-          Logger.log("Error forwarding email to SRC Webhook: " + err);
-        }
-      }
+  const handleSaveCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clientIdInput.trim() || !clientSecretInput.trim()) {
+      alert("Please provide both Google OAuth Client ID and Client Secret.");
+      return;
     }
-  }
-}`;
+    setIsSavingConfig(true);
+    try {
+      const res = await fetch("/api/gmail/oauth/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: clientIdInput.trim(),
+          clientSecret: clientSecretInput.trim()
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setHasCredentials(true);
+        setShowConfigAccordion(false);
+        alert("Google OAuth credentials saved! You can now click 'Connect with Google'.");
+      } else {
+        alert(`Failed to save credentials: ${data.error}`);
+      }
+    } catch (err: any) {
+      alert(`Error saving credentials: ${err.message}`);
+    } finally {
+      setIsSavingConfig(false);
+    }
+  };
+
+  const handleSyncNow = async () => {
+    setIsSyncing(true);
+    setSyncFeedback(null);
+    try {
+      const res = await fetch("/api/gmail/sync", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setSyncFeedback(data.message || `Sync complete. ${data.processedCount || 0} alerts processed.`);
+        fetchStatus();
+      } else {
+        setSyncFeedback(`Sync failed: ${data.error}`);
+      }
+    } catch (err: any) {
+      setSyncFeedback(`Sync error: ${err.message}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (!confirm("Are you sure you want to disconnect this Gmail account? Payments will no longer be observed from this inbox.")) {
+      return;
+    }
+    setIsDisconnecting(true);
+    try {
+      const res = await fetch("/api/gmail/oauth/disconnect", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setConnection({ connected: false });
+        alert("Account disconnected successfully.");
+      }
+    } catch (err: any) {
+      alert(`Disconnect error: ${err.message}`);
+    } finally {
+      setIsDisconnecting(false);
+    }
+  };
 
   const sampleBankPayloads = {
     canara: {
@@ -122,26 +197,13 @@ function processBankCreditEmails() {
     }
   };
 
-  const handleCopyScript = () => {
-    navigator.clipboard.writeText(googleAppsScriptCode);
-    setCopiedScript(true);
-    setTimeout(() => setCopiedScript(false), 2000);
-  };
-
-  const handleCopyUrl = () => {
-    navigator.clipboard.writeText(targetWebhookUrl);
-    setCopiedUrl(true);
-    setTimeout(() => setCopiedUrl(false), 2000);
-  };
-
   const handleSimulateBankEmail = async () => {
     setIsSimulating(true);
     setSimulationResult(null);
-    const start = performance.now();
     const bank = sampleBankPayloads[selectedBank];
 
     try {
-      const res = await fetch("/api/upi/webhook?secret=SRC_UPI_2026_GATEWAY", {
+      const res = await fetch("/api/upi/webhook?secret=SRC_UPI_2026_GATEWAY&source=Gmail", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -157,29 +219,29 @@ function processBankCreditEmails() {
         })
       });
 
-      const latency = Math.round(performance.now() - start);
       const data = await res.json();
-
       if (res.ok && data.success) {
         setSimulationResult({
           ok: true,
-          message: `Success (${latency}ms): Bank email parsed! UTR: ${data.utr || "detected"} · Amount: ₹${data.amount || "0"} · Stream entry logged.`,
-          latency
+          message: `Parsed email signal! UTR: ${data.utr || "detected"} · Amount: ₹${data.amount || "0"} · Stream entry logged.`
         });
       } else {
         setSimulationResult({
           ok: false,
-          message: `Simulation response (${res.status}): ${data.error || "Failed to process bank alert"}`
+          message: `Simulation response (${res.status}): ${data.error || "Failed"}`
         });
       }
     } catch (err: any) {
-      setSimulationResult({
-        ok: false,
-        message: `Simulation error: ${err.message}`
-      });
+      setSimulationResult({ ok: false, message: `Simulation error: ${err.message}` });
     } finally {
       setIsSimulating(false);
     }
+  };
+
+  const handleCopyRedirectUri = () => {
+    navigator.clipboard.writeText(redirectUri);
+    setCopiedUrl(true);
+    setTimeout(() => setCopiedUrl(false), 2000);
   };
 
   return (
@@ -198,11 +260,11 @@ function processBankCreditEmails() {
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-bold">Gmail Bank Alert Hook</h2>
                 <span className="text-[10px] font-bold bg-white/20 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
-                  Cloud Service
+                  OAuth 2.0 Integration
                 </span>
               </div>
               <p className="text-xs text-rose-200/90 mt-0.5">
-                Zero-phone backup: Catches bank credit alert emails cloud-to-cloud even if treasurer's phone is off
+                Zero-phone backup: Reads official bank credit alert emails directly via Google OAuth
               </p>
             </div>
           </div>
@@ -215,82 +277,195 @@ function processBankCreditEmails() {
           </button>
         </div>
 
-        {/* Scrollable Body */}
+        {/* Body */}
         <div className="p-6 overflow-y-auto space-y-6 text-slate-800 text-sm">
-          {/* Architecture Callout */}
-          <div className="p-4 rounded-2xl bg-rose-50/70 border border-rose-200/80 flex items-start gap-3">
-            <Sparkles className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-            <div className="text-xs text-rose-950 leading-relaxed">
-              <span className="font-bold">Why this guarantees 100% uptime:</span> Every major Indian bank (Canara, SBI, HDFC, ICICI, Paytm) instantly sends a transaction credit alert email to the registered account email. Using this hook, payments are automatically confirmed in the cloud without needing mobile battery, SIM data, or physical phone access.
-            </div>
-          </div>
+          {/* Main Connection Status Card */}
+          <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50 space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Treasurer Account Connection
+                </div>
+                {loadingStatus ? (
+                  <div className="text-sm font-semibold text-slate-400 mt-1 flex items-center gap-1.5">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    Checking connection status...
+                  </div>
+                ) : connection.connected ? (
+                  <div className="mt-1 space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-900 text-base">{connection.email}</span>
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        Active &amp; Authorised
+                      </span>
+                    </div>
+                    {connection.lastSyncedAt && (
+                      <p className="text-xs text-slate-400">
+                        Last checked: {new Date(connection.lastSyncedAt).toLocaleString("en-IN")}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-1">
+                    <span className="text-sm font-semibold text-slate-700">No Gmail account linked</span>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Connect the official treasurer inbox to catch bank emails cloud-to-cloud.
+                    </p>
+                  </div>
+                )}
+              </div>
 
-          {/* Setup Guide Steps */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                <Clock className="w-4 h-4 text-rose-600" />
-                60-Second Setup via Google Apps Script
-              </h3>
-              <a
-                href="https://script.google.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs font-bold text-rose-700 hover:text-rose-900"
-              >
-                Open Google Apps Script <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-
-            <ol className="space-y-2 text-xs text-slate-600 list-decimal list-inside bg-slate-50 p-4 rounded-2xl border border-slate-200">
-              <li>Open <strong className="text-slate-900 font-semibold">script.google.com</strong> in the treasurer's Google account and click <strong className="text-slate-900 font-semibold">+ New project</strong>.</li>
-              <li>Replace all code in the editor with the script below, and click <strong className="text-slate-900 font-semibold">Save</strong>.</li>
-              <li>Click the <strong className="text-slate-900 font-semibold">Triggers (Clock icon)</strong> on the left panel $\rightarrow$ click <strong className="text-slate-900 font-semibold">Add Trigger</strong>.</li>
-              <li>Select function: <strong className="text-slate-900 font-semibold">processBankCreditEmails</strong> $\rightarrow$ Event source: <strong className="text-slate-900 font-semibold">Time-driven</strong> $\rightarrow$ Timer: <strong className="text-slate-900 font-semibold">Minutes timer (Every 1 minute)</strong> $\rightarrow$ Save.</li>
-            </ol>
-          </div>
-
-          {/* Copyable Apps Script Code */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Google Apps Script Code
-              </label>
-              <button
-                type="button"
-                onClick={handleCopyScript}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
-              >
-                {copiedScript ? (
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                {connection.connected ? (
                   <>
-                    <Check className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Copied Code!</span>
+                    <button
+                      type="button"
+                      onClick={handleSyncNow}
+                      disabled={isSyncing}
+                      className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs shadow-2xs transition-all cursor-pointer"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 text-rose-600 ${isSyncing ? "animate-spin" : ""}`} />
+                      <span>{isSyncing ? "Checking..." : "Sync Inbox Now"}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDisconnect}
+                      disabled={isDisconnecting}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs border border-rose-200 transition-colors cursor-pointer"
+                      title="Disconnect account for tenure handoff"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Disconnect</span>
+                    </button>
                   </>
                 ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>Copy Script</span>
-                  </>
+                  <button
+                    type="button"
+                    onClick={handleConnectWithGoogle}
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white font-bold text-xs shadow-sm transition-all cursor-pointer"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                    </svg>
+                    <span>Connect with Google OAuth</span>
+                  </button>
                 )}
-              </button>
+              </div>
             </div>
-            <pre className="p-4 rounded-2xl bg-slate-950 text-slate-200 font-mono text-[11px] overflow-x-auto max-h-52 border border-slate-800 leading-relaxed">
-              {googleAppsScriptCode}
-            </pre>
+
+            {syncFeedback && (
+              <div className="p-3 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-800 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{syncFeedback}</span>
+              </div>
+            )}
           </div>
 
-          {/* Interactive Simulation / Test Section */}
-          <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                  <Zap className="w-3.5 h-3.5 text-amber-500" />
-                  Live Bank Alert Simulator &amp; Verification
-                </h4>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Test the cloud parsing engine without waiting for a real bank transaction.
-                </p>
+          {/* Tenure Handoff Callout */}
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-start gap-3">
+            <Sparkles className="w-5 h-5 text-[#17458F] shrink-0 mt-0.5" />
+            <div className="text-xs text-slate-600 leading-relaxed">
+              <span className="font-bold text-slate-900">Future Tenure Handover:</span> When a new treasurer is elected, simply click <strong>"Disconnect"</strong> and have the incoming treasurer click <strong>"Connect with Google"</strong>. The integration updates immediately without touching code, scripts, or database tables.
+            </div>
+          </div>
+
+          {/* OAuth Setup & Credentials Accordion */}
+          <div className="border border-slate-200 rounded-2xl overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowConfigAccordion(!showConfigAccordion)}
+              className="w-full p-4 bg-white hover:bg-slate-50 flex items-center justify-between text-left transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5">
+                <Sliders className="w-4 h-4 text-slate-500" />
+                <div>
+                  <div className="text-xs font-bold text-slate-900">Google Cloud OAuth Credentials</div>
+                  <div className="text-[11px] text-slate-400">
+                    {hasCredentials ? "Configured and active" : "Required for first-time setup"}
+                  </div>
+                </div>
               </div>
+              <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${showConfigAccordion ? "rotate-180" : ""}`} />
+            </button>
+
+            {showConfigAccordion && (
+              <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-4 text-xs">
+                {/* Step Instructions */}
+                <div className="space-y-2 text-slate-600">
+                  <div className="font-bold text-slate-900">How to get your OAuth Credentials:</div>
+                  <ol className="list-decimal list-inside space-y-1 pl-1">
+                    <li>Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="text-rose-700 font-bold hover:underline inline-flex items-center gap-0.5">Google Cloud Console <ExternalLink className="w-2.5 h-2.5" /></a>.</li>
+                    <li>Create an <strong>OAuth 2.0 Client ID</strong> (Web Application).</li>
+                    <li>Add this exact <strong>Authorized Redirect URI</strong>:</li>
+                  </ol>
+                  <div className="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200 font-mono text-[11px] text-slate-800">
+                    <span className="truncate flex-1">{redirectUri}</span>
+                    <button
+                      type="button"
+                      onClick={handleCopyRedirectUri}
+                      className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-sans font-bold text-[10px] shrink-0 cursor-pointer"
+                    >
+                      {copiedUrl ? "Copied!" : "Copy URI"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Input Form */}
+                <form onSubmit={handleSaveCredentials} className="space-y-3 pt-2 border-t border-slate-200">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                      Client ID
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 123456789-xyz.apps.googleusercontent.com"
+                      value={clientIdInput}
+                      onChange={(e) => setClientIdInput(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 font-mono text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#17458F]/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                      Client Secret
+                    </label>
+                    <input
+                      type="password"
+                      placeholder="GOCSPX-..."
+                      value={clientSecretInput}
+                      onChange={(e) => setClientSecretInput(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 font-mono text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#17458F]/20"
+                    />
+                  </div>
+                  <div className="flex justify-end pt-1">
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      isLoading={isSavingConfig}
+                      className="bg-[#17458F] text-xs"
+                    >
+                      Save Credentials
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </div>
+
+          {/* Live Bank Alert Simulator */}
+          <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50 space-y-4">
+            <div>
+              <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-amber-500" />
+                Live Bank Alert Simulator &amp; Verification
+              </h4>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Test the email parsing engine without waiting for a real bank credit email.
+              </p>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -314,7 +489,7 @@ function processBankCreditEmails() {
             </div>
 
             <div className="p-3 rounded-xl bg-white border border-slate-200 text-xs font-mono text-slate-700 space-y-1">
-              <div className="text-slate-400 text-[10px] uppercase font-bold">Sample Email Payload:</div>
+              <div className="text-slate-400 text-[10px] uppercase font-bold">Simulated Email Alert:</div>
               <div className="font-semibold text-slate-900">{sampleBankPayloads[selectedBank].subject}</div>
               <div className="text-[11px] text-slate-600 line-clamp-2">{sampleBankPayloads[selectedBank].body}</div>
             </div>
@@ -357,7 +532,7 @@ function processBankCreditEmails() {
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <span>Encrypted Webhook Endpoint · Automated Cloud Processor</span>
+            <span>Encrypted Token Storage · Official Google APIs</span>
           </div>
           <Button variant="outline" onClick={onClose}>
             Done
