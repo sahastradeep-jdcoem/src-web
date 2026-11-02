@@ -50,7 +50,7 @@ export function GmailHookModal({ isOpen, onClose, webhookUrl }: GmailHookModalPr
   const targetWebhookUrl = webhookUrl || "https://www.srcjdcoem.in/api/upi/webhook?secret=SRC_UPI_2026_GATEWAY";
 
   const googleAppsScriptCode = `/**
- * SRC Bank Alert Gmail Observer (100% Free Forever)
+ * SRC Bank Alert Gmail Observer
  * Runs in your Google account on Google Cloud infrastructure.
  * Checks unread bank credit emails every 1 minute and auto-forwards to SRC PayHook.
  */
@@ -197,8 +197,8 @@ function processBankCreditEmails() {
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-bold">Gmail Bank Alert Hook</h2>
-                <span className="text-[10px] font-bold bg-emerald-500 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
-                  100% Free Forever (₹0)
+                <span className="text-[10px] font-bold bg-white/20 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  Cloud Service
                 </span>
               </div>
               <p className="text-xs text-rose-200/90 mt-0.5">
@@ -221,7 +221,7 @@ function processBankCreditEmails() {
           <div className="p-4 rounded-2xl bg-rose-50/70 border border-rose-200/80 flex items-start gap-3">
             <Sparkles className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
             <div className="text-xs text-rose-950 leading-relaxed">
-              <span className="font-bold">Why this guarantees 100% uptime:</span> Every major Indian bank (Canara, SBI, HDFC, ICICI, Paytm) instantly sends a free transaction credit alert email to the registered account email. Using this hook, payments are automatically confirmed in the cloud without needing mobile battery, SIM data, or physical phone access.
+              <span className="font-bold">Why this guarantees 100% uptime:</span> Every major Indian bank (Canara, SBI, HDFC, ICICI, Paytm) instantly sends a transaction credit alert email to the registered account email. Using this hook, payments are automatically confirmed in the cloud without needing mobile battery, SIM data, or physical phone access.
             </div>
           </div>
 
@@ -230,7 +230,7 @@ function processBankCreditEmails() {
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
                 <Clock className="w-4 h-4 text-rose-600" />
-                60-Second Setup via Google Apps Script (Free)
+                60-Second Setup via Google Apps Script
               </h3>
               <a
                 href="https://script.google.com"
@@ -357,7 +357,7 @@ function processBankCreditEmails() {
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <span>Encrypted Webhook Endpoint · Zero Subscription Costs</span>
+            <span>Encrypted Webhook Endpoint · Automated Cloud Processor</span>
           </div>
           <Button variant="outline" onClick={onClose}>
             Done
