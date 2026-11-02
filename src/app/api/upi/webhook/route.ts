@@ -9,6 +9,8 @@ import {
   getDocs, 
   query, 
   where, 
+  limit,
+  orderBy,
   updateDoc,
   deleteDoc,
   writeBatch
@@ -291,32 +293,7 @@ export async function POST(req: NextRequest) {
           const existingPayer = existingData?.payerName || payerName || null;
           const existingIsFriend = Boolean(existingData?.isFriendPayment ?? isFriendPayment);
 
-          // Log duplicate signal in audit feed without blocking pre-reads
-          try {
-            const logId = `SIG-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
-            const logRef = doc(db, "upi_webhook_logs", logId);
-            await setDoc(logRef, {
-              id: logId,
-              receivedAt: now,
-              transactionTimestamp,
-              notificationTimestamp: rawPostTime || contentDate.getTime(),
-              combinedText: combinedText.slice(0, 500),
-              extractedUtr: utr,
-              extractedAmount: amount,
-              matchedOrderId: existingOrderId,
-              matchedRegistrationId: existingRegId,
-              matchedStudentName: existingStudent,
-              payerName: existingPayer,
-              isFriendPayment: existingIsFriend,
-              source: sourceAppName,
-              status: existingStatus,
-              isDuplicate: true,
-              burstCount: 1,
-            });
-          } catch (dupLogErr) {
-            console.warn("Notice: upi_webhook_logs duplicate write note:", dupLogErr);
-          }
-
+          // Return early on duplicate signal with zero redundant writes
           return NextResponse.json({
             success: true,
             isDuplicate: true,
@@ -335,22 +312,6 @@ export async function POST(req: NextRequest) {
         }
       } catch (idempotencyErr) {
         console.warn("Notice: idempotency lookup warning (proceeding):", idempotencyErr);
-      }
-
-      // Initial ledger write: record incoming payment before active session transition evaluation
-      try {
-        await setDoc(paymentDocRef, {
-          utr,
-          amount,
-          rawNotification: combinedText,
-          status: "UNCLAIMED",
-          isSyntheticUtr,
-          source: sourceAppName,
-          receivedAt: now,
-          payerName: payerName || null,
-        }, { merge: true });
-      } catch (initLedgerErr) {
-        console.warn("Notice: initial ledger write warning:", initLedgerErr);
       }
 
       // 3A. Match active checkout session (for zero-touch hands-free auto-approval on the student's checkout screen)
@@ -388,7 +349,8 @@ export async function POST(req: NextRequest) {
         try {
           const utrSessionQuery = query(
             collection(db, "active_checkout_sessions"),
-            where("submittedUtr", "==", utr)
+            where("submittedUtr", "==", utr),
+            limit(1)
           );
           const utrSessionSnap = await getDocs(utrSessionQuery);
           if (!utrSessionSnap.empty) {
@@ -415,7 +377,8 @@ export async function POST(req: NextRequest) {
         try {
           const waitingSessionsQuery = query(
             collection(db, "active_checkout_sessions"),
-            where("status", "==", "WAITING")
+            where("status", "==", "WAITING"),
+            limit(15)
           );
           const waitingSnap = await getDocs(waitingSessionsQuery);
           if (!waitingSnap.empty) {
@@ -563,7 +526,9 @@ export async function POST(req: NextRequest) {
         try {
           const expiredSessionsQuery = query(
             collection(db, "active_checkout_sessions"),
-            where("status", "==", "EXPIRED")
+            where("status", "==", "EXPIRED"),
+            where("amount", "==", Number(amount)),
+            limit(5)
           );
           const expiredSnap = await getDocs(expiredSessionsQuery);
           if (!expiredSnap.empty) {
@@ -611,10 +576,12 @@ export async function POST(req: NextRequest) {
         try {
           let matchedCompletedData: any = null;
 
-          // Check 1: Completed active checkout sessions (Strict <= 180s burst window or exact UTR match)
+          // Check 1: Completed active checkout sessions (Strict <= 180s burst window or exact UTR match, filtered by amount)
           const completedQuery = query(
             collection(db, "active_checkout_sessions"),
-            where("status", "==", "COMPLETED")
+            where("status", "==", "COMPLETED"),
+            where("amount", "==", Number(amount)),
+            limit(5)
           );
           const completedSnap = await getDocs(completedQuery);
 
@@ -651,11 +618,13 @@ export async function POST(req: NextRequest) {
             }
           }
 
-          // Check 2: Canonical registrations completed with synthetic UTR (e.g. AUTO-PTM-xxx)
+          // Check 2: Canonical registrations completed with synthetic UTR (e.g. AUTO-PTM-xxx, filtered by amount)
           if (!matchedCompletedData) {
             const paidRegsQuery = query(
               collection(db, "registrations"),
-              where("paymentStatus", "==", "PAID")
+              where("paymentStatus", "==", "PAID"),
+              where("amountPaid", "==", Number(amount)),
+              limit(5)
             );
             const paidRegsSnap = await getDocs(paidRegsQuery);
             if (!paidRegsSnap.empty) {
@@ -768,7 +737,8 @@ export async function POST(req: NextRequest) {
           try {
             const regQuery = query(
               collection(db, "registrations"),
-              where("paymentId", "==", utr)
+              where("paymentId", "==", utr),
+              limit(1)
             );
             let regSnap = await getDocs(regQuery);
             if (!regSnap.empty) {
@@ -782,7 +752,8 @@ export async function POST(req: NextRequest) {
           try {
             const orderRegQuery = query(
               collection(db, "registrations"),
-              where("orderId", "==", matchedOrderId)
+              where("orderId", "==", matchedOrderId),
+              limit(1)
             );
             const orderSnap = await getDocs(orderRegQuery);
             if (!orderSnap.empty) {
@@ -796,7 +767,8 @@ export async function POST(req: NextRequest) {
           try {
             const customRegQuery = query(
               collection(db, "registrations"),
-              where("customAnswers.upiUtr", "==", utr)
+              where("customAnswers.upiUtr", "==", utr),
+              limit(1)
             );
             const customSnap = await getDocs(customRegQuery);
             if (!customSnap.empty) {
@@ -811,7 +783,8 @@ export async function POST(req: NextRequest) {
           try {
             const pendingRegsQuery = query(
               collection(db, "registrations"),
-              where("paymentStatus", "==", "PENDING")
+              where("paymentStatus", "==", "PENDING"),
+              limit(25)
             );
             const pendingRegsSnap = await getDocs(pendingRegsQuery);
             if (!pendingRegsSnap.empty) {
@@ -1119,19 +1092,25 @@ export async function GET(req: NextRequest) {
   // If authorized, fetch last 5 received payments and last 10 webhook activity logs
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-      const snap = await getDocs(collection(db, "verified_upi_payments"));
-      const list = snap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .sort((a: any, b: any) => (b.receivedAt || "").localeCompare(a.receivedAt || ""))
-        .slice(0, 5);
+      const snap = await getDocs(
+        query(
+          collection(db, "verified_upi_payments"),
+          orderBy("receivedAt", "desc"),
+          limit(5)
+        )
+      );
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
       let recentLogs: any[] = [];
       try {
-        const logSnap = await getDocs(collection(db, "upi_webhook_logs"));
-        recentLogs = logSnap.docs
-          .map(d => ({ id: d.id, ...d.data() }))
-          .sort((a: any, b: any) => (b.receivedAt || "").localeCompare(a.receivedAt || ""))
-          .slice(0, 10);
+        const logSnap = await getDocs(
+          query(
+            collection(db, "upi_webhook_logs"),
+            orderBy("receivedAt", "desc"),
+            limit(10)
+          )
+        );
+        recentLogs = logSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       } catch {}
 
       return NextResponse.json({

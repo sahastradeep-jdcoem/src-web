@@ -101,11 +101,12 @@ export async function POST(req: NextRequest) {
     // Check for duplicate UTR submissions in Firestore to prevent reusing the same payment receipt
     try {
       const { db } = await import("@/lib/firebase/config");
-      const { collection, query, where, getDocs } = await import("firebase/firestore");
+      const { collection, query, where, getDocs, limit } = await import("firebase/firestore");
       if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
         const q = query(
           collection(db, "registrations"),
-          where("paymentId", "==", utr)
+          where("paymentId", "==", utr),
+          limit(1)
         );
         const snap = await getDocs(q);
         if (!snap.empty) {
@@ -152,14 +153,16 @@ export async function POST(req: NextRequest) {
         // Check for UNCLAIMED synthetic payment record (e.g. Paytm push notification without UTR that arrived earlier)
         if (!autoVerifiedViaWebhook && amount) {
           try {
-            const { collection, query, where, getDocs, setDoc } = await import("firebase/firestore");
+            const { collection, query, where, getDocs, setDoc, limit } = await import("firebase/firestore");
+            const expectedAmount = Number(amount || 0);
             const unclaimedQuery = query(
               collection(db, "verified_upi_payments"),
-              where("status", "==", "UNCLAIMED")
+              where("status", "==", "UNCLAIMED"),
+              where("amount", "==", expectedAmount),
+              limit(3)
             );
             const unclaimedSnap = await getDocs(unclaimedQuery);
             if (!unclaimedSnap.empty) {
-              const expectedAmount = Number(amount || 0);
               const unclaimedMatch = unclaimedSnap.docs.find((d) => {
                 const data = d.data();
                 const payAmt = Number(data.amount) || 0;

@@ -569,8 +569,15 @@ export default function StudentDashboardPage() {
           setRegistrations(formatted);
           setIsInitialLoading(false);
 
-          // Zero-Touch Self-Healing: Check if any pending registration has completed checkout session
-          const pendingWithOrders = formatted.filter((r) => r.paymentStatus === "PENDING" && r.orderId);
+          // Zero-Touch Self-Healing: Check if any recently created (< 2 hours) pending registration has completed checkout session
+          const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+          const pendingWithOrders = formatted
+            .filter((r) => {
+              if (r.paymentStatus !== "PENDING" || !r.orderId) return false;
+              const regDate = r.registeredAt ? new Date(r.registeredAt).getTime() : 0;
+              return !regDate || isNaN(regDate) || regDate > twoHoursAgo;
+            })
+            .slice(0, 3);
           for (const pending of pendingWithOrders) {
             (async () => {
               try {

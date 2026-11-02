@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-      const { collection, query, where, getDocs } = await import("firebase/firestore");
+      const { collection, query, where, getDocs, limit } = await import("firebase/firestore");
 
       // 1. Check active_checkout_sessions by orderId
       if (orderId) {
@@ -43,9 +43,9 @@ export async function GET(req: NextRequest) {
             }
 
             if (data?.status === "EXPIRED") {
-              // Check if registration was completed or auto-revived by delayed webhook
+              // Check if registration was completed or auto-revived by delayed webhook (limit 1)
               try {
-                const regCheck = await getDocs(query(collection(db, "registrations"), where("orderId", "==", orderId)));
+                const regCheck = await getDocs(query(collection(db, "registrations"), where("orderId", "==", orderId), limit(1)));
                 if (!regCheck.empty && regCheck.docs[0].data().paymentStatus === "PAID") {
                   const r = regCheck.docs[0].data();
                   return NextResponse.json({
@@ -74,8 +74,14 @@ export async function GET(req: NextRequest) {
 
               // Only check if we have a valid session creation timestamp
               if (sessionCreatedTime > 0) {
+                // Target query: filter strictly by exact amount and limit to 3 to prevent full-collection scans
                 const paymentsSnap = await getDocs(
-                  query(collection(db, "verified_upi_payments"), where("status", "==", "UNCLAIMED"))
+                  query(
+                    collection(db, "verified_upi_payments"),
+                    where("status", "==", "UNCLAIMED"),
+                    where("amount", "==", sessionAmt),
+                    limit(3)
+                  )
                 );
 
                 const match = paymentsSnap.docs.find((pDoc) => {
@@ -92,13 +98,12 @@ export async function GET(req: NextRequest) {
 
                   // 3. Strict Time Window Invariant:
                   // The payment MUST have been received AFTER this checkout session was created.
-                  // Pre-existing payments from earlier hours/days MUST NEVER be matched!
                   const paymentTime = pData.receivedAt ? new Date(pData.receivedAt).getTime() : 0;
                   if (!paymentTime || paymentTime < sessionCreatedTime - 30000) {
                     return false;
                   }
 
-                  // 4. Payment must have been received within 30 minutes of session creation (protects against delayed bank alerts)
+                  // 4. Payment must have been received within 30 minutes of session creation
                   if (sessionCreatedTime > 0 && paymentTime > sessionCreatedTime + 30 * 60 * 1000) {
                     return false;
                   }
@@ -133,6 +138,9 @@ export async function GET(req: NextRequest) {
                   });
                 }
               }
+
+              // Active session is confirmed WAITING; return immediately without falling through to query registrations collection!
+              return NextResponse.json({ status: "WAITING", orderId });
             }
           }
         } catch {}
@@ -175,7 +183,7 @@ export async function GET(req: NextRequest) {
         }
 
         if (orderId) {
-          const qOrder = query(collection(db, "registrations"), where("orderId", "==", orderId));
+          const qOrder = query(collection(db, "registrations"), where("orderId", "==", orderId), limit(1));
           const snapOrder = await getDocs(qOrder);
           if (!snapOrder.empty) {
             const data = snapOrder.docs[0].data();
@@ -192,7 +200,7 @@ export async function GET(req: NextRequest) {
         }
 
         if (utr && /^\d{12}$/.test(utr)) {
-          const qUtr = query(collection(db, "registrations"), where("paymentId", "==", utr));
+          const qUtr = query(collection(db, "registrations"), where("paymentId", "==", utr), limit(1));
           const snapUtr = await getDocs(qUtr);
           if (!snapUtr.empty) {
             const data = snapUtr.docs[0].data();

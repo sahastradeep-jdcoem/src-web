@@ -89,12 +89,13 @@ export async function POST(req: NextRequest) {
     if (baseAmount > 0) {
       try {
         const { db } = await import("@/lib/firebase/config");
-        const { collection, query, where, getDocs } = await import("firebase/firestore");
+        const { collection, query, where, getDocs, limit } = await import("firebase/firestore");
         if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
           const baseInt = Math.floor(baseAmount);
           const activeSessionsQuery = query(
             collection(db, "active_checkout_sessions"),
-            where("status", "==", "WAITING")
+            where("status", "==", "WAITING"),
+            limit(30)
           );
           const snap = await getDocs(activeSessionsQuery);
           const usedOffsets = new Set<number>();

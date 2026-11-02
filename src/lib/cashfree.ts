@@ -345,7 +345,7 @@ export async function confirmCashfreeOrderRegistration(
     }
 
     const { db } = await import("@/lib/firebase/config");
-    const { doc, getDoc, setDoc, collection, query, where, getDocs } = await import("firebase/firestore");
+    const { doc, getDoc, setDoc, collection, query, where, getDocs, limit } = await import("firebase/firestore");
 
     if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       return { success: false, error: "Database unavailable." };
@@ -382,7 +382,7 @@ export async function confirmCashfreeOrderRegistration(
 
     if (!existingRegDoc) {
       try {
-        const qOrder = query(collection(db, "registrations"), where("orderId", "==", orderId));
+        const qOrder = query(collection(db, "registrations"), where("orderId", "==", orderId), limit(1));
         const snapOrder = await getDocs(qOrder);
         if (!snapOrder.empty) {
           existingRegDoc = snapOrder.docs[0].data();
@@ -393,7 +393,7 @@ export async function confirmCashfreeOrderRegistration(
 
     if (!existingRegDoc && utr) {
       try {
-        const qUtr = query(collection(db, "registrations"), where("paymentId", "==", utr));
+        const qUtr = query(collection(db, "registrations"), where("paymentId", "==", utr), limit(1));
         const snapUtr = await getDocs(qUtr);
         if (!snapUtr.empty) {
           existingRegDoc = snapUtr.docs[0].data();
@@ -437,7 +437,7 @@ export async function confirmCashfreeOrderRegistration(
           resolvedEvent = { id: evSnap.id, ...evSnap.data() };
         } else {
           // Fallback search by slug or name if ID differs
-          const qSlug = query(collection(db, "events"), where("slug", "==", rawEventId));
+          const qSlug = query(collection(db, "events"), where("slug", "==", rawEventId), limit(1));
           const snapSlug = await getDocs(qSlug);
           if (!snapSlug.empty) {
             resolvedEvent = { id: snapSlug.docs[0].id, ...snapSlug.docs[0].data() };

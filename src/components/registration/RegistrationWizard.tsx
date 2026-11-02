@@ -378,8 +378,14 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       console.warn("Realtime pass subscription error:", e);
     }
 
-    // 2. HTTP Polling every 3 seconds to check-status API
+    // 2. HTTP Polling every 7 seconds to check-status API (capped to 30 attempts, snapshot is primary)
+    let checkPollCount = 0;
     const pollInterval = setInterval(async () => {
+      checkPollCount++;
+      if (checkPollCount > 30) {
+        clearInterval(pollInterval);
+        return;
+      }
       try {
         const params = new URLSearchParams();
         if (primaryDocId) params.set("regId", primaryDocId);
@@ -390,11 +396,12 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         if (res.ok) {
           const data = await res.json();
           if (data?.status === "PAID") {
+            clearInterval(pollInterval);
             handlePassPaid();
           }
         }
       } catch {}
-    }, 3000);
+    }, 7000);
 
     // 3. Listen for custom event across tabs
     const handleUpdate = (e: any) => {
@@ -1139,9 +1146,11 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       }
     })();
 
-    // Polling fallback every 2.5 seconds to /api/upi/check-status
+    // Polling fallback every 6 seconds to /api/upi/check-status (max 40 attempts, snapshot is primary)
+    let fallbackPollCount = 0;
     const pollInterval = setInterval(async () => {
-      if (autoDetectCompletedRef.current) {
+      fallbackPollCount++;
+      if (fallbackPollCount > 40 || autoDetectCompletedRef.current) {
         clearInterval(pollInterval);
         return;
       }
@@ -1151,13 +1160,14 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         if (res.ok) {
           const data = await res.json();
           if ((data?.status === "PAID" || data?.status === "COMPLETED") && !autoDetectCompletedRef.current) {
+            clearInterval(pollInterval);
             handleAutoSuccess(data.utr || "");
           }
         }
       } catch (e) {
         // Silent polling error catch
       }
-    }, 2500);
+    }, 6000);
 
     return () => {
       if (unsubscribeSnapshot) unsubscribeSnapshot();
@@ -1277,11 +1287,11 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           });
         }
 
-        // 3. Fallback polling via check-status API every 3.5 seconds
+        // 3. Fallback polling via check-status API every 7 seconds
         let pollCount = 0;
         pollInterval = setInterval(async () => {
           pollCount++;
-          if (pollCount > 35) {
+          if (pollCount > 25) {
             clearInterval(pollInterval);
             return;
           }

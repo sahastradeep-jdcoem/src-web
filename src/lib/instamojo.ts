@@ -238,7 +238,7 @@ export async function confirmInstamojoOrderRegistration(
     }
 
     const { db } = await import("@/lib/firebase/config");
-    const { doc, getDoc, setDoc, collection, query, where, getDocs } = await import("firebase/firestore");
+    const { doc, getDoc, setDoc, collection, query, where, getDocs, limit } = await import("firebase/firestore");
 
     if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       return { success: false, error: "Database unavailable." };
@@ -275,7 +275,7 @@ export async function confirmInstamojoOrderRegistration(
 
     if (!existingRegDoc) {
       try {
-        const qOrder = query(collection(db, "registrations"), where("orderId", "==", requestId));
+        const qOrder = query(collection(db, "registrations"), where("orderId", "==", requestId), limit(1));
         const snapOrder = await getDocs(qOrder);
         if (!snapOrder.empty) {
           existingRegDoc = snapOrder.docs[0].data();
@@ -286,7 +286,7 @@ export async function confirmInstamojoOrderRegistration(
 
     if (!existingRegDoc && paymentId) {
       try {
-        const qPayment = query(collection(db, "registrations"), where("paymentId", "==", paymentId));
+        const qPayment = query(collection(db, "registrations"), where("paymentId", "==", paymentId), limit(1));
         const snapPayment = await getDocs(qPayment);
         if (!snapPayment.empty) {
           existingRegDoc = snapPayment.docs[0].data();
@@ -327,7 +327,7 @@ export async function confirmInstamojoOrderRegistration(
         if (evSnap.exists()) {
           resolvedEvent = { id: evSnap.id, ...evSnap.data() };
         } else {
-          const qSlug = query(collection(db, "events"), where("slug", "==", rawEventId));
+          const qSlug = query(collection(db, "events"), where("slug", "==", rawEventId), limit(1));
           const snapSlug = await getDocs(qSlug);
           if (!snapSlug.empty) {
             resolvedEvent = { id: snapSlug.docs[0].id, ...snapSlug.docs[0].data() };
