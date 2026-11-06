@@ -17,6 +17,7 @@ import {
   ChevronDown
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { saveSiteContentToFirestore } from "@/lib/firebase/firestore";
 
 interface GmailHookModalProps {
   isOpen: boolean;
@@ -103,30 +104,55 @@ export function GmailHookModal({ isOpen, onClose, webhookUrl }: GmailHookModalPr
 
   const handleSaveCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!clientIdInput.trim() || !clientSecretInput.trim()) {
+    const cId = clientIdInput.trim();
+    const cSec = clientSecretInput.trim();
+
+    if (!cId || !cSec) {
       alert("Please provide both Google OAuth Client ID and Client Secret.");
       return;
     }
     setIsSavingConfig(true);
+    let directClientSuccess = false;
+
     try {
+      // 1. Direct client-side write to Firestore using active Admin session
+      try {
+        await saveSiteContentToFirestore("gmail_oauth_config", {
+          clientId: cId,
+          clientSecret: cSec,
+          updatedAt: new Date().toISOString()
+        });
+        directClientSuccess = true;
+      } catch (clientErr) {
+        console.warn("Direct client save notice:", clientErr);
+      }
+
+      // 2. Server-side API endpoint persistence
       const res = await fetch("/api/gmail/oauth/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          clientId: clientIdInput.trim(),
-          clientSecret: clientSecretInput.trim()
+          clientId: cId,
+          clientSecret: cSec
         })
       });
-      const data = await res.json();
-      if (data.success) {
+      const data = await res.json().catch(() => ({ success: false, error: "Server returned non-JSON response" }));
+
+      if (data.success || directClientSuccess) {
         setHasCredentials(true);
         setShowConfigAccordion(false);
         alert("Google OAuth credentials saved! You can now click 'Connect with Google'.");
       } else {
-        alert(`Failed to save credentials: ${data.error}`);
+        alert(`Failed to save credentials: ${data.error || "Please verify your admin permissions or check network connection."}`);
       }
     } catch (err: any) {
-      alert(`Error saving credentials: ${err.message}`);
+      if (directClientSuccess) {
+        setHasCredentials(true);
+        setShowConfigAccordion(false);
+        alert("Google OAuth credentials saved! You can now click 'Connect with Google'.");
+      } else {
+        alert(`Error saving credentials: ${err?.message || "Unknown network error"}`);
+      }
     } finally {
       setIsSavingConfig(false);
     }

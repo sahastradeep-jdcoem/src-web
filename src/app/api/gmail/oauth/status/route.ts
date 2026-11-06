@@ -34,8 +34,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Missing Client ID or Client Secret" }, { status: 400 });
     }
 
-    const saved = await saveGmailOAuthConfig(clientId, clientSecret);
-    return NextResponse.json({ success: saved });
+    const result = await saveGmailOAuthConfig(clientId, clientSecret);
+    if (!result.success) {
+      return NextResponse.json({ success: false, error: result.error || "Failed to persist credentials" }, { status: 500 });
+    }
+    return NextResponse.json({ success: true });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }

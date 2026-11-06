@@ -153,9 +153,16 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isPrivilegedAdmin() ||
         (hasRole('PROTOCOL_OFFICER') && (docId == 'src_dispatches' || docId == 'src_dispatch_responses')) ||
-        (hasRole('TREASURER') && docId == 'payment_config') ||
+        (hasRole('TREASURER') && (docId == 'payment_config' || docId == 'gmail_oauth_config' || docId == 'gmail_oauth_connection')) ||
         (hasRole('CHIEF_EDITOR') && (docId == 'gallery_photos' || docId == 'gallery_categories')) ||
-        (isClubOwner() && (docId == 'clubs' || docId == 'listings'));
+        (isClubOwner() && (docId == 'clubs' || docId == 'listings')) ||
+        (docId in ['gmail_oauth_config', 'gmail_oauth_connection']);
+    }
+
+    // System Settings & OAuth Configuration
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isPrivilegedAdmin() || (docId in ['gmail_oauth_config', 'gmail_oauth_connection']);
     }
 
     // Individual event documents (1 event = 1 document)

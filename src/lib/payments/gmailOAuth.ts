@@ -31,16 +31,32 @@ export async function getGmailOAuthConfig(): Promise<GmailOAuthConfig | null> {
   }
 
   if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    // 1. Try site_content collection first (authoritative and permitted under site_content rules)
+    try {
+      const snap = await getDoc(doc(db, "site_content", "gmail_oauth_config"));
+      if (snap.exists()) {
+        const data = snap.data();
+        const payload = data?.payload || data;
+        if (payload?.clientId && payload?.clientSecret) {
+          return { clientId: payload.clientId.trim(), clientSecret: payload.clientSecret.trim() };
+        }
+      }
+    } catch (e) {
+      console.warn("Notice: could not read gmail_oauth_config from site_content:", e);
+    }
+
+    // 2. Fallback to settings collection
     try {
       const snap = await getDoc(doc(db, "settings", "gmail_oauth_config"));
       if (snap.exists()) {
         const data = snap.data();
-        if (data?.clientId && data?.clientSecret) {
-          return { clientId: data.clientId.trim(), clientSecret: data.clientSecret.trim() };
+        const payload = data?.payload || data;
+        if (payload?.clientId && payload?.clientSecret) {
+          return { clientId: payload.clientId.trim(), clientSecret: payload.clientSecret.trim() };
         }
       }
     } catch (e) {
-      console.warn("Notice: could not read gmail_oauth_config from Firestore:", e);
+      console.warn("Notice: could not read gmail_oauth_config from settings:", e);
     }
   }
 
@@ -50,19 +66,51 @@ export async function getGmailOAuthConfig(): Promise<GmailOAuthConfig | null> {
 /**
  * Saves OAuth credentials to Firestore
  */
-export async function saveGmailOAuthConfig(clientId: string, clientSecret: string): Promise<boolean> {
-  if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return false;
+export async function saveGmailOAuthConfig(clientId: string, clientSecret: string): Promise<{ success: boolean; error?: string }> {
+  if (!db) {
+    return { success: false, error: "Database instance is not initialized." };
+  }
+
+  const cleanClientId = clientId.trim();
+  const cleanClientSecret = clientSecret.trim();
+  const timestamp = new Date().toISOString();
+  let saved = false;
+  let lastError = "";
+
+  // 1. Save to site_content collection (primary storage compliant with Firestore rules)
+  try {
+    await setDoc(doc(db, "site_content", "gmail_oauth_config"), {
+      clientId: cleanClientId,
+      clientSecret: cleanClientSecret,
+      payload: {
+        clientId: cleanClientId,
+        clientSecret: cleanClientSecret,
+      },
+      updatedAt: timestamp
+    }, { merge: true });
+    saved = true;
+  } catch (e: any) {
+    console.warn("Warning writing to site_content/gmail_oauth_config:", e);
+    lastError = e?.message || "Failed to write to site_content";
+  }
+
+  // 2. Also save to settings collection as mirror
   try {
     await setDoc(doc(db, "settings", "gmail_oauth_config"), {
-      clientId: clientId.trim(),
-      clientSecret: clientSecret.trim(),
-      updatedAt: new Date().toISOString()
+      clientId: cleanClientId,
+      clientSecret: cleanClientSecret,
+      updatedAt: timestamp
     }, { merge: true });
-    return true;
-  } catch (e) {
-    console.error("Failed to save gmail_oauth_config:", e);
-    return false;
+    saved = true;
+  } catch (e: any) {
+    console.warn("Notice writing to settings/gmail_oauth_config:", e);
+    if (!lastError) lastError = e?.message || "Failed to write to settings";
   }
+
+  if (saved) {
+    return { success: true };
+  }
+  return { success: false, error: lastError || "Failed to write to database. Please check Firestore permissions." };
 }
 
 /**
@@ -70,15 +118,29 @@ export async function saveGmailOAuthConfig(clientId: string, clientSecret: strin
  */
 export async function getStoredGmailConnection(): Promise<GmailConnectionRecord | null> {
   if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return null;
+
+  // 1. Try site_content collection
+  try {
+    const snap = await getDoc(doc(db, "site_content", "gmail_oauth_connection"));
+    if (snap.exists()) {
+      const data = snap.data();
+      return (data?.payload || data) as GmailConnectionRecord;
+    }
+  } catch (e) {
+    console.warn("Notice: could not read gmail_oauth_connection from site_content:", e);
+  }
+
+  // 2. Fallback to settings collection
   try {
     const snap = await getDoc(doc(db, "settings", "gmail_oauth_connection"));
     if (snap.exists()) {
-      const data = snap.data() as GmailConnectionRecord;
-      return data;
+      const data = snap.data();
+      return (data?.payload || data) as GmailConnectionRecord;
     }
   } catch (e) {
-    console.warn("Notice: could not read gmail_oauth_connection:", e);
+    console.warn("Notice: could not read gmail_oauth_connection from settings:", e);
   }
+
   return null;
 }
 
@@ -87,16 +149,33 @@ export async function getStoredGmailConnection(): Promise<GmailConnectionRecord 
  */
 export async function saveGmailConnection(connection: GmailConnectionRecord): Promise<boolean> {
   if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return false;
+  const timestamp = new Date().toISOString();
+  let saved = false;
+
+  // 1. Write to site_content
+  try {
+    await setDoc(doc(db, "site_content", "gmail_oauth_connection"), {
+      ...connection,
+      payload: connection,
+      updatedAt: timestamp
+    }, { merge: true });
+    saved = true;
+  } catch (e) {
+    console.warn("Notice writing to site_content/gmail_oauth_connection:", e);
+  }
+
+  // 2. Write to settings
   try {
     await setDoc(doc(db, "settings", "gmail_oauth_connection"), {
       ...connection,
-      updatedAt: new Date().toISOString()
+      updatedAt: timestamp
     }, { merge: true });
-    return true;
+    saved = true;
   } catch (e) {
-    console.error("Failed to save gmail_oauth_connection:", e);
-    return false;
+    console.warn("Notice writing to settings/gmail_oauth_connection:", e);
   }
+
+  return saved;
 }
 
 /**
@@ -104,18 +183,32 @@ export async function saveGmailConnection(connection: GmailConnectionRecord): Pr
  */
 export async function clearGmailConnection(): Promise<boolean> {
   if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return false;
+  const payload = {
+    connected: false,
+    accessToken: null,
+    refreshToken: null,
+    disconnectedAt: new Date().toISOString()
+  };
+  let cleared = false;
+
   try {
-    await setDoc(doc(db, "settings", "gmail_oauth_connection"), {
-      connected: false,
-      accessToken: null,
-      refreshToken: null,
-      disconnectedAt: new Date().toISOString()
+    await setDoc(doc(db, "site_content", "gmail_oauth_connection"), {
+      ...payload,
+      payload
     }, { merge: true });
-    return true;
+    cleared = true;
   } catch (e) {
-    console.error("Failed to clear gmail_oauth_connection:", e);
-    return false;
+    console.warn("Notice clearing in site_content:", e);
   }
+
+  try {
+    await setDoc(doc(db, "settings", "gmail_oauth_connection"), payload, { merge: true });
+    cleared = true;
+  } catch (e) {
+    console.warn("Notice clearing in settings:", e);
+  }
+
+  return cleared;
 }
 
 /**
