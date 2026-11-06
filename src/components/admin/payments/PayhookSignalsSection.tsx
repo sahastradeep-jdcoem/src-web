@@ -555,7 +555,7 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
           <div className="flex items-center gap-2">
             <Activity className="w-4 h-4 text-[#17458F]" />
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-              Received Signals &amp; Heartbeats ({displayedLogs.length}{logs.length !== displayedLogs.length ? ` / ${logs.length} raw` : ""})
+              Received Signals ({displayedLogs.length}{logs.length !== displayedLogs.length ? ` / ${logs.length} raw` : ""})
             </h4>
           </div>
 
