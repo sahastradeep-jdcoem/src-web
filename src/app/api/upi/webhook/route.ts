@@ -24,6 +24,7 @@ import {
   generateDeterministicSyntheticUtr,
   resolveSourceAppName,
   evaluateCandidateAgainstRegistration,
+  isPromotionalOrMarketingNotification,
 } from "@/lib/payments";
 
 const WEBHOOK_MAX_SKEW_SECONDS = 5 * 60;
@@ -205,6 +206,16 @@ export async function POST(req: NextRequest) {
     );
     const sender = String(rawBody.sender || rawBody.from || rawBody.smsNumber || rawBody.sms_number || "");
     const combinedText = `${title} ${sender} ${text || trimmedText}`.trim();
+
+    // Guard: Reject promotional, marketing, loan, credit card offer, or debit notifications
+    const promoCheck = isPromotionalOrMarketingNotification(combinedText, title, sender);
+    if (promoCheck.isPromotional) {
+      return NextResponse.json({
+        success: false,
+        ignored: true,
+        message: `Notification ignored: ${promoCheck.reason}`,
+      });
+    }
 
     // 1. Resolve UTR (either passed explicitly or extracted from text)
     let utr = rawBody.utr ? String(rawBody.utr).trim() : (queryUtr || null);

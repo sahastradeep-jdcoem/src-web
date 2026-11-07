@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGmailOAuthConfig, getStoredGmailConnection, getFreshAccessToken, saveGmailConnection } from "@/lib/payments/gmailOAuth";
+import { isPromotionalOrMarketingNotification } from "@/lib/payments";
 
 declare global {
   var _latestGmailAuthToken: any;
@@ -90,7 +91,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Query Gmail REST API for unread bank credit alert emails
-    const searchQuery = 'label:unread (from:canarabank OR from:hdfcbank OR from:paytm OR from:sbi OR from:icicibank OR from:axisbank OR "credited" OR "credit alert" OR "UPI Ref")';
+    // Exclude promotions, social, spam, loans, offers, and discounts at the Gmail search level
+    const searchQuery = 'label:unread -category:promotions -category:social -category:spam -subject:"loan" -subject:"offer" -subject:"discount" -subject:"cashback" -subject:"reward" -subject:"pre-approved" -subject:"apply" -subject:"card upgrade" -subject:"congratulations" ("credited" OR "credit alert" OR "deposited" OR "payment received" OR "received from" OR "UPI Ref")';
     const listRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(searchQuery)}&maxResults=10`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -123,6 +125,7 @@ export async function POST(req: NextRequest) {
 
     // Process each unread email
     const processedResults: any[] = [];
+    let skippedPromoCount = 0;
     const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "srcjdcoem.in";
     const proto = req.headers.get("x-forwarded-proto") || "https";
     const internalWebhookUrl = `${proto}://${host}/api/upi/webhook?secret=SRC_UPI_2026_GATEWAY&source=Gmail`;
@@ -136,6 +139,15 @@ export async function POST(req: NextRequest) {
         if (!msgRes.ok) continue;
 
         const msgData = await msgRes.json();
+        const labelIds: string[] = msgData.labelIds || [];
+
+        // 1. Guard against Gmail system promotional or spam classifications
+        if (labelIds.includes("CATEGORY_PROMOTIONS") || labelIds.includes("SPAM") || labelIds.includes("TRASH")) {
+          console.log(`[Gmail Sync] Skipping message ${item.id} labeled with ${labelIds.join(", ")}`);
+          skippedPromoCount++;
+          continue;
+        }
+
         const headers = msgData.payload?.headers || [];
         const subject = headers.find((h: any) => h.name.toLowerCase() === "subject")?.value || "";
         const from = headers.find((h: any) => h.name.toLowerCase() === "from")?.value || "";
@@ -157,6 +169,14 @@ export async function POST(req: NextRequest) {
               } catch {}
             }
           }
+        }
+
+        // 2. Guard against promotional, loan, marketing, and debit emails
+        const promoCheck = isPromotionalOrMarketingNotification(bodyText, subject, from);
+        if (promoCheck.isPromotional) {
+          console.log(`[Gmail Sync] Skipping promotional email: "${subject}" from ${from}. Reason: ${promoCheck.reason}`);
+          skippedPromoCount++;
+          continue;
         }
 
         // Post to internal webhook processor
@@ -212,8 +232,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Processed ${processedResults.length} unread bank alert email(s).`,
+      message: skippedPromoCount > 0
+        ? `Processed ${processedResults.length} verified bank credit alert(s). Filtered out ${skippedPromoCount} promotional/marketing email(s).`
+        : `Processed ${processedResults.length} unread bank alert email(s).`,
       processedCount: processedResults.length,
+      skippedPromoCount,
       processed: processedResults,
       syncedAt: new Date().toISOString()
     });

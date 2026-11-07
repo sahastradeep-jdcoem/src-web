@@ -202,3 +202,102 @@ export function isNameCompatible(senderName: string | null, candidateName: strin
   if (sParts.length === 0 || cParts.length === 0) return true;
   return sParts.some(sp => cParts.some(cp => cp.includes(sp) || sp.includes(cp)));
 }
+
+/**
+ * Detects whether an incoming email or notification is promotional, marketing, loan solicitation,
+ * or non-credit spam, preventing accidental forwarding or registration matching of marketing material.
+ */
+export function isPromotionalOrMarketingNotification(
+  text: string,
+  subject?: string,
+  sender?: string
+): { isPromotional: boolean; reason?: string } {
+  const cleanText = text || "";
+  const cleanSub = subject || "";
+  const cleanSnd = sender || "";
+  const combined = `${cleanSub} ${cleanSnd} ${cleanText}`.toLowerCase();
+  const subLower = cleanSub.toLowerCase();
+  const sndLower = cleanSnd.toLowerCase();
+
+  // 1. Promotional / marketing sender addresses
+  const promoSenderRegex = /\b(?:promotions?|offers?|marketing|campaigns?|newsletter|news|deals?|sales?|e-?updates?|adv|mailer|info|loans?|cards?|commercial)@/i;
+  if (promoSenderRegex.test(sndLower)) {
+    return { isPromotional: true, reason: `Promotional sender address (${cleanSnd})` };
+  }
+
+  // 2. Unsubscribe links / marketing email footers
+  if (
+    combined.includes("unsubscribe") ||
+    combined.includes("opt out") ||
+    combined.includes("click here to unsubscribe") ||
+    combined.includes("to stop receiving these emails") ||
+    combined.includes("view in browser") ||
+    combined.includes("trouble viewing this email") ||
+    combined.includes("manage preferences")
+  ) {
+    return { isPromotional: true, reason: "Contains promotional unsubscribe/marketing footer" };
+  }
+
+  // 3. Subject-level loan / card / discount / marketing keywords
+  const promoSubjectKeywords = [
+    "pre-approved",
+    "pre approved",
+    "personal loan",
+    "home loan",
+    "car loan",
+    "instant loan",
+    "gold loan",
+    "credit card offer",
+    "upgrade your card",
+    "lifetime free",
+    "flat discount",
+    "% off",
+    "cashback offer",
+    "reward points",
+    "rewards point",
+    "exclusive offer",
+    "special offer",
+    "limited period offer",
+    "festive offer",
+    "bumper offer",
+    "congratulations! you",
+    "you are eligible",
+    "discount voucher",
+    "coupon code",
+    "gift voucher",
+    "amazon voucher",
+    "flipkart voucher",
+    "fixed deposit rate",
+    "term insurance",
+    "mutual fund",
+    "open demat",
+    "apply now"
+  ];
+
+  for (const kw of promoSubjectKeywords) {
+    if (subLower.includes(kw)) {
+      return { isPromotional: true, reason: `Subject matched promotional pattern: "${kw}"` };
+    }
+  }
+
+  // 4. Body-level loan, card, and marketing solicitations
+  const promoBodyRegex = /\b(?:pre-?approved\s+(?:personal\s+)?loan|apply\s+for\s+(?:a\s+)?(?:credit\s+card|loan)|avail\s+(?:a\s+)?loan\s+up\s+to|instant\s+personal\s+loan|interest\s+rate\s+starting\s+at|get\s+flat\s+\d+%\s+off|exclusive\s+discount\s+on|bumper\s+discount|earn\s+\d+x\s+reward\s+points|zero\s+annual\s+fee|no\s+joining\s+fee)\b/i;
+  if (promoBodyRegex.test(combined)) {
+    return { isPromotional: true, reason: "Body matched marketing/loan solicitation pattern" };
+  }
+
+  // 5. Debit Alerts (prevent debits from being treated as incoming payments)
+  const isDebit = /\b(?:has\s+been\s+debited|debited\s+by|debited\s+with|debited\s+for|spent\s+on|withdrawn\s+from|atm\s+withdrawal|purchase\s+at)\b/i.test(combined);
+  const isCredit = /\b(?:credited\s+with|credited\s+by|has\s+been\s+credited|credited\s+to|received\s+from|payment\s+received|money\s+received|inr\s+[\d,.]+\s+credited|rs\.?\s*[\d,.]+\s+credited|credit\s+alert)\b/i.test(combined);
+
+  if (isDebit && !isCredit) {
+    return { isPromotional: true, reason: "Debit alert (money leaving account, not an incoming payment)" };
+  }
+
+  // 6. Positive confirmation: Genuine credit alerts must explicitly indicate a credit
+  if (!isCredit && !combined.includes("upi ref") && !combined.includes("credit alert")) {
+    return { isPromotional: true, reason: "Missing verified incoming credit alert keywords" };
+  }
+
+  return { isPromotional: false };
+}
