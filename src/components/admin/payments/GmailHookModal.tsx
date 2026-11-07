@@ -34,7 +34,15 @@ export function GmailHookModal({ isOpen, onClose, webhookUrl }: GmailHookModalPr
     name?: string | null;
     connectedAt?: string | null;
     lastSyncedAt?: string | null;
-  }>({ connected: false });
+  }>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("src_gmail_connection");
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return { connected: false };
+  });
 
   // Credentials config inputs
   const [clientIdInput, setClientIdInput] = useState("");
@@ -79,13 +87,20 @@ export function GmailHookModal({ isOpen, onClose, webhookUrl }: GmailHookModalPr
         const isConn = Boolean(data.connection?.connected) || queryConnected;
         const activeEmail = data.connection?.email || queryEmail;
 
-        setConnection({
+        const updatedConn = {
           connected: isConn,
           email: activeEmail,
           name: data.connection?.name || null,
           connectedAt: data.connection?.connectedAt || new Date().toISOString(),
           lastSyncedAt: data.connection?.lastSyncedAt || null,
-        });
+        };
+        setConnection(updatedConn);
+
+        if (isConn && typeof window !== "undefined") {
+          try {
+            localStorage.setItem("src_gmail_connection", JSON.stringify(updatedConn));
+          } catch {}
+        }
 
         if (queryConnected && queryEmail) {
           saveSiteContentToFirestore("gmail_oauth_connection", {
@@ -223,6 +238,11 @@ export function GmailHookModal({ isOpen, onClose, webhookUrl }: GmailHookModalPr
       const data = await res.json();
       if (data.success) {
         setConnection({ connected: false });
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.removeItem("src_gmail_connection");
+          } catch {}
+        }
         alert("Account disconnected successfully.");
       }
     } catch (err: any) {

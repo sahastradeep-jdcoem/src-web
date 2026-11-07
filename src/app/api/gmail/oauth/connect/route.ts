@@ -11,7 +11,10 @@ export async function GET(req: NextRequest) {
       }, { status: 400 });
     }
 
-    const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "www.srcjdcoem.in";
+    let host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "www.srcjdcoem.in";
+    if (host === "srcjdcoem.in") {
+      host = "www.srcjdcoem.in";
+    }
     const proto = req.headers.get("x-forwarded-proto") || "https";
     const origin = `${proto}://${host}`;
     const redirectUri = `${origin}/api/gmail/oauth/callback`;

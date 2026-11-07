@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getGmailOAuthConfig, saveGmailConnection } from "@/lib/payments/gmailOAuth";
 
 export async function GET(req: NextRequest) {
-  const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "www.srcjdcoem.in";
+  let host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "www.srcjdcoem.in";
+  if (host === "srcjdcoem.in") {
+    host = "www.srcjdcoem.in";
+  }
   const proto = req.headers.get("x-forwarded-proto") || "https";
   const origin = `${proto}://${host}`;
   const redirectUri = `${origin}/api/gmail/oauth/callback`;
