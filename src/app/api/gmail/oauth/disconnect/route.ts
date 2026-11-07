@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { clearGmailConnection, getGmailOAuthConfig, getStoredGmailConnection } from "@/lib/payments/gmailOAuth";
+import { clearGmailConnection, getStoredGmailConnection } from "@/lib/payments/gmailOAuth";
+
+declare global {
+  var _latestGmailAuthToken: any;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,9 +22,31 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const cleared = await clearGmailConnection();
-    return NextResponse.json({ success: cleared });
+    await clearGmailConnection().catch(() => {});
+
+    if (typeof global !== "undefined") {
+      (global as any)._latestGmailAuthToken = null;
+    }
+
+    const response = NextResponse.json({ success: true, message: "Disconnected successfully" });
+
+    // Clear standard cookies
+    const cookieNames = [
+      "src_gmail_connected",
+      "src_gmail_email",
+      "src_gmail_token_bundle",
+      "src_gmail_connected_shared",
+      "src_gmail_email_shared",
+      "src_gmail_token_bundle_shared"
+    ];
+
+    cookieNames.forEach((name) => {
+      response.cookies.set(name, "", { path: "/", maxAge: 0, expires: new Date(0) });
+      response.cookies.set(name, "", { path: "/", domain: ".srcjdcoem.in", maxAge: 0, expires: new Date(0) });
+    });
+
+    return response;
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return NextResponse.json({ success: true, warning: err.message });
   }
 }

@@ -1,27 +1,62 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGmailOAuthConfig, getStoredGmailConnection, getFreshAccessToken, saveGmailConnection } from "@/lib/payments/gmailOAuth";
-import { extractAmountFromText, extractUtrFromText, extractSenderName } from "@/lib/payments";
+
+declare global {
+  var _latestGmailAuthToken: any;
+}
 
 export async function POST(req: NextRequest) {
   try {
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {}
+
     const config = await getGmailOAuthConfig();
     let connection = await getStoredGmailConnection();
 
-    // Check cookie fallback if connection in Firestore has missing tokens
+    // 1. Direct tokens from authenticated admin client body
+    if (body?.accessToken || body?.refreshToken) {
+      connection = {
+        ...(connection || {}),
+        connected: true,
+        email: body.email || connection?.email || "",
+        accessToken: body.accessToken || connection?.accessToken || "",
+        refreshToken: body.refreshToken || connection?.refreshToken || "",
+        expiresAt: body.expiresAt || connection?.expiresAt || (Date.now() + 3600 * 1000)
+      };
+    }
+
+    // 2. In-memory global pending token (from recent OAuth callback)
+    if ((!connection?.accessToken && !connection?.refreshToken) && typeof global !== "undefined" && (global as any)._latestGmailAuthToken) {
+      const pending = (global as any)._latestGmailAuthToken;
+      if (pending?.accessToken || pending?.refreshToken) {
+        connection = {
+          ...(connection || {}),
+          ...pending
+        };
+      }
+    }
+
+    // 3. Cookie fallback
     if (!connection?.accessToken && !connection?.refreshToken) {
-      const cookieBundle = req.cookies.get("src_gmail_token_bundle")?.value;
+      const cookieBundle =
+        req.cookies.get("src_gmail_token_bundle")?.value ||
+        req.cookies.get("src_gmail_token_bundle_shared")?.value;
       if (cookieBundle) {
         try {
           const parsed = JSON.parse(cookieBundle);
-          connection = {
-            ...connection,
-            connected: true,
-            email: parsed.email || connection?.email,
-            accessToken: parsed.accessToken,
-            refreshToken: parsed.refreshToken,
-            expiresAt: parsed.expiresAt,
-            connectedAt: parsed.connectedAt
-          };
+          if (parsed?.accessToken || parsed?.refreshToken) {
+            connection = {
+              ...(connection || {}),
+              connected: true,
+              email: parsed.email || connection?.email,
+              accessToken: parsed.accessToken,
+              refreshToken: parsed.refreshToken,
+              expiresAt: parsed.expiresAt,
+              connectedAt: parsed.connectedAt
+            };
+          }
         } catch {}
       }
     }
@@ -33,7 +68,7 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    // 1. Resolve Access Token (use active accessToken or refresh using refreshToken)
+    // Resolve Access Token (use active accessToken or refresh using refreshToken)
     let accessToken = connection.accessToken;
     const isExpired = connection.expiresAt && Date.now() >= (connection.expiresAt - 60000);
 
@@ -54,7 +89,7 @@ export async function POST(req: NextRequest) {
       }, { status: 401 });
     }
 
-    // 2. Query Gmail REST API for unread bank credit alert emails
+    // Query Gmail REST API for unread bank credit alert emails
     const searchQuery = 'label:unread (from:canarabank OR from:hdfcbank OR from:paytm OR from:sbi OR from:icicibank OR from:axisbank OR "credited" OR "credit alert" OR "UPI Ref")';
     const listRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(searchQuery)}&maxResults=10`,
@@ -76,7 +111,7 @@ export async function POST(req: NextRequest) {
       await saveGmailConnection({
         ...connection,
         lastSyncedAt: new Date().toISOString()
-      });
+      }).catch(() => {});
 
       return NextResponse.json({
         success: true,
@@ -86,9 +121,9 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 3. Process each unread email
+    // Process each unread email
     const processedResults: any[] = [];
-    const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "www.srcjdcoem.in";
+    const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "srcjdcoem.in";
     const proto = req.headers.get("x-forwarded-proto") || "https";
     const internalWebhookUrl = `${proto}://${host}/api/upi/webhook?secret=SRC_UPI_2026_GATEWAY&source=Gmail`;
 
@@ -173,7 +208,7 @@ export async function POST(req: NextRequest) {
     await saveGmailConnection({
       ...connection,
       lastSyncedAt: new Date().toISOString()
-    });
+    }).catch(() => {});
 
     return NextResponse.json({
       success: true,

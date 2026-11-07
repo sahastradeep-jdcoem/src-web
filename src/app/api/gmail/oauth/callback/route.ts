@@ -1,14 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGmailOAuthConfig, saveGmailConnection } from "@/lib/payments/gmailOAuth";
 
+declare global {
+  var _latestGmailAuthToken: any;
+}
+
 export async function GET(req: NextRequest) {
-  let host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "www.srcjdcoem.in";
-  if (host === "srcjdcoem.in") {
-    host = "www.srcjdcoem.in";
-  }
+  const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "srcjdcoem.in";
   const proto = req.headers.get("x-forwarded-proto") || "https";
   const origin = `${proto}://${host}`;
-  const redirectUri = `${origin}/api/gmail/oauth/callback`;
+  let redirectUri = `${origin}/api/gmail/oauth/callback`;
+
+  // Decode state to retrieve exact redirectUri used during the initial request
+  const stateParam = req.nextUrl.searchParams.get("state");
+  if (stateParam) {
+    try {
+      const parsed = JSON.parse(Buffer.from(stateParam, "base64").toString("utf-8"));
+      if (parsed?.redirectUri) {
+        redirectUri = parsed.redirectUri;
+      }
+    } catch {}
+  }
 
   const code = req.nextUrl.searchParams.get("code");
   const error = req.nextUrl.searchParams.get("error");
@@ -74,21 +86,51 @@ export async function GET(req: NextRequest) {
       accessToken,
       refreshToken: refreshToken || "",
       expiresAt: Date.now() + (tokenData.expires_in || 3600) * 1000,
-      connectedAt: new Date().toISOString()
+      connectedAt: new Date().toISOString(),
+      tenureId: "2026-2027"
     };
 
-    await saveGmailConnection(tokenRecord);
+    // Stash in global memory for direct client pickup via /api/gmail/oauth/pending
+    (global as any)._latestGmailAuthToken = tokenRecord;
 
-    const response = NextResponse.redirect(`${origin}/admin/payments?gmail_connected=success&email=${encodeURIComponent(userEmail)}`);
-    response.cookies.set("src_gmail_connected", "true", { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
+    // Server-side best-effort Firestore write
+    await saveGmailConnection(tokenRecord).catch((e) => {
+      console.warn("Server saveGmailConnection notice:", e);
+    });
+
+    const response = NextResponse.redirect(
+      `${origin}/admin/payments?gmail_connected=success&email=${encodeURIComponent(userEmail)}&auth_sync=1`
+    );
+
+    const tokenBundleStr = JSON.stringify(tokenRecord);
+
+    // Standard cookies
+    response.cookies.set("src_gmail_connected", "true", { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax", httpOnly: false });
     if (userEmail) {
-      response.cookies.set("src_gmail_email", userEmail, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
+      response.cookies.set("src_gmail_email", userEmail, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax", httpOnly: false });
     }
-    response.cookies.set("src_gmail_token_bundle", JSON.stringify(tokenRecord), {
+    response.cookies.set("src_gmail_token_bundle", tokenBundleStr, {
       path: "/",
       maxAge: 60 * 60 * 24 * 365,
-      sameSite: "lax"
+      sameSite: "lax",
+      httpOnly: false
     });
+
+    // Domain-wide cookies for apex and subdomains (.srcjdcoem.in)
+    if (host.includes("srcjdcoem.in")) {
+      response.cookies.set("src_gmail_connected_shared", "true", { path: "/", domain: ".srcjdcoem.in", maxAge: 60 * 60 * 24 * 365, sameSite: "lax", httpOnly: false });
+      if (userEmail) {
+        response.cookies.set("src_gmail_email_shared", userEmail, { path: "/", domain: ".srcjdcoem.in", maxAge: 60 * 60 * 24 * 365, sameSite: "lax", httpOnly: false });
+      }
+      response.cookies.set("src_gmail_token_bundle_shared", tokenBundleStr, {
+        path: "/",
+        domain: ".srcjdcoem.in",
+        maxAge: 60 * 60 * 24 * 365,
+        sameSite: "lax",
+        httpOnly: false
+      });
+    }
+
     return response;
   } catch (err: any) {
     console.error("Gmail OAuth callback exception:", err);

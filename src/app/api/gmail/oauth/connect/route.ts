@@ -11,15 +11,17 @@ export async function GET(req: NextRequest) {
       }, { status: 400 });
     }
 
-    let host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "www.srcjdcoem.in";
-    if (host === "srcjdcoem.in") {
-      host = "www.srcjdcoem.in";
-    }
+    const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "srcjdcoem.in";
     const proto = req.headers.get("x-forwarded-proto") || "https";
     const origin = `${proto}://${host}`;
     const redirectUri = `${origin}/api/gmail/oauth/callback`;
 
-    const state = Math.random().toString(36).substring(2, 15);
+    // Encode redirectUri and anti-CSRF token in state to ensure identical redirectUri during code exchange
+    const state = Buffer.from(JSON.stringify({
+      nonce: Math.random().toString(36).substring(2, 15),
+      redirectUri
+    })).toString("base64");
+
     const scopes = [
       "https://www.googleapis.com/auth/gmail.readonly",
       "https://www.googleapis.com/auth/gmail.modify",

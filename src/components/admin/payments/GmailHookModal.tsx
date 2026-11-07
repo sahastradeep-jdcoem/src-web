@@ -32,6 +32,9 @@ export function GmailHookModal({ isOpen, onClose, webhookUrl }: GmailHookModalPr
     connected: boolean;
     email?: string | null;
     name?: string | null;
+    avatar?: string | null;
+    accessToken?: string | null;
+    refreshToken?: string | null;
     connectedAt?: string | null;
     lastSyncedAt?: string | null;
   }>(() => {
@@ -69,30 +72,73 @@ export function GmailHookModal({ isOpen, onClose, webhookUrl }: GmailHookModalPr
     try {
       setLoadingStatus(true);
 
-      // Check query params if just redirected back from Google OAuth
+      // Check query params if redirected back from Google OAuth
       let queryConnected = false;
       let queryEmail: string | null = null;
+      let hasAuthSync = false;
       if (typeof window !== "undefined") {
         const params = new URLSearchParams(window.location.search);
         if (params.get("gmail_connected") === "success") {
           queryConnected = true;
           queryEmail = params.get("email");
         }
+        if (params.get("auth_sync") === "1") {
+          hasAuthSync = true;
+        }
       }
 
+      // 1. Fetch OAuth status from server
       const res = await fetch("/api/gmail/oauth/status");
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ success: false }));
+
+      // 2. Fetch pending tokens from server (if just completed OAuth)
+      let pendingTokens: any = null;
+      try {
+        const pendingRes = await fetch("/api/gmail/oauth/pending");
+        if (pendingRes.ok) {
+          const pendingData = await pendingRes.json();
+          if (pendingData?.pending?.accessToken) {
+            pendingTokens = pendingData.pending;
+          }
+        }
+      } catch {}
+
+      // 3. Inspect cookies for token bundle
+      let cookieTokens: any = null;
+      if (typeof document !== "undefined") {
+        const cookieMatch = document.cookie.match(/src_gmail_token_bundle(?:_shared)?=([^;]+)/);
+        if (cookieMatch) {
+          try {
+            cookieTokens = JSON.parse(decodeURIComponent(cookieMatch[1]));
+          } catch {}
+        }
+      }
+
+      // 4. Inspect localStorage
+      let localTokens: any = null;
+      if (typeof window !== "undefined") {
+        try {
+          const raw = localStorage.getItem("src_gmail_connection");
+          if (raw) localTokens = JSON.parse(raw);
+        } catch {}
+      }
+
       if (data.success) {
         setHasCredentials(Boolean(data.hasCredentials));
-        const isConn = Boolean(data.connection?.connected) || queryConnected;
-        const activeEmail = data.connection?.email || queryEmail;
+
+        const activeTokens = pendingTokens || (cookieTokens?.accessToken ? cookieTokens : null) || (localTokens?.accessToken ? localTokens : null);
+        const isConn = Boolean(data.connection?.connected) || queryConnected || Boolean(activeTokens?.accessToken);
+        const activeEmail = activeTokens?.email || data.connection?.email || queryEmail || localTokens?.email || null;
 
         const updatedConn = {
           connected: isConn,
           email: activeEmail,
-          name: data.connection?.name || null,
-          connectedAt: data.connection?.connectedAt || new Date().toISOString(),
-          lastSyncedAt: data.connection?.lastSyncedAt || null,
+          name: activeTokens?.name || data.connection?.name || localTokens?.name || null,
+          avatar: activeTokens?.avatar || data.connection?.avatar || localTokens?.avatar || null,
+          accessToken: activeTokens?.accessToken || localTokens?.accessToken || null,
+          refreshToken: activeTokens?.refreshToken || localTokens?.refreshToken || null,
+          connectedAt: data.connection?.connectedAt || activeTokens?.connectedAt || new Date().toISOString(),
+          lastSyncedAt: data.connection?.lastSyncedAt || localTokens?.lastSyncedAt || null,
         };
         setConnection(updatedConn);
 
@@ -102,37 +148,43 @@ export function GmailHookModal({ isOpen, onClose, webhookUrl }: GmailHookModalPr
           } catch {}
         }
 
-        if (typeof document !== "undefined") {
-          const cookieMatch = document.cookie.match(/src_gmail_token_bundle=([^;]+)/);
-          if (cookieMatch) {
-            try {
-              const parsed = JSON.parse(decodeURIComponent(cookieMatch[1]));
-              if (parsed?.accessToken || parsed?.email) {
-                saveSiteContentToFirestore("gmail_oauth_connection", {
-                  ...parsed,
-                  connected: true,
-                  updatedAt: new Date().toISOString()
-                }).catch((err) => console.warn("Notice saving token bundle from client:", err));
-              }
-            } catch {}
-          } else if (queryConnected && queryEmail) {
-            saveSiteContentToFirestore("gmail_oauth_connection", {
-              connected: true,
-              email: queryEmail,
-              connectedAt: new Date().toISOString()
-            }).catch((err) => console.warn("Notice saving connection from client:", err));
-          }
+        // Direct client Firestore write using authenticated admin session whenever tokens exist
+        if (isConn && (activeTokens || queryConnected)) {
+          const payloadToSave = {
+            ...(activeTokens || {}),
+            connected: true,
+            email: activeEmail,
+            updatedAt: new Date().toISOString()
+          };
+          saveSiteContentToFirestore("gmail_oauth_connection", payloadToSave)
+            .catch((err) => console.warn("Notice saving connection to Firestore:", err));
         }
 
         if (!data.hasCredentials) {
           setShowConfigAccordion(true);
         }
       } else if (queryConnected && queryEmail) {
-        setConnection({
+        const fallbackConn = {
           connected: true,
           email: queryEmail,
           connectedAt: new Date().toISOString(),
-        });
+        };
+        setConnection(fallbackConn);
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem("src_gmail_connection", JSON.stringify(fallbackConn));
+          } catch {}
+        }
+      }
+
+      // Clean address bar query parameters to prevent re-triggering upon reload
+      if (typeof window !== "undefined" && (queryConnected || hasAuthSync)) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("gmail_connected");
+        url.searchParams.delete("email");
+        url.searchParams.delete("auth_sync");
+        url.searchParams.delete("gmail_error");
+        window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
       }
     } catch (e) {
       console.warn("Could not fetch Gmail OAuth status:", e);
@@ -227,7 +279,15 @@ export function GmailHookModal({ isOpen, onClose, webhookUrl }: GmailHookModalPr
     setIsSyncing(true);
     setSyncFeedback(null);
     try {
-      const res = await fetch("/api/gmail/sync", { method: "POST" });
+      const res = await fetch("/api/gmail/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accessToken: connection.accessToken || undefined,
+          refreshToken: connection.refreshToken || undefined,
+          email: connection.email || undefined,
+        })
+      });
       const data = await res.json();
       if (data.success) {
         setSyncFeedback(data.message || `Sync complete. ${data.processedCount || 0} alerts processed.`);
@@ -248,17 +308,57 @@ export function GmailHookModal({ isOpen, onClose, webhookUrl }: GmailHookModalPr
     }
     setIsDisconnecting(true);
     try {
-      const res = await fetch("/api/gmail/oauth/disconnect", { method: "POST" });
-      const data = await res.json();
-      if (data.success) {
-        setConnection({ connected: false });
-        if (typeof window !== "undefined") {
-          try {
-            localStorage.removeItem("src_gmail_connection");
-          } catch {}
-        }
-        alert("Account disconnected successfully.");
+      // 1. Revoke tokens with Google and clear server cookies
+      await fetch("/api/gmail/oauth/disconnect", { method: "POST" }).catch(() => {});
+
+      // 2. Direct client-side Firestore write using authenticated admin session
+      await saveSiteContentToFirestore("gmail_oauth_connection", {
+        connected: false,
+        email: null,
+        name: null,
+        avatar: null,
+        accessToken: null,
+        refreshToken: null,
+        disconnectedAt: new Date().toISOString()
+      }).catch((e) => console.warn("Notice updating firestore on disconnect:", e));
+
+      // 3. Clear localStorage cache
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.removeItem("src_gmail_connection");
+        } catch {}
       }
+
+      // 4. Clear all browser cookies across domains
+      if (typeof document !== "undefined") {
+        const cookiesToClear = [
+          "src_gmail_connected",
+          "src_gmail_email",
+          "src_gmail_token_bundle",
+          "src_gmail_connected_shared",
+          "src_gmail_email_shared",
+          "src_gmail_token_bundle_shared"
+        ];
+        cookiesToClear.forEach((name) => {
+          document.cookie = `${name}=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+          document.cookie = `${name}=; path=/; domain=.srcjdcoem.in; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+        });
+      }
+
+      // 5. Clean URL search params
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("gmail_connected");
+        url.searchParams.delete("email");
+        url.searchParams.delete("gmail_error");
+        url.searchParams.delete("auth_sync");
+        window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+      }
+
+      // 6. Update local React state
+      setConnection({ connected: false, email: null, name: null });
+      setSyncFeedback(null);
+      alert("Treasurer Gmail account disconnected successfully.");
     } catch (err: any) {
       alert(`Disconnect error: ${err.message}`);
     } finally {
@@ -455,8 +555,16 @@ export function GmailHookModal({ isOpen, onClose, webhookUrl }: GmailHookModalPr
             </div>
 
             {syncFeedback && (
-              <div className="p-3 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-800 flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <div className={`p-3 rounded-xl border text-xs font-semibold flex items-center gap-2 ${
+                syncFeedback.toLowerCase().includes("failed") || syncFeedback.toLowerCase().includes("error")
+                  ? "bg-rose-50 border-rose-200 text-rose-800"
+                  : "bg-emerald-50 border-emerald-200 text-emerald-800"
+              }`}>
+                {syncFeedback.toLowerCase().includes("failed") || syncFeedback.toLowerCase().includes("error") ? (
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                )}
                 <span>{syncFeedback}</span>
               </div>
             )}

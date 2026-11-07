@@ -1,18 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGmailOAuthConfig, getStoredGmailConnection, saveGmailOAuthConfig } from "@/lib/payments/gmailOAuth";
 
+declare global {
+  var _latestGmailAuthToken: any;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const config = await getGmailOAuthConfig();
     const connection = await getStoredGmailConnection();
 
-    const cookieConnected = req.cookies.get("src_gmail_connected")?.value === "true";
-    const cookieEmail = req.cookies.get("src_gmail_email")?.value;
+    const cookieConnected =
+      req.cookies.get("src_gmail_connected")?.value === "true" ||
+      req.cookies.get("src_gmail_connected_shared")?.value === "true";
+    const cookieEmail =
+      req.cookies.get("src_gmail_email")?.value ||
+      req.cookies.get("src_gmail_email_shared")?.value;
 
-    const isConnected = Boolean(
-      (connection?.connected && (connection?.email || connection?.accessToken || connection?.refreshToken)) ||
-      (cookieConnected && cookieEmail)
-    );
+    const pending = typeof global !== "undefined" ? (global as any)._latestGmailAuthToken : null;
+
+    let isConnected = false;
+    if (connection && connection.connected === false) {
+      isConnected = false;
+    } else if (connection?.connected && (connection?.email || connection?.accessToken || connection?.refreshToken)) {
+      isConnected = true;
+    } else if (pending?.connected && (pending?.email || pending?.accessToken)) {
+      isConnected = true;
+    } else if (cookieConnected && cookieEmail) {
+      isConnected = true;
+    }
+
+    const activeEmail = connection?.connected !== false ? (connection?.email || pending?.email || cookieEmail || null) : null;
 
     return NextResponse.json({
       success: true,
@@ -20,12 +38,13 @@ export async function GET(req: NextRequest) {
       clientId: config?.clientId ? `${config.clientId.slice(0, 12)}...` : null,
       connection: {
         connected: isConnected,
-        email: connection?.email || cookieEmail || null,
-        name: connection?.name || null,
-        avatar: connection?.avatar || null,
-        connectedAt: connection?.connectedAt || null,
-        lastSyncedAt: connection?.lastSyncedAt || null,
-        tenureId: connection?.tenureId || null
+        email: activeEmail,
+        name: isConnected ? (connection?.name || pending?.name || null) : null,
+        avatar: isConnected ? (connection?.avatar || pending?.avatar || null) : null,
+        connectedAt: isConnected ? (connection?.connectedAt || pending?.connectedAt || null) : null,
+        lastSyncedAt: isConnected ? (connection?.lastSyncedAt || null) : null,
+        tenureId: isConnected ? (connection?.tenureId || "2026-2027") : null,
+        hasTokens: Boolean(connection?.accessToken || connection?.refreshToken || pending?.accessToken)
       }
     });
   } catch (err: any) {
