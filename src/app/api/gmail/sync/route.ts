@@ -5,21 +5,52 @@ import { extractAmountFromText, extractUtrFromText, extractSenderName } from "@/
 export async function POST(req: NextRequest) {
   try {
     const config = await getGmailOAuthConfig();
-    const connection = await getStoredGmailConnection();
+    let connection = await getStoredGmailConnection();
 
-    if (!connection?.connected || !connection?.refreshToken || !config) {
+    // Check cookie fallback if connection in Firestore has missing tokens
+    if (!connection?.accessToken && !connection?.refreshToken) {
+      const cookieBundle = req.cookies.get("src_gmail_token_bundle")?.value;
+      if (cookieBundle) {
+        try {
+          const parsed = JSON.parse(cookieBundle);
+          connection = {
+            ...connection,
+            connected: true,
+            email: parsed.email || connection?.email,
+            accessToken: parsed.accessToken,
+            refreshToken: parsed.refreshToken,
+            expiresAt: parsed.expiresAt,
+            connectedAt: parsed.connectedAt
+          };
+        } catch {}
+      }
+    }
+
+    if (!connection?.connected || (!connection?.accessToken && !connection?.refreshToken)) {
       return NextResponse.json({
         success: false,
         error: "Gmail account is not connected. Please connect treasurer Gmail with Google first."
       }, { status: 400 });
     }
 
-    // 1. Get a fresh Access Token
-    const accessToken = await getFreshAccessToken(connection.refreshToken, config);
+    // 1. Resolve Access Token (use active accessToken or refresh using refreshToken)
+    let accessToken = connection.accessToken;
+    const isExpired = connection.expiresAt && Date.now() >= (connection.expiresAt - 60000);
+
+    if ((!accessToken || isExpired) && connection.refreshToken && config) {
+      const fresh = await getFreshAccessToken(connection.refreshToken, config);
+      if (fresh) {
+        accessToken = fresh;
+        connection.accessToken = fresh;
+        connection.expiresAt = Date.now() + 3500 * 1000;
+        await saveGmailConnection(connection).catch(() => {});
+      }
+    }
+
     if (!accessToken) {
       return NextResponse.json({
         success: false,
-        error: "Failed to refresh Google OAuth access token. The account may have been revoked or expired."
+        error: "Google access token has expired. Please click 'Connect with Google' to re-authenticate."
       }, { status: 401 });
     }
 

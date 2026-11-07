@@ -102,12 +102,26 @@ export function GmailHookModal({ isOpen, onClose, webhookUrl }: GmailHookModalPr
           } catch {}
         }
 
-        if (queryConnected && queryEmail) {
-          saveSiteContentToFirestore("gmail_oauth_connection", {
-            connected: true,
-            email: queryEmail,
-            connectedAt: new Date().toISOString()
-          }).catch((err) => console.warn("Notice saving connection from client:", err));
+        if (typeof document !== "undefined") {
+          const cookieMatch = document.cookie.match(/src_gmail_token_bundle=([^;]+)/);
+          if (cookieMatch) {
+            try {
+              const parsed = JSON.parse(decodeURIComponent(cookieMatch[1]));
+              if (parsed?.accessToken || parsed?.email) {
+                saveSiteContentToFirestore("gmail_oauth_connection", {
+                  ...parsed,
+                  connected: true,
+                  updatedAt: new Date().toISOString()
+                }).catch((err) => console.warn("Notice saving token bundle from client:", err));
+              }
+            } catch {}
+          } else if (queryConnected && queryEmail) {
+            saveSiteContentToFirestore("gmail_oauth_connection", {
+              connected: true,
+              email: queryEmail,
+              connectedAt: new Date().toISOString()
+            }).catch((err) => console.warn("Notice saving connection from client:", err));
+          }
         }
 
         if (!data.hasCredentials) {

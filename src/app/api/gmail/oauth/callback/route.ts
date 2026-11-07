@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
       console.warn("Notice: could not fetch Google user profile:", userErr);
     }
 
-    await saveGmailConnection({
+    const tokenRecord = {
       connected: true,
       email: userEmail,
       name: userName,
@@ -75,13 +75,20 @@ export async function GET(req: NextRequest) {
       refreshToken: refreshToken || "",
       expiresAt: Date.now() + (tokenData.expires_in || 3600) * 1000,
       connectedAt: new Date().toISOString()
-    });
+    };
+
+    await saveGmailConnection(tokenRecord);
 
     const response = NextResponse.redirect(`${origin}/admin/payments?gmail_connected=success&email=${encodeURIComponent(userEmail)}`);
     response.cookies.set("src_gmail_connected", "true", { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
     if (userEmail) {
       response.cookies.set("src_gmail_email", userEmail, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
     }
+    response.cookies.set("src_gmail_token_bundle", JSON.stringify(tokenRecord), {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: "lax"
+    });
     return response;
   } catch (err: any) {
     console.error("Gmail OAuth callback exception:", err);
