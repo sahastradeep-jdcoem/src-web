@@ -152,12 +152,34 @@ export async function saveGmailConnection(connection: GmailConnectionRecord): Pr
   const timestamp = new Date().toISOString();
   let saved = false;
 
+  // Retrieve existing connection if any, to preserve refreshToken if Google didn't reissue one
+  const existing = await getStoredGmailConnection();
+  const mergedConnection: GmailConnectionRecord = {
+    connected: true,
+    email: connection.email || existing?.email || "",
+    name: connection.name || existing?.name || "",
+    avatar: connection.avatar || existing?.avatar || "",
+    accessToken: connection.accessToken || existing?.accessToken || "",
+    refreshToken: connection.refreshToken || existing?.refreshToken || "",
+    expiresAt: connection.expiresAt || existing?.expiresAt || (Date.now() + 3600 * 1000),
+    connectedAt: connection.connectedAt || existing?.connectedAt || timestamp,
+    lastSyncedAt: connection.lastSyncedAt || existing?.lastSyncedAt || timestamp,
+    tenureId: connection.tenureId || existing?.tenureId || "2026-2027",
+  };
+
+  // Strip all undefined properties to prevent Firestore serialization crashes
+  const cleanData: Record<string, any> = { updatedAt: timestamp };
+  for (const [k, v] of Object.entries(mergedConnection)) {
+    if (v !== undefined && v !== null) {
+      cleanData[k] = v;
+    }
+  }
+
   // 1. Write to site_content
   try {
     await setDoc(doc(db, "site_content", "gmail_oauth_connection"), {
-      ...connection,
-      payload: connection,
-      updatedAt: timestamp
+      ...cleanData,
+      payload: cleanData,
     }, { merge: true });
     saved = true;
   } catch (e) {
@@ -166,10 +188,7 @@ export async function saveGmailConnection(connection: GmailConnectionRecord): Pr
 
   // 2. Write to settings
   try {
-    await setDoc(doc(db, "settings", "gmail_oauth_connection"), {
-      ...connection,
-      updatedAt: timestamp
-    }, { merge: true });
+    await setDoc(doc(db, "settings", "gmail_oauth_connection"), cleanData, { merge: true });
     saved = true;
   } catch (e) {
     console.warn("Notice writing to settings/gmail_oauth_connection:", e);

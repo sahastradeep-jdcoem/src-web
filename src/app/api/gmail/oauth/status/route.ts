@@ -6,13 +6,21 @@ export async function GET(req: NextRequest) {
     const config = await getGmailOAuthConfig();
     const connection = await getStoredGmailConnection();
 
+    const cookieConnected = req.cookies.get("src_gmail_connected")?.value === "true";
+    const cookieEmail = req.cookies.get("src_gmail_email")?.value;
+
+    const isConnected = Boolean(
+      (connection?.connected && (connection?.email || connection?.accessToken || connection?.refreshToken)) ||
+      (cookieConnected && cookieEmail)
+    );
+
     return NextResponse.json({
       success: true,
       hasCredentials: Boolean(config?.clientId && config?.clientSecret),
       clientId: config?.clientId ? `${config.clientId.slice(0, 12)}...` : null,
       connection: {
-        connected: Boolean(connection?.connected && connection?.refreshToken),
-        email: connection?.email || null,
+        connected: isConnected,
+        email: connection?.email || cookieEmail || null,
         name: connection?.name || null,
         avatar: connection?.avatar || null,
         connectedAt: connection?.connectedAt || null,

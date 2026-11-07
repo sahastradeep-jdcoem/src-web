@@ -60,14 +60,50 @@ export function GmailHookModal({ isOpen, onClose, webhookUrl }: GmailHookModalPr
   const fetchStatus = async () => {
     try {
       setLoadingStatus(true);
+
+      // Check query params if just redirected back from Google OAuth
+      let queryConnected = false;
+      let queryEmail: string | null = null;
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("gmail_connected") === "success") {
+          queryConnected = true;
+          queryEmail = params.get("email");
+        }
+      }
+
       const res = await fetch("/api/gmail/oauth/status");
       const data = await res.json();
       if (data.success) {
         setHasCredentials(Boolean(data.hasCredentials));
-        setConnection(data.connection || { connected: false });
+        const isConn = Boolean(data.connection?.connected) || queryConnected;
+        const activeEmail = data.connection?.email || queryEmail;
+
+        setConnection({
+          connected: isConn,
+          email: activeEmail,
+          name: data.connection?.name || null,
+          connectedAt: data.connection?.connectedAt || new Date().toISOString(),
+          lastSyncedAt: data.connection?.lastSyncedAt || null,
+        });
+
+        if (queryConnected && queryEmail) {
+          saveSiteContentToFirestore("gmail_oauth_connection", {
+            connected: true,
+            email: queryEmail,
+            connectedAt: new Date().toISOString()
+          }).catch((err) => console.warn("Notice saving connection from client:", err));
+        }
+
         if (!data.hasCredentials) {
           setShowConfigAccordion(true);
         }
+      } else if (queryConnected && queryEmail) {
+        setConnection({
+          connected: true,
+          email: queryEmail,
+          connectedAt: new Date().toISOString(),
+        });
       }
     } catch (e) {
       console.warn("Could not fetch Gmail OAuth status:", e);

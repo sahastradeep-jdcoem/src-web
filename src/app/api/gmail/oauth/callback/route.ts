@@ -69,12 +69,17 @@ export async function GET(req: NextRequest) {
       name: userName,
       avatar: userAvatar,
       accessToken,
-      refreshToken,
+      refreshToken: refreshToken || "",
       expiresAt: Date.now() + (tokenData.expires_in || 3600) * 1000,
       connectedAt: new Date().toISOString()
     });
 
-    return NextResponse.redirect(`${origin}/admin/payments?gmail_connected=success&email=${encodeURIComponent(userEmail)}`);
+    const response = NextResponse.redirect(`${origin}/admin/payments?gmail_connected=success&email=${encodeURIComponent(userEmail)}`);
+    response.cookies.set("src_gmail_connected", "true", { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
+    if (userEmail) {
+      response.cookies.set("src_gmail_email", userEmail, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
+    }
+    return response;
   } catch (err: any) {
     console.error("Gmail OAuth callback exception:", err);
     return NextResponse.redirect(`${origin}/admin/payments?gmail_error=${encodeURIComponent(err.message)}`);

@@ -135,6 +135,16 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
   const [isGmailModalOpen, setIsGmailModalOpen] = useState(false);
   const [groupDuplicates, setGroupDuplicates] = useState(true);
 
+  // Automatically open modal if redirected back from Google OAuth
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("gmail_connected") === "success") {
+        setIsGmailModalOpen(true);
+      }
+    }
+  }, []);
+
   // Group duplicate bursts under the primary approved signal
   const displayedLogs = React.useMemo(() => {
     if (!groupDuplicates) return logs;
