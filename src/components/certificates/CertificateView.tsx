@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import Image from "next/image";
 import { CertificateRecord, CertificateColorPalette } from "@/types/certificates";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { DEFAULT_CERTIFICATE_PALETTES } from "@/lib/colorExtractor";
@@ -180,15 +179,11 @@ export function CertificateView({
 
       {/* Subtle background crest watermark */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] z-0">
-        <div className="relative w-96 h-96">
-          <Image
-            src="/assets/SRC Logo.png"
-            alt="Watermark Crest"
-            fill
-            unoptimized={true}
-            className="object-contain"
-          />
-        </div>
+        <img
+          src="/assets/SRC Logo.png"
+          alt="Watermark Crest"
+          className="w-80 h-80 sm:w-96 sm:h-96 object-contain"
+        />
       </div>
 
       {/* Revocation Stamp Overlay (if revoked) */}
@@ -223,47 +218,35 @@ export function CertificateView({
         data-certificate-header
         className="relative z-10 flex items-center justify-between gap-4 border-b border-slate-100/90 pb-3 px-2"
       >
-        {/* Left: SRC Horizontal Logo (100% clean white background) */}
+        {/* Left: SRC Horizontal Logo (Natural proportions, never stretched by html2canvas) */}
         <div className="flex-1 flex items-center justify-start">
-          <div className="relative h-12 sm:h-14 md:h-16 w-44 sm:w-52 md:w-56 shrink-0">
-            <Image
-              src="/assets/SRC Horizontal B.png"
-              alt="Student Representative Council Logo"
-              fill
-              unoptimized={true}
-              className="object-contain object-left"
-              priority
-            />
-          </div>
+          <img
+            src="/assets/SRC Horizontal B.png"
+            alt="Student Representative Council Logo"
+            className="h-12 sm:h-14 md:h-16 w-auto max-w-[220px] object-contain object-left shrink-0"
+          />
         </div>
 
         {/* Center: Organizing Club Logo / 3D Embossed Seal (Rendered ONLY if event is conducted by a club) */}
         {clubLogoSrc && (
           <div className="flex flex-col items-center justify-center shrink-0 px-2">
             <div className="relative h-13 w-13 sm:h-15 sm:w-15 md:h-16 md:w-16 rounded-full overflow-hidden bg-white shadow-md border-2 border-amber-500/80 ring-4 ring-amber-300/30 p-1 flex items-center justify-center">
-              <Image
+              <img
                 src={clubLogoSrc}
                 alt={certificate.organizerClub || "Event Club"}
-                fill
-                unoptimized={true}
-                className="object-contain p-0.5 rounded-full"
+                className="w-full h-full object-contain p-0.5 rounded-full"
               />
             </div>
           </div>
         )}
 
-        {/* Right: JD Header Logo */}
+        {/* Right: JD Header Logo (Natural proportions, never stretched by html2canvas) */}
         <div className="flex-1 flex items-center justify-end">
-          <div className="relative h-12 sm:h-14 md:h-16 w-44 sm:w-52 md:w-56 shrink-0">
-            <Image
-              src="/assets/JD Header B.png"
-              alt="JD College of Engineering and Management"
-              fill
-              unoptimized={true}
-              className="object-contain object-right"
-              priority
-            />
-          </div>
+          <img
+            src="/assets/JD Header B.png"
+            alt="JD College of Engineering and Management"
+            className="h-12 sm:h-14 md:h-16 w-auto max-w-[240px] object-contain object-right shrink-0"
+          />
         </div>
       </header>
 
@@ -361,20 +344,16 @@ export function CertificateView({
               {/* Signature Image (Transparent PNG) or Cursive Text */}
               <div className="h-9 sm:h-11 flex items-end justify-center w-full px-1">
                 {sig.signatureImageUrl ? (
-                  <div className="relative h-8 sm:h-10 w-28 max-w-full">
-                    <Image
-                      src={
-                        sig.signatureImageUrl.startsWith("http://") ||
-                        sig.signatureImageUrl.startsWith("https://")
-                          ? `/api/proxy-image?url=${encodeURIComponent(sig.signatureImageUrl)}`
-                          : sig.signatureImageUrl
-                      }
-                      alt={sig.name}
-                      fill
-                      unoptimized={true}
-                      className="object-contain"
-                    />
-                  </div>
+                  <img
+                    src={
+                      sig.signatureImageUrl.startsWith("http://") ||
+                      sig.signatureImageUrl.startsWith("https://")
+                        ? `/api/proxy-image?url=${encodeURIComponent(sig.signatureImageUrl)}`
+                        : sig.signatureImageUrl
+                    }
+                    alt={sig.name}
+                    className="h-8 sm:h-10 w-auto max-w-[112px] object-contain"
+                  />
                 ) : (
                   <span
                     className="text-xs sm:text-sm text-slate-800 tracking-wider truncate max-w-full font-medium"

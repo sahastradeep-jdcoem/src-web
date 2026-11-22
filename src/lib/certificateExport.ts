@@ -82,6 +82,7 @@ export async function downloadCertificateAsImage(
             const h = parts[3] || (waveType === "bottom-right" ? 220 : 150);
 
             const canvasEl = clonedDoc.createElement("canvas");
+            canvasEl.setAttribute("data-wave-canvas", "true");
             // 3x resolution matching scale: 3 for crystal-sharp output
             canvasEl.width = w * 3;
             canvasEl.height = h * 3;
@@ -149,21 +150,6 @@ export async function downloadCertificateAsImage(
 
             if (svg.parentNode) {
               svg.parentNode.replaceChild(canvasEl, svg);
-            }
-          });
-
-          // Copy pixel buffer from live canvas (e.g. QR code) to cloned canvas
-          const liveCanvases = element.querySelectorAll<HTMLCanvasElement>("canvas");
-          const clonedCanvases = clonedEl.querySelectorAll<HTMLCanvasElement>("canvas");
-          liveCanvases.forEach((liveCanvas, idx) => {
-            const clonedCanvas = clonedCanvases[idx];
-            if (clonedCanvas && liveCanvas.width > 0 && liveCanvas.height > 0) {
-              clonedCanvas.width = liveCanvas.width;
-              clonedCanvas.height = liveCanvas.height;
-              const cloneCtx = clonedCanvas.getContext("2d");
-              if (cloneCtx) {
-                cloneCtx.drawImage(liveCanvas, 0, 0);
-              }
             }
           });
 
