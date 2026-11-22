@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Great+Vibes&family=Playfair+Display:ital,wght@0,600;0,700;0,800;0,900;1,600;1,700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -70,6 +72,12 @@
   .font-meta {
     font-family: 'Inter', sans-serif;
     font-weight: 500;
+  }
+  .font-cursive {
+    font-family: 'Great Vibes', cursive, 'Brush Script MT', sans-serif;
+  }
+  .font-cert-title {
+    font-family: 'Cinzel', 'Playfair Display', Georgia, serif;
   }
 
   /* Smooth Ticker & Marquee Animations */

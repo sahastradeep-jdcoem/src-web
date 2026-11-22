@@ -65,8 +65,10 @@ import {
 } from "@/lib/certificatesStore";
 import {
   extractPosterColorPalette,
+  generatePaletteFromBaseHex,
   DEFAULT_CERTIFICATE_PALETTES,
 } from "@/lib/colorExtractor";
+import { getStoredClubs, findClub } from "@/lib/councilStore";
 import { CertificateView } from "@/components/certificates/CertificateView";
 import { downloadCertificateAsImage, printCertificate } from "@/lib/certificateExport";
 
@@ -214,20 +216,48 @@ function AdminCertificatesContent() {
     let isCurrent = true;
     setIsExtractingColor(true);
 
-    const poster = currentEvent.posterImage || currentEvent.poster;
-    extractPosterColorPalette(poster)
-      .then((palette) => {
-        if (isCurrent) {
-          setColorPalette(palette);
-          setIsExtractingColor(false);
-        }
-      })
-      .catch(() => {
-        if (isCurrent) setIsExtractingColor(false);
-      });
+    const poster =
+      currentEvent.posterImage ||
+      currentEvent.poster ||
+      currentEvent.cardImage ||
+      currentEvent.headerImage;
 
-    // Reset or set club logo from event if present
-    setClubLogoUrl("");
+    if (poster) {
+      extractPosterColorPalette(poster)
+        .then((palette) => {
+          if (isCurrent) {
+            setColorPalette(palette);
+            setIsExtractingColor(false);
+          }
+        })
+        .catch(() => {
+          if (isCurrent) setIsExtractingColor(false);
+        });
+    } else {
+      setIsExtractingColor(false);
+    }
+
+    // Auto-detect club logo from system clubs roster
+    try {
+      const clubs = getStoredClubs();
+      const matchedClub = findClub(
+        clubs,
+        currentEvent.organizerClubSlug || currentEvent.organizer
+      );
+      if (matchedClub) {
+        const logo =
+          matchedClub.logoImage ||
+          matchedClub.cardImage ||
+          matchedClub.heroImage ||
+          "";
+        setClubLogoUrl(logo);
+      } else {
+        setClubLogoUrl("");
+      }
+    } catch (e) {
+      console.warn("Could not lookup club logo", e);
+      setClubLogoUrl("");
+    }
   }, [currentEvent]);
 
   // Registrations for the current selected event
@@ -871,33 +901,72 @@ function AdminCertificatesContent() {
                 />
               </div>
 
-              {/* Extracted Color Palette Palette Bar */}
-              <div className="text-xs space-y-1.5 p-3 rounded-xl bg-slate-50 border border-slate-200">
+              {/* Extracted Color Palette Bar & Custom Color Picker */}
+              <div className="text-xs space-y-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                    Poster Theme Palette
+                    Poster Theme Color Scheme
                   </span>
-                  <span className="text-[10px] text-slate-400">Pure White Canvas</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!currentEvent) return;
+                      setIsExtractingColor(true);
+                      const poster =
+                        currentEvent.posterImage ||
+                        currentEvent.poster ||
+                        currentEvent.cardImage ||
+                        currentEvent.headerImage;
+                      if (poster) {
+                        extractPosterColorPalette(poster)
+                          .then((palette) => {
+                            setColorPalette(palette);
+                            setIsExtractingColor(false);
+                          })
+                          .catch(() => setIsExtractingColor(false));
+                      } else {
+                        setIsExtractingColor(false);
+                      }
+                    }}
+                    className="text-[10px] font-bold text-[#17458F] hover:underline flex items-center gap-1"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isExtractingColor ? "animate-spin" : ""}`} />
+                    Re-extract
+                  </button>
                 </div>
+
                 <div className="flex items-center gap-2">
+                  {/* Primary Color Picker */}
+                  <div className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-lg border border-slate-200">
+                    <input
+                      type="color"
+                      value={colorPalette.primary}
+                      onChange={(e) => {
+                        const newHex = e.target.value;
+                        setColorPalette(generatePaletteFromBaseHex(newHex));
+                      }}
+                      className="w-5 h-5 rounded cursor-pointer border-0 p-0"
+                      title="Pick Custom Primary Color"
+                    />
+                    <span className="font-mono text-[10px] text-slate-600 font-bold">
+                      {colorPalette.primary}
+                    </span>
+                  </div>
+
+                  {/* Swatches */}
                   <div
-                    className="h-6 w-12 rounded-lg border border-slate-300 shadow-2xs"
-                    style={{ backgroundColor: colorPalette.primary }}
-                    title={`Primary: ${colorPalette.primary}`}
-                  />
-                  <div
-                    className="h-6 w-12 rounded-lg border border-slate-300 shadow-2xs"
+                    className="h-5 w-7 rounded border border-slate-300 shadow-2xs"
                     style={{ backgroundColor: colorPalette.secondary }}
                     title={`Secondary: ${colorPalette.secondary}`}
                   />
                   <div
-                    className="h-6 w-12 rounded-lg border border-slate-300 shadow-2xs"
+                    className="h-5 w-7 rounded border border-slate-300 shadow-2xs"
                     style={{ backgroundColor: colorPalette.accent }}
                     title={`Accent: ${colorPalette.accent}`}
                   />
                   <div
-                    className="h-6 w-12 rounded-lg border border-slate-300 shadow-2xs"
+                    className="h-5 w-7 rounded border border-slate-300 shadow-2xs"
                     style={{ backgroundColor: colorPalette.pillBg }}
                     title={`Pill: ${colorPalette.pillBg}`}
                   />
@@ -908,7 +977,7 @@ function AdminCertificatesContent() {
                       type="button"
                       onClick={() => setColorPalette(DEFAULT_CERTIFICATE_PALETTES.ocean)}
                       className="w-5 h-5 rounded-full bg-[#0B2545] border border-white shadow-2xs"
-                      title="Ocean Blue (Default Reference)"
+                      title="Ocean Blue"
                     />
                     <button
                       type="button"
@@ -928,7 +997,63 @@ function AdminCertificatesContent() {
                       className="w-5 h-5 rounded-full bg-[#831843] border border-white shadow-2xs"
                       title="Crimson"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setColorPalette(DEFAULT_CERTIFICATE_PALETTES.amberGold)}
+                      className="w-5 h-5 rounded-full bg-[#78350F] border border-white shadow-2xs"
+                      title="Amber Gold"
+                    />
                   </div>
+                </div>
+              </div>
+
+              {/* Club Emblem / Logo Header Configuration */}
+              <div className="text-xs space-y-1.5 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <Award className="w-3.5 h-3.5 text-amber-600" />
+                    Center Club Emblem (Header)
+                  </span>
+                  {currentEvent?.organizer && (
+                    <span className="text-[10px] text-slate-500 font-semibold truncate max-w-[150px]">
+                      {currentEvent.organizer}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {clubLogoUrl ? (
+                    <div className="relative h-9 w-9 rounded-full overflow-hidden bg-white border border-amber-400 shrink-0 p-0.5">
+                      <img
+                        src={clubLogoUrl}
+                        alt="Club Logo"
+                        className="h-full w-full object-contain rounded-full"
+                      />
+                    </div>
+                  ) : (
+                    <div className="h-9 w-9 rounded-full bg-slate-200 flex items-center justify-center text-slate-400 shrink-0">
+                      <Award className="w-4 h-4" />
+                    </div>
+                  )}
+
+                  <input
+                    type="text"
+                    value={clubLogoUrl}
+                    onChange={(e) => setClubLogoUrl(e.target.value)}
+                    placeholder="Club logo URL or upload..."
+                    className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs bg-white"
+                  />
+
+                  {clubLogoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setClubLogoUrl("")}
+                      className="text-slate-400 hover:text-slate-600 p-1"
+                      title="Clear Logo"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
 
