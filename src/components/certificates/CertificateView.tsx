@@ -279,7 +279,7 @@ export function CertificateView({
       >
         {/* CERTIFICATE Header in Dynamic Color */}
         <h1
-          className="font-serif tracking-[0.18em] text-3xl sm:text-4xl md:text-5xl font-extrabold uppercase leading-none mb-3 sm:mb-4"
+          className="font-serif tracking-[0.18em] text-3xl sm:text-4xl md:text-5xl font-extrabold uppercase leading-none mb-2.5 sm:mb-3"
           style={{
             fontFamily: "'Cinzel', 'Playfair Display', Georgia, serif",
             color: palette.primary,
@@ -289,15 +289,19 @@ export function CertificateView({
         </h1>
 
         {/* Dynamic Category Pill Badge (OF PARTICIPATION / OF ACHIEVEMENT) */}
-        <div className="inline-block mb-3 sm:mb-3.5">
+        <div className="flex items-center justify-center mb-2.5 sm:mb-3">
           <div
-            className="rounded-full px-8 sm:px-11 py-1 sm:py-1.5 shadow-md flex items-center justify-center border border-white/30"
+            className="rounded-full px-7 sm:px-8 py-1 shadow-sm flex items-center justify-center border border-white/30"
             style={{
               background: `linear-gradient(135deg, ${palette.pillBg}, ${palette.secondary})`,
-              boxShadow: `0 4px 16px ${palette.borderGlow}`,
+              boxShadow: `0 2px 10px ${palette.borderGlow}`,
+              lineHeight: 1,
             }}
           >
-            <span className="font-sans font-black text-xs sm:text-sm tracking-[0.26em] uppercase text-white">
+            <span
+              className="font-sans font-black text-[11px] sm:text-xs tracking-[0.24em] uppercase text-white select-none"
+              style={{ lineHeight: 1 }}
+            >
               {certificate.type === "ACHIEVEMENT"
                 ? "OF ACHIEVEMENT"
                 : certificate.title.toUpperCase().replace(/^CERTIFICATE\s+/, "") || "OF PARTICIPATION"}
@@ -306,24 +310,25 @@ export function CertificateView({
         </div>
 
         {/* PROUDLY PRESENTED TO */}
-        <p className="font-serif font-bold text-[10px] sm:text-xs text-slate-500 tracking-[0.3em] uppercase mb-1.5 sm:mb-2">
+        <p className="font-serif font-bold text-[10px] sm:text-xs text-slate-500 tracking-[0.28em] uppercase mb-1 sm:mb-1.5">
           PROUDLY PRESENTED TO
         </p>
 
         {/* Recipient Name in Elegant Calligraphy Script (Great Vibes) */}
-        <div className="w-full max-w-xl mx-auto mb-2 sm:mb-3">
+        <div className="w-full max-w-xl mx-auto mb-2 sm:mb-2.5">
           <h2
-            className="text-4xl sm:text-5xl md:text-6xl text-slate-900 leading-tight px-4 drop-shadow-xs mb-1.5 sm:mb-2"
+            className="text-4xl sm:text-5xl md:text-[54px] text-slate-900 px-4 mb-2 sm:mb-2.5"
             style={{
               fontFamily: "'Great Vibes', cursive, 'Brush Script MT', sans-serif",
               fontWeight: 400,
+              lineHeight: 1.08,
             }}
           >
             {certificate.recipientName || "Participant Name"}
           </h2>
 
           {/* Ornamental Divider with Centered Diamond */}
-          <div className="flex items-center justify-center gap-3 w-64 sm:w-80 mx-auto">
+          <div className="flex items-center justify-center gap-3 w-64 sm:w-80 mx-auto mt-1">
             <div
               className="h-[1.5px] flex-1 rounded-full opacity-65"
               style={{

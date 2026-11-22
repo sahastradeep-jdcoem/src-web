@@ -28,7 +28,10 @@ export async function downloadCertificateAsImage(
         await document.fonts.ready;
         await Promise.allSettled([
           document.fonts.load("400 48px 'Great Vibes'"),
+          document.fonts.load("400 54px 'Great Vibes'"),
+          document.fonts.load("400 60px 'Great Vibes'"),
           document.fonts.load("800 36px 'Cinzel'"),
+          document.fonts.load("800 48px 'Cinzel'"),
           document.fonts.load("700 12px 'Cinzel'"),
         ]);
       } catch (e) {
