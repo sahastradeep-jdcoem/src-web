@@ -4,7 +4,7 @@ import React from "react";
 import Image from "next/image";
 import { CertificateRecord, CertificateColorPalette } from "@/types/certificates";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
-import { Award } from "lucide-react";
+import { Award, ShieldCheck } from "lucide-react";
 import { DEFAULT_CERTIFICATE_PALETTES } from "@/lib/colorExtractor";
 
 interface CertificateViewProps {
@@ -50,99 +50,126 @@ export function CertificateView({
       `}</style>
 
       {/* ------------------------------------------------------------- */}
-      {/* DYNAMIC FLUID WAVE CORNER DECORATIONS (BOTTOM CORNERS ONLY)  */}
-      {/* (TOP HEADER IS 100% PURE WHITE TO ENSURE FULL LOGO CLARITY) */}
+      {/* ROYAL INSET DIPLOMA BORDERS (HIGH-END ACADEMIC PRESTIGE)      */}
+      {/* ------------------------------------------------------------- */}
+      <div className="absolute inset-3 sm:inset-4 border border-slate-200/90 rounded-[22px] pointer-events-none z-10" />
+      <div
+        className="absolute inset-4.5 sm:inset-5.5 border rounded-[18px] pointer-events-none z-10 opacity-35"
+        style={{ borderColor: palette.secondary }}
+      />
+
+      {/* Corner Bracket Accents (Top-Left, Top-Right, Bottom-Left, Bottom-Right) */}
+      <div
+        className="absolute top-4 left-4 w-4 h-4 border-t-2 border-l-2 rounded-tl-sm pointer-events-none z-10 opacity-70"
+        style={{ borderColor: palette.accent }}
+      />
+      <div
+        className="absolute top-4 right-4 w-4 h-4 border-t-2 border-r-2 rounded-tr-sm pointer-events-none z-10 opacity-70"
+        style={{ borderColor: palette.accent }}
+      />
+      <div
+        className="absolute bottom-4 left-4 w-4 h-4 border-b-2 border-l-2 rounded-bl-sm pointer-events-none z-10 opacity-70"
+        style={{ borderColor: palette.accent }}
+      />
+      <div
+        className="absolute bottom-4 right-4 w-4 h-4 border-b-2 border-r-2 rounded-br-sm pointer-events-none z-10 opacity-70"
+        style={{ borderColor: palette.accent }}
+      />
+
+      {/* ------------------------------------------------------------- */}
+      {/* DYNAMIC FLUID WAVE CORNER DECORATIONS (PERIPHERAL CORNERS ONLY) */}
+      {/* CAREFULLY CONFINED SO SIGNATURES & TEXT REMAIN 100% CLEAR       */}
       {/* ------------------------------------------------------------- */}
 
-      {/* 1. BOTTOM-RIGHT EXTENDED FLUID WAVE FRAME */}
+      {/* 1. BOTTOM-RIGHT CORNER FLUID WAVES (CONFINED TO OUTER CORNER) */}
       <svg
         className="absolute -bottom-1 -right-1 pointer-events-none z-0"
-        width={460}
-        height={360}
-        viewBox="0 0 460 360"
+        width={300}
+        height={220}
+        viewBox="0 0 300 220"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        style={{ width: "460px", height: "360px" }}
+        style={{ width: "300px", height: "220px" }}
       >
         {/* Layer 1: Deep Primary Sweeping Ribbon */}
         <path
-          d="M480 380L130 380C195 315 230 260 275 195C320 130 375 65 480 15L480 380Z"
+          d="M320 240L110 240C165 200 205 165 240 120C270 75 295 30 320 0L320 240Z"
           fill={palette.primary}
           fillOpacity="0.96"
         />
         {/* Layer 2: Secondary Mid-Tone Flow */}
         <path
-          d="M480 380L210 380C265 325 310 270 345 205C380 140 415 85 480 65L480 380Z"
+          d="M320 240L160 240C205 205 240 170 265 130C290 85 305 45 320 25L320 240Z"
           fill={palette.secondary}
-          fillOpacity="0.9"
+          fillOpacity="0.88"
         />
         {/* Layer 3: Vibrant Accent Ribbon */}
         <path
-          d="M480 380L290 380C335 335 375 290 400 225C425 160 440 115 480 105L480 380Z"
+          d="M320 240L215 240C245 210 270 180 285 140C300 100 310 65 320 50L320 240Z"
           fill={palette.accent}
-          fillOpacity="0.72"
+          fillOpacity="0.7"
         />
         {/* Layer 4: Front Highlight Ripple */}
         <path
-          d="M480 380L360 380C395 345 425 310 440 255C455 200 465 165 480 155L480 380Z"
+          d="M320 240L260 240C280 215 295 190 305 155C315 120 318 95 320 85L320 240Z"
           fill={palette.accent}
-          fillOpacity="0.38"
+          fillOpacity="0.35"
         />
 
         {/* White Wave Contour Lines */}
         <path
-          d="M175 370C230 305 265 250 315 185C360 120 405 65 450 25"
+          d="M140 235C185 195 220 160 250 115C280 70 300 30 315 5"
           stroke="#FFFFFF"
           strokeWidth="1.5"
           strokeOpacity="0.55"
           strokeLinecap="round"
         />
         <path
-          d="M240 370C285 315 325 260 360 195C395 130 430 85 460 55"
+          d="M185 235C220 200 250 165 270 125C295 85 310 50 320 25"
           stroke="#FFFFFF"
           strokeWidth="1"
           strokeOpacity="0.4"
           strokeLinecap="round"
         />
         <path
-          d="M150 375C205 330 250 280 290 225C335 160 385 105 445 65"
+          d="M120 238C165 205 200 170 230 130C265 85 295 45 315 15"
           stroke={palette.accent}
           strokeWidth="1.2"
-          strokeOpacity="0.7"
+          strokeOpacity="0.75"
           strokeLinecap="round"
         />
 
-        <circle cx="355" cy="235" r="2" fill="#FFFFFF" fillOpacity="0.5" />
-        <circle cx="395" cy="170" r="1.5" fill="#FFFFFF" fillOpacity="0.6" />
+        <circle cx="265" cy="140" r="1.5" fill="#FFFFFF" fillOpacity="0.5" />
+        <circle cx="290" cy="95" r="1.5" fill="#FFFFFF" fillOpacity="0.6" />
       </svg>
 
-      {/* 2. BOTTOM-LEFT FLUID WAVE ACCENT */}
+      {/* 2. BOTTOM-LEFT CORNER FLUID WAVES (CONFINED TO OUTER CORNER) */}
       <svg
         className="absolute -bottom-1 -left-1 pointer-events-none z-0"
-        width={340}
-        height={260}
-        viewBox="0 0 340 260"
+        width={240}
+        height={170}
+        viewBox="0 0 240 170"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        style={{ width: "340px", height: "260px" }}
+        style={{ width: "240px", height: "170px" }}
       >
         <path
-          d="M-20 280L220 280C175 220 130 200 105 150C80 100 45 55 -20 20L-20 280Z"
+          d="M-20 190L160 190C125 150 95 130 75 95C55 60 30 30 -20 0L-20 190Z"
           fill={palette.primary}
-          fillOpacity="0.95"
+          fillOpacity="0.94"
         />
         <path
-          d="M-20 280L160 280C115 230 80 195 55 150C30 105 5 70 -20 60L-20 280Z"
+          d="M-20 190L115 190C85 155 60 130 40 95C20 65 5 40 -20 25L-20 190Z"
           fill={palette.secondary}
-          fillOpacity="0.84"
+          fillOpacity="0.82"
         />
         <path
-          d="M-20 280L100 280C65 245 40 210 15 165L-20 140L-20 280Z"
+          d="M-20 190L70 190C45 160 30 135 15 105L-20 85L-20 190Z"
           fill={palette.accent}
-          fillOpacity="0.5"
+          fillOpacity="0.45"
         />
         <path
-          d="M-10 160C25 185 60 220 110 270"
+          d="M-10 110C15 125 40 150 75 180"
           stroke="#FFFFFF"
           strokeWidth="1.2"
           strokeOpacity="0.45"
@@ -151,7 +178,7 @@ export function CertificateView({
       </svg>
 
       {/* Subtle background crest watermark */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.035] z-0">
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] z-0">
         <div className="relative w-96 h-96">
           <Image
             src="/assets/SRC Logo.png"
@@ -173,17 +200,21 @@ export function CertificateView({
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* AUTHENTICITY QR CODE (POSITIONED IN UPPER-RIGHT UNDER JD LOGO) */}
+      {/* OFFICIAL VERIFICATION QR SEAL (UPPER RIGHT UNDER JD HEADER)   */}
       {/* ------------------------------------------------------------- */}
       {showQrCode && (
-        <div className="absolute top-22 sm:top-25 md:top-28 right-7 sm:right-9 md:right-11 z-20 flex flex-col items-center">
-          <div className="p-1 rounded-xl bg-white/95 border border-slate-200/90 shadow-xs">
+        <div className="absolute top-21 sm:top-23 md:top-25 right-8 sm:right-10 md:right-12 z-20 flex flex-col items-center">
+          <div className="p-1.5 rounded-xl bg-white/95 border border-slate-200/90 shadow-xs flex flex-col items-center">
             <ScannableQRCode
               value={certificate.verificationUrl}
-              size={50}
+              size={52}
               level="M"
               fgColor={palette.primary}
             />
+            <div className="flex items-center gap-1 mt-1 text-[7.5px] font-bold uppercase tracking-wider text-slate-500">
+              <ShieldCheck className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+              <span>Verify</span>
+            </div>
           </div>
         </div>
       )}
@@ -193,7 +224,7 @@ export function CertificateView({
       {/* ------------------------------------------------------------- */}
       <header
         data-certificate-header
-        className="relative z-10 flex items-center justify-between gap-4 border-b border-slate-100/90 pb-3"
+        className="relative z-10 flex items-center justify-between gap-4 border-b border-slate-100/90 pb-3 px-2"
       >
         {/* Left: SRC Horizontal Logo (100% clean white background) */}
         <div className="flex-1 flex items-center justify-start">
@@ -209,10 +240,10 @@ export function CertificateView({
           </div>
         </div>
 
-        {/* Center: Organizing Club Logo / 3D Embossed Shield (No text below) */}
+        {/* Center: Organizing Club Logo / 3D Embossed Seal (No text below) */}
         <div className="flex flex-col items-center justify-center shrink-0 px-2">
           {clubLogoSrc ? (
-            <div className="relative h-13 w-13 sm:h-15 sm:w-15 md:h-16 md:w-16 rounded-full overflow-hidden bg-white shadow-md border-2 border-amber-500/80 ring-2 ring-amber-300/40 p-1 flex items-center justify-center">
+            <div className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-full overflow-hidden bg-white shadow-md border-2 border-amber-500/80 ring-4 ring-amber-300/30 p-1 flex items-center justify-center">
               <Image
                 src={clubLogoSrc}
                 alt={certificate.organizerClub || "Event Club"}
@@ -223,12 +254,12 @@ export function CertificateView({
             </div>
           ) : (
             <div
-              className="h-12 w-12 sm:h-14 sm:w-14 md:h-15 md:w-15 rounded-full flex flex-col items-center justify-center text-white shadow-md border-2 border-amber-400 ring-2 ring-amber-200/50"
+              className="h-13 w-13 sm:h-15 sm:w-15 rounded-full flex flex-col items-center justify-center text-white shadow-md border-2 border-amber-400 ring-4 ring-amber-200/40"
               style={{
                 background: `linear-gradient(135deg, ${palette.primary}, ${palette.secondary})`,
               }}
             >
-              <Award className="w-5 h-5 text-amber-300" />
+              <Award className="w-6 h-6 text-amber-300" />
               <span className="text-[8px] font-black tracking-tighter uppercase leading-none mt-0.5">
                 {certificate.organizerClub ? certificate.organizerClub.slice(0, 5) : "EVENT"}
               </span>
@@ -260,7 +291,7 @@ export function CertificateView({
       >
         {/* CERTIFICATE Header in Dynamic Color */}
         <h1
-          className="font-serif tracking-[0.16em] text-3xl sm:text-4xl md:text-5xl font-extrabold uppercase leading-none"
+          className="font-serif tracking-[0.18em] text-3xl sm:text-4xl md:text-5xl font-extrabold uppercase leading-none"
           style={{
             fontFamily: "'Cinzel', 'Playfair Display', Georgia, serif",
             color: palette.primary,
@@ -272,13 +303,13 @@ export function CertificateView({
         {/* Dynamic Category Pill Badge (OF PARTICIPATION / OF ACHIEVEMENT) */}
         <div className="inline-block">
           <div
-            className="rounded-full px-7 sm:px-10 py-1 sm:py-1.5 shadow-md flex items-center justify-center border border-white/25"
+            className="rounded-full px-8 sm:px-11 py-1 sm:py-1.5 shadow-md flex items-center justify-center border border-white/30"
             style={{
               background: `linear-gradient(135deg, ${palette.pillBg}, ${palette.secondary})`,
-              boxShadow: `0 4px 14px ${palette.borderGlow}`,
+              boxShadow: `0 4px 16px ${palette.borderGlow}`,
             }}
           >
-            <span className="font-sans font-black text-xs sm:text-sm tracking-[0.24em] uppercase text-white">
+            <span className="font-sans font-black text-xs sm:text-sm tracking-[0.26em] uppercase text-white">
               {certificate.type === "ACHIEVEMENT"
                 ? "OF ACHIEVEMENT"
                 : certificate.title.toUpperCase().replace(/^CERTIFICATE\s+/, "") || "OF PARTICIPATION"}
@@ -287,7 +318,7 @@ export function CertificateView({
         </div>
 
         {/* PROUDLY PRESENTED TO */}
-        <p className="font-serif font-bold text-[10px] sm:text-xs text-slate-500 tracking-[0.28em] uppercase pt-0.5">
+        <p className="font-serif font-bold text-[10px] sm:text-xs text-slate-500 tracking-[0.3em] uppercase pt-0.5">
           PROUDLY PRESENTED TO
         </p>
 
@@ -312,7 +343,7 @@ export function CertificateView({
               }}
             />
             <div
-              className="w-2 h-2 rotate-45 rounded-[1px] shadow-xs shrink-0"
+              className="w-2.5 h-2.5 rotate-45 rounded-[1px] shadow-xs shrink-0"
               style={{ backgroundColor: palette.secondary }}
             />
             <div
@@ -332,13 +363,14 @@ export function CertificateView({
       </main>
 
       {/* ------------------------------------------------------------- */}
-      {/* 3. FOOTER (4 INSTITUTIONAL SIGNATURES SPANNING FULL WIDTH)    */}
+      {/* 3. FOOTER (4 INSTITUTIONAL SIGNATURES ON PURE WHITE BASELINE)  */}
+      {/* 100% CONTRAST & LEGIBILITY GUARANTEED ACROSS ALL 4 SIGNATORIES */}
       {/* ------------------------------------------------------------- */}
       <footer
         data-certificate-footer
-        className="relative z-10 pt-2 sm:pt-3 border-t border-slate-100/90 w-full"
+        className="relative z-10 pt-2.5 sm:pt-3.5 border-t border-slate-100/90 w-full"
       >
-        <div className="grid grid-cols-4 gap-4 sm:gap-6 items-end text-center w-full max-w-4xl mx-auto">
+        <div className="grid grid-cols-4 gap-4 sm:gap-6 items-end text-center w-full max-w-3xl sm:max-w-4xl mx-auto px-4">
           {certificate.signatories.slice(0, 4).map((sig, idx) => (
             <div key={sig.id || idx} className="space-y-1 flex flex-col items-center">
               {/* Signature Image (Transparent PNG) or Cursive Text */}
@@ -360,7 +392,7 @@ export function CertificateView({
                   </div>
                 ) : (
                   <span
-                    className="text-xs sm:text-sm text-slate-700 tracking-wider truncate max-w-full"
+                    className="text-xs sm:text-sm text-slate-800 tracking-wider truncate max-w-full font-medium"
                     style={{
                       fontFamily: "'Great Vibes', cursive, 'Brush Script MT', sans-serif",
                     }}
@@ -371,11 +403,11 @@ export function CertificateView({
               </div>
 
               {/* Line */}
-              <div className="w-full h-[1.5px] bg-slate-700/80" />
+              <div className="w-full h-[1.5px] bg-slate-800/80" />
 
-              {/* Designation & Organization Below Line */}
+              {/* Designation & Organization Below Line (Always high contrast on white) */}
               <div className="leading-tight">
-                <p className="text-[10px] sm:text-[11px] font-bold text-slate-800 truncate max-w-full">
+                <p className="text-[10px] sm:text-[11px] font-bold text-slate-900 truncate max-w-full">
                   {sig.designation}
                 </p>
                 <p className="text-[8px] sm:text-[9px] text-slate-500 font-medium truncate max-w-full">
