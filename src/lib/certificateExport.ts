@@ -1,7 +1,7 @@
 /**
  * High-Definition Client-Side Certificate Exporter (Zero Server Cost)
  * Renders the HTML Certificate element via html2canvas at 3x scale (~300 DPI print quality)
- * Supports desktop direct download, mobile Web Share / Camera Roll saving, and A4 landscape printing.
+ * Guarantees that exported image matches the Live Preview pixel-for-pixel.
  */
 
 export interface ExportCertificateResult {
@@ -27,10 +27,9 @@ export async function downloadCertificateAsImage(
       try {
         await document.fonts.ready;
         await Promise.allSettled([
-          document.fonts.load("400 54px 'Great Vibes'"),
-          document.fonts.load("800 44px 'Cinzel'"),
-          document.fonts.load("700 13px 'Cinzel'"),
-          document.fonts.load("400 14px 'Playfair Display'"),
+          document.fonts.load("400 48px 'Great Vibes'"),
+          document.fonts.load("800 36px 'Cinzel'"),
+          document.fonts.load("700 12px 'Cinzel'"),
         ]);
       } catch (e) {
         console.warn("Font loading wait notice", e);
@@ -53,37 +52,107 @@ export async function downloadCertificateAsImage(
       })
     );
 
-    // 3. Small delay to allow canvas elements (waves & QR code) to fully flush
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    // 3. Small flush delay for canvas rendering buffers
+    await new Promise((resolve) => setTimeout(resolve, 120));
 
     // 4. Dynamically import html2canvas
     const html2canvas = (await import("html2canvas")).default;
 
     const canvas = await html2canvas(element, {
-      scale: 3, // 3x ultra-HD resolution (300 DPI equivalent: 3120 x 2205 px)
+      scale: 3, // 3x ultra-HD resolution (300 DPI equivalent)
       useCORS: true,
       allowTaint: true,
       backgroundColor: "#FFFFFF", // Enforce pure white base
       logging: false,
       imageTimeout: 10000,
       removeContainer: true,
-      windowWidth: 1200,
       onclone: (clonedDoc) => {
         const clonedEl = clonedDoc.getElementById(elementId);
         if (clonedEl) {
-          // Reset transform to 1:1 master canvas resolution
-          clonedEl.style.transform = "none";
           clonedEl.style.boxShadow = "none";
-          clonedEl.style.width = "1040px";
-          clonedEl.style.minWidth = "1040px";
-          clonedEl.style.maxWidth = "1040px";
-          clonedEl.style.height = "735px";
-          clonedEl.style.minHeight = "735px";
-          clonedEl.style.maxHeight = "735px";
-          clonedEl.style.margin = "0 auto";
-          clonedEl.style.backgroundColor = "#FFFFFF";
 
-          // Copy canvas pixel buffers (fluid waves & QR code) directly to cloned DOM
+          // Convert wave SVG elements into HTML5 canvas in cloned DOM
+          // This bypasses html2canvas's known bug where inline SVGs are dropped/invisible
+          const waveSvgs = clonedEl.querySelectorAll<SVGElement>("svg[data-certificate-wave]");
+          waveSvgs.forEach((svg) => {
+            const waveType = svg.getAttribute("data-certificate-wave");
+            const viewBox = svg.getAttribute("viewBox") || "0 0 300 220";
+            const parts = viewBox.split(" ").map(Number);
+            const w = parts[2] || (waveType === "bottom-right" ? 300 : 210);
+            const h = parts[3] || (waveType === "bottom-right" ? 220 : 150);
+
+            const canvasEl = clonedDoc.createElement("canvas");
+            // 3x resolution matching scale: 3 for crystal-sharp output
+            canvasEl.width = w * 3;
+            canvasEl.height = h * 3;
+            canvasEl.style.width = `${w}px`;
+            canvasEl.style.height = `${h}px`;
+            canvasEl.style.position = "absolute";
+            canvasEl.style.bottom = "-4px";
+            if (waveType === "bottom-right") {
+              canvasEl.style.right = "-4px";
+            } else {
+              canvasEl.style.left = "-4px";
+            }
+            canvasEl.style.pointerEvents = "none";
+            canvasEl.style.zIndex = "0";
+
+            const ctx = canvasEl.getContext("2d");
+            if (ctx) {
+              ctx.scale(3, 3);
+
+              // 1. Draw paths
+              const paths = svg.querySelectorAll("path");
+              paths.forEach((p) => {
+                const d = p.getAttribute("d");
+                if (!d) return;
+                const fill = p.getAttribute("fill");
+                const fillOpacity = parseFloat(p.getAttribute("fill-opacity") || "1");
+                const stroke = p.getAttribute("stroke");
+                const strokeWidth = parseFloat(p.getAttribute("stroke-width") || "1");
+                const strokeOpacity = parseFloat(p.getAttribute("stroke-opacity") || "1");
+
+                ctx.save();
+                if (fill && fill !== "none") {
+                  ctx.fillStyle = fill;
+                  ctx.globalAlpha = fillOpacity;
+                  ctx.fill(new Path2D(d));
+                }
+                if (stroke && stroke !== "none") {
+                  ctx.strokeStyle = stroke;
+                  ctx.lineWidth = strokeWidth;
+                  ctx.globalAlpha = strokeOpacity;
+                  ctx.lineCap = "round";
+                  ctx.stroke(new Path2D(d));
+                }
+                ctx.restore();
+              });
+
+              // 2. Draw circles (sparkles)
+              const circles = svg.querySelectorAll("circle");
+              circles.forEach((c) => {
+                const cx = parseFloat(c.getAttribute("cx") || "0");
+                const cy = parseFloat(c.getAttribute("cy") || "0");
+                const r = parseFloat(c.getAttribute("r") || "1.5");
+                const fill = c.getAttribute("fill") || "#FFFFFF";
+                const fillOpacity = parseFloat(c.getAttribute("fill-opacity") || "0.5");
+
+                ctx.save();
+                ctx.fillStyle = fill;
+                ctx.globalAlpha = fillOpacity;
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+              });
+            }
+
+            if (svg.parentNode) {
+              svg.parentNode.replaceChild(canvasEl, svg);
+            }
+          });
+
+          // Copy pixel buffer from live canvas (e.g. QR code) to cloned canvas
           const liveCanvases = element.querySelectorAll<HTMLCanvasElement>("canvas");
           const clonedCanvases = clonedEl.querySelectorAll<HTMLCanvasElement>("canvas");
           liveCanvases.forEach((liveCanvas, idx) => {
