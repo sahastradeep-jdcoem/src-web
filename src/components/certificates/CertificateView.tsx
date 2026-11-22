@@ -239,17 +239,17 @@ export function CertificateView({
       >
         {/* Left: SRC Horizontal Logo (Natural 2.96:1 aspect ratio, never stretched) */}
         <div className="flex-1 flex items-center justify-start">
-          <div className="h-12 sm:h-14 md:h-16 flex items-center justify-start shrink-0">
+          <div className="h-14 sm:h-16 md:h-[68px] flex items-center justify-start shrink-0">
             <img
               src="/assets/SRC Horizontal B.png"
               alt="Student Representative Council Logo"
-              width={165}
-              height={56}
+              width={200}
+              height={68}
               style={{
                 height: "auto",
-                maxHeight: "56px",
+                maxHeight: "68px",
                 width: "auto",
-                maxWidth: "200px",
+                maxWidth: "230px",
                 aspectRatio: "1020 / 345",
               }}
               className="object-contain shrink-0"
