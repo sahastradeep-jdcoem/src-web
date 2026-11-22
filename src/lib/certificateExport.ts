@@ -22,23 +22,45 @@ export async function downloadCertificateAsImage(
       return { success: false };
     }
 
-    // Wait for fonts to be ready
+    // 1. Wait for custom web fonts to be completely ready
     if (typeof document !== "undefined" && document.fonts) {
       try {
         await document.fonts.ready;
+        await Promise.allSettled([
+          document.fonts.load("400 54px 'Great Vibes'"),
+          document.fonts.load("800 44px 'Cinzel'"),
+          document.fonts.load("700 13px 'Cinzel'"),
+          document.fonts.load("400 14px 'Playfair Display'"),
+        ]);
       } catch (e) {
         console.warn("Font loading wait notice", e);
       }
     }
 
-    // Small delay to allow canvas / SVG QR codes to flush
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // 2. Wait for all images inside the certificate to be fully decoded
+    const allImgs = Array.from(element.querySelectorAll("img"));
+    await Promise.allSettled(
+      allImgs.map(async (img) => {
+        if (!img.complete) {
+          await new Promise((resolve) => {
+            img.onload = resolve;
+            img.onerror = resolve;
+          });
+        }
+        if (img.decode) {
+          await img.decode().catch(() => {});
+        }
+      })
+    );
 
-    // Dynamically import html2canvas
+    // 3. Small delay to allow canvas elements (waves & QR code) to fully flush
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    // 4. Dynamically import html2canvas
     const html2canvas = (await import("html2canvas")).default;
 
     const canvas = await html2canvas(element, {
-      scale: 3, // 3x ultra-HD resolution (300 DPI equivalent)
+      scale: 3, // 3x ultra-HD resolution (300 DPI equivalent: 3120 x 2205 px)
       useCORS: true,
       allowTaint: true,
       backgroundColor: "#FFFFFF", // Enforce pure white base
@@ -49,6 +71,7 @@ export async function downloadCertificateAsImage(
       onclone: (clonedDoc) => {
         const clonedEl = clonedDoc.getElementById(elementId);
         if (clonedEl) {
+          // Reset transform to 1:1 master canvas resolution
           clonedEl.style.transform = "none";
           clonedEl.style.boxShadow = "none";
           clonedEl.style.width = "1040px";
@@ -60,13 +83,19 @@ export async function downloadCertificateAsImage(
           clonedEl.style.margin = "0 auto";
           clonedEl.style.backgroundColor = "#FFFFFF";
 
-          // Enforce explicit dimensions on all SVGs inside the clone
-          const allSvgs = clonedEl.querySelectorAll<SVGElement>("svg");
-          allSvgs.forEach((svg) => {
-            const w = svg.getAttribute("width") || svg.clientWidth;
-            const h = svg.getAttribute("height") || svg.clientHeight;
-            if (w) svg.style.width = typeof w === "number" ? `${w}px` : `${w}`;
-            if (h) svg.style.height = typeof h === "number" ? `${h}px` : `${h}`;
+          // Copy canvas pixel buffers (fluid waves & QR code) directly to cloned DOM
+          const liveCanvases = element.querySelectorAll<HTMLCanvasElement>("canvas");
+          const clonedCanvases = clonedEl.querySelectorAll<HTMLCanvasElement>("canvas");
+          liveCanvases.forEach((liveCanvas, idx) => {
+            const clonedCanvas = clonedCanvases[idx];
+            if (clonedCanvas && liveCanvas.width > 0 && liveCanvas.height > 0) {
+              clonedCanvas.width = liveCanvas.width;
+              clonedCanvas.height = liveCanvas.height;
+              const cloneCtx = clonedCanvas.getContext("2d");
+              if (cloneCtx) {
+                cloneCtx.drawImage(liveCanvas, 0, 0);
+              }
+            }
           });
 
           // Prevent text clipping in cloned DOM
