@@ -51,6 +51,7 @@ import {
   getAllRegistrationsFromFirestore,
   subscribeToRegistrationsFromFirestore,
   cleanUndefined,
+  saveSiteContentToFirestore,
 } from "@/lib/firebase/firestore";
 import {
   getAllCertificatesFromFirestore,
@@ -471,6 +472,7 @@ function AdminCertificatesContent() {
 
     // Save to Firestore and local storage so that scanning the QR on live preview instantly verifies on phone
     saveCertificateToFirestore(previewPayload).catch(console.error);
+    saveSiteContentToFirestore("preview_certificate", previewPayload).catch(console.error);
     if (typeof window !== "undefined") {
       try {
         localStorage.setItem("src_preview_cert", JSON.stringify(previewPayload));

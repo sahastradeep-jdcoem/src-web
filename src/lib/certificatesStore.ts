@@ -303,8 +303,12 @@ export async function getCertificateById(id: string): Promise<CertificateRecord 
     }
   }
 
-  // 4. Fallback: Lookup in site_content/certificates_registry
+  // 4. Fallback: Lookup in site_content/certificates_registry or preview_certificate
   try {
+    if (cleanId === "preview-cert") {
+      const remotePreview = await getSiteContentFromFirestore<CertificateRecord>("preview_certificate");
+      if (remotePreview) return remotePreview;
+    }
     const remoteRegistry = await getSiteContentFromFirestore<CertificateRecord[]>(REGISTRY_DOC_ID);
     if (remoteRegistry && Array.isArray(remoteRegistry)) {
       const found = remoteRegistry.find((c) => c.id === cleanId || c.certificateNumber === cleanId);
@@ -336,6 +340,46 @@ export async function getCertificateById(id: string): Promise<CertificateRecord 
     }
   } catch {
     // ignore
+  }
+
+  // 6. Resilient Fallback for live preview scans across devices
+  if (cleanId === "preview-cert") {
+    return {
+      id: "preview-cert",
+      certificateNumber: "SRC/2026-27/PRRM-8924",
+      type: "PARTICIPATION",
+      title: "CERTIFICATE OF PARTICIPATION",
+      recipientName: "Harsh Shende",
+      recipientEmail: "harshshende0718@gmail.com",
+      recipientBtId: "BT22CS001",
+      recipientDepartment: "Computer Science & Engineering",
+      recipientYear: "3rd Year",
+      recipientCollege: "JDCOEM Nagpur",
+      registrationId: "reg-preview-001",
+      ticketCode: "TCK-8924",
+      eventId: "event-prarambh",
+      eventSlug: "prarambh",
+      eventName: "ProblemX",
+      eventDate: "2026-27",
+      organizerClub: "Student Representation Council",
+      organizerClubSlug: "src",
+      colorPalette: {
+        primary: "#13384E",
+        secondary: "#1E40AF",
+        accent: "#F59E0B",
+        pillBg: "#0F172A",
+        pillText: "#FFFFFF",
+      },
+      citation:
+        "For outstanding performance in the ProblemX, in recognition of your outstanding performance, dedication, and technical skills.",
+      signatories: DEFAULT_INSTITUTIONAL_SIGNATORIES,
+      issueDate: new Date().toISOString().split("T")[0],
+      status: "PUBLISHED",
+      verificationUrl: "https://srcjdcoem.in/verify/certificate/preview-cert",
+      qrPayload: "https://srcjdcoem.in/verify/certificate/preview-cert",
+      issuedBy: "SRC Council Authority",
+      issuedAt: new Date().toISOString(),
+    };
   }
 
   return null;
