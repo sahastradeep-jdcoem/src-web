@@ -235,7 +235,7 @@ export function CertificateView({
       {/* ------------------------------------------------------------- */}
       <header
         data-certificate-header
-        className="relative z-10 flex items-center justify-between gap-4 border-b border-slate-100/90 pb-3 px-2"
+        className="relative z-10 flex items-center justify-between gap-4 pb-2.5 sm:pb-3 px-2"
       >
         {/* Left: SRC Horizontal Logo (Natural 2.96:1 aspect ratio, never stretched) */}
         <div className="flex-1 flex items-center justify-start">
@@ -388,13 +388,13 @@ export function CertificateView({
       {/* ------------------------------------------------------------- */}
       <footer
         data-certificate-footer
-        className="relative z-10 pt-2.5 sm:pt-3.5 border-t border-slate-100/90 w-full"
+        className="relative z-10 pt-1 sm:pt-2 w-full"
       >
         <div className="grid grid-cols-4 gap-4 sm:gap-6 items-end text-center w-full max-w-3xl sm:max-w-4xl mx-auto px-4">
           {certificate.signatories.slice(0, 4).map((sig, idx) => (
             <div key={sig.id || idx} className="flex flex-col items-center">
               {/* Signature Image (Transparent PNG) or Cursive Text */}
-              <div className="h-12 sm:h-16 md:h-[68px] flex items-end justify-center w-full px-1 mb-1">
+              <div className="h-12 sm:h-16 md:h-[64px] flex items-end justify-center w-full px-1 -mb-2 sm:-mb-3 md:-mb-3.5 relative z-10 pointer-events-none">
                 {sig.signatureImageUrl ? (
                   <img
                     src={
@@ -419,7 +419,7 @@ export function CertificateView({
               </div>
 
               {/* Line */}
-              <div className="w-full h-[1.5px] bg-slate-800/80 mb-1" />
+              <div className="w-full h-[1.5px] bg-slate-800/80 mb-1 relative z-0" />
 
               {/* Designation & Organization Below Line (Always high contrast on white) */}
               <div className="leading-tight">
