@@ -57,7 +57,7 @@ export default function PassVerificationPage() {
       return;
     }
 
-    if (passId.startsWith("cert_") || passId.includes("CERT") || passId.startsWith("SRC/")) {
+    if (passId.startsWith("cert_") || passId.toLowerCase().includes("cert") || passId.startsWith("SRC/")) {
       window.location.replace(`/verify/certificate/${passId}`);
       return;
     }

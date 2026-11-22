@@ -441,6 +441,7 @@ function AdminCertificatesContent() {
       recipientEmail: firstReg?.email || user?.email || "student@jdcoem.ac.in",
       recipientBtId: firstReg?.btId || user?.btId || "BT22CS001",
       recipientDepartment: recipientDept,
+      recipientYear: firstReg?.year || "3rd Year",
       recipientCollege: firstReg?.collegeName || "JDCOEM Nagpur",
       registrationId: firstReg?.id || firstReg?.registrationId || "reg-001",
       ticketCode: firstReg?.ticketCode || "TCK-001",
