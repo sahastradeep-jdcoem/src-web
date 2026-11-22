@@ -37,6 +37,7 @@ export function CertificateView({
       className={`relative w-full max-w-[1040px] aspect-[1.414/1] bg-white text-slate-900 rounded-[28px] shadow-2xl overflow-hidden select-none border border-slate-200/90 mx-auto flex flex-col justify-between p-7 sm:p-9 md:p-11 print:shadow-none print:border-none print:m-0 print:w-full print:aspect-auto ${className}`}
       style={{
         boxSizing: "border-box",
+        minHeight: "560px",
       }}
     >
       {/* ------------------------------------------------------------- */}
@@ -276,35 +277,28 @@ export function CertificateView({
         data-certificate-body
         className="relative z-10 flex flex-col items-center text-center my-auto py-2 sm:py-3"
       >
-        {/* 1. CERTIFICATE Header */}
+        {/* CERTIFICATE Header in Dynamic Color */}
         <h1
-          className="font-serif tracking-[0.18em] text-3xl sm:text-4xl md:text-5xl font-extrabold uppercase mb-4 sm:mb-5"
+          className="font-serif tracking-[0.18em] text-3xl sm:text-4xl md:text-5xl font-extrabold uppercase leading-none mb-3 sm:mb-4"
           style={{
             fontFamily: "'Cinzel', 'Playfair Display', Georgia, serif",
             color: palette.primary,
-            lineHeight: 1.15,
           }}
         >
           CERTIFICATE
         </h1>
 
-        {/* 2. Dynamic Category Pill Badge (OF PARTICIPATION / OF ACHIEVEMENT) */}
-        <div className="flex items-center justify-center mb-3 sm:mb-4">
+        {/* Dynamic Category Pill Badge (OF PARTICIPATION / OF ACHIEVEMENT) */}
+        {/* Adjustment A: Moved DOWN via mt-3 sm:mt-4 */}
+        <div className="inline-block mb-3 sm:mb-3.5 mt-3 sm:mt-4">
           <div
-            className="rounded-full px-8 sm:px-10 py-1.5 sm:py-2 shadow-sm flex items-center justify-center border border-white/30"
+            className="rounded-full px-8 sm:px-11 py-1.5 sm:py-2 shadow-md flex items-center justify-center border border-white/30"
             style={{
               background: `linear-gradient(135deg, ${palette.pillBg}, ${palette.secondary})`,
-              boxShadow: `0 2px 10px ${palette.borderGlow}`,
+              boxShadow: `0 4px 16px ${palette.borderGlow}`,
             }}
           >
-            <span
-              className="font-sans font-black text-xs sm:text-[13px] tracking-[0.24em] uppercase text-white select-none whitespace-nowrap"
-              style={{
-                lineHeight: "1.35",
-                display: "inline-block",
-                padding: "1px 0",
-              }}
-            >
+            <span className="font-sans font-black text-xs sm:text-sm tracking-[0.26em] uppercase text-white whitespace-nowrap">
               {certificate.type === "ACHIEVEMENT"
                 ? "OF ACHIEVEMENT"
                 : certificate.title.toUpperCase().replace(/^CERTIFICATE\s+/, "") || "OF PARTICIPATION"}
@@ -312,47 +306,46 @@ export function CertificateView({
           </div>
         </div>
 
-        {/* 3. PROUDLY PRESENTED TO */}
-        <p
-          className="font-serif font-bold text-[10px] sm:text-xs text-slate-500 tracking-[0.28em] uppercase mb-1.5 sm:mb-2"
-          style={{ lineHeight: 1.2 }}
-        >
+        {/* PROUDLY PRESENTED TO */}
+        <p className="font-serif font-bold text-[10px] sm:text-xs text-slate-500 tracking-[0.3em] uppercase mb-1.5 sm:mb-2">
           PROUDLY PRESENTED TO
         </p>
 
-        {/* 4. Recipient Name in Elegant Calligraphy Script (Great Vibes) */}
-        <h2
-          className="text-4xl sm:text-5xl md:text-[54px] text-slate-900 px-4 mb-3 sm:mb-3.5"
-          style={{
-            fontFamily: "'Great Vibes', cursive, 'Brush Script MT', sans-serif",
-            fontWeight: 400,
-            lineHeight: 1.12,
-          }}
-        >
-          {certificate.recipientName || "Participant Name"}
-        </h2>
+        {/* Recipient Name in Elegant Calligraphy Script (Great Vibes) */}
+        {/* Adjustment B: Moved UP via -mt-1.5 sm:-mt-2 */}
+        <div className="w-full max-w-xl mx-auto -mt-1.5 sm:-mt-2 mb-2 sm:mb-3">
+          <h2
+            className="text-4xl sm:text-5xl md:text-6xl text-slate-900 leading-tight px-4 drop-shadow-xs mb-1.5 sm:mb-2"
+            style={{
+              fontFamily: "'Great Vibes', cursive, 'Brush Script MT', sans-serif",
+              fontWeight: 400,
+            }}
+          >
+            {certificate.recipientName || "Participant Name"}
+          </h2>
 
-        {/* 5. Ornamental Divider with Centered Diamond */}
-        <div className="flex items-center justify-center gap-3 w-64 sm:w-80 mx-auto mb-3 sm:mb-3.5">
-          <div
-            className="h-[1.5px] flex-1 rounded-full opacity-65"
-            style={{
-              background: `linear-gradient(to right, transparent, ${palette.secondary})`,
-            }}
-          />
-          <div
-            className="w-2.5 h-2.5 rotate-45 rounded-[1px] shadow-xs shrink-0"
-            style={{ backgroundColor: palette.secondary }}
-          />
-          <div
-            className="h-[1.5px] flex-1 rounded-full opacity-65"
-            style={{
-              background: `linear-gradient(to left, transparent, ${palette.secondary})`,
-            }}
-          />
+          {/* Ornamental Divider with Centered Diamond */}
+          <div className="flex items-center justify-center gap-3 w-64 sm:w-80 mx-auto">
+            <div
+              className="h-[1.5px] flex-1 rounded-full opacity-65"
+              style={{
+                background: `linear-gradient(to right, transparent, ${palette.secondary})`,
+              }}
+            />
+            <div
+              className="w-2.5 h-2.5 rotate-45 rounded-[1px] shadow-xs shrink-0"
+              style={{ backgroundColor: palette.secondary }}
+            />
+            <div
+              className="h-[1.5px] flex-1 rounded-full opacity-65"
+              style={{
+                background: `linear-gradient(to left, transparent, ${palette.secondary})`,
+              }}
+            />
+          </div>
         </div>
 
-        {/* 6. Citation Body Text */}
+        {/* Citation Body Text */}
         <p className="max-w-2xl text-xs sm:text-[13px] md:text-sm text-slate-700 leading-relaxed font-sans px-6 font-normal">
           {certificate.citation ||
             `For outstanding performance in the ${certificate.eventName}, in recognition of your outstanding performance, dedication, and technical skills.`}

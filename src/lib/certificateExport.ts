@@ -58,38 +58,21 @@ export async function downloadCertificateAsImage(
     // 3. Small flush delay for canvas rendering buffers
     await new Promise((resolve) => setTimeout(resolve, 120));
 
-    // 4. Canonical master canvas dimensions for 300 DPI A4 Landscape export
-    // 1040x735 represents the exact 1.4142 : 1 A4 ratio design coordinate space
-    const MASTER_WIDTH = 1040;
-    const MASTER_HEIGHT = 735;
-
-    // 5. Dynamically import html2canvas
+    // 4. Dynamically import html2canvas
     const html2canvas = (await import("html2canvas")).default;
 
     const canvas = await html2canvas(element, {
-      scale: 3, // 3x ultra-HD resolution (300 DPI equivalent: 3120 x 2205)
+      scale: 3, // 3x ultra-HD resolution (300 DPI equivalent)
       useCORS: true,
       allowTaint: true,
       backgroundColor: "#FFFFFF", // Enforce pure white base
       logging: false,
       imageTimeout: 10000,
       removeContainer: true,
-      windowWidth: 1280, // Enforce desktop viewport so md: typography rules apply uniformly
-      windowHeight: 900,
       onclone: (clonedDoc) => {
         const clonedEl = clonedDoc.getElementById(elementId);
         if (clonedEl) {
           clonedEl.style.boxShadow = "none";
-
-          // CRITICAL: Lock cloned element to canonical master certificate dimensions.
-          // This guarantees 100% identical layout and typography regardless of
-          // whether previewed on laptop, tablet, or phone.
-          clonedEl.style.width = `${MASTER_WIDTH}px`;
-          clonedEl.style.minWidth = `${MASTER_WIDTH}px`;
-          clonedEl.style.maxWidth = `${MASTER_WIDTH}px`;
-          clonedEl.style.height = `${MASTER_HEIGHT}px`;
-          clonedEl.style.minHeight = `${MASTER_HEIGHT}px`;
-          clonedEl.style.maxHeight = `${MASTER_HEIGHT}px`;
 
           // Convert wave SVG elements into HTML5 canvas in cloned DOM
           // This bypasses html2canvas's known bug where inline SVGs are dropped/invisible
