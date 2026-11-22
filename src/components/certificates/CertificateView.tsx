@@ -394,7 +394,7 @@ export function CertificateView({
           {certificate.signatories.slice(0, 4).map((sig, idx) => (
             <div key={sig.id || idx} className="flex flex-col items-center">
               {/* Signature Image (Transparent PNG) or Cursive Text */}
-              <div className="h-9 sm:h-11 flex items-end justify-center w-full px-1 mb-1">
+              <div className="h-12 sm:h-16 md:h-[68px] flex items-end justify-center w-full px-1 mb-1">
                 {sig.signatureImageUrl ? (
                   <img
                     src={
@@ -404,11 +404,11 @@ export function CertificateView({
                         : sig.signatureImageUrl
                     }
                     alt={sig.name}
-                    className="h-8 sm:h-10 w-auto max-w-[112px] object-contain"
+                    className="h-11 sm:h-14 md:h-[64px] w-auto max-w-[130px] sm:max-w-[160px] md:max-w-[180px] object-contain"
                   />
                 ) : (
                   <span
-                    className="text-xs sm:text-sm text-slate-800 tracking-wider truncate max-w-full font-medium"
+                    className="text-sm sm:text-lg md:text-xl text-slate-800 tracking-wider truncate max-w-full font-medium"
                     style={{
                       fontFamily: "'Great Vibes', cursive, 'Brush Script MT', sans-serif",
                     }}
