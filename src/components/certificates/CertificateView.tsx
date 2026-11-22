@@ -200,6 +200,22 @@ export function CertificateView({
       )}
 
       {/* ------------------------------------------------------------- */}
+      {/* OFFICIAL VERIFICATION QR SEAL (RIGHT FLANK BELOW HEADER LINE)  */}
+      {/* ------------------------------------------------------------- */}
+      {showQrCode && (
+        <div className="absolute top-[118px] sm:top-[128px] md:top-[138px] right-7 sm:right-9 md:right-11 z-20 flex flex-col items-center">
+          <div className="p-1 rounded-xl bg-white/95 border border-slate-200/90 shadow-xs flex flex-col items-center">
+            <ScannableQRCode
+              value={certificate.verificationUrl}
+              size={48}
+              level="M"
+              fgColor={palette.primary}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
       {/* 1. HEADER (LEFT: SRC HORIZONTAL, CENTER: CLUB LOGO, RIGHT: JD HEADER) */}
       {/* ------------------------------------------------------------- */}
       <header
@@ -331,29 +347,14 @@ export function CertificateView({
       </main>
 
       {/* ------------------------------------------------------------- */}
-      {/* 3. FOOTER (CLEAN STANDALONE QR CODE & 4 INSTITUTIONAL SIGNATURES) */}
+      {/* 3. FOOTER (4 INSTITUTIONAL SIGNATURES ON PURE WHITE BASELINE)  */}
       {/* 100% CONTRAST & LEGIBILITY GUARANTEED ACROSS ALL 4 SIGNATORIES */}
       {/* ------------------------------------------------------------- */}
       <footer
         data-certificate-footer
-        className="relative z-10 pt-2.5 sm:pt-3.5 border-t border-slate-100/90 flex items-end justify-between gap-3 sm:gap-4 w-full"
+        className="relative z-10 pt-2.5 sm:pt-3.5 border-t border-slate-100/90 w-full"
       >
-        {/* Left: Clean Standalone Authenticity QR Code */}
-        {showQrCode && (
-          <div className="flex flex-col items-center justify-center shrink-0">
-            <div className="p-1 rounded-lg bg-white/95 border border-slate-200/90 shadow-xs">
-              <ScannableQRCode
-                value={certificate.verificationUrl}
-                size={46}
-                level="M"
-                fgColor={palette.primary}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Right: Signatures Grid (4 Institutional Columns) */}
-        <div className="flex-1 grid grid-cols-4 gap-2 sm:gap-4 items-end text-center">
+        <div className="grid grid-cols-4 gap-4 sm:gap-6 items-end text-center w-full max-w-3xl sm:max-w-4xl mx-auto px-4">
           {certificate.signatories.slice(0, 4).map((sig, idx) => (
             <div key={sig.id || idx} className="space-y-1 flex flex-col items-center">
               {/* Signature Image (Transparent PNG) or Cursive Text */}
