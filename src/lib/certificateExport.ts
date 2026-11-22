@@ -167,9 +167,10 @@ export async function downloadCertificateAsImage(
           // Calibrate pill badge & text in cloned DOM for mathematically centered rendering in html2canvas
           const pillBadge = clonedEl.querySelector<HTMLElement>("[data-certificate-pill]");
           if (pillBadge) {
+            pillBadge.style.position = "relative";
+            pillBadge.style.top = "6px";
             pillBadge.style.paddingTop = "3px";
             pillBadge.style.paddingBottom = "5px";
-            pillBadge.style.marginTop = "6px";
           }
           const pillText = clonedEl.querySelector<HTMLElement>("[data-certificate-pill-text]");
           if (pillText) {
