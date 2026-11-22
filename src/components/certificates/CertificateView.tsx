@@ -218,48 +218,68 @@ export function CertificateView({
         data-certificate-header
         className="relative z-10 flex items-center justify-between gap-4 border-b border-slate-100/90 pb-3 px-2"
       >
-        {/* Left: SRC Horizontal Logo (Natural proportions, never stretched by html2canvas) */}
+        {/* Left: SRC Horizontal Logo (Natural 2.96:1 aspect ratio, never stretched) */}
         <div className="flex-1 flex items-center justify-start">
-          <img
-            src="/assets/SRC Horizontal B.png"
-            alt="Student Representative Council Logo"
-            className="h-12 sm:h-14 md:h-16 w-auto max-w-[220px] object-contain object-left shrink-0"
-          />
+          <div className="h-12 sm:h-14 md:h-16 flex items-center justify-start shrink-0">
+            <img
+              src="/assets/SRC Horizontal B.png"
+              alt="Student Representative Council Logo"
+              style={{
+                height: "auto",
+                maxHeight: "56px",
+                width: "auto",
+                maxWidth: "200px",
+                aspectRatio: "1020 / 345",
+              }}
+              className="object-contain shrink-0"
+            />
+          </div>
         </div>
 
-        {/* Center: Organizing Club Logo / 3D Embossed Seal (Rendered ONLY if event is conducted by a club) */}
+        {/* Center: Organizing Club Logo (Fills the entire golden circle, no internal padding) */}
         {clubLogoSrc && (
           <div className="flex flex-col items-center justify-center shrink-0 px-2">
-            <div className="relative h-13 w-13 sm:h-15 sm:w-15 md:h-16 md:w-16 rounded-full overflow-hidden bg-white shadow-md border-2 border-amber-500/80 ring-4 ring-amber-300/30 p-1 flex items-center justify-center">
+            <div className="relative h-14 w-14 sm:h-16 sm:w-16 md:h-17 md:w-17 rounded-full overflow-hidden bg-white shadow-md border-2 border-amber-500 ring-4 ring-amber-300/40 flex items-center justify-center">
               <img
                 src={clubLogoSrc}
                 alt={certificate.organizerClub || "Event Club"}
-                className="w-full h-full object-contain p-0.5 rounded-full"
+                className="w-full h-full object-cover rounded-full"
               />
             </div>
           </div>
         )}
 
-        {/* Right: JD Header Logo (Natural proportions, never stretched by html2canvas) */}
+        {/* Right: JD Header Logo (Natural 4.88:1 aspect ratio, never stretched) */}
         <div className="flex-1 flex items-center justify-end">
-          <img
-            src="/assets/JD Header B.png"
-            alt="JD College of Engineering and Management"
-            className="h-12 sm:h-14 md:h-16 w-auto max-w-[240px] object-contain object-right shrink-0"
-          />
+          <div className="h-12 sm:h-14 md:h-16 flex items-center justify-end shrink-0">
+            <img
+              src="/assets/JD Header B.png"
+              alt="JD College of Engineering and Management"
+              style={{
+                height: "auto",
+                maxHeight: "52px",
+                width: "auto",
+                maxWidth: "250px",
+                aspectRatio: "864 / 177",
+              }}
+              className="object-contain shrink-0"
+            />
+          </div>
         </div>
       </header>
 
       {/* ------------------------------------------------------------- */}
       {/* 2. BODY CONTENT (CERTIFICATE OF PARTICIPATION / RECIPIENT) */}
+      {/* Explicit margins used to guarantee identical vertical spacing  */}
+      {/* between live preview and html2canvas without calc() collapses  */}
       {/* ------------------------------------------------------------- */}
       <main
         data-certificate-body
-        className="relative z-10 flex flex-col items-center text-center my-auto py-2.5 sm:py-3.5 space-y-2 sm:space-y-2.5"
+        className="relative z-10 flex flex-col items-center text-center my-auto py-2 sm:py-3"
       >
         {/* CERTIFICATE Header in Dynamic Color */}
         <h1
-          className="font-serif tracking-[0.18em] text-3xl sm:text-4xl md:text-5xl font-extrabold uppercase leading-none"
+          className="font-serif tracking-[0.18em] text-3xl sm:text-4xl md:text-5xl font-extrabold uppercase leading-none mb-3 sm:mb-4"
           style={{
             fontFamily: "'Cinzel', 'Playfair Display', Georgia, serif",
             color: palette.primary,
@@ -269,7 +289,7 @@ export function CertificateView({
         </h1>
 
         {/* Dynamic Category Pill Badge (OF PARTICIPATION / OF ACHIEVEMENT) */}
-        <div className="inline-block">
+        <div className="inline-block mb-3 sm:mb-3.5">
           <div
             className="rounded-full px-8 sm:px-11 py-1 sm:py-1.5 shadow-md flex items-center justify-center border border-white/30"
             style={{
@@ -286,14 +306,14 @@ export function CertificateView({
         </div>
 
         {/* PROUDLY PRESENTED TO */}
-        <p className="font-serif font-bold text-[10px] sm:text-xs text-slate-500 tracking-[0.3em] uppercase pt-0.5">
+        <p className="font-serif font-bold text-[10px] sm:text-xs text-slate-500 tracking-[0.3em] uppercase mb-1.5 sm:mb-2">
           PROUDLY PRESENTED TO
         </p>
 
         {/* Recipient Name in Elegant Calligraphy Script (Great Vibes) */}
-        <div className="space-y-1 w-full max-w-xl mx-auto py-0.5">
+        <div className="w-full max-w-xl mx-auto mb-2 sm:mb-3">
           <h2
-            className="text-4xl sm:text-5xl md:text-6xl text-slate-900 leading-tight px-4 drop-shadow-xs"
+            className="text-4xl sm:text-5xl md:text-6xl text-slate-900 leading-tight px-4 drop-shadow-xs mb-1.5 sm:mb-2"
             style={{
               fontFamily: "'Great Vibes', cursive, 'Brush Script MT', sans-serif",
               fontWeight: 400,
@@ -303,7 +323,7 @@ export function CertificateView({
           </h2>
 
           {/* Ornamental Divider with Centered Diamond */}
-          <div className="flex items-center justify-center gap-3 w-64 sm:w-80 mx-auto py-0.5">
+          <div className="flex items-center justify-center gap-3 w-64 sm:w-80 mx-auto">
             <div
               className="h-[1.5px] flex-1 rounded-full opacity-65"
               style={{
@@ -332,7 +352,6 @@ export function CertificateView({
 
       {/* ------------------------------------------------------------- */}
       {/* 3. FOOTER (4 INSTITUTIONAL SIGNATURES ON PURE WHITE BASELINE)  */}
-      {/* 100% CONTRAST & LEGIBILITY GUARANTEED ACROSS ALL 4 SIGNATORIES */}
       {/* ------------------------------------------------------------- */}
       <footer
         data-certificate-footer
@@ -340,9 +359,9 @@ export function CertificateView({
       >
         <div className="grid grid-cols-4 gap-4 sm:gap-6 items-end text-center w-full max-w-3xl sm:max-w-4xl mx-auto px-4">
           {certificate.signatories.slice(0, 4).map((sig, idx) => (
-            <div key={sig.id || idx} className="space-y-1 flex flex-col items-center">
+            <div key={sig.id || idx} className="flex flex-col items-center">
               {/* Signature Image (Transparent PNG) or Cursive Text */}
-              <div className="h-9 sm:h-11 flex items-end justify-center w-full px-1">
+              <div className="h-9 sm:h-11 flex items-end justify-center w-full px-1 mb-1">
                 {sig.signatureImageUrl ? (
                   <img
                     src={
@@ -367,7 +386,7 @@ export function CertificateView({
               </div>
 
               {/* Line */}
-              <div className="w-full h-[1.5px] bg-slate-800/80" />
+              <div className="w-full h-[1.5px] bg-slate-800/80 mb-1" />
 
               {/* Designation & Organization Below Line (Always high contrast on white) */}
               <div className="leading-tight">
