@@ -224,6 +224,8 @@ export function CertificateView({
             <img
               src="/assets/SRC Horizontal B.png"
               alt="Student Representative Council Logo"
+              width={165}
+              height={56}
               style={{
                 height: "auto",
                 maxHeight: "56px",
@@ -255,6 +257,8 @@ export function CertificateView({
             <img
               src="/assets/JD Header B.png"
               alt="JD College of Engineering and Management"
+              width={250}
+              height={52}
               style={{
                 height: "auto",
                 maxHeight: "52px",
@@ -289,16 +293,25 @@ export function CertificateView({
         </h1>
 
         {/* Dynamic Category Pill Badge (OF PARTICIPATION / OF ACHIEVEMENT) */}
-        {/* Adjustment A: Moved DOWN via mt-3 sm:mt-4 */}
-        <div className="inline-block mb-3 sm:mb-3.5 mt-3 sm:mt-4">
+        <div className="inline-block mb-3 sm:mb-3.5">
           <div
-            className="rounded-full px-8 sm:px-11 py-1.5 sm:py-2 shadow-md flex items-center justify-center border border-white/30"
+            data-certificate-pill
+            className="rounded-full px-8 sm:px-11 py-1 sm:py-1.5 shadow-md flex items-center justify-center border border-white/30"
             style={{
               background: `linear-gradient(135deg, ${palette.pillBg}, ${palette.secondary})`,
               boxShadow: `0 4px 16px ${palette.borderGlow}`,
             }}
           >
-            <span className="font-sans font-black text-xs sm:text-sm tracking-[0.26em] uppercase text-white whitespace-nowrap">
+            <span
+              data-certificate-pill-text
+              className="font-sans font-black text-xs sm:text-sm tracking-[0.26em] uppercase text-white whitespace-nowrap leading-none flex items-center justify-center text-center"
+              style={{
+                lineHeight: "1",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
               {certificate.type === "ACHIEVEMENT"
                 ? "OF ACHIEVEMENT"
                 : certificate.title.toUpperCase().replace(/^CERTIFICATE\s+/, "") || "OF PARTICIPATION"}
@@ -312,10 +325,9 @@ export function CertificateView({
         </p>
 
         {/* Recipient Name in Elegant Calligraphy Script (Great Vibes) */}
-        {/* Adjustment B: Moved UP via -mt-1.5 sm:-mt-2 */}
-        <div className="w-full max-w-xl mx-auto -mt-1.5 sm:-mt-2 mb-2 sm:mb-3">
+        <div className="w-full max-w-xl mx-auto mb-2 sm:mb-3">
           <h2
-            className="text-4xl sm:text-5xl md:text-6xl text-slate-900 leading-tight px-4 drop-shadow-xs mb-1.5 sm:mb-2"
+            className="text-3xl sm:text-4xl md:text-[44px] text-slate-900 leading-tight px-4 drop-shadow-xs mb-1.5 sm:mb-2"
             style={{
               fontFamily: "'Great Vibes', cursive, 'Brush Script MT', sans-serif",
               fontWeight: 400,

@@ -161,6 +161,16 @@ export async function downloadCertificateAsImage(
           allText.forEach((node) => {
             node.style.overflow = "visible";
           });
+
+          // Calibrate pill text in cloned DOM for mathematically centered rendering in html2canvas
+          const pillText = clonedEl.querySelector<HTMLElement>("[data-certificate-pill-text]");
+          if (pillText) {
+            pillText.style.lineHeight = "1";
+            pillText.style.display = "inline-flex";
+            pillText.style.alignItems = "center";
+            pillText.style.justifyContent = "center";
+            pillText.style.transform = "translateY(-1px)";
+          }
         }
       },
     });
