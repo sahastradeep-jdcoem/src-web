@@ -58,7 +58,16 @@ export async function downloadCertificateAsImage(
     // 3. Small flush delay for canvas rendering buffers
     await new Promise((resolve) => setTimeout(resolve, 120));
 
-    // 4. Dynamically import html2canvas
+    // 4. Capture the EXACT live preview bounding rect BEFORE cloning.
+    //    html2canvas clones the element into an iframe where it's no longer
+    //    constrained by the modal container. Without locking dimensions, the
+    //    element expands to max-w-[1040px] causing vertical flex redistribution
+    //    that shifts the CERTIFICATE heading, pill, and recipient name downward.
+    const liveRect = element.getBoundingClientRect();
+    const liveWidth = Math.round(liveRect.width);
+    const liveHeight = Math.round(liveRect.height);
+
+    // 5. Dynamically import html2canvas
     const html2canvas = (await import("html2canvas")).default;
 
     const canvas = await html2canvas(element, {
@@ -69,10 +78,22 @@ export async function downloadCertificateAsImage(
       logging: false,
       imageTimeout: 10000,
       removeContainer: true,
+      windowWidth: liveWidth + 100, // Match viewport so media query breakpoints stay identical
       onclone: (clonedDoc) => {
         const clonedEl = clonedDoc.getElementById(elementId);
         if (clonedEl) {
           clonedEl.style.boxShadow = "none";
+
+          // CRITICAL: Lock cloned element to the exact same pixel dimensions
+          // as the live preview. This prevents the element from expanding to
+          // max-w-[1040px] in the unconstrained iframe, which would add ~170px
+          // of extra vertical space and shift all flex-distributed content.
+          clonedEl.style.width = `${liveWidth}px`;
+          clonedEl.style.minWidth = `${liveWidth}px`;
+          clonedEl.style.maxWidth = `${liveWidth}px`;
+          clonedEl.style.height = `${liveHeight}px`;
+          clonedEl.style.minHeight = `${liveHeight}px`;
+          clonedEl.style.maxHeight = `${liveHeight}px`;
 
           // Convert wave SVG elements into HTML5 canvas in cloned DOM
           // This bypasses html2canvas's known bug where inline SVGs are dropped/invisible
