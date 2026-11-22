@@ -50,6 +50,7 @@ import {
 import {
   getAllRegistrationsFromFirestore,
   subscribeToRegistrationsFromFirestore,
+  cleanUndefined,
 } from "@/lib/firebase/firestore";
 import {
   getAllCertificatesFromFirestore,
@@ -432,7 +433,7 @@ function AdminCertificatesContent() {
       .replace(/{department}/g, recipientDept);
 
     const certNum = generateCertificateNumber(currentEvent.slug, firstReg?.ticketCode || "001");
-    const previewPayload: CertificateRecord = {
+    const previewPayload: CertificateRecord = cleanUndefined({
       id: "preview-cert",
       certificateNumber: certNum,
       type: certType,
@@ -448,19 +449,21 @@ function AdminCertificatesContent() {
       eventId: currentEvent.id,
       eventSlug: currentEvent.slug,
       eventName: currentEvent.name,
-      eventDate: currentEvent.date,
+      eventDate: currentEvent.date || "",
       organizerClub: currentEvent.organizer || "Student Representation Council",
-      clubLogoUrl,
+      organizerClubSlug: currentEvent.organizerClubSlug || "",
+      clubLogoUrl: clubLogoUrl || "",
+      posterUrl: currentEvent.posterImage || currentEvent.poster || "",
       colorPalette,
       citation: resolvedCitation,
-      signatories,
+      signatories: signatories || [],
       issueDate,
       status: "PUBLISHED",
       verificationUrl: `${typeof window !== "undefined" ? window.location.origin : ""}/verify/certificate/preview-cert`,
       qrPayload: `${typeof window !== "undefined" ? window.location.origin : ""}/verify/certificate/preview-cert`,
       issuedBy: user?.displayName || "SRC Admin",
       issuedAt: new Date().toISOString(),
-    };
+    });
 
     // Save to Firestore and local storage so that scanning the QR on live preview instantly verifies on phone
     saveCertificateToFirestore(previewPayload).catch(console.error);
@@ -499,9 +502,11 @@ function AdminCertificatesContent() {
 
       for (let i = 0; i < selectedList.length; i++) {
         const reg = selectedList[i];
-        const regId = reg.id || reg.registrationId;
-        const certId = `cert_${currentEvent.slug}_${regId}`;
-        const certNum = generateCertificateNumber(currentEvent.slug, reg.ticketCode || regId.slice(-4));
+        const rawRegId = reg.id || reg.registrationId || `reg_${i}`;
+        const cleanRegId = String(rawRegId).replace(/[^a-zA-Z0-9_-]/g, "_");
+        const cleanSlug = (currentEvent.slug || "event").replace(/[^a-zA-Z0-9_-]/g, "_");
+        const certId = `cert_${cleanSlug}_${cleanRegId}`;
+        const certNum = generateCertificateNumber(currentEvent.slug, reg.ticketCode || cleanRegId.slice(-4));
 
         const resolvedCitation = citationTemplate
           .replace(/{name}/g, reg.participantName || "Participant")
@@ -511,7 +516,7 @@ function AdminCertificatesContent() {
 
         const verificationUrl = `${origin}/verify/certificate/${certId}`;
 
-        certsToSave.push({
+        certsToSave.push(cleanUndefined({
           id: certId,
           certificateNumber: certNum,
           type: certType,
@@ -520,38 +525,46 @@ function AdminCertificatesContent() {
           recipientEmail: (reg.email || "").trim().toLowerCase(),
           recipientBtId: (reg.btId || "").trim().toUpperCase(),
           recipientDepartment: reg.department || "Engineering",
-          recipientYear: reg.year || "Year",
+          recipientYear: reg.year || "3rd Year",
           recipientCollege: reg.collegeName || "JDCOEM Nagpur",
-          registrationId: regId,
+          registrationId: rawRegId,
           ticketCode: reg.ticketCode || "",
           eventId: currentEvent.id,
           eventSlug: currentEvent.slug,
           eventName: currentEvent.name,
-          eventDate: currentEvent.date,
+          eventDate: currentEvent.date || "",
           organizerClub: currentEvent.organizer || "SRC Council",
-          organizerClubSlug: currentEvent.organizerClubSlug,
-          clubLogoUrl,
-          posterUrl: currentEvent.posterImage || currentEvent.poster,
+          organizerClubSlug: currentEvent.organizerClubSlug || "",
+          clubLogoUrl: clubLogoUrl || "",
+          posterUrl: currentEvent.posterImage || currentEvent.poster || "",
           colorPalette,
           citation: resolvedCitation,
-          signatories,
+          signatories: signatories || [],
           issueDate,
-          status: "PUBLISHED",
+          status: "PUBLISHED" as const,
           verificationUrl,
           qrPayload: verificationUrl,
           issuedBy: user?.displayName || user?.email || "SRC Admin",
           issuedAt: new Date().toISOString(),
-        });
+        }));
       }
 
       await batchSaveCertificatesToFirestore(certsToSave);
 
+      // Instantly update local state so certificates appear immediately
+      setAllCertificates((prev) => {
+        const map = new Map(prev.map((c) => [c.id, c]));
+        certsToSave.forEach((c) => map.set(c.id, c));
+        return Array.from(map.values());
+      });
+
       setPublishSuccessModal({ count: certsToSave.length });
       setSelectedRegIds(new Set());
       setActiveTab("issued");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Batch publish error:", err);
-      alert("Failed to publish certificates. Please check network and retry.");
+      const errorMsg = err?.message || err?.code || "Please check network and retry.";
+      alert(`Failed to publish certificates: ${errorMsg}`);
     } finally {
       setIsPublishing(false);
       setPublishProgress(null);
