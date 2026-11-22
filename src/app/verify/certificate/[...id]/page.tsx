@@ -253,10 +253,16 @@ export default function CertificateVerificationPage() {
 
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
             <div className="space-y-1">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
                   {cert.type === "ACHIEVEMENT" ? "Certificate of Achievement" : "Certificate of Participation"}
                 </span>
+                {cert.rankOrPosition && (
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                    <Award className="w-3 h-3 text-emerald-400" />
+                    Rank: {cert.rankOrPosition}
+                  </span>
+                )}
                 <span className="text-slate-600 text-xs">•</span>
                 <span className="text-xs text-slate-400 font-medium">Session 2026-27</span>
               </div>
@@ -455,6 +461,18 @@ export default function CertificateVerificationPage() {
                     {cert.issueDate}
                   </p>
                 </div>
+
+                {cert.rankOrPosition && (
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">
+                      Rank / Position Secured
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 font-bold text-xs">
+                      <Award className="w-3.5 h-3.5 text-amber-400" />
+                      {cert.rankOrPosition}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="border-t border-slate-800/80 pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">

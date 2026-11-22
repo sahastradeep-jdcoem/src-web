@@ -66,6 +66,9 @@ export const DEFAULT_INSTITUTIONAL_SIGNATORIES: CertificateSignatory[] = [
 export const DEFAULT_CITATION_TEMPLATE =
   "For outstanding performance in the {event}, in recognition of your outstanding performance, dedication, and technical skills.";
 
+export const DEFAULT_ACHIEVEMENT_CITATION_TEMPLATE =
+  "For securing {rank} position in {event}, in recognition of your outstanding performance, exceptional dedication, and meritorious achievement.";
+
 /**
  * Generates an official, tamper-evident certificate serial number
  * e.g. "SRC/2026-27/PRRM-8924"

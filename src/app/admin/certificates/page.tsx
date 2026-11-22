@@ -64,6 +64,7 @@ import {
   generateCertificateNumber,
   DEFAULT_INSTITUTIONAL_SIGNATORIES,
   DEFAULT_CITATION_TEMPLATE,
+  DEFAULT_ACHIEVEMENT_CITATION_TEMPLATE,
 } from "@/lib/certificatesStore";
 import {
   extractPosterColorPalette,
@@ -108,6 +109,7 @@ function AdminCertificatesContent() {
   // Certificate Generator form states
   const [certType, setCertType] = useState<CertificateType>("PARTICIPATION");
   const [certTitle, setCertTitle] = useState("CERTIFICATE OF PARTICIPATION");
+  const [rankOrPosition, setRankOrPosition] = useState<string>("1st");
   const [issueDate, setIssueDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [citationTemplate, setCitationTemplate] = useState(DEFAULT_CITATION_TEMPLATE);
   const [colorPalette, setColorPalette] = useState<CertificateColorPalette>(
@@ -428,6 +430,7 @@ function AdminCertificatesContent() {
 
     const resolvedCitation = citationTemplate
       .replace(/{name}/g, recipientName)
+      .replace(/{rank}/g, rankOrPosition || "1st")
       .replace(/{event}/g, eventName)
       .replace(/{date}/g, currentEvent.date || issueDate)
       .replace(/{department}/g, recipientDept);
@@ -438,6 +441,7 @@ function AdminCertificatesContent() {
       certificateNumber: certNum,
       type: certType,
       title: certTitle,
+      rankOrPosition: certType === "ACHIEVEMENT" ? (rankOrPosition || "1st") : undefined,
       recipientName,
       recipientEmail: firstReg?.email || user?.email || "student@jdcoem.ac.in",
       recipientBtId: firstReg?.btId || user?.btId || "BT22CS001",
@@ -510,6 +514,7 @@ function AdminCertificatesContent() {
 
         const resolvedCitation = citationTemplate
           .replace(/{name}/g, reg.participantName || "Participant")
+          .replace(/{rank}/g, rankOrPosition || "1st")
           .replace(/{event}/g, currentEvent.name)
           .replace(/{date}/g, currentEvent.date || issueDate)
           .replace(/{department}/g, reg.department || "Engineering");
@@ -521,6 +526,7 @@ function AdminCertificatesContent() {
           certificateNumber: certNum,
           type: certType,
           title: certTitle,
+          rankOrPosition: certType === "ACHIEVEMENT" ? (rankOrPosition || "1st") : undefined,
           recipientName: reg.participantName || "Delegate",
           recipientEmail: (reg.email || "").trim().toLowerCase(),
           recipientBtId: (reg.btId || "").trim().toUpperCase(),
@@ -873,10 +879,10 @@ function AdminCertificatesContent() {
                       setCertType(t);
                       if (t === "PARTICIPATION") {
                         setCertTitle("CERTIFICATE OF PARTICIPATION");
-                        setCitationTemplate("For active and enthusiastic participation in {event}, in recognition of your dedicated presence and technical engagement.");
+                        setCitationTemplate(DEFAULT_CITATION_TEMPLATE);
                       } else if (t === "ACHIEVEMENT") {
                         setCertTitle("CERTIFICATE OF ACHIEVEMENT");
-                        setCitationTemplate("For outstanding performance, exceptional dedication, and meritorious achievement in {event}.");
+                        setCitationTemplate(DEFAULT_ACHIEVEMENT_CITATION_TEMPLATE);
                       }
                     }}
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-medium"
@@ -897,6 +903,56 @@ function AdminCertificatesContent() {
                 </div>
               </div>
 
+              {/* Rank / Position Control (Active for Achievement Certificates) */}
+              {certType === "ACHIEVEMENT" && (
+                <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/80 space-y-2.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-amber-950 flex items-center gap-1.5">
+                      <Award className="w-4 h-4 text-amber-600" />
+                      Secured Rank / Position
+                    </label>
+                    <span className="text-[10px] font-semibold text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-200">
+                      Token: <code className="font-mono font-bold">&#123;rank&#125;</code>
+                    </span>
+                  </div>
+
+                  <input
+                    type="text"
+                    value={rankOrPosition}
+                    onChange={(e) => setRankOrPosition(e.target.value)}
+                    placeholder="e.g. 1st, 2nd, 3rd, Winner, 1st Runner Up"
+                    className="w-full px-3 py-2 rounded-xl border border-amber-300 bg-white font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs"
+                  />
+
+                  {/* Quick Preset Buttons */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      "1st",
+                      "2nd",
+                      "3rd",
+                      "Winner",
+                      "1st Runner Up",
+                      "2nd Runner Up",
+                      "Special Mention",
+                      "Consolation",
+                    ].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setRankOrPosition(preset)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
+                          rankOrPosition === preset
+                            ? "bg-amber-500 text-white border-amber-600 shadow-xs"
+                            : "bg-white text-slate-700 border-amber-200 hover:bg-amber-100/70"
+                        }`}
+                      >
+                        {preset}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Certificate Title */}
               <div className="text-xs">
                 <label className="font-bold text-slate-700 block mb-1">Pill Banner Title</label>
@@ -910,12 +966,31 @@ function AdminCertificatesContent() {
 
               {/* Citation Template */}
               <div className="text-xs">
-                <label className="font-bold text-slate-700 block mb-1">
-                  Citation Description
-                  <span className="text-[10px] text-slate-400 font-normal ml-1">
-                    (Use tokens: &#123;name&#125;, &#123;event&#125;, &#123;date&#125;)
-                  </span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-slate-700 block">
+                    Citation Description
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (certType === "ACHIEVEMENT") {
+                        setCitationTemplate(DEFAULT_ACHIEVEMENT_CITATION_TEMPLATE);
+                      } else {
+                        setCitationTemplate(DEFAULT_CITATION_TEMPLATE);
+                      }
+                    }}
+                    className="text-[10px] text-[#17458F] hover:underline font-semibold"
+                  >
+                    Reset Default Citation
+                  </button>
+                </div>
+                <div className="text-[10px] text-slate-400 font-normal mb-1">
+                  Tokens available: <code className="text-slate-600 font-mono">&#123;name&#125;</code>,{" "}
+                  <code className="text-amber-600 font-mono">&#123;rank&#125;</code>,{" "}
+                  <code className="text-slate-600 font-mono">&#123;event&#125;</code>,{" "}
+                  <code className="text-slate-600 font-mono">&#123;date&#125;</code>,{" "}
+                  <code className="text-slate-600 font-mono">&#123;department&#125;</code>
+                </div>
                 <textarea
                   rows={2}
                   value={citationTemplate}
