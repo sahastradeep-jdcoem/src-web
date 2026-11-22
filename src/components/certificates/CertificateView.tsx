@@ -220,10 +220,10 @@ export function CertificateView({
           </div>
         </div>
 
-        {/* Center: Organizing Club Logo / 3D Embossed Seal (No text below) */}
-        <div className="flex flex-col items-center justify-center shrink-0 px-2">
-          {clubLogoSrc ? (
-            <div className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-full overflow-hidden bg-white shadow-md border-2 border-amber-500/80 ring-4 ring-amber-300/30 p-1 flex items-center justify-center">
+        {/* Center: Organizing Club Logo / 3D Embossed Seal (Rendered ONLY if event is conducted by a club) */}
+        {clubLogoSrc && (
+          <div className="flex flex-col items-center justify-center shrink-0 px-2">
+            <div className="relative h-13 w-13 sm:h-15 sm:w-15 md:h-16 md:w-16 rounded-full overflow-hidden bg-white shadow-md border-2 border-amber-500/80 ring-4 ring-amber-300/30 p-1 flex items-center justify-center">
               <Image
                 src={clubLogoSrc}
                 alt={certificate.organizerClub || "Event Club"}
@@ -232,20 +232,8 @@ export function CertificateView({
                 className="object-contain p-0.5 rounded-full"
               />
             </div>
-          ) : (
-            <div
-              className="h-13 w-13 sm:h-15 sm:w-15 rounded-full flex flex-col items-center justify-center text-white shadow-md border-2 border-amber-400 ring-4 ring-amber-200/40"
-              style={{
-                background: `linear-gradient(135deg, ${palette.primary}, ${palette.secondary})`,
-              }}
-            >
-              <Award className="w-6 h-6 text-amber-300" />
-              <span className="text-[8px] font-black tracking-tighter uppercase leading-none mt-0.5">
-                {certificate.organizerClub ? certificate.organizerClub.slice(0, 5) : "EVENT"}
-              </span>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Right: JD Header Logo */}
         <div className="flex-1 flex items-center justify-end">
