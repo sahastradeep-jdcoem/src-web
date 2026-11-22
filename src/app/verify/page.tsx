@@ -110,6 +110,12 @@ export default function GateScannerHubPage() {
       if (match) id = match[1];
     }
 
+    // Check for certificate ID
+    if (id.startsWith("cert_") || id.includes("CERT") || id.startsWith("SRC/")) {
+      router.push(`/verify/certificate/${encodeURIComponent(id)}`);
+      return;
+    }
+
     router.push(`/verify/${encodeURIComponent(id)}`);
   };
 
@@ -238,7 +244,7 @@ export default function GateScannerHubPage() {
               <span>Verify Pass by ID or Token</span>
             </label>
             <p className="text-[11px] text-slate-500 font-medium">
-              Enter Pass ID (e.g. <code className="text-[#E78023] font-bold">reg-174092...</code>) or paste scanner output:
+              Enter Pass ID (e.g. <code className="text-[#E78023] font-bold">reg-...</code>) or Certificate ID (e.g. <code className="text-[#17458F] font-bold">SRC/2026-27/...</code>):
             </p>
           </div>
 
@@ -248,7 +254,7 @@ export default function GateScannerHubPage() {
               required
               value={passInput}
               onChange={(e) => setPassInput(e.target.value)}
-              placeholder="Paste Pass ID or Scan Token..."
+              placeholder="Paste Pass ID, Certificate Number, or Scan URL..."
               className="w-full pl-4 pr-12 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-mono text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#E78023] focus:bg-white transition-all"
             />
             <button

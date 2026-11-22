@@ -43,7 +43,8 @@ import {
   Banknote,
   RefreshCw,
   RotateCcw,
-  Copy
+  Copy,
+  Award
 } from "lucide-react";
 import { RegistrationRecord, EventItem, SrcFormField, CustomQuestion } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -2179,6 +2180,17 @@ export default function AdminRegistrationsPage() {
             <FileSpreadsheet className={`w-3.5 h-3.5 ${isExportDisabled ? "text-slate-400" : "text-emerald-100"}`} />
             <span>Export Excel (.xlsx)</span>
           </button>
+
+          {currentSelectedEventObj && (
+            <Link
+              href={`/admin/certificates?eventId=${encodeURIComponent(currentSelectedEventObj.id || currentSelectedEventObj.slug)}`}
+              className="h-9 px-3.5 sm:px-4 rounded-xl text-xs font-semibold tracking-normal transition-all duration-200 inline-flex items-center justify-center gap-2 bg-[#17458F] hover:bg-[#0f2e60] text-white shadow-xs hover:shadow-md hover:shadow-[#17458F]/20 active:scale-[0.98] cursor-pointer"
+              title={`Issue certificates for ${currentSelectedEventObj.name}`}
+            >
+              <Award className="w-3.5 h-3.5 text-amber-300" />
+              <span>Issue Certificates</span>
+            </Link>
+          )}
         </div>
 
       </div>

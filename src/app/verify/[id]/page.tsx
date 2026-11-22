@@ -51,6 +51,11 @@ export default function PassVerificationPage() {
       return;
     }
 
+    if (passId.startsWith("cert_") || passId.includes("CERT") || passId.startsWith("SRC/")) {
+      window.location.replace(`/verify/certificate/${encodeURIComponent(passId)}`);
+      return;
+    }
+
     setLoading(true);
     setErrorNotice(null);
     try {

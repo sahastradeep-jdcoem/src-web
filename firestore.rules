@@ -331,5 +331,19 @@ service cloud.firestore {
       allow create: if true;
       allow read, update, delete: if isPrivilegedAdmin();
     }
+
+    // Official student certificates & verified digital credentials
+    match /certificates/{certId} {
+      // Public verification: Anyone who scans the QR code or opens verification URL can view
+      allow get: if true;
+
+      // Listing: Privileged admins, club owners, coordinators, or authenticated students
+      allow list: if isPrivilegedAdmin() || isClubOwner() || isEventCoordinator() || (
+        isAuthenticated() && request.auth.token.email != null
+      );
+
+      // Certificate issuance, updates, and revocation
+      allow create, update, delete: if isPrivilegedAdmin() || isClubOwner() || isEventCoordinator();
+    }
   }
 }
