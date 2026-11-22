@@ -27,6 +27,8 @@ export async function downloadCertificateAsImage(
       try {
         await document.fonts.ready;
         await Promise.allSettled([
+          document.fonts.load("400 36px 'Great Vibes'"),
+          document.fonts.load("400 44px 'Great Vibes'"),
           document.fonts.load("400 48px 'Great Vibes'"),
           document.fonts.load("400 54px 'Great Vibes'"),
           document.fonts.load("400 60px 'Great Vibes'"),
@@ -162,14 +164,25 @@ export async function downloadCertificateAsImage(
             node.style.overflow = "visible";
           });
 
-          // Calibrate pill text in cloned DOM for mathematically centered rendering in html2canvas
+          // Calibrate pill badge & text in cloned DOM for mathematically centered rendering in html2canvas
+          const pillBadge = clonedEl.querySelector<HTMLElement>("[data-certificate-pill]");
+          if (pillBadge) {
+            pillBadge.style.paddingTop = "3.5px";
+            pillBadge.style.paddingBottom = "6.5px";
+            pillBadge.style.marginTop = "2px";
+          }
           const pillText = clonedEl.querySelector<HTMLElement>("[data-certificate-pill-text]");
           if (pillText) {
             pillText.style.lineHeight = "1";
             pillText.style.display = "inline-flex";
             pillText.style.alignItems = "center";
             pillText.style.justifyContent = "center";
-            pillText.style.transform = "translateY(-1px)";
+          }
+
+          // Calibrate recipient name in cloned DOM to guarantee clean separation above the ornamental line
+          const nameHeading = clonedEl.querySelector<HTMLElement>("h2");
+          if (nameHeading) {
+            nameHeading.style.marginBottom = "14px";
           }
         }
       },
