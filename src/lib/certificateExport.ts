@@ -54,8 +54,20 @@ export async function downloadCertificateAsImage(
           clonedEl.style.width = "1040px";
           clonedEl.style.minWidth = "1040px";
           clonedEl.style.maxWidth = "1040px";
+          clonedEl.style.height = "735px";
+          clonedEl.style.minHeight = "735px";
+          clonedEl.style.maxHeight = "735px";
           clonedEl.style.margin = "0 auto";
           clonedEl.style.backgroundColor = "#FFFFFF";
+
+          // Enforce explicit dimensions on all SVGs inside the clone
+          const allSvgs = clonedEl.querySelectorAll<SVGElement>("svg");
+          allSvgs.forEach((svg) => {
+            const w = svg.getAttribute("width") || svg.clientWidth;
+            const h = svg.getAttribute("height") || svg.clientHeight;
+            if (w) svg.style.width = typeof w === "number" ? `${w}px` : `${w}`;
+            if (h) svg.style.height = typeof h === "number" ? `${h}px` : `${h}`;
+          });
 
           // Prevent text clipping in cloned DOM
           const allText = clonedEl.querySelectorAll<HTMLElement>("p, span, h1, h2, h3, h4, h5, h6, strong");

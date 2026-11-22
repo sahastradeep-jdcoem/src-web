@@ -50,154 +50,161 @@ export function CertificateView({
       `}</style>
 
       {/* ------------------------------------------------------------- */}
-      {/* DYNAMIC FLUID WAVE CORNER DECORATIONS (MATCHING USER REFERENCE) */}
+      {/* DYNAMIC FLUID WAVE CORNER DECORATIONS (SOLID COMPATIBLE FOR HTML2CANVAS) */}
       {/* ------------------------------------------------------------- */}
 
       {/* 1. TOP-LEFT FLUID WAVE RIBBONS WITH CONTOUR LINES */}
       <svg
-        className="absolute -top-2 -left-2 w-72 sm:w-88 md:w-[380px] h-auto pointer-events-none z-0"
-        viewBox="0 0 380 280"
+        className="absolute -top-1 -left-1 pointer-events-none z-0"
+        width={420}
+        height={320}
+        viewBox="0 0 420 320"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
+        style={{ width: "420px", height: "320px" }}
       >
-        <defs>
-          <linearGradient id="tlGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor={palette.primary} stopOpacity="0.95" />
-            <stop offset="100%" stopColor={palette.secondary} stopOpacity="0.85" />
-          </linearGradient>
-          <linearGradient id="tlGrad2" x1="0%" y1="0%" x2="100%" y2="80%">
-            <stop offset="0%" stopColor={palette.secondary} stopOpacity="0.75" />
-            <stop offset="100%" stopColor={palette.accent} stopOpacity="0.5" />
-          </linearGradient>
-        </defs>
-        {/* Deep background wave band */}
+        {/* Layer 1: Deep Primary Background Flow */}
         <path
-          d="M-20 -20L280 -20C240 40 210 90 150 110C90 130 60 190 -20 220L-20 -20Z"
-          fill="url(#tlGrad1)"
+          d="M-20 -20L320 -20C280 45 250 100 180 125C110 150 70 210 -20 250L-20 -20Z"
+          fill={palette.primary}
+          fillOpacity="0.96"
         />
-        {/* Mid flowing ribbon */}
+        {/* Layer 2: Secondary Mid-Tone Ribbon */}
         <path
-          d="M-20 -20L210 -20C170 30 140 80 90 120C40 160 20 210 -20 260L-20 -20Z"
-          fill="url(#tlGrad2)"
+          d="M-20 -20L250 -20C205 35 175 90 120 135C65 180 35 235 -20 290L-20 -20Z"
+          fill={palette.secondary}
+          fillOpacity="0.88"
         />
-        {/* Accent ripple */}
+        {/* Layer 3: Vibrant Accent Ribbon */}
         <path
-          d="M-20 60C30 70 80 120 70 170C60 210 20 240 -20 270L-20 60Z"
+          d="M-20 -20L180 -20C140 30 110 80 60 125C15 170 -5 220 -20 270L-20 -20Z"
           fill={palette.accent}
-          fillOpacity="0.3"
+          fillOpacity="0.65"
         />
-        {/* White organic wave contour lines */}
+        {/* Layer 4: Front Accent Ripple */}
         <path
-          d="M-10 10C50 30 130 60 170 110C210 160 190 220 230 260"
-          stroke="#FFFFFF"
-          strokeWidth="1.5"
-          strokeOpacity="0.45"
-          strokeLinecap="round"
+          d="M-20 60C35 75 90 130 80 185C70 230 25 260 -20 295L-20 60Z"
+          fill={palette.accent}
+          fillOpacity="0.32"
         />
+        {/* White Wave Contour Lines */}
         <path
-          d="M-10 40C40 60 100 90 130 140C160 190 150 240 180 270"
-          stroke="#FFFFFF"
-          strokeWidth="1"
-          strokeOpacity="0.3"
-          strokeLinecap="round"
-        />
-        <circle cx="150" cy="50" r="1.5" fill="#FFFFFF" fillOpacity="0.6" />
-        <circle cx="110" cy="90" r="2" fill="#FFFFFF" fillOpacity="0.5" />
-      </svg>
-
-      {/* 2. BOTTOM-RIGHT EXTENDED FLUID WAVE FRAME (MATCHING USER REFERENCE) */}
-      <svg
-        className="absolute -bottom-2 -right-2 w-80 sm:w-96 md:w-[440px] h-auto pointer-events-none z-0"
-        viewBox="0 0 440 340"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <defs>
-          <linearGradient id="brGrad1" x1="100%" y1="100%" x2="0%" y2="0%">
-            <stop offset="0%" stopColor={palette.primary} stopOpacity="0.95" />
-            <stop offset="70%" stopColor={palette.secondary} stopOpacity="0.9" />
-            <stop offset="100%" stopColor={palette.accent} stopOpacity="0.8" />
-          </linearGradient>
-          <linearGradient id="brGrad2" x1="100%" y1="100%" x2="0%" y2="20%">
-            <stop offset="0%" stopColor={palette.secondary} stopOpacity="0.8" />
-            <stop offset="100%" stopColor={palette.accent} stopOpacity="0.45" />
-          </linearGradient>
-          <linearGradient id="brGrad3" x1="80%" y1="100%" x2="20%" y2="0%">
-            <stop offset="0%" stopColor={palette.accent} stopOpacity="0.5" />
-            <stop offset="100%" stopColor={palette.primary} stopOpacity="0.1" />
-          </linearGradient>
-        </defs>
-
-        {/* Outer Deep Wave Ribbon */}
-        <path
-          d="M460 360L160 360C220 300 250 250 290 190C330 130 380 70 460 20L460 360Z"
-          fill="url(#brGrad1)"
-        />
-        {/* Mid Flowing Wave Ribbon */}
-        <path
-          d="M460 360L230 360C280 310 320 260 350 200C380 140 410 90 460 70L460 360Z"
-          fill="url(#brGrad2)"
-        />
-        {/* Forward Sweeping Wave Accent */}
-        <path
-          d="M460 360L310 360C350 320 390 280 410 220C430 160 440 120 460 110L460 360Z"
-          fill="url(#brGrad3)"
-        />
-
-        {/* White Wave Contour Ribbons */}
-        <path
-          d="M200 350C250 290 280 240 330 180C370 120 410 70 450 30"
+          d="M-10 10C55 35 145 70 190 125C235 180 215 245 260 290"
           stroke="#FFFFFF"
           strokeWidth="1.5"
           strokeOpacity="0.5"
           strokeLinecap="round"
         />
         <path
-          d="M260 350C300 300 340 250 370 190C400 130 430 90 450 60"
+          d="M-10 45C45 70 115 105 145 160C175 215 165 270 200 305"
           stroke="#FFFFFF"
           strokeWidth="1"
           strokeOpacity="0.35"
           strokeLinecap="round"
         />
         <path
-          d="M170 355C220 315 260 270 300 220C340 160 390 110 445 70"
+          d="M-10 80C35 105 85 140 105 195C125 250 115 290 140 315"
           stroke={palette.accent}
           strokeWidth="1.2"
-          strokeOpacity="0.6"
+          strokeOpacity="0.7"
+          strokeLinecap="round"
+        />
+        <circle cx="165" cy="55" r="1.5" fill="#FFFFFF" fillOpacity="0.6" />
+        <circle cx="125" cy="100" r="2" fill="#FFFFFF" fillOpacity="0.5" />
+      </svg>
+
+      {/* 2. BOTTOM-RIGHT EXTENDED FLUID WAVE FRAME (MATCHING USER REFERENCE) */}
+      <svg
+        className="absolute -bottom-1 -right-1 pointer-events-none z-0"
+        width={460}
+        height={360}
+        viewBox="0 0 460 360"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        style={{ width: "460px", height: "360px" }}
+      >
+        {/* Layer 1: Deep Primary Sweeping Ribbon */}
+        <path
+          d="M480 380L130 380C195 315 230 260 275 195C320 130 375 65 480 15L480 380Z"
+          fill={palette.primary}
+          fillOpacity="0.96"
+        />
+        {/* Layer 2: Secondary Mid-Tone Flow */}
+        <path
+          d="M480 380L210 380C265 325 310 270 345 205C380 140 415 85 480 65L480 380Z"
+          fill={palette.secondary}
+          fillOpacity="0.9"
+        />
+        {/* Layer 3: Vibrant Accent Ribbon */}
+        <path
+          d="M480 380L290 380C335 335 375 290 400 225C425 160 440 115 480 105L480 380Z"
+          fill={palette.accent}
+          fillOpacity="0.72"
+        />
+        {/* Layer 4: Front Highlight Ripple */}
+        <path
+          d="M480 380L360 380C395 345 425 310 440 255C455 200 465 165 480 155L480 380Z"
+          fill={palette.accent}
+          fillOpacity="0.38"
+        />
+
+        {/* White Wave Contour Lines */}
+        <path
+          d="M175 370C230 305 265 250 315 185C360 120 405 65 450 25"
+          stroke="#FFFFFF"
+          strokeWidth="1.5"
+          strokeOpacity="0.55"
+          strokeLinecap="round"
+        />
+        <path
+          d="M240 370C285 315 325 260 360 195C395 130 430 85 460 55"
+          stroke="#FFFFFF"
+          strokeWidth="1"
+          strokeOpacity="0.4"
+          strokeLinecap="round"
+        />
+        <path
+          d="M150 375C205 330 250 280 290 225C335 160 385 105 445 65"
+          stroke={palette.accent}
+          strokeWidth="1.2"
+          strokeOpacity="0.7"
           strokeLinecap="round"
         />
 
-        <circle cx="340" cy="220" r="2" fill="#FFFFFF" fillOpacity="0.5" />
-        <circle cx="380" cy="160" r="1.5" fill="#FFFFFF" fillOpacity="0.6" />
+        <circle cx="355" cy="235" r="2" fill="#FFFFFF" fillOpacity="0.5" />
+        <circle cx="395" cy="170" r="1.5" fill="#FFFFFF" fillOpacity="0.6" />
       </svg>
 
       {/* 3. BOTTOM-LEFT FLUID WAVE ACCENT (MATCHING USER REFERENCE) */}
       <svg
-        className="absolute -bottom-2 -left-2 w-64 sm:w-76 md:w-88 h-auto pointer-events-none z-0"
-        viewBox="0 0 320 220"
+        className="absolute -bottom-1 -left-1 pointer-events-none z-0"
+        width={340}
+        height={260}
+        viewBox="0 0 340 260"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
+        style={{ width: "340px", height: "260px" }}
       >
         <path
-          d="M-20 240L180 240C140 190 100 170 80 130C60 90 30 50 -20 20L-20 240Z"
+          d="M-20 280L220 280C175 220 130 200 105 150C80 100 45 55 -20 20L-20 280Z"
           fill={palette.primary}
-          fillOpacity="0.9"
+          fillOpacity="0.95"
         />
         <path
-          d="M-20 240L130 240C90 200 60 170 40 130C20 90 0 60 -20 50L-20 240Z"
+          d="M-20 280L160 280C115 230 80 195 55 150C30 105 5 70 -20 60L-20 280Z"
           fill={palette.secondary}
-          fillOpacity="0.7"
+          fillOpacity="0.84"
         />
         <path
-          d="M-20 240L80 240C50 210 30 180 10 140L-20 120L-20 240Z"
+          d="M-20 280L100 280C65 245 40 210 15 165L-20 140L-20 280Z"
           fill={palette.accent}
-          fillOpacity="0.4"
+          fillOpacity="0.5"
         />
         <path
-          d="M-10 140C20 160 50 190 90 230"
+          d="M-10 160C25 185 60 220 110 270"
           stroke="#FFFFFF"
           strokeWidth="1.2"
-          strokeOpacity="0.4"
+          strokeOpacity="0.45"
           strokeLinecap="round"
         />
       </svg>
