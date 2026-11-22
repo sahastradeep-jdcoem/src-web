@@ -50,70 +50,11 @@ export function CertificateView({
       `}</style>
 
       {/* ------------------------------------------------------------- */}
-      {/* DYNAMIC FLUID WAVE CORNER DECORATIONS (SOLID COMPATIBLE FOR HTML2CANVAS) */}
+      {/* DYNAMIC FLUID WAVE CORNER DECORATIONS (BOTTOM CORNERS ONLY)  */}
+      {/* (TOP HEADER IS 100% PURE WHITE TO ENSURE FULL LOGO CLARITY) */}
       {/* ------------------------------------------------------------- */}
 
-      {/* 1. TOP-LEFT FLUID WAVE RIBBONS WITH CONTOUR LINES */}
-      <svg
-        className="absolute -top-1 -left-1 pointer-events-none z-0"
-        width={420}
-        height={320}
-        viewBox="0 0 420 320"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        style={{ width: "420px", height: "320px" }}
-      >
-        {/* Layer 1: Deep Primary Background Flow */}
-        <path
-          d="M-20 -20L320 -20C280 45 250 100 180 125C110 150 70 210 -20 250L-20 -20Z"
-          fill={palette.primary}
-          fillOpacity="0.96"
-        />
-        {/* Layer 2: Secondary Mid-Tone Ribbon */}
-        <path
-          d="M-20 -20L250 -20C205 35 175 90 120 135C65 180 35 235 -20 290L-20 -20Z"
-          fill={palette.secondary}
-          fillOpacity="0.88"
-        />
-        {/* Layer 3: Vibrant Accent Ribbon */}
-        <path
-          d="M-20 -20L180 -20C140 30 110 80 60 125C15 170 -5 220 -20 270L-20 -20Z"
-          fill={palette.accent}
-          fillOpacity="0.65"
-        />
-        {/* Layer 4: Front Accent Ripple */}
-        <path
-          d="M-20 60C35 75 90 130 80 185C70 230 25 260 -20 295L-20 60Z"
-          fill={palette.accent}
-          fillOpacity="0.32"
-        />
-        {/* White Wave Contour Lines */}
-        <path
-          d="M-10 10C55 35 145 70 190 125C235 180 215 245 260 290"
-          stroke="#FFFFFF"
-          strokeWidth="1.5"
-          strokeOpacity="0.5"
-          strokeLinecap="round"
-        />
-        <path
-          d="M-10 45C45 70 115 105 145 160C175 215 165 270 200 305"
-          stroke="#FFFFFF"
-          strokeWidth="1"
-          strokeOpacity="0.35"
-          strokeLinecap="round"
-        />
-        <path
-          d="M-10 80C35 105 85 140 105 195C125 250 115 290 140 315"
-          stroke={palette.accent}
-          strokeWidth="1.2"
-          strokeOpacity="0.7"
-          strokeLinecap="round"
-        />
-        <circle cx="165" cy="55" r="1.5" fill="#FFFFFF" fillOpacity="0.6" />
-        <circle cx="125" cy="100" r="2" fill="#FFFFFF" fillOpacity="0.5" />
-      </svg>
-
-      {/* 2. BOTTOM-RIGHT EXTENDED FLUID WAVE FRAME (MATCHING USER REFERENCE) */}
+      {/* 1. BOTTOM-RIGHT EXTENDED FLUID WAVE FRAME */}
       <svg
         className="absolute -bottom-1 -right-1 pointer-events-none z-0"
         width={460}
@@ -175,7 +116,7 @@ export function CertificateView({
         <circle cx="395" cy="170" r="1.5" fill="#FFFFFF" fillOpacity="0.6" />
       </svg>
 
-      {/* 3. BOTTOM-LEFT FLUID WAVE ACCENT (MATCHING USER REFERENCE) */}
+      {/* 2. BOTTOM-LEFT FLUID WAVE ACCENT */}
       <svg
         className="absolute -bottom-1 -left-1 pointer-events-none z-0"
         width={340}
@@ -232,13 +173,29 @@ export function CertificateView({
       )}
 
       {/* ------------------------------------------------------------- */}
+      {/* AUTHENTICITY QR CODE (POSITIONED IN UPPER-RIGHT UNDER JD LOGO) */}
+      {/* ------------------------------------------------------------- */}
+      {showQrCode && (
+        <div className="absolute top-22 sm:top-25 md:top-28 right-7 sm:right-9 md:right-11 z-20 flex flex-col items-center">
+          <div className="p-1 rounded-xl bg-white/95 border border-slate-200/90 shadow-xs">
+            <ScannableQRCode
+              value={certificate.verificationUrl}
+              size={50}
+              level="M"
+              fgColor={palette.primary}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
       {/* 1. HEADER (LEFT: SRC HORIZONTAL, CENTER: CLUB LOGO, RIGHT: JD HEADER) */}
       {/* ------------------------------------------------------------- */}
       <header
         data-certificate-header
         className="relative z-10 flex items-center justify-between gap-4 border-b border-slate-100/90 pb-3"
       >
-        {/* Left: SRC Horizontal Logo */}
+        {/* Left: SRC Horizontal Logo (100% clean white background) */}
         <div className="flex-1 flex items-center justify-start">
           <div className="relative h-12 sm:h-14 md:h-16 w-44 sm:w-52 md:w-56 shrink-0">
             <Image
@@ -252,7 +209,7 @@ export function CertificateView({
           </div>
         </div>
 
-        {/* Center: Organizing Club Logo / 3D Embossed Shield */}
+        {/* Center: Organizing Club Logo / 3D Embossed Shield (No text below) */}
         <div className="flex flex-col items-center justify-center shrink-0 px-2">
           {clubLogoSrc ? (
             <div className="relative h-13 w-13 sm:h-15 sm:w-15 md:h-16 md:w-16 rounded-full overflow-hidden bg-white shadow-md border-2 border-amber-500/80 ring-2 ring-amber-300/40 p-1 flex items-center justify-center">
@@ -276,11 +233,6 @@ export function CertificateView({
                 {certificate.organizerClub ? certificate.organizerClub.slice(0, 5) : "EVENT"}
               </span>
             </div>
-          )}
-          {certificate.organizerClub && (
-            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1 max-w-[130px] truncate text-center">
-              {certificate.organizerClub}
-            </span>
           )}
         </div>
 
@@ -380,28 +332,13 @@ export function CertificateView({
       </main>
 
       {/* ------------------------------------------------------------- */}
-      {/* 3. FOOTER (4 SIGNATURES & CLEAN MINIMAL STANDALONE QR CODE) */}
+      {/* 3. FOOTER (4 INSTITUTIONAL SIGNATURES SPANNING FULL WIDTH)    */}
       {/* ------------------------------------------------------------- */}
       <footer
         data-certificate-footer
-        className="relative z-10 pt-2 sm:pt-3 border-t border-slate-100/90 flex items-end justify-between gap-3 sm:gap-4"
+        className="relative z-10 pt-2 sm:pt-3 border-t border-slate-100/90 w-full"
       >
-        {/* Left: Clean Minimal Standalone QR Code (NO bulky box, NO event code, NO extra text) */}
-        {showQrCode && (
-          <div className="flex flex-col items-center justify-center shrink-0">
-            <div className="p-1 rounded-lg bg-white/95 border border-slate-200/90 shadow-xs">
-              <ScannableQRCode
-                value={certificate.verificationUrl}
-                size={46}
-                level="M"
-                fgColor={palette.primary}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Right: Signatures Grid (4 Institutional Columns) */}
-        <div className="flex-1 grid grid-cols-4 gap-2 sm:gap-4 items-end text-center">
+        <div className="grid grid-cols-4 gap-4 sm:gap-6 items-end text-center w-full max-w-4xl mx-auto">
           {certificate.signatories.slice(0, 4).map((sig, idx) => (
             <div key={sig.id || idx} className="space-y-1 flex flex-col items-center">
               {/* Signature Image (Transparent PNG) or Cursive Text */}
@@ -436,7 +373,7 @@ export function CertificateView({
               {/* Line */}
               <div className="w-full h-[1.5px] bg-slate-700/80" />
 
-              {/* Designation & Organization Below Line (No duplicated titles above) */}
+              {/* Designation & Organization Below Line */}
               <div className="leading-tight">
                 <p className="text-[10px] sm:text-[11px] font-bold text-slate-800 truncate max-w-full">
                   {sig.designation}
