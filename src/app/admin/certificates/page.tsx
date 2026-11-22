@@ -54,6 +54,7 @@ import {
 import {
   getAllCertificatesFromFirestore,
   subscribeToCertificates,
+  saveCertificateToFirestore,
   batchSaveCertificatesToFirestore,
   revokeCertificateInFirestore,
   deleteCertificateFromFirestore,
@@ -454,11 +455,19 @@ function AdminCertificatesContent() {
       signatories,
       issueDate,
       status: "PUBLISHED",
-      verificationUrl: `${typeof window !== "undefined" ? window.location.origin : ""}/verify/certificate/${certNum}`,
-      qrPayload: `${typeof window !== "undefined" ? window.location.origin : ""}/verify/certificate/${certNum}`,
+      verificationUrl: `${typeof window !== "undefined" ? window.location.origin : ""}/verify/certificate/preview-cert`,
+      qrPayload: `${typeof window !== "undefined" ? window.location.origin : ""}/verify/certificate/preview-cert`,
       issuedBy: user?.displayName || "SRC Admin",
       issuedAt: new Date().toISOString(),
     };
+
+    // Save to Firestore and local storage so that scanning the QR on live preview instantly verifies on phone
+    saveCertificateToFirestore(previewPayload).catch(console.error);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("src_preview_cert", JSON.stringify(previewPayload));
+      } catch {}
+    }
 
     setPreviewCert(previewPayload);
   };

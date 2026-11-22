@@ -237,11 +237,17 @@ export async function getCertificateById(id: string): Promise<CertificateRecord 
   if (!cleanId || !db) return null;
 
   try {
-    // 1. Direct document lookup by cert ID
-    const docRef = doc(db, CERTIFICATES_COLLECTION, cleanId);
-    const snap = await getDoc(docRef);
-    if (snap.exists()) {
-      return snap.data() as CertificateRecord;
+    // 1. Direct document lookup by cert ID (only if valid single segment ID without slashes)
+    if (!cleanId.includes("/")) {
+      try {
+        const docRef = doc(db, CERTIFICATES_COLLECTION, cleanId);
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          return snap.data() as CertificateRecord;
+        }
+      } catch (docErr) {
+        console.warn("Direct document lookup failed, proceeding to query:", docErr);
+      }
     }
 
     // 2. Query lookup by certificateNumber (e.g. SRC/2026-27/PRRM-8924)
@@ -250,6 +256,39 @@ export async function getCertificateById(id: string): Promise<CertificateRecord 
     const querySnap = await getDocs(q);
     if (!querySnap.empty) {
       return querySnap.docs[0].data() as CertificateRecord;
+    }
+
+    // 3. Fallback: Query lookup by id field in document
+    const qId = query(colRef, where("id", "==", cleanId), limit(1));
+    const querySnapId = await getDocs(qId);
+    if (!querySnapId.empty) {
+      return querySnapId.docs[0].data() as CertificateRecord;
+    }
+
+    // 4. Fallback: Local storage cache (for preview certificates or offline resilience)
+    try {
+      if (typeof window !== "undefined") {
+        const preview = localStorage.getItem("src_preview_cert") || sessionStorage.getItem("src_preview_cert");
+        if (preview) {
+          const pCert = JSON.parse(preview) as CertificateRecord;
+          if (
+            pCert.id === cleanId ||
+            pCert.certificateNumber === cleanId ||
+            cleanId === "preview-cert"
+          ) {
+            return pCert;
+          }
+        }
+
+        const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (cached) {
+          const list: CertificateRecord[] = JSON.parse(cached);
+          const found = list.find((c) => c.id === cleanId || c.certificateNumber === cleanId);
+          if (found) return found;
+        }
+      }
+    } catch {
+      // ignore
     }
 
     return null;

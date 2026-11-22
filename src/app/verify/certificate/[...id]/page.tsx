@@ -31,7 +31,13 @@ import { Button } from "@/components/ui/Button";
 
 export default function CertificateVerificationPage() {
   const params = useParams();
-  const rawId = typeof params?.id === "string" ? decodeURIComponent(params.id) : "";
+  const rawId = React.useMemo(() => {
+    if (!params?.id) return "";
+    if (Array.isArray(params.id)) {
+      return params.id.map((segment) => decodeURIComponent(segment)).join("/");
+    }
+    return decodeURIComponent(String(params.id));
+  }, [params?.id]);
   const [cert, setCert] = useState<CertificateRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);

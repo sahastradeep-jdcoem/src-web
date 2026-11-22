@@ -35,7 +35,13 @@ import { getStoredEvents, getGateCheckInAccessStatus } from "@/lib/eventsStore";
 
 export default function PassVerificationPage() {
   const params = useParams();
-  const passId = typeof params?.id === "string" ? decodeURIComponent(params.id) : "";
+  const passId = React.useMemo(() => {
+    if (!params?.id) return "";
+    if (Array.isArray(params.id)) {
+      return params.id.map((segment) => decodeURIComponent(segment)).join("/");
+    }
+    return decodeURIComponent(String(params.id));
+  }, [params?.id]);
   const { user, isAdmin, openAuthModal } = useAuth();
 
   const [loading, setLoading] = useState(true);
@@ -52,7 +58,7 @@ export default function PassVerificationPage() {
     }
 
     if (passId.startsWith("cert_") || passId.includes("CERT") || passId.startsWith("SRC/")) {
-      window.location.replace(`/verify/certificate/${encodeURIComponent(passId)}`);
+      window.location.replace(`/verify/certificate/${passId}`);
       return;
     }
 
