@@ -215,7 +215,7 @@ export function CertificateView({
       {/* OFFICIAL GOLD RIBBON EMBLEM (LEFT FLANK BELOW SRC LOGO)       */}
       {/* Symmetrically balanced with the verification QR seal on right */}
       {/* ------------------------------------------------------------- */}
-      <div className="absolute top-[118px] sm:top-[128px] md:top-[138px] left-7 sm:left-9 md:left-11 z-20 flex flex-col items-center">
+      <div className="absolute top-[118px] sm:top-[128px] md:top-[138px] left-9 sm:left-12 md:left-14 z-20 flex flex-col items-center">
         <img
           src="/assets/gold_ribbon.png"
           alt="Official Gold Ribbon Emblem"
@@ -323,7 +323,7 @@ export function CertificateView({
           >
             <span
               data-certificate-pill-text
-              className="font-sans font-black text-xs sm:text-sm tracking-[0.26em] uppercase text-white whitespace-nowrap leading-none flex items-center justify-center text-center relative -top-0.5 sm:-top-1"
+              className="font-sans font-black text-xs sm:text-sm tracking-[0.26em] uppercase text-white whitespace-nowrap leading-none flex items-center justify-center text-center relative -top-[0.5px]"
               style={{
                 lineHeight: "1",
                 display: "inline-flex",

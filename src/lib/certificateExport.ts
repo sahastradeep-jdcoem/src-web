@@ -169,14 +169,14 @@ export async function downloadCertificateAsImage(
           if (pillBadge) {
             pillBadge.style.position = "relative";
             pillBadge.style.top = "12.33px"; // Exactly 37px at 3x export resolution (kept as approved by user)
-            pillBadge.style.paddingTop = "3px";
-            pillBadge.style.paddingBottom = "9px";
+            pillBadge.style.paddingTop = "4.5px";
+            pillBadge.style.paddingBottom = "7.5px";
             pillBadge.style.boxShadow = "none";
           }
           const pillText = clonedEl.querySelector<HTMLElement>("[data-certificate-pill-text]");
           if (pillText) {
             pillText.style.position = "relative";
-            pillText.style.top = "-5px";
+            pillText.style.top = "-3.5px";
             pillText.style.lineHeight = "1";
             pillText.style.display = "inline-flex";
             pillText.style.alignItems = "center";
