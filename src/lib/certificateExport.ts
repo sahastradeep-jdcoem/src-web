@@ -176,7 +176,7 @@ export async function downloadCertificateAsImage(
           const pillText = clonedEl.querySelector<HTMLElement>("[data-certificate-pill-text]");
           if (pillText) {
             pillText.style.position = "relative";
-            pillText.style.top = "-4.5px";
+            pillText.style.top = "-7.5px";
             pillText.style.lineHeight = "1";
             pillText.style.display = "inline-flex";
             pillText.style.alignItems = "center";
