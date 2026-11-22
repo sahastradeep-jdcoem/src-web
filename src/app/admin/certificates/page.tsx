@@ -30,6 +30,7 @@ import {
   X,
   FileText,
   Printer,
+  ChevronDown,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Badge } from "@/components/ui/Badge";
@@ -46,7 +47,16 @@ import {
   getStoredEvents,
   syncEventsFromFirestore,
   subscribeToEvents,
+  resolveTenureForEvent,
 } from "@/lib/eventsStore";
+import {
+  getStoredTenures,
+  syncTenuresFromFirestore,
+  subscribeToTenures,
+  getLatestAvailableTenure,
+  CouncilTenure,
+} from "@/lib/tenureStore";
+import { getActiveTenure } from "@/lib/tenureEngine";
 import {
   getAllRegistrationsFromFirestore,
   subscribeToRegistrationsFromFirestore,
@@ -101,8 +111,33 @@ function AdminCertificatesContent() {
   const [allCertificates, setAllCertificates] = useState<CertificateRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Selected event
+  // Tenure filter state
+  const [tenuresList, setTenuresList] = useState<CouncilTenure[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return getStoredTenures();
+      } catch {}
+    }
+    return [];
+  });
+  const [userSelectedTenure, setUserSelectedTenure] = useState(false);
+  const [selectedTenureId, setSelectedTenureId] = useState<string>(() => {
+    try {
+      return getActiveTenure().id;
+    } catch {
+      return "all";
+    }
+  });
+
+  // Selected event (can be event id, slug, or "all" / "")
   const [selectedEventId, setSelectedEventId] = useState<string>(initialEventId);
+
+  // Event Autocomplete & Dropdown filter state
+  const [eventSearchQuery, setEventSearchQuery] = useState("");
+  const [isEventDropdownOpen, setIsEventDropdownOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(0);
+  const eventDropdownRef = useRef<HTMLDivElement | null>(null);
+  const optionsListRef = useRef<HTMLDivElement | null>(null);
 
   // Tab: "generate" | "issued"
   const [activeTab, setActiveTab] = useState<"generate" | "issued">("generate");
@@ -160,6 +195,23 @@ function AdminCertificatesContent() {
       if (isMounted && evts) setEvents(evts);
     });
 
+    const initialTenures = getStoredTenures();
+    setTenuresList(initialTenures);
+    if (!userSelectedTenure && initialTenures.length > 0) {
+      const latest = getLatestAvailableTenure(initialTenures);
+      if (latest) setSelectedTenureId(latest.id);
+    }
+
+    syncTenuresFromFirestore().then((res) => {
+      if (isMounted && res && res.length > 0) {
+        setTenuresList(res);
+        if (!userSelectedTenure) {
+          const latest = getLatestAvailableTenure(res);
+          if (latest) setSelectedTenureId(latest.id);
+        }
+      }
+    });
+
     getAllRegistrationsFromFirestore().then((regs) => {
       if (isMounted && regs) setAllRegistrations(regs as unknown as RegistrationRecord[]);
     });
@@ -182,6 +234,16 @@ function AdminCertificatesContent() {
       if (isMounted && remoteEvts) setEvents(remoteEvts);
     });
 
+    const unsubTenures = subscribeToTenures((cloudTenures) => {
+      if (isMounted && cloudTenures && Array.isArray(cloudTenures) && cloudTenures.length > 0) {
+        setTenuresList(cloudTenures);
+        if (!userSelectedTenure) {
+          const latest = getLatestAvailableTenure(cloudTenures);
+          if (latest) setSelectedTenureId(latest.id);
+        }
+      }
+    });
+
     const unsubRegs = subscribeToRegistrationsFromFirestore((remoteRegs) => {
       if (isMounted && remoteRegs) setAllRegistrations(remoteRegs as unknown as RegistrationRecord[]);
     });
@@ -190,29 +252,247 @@ function AdminCertificatesContent() {
       if (isMounted && remoteCerts) setAllCertificates(remoteCerts);
     });
 
+    const handleClickOutside = (event: MouseEvent) => {
+      if (eventDropdownRef.current && !eventDropdownRef.current.contains(event.target as Node)) {
+        setIsEventDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+
     return () => {
       isMounted = false;
       unsubEvents();
+      unsubTenures();
       unsubRegs();
       unsubCerts();
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
-  // 2. Select default event if query param provided or fallback
+  // Comprehensive catalog of all events (live store + past tenure snapshots)
+  const allKnownEvents = useMemo(() => {
+    const map = new Map<string, EventItem>();
+    events.forEach((e) => {
+      if (e && (e.id || e.slug)) map.set(e.id || e.slug, e);
+    });
+    tenuresList.forEach((t) => {
+      if (Array.isArray(t.events)) {
+        t.events.forEach((e) => {
+          if (e && (e.id || e.slug) && !map.has(e.id || e.slug)) {
+            map.set(e.id || e.slug, e);
+          }
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [events, tenuresList]);
+
+  // Sync event query param from URL on initial client load
   useEffect(() => {
-    if (!selectedEventId && events.length > 0) {
-      if (initialEventId && events.some((e) => e.id === initialEventId || e.slug === initialEventId)) {
-        setSelectedEventId(initialEventId);
-      } else {
-        setSelectedEventId(events[0].id);
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const evtParam = params.get("eventId") || params.get("event");
+      if (evtParam) {
+        setSelectedEventId(evtParam);
       }
     }
-  }, [events, selectedEventId, initialEventId]);
+  }, []);
+
+  // When initialEventId matches an event, ensure its tenure is selected
+  useEffect(() => {
+    if (initialEventId && allKnownEvents.length > 0 && !userSelectedTenure) {
+      const matched = allKnownEvents.find((e) => e.id === initialEventId || e.slug === initialEventId);
+      if (matched) {
+        setSelectedEventId(matched.id || matched.slug);
+        const resolved = resolveTenureForEvent(matched, tenuresList);
+        if (resolved) {
+          setSelectedTenureId(resolved.id);
+        }
+      }
+    }
+  }, [initialEventId, allKnownEvents, tenuresList, userSelectedTenure]);
+
+  // Events available in selected tenure
+  const tenureFilteredEvents = useMemo(() => {
+    let result: EventItem[] = [];
+    const matchedTenure = tenuresList.find((t) => t.id === selectedTenureId);
+    if (selectedTenureId === "all" || !matchedTenure) {
+      if (selectedTenureId === "all") {
+        result = events;
+      } else {
+        result = events.filter((e) => {
+          const resolved = resolveTenureForEvent(e, tenuresList);
+          return resolved ? resolved.id === selectedTenureId : e.tenureId === selectedTenureId;
+        });
+      }
+    } else if (matchedTenure.isCurrent || matchedTenure.status === "active") {
+      result = events.filter((e) => {
+        const resolved = resolveTenureForEvent(e, tenuresList);
+        return resolved ? resolved.id === matchedTenure.id : (e.tenureId === matchedTenure.id || !e.tenureId);
+      });
+    } else {
+      // Past tenure: load past tenure events only
+      const snapshotEvents = Array.isArray(matchedTenure.events) ? matchedTenure.events : [];
+      const pastFromStore = events.filter((e) => {
+        const resolved = resolveTenureForEvent(e, tenuresList);
+        return resolved ? resolved.id === matchedTenure.id : e.tenureId === matchedTenure.id;
+      });
+
+      const map = new Map<string, EventItem>();
+      [...snapshotEvents, ...pastFromStore].forEach((ev) => {
+        if (ev && (ev.id || ev.slug)) map.set(ev.id || ev.slug, ev);
+      });
+      result = Array.from(map.values());
+    }
+    return result;
+  }, [events, selectedTenureId, tenuresList]);
+
+  // Autocomplete / search filtered events for dropdown
+  const filteredDropdownEvents = useMemo(() => {
+    if (!eventSearchQuery.trim()) return tenureFilteredEvents;
+    const q = eventSearchQuery.toLowerCase();
+    return tenureFilteredEvents.filter(
+      (e) =>
+        e.name.toLowerCase().includes(q) ||
+        e.slug.toLowerCase().includes(q) ||
+        (e.category && e.category.toLowerCase().includes(q))
+    );
+  }, [tenureFilteredEvents, eventSearchQuery]);
+
+  // Selectable event options list for keyboard navigation and rendering
+  const selectableEventOptions = useMemo(() => {
+    const allOption = {
+      slug: "all",
+      name: "All Events & Forms",
+      category: "Overview",
+      count: allRegistrations.length,
+      isAll: true,
+    };
+
+    const eventOptions = filteredDropdownEvents.map((evt) => {
+      // Find all child events if this is an umbrella parent fest
+      const childEvents = evt.isParentFest
+        ? allKnownEvents.filter(
+            (e) =>
+              (e.parentEventId && (e.parentEventId === evt.id || e.parentEventId === evt.slug)) ||
+              (e.parentEventSlug && (e.parentEventSlug === evt.slug || e.parentEventSlug === evt.id)) ||
+              (e.parentEventName && e.parentEventName.toLowerCase().trim() === evt.name.toLowerCase().trim())
+          )
+        : [];
+      const childSlugs = new Set(childEvents.map((c) => (c.slug || "").toLowerCase()));
+      const childIds = new Set(childEvents.map((c) => (c.id || "").toLowerCase()));
+      const childNames = new Set(childEvents.map((c) => (c.name || "").toLowerCase()));
+
+      const count = allRegistrations.filter((r) => {
+        const rName = (r.eventName || "").toLowerCase();
+        const rSlug = (r.eventSlug || "").toLowerCase();
+        const rId = (r.eventId || "").toLowerCase();
+        const rParentId = (r.parentEventId || "").toLowerCase();
+        const rParentName = (r.parentEventName || "").toLowerCase();
+
+        // Direct match
+        if (
+          rName === evt.name.toLowerCase() ||
+          rSlug === evt.slug.toLowerCase() ||
+          rId === evt.id.toLowerCase() ||
+          rId === evt.slug.toLowerCase() ||
+          rSlug === evt.id.toLowerCase()
+        ) {
+          return true;
+        }
+
+        // Umbrella aggregation: if this is a parent fest, count all sub-competition registrations
+        if (evt.isParentFest) {
+          if (
+            childNames.has(rName) ||
+            childSlugs.has(rSlug) ||
+            childIds.has(rId) ||
+            childSlugs.has(rId) ||
+            childIds.has(rSlug) ||
+            rParentId === evt.id.toLowerCase() ||
+            rParentId === evt.slug.toLowerCase() ||
+            (rParentName && rParentName === evt.name.toLowerCase())
+          ) {
+            return true;
+          }
+        }
+        return false;
+      }).length;
+
+      return {
+        slug: evt.id || evt.slug,
+        name: evt.parentEventName ? `${evt.name} (Part of ${evt.parentEventName})` : evt.name,
+        category: evt.isParentFest ? "Umbrella Event" : (evt.category || "Event"),
+        count,
+        isAll: false,
+      };
+    });
+
+    return [allOption, ...eventOptions];
+  }, [filteredDropdownEvents, allRegistrations, allKnownEvents]);
+
+  // Keep highlighted index in sync when search changes
+  useEffect(() => {
+    if (eventSearchQuery.trim() && selectableEventOptions.length > 1) {
+      setHighlightedIndex(1); // highlight first matching event
+    } else {
+      setHighlightedIndex(0);
+    }
+  }, [eventSearchQuery, selectableEventOptions.length]);
+
+  // Auto-scroll highlighted option into view
+  useEffect(() => {
+    if (isEventDropdownOpen && optionsListRef.current) {
+      const el = optionsListRef.current.querySelector(`[data-option-index="${highlightedIndex}"]`);
+      if (el) {
+        el.scrollIntoView({ block: "nearest" });
+      }
+    }
+  }, [highlightedIndex, isEventDropdownOpen]);
+
+  const handleSelectEventOption = (slugOrId: string) => {
+    setSelectedEventId(slugOrId);
+    setIsEventDropdownOpen(false);
+    setEventSearchQuery("");
+  };
+
+  const handleEventInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isEventDropdownOpen) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        setIsEventDropdownOpen(true);
+        setHighlightedIndex(selectableEventOptions.length > 1 && selectedEventId !== "all" ? 1 : 0);
+      }
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex((prev) =>
+        prev < selectableEventOptions.length - 1 ? prev + 1 : 0
+      );
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex((prev) =>
+        prev > 0 ? prev - 1 : selectableEventOptions.length - 1
+      );
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const chosen = selectableEventOptions[highlightedIndex];
+      if (chosen) {
+        handleSelectEventOption(chosen.slug);
+      }
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setIsEventDropdownOpen(false);
+    }
+  };
 
   // Current selected event object
   const currentEvent = useMemo(() => {
-    return events.find((e) => e.id === selectedEventId || e.slug === selectedEventId);
-  }, [events, selectedEventId]);
+    if (!selectedEventId || selectedEventId === "all") return null;
+    return allKnownEvents.find((e) => e.id === selectedEventId || e.slug.toLowerCase() === selectedEventId.toLowerCase() || e.name.toLowerCase() === selectedEventId.toLowerCase()) || null;
+  }, [allKnownEvents, selectedEventId]);
 
   // 3. Auto Color Scheme & Logo Extraction when Selected Event Changes
   useEffect(() => {
@@ -284,13 +564,24 @@ function AdminCertificatesContent() {
     });
   }, [allRegistrations, currentEvent]);
 
-  // Certificates for the current selected event
+  // Certificates for the current selected event (or filtered by tenure)
   const eventCertificates = useMemo(() => {
-    if (!currentEvent) return allCertificates;
-    return allCertificates.filter(
-      (c) => c.eventId === currentEvent.id || c.eventSlug === currentEvent.slug
-    );
-  }, [allCertificates, currentEvent]);
+    if (currentEvent) {
+      return allCertificates.filter(
+        (c) => c.eventId === currentEvent.id || c.eventSlug === currentEvent.slug
+      );
+    }
+    if (selectedTenureId !== "all") {
+      const tenureEventIds = new Set(tenureFilteredEvents.map((e) => (e.id || "").toLowerCase()));
+      const tenureEventSlugs = new Set(tenureFilteredEvents.map((e) => (e.slug || "").toLowerCase()));
+      return allCertificates.filter(
+        (c) =>
+          tenureEventIds.has((c.eventId || "").toLowerCase()) ||
+          tenureEventSlugs.has((c.eventSlug || "").toLowerCase())
+      );
+    }
+    return allCertificates;
+  }, [allCertificates, currentEvent, selectedTenureId, tenureFilteredEvents]);
 
   // Set of participant registration IDs that already have a certificate
   const certifiedRegIds = useMemo(() => {
@@ -666,64 +957,231 @@ function AdminCertificatesContent() {
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* 2. EVENT SELECTOR BAR */}
+      {/* 2. FILTER MENU BAR: TENURE PERIOD & EVENT FILTER */}
       {/* ------------------------------------------------------------- */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-3">
-          <label className="text-xs font-bold text-slate-700 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
-            <Calendar className="w-4 h-4 text-[#17458F]" />
-            Target Event:
-          </label>
-          <select
-            value={selectedEventId}
-            onChange={(e) => setSelectedEventId(e.target.value)}
-            className="flex-1 max-w-md px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#17458F]/20"
-          >
-            {events.map((evt) => (
-              <option key={evt.id} value={evt.id}>
-                {evt.name} ({evt.date || "Scheduled"})
-              </option>
-            ))}
-          </select>
+      <div className="p-4 sm:p-5 rounded-3xl bg-white border border-slate-200 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        
+        {/* Left Side: Tenure Filter & Autocomplete Event Filter */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
+          
+          {/* 1. Tenure Dropdown Filter */}
+          <div className="min-w-[180px] sm:min-w-[210px]">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+              Tenure Period
+            </span>
+            <div className="relative">
+              <select
+                value={selectedTenureId}
+                onChange={(e) => {
+                  setUserSelectedTenure(true);
+                  setSelectedTenureId(e.target.value);
+                  setSelectedEventId("all");
+                }}
+                className="w-full pl-9 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:outline-none focus:border-[#17458F] cursor-pointer appearance-none shadow-2xs"
+              >
+                <option value="all">All Tenures</option>
+                {tenuresList.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.tenureNumber} ({t.label})
+                  </option>
+                ))}
+              </select>
+              <Calendar className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          </div>
 
+          {/* 2. Autocomplete & Dropdown Supported Event Filter */}
+          <div className="relative flex-1 min-w-[240px]" ref={eventDropdownRef}>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+              Event / Competition Filter
+            </span>
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={
+                  isEventDropdownOpen
+                    ? eventSearchQuery
+                    : !selectedEventId
+                    ? ""
+                    : selectedEventId === "all"
+                    ? "All Events & Forms"
+                    : (allKnownEvents.find(e => e.id === selectedEventId || e.slug.toLowerCase() === selectedEventId.toLowerCase() || e.name.toLowerCase() === selectedEventId.toLowerCase())?.name || selectedEventId)
+                }
+                onFocus={() => {
+                  setIsEventDropdownOpen(true);
+                  setEventSearchQuery("");
+                }}
+                onChange={(e) => {
+                  setEventSearchQuery(e.target.value);
+                  setIsEventDropdownOpen(true);
+                }}
+                onKeyDown={handleEventInputKeyDown}
+                placeholder={
+                  !selectedEventId 
+                    ? "Select an event or choose 'All Events'..." 
+                    : selectedEventId === "all" 
+                    ? "All Events selected (search to change)..." 
+                    : "Change event (use ↑↓ keys & Enter)..."
+                }
+                className="w-full pl-10 pr-9 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:outline-none focus:border-[#17458F] shadow-2xs"
+              />
+              {selectedEventId ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedEventId("");
+                    setEventSearchQuery("");
+                    setIsEventDropdownOpen(false);
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1 rounded-full hover:bg-slate-200 cursor-pointer"
+                  title="Clear event filter"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              )}
+            </div>
+
+            {/* Autocomplete Dropdown Options Menu with Keyboard Controls */}
+            {isEventDropdownOpen && (
+              <div 
+                ref={optionsListRef}
+                className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 max-h-64 overflow-y-auto p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-150 scrollbar-thin"
+              >
+                {selectableEventOptions.map((opt, idx) => {
+                  const isHighlighted = highlightedIndex === idx;
+                  const isCurrentActive = opt.isAll 
+                    ? selectedEventId === "all" 
+                    : (Boolean(selectedEventId) && (selectedEventId === opt.slug || selectedEventId.toLowerCase() === opt.slug.toLowerCase() || (currentEvent && (currentEvent.id === opt.slug || currentEvent.slug.toLowerCase() === opt.slug.toLowerCase()))));
+
+                  return (
+                    <button
+                      key={opt.slug}
+                      type="button"
+                      data-option-index={idx}
+                      onMouseEnter={() => setHighlightedIndex(idx)}
+                      onClick={() => handleSelectEventOption(opt.slug)}
+                      className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
+                        isHighlighted
+                          ? "bg-[#17458F] text-white shadow-xs ring-1 ring-[#17458F]"
+                          : isCurrentActive
+                          ? "bg-slate-100 text-[#17458F]"
+                          : "text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 truncate pr-2">
+                        <span className="truncate">{opt.name}</span>
+                        {!opt.isAll && (
+                          <span
+                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${
+                              isHighlighted 
+                                ? "bg-white/20 text-white" 
+                                : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            {opt.category}
+                          </span>
+                        )}
+                      </div>
+                      <Badge 
+                        variant={isHighlighted ? "orange" : isCurrentActive ? "orange" : "slate"} 
+                        size="sm"
+                      >
+                        {opt.count}
+                      </Badge>
+                    </button>
+                  );
+                })}
+
+                {selectableEventOptions.length === 0 && (
+                  <div className="p-3 text-center text-xs text-slate-400">
+                    No matching events found
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+        </div>
+
+        {/* Right Corner: Poster Extraction status & Tab Switcher */}
+        <div className="pt-1 md:pt-0 flex flex-wrap items-end sm:items-center gap-3">
           {isExtractingColor && (
             <span className="text-[11px] text-amber-600 font-bold flex items-center gap-1 animate-pulse">
               <Sparkles className="w-3.5 h-3.5" />
-              Sampling 4:5 Poster Colors...
+              Sampling Colors...
             </span>
           )}
-        </div>
 
-        {/* Tab Switcher */}
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl self-start sm:self-auto">
-          <button
-            onClick={() => setActiveTab("generate")}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-              activeTab === "generate"
-                ? "bg-white text-[#17458F] shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-            Issue Certificates
-          </button>
-          <button
-            onClick={() => setActiveTab("issued")}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-              activeTab === "issued"
-                ? "bg-white text-[#17458F] shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5 text-[#17458F]" />
-            Issued ({eventCertificates.length})
-          </button>
+          {/* Tab Switcher */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl self-start sm:self-auto">
+            <button
+              onClick={() => setActiveTab("generate")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === "generate"
+                  ? "bg-white text-[#17458F] shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              Issue Certificates
+            </button>
+            <button
+              onClick={() => setActiveTab("issued")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === "issued"
+                  ? "bg-white text-[#17458F] shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5 text-[#17458F]" />
+              Issued ({eventCertificates.length})
+            </button>
+          </div>
         </div>
       </div>
 
       {/* ------------------------------------------------------------- */}
       {/* 3. TAB 1: GENERATE CERTIFICATES */}
       {/* ------------------------------------------------------------- */}
+      {activeTab === "generate" && !currentEvent && (
+        <div className="bg-white rounded-3xl border border-slate-200 p-8 sm:p-12 text-center shadow-xs space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center mx-auto">
+            <Award className="w-8 h-8" />
+          </div>
+          <div>
+            <h3 className="font-heading font-extrabold text-lg sm:text-xl text-slate-900">
+              Select an Event to Issue Certificates
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto mt-1">
+              Official digital certificates are generated and issued per event or competition. Choose an event from the filter above or pick from the active events below:
+            </p>
+          </div>
+
+          {tenureFilteredEvents.length > 0 ? (
+            <div className="flex flex-wrap justify-center gap-2 max-w-2xl mx-auto pt-2">
+              {tenureFilteredEvents.slice(0, 10).map((evt) => (
+                <button
+                  key={evt.id || evt.slug}
+                  type="button"
+                  onClick={() => handleSelectEventOption(evt.id || evt.slug)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-50 hover:bg-[#17458F] hover:text-white text-slate-700 border border-slate-200 transition-all cursor-pointer shadow-2xs hover:shadow-xs"
+                >
+                  {evt.name}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs text-slate-400 pt-2">
+              No events found in the selected tenure.
+            </div>
+          )}
+        </div>
+      )}
       {activeTab === "generate" && currentEvent && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* LEFT 7 COLS: PARTICIPANT SELECTION */}
@@ -1259,7 +1717,7 @@ function AdminCertificatesContent() {
                 Issued Official Credentials ({eventCertificates.length})
               </h3>
               <p className="text-xs text-slate-500">
-                All digital certificates published for {currentEvent ? currentEvent.name : "all events"}
+                All digital certificates published for {currentEvent ? currentEvent.name : (selectedTenureId === "all" ? "all tenures and events" : "all events in selected tenure")}
               </p>
             </div>
 
@@ -1403,6 +1861,14 @@ function AdminCertificatesContent() {
                       </td>
                     </tr>
                   ))}
+
+                {eventCertificates.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-slate-400">
+                      No issued certificates found{currentEvent ? ` for "${currentEvent.name}"` : ""}.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
