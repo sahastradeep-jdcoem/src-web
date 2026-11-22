@@ -167,9 +167,9 @@ export async function downloadCertificateAsImage(
           // Calibrate pill badge & text in cloned DOM for mathematically centered rendering in html2canvas
           const pillBadge = clonedEl.querySelector<HTMLElement>("[data-certificate-pill]");
           if (pillBadge) {
-            pillBadge.style.paddingTop = "3.5px";
-            pillBadge.style.paddingBottom = "6.5px";
-            pillBadge.style.marginTop = "2px";
+            pillBadge.style.paddingTop = "3px";
+            pillBadge.style.paddingBottom = "5px";
+            pillBadge.style.marginTop = "6px";
           }
           const pillText = clonedEl.querySelector<HTMLElement>("[data-certificate-pill-text]");
           if (pillText) {
@@ -179,9 +179,11 @@ export async function downloadCertificateAsImage(
             pillText.style.justifyContent = "center";
           }
 
-          // Calibrate recipient name in cloned DOM to guarantee clean separation above the ornamental line
+          // Calibrate recipient name in cloned DOM: move more up and guarantee clean separation above the ornamental line
           const nameHeading = clonedEl.querySelector<HTMLElement>("h2");
           if (nameHeading) {
+            nameHeading.style.position = "relative";
+            nameHeading.style.top = "-7px";
             nameHeading.style.marginBottom = "14px";
           }
         }
