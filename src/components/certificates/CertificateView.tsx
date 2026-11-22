@@ -323,7 +323,7 @@ export function CertificateView({
           >
             <span
               data-certificate-pill-text
-              className="font-sans font-black text-xs sm:text-sm tracking-[0.26em] uppercase text-white whitespace-nowrap leading-none flex items-center justify-center text-center relative -top-[0.5px]"
+              className="font-sans font-black text-xs sm:text-sm tracking-[0.26em] uppercase text-white whitespace-nowrap leading-none flex items-center justify-center text-center relative -top-[1px]"
               style={{
                 lineHeight: "1",
                 display: "inline-flex",
