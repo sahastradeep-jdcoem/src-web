@@ -146,30 +146,30 @@ export function CertificateView({
       {/* 2. BOTTOM-LEFT CORNER FLUID WAVES (CONFINED TO OUTER CORNER) */}
       <svg
         className="absolute -bottom-1 -left-1 pointer-events-none z-0"
-        width={240}
-        height={170}
-        viewBox="0 0 240 170"
+        width={210}
+        height={150}
+        viewBox="0 0 210 150"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        style={{ width: "240px", height: "170px" }}
+        style={{ width: "210px", height: "150px" }}
       >
         <path
-          d="M-20 190L160 190C125 150 95 130 75 95C55 60 30 30 -20 0L-20 190Z"
+          d="M-20 170L140 170C110 130 80 110 60 75C40 45 20 20 -20 0L-20 170Z"
           fill={palette.primary}
           fillOpacity="0.94"
         />
         <path
-          d="M-20 190L115 190C85 155 60 130 40 95C20 65 5 40 -20 25L-20 190Z"
+          d="M-20 170L100 170C70 135 50 110 30 75C15 50 0 25 -20 15L-20 170Z"
           fill={palette.secondary}
           fillOpacity="0.82"
         />
         <path
-          d="M-20 190L70 190C45 160 30 135 15 105L-20 85L-20 190Z"
+          d="M-20 170L60 170C40 140 25 115 10 85L-20 65L-20 170Z"
           fill={palette.accent}
           fillOpacity="0.45"
         />
         <path
-          d="M-10 110C15 125 40 150 75 180"
+          d="M-10 90C10 105 30 130 65 160"
           stroke="#FFFFFF"
           strokeWidth="1.2"
           strokeOpacity="0.45"
@@ -195,26 +195,6 @@ export function CertificateView({
         <div className="absolute inset-0 z-40 bg-red-950/15 backdrop-blur-[1px] flex items-center justify-center">
           <div className="border-4 border-red-600 text-red-600 uppercase font-black tracking-widest text-4xl sm:text-6xl px-8 py-3 rounded-2xl rotate-[-15deg] shadow-2xl bg-white/90">
             REVOKED
-          </div>
-        </div>
-      )}
-
-      {/* ------------------------------------------------------------- */}
-      {/* OFFICIAL VERIFICATION QR SEAL (UPPER RIGHT UNDER JD HEADER)   */}
-      {/* ------------------------------------------------------------- */}
-      {showQrCode && (
-        <div className="absolute top-21 sm:top-23 md:top-25 right-8 sm:right-10 md:right-12 z-20 flex flex-col items-center">
-          <div className="p-1.5 rounded-xl bg-white/95 border border-slate-200/90 shadow-xs flex flex-col items-center">
-            <ScannableQRCode
-              value={certificate.verificationUrl}
-              size={52}
-              level="M"
-              fgColor={palette.primary}
-            />
-            <div className="flex items-center gap-1 mt-1 text-[7.5px] font-bold uppercase tracking-wider text-slate-500">
-              <ShieldCheck className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
-              <span>Verify</span>
-            </div>
           </div>
         </div>
       )}
@@ -363,14 +343,29 @@ export function CertificateView({
       </main>
 
       {/* ------------------------------------------------------------- */}
-      {/* 3. FOOTER (4 INSTITUTIONAL SIGNATURES ON PURE WHITE BASELINE)  */}
+      {/* 3. FOOTER (CLEAN STANDALONE QR CODE & 4 INSTITUTIONAL SIGNATURES) */}
       {/* 100% CONTRAST & LEGIBILITY GUARANTEED ACROSS ALL 4 SIGNATORIES */}
       {/* ------------------------------------------------------------- */}
       <footer
         data-certificate-footer
-        className="relative z-10 pt-2.5 sm:pt-3.5 border-t border-slate-100/90 w-full"
+        className="relative z-10 pt-2.5 sm:pt-3.5 border-t border-slate-100/90 flex items-end justify-between gap-3 sm:gap-4 w-full"
       >
-        <div className="grid grid-cols-4 gap-4 sm:gap-6 items-end text-center w-full max-w-3xl sm:max-w-4xl mx-auto px-4">
+        {/* Left: Clean Standalone Authenticity QR Code */}
+        {showQrCode && (
+          <div className="flex flex-col items-center justify-center shrink-0">
+            <div className="p-1 rounded-lg bg-white/95 border border-slate-200/90 shadow-xs">
+              <ScannableQRCode
+                value={certificate.verificationUrl}
+                size={46}
+                level="M"
+                fgColor={palette.primary}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Right: Signatures Grid (4 Institutional Columns) */}
+        <div className="flex-1 grid grid-cols-4 gap-2 sm:gap-4 items-end text-center">
           {certificate.signatories.slice(0, 4).map((sig, idx) => (
             <div key={sig.id || idx} className="space-y-1 flex flex-col items-center">
               {/* Signature Image (Transparent PNG) or Cursive Text */}
