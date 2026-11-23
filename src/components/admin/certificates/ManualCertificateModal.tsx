@@ -30,6 +30,7 @@ import {
   CertificateColorPalette,
 } from "@/types/certificates";
 import { findStudentByBtId } from "@/lib/usersStore";
+import { resolveTenureForEvent } from "@/lib/eventsStore";
 import {
   generateCertificateNumber,
   batchSaveCertificatesToFirestore,
@@ -94,42 +95,82 @@ export function ManualCertificateModal({
     if (initialEventId) setSelectedEventId(initialEventId);
   }, [initialEventId]);
 
-  // Compute events belonging to selected tenure
+  // Compute events belonging strictly to the selected tenure
   const tenureFilteredEvents = useMemo(() => {
     if (!selectedTenureId || selectedTenureId === "all") return allEvents;
-    const activeTenure = tenuresList.find((t) => t.id === selectedTenureId);
-    if (!activeTenure) return allEvents;
+    const matchedTenure = tenuresList.find((t) => t.id === selectedTenureId);
+    if (!matchedTenure) return allEvents;
 
-    const startDate = activeTenure.startDate ? new Date(activeTenure.startDate).getTime() : 0;
-    const endDate = activeTenure.endDate ? new Date(activeTenure.endDate).getTime() : Infinity;
+    if (matchedTenure.isCurrent || matchedTenure.status === "active") {
+      // Current tenure: strictly show events that belong to this tenure only!
+      return allEvents.filter((e) => {
+        // Exclude snapshot events stored inside another past tenure's t.events
+        const isFromPastSnapshot = tenuresList.some(
+          (otherT) =>
+            otherT.id !== matchedTenure.id &&
+            Array.isArray(otherT.events) &&
+            otherT.events.some((pastEv) => (pastEv.id && pastEv.id === e.id) || (pastEv.slug && pastEv.slug === e.slug))
+        );
+        if (isFromPastSnapshot) return false;
 
-    return allEvents.filter((e) => {
-      if (e.tenureId && e.tenureId === selectedTenureId) return true;
-      if (e.date) {
-        const eTime = new Date(e.date).getTime();
-        return eTime >= startDate && eTime <= endDate;
-      }
-      return false;
-    });
+        // If explicitly tagged to another tenure, exclude
+        if (e.tenureId && e.tenureId !== matchedTenure.id) return false;
+
+        const resolved = resolveTenureForEvent(e, tenuresList);
+        return resolved ? resolved.id === matchedTenure.id : (e.tenureId === matchedTenure.id || !e.tenureId);
+      });
+    } else {
+      // Past / Archived tenure: load events from this past tenure's snapshot + store tagged events
+      const snapshotEvents = Array.isArray(matchedTenure.events) ? matchedTenure.events : [];
+      const pastFromStore = allEvents.filter((e) => {
+        if (e.tenureId) return e.tenureId === matchedTenure.id;
+        const resolved = resolveTenureForEvent(e, tenuresList);
+        return resolved?.id === matchedTenure.id;
+      });
+
+      const map = new Map<string, EventItem>();
+      [...snapshotEvents, ...pastFromStore].forEach((ev) => {
+        if (ev && (ev.id || ev.slug)) map.set(ev.id || ev.slug, ev);
+      });
+      return Array.from(map.values());
+    }
   }, [allEvents, selectedTenureId, tenuresList]);
 
   // Current selected event object
   const currentEvent = useMemo(() => {
     if (!selectedEventId) return null;
-    return allEvents.find(
-      (e) =>
-        e.id === selectedEventId ||
-        e.slug.toLowerCase() === selectedEventId.toLowerCase() ||
-        e.name.toLowerCase() === selectedEventId.toLowerCase()
-    ) || null;
-  }, [allEvents, selectedEventId]);
+    return (
+      tenureFilteredEvents.find(
+        (e) =>
+          e.id === selectedEventId ||
+          e.slug.toLowerCase() === selectedEventId.toLowerCase() ||
+          e.name.toLowerCase() === selectedEventId.toLowerCase()
+      ) ||
+      allEvents.find(
+        (e) =>
+          e.id === selectedEventId ||
+          e.slug.toLowerCase() === selectedEventId.toLowerCase() ||
+          e.name.toLowerCase() === selectedEventId.toLowerCase()
+      ) ||
+      null
+    );
+  }, [allEvents, tenureFilteredEvents, selectedEventId]);
 
-  // If no event selected or filtered out, select first event if available
+  // When tenureFilteredEvents changes, ensure selectedEventId is a valid event within this tenure
   useEffect(() => {
-    if (!selectedEventId && tenureFilteredEvents.length > 0) {
-      setSelectedEventId(tenureFilteredEvents[0].id || tenureFilteredEvents[0].slug);
+    if (tenureFilteredEvents.length > 0) {
+      const isCurrentSelectionValid = tenureFilteredEvents.some(
+        (e) =>
+          (e.id && e.id === selectedEventId) ||
+          (e.slug && e.slug.toLowerCase() === selectedEventId.toLowerCase())
+      );
+      if (!isCurrentSelectionValid) {
+        setSelectedEventId(tenureFilteredEvents[0].id || tenureFilteredEvents[0].slug);
+      }
+    } else {
+      setSelectedEventId("");
     }
-  }, [selectedEventId, tenureFilteredEvents]);
+  }, [tenureFilteredEvents, selectedEventId]);
 
   // 2. Template Styling States
   const [certType, setCertType] = useState<CertificateType>("PARTICIPATION");
