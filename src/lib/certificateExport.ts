@@ -71,20 +71,10 @@ export async function downloadCertificateAsImage(
       logging: false,
       imageTimeout: 10000,
       removeContainer: true,
-      windowWidth: 1280,
-      windowHeight: 900,
-      width: 1040,
-      height: 736,
       onclone: (clonedDoc) => {
         const clonedEl = clonedDoc.getElementById(elementId);
         if (clonedEl) {
           clonedEl.style.boxShadow = "none";
-          clonedEl.style.width = "1040px";
-          clonedEl.style.minWidth = "1040px";
-          clonedEl.style.maxWidth = "1040px";
-          clonedEl.style.height = "736px";
-          clonedEl.style.minHeight = "736px";
-          clonedEl.style.maxHeight = "736px";
 
           // Convert wave SVG elements into HTML5 canvas in cloned DOM
           // This bypasses html2canvas's known bug where inline SVGs are dropped/invisible

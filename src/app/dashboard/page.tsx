@@ -235,8 +235,8 @@ export default function StudentDashboardPage() {
     setIsDownloadingCertId(cert.id);
     setDownloadingCert(cert);
     try {
-      // Wait for offscreen certificate canvas to mount in DOM and fonts to settle
-      await new Promise((r) => setTimeout(r, 250));
+      // Wait for offscreen certificate canvas to mount in DOM
+      await new Promise((r) => setTimeout(r, 200));
       await downloadCertificateAsImage(
         `export-cert-${cert.id}`,
         `SRC-Certificate-${(cert.recipientName || "Student").replace(/\s+/g, "_")}`
@@ -3606,15 +3606,9 @@ export default function StudentDashboardPage() {
             left: "-9999px",
             top: "-9999px",
             width: "1040px",
-            minWidth: "1040px",
-            maxWidth: "1040px",
-            height: "736px",
-            minHeight: "736px",
-            maxHeight: "736px",
             zIndex: -100,
             pointerEvents: "none",
             opacity: 0,
-            overflow: "hidden",
           }}
         >
           <CertificateView
