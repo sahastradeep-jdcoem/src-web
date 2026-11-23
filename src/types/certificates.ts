@@ -70,6 +70,8 @@ export interface CertificateRecord {
 export interface CertificateSettings {
   defaultSignatories: CertificateSignatory[];
   defaultCitationTemplate: string;
+  defaultClubLogoUrl?: string;
+  clubLogosByEvent?: Record<string, string>;
   updatedAt?: string;
   updatedBy?: string;
 }

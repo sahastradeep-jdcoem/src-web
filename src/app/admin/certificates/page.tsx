@@ -83,7 +83,7 @@ import {
   generatePaletteFromBaseHex,
   DEFAULT_CERTIFICATE_PALETTES,
 } from "@/lib/colorExtractor";
-import { getStoredClubs, findClub } from "@/lib/councilStore";
+import { getStoredClubs, findClub, saveStoredClubs } from "@/lib/councilStore";
 import { CertificateView } from "@/components/certificates/CertificateView";
 import { downloadCertificateAsImage, printCertificate } from "@/lib/certificateExport";
 
@@ -691,6 +691,33 @@ function AdminCertificatesContent() {
     reader.readAsDataURL(file);
   };
 
+  // Club logo image upload helper
+  const handleClubLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Please upload a valid image file");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setClubLogoUrl(reader.result);
+        if (currentEvent) {
+          try {
+            if (typeof window !== "undefined") {
+              localStorage.setItem(`src_club_logo_${currentEvent.slug}`, reader.result);
+              localStorage.setItem(`src_club_logo_${currentEvent.id}`, reader.result);
+            }
+          } catch {}
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Save current signatories as persistent default settings
   const handleSaveDefaultSignatories = async () => {
     setIsSavingSignatories(true);
@@ -698,8 +725,20 @@ function AdminCertificatesContent() {
       await saveCertificateSettings({
         defaultSignatories: signatories,
         defaultCitationTemplate: citationTemplate,
+        defaultClubLogoUrl: clubLogoUrl || undefined,
+        clubLogosByEvent: currentEvent ? {
+          [currentEvent.slug]: clubLogoUrl,
+          [currentEvent.id]: clubLogoUrl,
+        } : undefined,
       });
-      alert("Institutional signatories saved as default for future certificates!");
+      if (clubLogoUrl && currentEvent) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem(`src_club_logo_${currentEvent.slug}`, clubLogoUrl);
+          localStorage.setItem(`src_club_logo_${currentEvent.id}`, clubLogoUrl);
+        }
+        saveSiteContentToFirestore(`cert_logo_${currentEvent.slug}`, { logoUrl: clubLogoUrl }).catch(() => {});
+      }
+      alert("Institutional signatories & default configuration saved for future certificates!");
     } catch (e) {
       console.error(e);
       alert("Could not save default signatories. Please retry.");
@@ -769,6 +808,10 @@ function AdminCertificatesContent() {
     if (typeof window !== "undefined") {
       try {
         localStorage.setItem("src_preview_cert", JSON.stringify(previewPayload));
+        if (previewPayload.clubLogoUrl && currentEvent) {
+          localStorage.setItem(`src_club_logo_${currentEvent.slug}`, previewPayload.clubLogoUrl);
+          localStorage.setItem(`src_club_logo_${currentEvent.id}`, previewPayload.clubLogoUrl);
+        }
       } catch {}
     }
 
@@ -852,12 +895,34 @@ function AdminCertificatesContent() {
 
       await batchSaveCertificatesToFirestore(certsToSave);
 
-      // Also ensure institutional signatures are synced to persistent settings
-      if (signatories && signatories.length > 0) {
-        saveCertificateSettings({
-          defaultSignatories: signatories,
-          defaultCitationTemplate: citationTemplate,
-        }).catch(console.warn);
+      // Also ensure institutional signatures & event club logo are synced to persistent settings
+      saveCertificateSettings({
+        defaultSignatories: signatories,
+        defaultCitationTemplate: citationTemplate,
+        defaultClubLogoUrl: clubLogoUrl || undefined,
+        clubLogosByEvent: currentEvent ? {
+          [currentEvent.slug]: clubLogoUrl,
+          [currentEvent.id]: clubLogoUrl,
+        } : undefined,
+      }).catch(console.warn);
+
+      if (clubLogoUrl && currentEvent) {
+        try {
+          if (typeof window !== "undefined") {
+            localStorage.setItem(`src_club_logo_${currentEvent.slug}`, clubLogoUrl);
+            localStorage.setItem(`src_club_logo_${currentEvent.id}`, clubLogoUrl);
+          }
+          saveSiteContentToFirestore(`cert_logo_${currentEvent.slug}`, { logoUrl: clubLogoUrl }).catch(console.warn);
+          saveSiteContentToFirestore(`cert_logo_${currentEvent.id}`, { logoUrl: clubLogoUrl }).catch(console.warn);
+
+          // If matched club exists, persist logo to club roster
+          const clubs = getStoredClubs();
+          const matchedClub = findClub(clubs, currentEvent.organizerClubSlug || currentEvent.organizer || "");
+          if (matchedClub && (!matchedClub.logoImage || matchedClub.logoImage !== clubLogoUrl)) {
+            matchedClub.logoImage = clubLogoUrl;
+            saveStoredClubs(clubs).catch(console.warn);
+          }
+        } catch {}
       }
 
       // Instantly update local state so certificates appear immediately
@@ -1611,6 +1676,20 @@ function AdminCertificatesContent() {
                     placeholder="Club logo URL or upload..."
                     className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs bg-white"
                   />
+
+                  <label
+                    className="px-2 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 cursor-pointer text-xs flex items-center gap-1 shrink-0 font-medium transition-colors shadow-2xs"
+                    title="Upload club emblem image"
+                  >
+                    <Upload className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Upload</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleClubLogoUpload}
+                    />
+                  </label>
 
                   {clubLogoUrl && (
                     <button

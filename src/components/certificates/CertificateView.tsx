@@ -4,7 +4,12 @@ import React, { useState, useEffect } from "react";
 import { CertificateRecord, CertificateColorPalette, CertificateSignatory } from "@/types/certificates";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { DEFAULT_CERTIFICATE_PALETTES } from "@/lib/colorExtractor";
-import { getCertificateSettings, DEFAULT_INSTITUTIONAL_SIGNATORIES } from "@/lib/certificatesStore";
+import {
+  getCertificateSettings,
+  DEFAULT_INSTITUTIONAL_SIGNATORIES,
+  resolveCertificateClubLogoSync,
+  resolveCertificateClubLogoAsync,
+} from "@/lib/certificatesStore";
 
 interface CertificateViewProps {
   certificate: CertificateRecord;
@@ -40,6 +45,27 @@ export function CertificateView({
     }
   }, [certificate]);
 
+  // Auto-resolve organizing club logo synchronously on mount and reactively via fallbacks
+  const [resolvedClubLogo, setResolvedClubLogo] = useState<string>(() =>
+    resolveCertificateClubLogoSync(certificate)
+  );
+
+  useEffect(() => {
+    const syncLogo = resolveCertificateClubLogoSync(certificate);
+    if (syncLogo) {
+      setResolvedClubLogo(syncLogo);
+      return;
+    }
+
+    resolveCertificateClubLogoAsync(certificate)
+      .then((logo) => {
+        if (logo) {
+          setResolvedClubLogo(logo);
+        }
+      })
+      .catch(() => {});
+  }, [certificate]);
+
   const qrVerificationUrl = certificate.verificationUrl?.startsWith("http")
     ? certificate.verificationUrl
     : certificate.verificationUrl
@@ -47,10 +73,11 @@ export function CertificateView({
     : `https://srcjdcoem.in/verify/certificate/${certificate.id || certificate.certificateNumber}`;
 
   // Sanitize remote club logo through proxy to prevent canvas CORS tainting during html2canvas export
-  const clubLogoSrc = certificate.clubLogoUrl
-    ? certificate.clubLogoUrl.startsWith("http://") || certificate.clubLogoUrl.startsWith("https://")
-      ? `/api/proxy-image?url=${encodeURIComponent(certificate.clubLogoUrl)}`
-      : certificate.clubLogoUrl
+  const effectiveClubLogo = resolvedClubLogo || certificate.clubLogoUrl || "";
+  const clubLogoSrc = effectiveClubLogo
+    ? effectiveClubLogo.startsWith("http://") || effectiveClubLogo.startsWith("https://")
+      ? `/api/proxy-image?url=${encodeURIComponent(effectiveClubLogo)}`
+      : effectiveClubLogo
     : "";
 
   return (

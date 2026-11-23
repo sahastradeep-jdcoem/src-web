@@ -116,7 +116,9 @@ import {
 import { CertificateRecord } from "@/types/certificates";
 import { 
   getStudentCertificatesFromFirestore, 
-  subscribeToStudentCertificates 
+  subscribeToStudentCertificates,
+  hydrateCertificateClubLogo,
+  resolveCertificateClubLogoSync,
 } from "@/lib/certificatesStore";
 import { CertificateView } from "@/components/certificates/CertificateView";
 import { downloadCertificateAsImage } from "@/lib/certificateExport";
@@ -233,14 +235,17 @@ export default function StudentDashboardPage() {
 
   const handleDownloadCertificate = async (cert: CertificateRecord) => {
     setIsDownloadingCertId(cert.id);
-    setDownloadingCert(cert);
     try {
-      // Wait for offscreen certificate canvas to mount in DOM
-      await new Promise((r) => setTimeout(r, 200));
-      const cleanEvent = (cert.eventName || "Event").trim();
-      const cleanRecipient = (cert.recipientName || "Student").trim().replace(/\s+/g, "_");
+      // Pre-hydrate certificate with club logo and signatories before DOM mount
+      const hydratedCert = await hydrateCertificateClubLogo(cert);
+      setDownloadingCert(hydratedCert);
+
+      // Wait for offscreen certificate canvas to mount in DOM and images to be decoded
+      await new Promise((r) => setTimeout(r, 350));
+      const cleanEvent = (hydratedCert.eventName || "Event").trim();
+      const cleanRecipient = (hydratedCert.recipientName || "Student").trim().replace(/\s+/g, "_");
       await downloadCertificateAsImage(
-        `export-cert-${cert.id}`,
+        `export-cert-${hydratedCert.id}`,
         `SRC-${cleanEvent} Certificate-${cleanRecipient}`
       );
     } finally {
@@ -679,7 +684,12 @@ export default function StudentDashboardPage() {
     if (certEmail || certBtId) {
       getStudentCertificatesFromFirestore(certEmail, certBtId).then((certs) => {
         if (isCurrent) {
-          setCertificates(certs);
+          const hydrated = certs.map((c) => {
+            if (c.clubLogoUrl) return c;
+            const logo = resolveCertificateClubLogoSync(c);
+            return logo ? { ...c, clubLogoUrl: logo } : c;
+          });
+          setCertificates(hydrated);
           setIsCertificatesLoading(false);
         }
       });
@@ -692,7 +702,12 @@ export default function StudentDashboardPage() {
       certBtId,
       (cloudCerts) => {
         if (isCurrent) {
-          setCertificates(cloudCerts);
+          const hydrated = cloudCerts.map((c) => {
+            if (c.clubLogoUrl) return c;
+            const logo = resolveCertificateClubLogoSync(c);
+            return logo ? { ...c, clubLogoUrl: logo } : c;
+          });
+          setCertificates(hydrated);
           setIsCertificatesLoading(false);
         }
       }

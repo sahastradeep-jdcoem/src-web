@@ -26,6 +26,8 @@ import {
   cleanUndefined,
 } from "@/lib/firebase/firestore";
 import { enqueueCloudWrite } from "./dataSyncEngine";
+import { getStoredClubs, findClub } from "./councilStore";
+import { getStoredEvents } from "./eventsStore";
 
 const CERTIFICATES_COLLECTION = "certificates";
 const SETTINGS_DOC_ID = "certificate_settings";
@@ -543,6 +545,24 @@ export async function batchSaveCertificatesToFirestore(
     }
   }
 
+  // 3b. Persist event club logos so they are never lost even if stripped from registry
+  for (const cert of cleanedCerts) {
+    if (cert.clubLogoUrl && cert.clubLogoUrl.trim()) {
+      try {
+        if (typeof window !== "undefined") {
+          if (cert.eventSlug) localStorage.setItem(`src_club_logo_${cert.eventSlug}`, cert.clubLogoUrl);
+          if (cert.eventId) localStorage.setItem(`src_club_logo_${cert.eventId}`, cert.clubLogoUrl);
+        }
+        if (cert.eventSlug) {
+          saveSiteContentToFirestore(`cert_logo_${cert.eventSlug}`, { logoUrl: cert.clubLogoUrl }).catch(() => {});
+        }
+        if (cert.eventId) {
+          saveSiteContentToFirestore(`cert_logo_${cert.eventId}`, { logoUrl: cert.clubLogoUrl }).catch(() => {});
+        }
+      } catch {}
+    }
+  }
+
   // 4. Local storage cache update & instant cross-tab notification
   try {
     if (typeof window !== "undefined") {
@@ -696,31 +716,202 @@ export function subscribeToCertificates(
 }
 
 /**
- * Get persistent administrative certificate settings (signatories, default citations)
+ * Get persistent administrative certificate settings (signatories, default citations, club emblems)
  */
 export async function getCertificateSettings(): Promise<CertificateSettings> {
   try {
     const remote = await getSiteContentFromFirestore<CertificateSettings>(SETTINGS_DOC_ID);
-    if (remote && remote.defaultSignatories && remote.defaultSignatories.length > 0) {
-      return remote;
+    if (remote) {
+      const merged: CertificateSettings = {
+        defaultSignatories: remote.defaultSignatories?.length > 0 ? remote.defaultSignatories : DEFAULT_INSTITUTIONAL_SIGNATORIES,
+        defaultCitationTemplate: remote.defaultCitationTemplate || DEFAULT_CITATION_TEMPLATE,
+        defaultClubLogoUrl: remote.defaultClubLogoUrl || "",
+        clubLogosByEvent: remote.clubLogosByEvent || {},
+        updatedAt: remote.updatedAt,
+        updatedBy: remote.updatedBy,
+      };
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("src_certificate_settings", JSON.stringify(merged));
+        } catch {}
+      }
+      return merged;
     }
   } catch (e) {
     console.warn("Could not fetch remote certificate settings:", e);
   }
 
+  if (typeof window !== "undefined") {
+    try {
+      const cached = localStorage.getItem("src_certificate_settings");
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch {}
+  }
+
   return {
     defaultSignatories: DEFAULT_INSTITUTIONAL_SIGNATORIES,
     defaultCitationTemplate: DEFAULT_CITATION_TEMPLATE,
+    defaultClubLogoUrl: "",
+    clubLogosByEvent: {},
   };
 }
 
 /**
  * Save persistent administrative certificate settings to Firestore
  */
-export async function saveCertificateSettings(settings: CertificateSettings): Promise<void> {
+export async function saveCertificateSettings(settings: Partial<CertificateSettings>): Promise<void> {
+  let existing: CertificateSettings | null = null;
+  try {
+    existing = await getCertificateSettings();
+  } catch {}
+
+  const mergedClubLogos = {
+    ...(existing?.clubLogosByEvent || {}),
+    ...(settings.clubLogosByEvent || {}),
+  };
+
   const cleanSettings = cleanUndefined({
-    ...settings,
+    defaultSignatories: settings.defaultSignatories || existing?.defaultSignatories || DEFAULT_INSTITUTIONAL_SIGNATORIES,
+    defaultCitationTemplate: settings.defaultCitationTemplate || existing?.defaultCitationTemplate || DEFAULT_CITATION_TEMPLATE,
+    defaultClubLogoUrl: settings.defaultClubLogoUrl !== undefined ? settings.defaultClubLogoUrl : (existing?.defaultClubLogoUrl || ""),
+    clubLogosByEvent: mergedClubLogos,
     updatedAt: new Date().toISOString(),
+    updatedBy: settings.updatedBy || existing?.updatedBy,
   });
+
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("src_certificate_settings", JSON.stringify(cleanSettings));
+    } catch {}
+  }
+
   await saveSiteContentToFirestore(SETTINGS_DOC_ID, cleanSettings);
+}
+
+/**
+ * Synchronously resolves the organizing club logo for a certificate record:
+ * 1. Certificate's own non-empty clubLogoUrl
+ * 2. System Clubs roster (`getStoredClubs()`) matched by organizerClubSlug or organizerClub
+ * 3. Events catalog (`getStoredEvents()`) matched by eventId, eventSlug, or eventName
+ * 4. LocalStorage caches (`src_certificate_settings`, `src_club_logo_*`, `src_preview_cert`)
+ */
+export function resolveCertificateClubLogoSync(cert: Partial<CertificateRecord>): string {
+  if (cert.clubLogoUrl && cert.clubLogoUrl.trim()) return cert.clubLogoUrl.trim();
+
+  // 1. Try clubs roster by organizerClubSlug or organizerClub
+  try {
+    const clubs = getStoredClubs();
+    const matched = findClub(clubs, cert.organizerClubSlug || cert.organizerClub || "");
+    const logo = matched?.logoImage || matched?.cardImage || matched?.heroImage;
+    if (logo && logo.trim()) return logo.trim();
+  } catch {}
+
+  // 2. Try events roster by eventId, eventSlug, or eventName
+  try {
+    const events = getStoredEvents();
+    const matchedEv = events.find(
+      (e) =>
+        (cert.eventId && e.id === cert.eventId) ||
+        (cert.eventSlug && e.slug === cert.eventSlug) ||
+        (cert.eventName && (e.name === cert.eventName || (e as any).title === cert.eventName))
+    );
+    if (matchedEv) {
+      if ((matchedEv as any).clubLogoUrl) return (matchedEv as any).clubLogoUrl;
+      const clubs = getStoredClubs();
+      const matched = findClub(clubs, matchedEv.organizerClubSlug || matchedEv.organizer || "");
+      const logo = matched?.logoImage || matched?.cardImage || matched?.heroImage;
+      if (logo && logo.trim()) return logo.trim();
+    }
+  } catch {}
+
+  // 3. Try cached certificate settings in localStorage
+  if (typeof window !== "undefined") {
+    try {
+      const cachedSettings = localStorage.getItem("src_certificate_settings");
+      if (cachedSettings) {
+        const parsed = JSON.parse(cachedSettings) as CertificateSettings;
+        const slug = cert.eventSlug || "";
+        const id = cert.eventId || "";
+        const byEvent = parsed.clubLogosByEvent?.[slug] || parsed.clubLogosByEvent?.[id];
+        if (byEvent && byEvent.trim()) return byEvent.trim();
+        if (parsed.defaultClubLogoUrl && parsed.defaultClubLogoUrl.trim()) return parsed.defaultClubLogoUrl.trim();
+      }
+    } catch {}
+
+    // 4. Try localStorage direct event logo keys
+    try {
+      const cachedBySlug = cert.eventSlug ? localStorage.getItem(`src_club_logo_${cert.eventSlug}`) : null;
+      if (cachedBySlug && cachedBySlug.trim()) return cachedBySlug.trim();
+
+      const cachedById = cert.eventId ? localStorage.getItem(`src_club_logo_${cert.eventId}`) : null;
+      if (cachedById && cachedById.trim()) return cachedById.trim();
+
+      const preview = localStorage.getItem("src_preview_cert");
+      if (preview) {
+        const parsed = JSON.parse(preview);
+        if (parsed?.clubLogoUrl && (parsed.eventId === cert.eventId || parsed.eventName === cert.eventName || parsed.organizerClub === cert.organizerClub)) {
+          return parsed.clubLogoUrl.trim();
+        }
+      }
+    } catch {}
+  }
+
+  return "";
+}
+
+/**
+ * Asynchronously resolves the organizing club logo for a certificate record:
+ * Runs synchronous resolution first, then checks Firestore certificate_settings,
+ * partitioned document site_content/cert_${cert.id}, and site_content/cert_logo_${slug}.
+ */
+export async function resolveCertificateClubLogoAsync(cert: CertificateRecord): Promise<string> {
+  const syncLogo = resolveCertificateClubLogoSync(cert);
+  if (syncLogo) return syncLogo;
+
+  // 1. Fetch remote certificate settings
+  try {
+    const settings = await getCertificateSettings();
+    if (settings) {
+      const slug = cert.eventSlug || "";
+      const id = cert.eventId || "";
+      const byEvent = settings.clubLogosByEvent?.[slug] || settings.clubLogosByEvent?.[id];
+      if (byEvent && byEvent.trim()) return byEvent.trim();
+      if (settings.defaultClubLogoUrl && settings.defaultClubLogoUrl.trim()) return settings.defaultClubLogoUrl.trim();
+    }
+  } catch {}
+
+  // 2. Fetch partitioned individual cert document from site_content/cert_${cert.id} or /certificates/${cert.id}
+  if (cert.id) {
+    try {
+      const fullDoc = await getCertificateById(cert.id);
+      if (fullDoc?.clubLogoUrl && fullDoc.clubLogoUrl.trim()) return fullDoc.clubLogoUrl.trim();
+    } catch {}
+  }
+
+  // 3. Fetch dedicated site_content logo doc
+  if (cert.eventSlug) {
+    try {
+      const doc = await getSiteContentFromFirestore<{ logoUrl?: string }>(`cert_logo_${cert.eventSlug}`);
+      if (doc?.logoUrl && doc.logoUrl.trim()) return doc.logoUrl.trim();
+    } catch {}
+  }
+
+  return "";
+}
+
+/**
+ * Hydrates a certificate with its organizing club logo before export or rendering
+ */
+export async function hydrateCertificateClubLogo(cert: CertificateRecord): Promise<CertificateRecord> {
+  if (cert.clubLogoUrl && cert.clubLogoUrl.trim()) return cert;
+  const logo = await resolveCertificateClubLogoAsync(cert);
+  if (logo) {
+    return {
+      ...cert,
+      clubLogoUrl: logo,
+    };
+  }
+  return cert;
 }
