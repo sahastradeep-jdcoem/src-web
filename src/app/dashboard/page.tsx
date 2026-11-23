@@ -397,9 +397,8 @@ export default function StudentDashboardPage() {
       if (remote && isCurrent) setEvents(remote);
     });
 
-    // Pre-sync clubs roster & certificate settings so club emblems and signatures are available in memory
+    // Pre-sync clubs roster so club emblems are available in memory
     syncClubsFromFirestore().catch(() => {});
-    getCertificateSettings().catch(() => {});
 
     // 2. SRC Dispatches
     setSrcDispatches(getStoredSrcDispatches());
@@ -684,24 +683,32 @@ export default function StudentDashboardPage() {
       }
     );
 
-    // 2b. Official Certificates Sync & Realtime Subscription
+    // 2b. Official Certificates Realtime Subscription (with instant local cache hydration)
     const certEmail = effUser?.email || user?.email;
     const certBtId = effUser?.btId || user?.btId;
-    if (certEmail || certBtId) {
-      getStudentCertificatesFromFirestore(certEmail, certBtId).then((certs) => {
-        if (isCurrent) {
-          const hydrated = certs
-            .filter((c) => c.id !== "preview-cert" && c.status === "PUBLISHED")
-            .map((c) => {
-              if (c.clubLogoUrl) return c;
-              const logo = resolveCertificateClubLogoSync(c);
-              return logo ? { ...c, clubLogoUrl: logo } : c;
-            });
-          setCertificates(hydrated);
-          setIsCertificatesLoading(false);
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("src_local_certificates_cache");
+        if (cached) {
+          const parsed: CertificateRecord[] = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const normEm = (certEmail || "").trim().toLowerCase();
+            const normBt = (certBtId || "").trim().toUpperCase();
+            const filtered = parsed.filter(
+              (c) =>
+                (normEm && c.recipientEmail?.toLowerCase() === normEm) ||
+                (normBt && c.recipientBtId?.toUpperCase() === normBt)
+            );
+            if (filtered.length > 0 && isCurrent) {
+              setCertificates(filtered);
+              setIsCertificatesLoading(false);
+            }
+          }
         }
-      });
-    } else {
+      } catch {}
+    }
+
+    if (!certEmail && !certBtId) {
       setIsCertificatesLoading(false);
     }
 

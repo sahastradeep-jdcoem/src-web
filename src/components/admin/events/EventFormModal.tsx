@@ -37,6 +37,8 @@ import {
   Star,
   UserCheck,
   ShieldCheck,
+  BookOpen,
+  Headphones,
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -47,8 +49,16 @@ import { cn } from "@/lib/utils";
 import { parseDateStringToTimestamp } from "@/lib/eventsStore";
 import { getStoredClubs } from "@/lib/councilStore";
 import { getStoredUsers } from "@/lib/usersStore";
+import { DEFAULT_DEPARTMENTS, DEPARTMENT_SHORT_NAMES } from "@/data/departments";
 
-export type EventModalSection = "details" | "schedule" | "registration" | "participation" | "gateCheckIn" | "visuals" | "qa";
+export const ALL_STUDY_YEARS = [
+  "1st Year",
+  "2nd Year",
+  "3rd Year",
+  "4th Year / Final Year"
+];
+
+export type EventModalSection = "details" | "participation" | "registration" | "guidelines" | "schedule" | "helpdesk" | "visuals" | "gateCheckIn" | "qa";
 
 export interface EventFormData {
   isLive?: boolean;
@@ -67,6 +77,8 @@ export interface EventFormData {
   status: "Registration Open" | "Registration Closed" | "Upcoming" | "Coming Soon" | "Dates Coming Soon (Open)" | "Completed" | "Cancelled" | "draft";
   gateCheckInBtIds?: string[];
   eventAccessBtIds?: string[];
+  eligibleDepartments?: string[];
+  eligibleYears?: string[];
   poster: string;
   cardImage: string;
   posterImage: string;
@@ -203,10 +215,10 @@ const SECTIONS: {
     icon: FileText,
   },
   {
-    id: "schedule",
-    label: "Schedule & Prizes",
-    shortLabel: "Schedule",
-    icon: CalendarClock,
+    id: "participation",
+    label: "Participation",
+    shortLabel: "Participation",
+    icon: Users,
   },
   {
     id: "registration",
@@ -215,22 +227,34 @@ const SECTIONS: {
     icon: Ticket,
   },
   {
-    id: "participation",
-    label: "Participation",
-    shortLabel: "Participation",
-    icon: Users,
+    id: "guidelines",
+    label: "Guidelines",
+    shortLabel: "Guidelines",
+    icon: BookOpen,
   },
   {
-    id: "gateCheckIn",
-    label: "Access",
-    shortLabel: "Access",
-    icon: UserCheck,
+    id: "schedule",
+    label: "Schedule & Prizes",
+    shortLabel: "Schedule",
+    icon: CalendarClock,
+  },
+  {
+    id: "helpdesk",
+    label: "Event Helpdesk",
+    shortLabel: "Helpdesk",
+    icon: Headphones,
   },
   {
     id: "visuals",
     label: "Event Visual Asset",
     shortLabel: "Visuals",
     icon: ImageIcon,
+  },
+  {
+    id: "gateCheckIn",
+    label: "Access",
+    shortLabel: "Access",
+    icon: UserCheck,
   },
   {
     id: "qa",
@@ -343,6 +367,12 @@ export function EventFormModal({
     teamType: initialData?.teamType || "Both",
     minTeamSize: initialData?.minTeamSize || 2,
     maxTeamSize: initialData?.maxTeamSize || 4,
+    eligibleDepartments: Array.isArray(initialData?.eligibleDepartments) && initialData.eligibleDepartments.length > 0
+      ? JSON.parse(JSON.stringify(initialData.eligibleDepartments))
+      : [...DEFAULT_DEPARTMENTS],
+    eligibleYears: Array.isArray(initialData?.eligibleYears) && initialData.eligibleYears.length > 0
+      ? JSON.parse(JSON.stringify(initialData.eligibleYears))
+      : [...ALL_STUDY_YEARS],
     noRegistrationRequired: Boolean(initialData?.noRegistrationRequired),
     registrationStartDate: initialData?.registrationStartDate || defaultRawDate,
     registrationDeadline: parseToIsoDate(initialData?.registrationDeadline) || initialData?.registrationDeadline || "",
@@ -468,6 +498,12 @@ export function EventFormModal({
         whatsappGroupName: initialData.whatsappGroupName || "",
         gateCheckInBtIds: Array.isArray(initialData.gateCheckInBtIds) ? JSON.parse(JSON.stringify(initialData.gateCheckInBtIds)) : [],
         eventAccessBtIds: Array.isArray(initialData.eventAccessBtIds) ? JSON.parse(JSON.stringify(initialData.eventAccessBtIds)) : [],
+        eligibleDepartments: Array.isArray(initialData.eligibleDepartments) && initialData.eligibleDepartments.length > 0
+          ? JSON.parse(JSON.stringify(initialData.eligibleDepartments))
+          : (prev.eligibleDepartments && prev.eligibleDepartments.length > 0 ? prev.eligibleDepartments : [...DEFAULT_DEPARTMENTS]),
+        eligibleYears: Array.isArray(initialData.eligibleYears) && initialData.eligibleYears.length > 0
+          ? JSON.parse(JSON.stringify(initialData.eligibleYears))
+          : (prev.eligibleYears && prev.eligibleYears.length > 0 ? prev.eligibleYears : [...ALL_STUDY_YEARS]),
       }));
     }
   }, [initialData, isOpen]);
@@ -538,6 +574,40 @@ export function EventFormModal({
         endDate: isMulti ? formatDateToReadable(endVal) : "",
       };
     });
+  };
+
+  const handleToggleDepartment = (dept: string) => {
+    setForm((prev) => {
+      const current = prev.eligibleDepartments || [...DEFAULT_DEPARTMENTS];
+      const exists = current.includes(dept);
+      const updated = exists ? current.filter((d) => d !== dept) : [...current, dept];
+      return { ...prev, eligibleDepartments: updated };
+    });
+  };
+
+  const handleSelectAllDepartments = () => {
+    setForm((prev) => ({ ...prev, eligibleDepartments: [...DEFAULT_DEPARTMENTS] }));
+  };
+
+  const handleClearAllDepartments = () => {
+    setForm((prev) => ({ ...prev, eligibleDepartments: [] }));
+  };
+
+  const handleToggleYear = (year: string) => {
+    setForm((prev) => {
+      const current = prev.eligibleYears || [...ALL_STUDY_YEARS];
+      const exists = current.includes(year);
+      const updated = exists ? current.filter((y) => y !== year) : [...current, year];
+      return { ...prev, eligibleYears: updated };
+    });
+  };
+
+  const handleSelectAllYears = () => {
+    setForm((prev) => ({ ...prev, eligibleYears: [...ALL_STUDY_YEARS] }));
+  };
+
+  const handleClearAllYears = () => {
+    setForm((prev) => ({ ...prev, eligibleYears: [] }));
   };
 
   const [newGatekeeperInput, setNewGatekeeperInput] = useState("");

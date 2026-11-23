@@ -112,6 +112,8 @@ export interface EventItem {
   teamType: "Individual" | "Team" | "Both";
   maxTeamSize?: number;
   minTeamSize?: number;
+  eligibleDepartments?: string[]; // Specific academic departments permitted to register (empty or undefined = all allowed)
+  eligibleYears?: string[]; // Specific study years permitted to register (empty or undefined = all allowed)
   noRegistrationRequired?: boolean; // True if event does not require portal registration (open walk-in / informational)
   registrationStartDate?: string;
   registrationDeadline?: string;

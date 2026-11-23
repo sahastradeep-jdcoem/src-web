@@ -70,6 +70,7 @@ export function CertificateView({
       setResolvedClubLogo(syncLogo);
       return;
     }
+    if (resolvedClubLogo) return;
 
     resolveCertificateClubLogoAsync(certificate)
       .then((logo) => {
@@ -78,7 +79,7 @@ export function CertificateView({
         }
       })
       .catch(() => {});
-  }, [certificate]);
+  }, [certificate, resolvedClubLogo]);
 
   const qrVerificationUrl = certificate.verificationUrl?.startsWith("http")
     ? certificate.verificationUrl

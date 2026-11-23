@@ -187,6 +187,11 @@ export async function getCertificatesByEvent(eventId: string): Promise<Certifica
   return all.filter((c) => c.eventId === eventId || c.eventSlug === eventId);
 }
 
+// In-memory cache & promise deduplication for administrative settings & logos to eliminate burst reads
+let inMemoryCertificateSettings: CertificateSettings | null = null;
+let settingsFetchPromise: Promise<CertificateSettings> | null = null;
+const inMemoryEventLogos = new Map<string, string>();
+
 /**
  * Fetch certificates issued to a specific student (by email or BT ID)
  */
@@ -199,13 +204,14 @@ export async function getStudentCertificatesFromFirestore(
   const resultsMap = new Map<string, CertificateRecord>();
   const normEmail = (email || "").trim().toLowerCase();
   const normBtId = (btId || "").trim().toUpperCase();
+  let queryFailed = false;
 
   if (db) {
     try {
       const colRef = collection(db, CERTIFICATES_COLLECTION);
 
       if (normEmail) {
-        const qEmail = query(colRef, where("recipientEmail", "==", normEmail));
+        const qEmail = query(colRef, where("recipientEmail", "==", normEmail), limit(50));
         const snapEmail = await getDocs(qEmail);
         snapEmail.forEach((d) => {
           const cert = d.data() as CertificateRecord;
@@ -216,7 +222,7 @@ export async function getStudentCertificatesFromFirestore(
       }
 
       if (normBtId) {
-        const qBtId = query(colRef, where("recipientBtId", "==", normBtId));
+        const qBtId = query(colRef, where("recipientBtId", "==", normBtId), limit(50));
         const snapBtId = await getDocs(qBtId);
         snapBtId.forEach((d) => {
           const cert = d.data() as CertificateRecord;
@@ -226,12 +232,16 @@ export async function getStudentCertificatesFromFirestore(
         });
       }
     } catch (err) {
-      console.warn("Direct student certificates query warning, falling back to registry:", err);
+      queryFailed = true;
+      console.warn("Direct student certificates query warning, checking fallback registry:", err);
     }
+  } else {
+    queryFailed = true;
   }
 
-  // Fallback: Check site_content/certificates_registry
-  if (resultsMap.size === 0) {
+  // Fallback: Check site_content/certificates_registry ONLY IF primary collection queries threw an error
+  // If queries succeeded with 0 results, the student simply has 0 certificates—never download the whole registry!
+  if (queryFailed && resultsMap.size === 0) {
     try {
       const registry = await getSiteContentFromFirestore<CertificateRecord[]>(REGISTRY_DOC_ID);
       if (registry && Array.isArray(registry)) {
@@ -286,8 +296,8 @@ export function subscribeToStudentCertificates(
       callback(list);
     };
 
-    const qEmail = query(colRef, where("recipientEmail", "==", normEmail));
-    const qBtId = query(colRef, where("recipientBtId", "==", normBtId));
+    const qEmail = query(colRef, where("recipientEmail", "==", normEmail), limit(50));
+    const qBtId = query(colRef, where("recipientBtId", "==", normBtId), limit(50));
 
     const unsubEmail = onSnapshot(
       qEmail,
@@ -333,9 +343,9 @@ export function subscribeToStudentCertificates(
 
   let q;
   if (normEmail) {
-    q = query(colRef, where("recipientEmail", "==", normEmail));
+    q = query(colRef, where("recipientEmail", "==", normEmail), limit(50));
   } else if (normBtId) {
-    q = query(colRef, where("recipientBtId", "==", normBtId));
+    q = query(colRef, where("recipientBtId", "==", normBtId), limit(50));
   }
 
   if (!q) {
@@ -383,19 +393,7 @@ export async function getCertificateById(id: string): Promise<CertificateRecord 
     }
   }
 
-  // 2. Direct lookup from site_content document partition (site_content/cert_[id] or site_content/[id])
-  // This guarantees verification succeeds on all devices even if /certificates security rules are pending
-  try {
-    const partitionedDocId = cleanId.startsWith("cert_") ? cleanId : `cert_${cleanId}`;
-    const remoteDirect = await getSiteContentFromFirestore<CertificateRecord>(partitionedDocId);
-    if (remoteDirect && remoteDirect.id) {
-      return remoteDirect;
-    }
-  } catch (partErr) {
-    console.warn("Partitioned site_content lookup notice:", partErr);
-  }
-
-  // 3. Query lookup by certificateNumber (e.g. SRC/2026-27/PRRM-8924)
+  // 2. Query lookup by certificateNumber (e.g. SRC/2026-27/PRRM-8924)
   if (db) {
     try {
       const colRef = collection(db, CERTIFICATES_COLLECTION);
@@ -405,14 +403,29 @@ export async function getCertificateById(id: string): Promise<CertificateRecord 
         return querySnap.docs[0].data() as CertificateRecord;
       }
 
-      // 4. Fallback: Query lookup by id field in document
-      const qId = query(colRef, where("id", "==", cleanId), limit(1));
-      const querySnapId = await getDocs(qId);
-      if (!querySnapId.empty) {
-        return querySnapId.docs[0].data() as CertificateRecord;
+      // 3. Fallback: Query lookup by id field in document if cleanId contained slashes
+      if (cleanId.includes("/")) {
+        const qId = query(colRef, where("id", "==", cleanId), limit(1));
+        const querySnapId = await getDocs(qId);
+        if (!querySnapId.empty) {
+          return querySnapId.docs[0].data() as CertificateRecord;
+        }
       }
     } catch (queryErr) {
       console.warn("Firestore query lookup failed, checking site_content fallback:", queryErr);
+    }
+  }
+
+  // 4. Fallback for legacy partitioned document in site_content (only if single segment)
+  if (!cleanId.includes("/")) {
+    try {
+      const partitionedDocId = cleanId.startsWith("cert_") ? cleanId : `cert_${cleanId}`;
+      const remoteDirect = await getSiteContentFromFirestore<CertificateRecord>(partitionedDocId);
+      if (remoteDirect && remoteDirect.id) {
+        return remoteDirect;
+      }
+    } catch (partErr) {
+      console.warn("Partitioned site_content lookup notice:", partErr);
     }
   }
 
@@ -512,20 +525,24 @@ export async function saveCertificateToFirestore(cert: CertificateRecord): Promi
     return;
   }
 
+  let directWriteSucceeded = false;
   if (db) {
     try {
       const docRef = doc(db, CERTIFICATES_COLLECTION, cert.id);
       await setDoc(docRef, cleanCert, { merge: true });
+      directWriteSucceeded = true;
     } catch (err) {
       console.warn("Direct save to /certificates failed, saving to site_content fallback:", err);
     }
   }
 
-  // Individual partitioned document in site_content (guarantees public QR verification access across all devices)
-  try {
-    await saveSiteContentToFirestore(`cert_${cert.id}`, cleanCert);
-  } catch (partErr) {
-    console.warn("Could not save partitioned cert document to site_content:", partErr);
+  // Only fallback to individual partitioned document in site_content if primary collection write failed
+  if (!directWriteSucceeded) {
+    try {
+      await saveSiteContentToFirestore(`cert_${cert.id}`, cleanCert);
+    } catch (partErr) {
+      console.warn("Could not save partitioned cert document to site_content:", partErr);
+    }
   }
 
   // Dual-write to site_content/certificates_registry with compacted entry
@@ -536,9 +553,8 @@ export async function saveCertificateToFirestore(cert: CertificateRecord): Promi
       rawExisting.forEach((c) => map.set(c.id, compactCertificateForRegistry(c)));
     }
     map.set(cert.id, compactCertificateForRegistry(cleanCert));
-    const combined = Array.from(map.values()).slice(0, 300);
+    const combined = Array.from(map.values()).slice(0, 150);
     await saveSiteContentToFirestore(REGISTRY_DOC_ID, combined);
-    enqueueCloudWrite(REGISTRY_DOC_ID, combined, `Certificate: ${cert.recipientName}`);
   } catch (dualErr) {
     console.warn("Dual-write certificate registry notice:", dualErr);
   }
@@ -576,15 +592,16 @@ export async function batchSaveCertificatesToFirestore(
     console.warn("Direct /certificates batch write notice, executing dual-write registry backup:", primaryErr);
   }
 
-  // 2. Individual document backup in site_content: site_content/cert_${cert.id}
-  // Guarantees that any mobile device scanning the unique QR code can fetch the certificate instantly
+  // 2. Individual document backup in site_content ONLY if direct write failed
   let individualWriteCount = 0;
-  for (const cert of cleanedCerts) {
-    try {
-      await saveSiteContentToFirestore(`cert_${cert.id}`, cert);
-      individualWriteCount++;
-    } catch (indErr) {
-      console.warn(`Individual cert backup notice for ${cert.id}:`, indErr);
+  if (!directWriteSucceeded) {
+    for (const cert of cleanedCerts) {
+      try {
+        await saveSiteContentToFirestore(`cert_${cert.id}`, cert);
+        individualWriteCount++;
+      } catch (indErr) {
+        console.warn(`Individual cert backup notice for ${cert.id}:`, indErr);
+      }
     }
   }
 
@@ -595,7 +612,6 @@ export async function batchSaveCertificatesToFirestore(
     try {
       const rawExisting = await getSiteContentFromFirestore<CertificateRecord[]>(REGISTRY_DOC_ID);
       if (Array.isArray(rawExisting)) {
-        // Automatically compact existing entries to cleanse legacy base64 bloat!
         existing = rawExisting.map((c) => compactCertificateForRegistry(c));
       }
     } catch (fetchErr) {
@@ -609,37 +625,43 @@ export async function batchSaveCertificatesToFirestore(
     let combined = Array.from(map.values());
     combined.sort((a, b) => new Date(b.issuedAt || 0).getTime() - new Date(a.issuedAt || 0).getTime());
 
-    // Safe payload cap: keep latest 300 certificates in the registry document (< 200 KB)
-    if (combined.length > 300) {
-      combined = combined.slice(0, 300);
+    // Safe payload cap: keep latest 150 certificates in the registry document (< 100 KB)
+    if (combined.length > 150) {
+      combined = combined.slice(0, 150);
     }
 
     await saveSiteContentToFirestore(REGISTRY_DOC_ID, combined);
-    enqueueCloudWrite(REGISTRY_DOC_ID, combined, `Certificates Registry (${combined.length} items)`);
   } catch (fallbackErr) {
     console.error("Dual-write registry fallback notice:", fallbackErr);
-    // Only fail if neither direct write nor individual writes succeeded
     if (!directWriteSucceeded && individualWriteCount === 0) {
       throw fallbackErr;
     }
   }
 
-  // 3b. Persist event club logos so they are never lost even if stripped from registry
+  // 3b. Persist event club logos ONCE per unique event in the batch (eliminates 400x redundant writes)
+  const uniqueLogos = new Map<string, { slug?: string; id?: string; url: string }>();
   for (const cert of cleanedCerts) {
     if (cert.clubLogoUrl && cert.clubLogoUrl.trim()) {
-      try {
-        if (typeof window !== "undefined") {
-          if (cert.eventSlug) localStorage.setItem(`src_club_logo_${cert.eventSlug}`, cert.clubLogoUrl);
-          if (cert.eventId) localStorage.setItem(`src_club_logo_${cert.eventId}`, cert.clubLogoUrl);
-        }
-        if (cert.eventSlug) {
-          saveSiteContentToFirestore(`cert_logo_${cert.eventSlug}`, { logoUrl: cert.clubLogoUrl }).catch(() => {});
-        }
-        if (cert.eventId) {
-          saveSiteContentToFirestore(`cert_logo_${cert.eventId}`, { logoUrl: cert.clubLogoUrl }).catch(() => {});
-        }
-      } catch {}
+      const key = cert.eventSlug || cert.eventId || "";
+      if (key && !uniqueLogos.has(key)) {
+        uniqueLogos.set(key, { slug: cert.eventSlug, id: cert.eventId, url: cert.clubLogoUrl.trim() });
+      }
     }
+  }
+
+  for (const [, item] of uniqueLogos) {
+    try {
+      if (typeof window !== "undefined") {
+        if (item.slug) localStorage.setItem(`src_club_logo_${item.slug}`, item.url);
+        if (item.id) localStorage.setItem(`src_club_logo_${item.id}`, item.url);
+      }
+      if (item.slug) {
+        saveSiteContentToFirestore(`cert_logo_${item.slug}`, { logoUrl: item.url }).catch(() => {});
+      }
+      if (item.id) {
+        saveSiteContentToFirestore(`cert_logo_${item.id}`, { logoUrl: item.url }).catch(() => {});
+      }
+    } catch {}
   }
 
   // 4. Local storage cache update & instant cross-tab notification
@@ -796,54 +818,72 @@ export function subscribeToCertificates(
 
 /**
  * Get persistent administrative certificate settings (signatories, default citations, club emblems)
+ * Features in-memory caching and promise deduplication to eliminate burst Firestore reads.
  */
-export async function getCertificateSettings(): Promise<CertificateSettings> {
-  try {
-    const remote = await getSiteContentFromFirestore<CertificateSettings>(SETTINGS_DOC_ID);
-    if (remote) {
-      const resolvedCitation =
-        remote.defaultCitationTemplate && remote.defaultCitationTemplate !== OLD_DEFAULT_CITATION_TEMPLATE
-          ? remote.defaultCitationTemplate
-          : DEFAULT_CITATION_TEMPLATE;
-
-      const merged: CertificateSettings = {
-        defaultSignatories: remote.defaultSignatories?.length > 0 ? remote.defaultSignatories : DEFAULT_INSTITUTIONAL_SIGNATORIES,
-        defaultCitationTemplate: resolvedCitation,
-        defaultClubLogoUrl: remote.defaultClubLogoUrl || "",
-        clubLogosByEvent: remote.clubLogosByEvent || {},
-        updatedAt: remote.updatedAt,
-        updatedBy: remote.updatedBy,
-      };
-      if (typeof window !== "undefined") {
-        try {
-          localStorage.setItem("src_certificate_settings", JSON.stringify(merged));
-        } catch {}
-      }
-      return merged;
-    }
-  } catch (e) {
-    console.warn("Could not fetch remote certificate settings:", e);
+export async function getCertificateSettings(forceRefresh = false): Promise<CertificateSettings> {
+  if (!forceRefresh && inMemoryCertificateSettings) {
+    return inMemoryCertificateSettings;
+  }
+  if (!forceRefresh && settingsFetchPromise) {
+    return settingsFetchPromise;
   }
 
-  if (typeof window !== "undefined") {
+  settingsFetchPromise = (async () => {
     try {
-      const cached = localStorage.getItem("src_certificate_settings");
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed.defaultCitationTemplate === OLD_DEFAULT_CITATION_TEMPLATE || !parsed.defaultCitationTemplate) {
-          parsed.defaultCitationTemplate = DEFAULT_CITATION_TEMPLATE;
-        }
-        return parsed;
-      }
-    } catch {}
-  }
+      const remote = await getSiteContentFromFirestore<CertificateSettings>(SETTINGS_DOC_ID);
+      if (remote) {
+        const resolvedCitation =
+          remote.defaultCitationTemplate && remote.defaultCitationTemplate !== OLD_DEFAULT_CITATION_TEMPLATE
+            ? remote.defaultCitationTemplate
+            : DEFAULT_CITATION_TEMPLATE;
 
-  return {
-    defaultSignatories: DEFAULT_INSTITUTIONAL_SIGNATORIES,
-    defaultCitationTemplate: DEFAULT_CITATION_TEMPLATE,
-    defaultClubLogoUrl: "",
-    clubLogosByEvent: {},
-  };
+        const merged: CertificateSettings = {
+          defaultSignatories: remote.defaultSignatories?.length > 0 ? remote.defaultSignatories : DEFAULT_INSTITUTIONAL_SIGNATORIES,
+          defaultCitationTemplate: resolvedCitation,
+          defaultClubLogoUrl: remote.defaultClubLogoUrl || "",
+          clubLogosByEvent: remote.clubLogosByEvent || {},
+          updatedAt: remote.updatedAt,
+          updatedBy: remote.updatedBy,
+        };
+        inMemoryCertificateSettings = merged;
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem("src_certificate_settings", JSON.stringify(merged));
+          } catch {}
+        }
+        return merged;
+      }
+    } catch (e) {
+      console.warn("Could not fetch remote certificate settings:", e);
+    } finally {
+      settingsFetchPromise = null;
+    }
+
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("src_certificate_settings");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed.defaultCitationTemplate === OLD_DEFAULT_CITATION_TEMPLATE || !parsed.defaultCitationTemplate) {
+            parsed.defaultCitationTemplate = DEFAULT_CITATION_TEMPLATE;
+          }
+          inMemoryCertificateSettings = parsed;
+          return parsed;
+        }
+      } catch {}
+    }
+
+    const fallback: CertificateSettings = {
+      defaultSignatories: DEFAULT_INSTITUTIONAL_SIGNATORIES,
+      defaultCitationTemplate: DEFAULT_CITATION_TEMPLATE,
+      defaultClubLogoUrl: "",
+      clubLogosByEvent: {},
+    };
+    inMemoryCertificateSettings = fallback;
+    return fallback;
+  })();
+
+  return settingsFetchPromise;
 }
 
 /**
@@ -868,6 +908,8 @@ export async function saveCertificateSettings(settings: Partial<CertificateSetti
     updatedAt: new Date().toISOString(),
     updatedBy: settings.updatedBy || existing?.updatedBy,
   });
+
+  inMemoryCertificateSettings = cleanSettings as CertificateSettings;
 
   if (typeof window !== "undefined") {
     try {
@@ -958,31 +1000,36 @@ export async function resolveCertificateClubLogoAsync(cert: CertificateRecord): 
   const syncLogo = resolveCertificateClubLogoSync(cert);
   if (syncLogo) return syncLogo;
 
-  // 1. Fetch remote certificate settings
+  const cacheKey = cert.eventSlug || cert.eventId || "";
+  if (cacheKey && inMemoryEventLogos.has(cacheKey)) {
+    return inMemoryEventLogos.get(cacheKey)!;
+  }
+
+  // 1. Fetch remote certificate settings (in-memory cached)
   try {
     const settings = await getCertificateSettings();
     if (settings) {
       const slug = cert.eventSlug || "";
       const id = cert.eventId || "";
       const byEvent = settings.clubLogosByEvent?.[slug] || settings.clubLogosByEvent?.[id];
-      if (byEvent && byEvent.trim()) return byEvent.trim();
-      if (settings.defaultClubLogoUrl && settings.defaultClubLogoUrl.trim()) return settings.defaultClubLogoUrl.trim();
+      if (byEvent && byEvent.trim()) {
+        if (cacheKey) inMemoryEventLogos.set(cacheKey, byEvent.trim());
+        return byEvent.trim();
+      }
+      if (settings.defaultClubLogoUrl && settings.defaultClubLogoUrl.trim()) {
+        return settings.defaultClubLogoUrl.trim();
+      }
     }
   } catch {}
 
-  // 2. Fetch partitioned individual cert document from site_content/cert_${cert.id} or /certificates/${cert.id}
-  if (cert.id) {
-    try {
-      const fullDoc = await getCertificateById(cert.id);
-      if (fullDoc?.clubLogoUrl && fullDoc.clubLogoUrl.trim()) return fullDoc.clubLogoUrl.trim();
-    } catch {}
-  }
-
-  // 3. Fetch dedicated site_content logo doc
+  // 2. Fetch dedicated site_content logo doc
   if (cert.eventSlug) {
     try {
       const doc = await getSiteContentFromFirestore<{ logoUrl?: string }>(`cert_logo_${cert.eventSlug}`);
-      if (doc?.logoUrl && doc.logoUrl.trim()) return doc.logoUrl.trim();
+      if (doc?.logoUrl && doc.logoUrl.trim()) {
+        if (cacheKey) inMemoryEventLogos.set(cacheKey, doc.logoUrl.trim());
+        return doc.logoUrl.trim();
+      }
     } catch {}
   }
 

@@ -251,10 +251,19 @@ function AdminCertificatesContent() {
       if (isMounted && regs) setAllRegistrations(regs as unknown as RegistrationRecord[]);
     });
 
-    getAllCertificatesFromFirestore().then((certs) => {
-      if (isMounted && certs) setAllCertificates(certs);
-      setIsLoading(false);
-    });
+    // Hydrate certificates initially from local cache for instant UI rendering
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("src_local_certificates_cache");
+        if (cached) {
+          const list: CertificateRecord[] = JSON.parse(cached);
+          if (Array.isArray(list) && list.length > 0) {
+            setAllCertificates(list);
+            setIsLoading(false);
+          }
+        }
+      } catch {}
+    }
 
     getCertificateSettings().then((settings) => {
       if (isMounted && settings?.defaultSignatories?.length > 0) {
@@ -285,7 +294,10 @@ function AdminCertificatesContent() {
     });
 
     const unsubCerts = subscribeToCertificates((remoteCerts) => {
-      if (isMounted && remoteCerts) setAllCertificates(remoteCerts);
+      if (isMounted && remoteCerts) {
+        setAllCertificates(remoteCerts);
+        setIsLoading(false);
+      }
     });
 
     const handleClickOutside = (event: MouseEvent) => {
