@@ -2216,15 +2216,15 @@ export function EventFormModal({
                     </label>
                     <span className={cn(
                       "text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border",
-                      (form.eligibleDepartments || []).length === DEFAULT_DEPARTMENTS.length
+                      (form.eligibleDepartments || []).length === departmentsList.length
                         ? "bg-emerald-50 text-emerald-800 border-emerald-200"
                         : (form.eligibleDepartments || []).length === 0
                         ? "bg-rose-50 text-rose-800 border-rose-200"
                         : "bg-blue-50 text-[#17458F] border-[#17458F]/30"
                     )}>
-                      {(form.eligibleDepartments || []).length === DEFAULT_DEPARTMENTS.length
+                      {(form.eligibleDepartments || []).length === departmentsList.length
                         ? "All Departments Eligible"
-                        : `${(form.eligibleDepartments || []).length} of ${DEFAULT_DEPARTMENTS.length} Selected`}
+                        : `${(form.eligibleDepartments || []).length} of ${departmentsList.length} Selected`}
                     </span>
                   </div>
 
@@ -2248,7 +2248,7 @@ export function EventFormModal({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {DEFAULT_DEPARTMENTS.map((dept) => {
+                  {departmentsList.map((dept) => {
                     const isChecked = (form.eligibleDepartments || []).includes(dept);
                     const shortCode = getDepartmentShortName(dept) || "";
                     return (
