@@ -49,7 +49,13 @@ import { cn } from "@/lib/utils";
 import { parseDateStringToTimestamp } from "@/lib/eventsStore";
 import { getStoredClubs } from "@/lib/councilStore";
 import { getStoredUsers } from "@/lib/usersStore";
-import { DEFAULT_DEPARTMENTS, DEPARTMENT_SHORT_NAMES } from "@/data/departments";
+import { 
+  getStoredDepartments,
+  syncDepartmentsFromFirestore,
+  subscribeToDepartments,
+  getDepartmentShortName,
+  DEFAULT_DEPARTMENTS
+} from "@/lib/departmentsStore";
 
 export const ALL_STUDY_YEARS = [
   "1st Year",
@@ -200,6 +206,7 @@ interface EventFormModalProps {
   onSubmit: (data: EventFormData, asDraft?: boolean) => void | Promise<void>;
   pendingUploads: number;
   onUploadStateChange: (uploading: boolean) => void;
+  departmentsList?: string[];
 }
 
 const SECTIONS: {
@@ -277,11 +284,48 @@ export function EventFormModal({
   onSubmit,
   pendingUploads,
   onUploadStateChange,
+  departmentsList: propDepartmentsList,
 }: EventFormModalProps) {
   const [activeSection, setActiveSection] = useState<EventModalSection>("details");
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const contentScrollRef = useRef<HTMLDivElement>(null);
+
+  // Live accredited departments list dynamically synced with /admin/departments roster
+  const [departmentsList, setDepartmentsList] = useState<string[]>(() => {
+    if (propDepartmentsList && propDepartmentsList.length > 0) return propDepartmentsList;
+    return getStoredDepartments();
+  });
+
+  useEffect(() => {
+    if (propDepartmentsList && propDepartmentsList.length > 0) {
+      setDepartmentsList(propDepartmentsList);
+    }
+  }, [propDepartmentsList]);
+
+  // Real-time dual subscription across all tabs and Firestore for departments
+  useEffect(() => {
+    const stored = getStoredDepartments();
+    if (stored && stored.length > 0) {
+      setDepartmentsList(stored);
+    }
+
+    syncDepartmentsFromFirestore().then((remote) => {
+      if (remote && Array.isArray(remote) && remote.length > 0) {
+        setDepartmentsList(remote);
+      }
+    });
+
+    const unsubscribe = subscribeToDepartments((fresh) => {
+      if (fresh && Array.isArray(fresh) && fresh.length > 0) {
+        setDepartmentsList(fresh);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   // Reset scroll position to top whenever active tab changes or modal opens
   useEffect(() => {
@@ -315,84 +359,89 @@ export function EventFormModal({
     return !isCentral && !isClub;
   });
 
-  const [form, setForm] = useState<EventFormData>({
-    isLive: initialData?.isLive,
-    name: initialData?.name || "",
-    category: initialData?.category || "Technical",
-    rawDate: initialData?.rawDate || defaultRawDate,
-    rawEndDate: initialRawEndDate,
-    date: initialData?.date || (initialIsMulti ? formatDateRangeToReadable(initialData?.rawDate || defaultRawDate, initialRawEndDate) : formatDateToReadable(defaultRawDate)),
-    endDate: initialData?.endDate || (initialIsMulti ? formatDateToReadable(initialRawEndDate) : ""),
-    isMultiDay: initialIsMulti,
-    time: initialData?.time || "10:00 AM IST",
-    venue: initialData?.venue || "JDCOEM Campus",
-    organizer: initialOrg,
-    organizerClubSlug: initialSlug,
-    collaboratingClubs: initialData?.collaboratingClubs || [],
-    status: initialData?.status || "Registration Open",
-    poster: initialData?.poster || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
-    cardImage: initialData?.cardImage || "",
-    posterImage: initialData?.posterImage || "",
-    headerImage: initialData?.headerImage || "",
-    description: initialData?.description || "",
-    about: initialData?.about || "",
-    whatToExpect: initialData?.whatToExpect && initialData.whatToExpect.length > 0 ? initialData.whatToExpect : [""],
-    rules: initialData?.rules && initialData.rules.length > 0 ? initialData.rules : [""],
-    hasSchedule: initialHasSchedule,
-    hasPrizes: initialHasPrizes,
-    schedule: initialData?.schedule && Array.isArray(initialData.schedule) ? JSON.parse(JSON.stringify(initialData.schedule)) : [],
-    prizes: initialData?.prizes && Array.isArray(initialData.prizes) ? JSON.parse(JSON.stringify(initialData.prizes)) : [],
-    coordinatorContact: {
-      name: initialData?.coordinatorContact?.name || "",
-      role: initialData?.coordinatorContact?.role || "",
-      phone: initialData?.coordinatorContact?.phone || "",
-    },
-    coordinatorContacts: Array.isArray(initialData?.coordinatorContacts) && initialData.coordinatorContacts.length > 0
-      ? JSON.parse(JSON.stringify(initialData.coordinatorContacts))
-      : initialData?.coordinatorContact && (initialData.coordinatorContact.name || initialData.coordinatorContact.phone)
-      ? [
-          {
-            name: initialData.coordinatorContact.name || "",
-            role: initialData.coordinatorContact.role || "",
-            phone: initialData.coordinatorContact.phone || "",
-          },
-        ]
-      : [
-          {
-            name: "",
-            role: "",
-            phone: "",
-          },
-        ],
-    teamType: initialData?.teamType || "Both",
-    minTeamSize: initialData?.minTeamSize || 2,
-    maxTeamSize: initialData?.maxTeamSize || 4,
-    eligibleDepartments: Array.isArray(initialData?.eligibleDepartments) && initialData.eligibleDepartments.length > 0
-      ? JSON.parse(JSON.stringify(initialData.eligibleDepartments))
-      : [...DEFAULT_DEPARTMENTS],
-    eligibleYears: Array.isArray(initialData?.eligibleYears) && initialData.eligibleYears.length > 0
-      ? JSON.parse(JSON.stringify(initialData.eligibleYears))
-      : [...ALL_STUDY_YEARS],
-    noRegistrationRequired: Boolean(initialData?.noRegistrationRequired),
-    registrationStartDate: initialData?.registrationStartDate || defaultRawDate,
-    registrationDeadline: parseToIsoDate(initialData?.registrationDeadline) || initialData?.registrationDeadline || "",
-    isPaid: initialData?.isPaid || false,
-    feeAmount: initialData?.feeAmount ?? 100,
-    feePricingModel: initialData?.feePricingModel || "per_person",
-    teamFeeAmount: initialData?.teamFeeAmount ?? 300,
-    customQuestions: initialData?.customQuestions || [],
-    isParentFest: initialData?.isParentFest || false,
-    parentEventId: initialData?.parentEventId || "",
-    parentEventSlug: initialData?.parentEventSlug || "",
-    parentEventName: initialData?.parentEventName || "",
-    subEventBadge: initialData?.subEventBadge || "",
-    targetAudience: initialData?.targetAudience || "inter_college",
-    isInterCollege: initialData?.isInterCollege !== false,
-    isFeatured: Boolean(initialData?.isFeatured),
-    whatsappGroupUrl: initialData?.whatsappGroupUrl || "",
-    whatsappGroupName: initialData?.whatsappGroupName || "",
-    gateCheckInBtIds: initialData?.gateCheckInBtIds ? JSON.parse(JSON.stringify(initialData.gateCheckInBtIds)) : [],
-    eventAccessBtIds: initialData?.eventAccessBtIds ? JSON.parse(JSON.stringify(initialData.eventAccessBtIds)) : [],
+  const [form, setForm] = useState<EventFormData>(() => {
+    const activeDepts = (propDepartmentsList && propDepartmentsList.length > 0)
+      ? propDepartmentsList
+      : getStoredDepartments();
+    return {
+      isLive: initialData?.isLive,
+      name: initialData?.name || "",
+      category: initialData?.category || "Technical",
+      rawDate: initialData?.rawDate || defaultRawDate,
+      rawEndDate: initialRawEndDate,
+      date: initialData?.date || (initialIsMulti ? formatDateRangeToReadable(initialData?.rawDate || defaultRawDate, initialRawEndDate) : formatDateToReadable(defaultRawDate)),
+      endDate: initialData?.endDate || (initialIsMulti ? formatDateToReadable(initialRawEndDate) : ""),
+      isMultiDay: initialIsMulti,
+      time: initialData?.time || "10:00 AM IST",
+      venue: initialData?.venue || "JDCOEM Campus",
+      organizer: initialOrg,
+      organizerClubSlug: initialSlug,
+      collaboratingClubs: initialData?.collaboratingClubs || [],
+      status: initialData?.status || "Registration Open",
+      poster: initialData?.poster || "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop",
+      cardImage: initialData?.cardImage || "",
+      posterImage: initialData?.posterImage || "",
+      headerImage: initialData?.headerImage || "",
+      description: initialData?.description || "",
+      about: initialData?.about || "",
+      whatToExpect: initialData?.whatToExpect && initialData.whatToExpect.length > 0 ? initialData.whatToExpect : [""],
+      rules: initialData?.rules && initialData.rules.length > 0 ? initialData.rules : [""],
+      hasSchedule: initialHasSchedule,
+      hasPrizes: initialHasPrizes,
+      schedule: initialData?.schedule && Array.isArray(initialData.schedule) ? JSON.parse(JSON.stringify(initialData.schedule)) : [],
+      prizes: initialData?.prizes && Array.isArray(initialData.prizes) ? JSON.parse(JSON.stringify(initialData.prizes)) : [],
+      coordinatorContact: {
+        name: initialData?.coordinatorContact?.name || "",
+        role: initialData?.coordinatorContact?.role || "",
+        phone: initialData?.coordinatorContact?.phone || "",
+      },
+      coordinatorContacts: Array.isArray(initialData?.coordinatorContacts) && initialData.coordinatorContacts.length > 0
+        ? JSON.parse(JSON.stringify(initialData.coordinatorContacts))
+        : initialData?.coordinatorContact && (initialData.coordinatorContact.name || initialData.coordinatorContact.phone)
+        ? [
+            {
+              name: initialData.coordinatorContact.name || "",
+              role: initialData.coordinatorContact.role || "",
+              phone: initialData.coordinatorContact.phone || "",
+            },
+          ]
+        : [
+            {
+              name: "",
+              role: "",
+              phone: "",
+            },
+          ],
+      teamType: initialData?.teamType || "Both",
+      minTeamSize: initialData?.minTeamSize || 2,
+      maxTeamSize: initialData?.maxTeamSize || 4,
+      eligibleDepartments: Array.isArray(initialData?.eligibleDepartments) && initialData.eligibleDepartments.length > 0
+        ? JSON.parse(JSON.stringify(initialData.eligibleDepartments))
+        : [...activeDepts],
+      eligibleYears: Array.isArray(initialData?.eligibleYears) && initialData.eligibleYears.length > 0
+        ? JSON.parse(JSON.stringify(initialData.eligibleYears))
+        : [...ALL_STUDY_YEARS],
+      noRegistrationRequired: Boolean(initialData?.noRegistrationRequired),
+      registrationStartDate: initialData?.registrationStartDate || defaultRawDate,
+      registrationDeadline: parseToIsoDate(initialData?.registrationDeadline) || initialData?.registrationDeadline || "",
+      isPaid: initialData?.isPaid || false,
+      feeAmount: initialData?.feeAmount ?? 100,
+      feePricingModel: initialData?.feePricingModel || "per_person",
+      teamFeeAmount: initialData?.teamFeeAmount ?? 300,
+      customQuestions: initialData?.customQuestions || [],
+      isParentFest: initialData?.isParentFest || false,
+      parentEventId: initialData?.parentEventId || "",
+      parentEventSlug: initialData?.parentEventSlug || "",
+      parentEventName: initialData?.parentEventName || "",
+      subEventBadge: initialData?.subEventBadge || "",
+      targetAudience: initialData?.targetAudience || "inter_college",
+      isInterCollege: initialData?.isInterCollege !== false,
+      isFeatured: Boolean(initialData?.isFeatured),
+      whatsappGroupUrl: initialData?.whatsappGroupUrl || "",
+      whatsappGroupName: initialData?.whatsappGroupName || "",
+      gateCheckInBtIds: initialData?.gateCheckInBtIds ? JSON.parse(JSON.stringify(initialData.gateCheckInBtIds)) : [],
+      eventAccessBtIds: initialData?.eventAccessBtIds ? JSON.parse(JSON.stringify(initialData.eventAccessBtIds)) : [],
+    };
   });
 
   useEffect(() => {
@@ -499,14 +548,43 @@ export function EventFormModal({
         gateCheckInBtIds: Array.isArray(initialData.gateCheckInBtIds) ? JSON.parse(JSON.stringify(initialData.gateCheckInBtIds)) : [],
         eventAccessBtIds: Array.isArray(initialData.eventAccessBtIds) ? JSON.parse(JSON.stringify(initialData.eventAccessBtIds)) : [],
         eligibleDepartments: Array.isArray(initialData.eligibleDepartments) && initialData.eligibleDepartments.length > 0
-          ? JSON.parse(JSON.stringify(initialData.eligibleDepartments))
-          : (prev.eligibleDepartments && prev.eligibleDepartments.length > 0 ? prev.eligibleDepartments : [...DEFAULT_DEPARTMENTS]),
+          ? JSON.parse(JSON.stringify(initialData.eligibleDepartments)).filter((d: string) => departmentsList.includes(d))
+          : (prev.eligibleDepartments && prev.eligibleDepartments.length > 0 ? prev.eligibleDepartments.filter((d: string) => departmentsList.includes(d)) : [...departmentsList]),
         eligibleYears: Array.isArray(initialData.eligibleYears) && initialData.eligibleYears.length > 0
           ? JSON.parse(JSON.stringify(initialData.eligibleYears))
           : (prev.eligibleYears && prev.eligibleYears.length > 0 ? prev.eligibleYears : [...ALL_STUDY_YEARS]),
       }));
     }
-  }, [initialData, isOpen]);
+  }, [initialData, isOpen, departmentsList]);
+
+  // Dynamically sync eligible departments with live accredited roster changes
+  useEffect(() => {
+    if (departmentsList.length > 0) {
+      setForm((prev) => {
+        // If mode is create and user hadn't explicitly cleared or restricted, keep all active departments selected
+        if (mode === "create" && (!initialData?.eligibleDepartments || initialData.eligibleDepartments.length === 0)) {
+          const wasAllSelected = !prev.eligibleDepartments || prev.eligibleDepartments.length === 0 || prev.eligibleDepartments.length >= departmentsList.length - 1;
+          if (wasAllSelected) {
+            return {
+              ...prev,
+              eligibleDepartments: [...departmentsList],
+            };
+          }
+        }
+        // If departments were removed from the roster, purge them so removed departments stay removed
+        if (prev.eligibleDepartments && prev.eligibleDepartments.length > 0) {
+          const valid = prev.eligibleDepartments.filter((d) => departmentsList.includes(d));
+          if (valid.length !== prev.eligibleDepartments.length) {
+            return {
+              ...prev,
+              eligibleDepartments: valid,
+            };
+          }
+        }
+        return prev;
+      });
+    }
+  }, [departmentsList, mode, initialData?.eligibleDepartments]);
 
   const handleStartDateChange = (val: string) => {
     setForm((prev) => {
@@ -578,7 +656,7 @@ export function EventFormModal({
 
   const handleToggleDepartment = (dept: string) => {
     setForm((prev) => {
-      const current = prev.eligibleDepartments || [...DEFAULT_DEPARTMENTS];
+      const current = prev.eligibleDepartments || departmentsList;
       const exists = current.includes(dept);
       const updated = exists ? current.filter((d) => d !== dept) : [...current, dept];
       return { ...prev, eligibleDepartments: updated };
@@ -586,7 +664,7 @@ export function EventFormModal({
   };
 
   const handleSelectAllDepartments = () => {
-    setForm((prev) => ({ ...prev, eligibleDepartments: [...DEFAULT_DEPARTMENTS] }));
+    setForm((prev) => ({ ...prev, eligibleDepartments: [...departmentsList] }));
   };
 
   const handleClearAllDepartments = () => {
@@ -1134,6 +1212,10 @@ export function EventFormModal({
           }
         : undefined;
 
+      const sanitizedEligibleDepts = Array.isArray(form.eligibleDepartments)
+        ? form.eligibleDepartments.filter((d) => departmentsList.includes(d))
+        : [...departmentsList];
+
       const payload: EventFormData = form.isParentFest
         ? {
             ...form,
@@ -1160,6 +1242,7 @@ export function EventFormModal({
             parentEventSlug: "",
             parentEventName: "",
             subEventBadge: "",
+            eligibleDepartments: sanitizedEligibleDepts,
           }
         : {
             ...form,
@@ -1171,6 +1254,7 @@ export function EventFormModal({
             hasPrizes: Boolean(form.hasPrizes),
             schedule: form.hasSchedule ? (form.schedule || []) : [],
             prizes: form.hasPrizes ? (form.prizes || []) : [],
+            eligibleDepartments: sanitizedEligibleDepts,
           };
 
       await onSubmit(payload, asDraft);
@@ -2166,7 +2250,7 @@ export function EventFormModal({
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                   {DEFAULT_DEPARTMENTS.map((dept) => {
                     const isChecked = (form.eligibleDepartments || []).includes(dept);
-                    const shortCode = DEPARTMENT_SHORT_NAMES[dept] || "";
+                    const shortCode = getDepartmentShortName(dept) || "";
                     return (
                       <button
                         key={dept}

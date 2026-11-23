@@ -3216,7 +3216,7 @@ export default function StudentDashboardPage() {
               <div>
                 <h3 className="font-heading font-extrabold text-xl text-slate-900 flex items-center gap-2">
                   <Award className="w-5 h-5 text-amber-500" />
-                  Official Digital Credentials ({certificates.length})
+                  Official E-Certificates ({certificates.length})
                 </h3>
                 <p className="text-xs text-slate-500">
                   Verified certificates issued by the Student Representation Council with permanent authenticity verification
