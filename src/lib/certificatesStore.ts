@@ -270,8 +270,65 @@ export function subscribeToStudentCertificates(
   }
 
   const colRef = collection(db, CERTIFICATES_COLLECTION);
-  let q;
+  if (normEmail && normBtId) {
+    const emailMap = new Map<string, CertificateRecord>();
+    const btIdMap = new Map<string, CertificateRecord>();
 
+    const mergeAndNotify = () => {
+      const mergedMap = new Map<string, CertificateRecord>();
+      emailMap.forEach((v, k) => mergedMap.set(k, v));
+      btIdMap.forEach((v, k) => mergedMap.set(k, v));
+      const list = Array.from(mergedMap.values());
+      list.sort((a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime());
+      callback(list);
+    };
+
+    const qEmail = query(colRef, where("recipientEmail", "==", normEmail));
+    const qBtId = query(colRef, where("recipientBtId", "==", normBtId));
+
+    const unsubEmail = onSnapshot(
+      qEmail,
+      (snapshot) => {
+        emailMap.clear();
+        snapshot.forEach((docSnap) => {
+          const cert = docSnap.data() as CertificateRecord;
+          if (cert.id !== "preview-cert" && cert.status === "PUBLISHED") {
+            emailMap.set(cert.id, cert);
+          }
+        });
+        mergeAndNotify();
+      },
+      (error) => {
+        console.warn("Certificates email subscription warning:", error);
+        getStudentCertificatesFromFirestore(normEmail, normBtId).then(callback);
+      }
+    );
+
+    const unsubBtId = onSnapshot(
+      qBtId,
+      (snapshot) => {
+        btIdMap.clear();
+        snapshot.forEach((docSnap) => {
+          const cert = docSnap.data() as CertificateRecord;
+          if (cert.id !== "preview-cert" && cert.status === "PUBLISHED") {
+            btIdMap.set(cert.id, cert);
+          }
+        });
+        mergeAndNotify();
+      },
+      (error) => {
+        console.warn("Certificates BT ID subscription warning:", error);
+        getStudentCertificatesFromFirestore(normEmail, normBtId).then(callback);
+      }
+    );
+
+    return () => {
+      unsubEmail();
+      unsubBtId();
+    };
+  }
+
+  let q;
   if (normEmail) {
     q = query(colRef, where("recipientEmail", "==", normEmail));
   } else if (normBtId) {

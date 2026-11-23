@@ -32,6 +32,7 @@ import {
   Printer,
   ChevronDown,
   PenTool,
+  Plus,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Badge } from "@/components/ui/Badge";
@@ -87,6 +88,7 @@ import {
 import { getStoredClubs, findClub, saveStoredClubs } from "@/lib/councilStore";
 import { CertificateView } from "@/components/certificates/CertificateView";
 import { downloadCertificateAsImage, printCertificate } from "@/lib/certificateExport";
+import { ManualCertificateModal } from "@/components/admin/certificates/ManualCertificateModal";
 
 export default function AdminCertificatesPage() {
   return (
@@ -182,6 +184,7 @@ function AdminCertificatesContent() {
     null
   );
   const [publishSuccessModal, setPublishSuccessModal] = useState<{ count: number } | null>(null);
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [revokingCert, setRevokingCert] = useState<CertificateRecord | null>(null);
   const [revokeReason, setRevokeReason] = useState("");
@@ -1064,8 +1067,8 @@ function AdminCertificatesContent() {
           </div>
         </div>
 
-        {/* Global Stats */}
-        <div className="flex items-center gap-4">
+        {/* Global Stats & Add Certificate Button */}
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
           <div className="px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-center">
             <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
               Issued Credentials
@@ -1083,6 +1086,15 @@ function AdminCertificatesContent() {
               {new Set(allCertificates.map((c) => c.eventId)).size}
             </span>
           </div>
+
+          <Button
+            type="button"
+            onClick={() => setIsManualModalOpen(true)}
+            className="px-4 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123673] text-white font-bold text-xs shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0 transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Add Certificate
+          </Button>
         </div>
       </div>
 
@@ -2205,6 +2217,25 @@ function AdminCertificatesContent() {
           </div>
         </div>
       )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* 4.5 MANUAL / OFFLINE CERTIFICATES MODAL */}
+      {/* ------------------------------------------------------------- */}
+      <ManualCertificateModal
+        isOpen={isManualModalOpen}
+        onClose={() => setIsManualModalOpen(false)}
+        tenuresList={tenuresList}
+        allEvents={allKnownEvents}
+        defaultSignatories={savedSignatories}
+        initialTenureId={selectedTenureId !== "all" ? selectedTenureId : undefined}
+        initialEventId={currentEvent ? currentEvent.id || currentEvent.slug : undefined}
+        onSuccessPublished={(count) => {
+          setPublishSuccessModal({ count });
+        }}
+        onOpenLivePreview={(previewPayload) => {
+          setPreviewCert(previewPayload);
+        }}
+      />
 
       {/* ------------------------------------------------------------- */}
       {/* 5. LIVE PREVIEW / INSPECT MODAL */}
