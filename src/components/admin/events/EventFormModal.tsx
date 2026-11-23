@@ -1245,30 +1245,54 @@ export function EventFormModal({
             {/* ========================================================= */}
             {activeSection === "details" && (
               <div className="space-y-5 animate-in fade-in duration-200">
-            
-            <div className="grid grid-cols-2 gap-4">
-{/* Event Title */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                Event Title *
-              </label>
-              <input
-                type="text"
-                required
-                value={form.name}
-                onChange={(e) => {
-                  setForm({ ...form, name: e.target.value });
-                  if (formError) setFormError(null);
-                }}
-                placeholder="e.g. CodeStorm 2026 Hackathon"
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F]"
-              />
-            </div>
+                {/* 1. Event Title */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    Event Title *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={form.name}
+                    onChange={(e) => {
+                      setForm({ ...form, name: e.target.value });
+                      if (formError) setFormError(null);
+                    }}
+                    placeholder="e.g. CodeStorm 2026 Hackathon"
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F]"
+                  />
+                </div>
 
-</div>
+                {/* 2. Brief Description */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    Brief Description
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={form.description}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                    placeholder="Short summary displayed on cards, social previews, and listing strips..."
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F] resize-none"
+                  />
+                </div>
 
-            {/* Organized By */}
-            <div className="space-y-1.5">
+                {/* 3. About The Event */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    About The Event
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={form.about}
+                    onChange={(e) => setForm({ ...form, about: e.target.value })}
+                    placeholder="Detailed description about what the event is, its significance, objectives, and awards..."
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F] resize-none"
+                  />
+                </div>
+
+                {/* 4. Organized By */}
+                <div className="space-y-1.5">
               <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5 text-[#17458F]" />
                 <span>Organized By *</span>
@@ -1436,412 +1460,384 @@ export function EventFormModal({
               )}
             </div>
 
-            {/* Dynamic Festival & Competition Hierarchy */}
-            <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
-                  <Layers className="w-4 h-4 text-[#E78023]" />
-                  <span>Event &amp; Competition Hierarchy</span>
-                </label>
-                <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={form.isParentFest}
-                    onChange={(e) => {
-                      const isChecked = e.target.checked;
-                      setForm((prev) => ({
-                        ...prev,
-                        isParentFest: isChecked,
-                        ...(isChecked
-                          ? {
-                              parentEventId: "",
-                              parentEventSlug: "",
-                              parentEventName: "",
-                              subEventBadge: "",
-                            }
-                          : {}),
-                      }));
-                      if (isChecked && activeSection !== "details" && activeSection !== "visuals") {
-                        setActiveSection("details");
-                      }
-                    }}
-                    className="w-4 h-4 rounded text-[#17458F] focus:ring-[#17458F] border-slate-300"
-                  />
-                  <span className="text-xs font-bold text-amber-950">Is Umbrella Event</span>
-                </label>
-              </div>
-
-              {form.isParentFest ? (
-                <div className="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200/90 text-amber-950 space-y-1.5 animate-in fade-in">
-                  <div className="flex items-center gap-2 font-bold text-xs text-amber-900">
-                    <Layers className="w-4 h-4 text-[#E78023]" />
-                    <span>Umbrella Festival Mode Active</span>
-                  </div>
-                  <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
-                    Schedule itineraries, prize distributions, entry fees, and squad participation rules are omitted here because they are configured individually on each sub-competition under this festival. Only festival details, secretariat support, and visual branding assets are required.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-amber-200/60">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
-                      Part of Umbrella Event (Optional)
+                {/* 6. Category and Status */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                      Category *
                     </label>
                     <select
-                      value={form.parentEventId}
-                      onChange={(e) => {
-                        const pid = e.target.value;
-                        const parentEvt = eventsList.find((ev) => ev.id === pid || ev.slug === pid);
-                        setForm({
-                          ...form,
-                          parentEventId: pid,
-                          parentEventSlug: parentEvt ? parentEvt.slug : "",
-                          parentEventName: parentEvt ? parentEvt.name : "",
-                        });
-                      }}
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-semibold focus:outline-none focus:border-[#17458F]"
+                      value={form.category}
+                      onChange={(e) => setForm({ ...form, category: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
                     >
-                      <option value="">None (Standalone Event)</option>
-                      {eventsList
-                        .filter((ev) => ev.id !== editingEventId && Boolean(ev.isParentFest))
-                        .map((ev) => (
-                          <option key={ev.id} value={ev.id}>
-                            {ev.name} ({ev.category})
-                          </option>
-                        ))}
+                      <option value="Fest">Fest</option>
+                      <option value="Technical">Technical</option>
+                      <option value="Cultural">Cultural</option>
+                      <option value="Competitions">Competitions</option>
+                      <option value="Workshops">Workshops</option>
+                      <option value="Sports">Sports</option>
                     </select>
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
-                      Sub-Event Badge / Tag (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={form.subEventBadge}
-                      onChange={(e) => setForm({ ...form, subEventBadge: e.target.value.toUpperCase() })}
-                      placeholder="e.g. CONTESTANT, AUDITION, SOLO"
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-bold tracking-wider uppercase focus:outline-none focus:border-[#17458F]"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Flagship Highlight Spotlight Toggle */}
-            <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/80 flex items-center justify-between">
-              <label className="text-xs font-bold uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-[#E78023]" />
-                <span>Flagship Highlight Spotlight</span>
-              </label>
-              <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={Boolean(form.isFeatured)}
-                  onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })}
-                  className="w-4 h-4 rounded text-[#17458F] focus:ring-[#17458F] border-slate-300"
-                />
-                <span className="text-xs font-bold text-amber-950">Feature as Flagship</span>
-              </label>
-            </div>
-
-            {/* Target Audience & Eligibility Toggle Switch */}
-            <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                  <Users className="w-3.5 h-3.5 text-[#17458F]" />
-                  <span>Target Audience &amp; Eligibility</span>
-                </label>
-                <span
-                  className={cn(
-                    "text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full border transition-all",
-                    form.targetAudience === "jdcoem_only"
-                      ? "bg-amber-50 text-amber-800 border-amber-200"
-                      : "bg-emerald-50 text-emerald-800 border-emerald-200"
-                  )}
-                >
-                  {form.targetAudience === "jdcoem_only" ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
-                </span>
-              </div>
-
-              {/* Tactile 2-Segment Toggle */}
-              <div className="grid grid-cols-2 gap-2 p-1 bg-slate-200/70 rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...form, targetAudience: "jdcoem_only", isInterCollege: false })}
-                  className={cn(
-                    "py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
-                    form.targetAudience === "jdcoem_only"
-                      ? "bg-white text-[#17458F] shadow-xs"
-                      : "text-slate-600 hover:text-slate-900"
-                  )}
-                >
-                  <GraduationCap className="w-3.5 h-3.5" />
-                  <span>JDCOEM Students Only</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...form, targetAudience: "inter_college", isInterCollege: true })}
-                  className={cn(
-                    "py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
-                    form.targetAudience === "inter_college"
-                      ? "bg-white text-[#E78023] shadow-xs"
-                      : "text-slate-600 hover:text-slate-900"
-                  )}
-                >
-                  <Globe className="w-3.5 h-3.5" />
-                  <span>Inter-College (Open to All)</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Category and Status */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                  Category *
-                </label>
-                <select
-                  value={form.category}
-                  onChange={(e) => setForm({ ...form, category: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
-                >
-                  <option value="Fest">Fest</option>
-                  <option value="Technical">Technical</option>
-                  <option value="Cultural">Cultural</option>
-                  <option value="Competitions">Competitions</option>
-                  <option value="Workshops">Workshops</option>
-                  <option value="Sports">Sports</option>
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                  Event Status *
-                </label>
-                <select
-                  value={form.status}
-                  onChange={(e) => setForm({ ...form, status: e.target.value as any })}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
-                >
-                  <option value="Registration Open">Registration Open</option>
-                  <option value="Dates Coming Soon (Open)">Dates Coming Soon (Open)</option>
-                  <option value="Registration Closed">Registration Closed</option>
-                  <option value="Upcoming">Upcoming</option>
-                  <option value="Coming Soon">Coming Soon</option>
-                  <option value="Completed">Completed</option>
-                  <option value="Cancelled">Cancelled</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Event Date (Interactive Single or Multi-Day Date Range) & Venue */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="space-y-0.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                    <CalendarIcon className="w-3.5 h-3.5 text-[#E78023]" />
-                    <span>Event Date &amp; Duration *</span>
-                  </label>
-                  <p className="text-[11px] text-slate-500">
-                    Choose whether the event is held on a single day or spans across multiple days.
-                  </p>
-                </div>
-
-                {/* Duration Mode Switch */}
-                <div className="inline-flex p-1 bg-slate-200/70 rounded-xl shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => handleToggleMultiDay(false)}
-                    className={cn(
-                      "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                      !form.isMultiDay
-                        ? "bg-white text-[#17458F] shadow-xs"
-                        : "text-slate-600 hover:text-slate-900"
-                    )}
-                  >
-                    Single Day
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleMultiDay(true)}
-                    className={cn(
-                      "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                      form.isMultiDay
-                        ? "bg-white text-[#E78023] shadow-xs"
-                        : "text-slate-600 hover:text-slate-900"
-                    )}
-                  >
-                    Multi-Day (Period)
-                  </button>
-                </div>
-              </div>
-
-              {/* Date & Time Input Fields */}
-              {!form.isMultiDay ? (
-                <div className="space-y-3 pt-1">
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-                      Date (Calendar) *
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                      Event Status *
                     </label>
-                    <input
-                      type="date"
-                      required
-                      value={form.rawDate}
-                      onChange={(e) => handleStartDateChange(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-[#E78023]" />
-                        <span>Event Time *</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={form.time}
-                        onChange={(e) => setForm({ ...form, time: e.target.value })}
-                        placeholder="e.g. 10:00 AM IST or 10:00 AM - 04:00 PM"
-                        className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-[#E78023]" />
-                        <span>Venue *</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={form.venue}
-                        onChange={(e) => setForm({ ...form, venue: e.target.value })}
-                        placeholder="e.g. Central Auditorium"
-                        className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
-                      />
-                    </div>
+                    <select
+                      value={form.status}
+                      onChange={(e) => setForm({ ...form, status: e.target.value as any })}
+                      className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
+                    >
+                      <option value="Registration Open">Registration Open</option>
+                      <option value="Dates Coming Soon (Open)">Dates Coming Soon (Open)</option>
+                      <option value="Registration Closed">Registration Closed</option>
+                      <option value="Upcoming">Upcoming</option>
+                      <option value="Coming Soon">Coming Soon</option>
+                      <option value="Completed">Completed</option>
+                      <option value="Cancelled">Cancelled</option>
+                    </select>
                   </div>
                 </div>
-              ) : (
-                <div className="space-y-3 pt-1">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-                        Start Date *
+
+                {/* 7. Event Date (Interactive Single or Multi-Day Date Range) & Venue */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                        <CalendarIcon className="w-3.5 h-3.5 text-[#E78023]" />
+                        <span>Event Date &amp; Duration *</span>
                       </label>
-                      <input
-                        type="date"
-                        required
-                        value={form.rawDate}
-                        onChange={(e) => handleStartDateChange(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
-                      />
+                      <p className="text-[11px] text-slate-500">
+                        Choose whether the event is held on a single day or spans across multiple days.
+                      </p>
                     </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-                        End Date *
-                      </label>
-                      <input
-                        type="date"
-                        required
-                        min={form.rawDate}
-                        value={form.rawEndDate || form.rawDate}
-                        onChange={(e) => handleEndDateChange(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
-                      />
+
+                    {/* Duration Mode Switch */}
+                    <div className="inline-flex p-1 bg-slate-200/70 rounded-xl shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleMultiDay(false)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                          !form.isMultiDay
+                            ? "bg-white text-[#17458F] shadow-xs"
+                            : "text-slate-600 hover:text-slate-900"
+                        )}
+                      >
+                        Single Day
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleMultiDay(true)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                          form.isMultiDay
+                            ? "bg-white text-[#E78023] shadow-xs"
+                            : "text-slate-600 hover:text-slate-900"
+                        )}
+                      >
+                        Multi-Day (Period)
+                      </button>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-[#E78023]" />
-                        <span>Event Daily Schedule / Time *</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={form.time}
-                        onChange={(e) => setForm({ ...form, time: e.target.value })}
-                        placeholder="e.g. 10:00 AM Daily or 09:30 AM - 05:30 PM"
-                        className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-[#E78023]" />
-                        <span>Venue *</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={form.venue}
-                        onChange={(e) => setForm({ ...form, venue: e.target.value })}
-                        placeholder="e.g. Campus Grounds & Auditorium"
-                        className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
+                  {/* Date & Time Input Fields */}
+                  {!form.isMultiDay ? (
+                    <div className="space-y-3 pt-1">
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+                          Date (Calendar) *
+                        </label>
+                        <input
+                          type="date"
+                          required
+                          value={form.rawDate}
+                          onChange={(e) => handleStartDateChange(e.target.value)}
+                          className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
+                        />
+                      </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] pt-2 border-t border-slate-200/70 text-slate-500">
-                <div className="flex items-center gap-2">
-                  <span>Public Display Format:</span>
-                  {form.status === "Coming Soon" ? (
-                    <span className="font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-md inline-flex items-center gap-1.5">
-                      <span>Coming Soon</span>
-                      <span className="text-[10px] text-amber-600 font-medium">(Date hidden on website — status is Coming Soon)</span>
-                    </span>
-                  ) : form.status === "Dates Coming Soon (Open)" ? (
-                    <span className="font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-md inline-flex items-center gap-1.5">
-                      <span>Coming Soon</span>
-                      <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">(Date hidden on website — Registrations OPEN)</span>
-                    </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-[#E78023]" />
+                            <span>Event Time *</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={form.time}
+                            onChange={(e) => setForm({ ...form, time: e.target.value })}
+                            placeholder="e.g. 10:00 AM IST or 10:00 AM - 04:00 PM"
+                            className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                            <MapPin className="w-3.5 h-3.5 text-[#E78023]" />
+                            <span>Venue *</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={form.venue}
+                            onChange={(e) => setForm({ ...form, venue: e.target.value })}
+                            placeholder="e.g. Central Auditorium"
+                            className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   ) : (
-                    <span className="font-bold text-[#17458F] bg-blue-50 border border-blue-100 px-2.5 py-0.5 rounded-md">
-                      {form.date || "Selected Date"}
+                    <div className="space-y-3 pt-1">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+                            Start Date *
+                          </label>
+                          <input
+                            type="date"
+                            required
+                            value={form.rawDate}
+                            onChange={(e) => handleStartDateChange(e.target.value)}
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+                            End Date *
+                          </label>
+                          <input
+                            type="date"
+                            required
+                            min={form.rawDate}
+                            value={form.rawEndDate || form.rawDate}
+                            onChange={(e) => handleEndDateChange(e.target.value)}
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-[#E78023]" />
+                            <span>Event Daily Schedule / Time *</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={form.time}
+                            onChange={(e) => setForm({ ...form, time: e.target.value })}
+                            placeholder="e.g. 10:00 AM Daily or 09:30 AM - 05:30 PM"
+                            className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                            <MapPin className="w-3.5 h-3.5 text-[#E78023]" />
+                            <span>Venue *</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={form.venue}
+                            onChange={(e) => setForm({ ...form, venue: e.target.value })}
+                            placeholder="e.g. Campus Grounds & Auditorium"
+                            className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] pt-2 border-t border-slate-200/70 text-slate-500">
+                    <div className="flex items-center gap-2">
+                      <span>Public Display Format:</span>
+                      {form.status === "Coming Soon" ? (
+                        <span className="font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-md inline-flex items-center gap-1.5">
+                          <span>Coming Soon</span>
+                          <span className="text-[10px] text-amber-600 font-medium">(Date hidden on website — status is Coming Soon)</span>
+                        </span>
+                      ) : form.status === "Dates Coming Soon (Open)" ? (
+                        <span className="font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-md inline-flex items-center gap-1.5">
+                          <span>Coming Soon</span>
+                          <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">(Date hidden on website — Registrations OPEN)</span>
+                        </span>
+                      ) : (
+                        <span className="font-bold text-[#17458F] bg-blue-50 border border-blue-100 px-2.5 py-0.5 rounded-md">
+                          {form.date || "Selected Date"}
+                        </span>
+                      )}
+                    </div>
+                    {form.status !== "Coming Soon" && form.status !== "Dates Coming Soon (Open)" && form.time && (
+                      <div className="flex items-center gap-1.5 font-semibold text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-md">
+                        <Clock className="w-3 h-3 text-[#E78023]" />
+                        <span>{form.time}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 8. Target Audience & Eligibility Toggle Switch */}
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-[#17458F]" />
+                      <span>Target Audience &amp; Eligibility</span>
+                    </label>
+                    <span
+                      className={cn(
+                        "text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full border transition-all",
+                        form.targetAudience === "jdcoem_only"
+                          ? "bg-amber-50 text-amber-800 border-amber-200"
+                          : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                      )}
+                    >
+                      {form.targetAudience === "jdcoem_only" ? "🎓 JDCOEM Only" : "🌐 Inter-College"}
                     </span>
+                  </div>
+
+                  {/* Tactile 2-Segment Toggle */}
+                  <div className="grid grid-cols-2 gap-2 p-1 bg-slate-200/70 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, targetAudience: "jdcoem_only", isInterCollege: false })}
+                      className={cn(
+                        "py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+                        form.targetAudience === "jdcoem_only"
+                          ? "bg-white text-[#17458F] shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      )}
+                    >
+                      <GraduationCap className="w-3.5 h-3.5" />
+                      <span>JDCOEM Students Only</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, targetAudience: "inter_college", isInterCollege: true })}
+                      className={cn(
+                        "py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+                        form.targetAudience === "inter_college"
+                          ? "bg-white text-[#E78023] shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      )}
+                    >
+                      <Globe className="w-3.5 h-3.5" />
+                      <span>Inter-College (Open to All)</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 9. Event & Competition Hierarchy */}
+                <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
+                      <Layers className="w-4 h-4 text-[#E78023]" />
+                      <span>Event &amp; Competition Hierarchy</span>
+                    </label>
+                    <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={form.isParentFest}
+                        onChange={(e) => {
+                          const isChecked = e.target.checked;
+                          setForm((prev) => ({
+                            ...prev,
+                            isParentFest: isChecked,
+                            ...(isChecked
+                              ? {
+                                  parentEventId: "",
+                                  parentEventSlug: "",
+                                  parentEventName: "",
+                                  subEventBadge: "",
+                                }
+                              : {}),
+                          }));
+                          if (isChecked && activeSection !== "details" && activeSection !== "visuals") {
+                            setActiveSection("details");
+                          }
+                        }}
+                        className="w-4 h-4 rounded text-[#17458F] focus:ring-[#17458F] border-slate-300"
+                      />
+                      <span className="text-xs font-bold text-amber-950">Is Umbrella Event</span>
+                    </label>
+                  </div>
+
+                  {form.isParentFest ? (
+                    <div className="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200/90 text-amber-950 space-y-1.5 animate-in fade-in">
+                      <div className="flex items-center gap-2 font-bold text-xs text-amber-900">
+                        <Layers className="w-4 h-4 text-[#E78023]" />
+                        <span>Umbrella Festival Mode Active</span>
+                      </div>
+                      <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
+                        Schedule itineraries, prize distributions, entry fees, and squad participation rules are omitted here because they are configured individually on each sub-competition under this festival. Only festival details, secretariat support, and visual branding assets are required.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-amber-200/60">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
+                          Part of Umbrella Event (Optional)
+                        </label>
+                        <select
+                          value={form.parentEventId}
+                          onChange={(e) => {
+                            const pid = e.target.value;
+                            const parentEvt = eventsList.find((ev) => ev.id === pid || ev.slug === pid);
+                            setForm({
+                              ...form,
+                              parentEventId: pid,
+                              parentEventSlug: parentEvt ? parentEvt.slug : "",
+                              parentEventName: parentEvt ? parentEvt.name : "",
+                            });
+                          }}
+                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-semibold focus:outline-none focus:border-[#17458F]"
+                        >
+                          <option value="">None (Standalone Event)</option>
+                          {eventsList
+                            .filter((ev) => ev.id !== editingEventId && Boolean(ev.isParentFest))
+                            .map((ev) => (
+                              <option key={ev.id} value={ev.id}>
+                                {ev.name} ({ev.category})
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
+                          Sub-Event Badge / Tag (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={form.subEventBadge}
+                          onChange={(e) => setForm({ ...form, subEventBadge: e.target.value.toUpperCase() })}
+                          placeholder="e.g. CONTESTANT, AUDITION, SOLO"
+                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs font-bold tracking-wider uppercase focus:outline-none focus:border-[#17458F]"
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
-                {form.status !== "Coming Soon" && form.status !== "Dates Coming Soon (Open)" && form.time && (
-                  <div className="flex items-center gap-1.5 font-semibold text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-md">
-                    <Clock className="w-3 h-3 text-[#E78023]" />
-                    <span>{form.time}</span>
-                  </div>
-                )}
-              </div>
-            </div>
 
-            {/* Brief Description */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                Brief Description
-              </label>
-              <textarea
-                rows={2}
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="Short summary displayed on cards, social previews, and listing strips..."
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F] resize-none"
-              />
-            </div>
-
-            {/* About The Event */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                About The Event
-              </label>
-              <textarea
-                rows={4}
-                value={form.about}
-                onChange={(e) => setForm({ ...form, about: e.target.value })}
-                placeholder="Detailed description about what the event is, its significance, objectives, and awards..."
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:border-[#17458F] resize-none"
-              />
-            </div>
+                {/* 10. Flagship Highlight Spotlight */}
+                <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/80 flex items-center justify-between">
+                  <label className="text-xs font-bold uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-[#E78023]" />
+                    <span>Flagship Highlight</span>
+                  </label>
+                  <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(form.isFeatured)}
+                      onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })}
+                      className="w-4 h-4 rounded text-[#17458F] focus:ring-[#17458F] border-slate-300"
+                    />
+                    <span className="text-xs font-bold text-amber-950">Feature as Flagship</span>
+                  </label>
+                </div>
 
             {/* Festival Secretariat & Support Helpdesk (Available directly on Umbrella Events) */}
             {form.isParentFest && (
@@ -1985,7 +1981,619 @@ export function EventFormModal({
         )}
 
         {/* ========================================================= */}
-        {/* 2. SCHEDULE & PRIZES SECTION                              */}
+        {/* 2. PARTICIPATION SECTION                                 */}
+        {/* ========================================================= */}
+        {activeSection === "participation" && (
+          <div className="space-y-5 animate-in fade-in duration-200">
+            {/* Participation Format */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                Participation Format *
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {(["Individual", "Team", "Both"] as const).map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setForm({ ...form, teamType: opt })}
+                    className={cn(
+                      "py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer",
+                      form.teamType === opt
+                        ? "bg-[#17458F] text-white border-[#17458F] shadow-xs"
+                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                    )}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+
+              {form.teamType !== "Individual" && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Min Team Size
+                    </label>
+                    <input
+                      type="number"
+                      min={2}
+                      max={20}
+                      value={form.minTeamSize}
+                      onChange={(e) => setForm({ ...form, minTeamSize: parseInt(e.target.value) || 2 })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Max Team Size
+                    </label>
+                    <input
+                      type="number"
+                      min={2}
+                      max={20}
+                      value={form.maxTeamSize}
+                      onChange={(e) => setForm({ ...form, maxTeamSize: parseInt(e.target.value) || 4 })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 2. Eligible Department & Year */}
+            <div className="space-y-4 pt-4 border-t border-slate-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1 border-b border-slate-200">
+                <div className="flex items-center gap-2">
+                  <GraduationCap className="w-4 h-4 text-[#17458F]" />
+                  <h4 className="font-heading font-bold text-sm text-slate-900 uppercase">
+                    Eligible Academic Departments &amp; Study Years
+                  </h4>
+                </div>
+              </div>
+
+              {/* Sub-Card A: Study Years */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                      Academic Year Eligibility
+                    </label>
+                    <span className={cn(
+                      "text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border",
+                      (form.eligibleYears || []).length === ALL_STUDY_YEARS.length
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                        : (form.eligibleYears || []).length === 0
+                        ? "bg-rose-50 text-rose-800 border-rose-200"
+                        : "bg-blue-50 text-[#17458F] border-[#17458F]/30"
+                    )}>
+                      {(form.eligibleYears || []).length === ALL_STUDY_YEARS.length
+                        ? "All Years Eligible"
+                        : `${(form.eligibleYears || []).length} of ${ALL_STUDY_YEARS.length} Years Selected`}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSelectAllYears}
+                      className="text-xs text-[#17458F] hover:underline font-semibold cursor-pointer"
+                    >
+                      Select All
+                    </button>
+                    <span className="text-slate-300">•</span>
+                    <button
+                      type="button"
+                      onClick={handleClearAllYears}
+                      className="text-xs text-rose-600 hover:underline font-semibold cursor-pointer"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {ALL_STUDY_YEARS.map((year) => {
+                    const isChecked = (form.eligibleYears || []).includes(year);
+                    return (
+                      <button
+                        key={year}
+                        type="button"
+                        onClick={() => handleToggleYear(year)}
+                        className={cn(
+                          "p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-2.5",
+                          isChecked
+                            ? "bg-blue-50/70 border-[#17458F] text-[#17458F] shadow-xs"
+                            : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition-colors",
+                            isChecked
+                              ? "bg-[#17458F] border-[#17458F] text-white"
+                              : "border-slate-300 bg-slate-50"
+                          )}
+                        >
+                          {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                        <span className="text-xs font-bold truncate">{year}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Sub-Card B: Academic Departments */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                      Department Eligibility
+                    </label>
+                    <span className={cn(
+                      "text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border",
+                      (form.eligibleDepartments || []).length === DEFAULT_DEPARTMENTS.length
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                        : (form.eligibleDepartments || []).length === 0
+                        ? "bg-rose-50 text-rose-800 border-rose-200"
+                        : "bg-blue-50 text-[#17458F] border-[#17458F]/30"
+                    )}>
+                      {(form.eligibleDepartments || []).length === DEFAULT_DEPARTMENTS.length
+                        ? "All Departments Eligible"
+                        : `${(form.eligibleDepartments || []).length} of ${DEFAULT_DEPARTMENTS.length} Selected`}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSelectAllDepartments}
+                      className="text-xs text-[#17458F] hover:underline font-semibold cursor-pointer"
+                    >
+                      Select All
+                    </button>
+                    <span className="text-slate-300">•</span>
+                    <button
+                      type="button"
+                      onClick={handleClearAllDepartments}
+                      className="text-xs text-rose-600 hover:underline font-semibold cursor-pointer"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {DEFAULT_DEPARTMENTS.map((dept) => {
+                    const isChecked = (form.eligibleDepartments || []).includes(dept);
+                    const shortCode = DEPARTMENT_SHORT_NAMES[dept] || "";
+                    return (
+                      <button
+                        key={dept}
+                        type="button"
+                        onClick={() => handleToggleDepartment(dept)}
+                        className={cn(
+                          "p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-2.5",
+                          isChecked
+                            ? "bg-blue-50/70 border-[#17458F] text-[#17458F] shadow-xs"
+                            : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition-colors",
+                            isChecked
+                              ? "bg-[#17458F] border-[#17458F] text-white"
+                              : "border-slate-300 bg-slate-50"
+                          )}
+                        >
+                          {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                        <div className="flex-1 min-w-0 flex items-center justify-between gap-1.5">
+                          <span className="text-xs font-bold truncate text-slate-900">{dept}</span>
+                          {shortCode && (
+                            <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
+                              {shortCode}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <p className="text-[11px] text-slate-500 font-medium pt-1">
+                  If any department or academic year is unchecked, students in that department or year will be prevented from registering for this event on the portal.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* 3. REGISTRATION SECTION                                   */}
+        {/* ========================================================= */}
+        {activeSection === "registration" && (
+          <div className="space-y-5 animate-in fade-in duration-200">
+            {form.status === "Completed" && (
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-amber-900">
+                    Registration Locked • Event Marked As Completed
+                  </h4>
+                  <p className="text-xs text-amber-800 leading-relaxed font-medium">
+                    Since this event is marked as <strong>Completed</strong>, public registrations are locked on the portal regardless of registration dates or fee configurations.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Registration Requirement Mode Card */}
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-50/70 to-slate-50 border border-blue-100 space-y-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-[#17458F]" />
+                  <span>Registration Requirement</span>
+                </label>
+                <span className={cn(
+                  "text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border shrink-0",
+                  form.noRegistrationRequired
+                    ? "bg-amber-50 text-amber-800 border-amber-200"
+                    : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                )}>
+                  {form.noRegistrationRequired ? "No Registration Required" : "Registration Mandatory"}
+                </span>
+              </div>
+
+              {/* 2-Option Card Switch */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, noRegistrationRequired: false })}
+                  className={cn(
+                    "py-2.5 px-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-center gap-3",
+                    !form.noRegistrationRequired
+                      ? "bg-white border-[#17458F] shadow-sm ring-2 ring-[#17458F]/20"
+                      : "bg-white/60 border-slate-200 hover:bg-white text-slate-600"
+                  )}
+                >
+                  <div className={cn(
+                    "w-4 h-4 rounded-full border flex items-center justify-center shrink-0",
+                    !form.noRegistrationRequired ? "border-[#17458F] bg-[#17458F] text-white" : "border-slate-300"
+                  )}>
+                    {!form.noRegistrationRequired && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                  </div>
+                  <div className="text-xs font-bold text-slate-900">Require Registrations</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, noRegistrationRequired: true, isPaid: false })}
+                  className={cn(
+                    "py-2.5 px-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-center gap-3",
+                    form.noRegistrationRequired
+                      ? "bg-white border-amber-500 shadow-sm ring-2 ring-amber-500/20"
+                      : "bg-white/60 border-slate-200 hover:bg-white text-slate-600"
+                  )}
+                >
+                  <div className={cn(
+                    "w-4 h-4 rounded-full border flex items-center justify-center shrink-0",
+                    form.noRegistrationRequired ? "border-amber-600 bg-amber-600 text-white" : "border-slate-300"
+                  )}>
+                    {form.noRegistrationRequired && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                  </div>
+                  <div className="text-xs font-bold text-slate-900">No Registrations Required</div>
+                </button>
+              </div>
+            </div>
+
+            {form.noRegistrationRequired ? (
+              <div className="p-5 rounded-2xl bg-emerald-50/80 border border-emerald-200 text-emerald-950 space-y-3 animate-in fade-in duration-200">
+                <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-emerald-800">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Open Attendance Listing Active</span>
+                </div>
+                <p className="text-xs text-emerald-900/90 leading-relaxed font-medium font-sans">
+                  This event will be published purely as an informational listing for student and visitor discovery. 
+                  No registration fees, opening dates, or closing deadlines are required, and no student signups will be collected on the portal.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-[11px] font-semibold text-emerald-800">
+                  <div className="p-2.5 rounded-xl bg-white border border-emerald-200/70 flex items-center gap-2 shadow-xs">
+                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Free Walk-in Entry</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white border border-emerald-200/70 flex items-center gap-2 shadow-xs">
+                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>No Deadlines Enforced</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white border border-emerald-200/70 flex items-center gap-2 shadow-xs">
+                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>No Ticketing Gateway</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Registration Dates */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-[#E78023]" />
+                      <span>Registration Opens</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={form.registrationStartDate}
+                      onChange={(e) => setForm({ ...form, registrationStartDate: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-rose-500" />
+                      <span>Registration Closes</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={form.registrationDeadline}
+                      onChange={(e) => setForm({ ...form, registrationDeadline: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Registration Fee & Gateway Pricing */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
+                      <span>Registration Fee</span>
+                    </label>
+                    <span
+                      className={cn(
+                        "text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border",
+                        form.isPaid
+                          ? "bg-blue-50 text-[#17458F] border-[#17458F]/30"
+                          : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                      )}
+                    >
+                      {form.isPaid ? "Paid Event" : "Free Entry"}
+                    </span>
+                  </div>
+
+                  {/* Free vs Paid Toggle */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, isPaid: false, feeAmount: 0, teamFeeAmount: 0 })}
+                      className={cn(
+                        "py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                        !form.isPaid
+                          ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                      )}
+                    >
+                      <Check className={cn("w-3.5 h-3.5", !form.isPaid ? "opacity-100" : "opacity-0")} />
+                      <span>Free Event (₹0)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, isPaid: true, feeAmount: form.feeAmount > 0 ? form.feeAmount : 100 })}
+                      className={cn(
+                        "py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                        form.isPaid
+                          ? "bg-[#17458F] text-white border-[#17458F] shadow-xs"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                      )}
+                    >
+                      <Sparkles className={cn("w-3.5 h-3.5", form.isPaid ? "opacity-100" : "opacity-0")} />
+                      <span>Paid Event (₹ Fees)</span>
+                    </button>
+                  </div>
+
+                  {form.isPaid && (
+                    <div className="p-4 rounded-2xl bg-white border border-[#17458F]/20 space-y-3 shadow-xs animate-in fade-in duration-200">
+                      {form.teamType !== "Individual" && (
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+                            Team Pricing Structure
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setForm({ ...form, feePricingModel: "per_person" })}
+                              className={cn(
+                                "py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                                form.feePricingModel === "per_person"
+                                  ? "bg-[#17458F] text-white border-[#17458F]"
+                                  : "bg-slate-50 text-slate-700 border-slate-200"
+                              )}
+                            >
+                              Per Member (₹ × Squad)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setForm({ ...form, feePricingModel: "per_team" })}
+                              className={cn(
+                                "py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                                form.feePricingModel === "per_team"
+                                  ? "bg-[#17458F] text-white border-[#17458F]"
+                                  : "bg-slate-50 text-slate-700 border-slate-200"
+                              )}
+                            >
+                              Flat Team Fee (₹ Fixed)
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-4 pt-1">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                            {form.feePricingModel === "per_team" && form.teamType !== "Individual"
+                              ? "Solo Delegate Fee (₹)"
+                              : "Fee Per Participant (₹)"}
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            step={1}
+                            value={form.feeAmount === 0 ? "" : form.feeAmount}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const parsed = val === "" ? 0 : parseInt(val, 10);
+                              setForm({ ...form, feeAmount: isNaN(parsed) ? 0 : Math.max(0, parsed) });
+                            }}
+                            placeholder="e.g. 150"
+                            className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
+                          />
+                        </div>
+
+                        {form.teamType !== "Individual" && form.feePricingModel === "per_team" && (
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                              Flat Squad Fee (₹ / Team)
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              step={1}
+                              value={form.teamFeeAmount === 0 ? "" : form.teamFeeAmount}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const parsed = val === "" ? 0 : parseInt(val, 10);
+                                setForm({ ...form, teamFeeAmount: isNaN(parsed) ? 0 : Math.max(0, parsed) });
+                              }}
+                              placeholder="e.g. 300"
+                              className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      <p className="text-[10px] text-slate-500 font-medium">
+                        Integrated with Paytm for Business and UPI Gateway. Registrations will securely collect this amount via UPI (GPay/PhonePe/Paytm) before issuing delegate passes.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* 4. GUIDELINES SECTION                                     */}
+        {/* ========================================================= */}
+        {activeSection === "guidelines" && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Rules & Guidelines */}
+            <div className="space-y-2.5 pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 block">
+                    Rules &amp; Guidelines
+                  </label>
+                  <p className="text-[11px] text-slate-400">Specify ground rules, eligibility conditions, or code of conduct.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, rules: ["", ...form.rules] })}
+                  className="px-2.5 py-1 rounded-lg bg-blue-50 text-[#17458F] hover:bg-blue-100 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add Rule
+                </button>
+              </div>
+              <div className="space-y-2">
+                {form.rules.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono font-bold text-slate-400 w-6 shrink-0 text-center">
+                      {(idx + 1).toString().padStart(2, "0")}
+                    </span>
+                    <input
+                      type="text"
+                      value={item}
+                      onChange={(e) => {
+                        const updated = [...form.rules];
+                        updated[idx] = e.target.value;
+                        setForm({ ...form, rules: updated });
+                      }}
+                      placeholder="e.g. College ID mandatory at entry"
+                      className="flex-1 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs focus:outline-none focus:border-[#17458F]"
+                    />
+                    {form.rules.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = form.rules.filter((_, i) => i !== idx);
+                          setForm({ ...form, rules: updated });
+                        }}
+                        className="p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 cursor-pointer transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* What To Expect */}
+            <div className="space-y-2.5 pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 block">
+                    What To Expect
+                  </label>
+                  <p className="text-[11px] text-slate-400">Highlight key takeaways, perks, and event experiences.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, whatToExpect: ["", ...form.whatToExpect] })}
+                  className="px-2.5 py-1 rounded-lg bg-blue-50 text-[#17458F] hover:bg-blue-100 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add Item
+                </button>
+              </div>
+              <div className="space-y-2">
+                {form.whatToExpect.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono font-bold text-slate-400 w-6 shrink-0 text-center">
+                      {(idx + 1).toString().padStart(2, "0")}
+                    </span>
+                    <input
+                      type="text"
+                      value={item}
+                      onChange={(e) => {
+                        const updated = [...form.whatToExpect];
+                        updated[idx] = e.target.value;
+                        setForm({ ...form, whatToExpect: updated });
+                      }}
+                      placeholder="e.g. Industry-level competition experience & cash prizes"
+                      className="flex-1 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs focus:outline-none focus:border-[#17458F]"
+                    />
+                    {form.whatToExpect.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = form.whatToExpect.filter((_, i) => i !== idx);
+                          setForm({ ...form, whatToExpect: updated });
+                        }}
+                        className="p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 cursor-pointer transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* 5. SCHEDULE & PRIZES SECTION                              */}
         {/* ========================================================= */}
         {activeSection === "schedule" && (
           <div className="space-y-6 animate-in fade-in duration-200">
@@ -2824,276 +3432,10 @@ export function EventFormModal({
         )}
 
         {/* ========================================================= */}
-        {/* 3. REGISTRATION SECTION                                   */}
+        {/* 6. EVENT HELPDESK SECTION                                 */}
         {/* ========================================================= */}
-        {activeSection === "registration" && (
+        {activeSection === "helpdesk" && (
           <div className="space-y-5 animate-in fade-in duration-200">
-            {form.status === "Completed" && (
-              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <h4 className="font-bold text-xs uppercase tracking-wider text-amber-900">
-                    Registration Locked • Event Marked As Completed
-                  </h4>
-                  <p className="text-xs text-amber-800 leading-relaxed font-medium">
-                    Since this event is marked as <strong>Completed</strong>, public registrations are locked on the portal regardless of registration dates or fee configurations.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Registration Requirement Mode Card */}
-            <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-50/70 to-slate-50 border border-blue-100 space-y-2.5">
-              <div className="flex items-center justify-between gap-3">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-1.5">
-                  <Users className="w-3.5 h-3.5 text-[#17458F]" />
-                  <span>Registration Requirement</span>
-                </label>
-                <span className={cn(
-                  "text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border shrink-0",
-                  form.noRegistrationRequired
-                    ? "bg-amber-50 text-amber-800 border-amber-200"
-                    : "bg-emerald-50 text-emerald-800 border-emerald-200"
-                )}>
-                  {form.noRegistrationRequired ? "No Registration Required" : "Registration Mandatory"}
-                </span>
-              </div>
-
-              {/* 2-Option Card Switch */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...form, noRegistrationRequired: false })}
-                  className={cn(
-                    "py-2.5 px-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-center gap-3",
-                    !form.noRegistrationRequired
-                      ? "bg-white border-[#17458F] shadow-sm ring-2 ring-[#17458F]/20"
-                      : "bg-white/60 border-slate-200 hover:bg-white text-slate-600"
-                  )}
-                >
-                  <div className={cn(
-                    "w-4 h-4 rounded-full border flex items-center justify-center shrink-0",
-                    !form.noRegistrationRequired ? "border-[#17458F] bg-[#17458F] text-white" : "border-slate-300"
-                  )}>
-                    {!form.noRegistrationRequired && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                  </div>
-                  <div className="text-xs font-bold text-slate-900">Require Registrations</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...form, noRegistrationRequired: true, isPaid: false })}
-                  className={cn(
-                    "py-2.5 px-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-center gap-3",
-                    form.noRegistrationRequired
-                      ? "bg-white border-amber-500 shadow-sm ring-2 ring-amber-500/20"
-                      : "bg-white/60 border-slate-200 hover:bg-white text-slate-600"
-                  )}
-                >
-                  <div className={cn(
-                    "w-4 h-4 rounded-full border flex items-center justify-center shrink-0",
-                    form.noRegistrationRequired ? "border-amber-600 bg-amber-600 text-white" : "border-slate-300"
-                  )}>
-                    {form.noRegistrationRequired && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                  </div>
-                  <div className="text-xs font-bold text-slate-900">No Registrations Required</div>
-                </button>
-              </div>
-            </div>
-
-            {form.noRegistrationRequired ? (
-              <div className="p-5 rounded-2xl bg-emerald-50/80 border border-emerald-200 text-emerald-950 space-y-3 animate-in fade-in duration-200">
-                <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-emerald-800">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Open Attendance Listing Active</span>
-                </div>
-                <p className="text-xs text-emerald-900/90 leading-relaxed font-medium font-sans">
-                  This event will be published purely as an informational listing for student and visitor discovery. 
-                  No registration fees, opening dates, or closing deadlines are required, and no student signups will be collected on the portal.
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-[11px] font-semibold text-emerald-800">
-                  <div className="p-2.5 rounded-xl bg-white border border-emerald-200/70 flex items-center gap-2 shadow-xs">
-                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>Free Walk-in Entry</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-white border border-emerald-200/70 flex items-center gap-2 shadow-xs">
-                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>No Deadlines Enforced</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-white border border-emerald-200/70 flex items-center gap-2 shadow-xs">
-                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>No Ticketing Gateway</span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <>
-                {/* Registration Dates */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-[#E78023]" />
-                      <span>Registration Opens</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={form.registrationStartDate}
-                      onChange={(e) => setForm({ ...form, registrationStartDate: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-rose-500" />
-                      <span>Registration Closes</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={form.registrationDeadline}
-                      onChange={(e) => setForm({ ...form, registrationDeadline: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                {/* Registration Fee & Gateway Pricing */}
-                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
-                      <span>Registration Fee</span>
-                    </label>
-                    <span
-                      className={cn(
-                        "text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border",
-                        form.isPaid
-                          ? "bg-blue-50 text-[#17458F] border-[#17458F]/30"
-                          : "bg-emerald-50 text-emerald-800 border-emerald-200"
-                      )}
-                    >
-                      {form.isPaid ? "Paid Event" : "Free Entry"}
-                    </span>
-                  </div>
-
-                  {/* Free vs Paid Toggle */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setForm({ ...form, isPaid: false, feeAmount: 0, teamFeeAmount: 0 })}
-                      className={cn(
-                        "py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer flex items-center justify-center gap-1.5",
-                        !form.isPaid
-                          ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
-                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
-                      )}
-                    >
-                      <Check className={cn("w-3.5 h-3.5", !form.isPaid ? "opacity-100" : "opacity-0")} />
-                      <span>Free Event (₹0)</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setForm({ ...form, isPaid: true, feeAmount: form.feeAmount > 0 ? form.feeAmount : 100 })}
-                      className={cn(
-                        "py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer flex items-center justify-center gap-1.5",
-                        form.isPaid
-                          ? "bg-[#17458F] text-white border-[#17458F] shadow-xs"
-                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
-                      )}
-                    >
-                      <Sparkles className={cn("w-3.5 h-3.5", form.isPaid ? "opacity-100" : "opacity-0")} />
-                      <span>Paid Event (₹ Fees)</span>
-                    </button>
-                  </div>
-
-                  {form.isPaid && (
-                    <div className="p-4 rounded-2xl bg-white border border-[#17458F]/20 space-y-3 shadow-xs animate-in fade-in duration-200">
-                      {form.teamType !== "Individual" && (
-                        <div className="space-y-1.5">
-                          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-                            Team Pricing Structure
-                          </label>
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setForm({ ...form, feePricingModel: "per_person" })}
-                              className={cn(
-                                "py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                                form.feePricingModel === "per_person"
-                                  ? "bg-[#17458F] text-white border-[#17458F]"
-                                  : "bg-slate-50 text-slate-700 border-slate-200"
-                              )}
-                            >
-                              Per Member (₹ × Squad)
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setForm({ ...form, feePricingModel: "per_team" })}
-                              className={cn(
-                                "py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
-                                form.feePricingModel === "per_team"
-                                  ? "bg-[#17458F] text-white border-[#17458F]"
-                                  : "bg-slate-50 text-slate-700 border-slate-200"
-                              )}
-                            >
-                              Flat Team Fee (₹ Fixed)
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="grid grid-cols-2 gap-4 pt-1">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                            {form.feePricingModel === "per_team" && form.teamType !== "Individual"
-                              ? "Solo Delegate Fee (₹)"
-                              : "Fee Per Participant (₹)"}
-                          </label>
-                          <input
-                            type="number"
-                            min={0}
-                            step={1}
-                            value={form.feeAmount === 0 ? "" : form.feeAmount}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              const parsed = val === "" ? 0 : parseInt(val, 10);
-                              setForm({ ...form, feeAmount: isNaN(parsed) ? 0 : Math.max(0, parsed) });
-                            }}
-                            placeholder="e.g. 150"
-                            className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
-                          />
-                        </div>
-
-                        {form.teamType !== "Individual" && form.feePricingModel === "per_team" && (
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                              Flat Squad Fee (₹ / Team)
-                            </label>
-                            <input
-                              type="number"
-                              min={0}
-                              step={1}
-                              value={form.teamFeeAmount === 0 ? "" : form.teamFeeAmount}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                const parsed = val === "" ? 0 : parseInt(val, 10);
-                                setForm({ ...form, teamFeeAmount: isNaN(parsed) ? 0 : Math.max(0, parsed) });
-                              }}
-                              placeholder="e.g. 300"
-                              className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
-                            />
-                          </div>
-                        )}
-                      </div>
-
-                      <p className="text-[10px] text-slate-500 font-medium">
-                        Integrated with Paytm for Business and UPI Gateway. Registrations will securely collect this amount via UPI (GPay/PhonePe/Paytm) before issuing delegate passes.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-
             {/* SUB-SECTION: EVENT HELPDESK & COORDINATOR CONTACT */}
             <div className="space-y-4 pt-4 border-t border-slate-200">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200">
@@ -3260,171 +3602,73 @@ export function EventFormModal({
         )}
 
         {/* ========================================================= */}
-        {/* 3. PARTICIPATION SECTION                                 */}
+        {/* 7. EVENT VISUAL ASSETS SECTION                           */}
         {/* ========================================================= */}
-        {activeSection === "participation" && (
+        {activeSection === "visuals" && (
           <div className="space-y-5 animate-in fade-in duration-200">
-            {/* Participation Format */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                Participation Format *
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {(["Individual", "Team", "Both"] as const).map((opt) => (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => setForm({ ...form, teamType: opt })}
-                    className={cn(
-                      "py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer",
-                      form.teamType === opt
-                        ? "bg-[#17458F] text-white border-[#17458F] shadow-xs"
-                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                    )}
-                  >
-                    {opt}
-                  </button>
-                ))}
+            <div className="grid grid-cols-2 gap-6">
+              {/* 1. Event Card Thumbnail (16:9) */}
+              <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
+                <UniversalImageUploader
+                  purpose="cardCover"
+                  label="1. Card Thumbnail"
+                  sublabel="For catalog cards & dashboard"
+                  recommendedSize="1200 x 675 px (16:9)"
+                  storagePath="events/cards"
+                  aspectRatioOverride="16:9"
+                  allowedAspectRatiosOverride={["16:9"]}
+                  lockAspectRatioOverride={true}
+                  previewUrl={form.cardImage}
+                  onUploadStateChange={onUploadStateChange}
+                  onUrlChange={(url) => {
+                    setForm((prev) => ({ ...prev, cardImage: url }));
+                  }}
+                />
               </div>
 
-              {form.teamType !== "Individual" && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      Min Team Size
-                    </label>
-                    <input
-                      type="number"
-                      min={2}
-                      max={20}
-                      value={form.minTeamSize}
-                      onChange={(e) => setForm({ ...form, minTeamSize: parseInt(e.target.value) || 2 })}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      Max Team Size
-                    </label>
-                    <input
-                      type="number"
-                      min={2}
-                      max={20}
-                      value={form.maxTeamSize}
-                      onChange={(e) => setForm({ ...form, maxTeamSize: parseInt(e.target.value) || 4 })}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
+              {/* 2. Official Vertical Poster (4:5) */}
+              <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
+                <UniversalImageUploader
+                  purpose="eventPoster"
+                  label="2. Vertical Poster"
+                  sublabel="For official notices & passes"
+                  recommendedSize="1080 x 1350 px (4:5)"
+                  storagePath="events/posters"
+                  aspectRatioOverride="4:5"
+                  allowedAspectRatiosOverride={["4:5"]}
+                  lockAspectRatioOverride={true}
+                  previewUrl={form.posterImage}
+                  onUploadStateChange={onUploadStateChange}
+                  onUrlChange={(url) => {
+                    setForm((prev) => ({ ...prev, posterImage: url, poster: url || prev.poster }));
+                  }}
+                />
+              </div>
 
-            {/* Rules & Guidelines */}
-            <div className="space-y-2.5 pt-2 border-t border-slate-100">
-              <div className="flex items-center justify-between">
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 block">
-                    Rules &amp; Guidelines
-                  </label>
-                  <p className="text-[11px] text-slate-400">Specify ground rules, eligibility conditions, or code of conduct.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...form, rules: ["", ...form.rules] })}
-                  className="px-2.5 py-1 rounded-lg bg-blue-50 text-[#17458F] hover:bg-blue-100 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Add Rule
-                </button>
-              </div>
-              <div className="space-y-2">
-                {form.rules.map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <span className="text-[10px] font-mono font-bold text-slate-400 w-6 shrink-0 text-center">
-                      {(idx + 1).toString().padStart(2, "0")}
-                    </span>
-                    <input
-                      type="text"
-                      value={item}
-                      onChange={(e) => {
-                        const updated = [...form.rules];
-                        updated[idx] = e.target.value;
-                        setForm({ ...form, rules: updated });
-                      }}
-                      placeholder="e.g. College ID mandatory at entry"
-                      className="flex-1 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs focus:outline-none focus:border-[#17458F]"
-                    />
-                    {form.rules.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const updated = form.rules.filter((_, i) => i !== idx);
-                          setForm({ ...form, rules: updated });
-                        }}
-                        className="p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 cursor-pointer transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* What To Expect */}
-            <div className="space-y-2.5 pt-2 border-t border-slate-100">
-              <div className="flex items-center justify-between">
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 block">
-                    What To Expect
-                  </label>
-                  <p className="text-[11px] text-slate-400">Highlight key takeaways, perks, and event experiences.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...form, whatToExpect: ["", ...form.whatToExpect] })}
-                  className="px-2.5 py-1 rounded-lg bg-blue-50 text-[#17458F] hover:bg-blue-100 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Add Item
-                </button>
-              </div>
-              <div className="space-y-2">
-                {form.whatToExpect.map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <span className="text-[10px] font-mono font-bold text-slate-400 w-6 shrink-0 text-center">
-                      {(idx + 1).toString().padStart(2, "0")}
-                    </span>
-                    <input
-                      type="text"
-                      value={item}
-                      onChange={(e) => {
-                        const updated = [...form.whatToExpect];
-                        updated[idx] = e.target.value;
-                        setForm({ ...form, whatToExpect: updated });
-                      }}
-                      placeholder="e.g. Industry-level competition experience & cash prizes"
-                      className="flex-1 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs focus:outline-none focus:border-[#17458F]"
-                    />
-                    {form.whatToExpect.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const updated = form.whatToExpect.filter((_, i) => i !== idx);
-                          setForm({ ...form, whatToExpect: updated });
-                        }}
-                        className="p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 cursor-pointer transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                ))}
+              {/* 3. Hero Header Backdrop (21:9) */}
+              <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
+                <UniversalImageUploader
+                  purpose="banner"
+                  label="3. Header Banner"
+                  sublabel="Cinematic backdrop on detail page"
+                  recommendedSize="1920 x 820 px (21:9)"
+                  storagePath="events/headers"
+                  aspectRatioOverride="21:9"
+                  allowedAspectRatiosOverride={["21:9"]}
+                  lockAspectRatioOverride={true}
+                  previewUrl={form.headerImage}
+                  onUploadStateChange={onUploadStateChange}
+                  onUrlChange={(url) => {
+                    setForm((prev) => ({ ...prev, headerImage: url }));
+                  }}
+                />
               </div>
             </div>
           </div>
         )}
 
         {/* ========================================================= */}
-        {/* ACCESS: EVENT COORDINATOR ACCESS & GATE CHECK-IN ROSTER   */}
+        {/* 8. ACCESS (EVENT COORDINATOR & GATE CHECK-IN ROSTER)      */}
         {/* ========================================================= */}
         {activeSection === "gateCheckIn" && (
           <div className="space-y-8 animate-in fade-in duration-200">
@@ -3777,73 +4021,7 @@ export function EventFormModal({
         )}
 
         {/* ========================================================= */}
-        {/* 5. EVENT VISUAL ASSETS SECTION                           */}
-        {/* ========================================================= */}
-        {activeSection === "visuals" && (
-          <div className="space-y-5 animate-in fade-in duration-200">
-            <div className="grid grid-cols-2 gap-6">
-              {/* 1. Event Card Thumbnail (16:9) */}
-              <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-                <UniversalImageUploader
-                  purpose="cardCover"
-                  label="1. Card Thumbnail"
-                  sublabel="For catalog cards & dashboard"
-                  recommendedSize="1200 x 675 px (16:9)"
-                  storagePath="events/cards"
-                  aspectRatioOverride="16:9"
-                  allowedAspectRatiosOverride={["16:9"]}
-                  lockAspectRatioOverride={true}
-                  previewUrl={form.cardImage}
-                  onUploadStateChange={onUploadStateChange}
-                  onUrlChange={(url) => {
-                    setForm((prev) => ({ ...prev, cardImage: url }));
-                  }}
-                />
-              </div>
-
-              {/* 2. Official Vertical Poster (4:5) */}
-              <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-                <UniversalImageUploader
-                  purpose="eventPoster"
-                  label="2. Vertical Poster"
-                  sublabel="For official notices & passes"
-                  recommendedSize="1080 x 1350 px (4:5)"
-                  storagePath="events/posters"
-                  aspectRatioOverride="4:5"
-                  allowedAspectRatiosOverride={["4:5"]}
-                  lockAspectRatioOverride={true}
-                  previewUrl={form.posterImage}
-                  onUploadStateChange={onUploadStateChange}
-                  onUrlChange={(url) => {
-                    setForm((prev) => ({ ...prev, posterImage: url, poster: url || prev.poster }));
-                  }}
-                />
-              </div>
-
-              {/* 3. Hero Header Backdrop (21:9) */}
-              <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-2">
-                <UniversalImageUploader
-                  purpose="banner"
-                  label="3. Header Banner"
-                  sublabel="Cinematic backdrop on detail page"
-                  recommendedSize="1920 x 820 px (21:9)"
-                  storagePath="events/headers"
-                  aspectRatioOverride="21:9"
-                  allowedAspectRatiosOverride={["21:9"]}
-                  lockAspectRatioOverride={true}
-                  previewUrl={form.headerImage}
-                  onUploadStateChange={onUploadStateChange}
-                  onUrlChange={(url) => {
-                    setForm((prev) => ({ ...prev, headerImage: url }));
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ========================================================= */}
-        {/* 5. SRC FORMS BUILDER SECTION                             */}
+        {/* 9. SRC FORMS BUILDER SECTION                             */}
         {/* ========================================================= */}
         {activeSection === "qa" && (
           <div className="space-y-4 animate-in fade-in duration-200">
@@ -3857,6 +4035,7 @@ export function EventFormModal({
             />
           </div>
         )}
+
 
                 </div>
         </div>

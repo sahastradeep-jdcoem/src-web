@@ -81,6 +81,49 @@ interface RegistrationWizardProps {
   event: EventItem;
 }
 
+function isDepartmentEligible(
+  studentDept: string | undefined,
+  eligibleDepts: string[] | undefined,
+  allDepts: string[] = DEFAULT_DEPARTMENTS
+): boolean {
+  if (!eligibleDepts || !Array.isArray(eligibleDepts) || eligibleDepts.length === 0) {
+    return true;
+  }
+  if (!studentDept || !studentDept.trim()) return false;
+  
+  const canonicalStudentDept = resolveCanonicalDepartmentName(studentDept, allDepts).trim().toLowerCase();
+  
+  return eligibleDepts.some((dept) => {
+    const canonicalEligible = resolveCanonicalDepartmentName(dept, allDepts).trim().toLowerCase();
+    return canonicalEligible === canonicalStudentDept || 
+      dept.trim().toLowerCase() === canonicalStudentDept ||
+      canonicalStudentDept.includes(dept.trim().toLowerCase()) ||
+      dept.trim().toLowerCase().includes(canonicalStudentDept);
+  });
+}
+
+function isYearEligible(
+  studentYear: string | undefined,
+  eligibleYears: string[] | undefined
+): boolean {
+  if (!eligibleYears || !Array.isArray(eligibleYears) || eligibleYears.length === 0) {
+    return true;
+  }
+  if (!studentYear || !studentYear.trim()) return false;
+  
+  const norm = studentYear.trim().toLowerCase();
+  
+  return eligibleYears.some((y) => {
+    const eligibleNorm = y.trim().toLowerCase();
+    if (eligibleNorm === norm) return true;
+    if (norm.includes("1st") && eligibleNorm.includes("1st")) return true;
+    if (norm.includes("2nd") && eligibleNorm.includes("2nd")) return true;
+    if (norm.includes("3rd") && eligibleNorm.includes("3rd")) return true;
+    if ((norm.includes("4th") || norm.includes("final")) && (eligibleNorm.includes("4th") || eligibleNorm.includes("final"))) return true;
+    return false;
+  });
+}
+
 const YEARS = ["1st Year", "2nd Year", "3rd Year", "4th Year", "4th Year / Final Year"];
 
 export interface TeamMemberEntry {
@@ -206,6 +249,10 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     collegeName: "",
     city: "",
   });
+
+  const isDeptEligible = isFaculty || isDepartmentEligible(formData.department || user?.department, event.eligibleDepartments, departmentsList);
+  const isYrEligible = isFaculty || isYearEligible(formData.year || user?.year, event.eligibleYears);
+  const isDeptOrYearIneligible = Boolean(user && !isExternal && (!isDeptEligible || !isYrEligible));
 
   const isJdcoemStudent = Boolean(
     user &&
@@ -650,6 +697,26 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         return;
       }
 
+      // Check Department and Year Eligibility
+      const isTeammateDeptOk = isDepartmentEligible(found.department, event.eligibleDepartments, departmentsList);
+      const isTeammateYearOk = isYearEligible(found.year, event.eligibleYears);
+
+      if (!isTeammateDeptOk) {
+        setLookupError(
+          `Teammate ${cleanBtId} (${found.department || "Unknown Dept"}) is not in an eligible department for this event.`
+        );
+        setIsVerifyingTeammate(false);
+        return;
+      }
+
+      if (!isTeammateYearOk) {
+        setLookupError(
+          `Teammate ${cleanBtId} (${found.year || "Unknown Year"}) is not in an eligible academic year for this event.`
+        );
+        setIsVerifyingTeammate(false);
+        return;
+      }
+
       const memberName = found.displayName || `${found.firstName || ""} ${found.lastName || ""}`.trim() || found.email || "Student";
       const newEntry: TeamMemberEntry = {
         name: memberName,
@@ -697,6 +764,15 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     }
     if (!user) {
       openAuthModal();
+      return;
+    }
+
+    if (!isDeptEligible) {
+      alert(`Registration is restricted for students of ${formData.department || "your department"}. Please check event eligibility.`);
+      return;
+    }
+    if (!isYrEligible) {
+      alert(`Registration is restricted for ${formData.year || "your academic year"} students. Please check event eligibility.`);
       return;
     }
 
@@ -2029,6 +2105,70 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                   className="px-5 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-all shadow-xs"
                 >
                   Browse Inter-College Events
+                </Link>
+                <Link
+                  href={`/events/${event.slug}`}
+                  className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider transition-all"
+                >
+                  Return to Event Details
+                </Link>
+              </div>
+            </div>
+          ) : isDeptOrYearIneligible ? (
+            /* Ineligible Department or Academic Year Alert */
+            <div className="p-8 sm:p-10 rounded-3xl bg-amber-50/90 border-2 border-amber-300 text-amber-950 space-y-5 max-w-xl mx-auto text-center shadow-md animate-in fade-in">
+              <div className="w-14 h-14 rounded-3xl bg-amber-500 text-white flex items-center justify-center mx-auto shadow-lg shadow-amber-500/25">
+                <GraduationCap className="w-7 h-7" />
+              </div>
+              <div className="space-y-2">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                  Eligibility Restriction
+                </span>
+                <h4 className="font-heading font-extrabold text-2xl text-[#0F172A] tracking-tight">
+                  Registration Ineligible for Your Stream
+                </h4>
+                <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed">
+                  {!isDeptEligible && !isYrEligible ? (
+                    <>
+                      Students from your department (<strong className="text-slate-800">{formData.department || user?.department || "Your Department"}</strong>) and academic year (<strong className="text-slate-800">{formData.year || user?.year || "Your Year"}</strong>) are not eligible to register for this event.
+                    </>
+                  ) : !isDeptEligible ? (
+                    <>
+                      Students from your department (<strong className="text-slate-800">{formData.department || user?.department || "Your Department"}</strong>) are not eligible to register for this event.
+                    </>
+                  ) : (
+                    <>
+                      Students from your academic year (<strong className="text-slate-800">{formData.year || user?.year || "Your Year"}</strong>) are not eligible to register for this event.
+                    </>
+                  )}
+                </p>
+
+                <div className="p-4 rounded-2xl bg-white/80 border border-amber-200 text-left space-y-2 text-xs">
+                  {event.eligibleDepartments && event.eligibleDepartments.length > 0 && event.eligibleDepartments.length < 15 && (
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-amber-900 tracking-wider block">Eligible Departments:</span>
+                      <span className="font-semibold text-slate-700">{event.eligibleDepartments.join(", ")}</span>
+                    </div>
+                  )}
+                  {event.eligibleYears && event.eligibleYears.length > 0 && event.eligibleYears.length < 4 && (
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-amber-900 tracking-wider block">Eligible Academic Years:</span>
+                      <span className="font-semibold text-slate-700">{event.eligibleYears.join(", ")}</span>
+                    </div>
+                  )}
+                </div>
+
+                <p className="text-xs text-slate-500 font-medium pt-1">
+                  Please explore other events open to your department and academic year!
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                <Link
+                  href="/events"
+                  className="px-5 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123670] text-white text-xs font-bold uppercase tracking-wider transition-all shadow-xs"
+                >
+                  Browse Other Events
                 </Link>
                 <Link
                   href={`/events/${event.slug}`}

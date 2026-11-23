@@ -236,6 +236,24 @@ export function sanitizeEventItem(event: EventItem): EventItem {
           )
         )
       : [],
+    eligibleDepartments: Array.isArray(event.eligibleDepartments)
+      ? Array.from(
+          new Set(
+            event.eligibleDepartments
+              .map((d) => (typeof d === "string" ? d.trim() : ""))
+              .filter(Boolean)
+          )
+        )
+      : undefined,
+    eligibleYears: Array.isArray(event.eligibleYears)
+      ? Array.from(
+          new Set(
+            event.eligibleYears
+              .map((y) => (typeof y === "string" ? y.trim() : ""))
+              .filter(Boolean)
+          )
+        )
+      : undefined,
   };
 }
 

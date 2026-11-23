@@ -443,6 +443,8 @@ export default function AdminEventsPage() {
       tenureLabel: resolvedTenure?.label || getCurrentTenure()?.label,
       gateCheckInBtIds: Array.isArray(formData.gateCheckInBtIds) ? formData.gateCheckInBtIds : [],
       eventAccessBtIds: Array.isArray(formData.eventAccessBtIds) ? formData.eventAccessBtIds : [],
+      eligibleDepartments: Array.isArray(formData.eligibleDepartments) ? formData.eligibleDepartments : undefined,
+      eligibleYears: Array.isArray(formData.eligibleYears) ? formData.eligibleYears : undefined,
     };
 
     const updated = created.isFeatured
@@ -630,6 +632,8 @@ export default function AdminEventsPage() {
         : undefined,
       gateCheckInBtIds: Array.isArray(editingEvent.gateCheckInBtIds) ? JSON.parse(JSON.stringify(editingEvent.gateCheckInBtIds)) : [],
       eventAccessBtIds: Array.isArray(editingEvent.eventAccessBtIds) ? JSON.parse(JSON.stringify(editingEvent.eventAccessBtIds)) : [],
+      eligibleDepartments: Array.isArray(editingEvent.eligibleDepartments) ? JSON.parse(JSON.stringify(editingEvent.eligibleDepartments)) : undefined,
+      eligibleYears: Array.isArray(editingEvent.eligibleYears) ? JSON.parse(JSON.stringify(editingEvent.eligibleYears)) : undefined,
     };
   }, [editingEvent]);
 
@@ -828,6 +832,8 @@ export default function AdminEventsPage() {
       tenureLabel: resolvedTenure?.label || editingEvent.tenureLabel || getCurrentTenure()?.label,
       gateCheckInBtIds: Array.isArray(formData.gateCheckInBtIds) ? formData.gateCheckInBtIds : [],
       eventAccessBtIds: Array.isArray(formData.eventAccessBtIds) ? formData.eventAccessBtIds : [],
+      eligibleDepartments: Array.isArray(formData.eligibleDepartments) ? formData.eligibleDepartments : undefined,
+      eligibleYears: Array.isArray(formData.eligibleYears) ? formData.eligibleYears : undefined,
     };
 
     const hasItem = eventsList.some(targetMatch);
