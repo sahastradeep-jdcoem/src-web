@@ -47,8 +47,15 @@ export async function downloadCertificateAsImage(
       allImgs.map(async (img) => {
         if (!img.complete) {
           await new Promise((resolve) => {
-            img.onload = resolve;
-            img.onerror = resolve;
+            const timer = setTimeout(resolve, 2500);
+            img.onload = () => {
+              clearTimeout(timer);
+              resolve(true);
+            };
+            img.onerror = () => {
+              clearTimeout(timer);
+              resolve(false);
+            };
           });
         }
         if (img.decode) {
@@ -58,7 +65,7 @@ export async function downloadCertificateAsImage(
     );
 
     // 3. Small flush delay for canvas rendering buffers
-    await new Promise((resolve) => setTimeout(resolve, 120));
+    await new Promise((resolve) => setTimeout(resolve, 150));
 
     // 4. Dynamically import html2canvas
     const html2canvas = (await import("html2canvas")).default;
@@ -75,6 +82,13 @@ export async function downloadCertificateAsImage(
         const clonedEl = clonedDoc.getElementById(elementId);
         if (clonedEl) {
           clonedEl.style.boxShadow = "none";
+
+          // Ensure all images in cloned DOM have full opacity and are not clipped
+          const clonedImgs = clonedEl.querySelectorAll<HTMLImageElement>("img");
+          clonedImgs.forEach((img) => {
+            img.style.opacity = "1";
+            img.style.visibility = "visible";
+          });
 
           // Convert wave SVG elements into HTML5 canvas in cloned DOM
           // This bypasses html2canvas's known bug where inline SVGs are dropped/invisible

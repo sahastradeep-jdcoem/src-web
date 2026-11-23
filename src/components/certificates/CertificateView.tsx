@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { CertificateRecord, CertificateColorPalette, CertificateSignatory } from "@/types/certificates";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { DEFAULT_CERTIFICATE_PALETTES } from "@/lib/colorExtractor";
@@ -93,6 +93,23 @@ export function CertificateView({
       ? `/api/proxy-image?url=${encodeURIComponent(effectiveClubLogo)}`
       : effectiveClubLogo
     : "";
+
+  // Always guarantee exactly 4 institutional signatories in the baseline footer
+  const activeSignatories = useMemo(() => {
+    return [0, 1, 2, 3].map((idx) => {
+      const certSig = certificate.signatories?.[idx];
+      const fallbackSig =
+        (defaultSignatories && defaultSignatories[idx]) ||
+        DEFAULT_INSTITUTIONAL_SIGNATORIES[idx];
+      return {
+        id: certSig?.id || fallbackSig.id,
+        name: certSig?.name || fallbackSig.name,
+        designation: certSig?.designation || fallbackSig.designation,
+        organization: certSig?.organization || fallbackSig.organization || "SRC, JDCOEM",
+        signatureImageUrl: certSig?.signatureImageUrl || fallbackSig?.signatureImageUrl || "",
+      };
+    });
+  }, [certificate.signatories, defaultSignatories]);
 
   return (
     <div
@@ -246,6 +263,7 @@ export function CertificateView({
         <img
           src="/assets/SRC Logo.png"
           alt="Watermark Crest"
+          crossOrigin="anonymous"
           className="w-80 h-80 sm:w-96 sm:h-96 object-contain"
         />
       </div>
@@ -283,6 +301,7 @@ export function CertificateView({
         <img
           src="/assets/gold_ribbon.png"
           alt="Official Gold Ribbon Emblem"
+          crossOrigin="anonymous"
           width={44}
           height={56}
           style={{
@@ -307,6 +326,7 @@ export function CertificateView({
             <img
               src="/assets/SRC Horizontal B.png"
               alt="Student Representative Council Logo"
+              crossOrigin="anonymous"
               width={200}
               height={68}
               style={{
@@ -328,6 +348,7 @@ export function CertificateView({
               <img
                 src={clubLogoSrc}
                 alt={certificate.organizerClub || "Event Club"}
+                crossOrigin="anonymous"
                 className="w-full h-full object-cover rounded-full"
               />
             </div>
@@ -340,6 +361,7 @@ export function CertificateView({
             <img
               src="/assets/JD Header B.png"
               alt="JD College of Engineering and Management"
+              crossOrigin="anonymous"
               width={250}
               height={52}
               style={{
@@ -455,12 +477,8 @@ export function CertificateView({
         className="relative z-10 pt-1 sm:pt-2 w-full"
       >
         <div className="grid grid-cols-4 gap-4 sm:gap-6 items-end text-center w-full max-w-3xl sm:max-w-4xl mx-auto px-4">
-          {certificate.signatories.slice(0, 4).map((sig, idx) => {
-            // Strict slot-indexed fallback prevents duplication across identical designations
-            const fallbackSig =
-              (defaultSignatories && defaultSignatories[idx]) ||
-              defaultSignatories?.find((d) => d.id === sig.id);
-            const signatureUrl = sig.signatureImageUrl || fallbackSig?.signatureImageUrl || "";
+          {activeSignatories.map((sig, idx) => {
+            const signatureUrl = sig.signatureImageUrl;
 
             return (
               <div key={sig.id || idx} className="flex flex-col items-center">
@@ -475,6 +493,7 @@ export function CertificateView({
                           : signatureUrl
                       }
                       alt={sig.name}
+                      crossOrigin="anonymous"
                       className="h-11 sm:h-14 md:h-[64px] w-auto max-w-[130px] sm:max-w-[160px] md:max-w-[180px] object-contain"
                     />
                   ) : (

@@ -3631,7 +3631,7 @@ export default function StudentDashboardPage() {
             width: "896px",
             zIndex: -100,
             pointerEvents: "none",
-            opacity: 0,
+            opacity: 1,
           }}
         >
           <div className="p-3 sm:p-5">
