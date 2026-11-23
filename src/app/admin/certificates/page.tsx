@@ -920,8 +920,11 @@ function AdminCertificatesContent() {
       issuedAt: new Date().toISOString(),
     });
 
-    // Save to Firestore and local storage so that scanning the QR on live preview instantly verifies on phone
-    saveCertificateToFirestore(previewPayload).catch(console.error);
+    // Isolate live preview: Never publish to the certificates collection until the user clicks "Publish"
+    // Delete any stray "preview-cert" from the certificates collection so student dashboards remain pristine
+    deleteCertificateFromFirestore("preview-cert").catch(() => {});
+
+    // Save strictly to site_content partition so scanning the QR on live preview can verify on phone without publishing to student dashboard
     saveSiteContentToFirestore("preview_certificate", compactCertificateForRegistry(previewPayload)).catch(console.error);
     if (typeof window !== "undefined") {
       try {

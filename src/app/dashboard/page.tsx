@@ -690,11 +690,13 @@ export default function StudentDashboardPage() {
     if (certEmail || certBtId) {
       getStudentCertificatesFromFirestore(certEmail, certBtId).then((certs) => {
         if (isCurrent) {
-          const hydrated = certs.map((c) => {
-            if (c.clubLogoUrl) return c;
-            const logo = resolveCertificateClubLogoSync(c);
-            return logo ? { ...c, clubLogoUrl: logo } : c;
-          });
+          const hydrated = certs
+            .filter((c) => c.id !== "preview-cert" && c.status === "PUBLISHED")
+            .map((c) => {
+              if (c.clubLogoUrl) return c;
+              const logo = resolveCertificateClubLogoSync(c);
+              return logo ? { ...c, clubLogoUrl: logo } : c;
+            });
           setCertificates(hydrated);
           setIsCertificatesLoading(false);
         }
@@ -708,11 +710,13 @@ export default function StudentDashboardPage() {
       certBtId,
       (cloudCerts) => {
         if (isCurrent) {
-          const hydrated = cloudCerts.map((c) => {
-            if (c.clubLogoUrl) return c;
-            const logo = resolveCertificateClubLogoSync(c);
-            return logo ? { ...c, clubLogoUrl: logo } : c;
-          });
+          const hydrated = cloudCerts
+            .filter((c) => c.id !== "preview-cert" && c.status === "PUBLISHED")
+            .map((c) => {
+              if (c.clubLogoUrl) return c;
+              const logo = resolveCertificateClubLogoSync(c);
+              return logo ? { ...c, clubLogoUrl: logo } : c;
+            });
           setCertificates(hydrated);
           setIsCertificatesLoading(false);
         }

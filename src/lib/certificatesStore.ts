@@ -137,7 +137,10 @@ export async function getAllCertificatesFromFirestore(): Promise<CertificateReco
         if (!snap.empty) {
           const list: CertificateRecord[] = [];
           snap.forEach((docSnap) => {
-            list.push(docSnap.data() as CertificateRecord);
+            const data = docSnap.data() as CertificateRecord;
+            if (data.id !== "preview-cert") {
+              list.push(data);
+            }
           });
           try {
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list.slice(0, 100)));
@@ -152,10 +155,11 @@ export async function getAllCertificatesFromFirestore(): Promise<CertificateReco
     // Fallback: site_content/certificates_registry
     const remoteList = await getSiteContentFromFirestore<CertificateRecord[]>(REGISTRY_DOC_ID);
     if (remoteList && Array.isArray(remoteList) && remoteList.length > 0) {
+      const cleanList = remoteList.filter((c) => c.id !== "preview-cert");
       try {
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(remoteList.slice(0, 100)));
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cleanList.slice(0, 100)));
       } catch {}
-      return remoteList;
+      return cleanList;
     }
 
     const cached = typeof localStorage !== "undefined" ? localStorage.getItem(LOCAL_STORAGE_KEY) : null;
@@ -202,7 +206,9 @@ export async function getStudentCertificatesFromFirestore(
         const snapEmail = await getDocs(qEmail);
         snapEmail.forEach((d) => {
           const cert = d.data() as CertificateRecord;
-          resultsMap.set(cert.id, cert);
+          if (cert.id !== "preview-cert" && cert.status === "PUBLISHED") {
+            resultsMap.set(cert.id, cert);
+          }
         });
       }
 
@@ -211,7 +217,9 @@ export async function getStudentCertificatesFromFirestore(
         const snapBtId = await getDocs(qBtId);
         snapBtId.forEach((d) => {
           const cert = d.data() as CertificateRecord;
-          resultsMap.set(cert.id, cert);
+          if (cert.id !== "preview-cert" && cert.status === "PUBLISHED") {
+            resultsMap.set(cert.id, cert);
+          }
         });
       }
     } catch (err) {
@@ -227,7 +235,7 @@ export async function getStudentCertificatesFromFirestore(
         registry.forEach((cert) => {
           const matchEmail = normEmail && cert.recipientEmail?.toLowerCase() === normEmail;
           const matchBtId = normBtId && cert.recipientBtId?.toUpperCase() === normBtId;
-          if (matchEmail || matchBtId) {
+          if ((matchEmail || matchBtId) && cert.id !== "preview-cert" && cert.status === "PUBLISHED") {
             resultsMap.set(cert.id, cert);
           }
         });
@@ -280,7 +288,10 @@ export function subscribeToStudentCertificates(
     (snapshot) => {
       const list: CertificateRecord[] = [];
       snapshot.forEach((docSnap) => {
-        list.push(docSnap.data() as CertificateRecord);
+        const cert = docSnap.data() as CertificateRecord;
+        if (cert.id !== "preview-cert" && cert.status === "PUBLISHED") {
+          list.push(cert);
+        }
       });
       list.sort((a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime());
       callback(list);
@@ -432,6 +443,14 @@ export async function getCertificateById(id: string): Promise<CertificateRecord 
  */
 export async function saveCertificateToFirestore(cert: CertificateRecord): Promise<void> {
   const cleanCert = cleanUndefined(cert);
+
+  // Preview certificates are strictly ephemeral and must NEVER be published to the issued certificates collection or public registry
+  if (cert.id === "preview-cert") {
+    try {
+      await saveSiteContentToFirestore("preview_certificate", compactCertificateForRegistry(cleanCert));
+    } catch {}
+    return;
+  }
 
   if (db) {
     try {
