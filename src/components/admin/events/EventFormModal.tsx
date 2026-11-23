@@ -195,56 +195,48 @@ const SECTIONS: {
   label: string;
   shortLabel: string;
   icon: React.ElementType;
-  description: string;
 }[] = [
   {
     id: "details",
     label: "Event Details",
     shortLabel: "Details",
     icon: FileText,
-    description: "Core identity, hierarchy, eligibility, dates, and event descriptions.",
   },
   {
     id: "schedule",
     label: "Schedule & Prizes",
     shortLabel: "Schedule",
     icon: CalendarClock,
-    description: "Timeline itinerary, round timings, milestones, trophies, cash prizes & perks.",
   },
   {
     id: "registration",
     label: "Registration",
     shortLabel: "Registration",
     icon: Ticket,
-    description: "Schedules, entry fees, team pricing models, and payment settings.",
   },
   {
     id: "participation",
     label: "Participation",
     shortLabel: "Participation",
     icon: Users,
-    description: "Squad formats, team limits, guidelines, and what delegates should expect.",
   },
   {
     id: "gateCheckIn",
     label: "Access",
     shortLabel: "Access",
     icon: UserCheck,
-    description: "Grant Event Coordinator console access (Event Details, Registrations, Payments) & Gate Check-In scanner permissions via BT ID.",
   },
   {
     id: "visuals",
     label: "Event Visual Asset",
     shortLabel: "Visuals",
     icon: ImageIcon,
-    description: "Thumbnails, official vertical posters, and high-impact hero banners.",
   },
   {
     id: "qa",
     label: "SRC Forms",
     shortLabel: "SRC Forms",
     icon: ClipboardList,
-    description: "Custom delegate questionnaires, surveys, and SRC Forms inquiry fields.",
   },
 ];
 
@@ -1124,41 +1116,6 @@ export function EventFormModal({
     await submitWithMode(false);
   };
 
-  const getSectionBadge = (id: EventModalSection) => {
-    switch (id) {
-      case "details":
-        return form.category;
-      case "schedule": {
-        if (!form.hasSchedule && !form.hasPrizes) return "Excluded";
-        const sCount = form.hasSchedule ? (form.schedule?.length || 0) : 0;
-        const pCount = form.hasPrizes ? (form.prizes?.length || 0) : 0;
-        if (sCount > 0 && pCount > 0) return `${sCount} slots • ${pCount} prizes`;
-        if (sCount > 0) return `${sCount} slots`;
-        if (pCount > 0) return `${pCount} prizes`;
-        if (form.hasSchedule && form.hasPrizes) return "Active";
-        if (form.hasSchedule) return "Timeline";
-        if (form.hasPrizes) return "Prizes";
-        return "Excluded";
-      }
-      case "registration":
-        return form.noRegistrationRequired ? "Open Walk-in" : form.isPaid ? `₹${form.feeAmount}` : "Free";
-      case "participation":
-        return form.teamType;
-      case "gateCheckIn": {
-        const count = (form.eventAccessBtIds?.length || 0) + (form.gateCheckInBtIds?.length || 0);
-        return count > 0 ? `${count} ${count === 1 ? "BT ID" : "BT IDs"}` : null;
-      }
-      case "visuals": {
-        const count = [form.cardImage, form.posterImage, form.headerImage].filter(Boolean).length;
-        return count > 0 ? `${count}/3` : null;
-      }
-      case "qa":
-        return form.customQuestions?.length ? `${form.customQuestions.length}` : null;
-      default:
-        return null;
-    }
-  };
-
   return (
     <Modal
       isOpen={isOpen}
@@ -1179,7 +1136,6 @@ export function EventFormModal({
             {visibleSections.map((section, idx) => {
               const Icon = section.icon;
               const isActive = activeSection === section.id;
-              const badge = getSectionBadge(section.id);
               return (
                 <button
                   key={section.id}
@@ -1194,14 +1150,6 @@ export function EventFormModal({
                 >
                   <Icon className={cn("w-4 h-4 shrink-0", isActive ? "text-[#E78023]" : "text-slate-400")} />
                   <span className="flex-1 truncate">{section.label}</span>
-                  {badge && (
-                    <span className={cn(
-                      "text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-md leading-none shrink-0",
-                      isActive ? "bg-white/20 text-white" : "bg-slate-200/80 text-slate-600"
-                    )}>
-                      {badge}
-                    </span>
-                  )}
                 </button>
               );
             })}
@@ -1213,14 +1161,7 @@ export function EventFormModal({
           </nav>
 
           {/* Scrollable Content Area */}
-          <div ref={contentScrollRef} className="flex-1 overflow-y-auto p-6 min-h-0">
-            {/* Section Micro-Header */}
-            <div className="flex items-center gap-2 text-slate-500 text-[11px] mb-5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#E78023]" />
-              <span className="font-semibold text-slate-700">
-                {visibleSections[currentSectionIndex]?.description}
-              </span>
-            </div>
+          <div ref={contentScrollRef} className="flex-1 overflow-y-auto p-5 sm:p-6 min-h-0">
 
             {formError && (
               <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2 animate-in fade-in mb-5">
@@ -1428,15 +1369,10 @@ export function EventFormModal({
             {/* Dynamic Festival & Competition Hierarchy */}
             <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-3">
               <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
-                    <Layers className="w-4 h-4 text-[#E78023]" />
-                    <span>Event &amp; Competition Hierarchy</span>
-                  </label>
-                  <p className="text-[11px] text-amber-800">
-                    Configure whether this is an umbrella event or a sub-competition/segment under another event.
-                  </p>
-                </div>
+                <label className="text-xs font-bold uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
+                  <Layers className="w-4 h-4 text-[#E78023]" />
+                  <span>Event &amp; Competition Hierarchy</span>
+                </label>
                 <label className="inline-flex items-center gap-2 cursor-pointer select-none">
                   <input
                     type="checkbox"
@@ -1522,48 +1458,33 @@ export function EventFormModal({
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-
-{/* Flagship Highlight Spotlight Toggle */}
-            <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-[#E78023]" />
-                    <span>Flagship Highlight Spotlight</span>
-                  </label>
-                  <p className="text-[11px] text-amber-800 font-medium">
-                    Feature this event as the prominent top hero banner highlight on the official events calendar.
-                  </p>
-                </div>
-                <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(form.isFeatured)}
-                    onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })}
-                    className="w-4 h-4 rounded text-[#17458F] focus:ring-[#17458F] border-slate-300"
-                  />
-                  <span className="text-xs font-bold text-amber-950">Feature as Flagship</span>
-                </label>
-              </div>
+            {/* Flagship Highlight Spotlight Toggle */}
+            <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/80 flex items-center justify-between">
+              <label className="text-xs font-bold uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-[#E78023]" />
+                <span>Flagship Highlight Spotlight</span>
+              </label>
+              <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={Boolean(form.isFeatured)}
+                  onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })}
+                  className="w-4 h-4 rounded text-[#17458F] focus:ring-[#17458F] border-slate-300"
+                />
+                <span className="text-xs font-bold text-amber-950">Feature as Flagship</span>
+              </label>
             </div>
-</div>
 
             {/* Target Audience & Eligibility Toggle Switch */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
               <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-[#17458F]" />
-                    <span>Target Audience &amp; Eligibility</span>
-                  </label>
-                  <p className="text-[11px] text-slate-500 font-medium">
-                    Visible to everyone publicly. Control whether registration is campus-only or open.
-                  </p>
-                </div>
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-[#17458F]" />
+                  <span>Target Audience &amp; Eligibility</span>
+                </label>
                 <span
                   className={cn(
-                    "text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full border transition-all",
+                    "text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full border transition-all",
                     form.targetAudience === "jdcoem_only"
                       ? "bg-amber-50 text-amber-800 border-amber-200"
                       : "bg-emerald-50 text-emerald-800 border-emerald-200"
@@ -1602,11 +1523,6 @@ export function EventFormModal({
                   <span>Inter-College (Open to All)</span>
                 </button>
               </div>
-              <p className="text-[10px] text-slate-500 font-medium italic">
-                {form.targetAudience === "jdcoem_only"
-                  ? "ℹ️ External non-JDCOEM students can view details, but registration will be restricted to verified campus students."
-                  : "ℹ️ Open to students and delegates across all colleges and institutions."}
-              </p>
             </div>
 
             {/* Category and Status */}
@@ -2002,71 +1918,19 @@ export function EventFormModal({
         {/* 2. SCHEDULE & PRIZES SECTION                              */}
         {/* ========================================================= */}
         {activeSection === "schedule" && (
-          <div className="space-y-8 animate-in fade-in duration-200">
-            {/* Context Header */}
-            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-50/80 via-indigo-50/40 to-slate-50 border border-blue-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <CalendarClock className="w-4 h-4 text-[#17458F]" />
-                  <h3 className="font-heading font-bold text-sm text-[#0F172A] uppercase tracking-wide">
-                    Schedule &amp; Prize Configuration
-                  </h3>
-                </div>
-                <p className="text-xs text-slate-500">
-                  Configure optional timeline slots and podium cash prizes. You can disable either section if not required for this event.
-                </p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold shadow-2xs transition-colors",
-                    form.hasSchedule
-                      ? "bg-white border-blue-200/80 text-[#17458F]"
-                      : "bg-slate-100 border-slate-200 text-slate-500"
-                  )}
-                >
-                  <Clock className="w-3 h-3" />
-                  <span>
-                    {form.hasSchedule
-                      ? `${form.schedule.length} ${form.schedule.length === 1 ? "Slot" : "Slots"}`
-                      : "Itinerary Omitted"}
-                  </span>
-                </span>
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold shadow-2xs transition-colors",
-                    form.hasPrizes
-                      ? "bg-white border-amber-200/80 text-amber-700"
-                      : "bg-slate-100 border-slate-200 text-slate-500"
-                  )}
-                >
-                  <Trophy className="w-3 h-3" />
-                  <span>
-                    {form.hasPrizes
-                      ? `${form.prizes.length} ${form.prizes.length === 1 ? "Prize" : "Prizes"}`
-                      : "Prizes Omitted"}
-                  </span>
-                </span>
-              </div>
-            </div>
-
+          <div className="space-y-6 animate-in fade-in duration-200">
             {/* SUB-SECTION 1: SCHEDULE & TIMELINE */}
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-[#17458F]" />
-                    <h4 className="font-heading font-bold text-sm text-slate-900 uppercase">
-                      1. Event Timeline &amp; Itinerary
-                    </h4>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    Defines rounds, keynote sessions, lunch breaks, and judging timings for the public event page.
-                  </p>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-200">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-[#17458F]" />
+                  <h4 className="font-heading font-bold text-sm text-slate-900 uppercase">
+                    1. Event Timeline &amp; Itinerary
+                  </h4>
                 </div>
                 <span
                   className={cn(
-                    "text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border shrink-0 w-fit",
+                    "text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border shrink-0 w-fit",
                     form.hasSchedule
                       ? "bg-blue-50 text-[#17458F] border-blue-200"
                       : "bg-slate-100 text-slate-600 border-slate-200"
@@ -2082,7 +1946,7 @@ export function EventFormModal({
                   type="button"
                   onClick={() => setForm((prev) => ({ ...prev, hasSchedule: true }))}
                   className={cn(
-                    "p-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-start gap-3",
+                    "py-2.5 px-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-center gap-3",
                     form.hasSchedule
                       ? "bg-white border-[#17458F] shadow-sm ring-2 ring-[#17458F]/20"
                       : "bg-white/60 border-slate-200 hover:bg-white text-slate-600"
@@ -2090,22 +1954,17 @@ export function EventFormModal({
                 >
                   <div
                     className={cn(
-                      "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 mt-0.5",
+                      "w-4 h-4 rounded-full border flex items-center justify-center shrink-0",
                       form.hasSchedule ? "border-[#17458F] bg-[#17458F] text-white" : "border-slate-300"
                     )}
                   >
-                    {form.hasSchedule && <Check className="w-3 h-3 stroke-[3]" />}
+                    {form.hasSchedule && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                   </div>
-                  <div>
-                    <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                      <span>Include Schedule &amp; Itinerary</span>
-                      <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-md bg-blue-50 text-[#17458F] uppercase border border-blue-100">
-                        Active
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 font-normal mt-0.5 leading-snug">
-                      Publish round timings, keynote sessions, arrival reporting, and judging agenda.
-                    </div>
+                  <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                    <span>Include Schedule &amp; Itinerary</span>
+                    <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-md bg-blue-50 text-[#17458F] uppercase border border-blue-100">
+                      Active
+                    </span>
                   </div>
                 </button>
 
@@ -2113,7 +1972,7 @@ export function EventFormModal({
                   type="button"
                   onClick={() => setForm((prev) => ({ ...prev, hasSchedule: false }))}
                   className={cn(
-                    "p-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-start gap-3",
+                    "py-2.5 px-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-center gap-3",
                     !form.hasSchedule
                       ? "bg-white border-amber-500 shadow-sm ring-2 ring-amber-500/20"
                       : "bg-white/60 border-slate-200 hover:bg-white text-slate-600"
@@ -2121,22 +1980,17 @@ export function EventFormModal({
                 >
                   <div
                     className={cn(
-                      "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 mt-0.5",
+                      "w-4 h-4 rounded-full border flex items-center justify-center shrink-0",
                       !form.hasSchedule ? "border-amber-600 bg-amber-600 text-white" : "border-slate-300"
                     )}
                   >
-                    {!form.hasSchedule && <Check className="w-3 h-3 stroke-[3]" />}
+                    {!form.hasSchedule && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                   </div>
-                  <div>
-                    <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                      <span>No Schedule Needed</span>
-                      <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-md bg-amber-50 text-amber-800 uppercase border border-amber-200">
-                        Omitted
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 font-normal mt-0.5 leading-snug">
-                      Omit itinerary section completely. Ideal for single-session lectures, informal meetups, or exhibitions.
-                    </div>
+                  <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                    <span>No Schedule Needed</span>
+                    <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-md bg-amber-50 text-amber-800 uppercase border border-amber-200">
+                      Omitted
+                    </span>
                   </div>
                 </button>
               </div>
@@ -2351,22 +2205,17 @@ export function EventFormModal({
             </div>
 
             {/* SUB-SECTION 2: PRIZES & RECOGNITION */}
-            <div className="space-y-4 pt-4 border-t border-slate-200">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <Trophy className="w-4 h-4 text-amber-500" />
-                    <h4 className="font-heading font-bold text-sm text-slate-900 uppercase">
-                      2. Prizes, Recognition &amp; Perks
-                    </h4>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    Display competitive podium grants, champion trophies, merit certificates, and perks on the event landing page.
-                  </p>
+            <div className="space-y-3 pt-4 border-t border-slate-200">
+              <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-200">
+                <div className="flex items-center gap-2">
+                  <Trophy className="w-4 h-4 text-amber-500" />
+                  <h4 className="font-heading font-bold text-sm text-slate-900 uppercase">
+                    2. Prizes, Recognition &amp; Perks
+                  </h4>
                 </div>
                 <span
                   className={cn(
-                    "text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border shrink-0 w-fit",
+                    "text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border shrink-0 w-fit",
                     form.hasPrizes
                       ? "bg-amber-50 text-amber-800 border-amber-200"
                       : "bg-slate-100 text-slate-600 border-slate-200"
@@ -2382,7 +2231,7 @@ export function EventFormModal({
                   type="button"
                   onClick={() => setForm((prev) => ({ ...prev, hasPrizes: true }))}
                   className={cn(
-                    "p-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-start gap-3",
+                    "py-2.5 px-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-center gap-3",
                     form.hasPrizes
                       ? "bg-white border-[#E78023] shadow-sm ring-2 ring-[#E78023]/20"
                       : "bg-white/60 border-slate-200 hover:bg-white text-slate-600"
@@ -2390,22 +2239,17 @@ export function EventFormModal({
                 >
                   <div
                     className={cn(
-                      "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 mt-0.5",
+                      "w-4 h-4 rounded-full border flex items-center justify-center shrink-0",
                       form.hasPrizes ? "border-[#E78023] bg-[#E78023] text-white" : "border-slate-300"
                     )}
                   >
-                    {form.hasPrizes && <Check className="w-3 h-3 stroke-[3]" />}
+                    {form.hasPrizes && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                   </div>
-                  <div>
-                    <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                      <span>Include Prizes &amp; Recognition</span>
-                      <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-md bg-amber-50 text-amber-800 uppercase border border-amber-200">
-                        Active
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 font-normal mt-0.5 leading-snug">
-                      Display podium ranks, cash prize grants, champion trophies, and winner perks.
-                    </div>
+                  <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                    <span>Include Prizes &amp; Recognition</span>
+                    <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-md bg-amber-50 text-amber-800 uppercase border border-amber-200">
+                      Active
+                    </span>
                   </div>
                 </button>
 
@@ -2413,7 +2257,7 @@ export function EventFormModal({
                   type="button"
                   onClick={() => setForm((prev) => ({ ...prev, hasPrizes: false }))}
                   className={cn(
-                    "p-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-start gap-3",
+                    "py-2.5 px-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-center gap-3",
                     !form.hasPrizes
                       ? "bg-white border-amber-500 shadow-sm ring-2 ring-amber-500/20"
                       : "bg-white/60 border-slate-200 hover:bg-white text-slate-600"
@@ -2421,22 +2265,17 @@ export function EventFormModal({
                 >
                   <div
                     className={cn(
-                      "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 mt-0.5",
+                      "w-4 h-4 rounded-full border flex items-center justify-center shrink-0",
                       !form.hasPrizes ? "border-amber-600 bg-amber-600 text-white" : "border-slate-300"
                     )}
                   >
-                    {!form.hasPrizes && <Check className="w-3 h-3 stroke-[3]" />}
+                    {!form.hasPrizes && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                   </div>
-                  <div>
-                    <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                      <span>No Prizes Awarded</span>
-                      <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-md bg-slate-100 text-slate-700 uppercase border border-slate-200">
-                        Omitted
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 font-normal mt-0.5 leading-snug">
-                      Omit prize podium. Ideal for non-competitive workshops, orientation fests, webinars, and guest lectures.
-                    </div>
+                  <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                    <span>No Prizes Awarded</span>
+                    <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-md bg-slate-100 text-slate-700 uppercase border border-slate-200">
+                      Omitted
+                    </span>
                   </div>
                 </button>
               </div>
@@ -2934,19 +2773,14 @@ export function EventFormModal({
             )}
 
             {/* Registration Requirement Mode Card */}
-            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-50/70 to-slate-50 border border-blue-100 space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-[#17458F]" />
-                    <span>Registration Requirement</span>
-                  </label>
-                  <p className="text-xs text-slate-600 leading-relaxed font-sans">
-                    Is student/attendee registration mandatory on the portal for this event?
-                  </p>
-                </div>
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-50/70 to-slate-50 border border-blue-100 space-y-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-[#17458F]" />
+                  <span>Registration Requirement</span>
+                </label>
                 <span className={cn(
-                  "text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border shrink-0",
+                  "text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border shrink-0",
                   form.noRegistrationRequired
                     ? "bg-amber-50 text-amber-800 border-amber-200"
                     : "bg-emerald-50 text-emerald-800 border-emerald-200"
@@ -2956,53 +2790,43 @@ export function EventFormModal({
               </div>
 
               {/* 2-Option Card Switch */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <button
                   type="button"
                   onClick={() => setForm({ ...form, noRegistrationRequired: false })}
                   className={cn(
-                    "p-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-start gap-3",
+                    "py-2.5 px-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-center gap-3",
                     !form.noRegistrationRequired
                       ? "bg-white border-[#17458F] shadow-sm ring-2 ring-[#17458F]/20"
                       : "bg-white/60 border-slate-200 hover:bg-white text-slate-600"
                   )}
                 >
                   <div className={cn(
-                    "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 mt-0.5",
+                    "w-4 h-4 rounded-full border flex items-center justify-center shrink-0",
                     !form.noRegistrationRequired ? "border-[#17458F] bg-[#17458F] text-white" : "border-slate-300"
                   )}>
-                    {!form.noRegistrationRequired && <Check className="w-3 h-3 stroke-[3]" />}
+                    {!form.noRegistrationRequired && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                   </div>
-                  <div>
-                    <div className="text-xs font-bold text-slate-900">Require Registrations</div>
-                    <div className="text-[11px] text-slate-500 font-normal mt-0.5 leading-snug">
-                      Students register via portal, answer questions, receive tickets, and pay fees if applicable.
-                    </div>
-                  </div>
+                  <div className="text-xs font-bold text-slate-900">Require Registrations</div>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setForm({ ...form, noRegistrationRequired: true, isPaid: false })}
                   className={cn(
-                    "p-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-start gap-3",
+                    "py-2.5 px-3.5 rounded-xl text-left border transition-all cursor-pointer flex items-center gap-3",
                     form.noRegistrationRequired
                       ? "bg-white border-amber-500 shadow-sm ring-2 ring-amber-500/20"
                       : "bg-white/60 border-slate-200 hover:bg-white text-slate-600"
                   )}
                 >
                   <div className={cn(
-                    "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 mt-0.5",
+                    "w-4 h-4 rounded-full border flex items-center justify-center shrink-0",
                     form.noRegistrationRequired ? "border-amber-600 bg-amber-600 text-white" : "border-slate-300"
                   )}>
-                    {form.noRegistrationRequired && <Check className="w-3 h-3 stroke-[3]" />}
+                    {form.noRegistrationRequired && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                   </div>
-                  <div>
-                    <div className="text-xs font-bold text-slate-900">No Registrations Required</div>
-                    <div className="text-[11px] text-slate-500 font-normal mt-0.5 leading-snug">
-                      Open attendance / informational listing only. No registration deadlines, tickets, or fees required.
-                    </div>
-                  </div>
+                  <div className="text-xs font-bold text-slate-900">No Registrations Required</div>
                 </button>
               </div>
             </div>
@@ -3067,7 +2891,7 @@ export function EventFormModal({
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-[#E78023]" />
-                      <span>Registration Fee (Paytm / UPI Gateway)</span>
+                      <span>Registration Fee</span>
                     </label>
                     <span
                       className={cn(
@@ -3203,16 +3027,11 @@ export function EventFormModal({
             {/* SUB-SECTION: EVENT HELPDESK & COORDINATOR CONTACT */}
             <div className="space-y-4 pt-4 border-t border-slate-200">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-[#E78023]" />
-                    <h4 className="font-heading font-bold text-sm text-slate-900 uppercase">
-                      Event Helpdesk &amp; Coordinator Contact
-                    </h4>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    Direct support contacts displayed on the public event registration card. Add multiple coordinators as needed.
-                  </p>
+                <div className="flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-[#E78023]" />
+                  <h4 className="font-heading font-bold text-sm text-slate-900 uppercase">
+                    Event Helpdesk &amp; Coordinator Contact
+                  </h4>
                 </div>
                 <div className="flex items-center gap-2">
                   {activeContactsCount > 0 && (
@@ -3549,14 +3368,9 @@ export function EventFormModal({
                   <div className="p-1.5 rounded-lg bg-[#E78023] text-white shrink-0">
                     <ShieldCheck className="w-4 h-4" />
                   </div>
-                  <div>
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-                      Event Access via BT ID (Event Coordinator Console)
-                    </h4>
-                    <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
-                      Share management access for this specific event with Event Coordinators via their BT ID — ideal when an event does not belong to a club or needs dedicated student coordinators.
-                    </p>
-                  </div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                    Event Access via BT ID (Event Coordinator Console)
+                  </h4>
                 </div>
                 <div className="pt-2 border-t border-amber-200/60 flex flex-wrap items-center justify-between gap-2 text-[11px]">
                   <div className="flex items-center gap-1.5 text-slate-700">
@@ -3728,14 +3542,9 @@ export function EventFormModal({
                   <div className="p-1.5 rounded-lg bg-[#17458F] text-white">
                     <UserCheck className="w-4 h-4" />
                   </div>
-                  <div>
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-[#17458F]">
-                      Gate Check-In &amp; Scanner Authorization
-                    </h4>
-                    <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
-                      Authorize student gatekeepers with temporary access to scan and check in delegate passes for this event.
-                    </p>
-                  </div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#17458F]">
+                    Gate Check-In &amp; Scanner Authorization
+                  </h4>
                 </div>
                 <div className="pt-2 border-t border-blue-200/60 flex flex-wrap items-center justify-between gap-2 text-[11px]">
                   <div className="flex items-center gap-1.5 text-slate-700">
