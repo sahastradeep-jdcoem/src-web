@@ -167,7 +167,6 @@ function AdminCertificatesContent() {
   const [signatories, setSignatories] = useState<CertificateSignatory[]>(
     DEFAULT_INSTITUTIONAL_SIGNATORIES
   );
-  const [isSavingSignatories, setIsSavingSignatories] = useState(false);
 
   // Participant selection for generation
   const [participantFilter, setParticipantFilter] = useState<"CHECKED_IN" | "ALL" | "UNCERTIFIED">(
@@ -668,38 +667,6 @@ function AdminCertificatesContent() {
     }
   };
 
-  // Signatory update helper
-  const handleUpdateSignatory = (
-    index: number,
-    field: keyof CertificateSignatory,
-    value: string
-  ) => {
-    setSignatories((prev) => {
-      const copy = [...prev];
-      copy[index] = { ...copy[index], [field]: value };
-      return copy;
-    });
-  };
-
-  // Signature image upload helper (converts to data URL for zero latency)
-  const handleSignatureUpload = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      alert("Please upload a valid PNG or image file");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        handleUpdateSignatory(index, "signatureImageUrl", reader.result);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
   // Club logo image upload helper
   const handleClubLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -725,36 +692,6 @@ function AdminCertificatesContent() {
       }
     };
     reader.readAsDataURL(file);
-  };
-
-  // Save current signatories as persistent default settings
-  const handleSaveDefaultSignatories = async () => {
-    setIsSavingSignatories(true);
-    try {
-      await saveCertificateSettings({
-        defaultSignatories: signatories,
-        defaultCitationTemplate: citationTemplate,
-        defaultClubLogoUrl: clubLogoUrl || undefined,
-        clubLogosByEvent: currentEvent ? {
-          [currentEvent.slug]: clubLogoUrl,
-          [currentEvent.id]: clubLogoUrl,
-        } : undefined,
-      });
-      setSavedSignatories(signatories);
-      if (clubLogoUrl && currentEvent) {
-        if (typeof window !== "undefined") {
-          localStorage.setItem(`src_club_logo_${currentEvent.slug}`, clubLogoUrl);
-          localStorage.setItem(`src_club_logo_${currentEvent.id}`, clubLogoUrl);
-        }
-        saveSiteContentToFirestore(`cert_logo_${currentEvent.slug}`, { logoUrl: clubLogoUrl }).catch(() => {});
-      }
-      alert("Institutional signatories & default configuration saved for future certificates!");
-    } catch (e) {
-      console.error(e);
-      alert("Could not save default signatories. Please retry.");
-    } finally {
-      setIsSavingSignatories(false);
-    }
   };
 
   // Helpers for Institutional Saved Signatures (Single Source of Truth)
@@ -911,7 +848,7 @@ function AdminCertificatesContent() {
       posterUrl: currentEvent.posterImage || currentEvent.poster || "",
       colorPalette,
       citation: resolvedCitation,
-      signatories: signatories || [],
+      signatories: (savedSignatories && savedSignatories.length > 0) ? savedSignatories : (signatories || []),
       issueDate,
       status: "PUBLISHED",
       verificationUrl: `${origin}/verify/certificate/preview-cert`,
@@ -1004,7 +941,7 @@ function AdminCertificatesContent() {
           posterUrl: currentEvent.posterImage || currentEvent.poster || "",
           colorPalette,
           citation: resolvedCitation,
-          signatories: signatories || [],
+          signatories: (savedSignatories && savedSignatories.length > 0) ? savedSignatories : (signatories || []),
           issueDate,
           status: "PUBLISHED" as const,
           verificationUrl,
@@ -1018,7 +955,7 @@ function AdminCertificatesContent() {
 
       // Also ensure institutional signatures & event club logo are synced to persistent settings
       saveCertificateSettings({
-        defaultSignatories: signatories,
+        defaultSignatories: (savedSignatories && savedSignatories.length > 0) ? savedSignatories : signatories,
         defaultCitationTemplate: citationTemplate,
         defaultClubLogoUrl: clubLogoUrl || undefined,
         clubLogosByEvent: currentEvent ? {
@@ -1541,7 +1478,7 @@ function AdminCertificatesContent() {
             <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-4">
               <h3 className="font-heading font-extrabold text-base text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
                 <Palette className="w-4 h-4 text-[#E78023]" />
-                Template Styling & Signatures
+                Template Styling
               </h3>
 
               {/* Certificate Type & Title */}
@@ -1842,76 +1779,6 @@ function AdminCertificatesContent() {
                       <X className="w-3.5 h-3.5" />
                     </button>
                   )}
-                </div>
-              </div>
-
-              {/* 4 Signatories & PNG Uploads */}
-              <div className="space-y-2.5 pt-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-800">
-                    Signatory Lines & PNG Signatures
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab("signatures")}
-                      className="text-[10px] font-bold text-indigo-600 hover:underline flex items-center gap-0.5 cursor-pointer"
-                    >
-                      <PenTool className="w-2.5 h-2.5" />
-                      Manage All
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSaveDefaultSignatories}
-                      disabled={isSavingSignatories}
-                      className="text-[10px] font-bold text-[#17458F] hover:underline cursor-pointer"
-                    >
-                      {isSavingSignatories ? "Saving..." : "Save as Default"}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2.5">
-                  {signatories.map((sig, idx) => (
-                    <div
-                      key={sig.id || idx}
-                      className="p-2.5 rounded-xl border border-slate-200 bg-white text-xs space-y-1.5"
-                    >
-                      <input
-                        type="text"
-                        value={sig.designation}
-                        onChange={(e) => handleUpdateSignatory(idx, "designation", e.target.value)}
-                        placeholder="Designation"
-                        className="w-full px-2 py-1 rounded border border-slate-200 font-bold text-[11px]"
-                      />
-                      <input
-                        type="text"
-                        value={sig.organization || ""}
-                        onChange={(e) => handleUpdateSignatory(idx, "organization", e.target.value)}
-                        placeholder="Subtext / Org"
-                        className="w-full px-2 py-0.5 rounded border border-slate-200 text-[10px] text-slate-500"
-                      />
-
-                      {/* Signature PNG Upload */}
-                      <div className="flex items-center gap-1.5 pt-0.5">
-                        <label className="cursor-pointer px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-[10px] font-bold text-slate-700 flex items-center gap-1">
-                          <Upload className="w-3 h-3 text-[#17458F]" />
-                          {sig.signatureImageUrl ? "Replace PNG" : "Upload PNG"}
-                          <input
-                            type="file"
-                            accept="image/png,image/webp"
-                            onChange={(e) => handleSignatureUpload(idx, e)}
-                            className="hidden"
-                          />
-                        </label>
-                        {sig.signatureImageUrl && (
-                          <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5">
-                            <Check className="w-2.5 h-2.5" /> Ready
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
                 </div>
               </div>
 
