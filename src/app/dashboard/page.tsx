@@ -116,7 +116,7 @@ import {
 import { CertificateRecord } from "@/types/certificates";
 import { 
   getStudentCertificatesFromFirestore, 
-  subscribeToStudentCertificates, 
+  subscribeToStudentCertificates 
 } from "@/lib/certificatesStore";
 import { CertificateView } from "@/components/certificates/CertificateView";
 import { downloadCertificateAsImage } from "@/lib/certificateExport";
@@ -230,6 +230,22 @@ export default function StudentDashboardPage() {
   const [isCertificatesLoading, setIsCertificatesLoading] = useState(true);
   const [downloadingCert, setDownloadingCert] = useState<CertificateRecord | null>(null);
   const [isDownloadingCertId, setIsDownloadingCertId] = useState<string | null>(null);
+
+  const handleDownloadCertificate = async (cert: CertificateRecord) => {
+    setIsDownloadingCertId(cert.id);
+    setDownloadingCert(cert);
+    try {
+      // Wait for offscreen certificate canvas to mount in DOM
+      await new Promise((r) => setTimeout(r, 200));
+      await downloadCertificateAsImage(
+        `export-cert-${cert.id}`,
+        `SRC-Certificate-${(cert.recipientName || "Student").replace(/\s+/g, "_")}`
+      );
+    } finally {
+      setDownloadingCert(null);
+      setIsDownloadingCertId(null);
+    }
+  };
   const [passFilter, setPassFilter] = useState<"ALL" | "UPCOMING" | "CHECKED_IN">("ALL");
   const [srcFilter, setSrcFilter] = useState<"ALL" | "DIRECT" | "UPDATE" | "EVENT" | "PAYMENT" | "FORM">("ALL");
 
@@ -3275,25 +3291,11 @@ export default function StudentDashboardPage() {
                           size="sm"
                           variant="primary"
                           disabled={isDownloadingCertId === cert.id}
-                          onClick={async () => {
-                            setIsDownloadingCertId(cert.id);
-                            setDownloadingCert(cert);
-                            try {
-                              // Small flush delay for headless canvas mount & font readiness
-                              await new Promise((r) => setTimeout(r, 200));
-                              await downloadCertificateAsImage(
-                                `headless-cert-${cert.id}`,
-                                `SRC-Certificate-${cert.recipientName.replace(/\s+/g, "_")}`
-                              );
-                            } finally {
-                              setIsDownloadingCertId(null);
-                              setDownloadingCert(null);
-                            }
-                          }}
-                          className="w-full text-[11px] font-bold bg-[#17458F] text-white hover:bg-[#0f2e60] shadow-2xs"
+                          onClick={() => handleDownloadCertificate(cert)}
+                          className="w-full text-xs font-bold bg-[#17458F] text-white hover:bg-[#0f2e60] py-2 flex items-center justify-center gap-1.5 shadow-2xs"
                         >
-                          <Download className="w-3.5 h-3.5 mr-1.5" />
-                          {isDownloadingCertId === cert.id ? "Saving Certificate PNG..." : "Download Certificate (PNG)"}
+                          <Download className="w-3.5 h-3.5" />
+                          {isDownloadingCertId === cert.id ? "Saving PNG..." : "Download Certificate (PNG)"}
                         </Button>
                       </div>
                     </div>
@@ -3594,7 +3596,7 @@ export default function StudentDashboardPage() {
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* HEADLESS OFF-SCREEN CANVAS FOR HIGH-RES PNG EXPORT (NO MODAL) */}
+      {/* OFFSCREEN CANVAS FOR INSTANT HIGH-RES PNG DOWNLOAD (ZERO MODAL) */}
       {/* ------------------------------------------------------------- */}
       {downloadingCert && (
         <div
@@ -3602,7 +3604,7 @@ export default function StudentDashboardPage() {
           style={{
             position: "fixed",
             left: "-9999px",
-            top: 0,
+            top: "-9999px",
             width: "1040px",
             zIndex: -100,
             pointerEvents: "none",
@@ -3610,7 +3612,7 @@ export default function StudentDashboardPage() {
           }}
         >
           <CertificateView
-            id={`headless-cert-${downloadingCert.id}`}
+            id={`export-cert-${downloadingCert.id}`}
             certificate={downloadingCert}
           />
         </div>
