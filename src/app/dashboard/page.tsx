@@ -3645,9 +3645,9 @@ export default function StudentDashboardPage() {
             opacity: 1,
           }}
         >
-          <div className="p-3 sm:p-5">
+          <div className="p-5">
             <div className="space-y-4">
-              <div className="bg-slate-100 p-2 sm:p-4 rounded-2xl overflow-x-auto">
+              <div className="bg-slate-100 p-4 rounded-2xl overflow-x-auto">
                 <CertificateView
                   id={`export-cert-${downloadingCert.id}`}
                   certificate={downloadingCert}

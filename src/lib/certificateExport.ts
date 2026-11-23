@@ -78,6 +78,8 @@ export async function downloadCertificateAsImage(
       logging: false,
       imageTimeout: 10000,
       removeContainer: true,
+      windowWidth: 1280,
+      windowHeight: 900,
       onclone: (clonedDoc) => {
         const clonedEl = clonedDoc.getElementById(elementId);
         if (clonedEl) {
