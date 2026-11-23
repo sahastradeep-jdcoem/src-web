@@ -78,37 +78,10 @@ export async function downloadCertificateAsImage(
       logging: false,
       imageTimeout: 10000,
       removeContainer: true,
-      windowWidth: 1440, // Standardize virtual window width to desktop on all devices
-      windowHeight: 900,
-      width: 1040,       // Standard master certificate width
-      height: 735,       // Standard master A4 landscape height
       onclone: (clonedDoc) => {
         const clonedEl = clonedDoc.getElementById(elementId);
         if (clonedEl) {
-          // Lock authoritative master desktop dimensions onto cloned element
-          clonedEl.style.width = "1040px";
-          clonedEl.style.minWidth = "1040px";
-          clonedEl.style.maxWidth = "1040px";
-          clonedEl.style.height = "735.39px";
-          clonedEl.style.minHeight = "735.39px";
-          clonedEl.style.maxHeight = "735.39px";
-          clonedEl.style.aspectRatio = "1.414 / 1";
           clonedEl.style.boxShadow = "none";
-          clonedEl.style.margin = "0 auto";
-          clonedEl.style.padding = "44px";
-          clonedEl.style.boxSizing = "border-box";
-
-          // Un-constrain parent containers in clonedDoc so no parent clips or shrinks the canvas
-          let parent = clonedEl.parentElement;
-          while (parent && parent !== clonedDoc.body) {
-            parent.style.width = "1040px";
-            parent.style.minWidth = "1040px";
-            parent.style.maxWidth = "none";
-            parent.style.padding = "0";
-            parent.style.margin = "0";
-            parent.style.overflow = "visible";
-            parent = parent.parentElement;
-          }
 
           // Ensure all images in cloned DOM have full opacity and are not clipped
           const clonedImgs = clonedEl.querySelectorAll<HTMLImageElement>("img");

@@ -116,7 +116,7 @@ export function CertificateView({
     <div
       id={id}
       data-certificate-root
-      className={`relative w-full max-w-[1040px] aspect-[1.414/1] bg-white text-slate-900 rounded-[28px] shadow-2xl overflow-hidden select-none border border-slate-200/90 mx-auto flex flex-col justify-between p-11 print:shadow-none print:border-none print:m-0 print:w-full print:aspect-auto ${className}`}
+      className={`relative w-full max-w-[1040px] aspect-[1.414/1] bg-white text-slate-900 rounded-[28px] shadow-2xl overflow-hidden select-none border border-slate-200/90 mx-auto flex flex-col justify-between p-7 sm:p-9 md:p-11 print:shadow-none print:border-none print:m-0 print:w-full print:aspect-auto ${className}`}
       style={{
         boxSizing: "border-box",
         minHeight: "560px",
@@ -132,9 +132,9 @@ export function CertificateView({
       {/* ------------------------------------------------------------- */}
       {/* ROYAL INSET DIPLOMA BORDERS (HIGH-END ACADEMIC PRESTIGE)      */}
       {/* ------------------------------------------------------------- */}
-      <div className="absolute inset-4 border border-slate-200/90 rounded-[22px] pointer-events-none z-10" />
+      <div className="absolute inset-3 sm:inset-4 border border-slate-200/90 rounded-[22px] pointer-events-none z-10" />
       <div
-        className="absolute inset-5.5 border rounded-[18px] pointer-events-none z-10 opacity-35"
+        className="absolute inset-4.5 sm:inset-5.5 border rounded-[18px] pointer-events-none z-10 opacity-35"
         style={{ borderColor: palette.secondary }}
       />
 
@@ -265,14 +265,14 @@ export function CertificateView({
           src="/assets/SRC Logo.png"
           alt="Watermark Crest"
           crossOrigin="anonymous"
-          className="w-96 h-96 object-contain"
+          className="w-80 h-80 sm:w-96 sm:h-96 object-contain"
         />
       </div>
 
       {/* Revocation Stamp Overlay (if revoked) */}
       {isRevoked && (
         <div className="absolute inset-0 z-40 bg-red-950/15 backdrop-blur-[1px] flex items-center justify-center">
-          <div className="border-4 border-red-600 text-red-600 uppercase font-black tracking-widest text-6xl px-8 py-3 rounded-2xl rotate-[-15deg] shadow-2xl bg-white/90">
+          <div className="border-4 border-red-600 text-red-600 uppercase font-black tracking-widest text-4xl sm:text-6xl px-8 py-3 rounded-2xl rotate-[-15deg] shadow-2xl bg-white/90">
             REVOKED
           </div>
         </div>
@@ -282,7 +282,7 @@ export function CertificateView({
       {/* OFFICIAL VERIFICATION QR SEAL (RIGHT FLANK BELOW HEADER LINE)  */}
       {/* ------------------------------------------------------------- */}
       {showQrCode && (
-        <div className="absolute top-[138px] right-11 z-20 flex flex-col items-center">
+        <div className="absolute top-[118px] sm:top-[128px] md:top-[138px] right-7 sm:right-9 md:right-11 z-20 flex flex-col items-center">
           <div className="p-1 rounded-xl bg-white/95 border border-slate-200/90 shadow-xs flex flex-col items-center">
             <ScannableQRCode
               value={qrVerificationUrl}
@@ -298,7 +298,7 @@ export function CertificateView({
       {/* OFFICIAL GOLD RIBBON EMBLEM (LEFT FLANK BELOW SRC LOGO)       */}
       {/* Symmetrically balanced with the verification QR seal on right */}
       {/* ------------------------------------------------------------- */}
-      <div className="absolute top-[138px] left-14 z-20 flex flex-col items-center">
+      <div className="absolute top-[118px] sm:top-[128px] md:top-[138px] left-9 sm:left-12 md:left-14 z-20 flex flex-col items-center">
         <img
           src="/assets/gold_ribbon.png"
           alt="Official Gold Ribbon Emblem"
@@ -310,7 +310,7 @@ export function CertificateView({
             width: "auto",
             aspectRatio: "83 / 106",
           }}
-          className="h-14 w-auto object-contain drop-shadow-xs pointer-events-none"
+          className="h-12 sm:h-13 md:h-14 w-auto object-contain drop-shadow-xs pointer-events-none"
         />
       </div>
 
@@ -319,11 +319,11 @@ export function CertificateView({
       {/* ------------------------------------------------------------- */}
       <header
         data-certificate-header
-        className="relative z-10 flex items-center justify-between gap-4 pb-3 px-2"
+        className="relative z-10 flex items-center justify-between gap-4 pb-2.5 sm:pb-3 px-2"
       >
         {/* Left: SRC Horizontal Logo (Natural 2.96:1 aspect ratio, never stretched) */}
         <div className="flex-1 flex items-center justify-start">
-          <div className="h-[68px] flex items-center justify-start shrink-0">
+          <div className="h-14 sm:h-16 md:h-[68px] flex items-center justify-start shrink-0">
             <img
               src="/assets/SRC Horizontal B.png"
               alt="Student Representative Council Logo"
@@ -345,7 +345,7 @@ export function CertificateView({
         {/* Center: Organizing Club Logo (Fills the entire golden circle, no internal padding) */}
         {clubLogoSrc && (
           <div className="flex flex-col items-center justify-center shrink-0 px-2">
-            <div className="relative h-17 w-17 rounded-full overflow-hidden bg-white shadow-md border-2 border-amber-500 ring-4 ring-amber-300/40 flex items-center justify-center">
+            <div className="relative h-14 w-14 sm:h-16 sm:w-16 md:h-17 md:w-17 rounded-full overflow-hidden bg-white shadow-md border-2 border-amber-500 ring-4 ring-amber-300/40 flex items-center justify-center">
               <img
                 src={clubLogoSrc}
                 alt={certificate.organizerClub || "Event Club"}
@@ -358,7 +358,7 @@ export function CertificateView({
 
         {/* Right: JD Header Logo (Natural 4.88:1 aspect ratio, never stretched) */}
         <div className="flex-1 flex items-center justify-end">
-          <div className="h-16 flex items-center justify-end shrink-0">
+          <div className="h-12 sm:h-14 md:h-16 flex items-center justify-end shrink-0">
             <img
               src="/assets/JD Header B.png"
               alt="JD College of Engineering and Management"
@@ -385,11 +385,11 @@ export function CertificateView({
       {/* ------------------------------------------------------------- */}
       <main
         data-certificate-body
-        className="relative z-10 flex flex-col items-center text-center my-auto py-3"
+        className="relative z-10 flex flex-col items-center text-center my-auto py-2 sm:py-3"
       >
         {/* CERTIFICATE Header in Dynamic Color */}
         <h1
-          className="font-serif tracking-[0.18em] text-5xl font-extrabold uppercase leading-none mb-4"
+          className="font-serif tracking-[0.18em] text-3xl sm:text-4xl md:text-5xl font-extrabold uppercase leading-none mb-3 sm:mb-4"
           style={{
             fontFamily: "'Cinzel', 'Playfair Display', Georgia, serif",
             color: palette.primary,
@@ -399,10 +399,10 @@ export function CertificateView({
         </h1>
 
         {/* Dynamic Category Pill Badge (OF PARTICIPATION / OF ACHIEVEMENT) */}
-        <div className="inline-block mb-3.5">
+        <div className="inline-block mb-3 sm:mb-3.5">
           <div
             data-certificate-pill
-            className="rounded-full px-11 py-1.5 shadow-md flex items-center justify-center border border-white/30"
+            className="rounded-full px-8 sm:px-11 py-1 sm:py-1.5 shadow-md flex items-center justify-center border border-white/30"
             style={{
               background: `linear-gradient(135deg, ${palette.pillBg}, ${palette.secondary})`,
               boxShadow: `0 4px 16px ${palette.borderGlow}`,
@@ -410,7 +410,7 @@ export function CertificateView({
           >
             <span
               data-certificate-pill-text
-              className="font-sans font-black text-sm tracking-[0.26em] uppercase text-white whitespace-nowrap leading-none flex items-center justify-center text-center relative -top-[1px]"
+              className="font-sans font-black text-xs sm:text-sm tracking-[0.26em] uppercase text-white whitespace-nowrap leading-none flex items-center justify-center text-center relative -top-[1px]"
               style={{
                 lineHeight: "1",
                 display: "inline-flex",
@@ -426,14 +426,14 @@ export function CertificateView({
         </div>
 
         {/* PROUDLY PRESENTED TO */}
-        <p className="font-serif font-bold text-xs text-slate-500 tracking-[0.3em] uppercase mb-2">
+        <p className="font-serif font-bold text-[10px] sm:text-xs text-slate-500 tracking-[0.3em] uppercase mb-1.5 sm:mb-2">
           PROUDLY PRESENTED TO
         </p>
 
         {/* Recipient Name in Elegant Calligraphy Script (Great Vibes) */}
-        <div className="w-full max-w-xl mx-auto mb-3">
+        <div className="w-full max-w-xl mx-auto mb-2 sm:mb-3">
           <h2
-            className="text-[44px] text-slate-900 leading-tight px-4 drop-shadow-xs mb-2"
+            className="text-3xl sm:text-4xl md:text-[44px] text-slate-900 leading-tight px-4 drop-shadow-xs mb-1.5 sm:mb-2"
             style={{
               fontFamily: "'Great Vibes', cursive, 'Brush Script MT', sans-serif",
               fontWeight: 400,
@@ -443,7 +443,7 @@ export function CertificateView({
           </h2>
 
           {/* Ornamental Divider with Centered Diamond */}
-          <div className="flex items-center justify-center gap-3 w-80 mx-auto">
+          <div className="flex items-center justify-center gap-3 w-64 sm:w-80 mx-auto">
             <div
               className="h-[1.5px] flex-1 rounded-full opacity-65"
               style={{
@@ -464,7 +464,7 @@ export function CertificateView({
         </div>
 
         {/* Citation Body Text */}
-        <p className="max-w-2xl text-sm text-slate-700 leading-relaxed font-sans px-6 font-normal">
+        <p className="max-w-2xl text-xs sm:text-[13px] md:text-sm text-slate-700 leading-relaxed font-sans px-6 font-normal">
           {certificate.citation ||
             `In recognition of your enthusiastic participation in the ${certificate.eventName}, showcasing dedication and a commendable commitment to excellence.`}
         </p>
@@ -475,16 +475,16 @@ export function CertificateView({
       {/* ------------------------------------------------------------- */}
       <footer
         data-certificate-footer
-        className="relative z-10 pt-2 w-full"
+        className="relative z-10 pt-1 sm:pt-2 w-full"
       >
-        <div className="grid grid-cols-4 gap-6 items-end text-center w-full max-w-4xl mx-auto px-4">
+        <div className="grid grid-cols-4 gap-4 sm:gap-6 items-end text-center w-full max-w-3xl sm:max-w-4xl mx-auto px-4">
           {activeSignatories.map((sig, idx) => {
             const signatureUrl = sig.signatureImageUrl;
 
             return (
               <div key={sig.id || idx} className="flex flex-col items-center">
                 {/* Signature Image (Transparent PNG) or Cursive Text */}
-                <div className="h-[64px] flex items-end justify-center w-full px-1 -mb-3.5 relative z-10 pointer-events-none">
+                <div className="h-12 sm:h-16 md:h-[64px] flex items-end justify-center w-full px-1 -mb-2 sm:-mb-3 md:-mb-3.5 relative z-10 pointer-events-none">
                   {signatureUrl ? (
                     <img
                       src={
@@ -495,11 +495,11 @@ export function CertificateView({
                       }
                       alt={sig.name}
                       crossOrigin="anonymous"
-                      className="h-[64px] w-auto max-w-[180px] object-contain"
+                      className="h-11 sm:h-14 md:h-[64px] w-auto max-w-[130px] sm:max-w-[160px] md:max-w-[180px] object-contain"
                     />
                   ) : (
                     <span
-                      className="text-xl text-slate-800 tracking-wider truncate max-w-full font-medium"
+                      className="text-sm sm:text-lg md:text-xl text-slate-800 tracking-wider truncate max-w-full font-medium"
                       style={{
                         fontFamily: "'Great Vibes', cursive, 'Brush Script MT', sans-serif",
                       }}
@@ -514,10 +514,10 @@ export function CertificateView({
 
                 {/* Designation & Organization Below Line (Always high contrast on white) */}
                 <div className="leading-tight">
-                  <p className="text-[11px] font-bold text-slate-900 truncate max-w-full">
+                  <p className="text-[10px] sm:text-[11px] font-bold text-slate-900 truncate max-w-full">
                     {sig.designation}
                   </p>
-                  <p className="text-[9px] text-slate-500 font-medium truncate max-w-full">
+                  <p className="text-[8px] sm:text-[9px] text-slate-500 font-medium truncate max-w-full">
                     {sig.organization || "SRC, JDCOEM"}
                   </p>
                 </div>
