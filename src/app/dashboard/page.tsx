@@ -43,8 +43,7 @@ import {
   Send,
   Edit2,
   Power,
-  MessageCircle,
-  Printer
+  MessageCircle
 } from "lucide-react";
 import { WhatsAppJoinCard } from "@/components/forms/WhatsAppJoinCard";
 import { 
@@ -118,10 +117,9 @@ import { CertificateRecord } from "@/types/certificates";
 import { 
   getStudentCertificatesFromFirestore, 
   subscribeToStudentCertificates, 
-  generateLinkedInCertUrl 
 } from "@/lib/certificatesStore";
 import { CertificateView } from "@/components/certificates/CertificateView";
-import { downloadCertificateAsImage, printCertificate } from "@/lib/certificateExport";
+import { downloadCertificateAsImage } from "@/lib/certificateExport";
 
 function findMatchingEvent(events: EventItem[], passOrTicket?: { eventSlug?: string; eventId?: string; eventName?: string } | null): EventItem | undefined {
   if (!passOrTicket || !events || events.length === 0) return undefined;
@@ -230,7 +228,7 @@ export default function StudentDashboardPage() {
   const [activeDashboardTab, setActiveDashboardTab] = useState<"passes" | "hub" | "src_portal" | "accreditation" | "certificates">("passes");
   const [certificates, setCertificates] = useState<CertificateRecord[]>([]);
   const [isCertificatesLoading, setIsCertificatesLoading] = useState(true);
-  const [selectedCertificate, setSelectedCertificate] = useState<CertificateRecord | null>(null);
+  const [downloadingCert, setDownloadingCert] = useState<CertificateRecord | null>(null);
   const [isDownloadingCertId, setIsDownloadingCertId] = useState<string | null>(null);
   const [passFilter, setPassFilter] = useState<"ALL" | "UPCOMING" | "CHECKED_IN">("ALL");
   const [srcFilter, setSrcFilter] = useState<"ALL" | "DIRECT" | "UPDATE" | "EVENT" | "PAYMENT" | "FORM">("ALL");
@@ -3204,14 +3202,12 @@ export default function StudentDashboardPage() {
               /* Certificates Grid */
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {certificates.map((cert) => {
-                  const linkedInUrl = generateLinkedInCertUrl(cert);
                   const isRevoked = cert.status === "REVOKED";
 
                   return (
                     <div
                       key={cert.id}
-                      onClick={() => setSelectedCertificate(cert)}
-                      className="bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:shadow-md transition-all overflow-hidden flex flex-col justify-between group cursor-pointer"
+                      className="bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:shadow-md transition-all overflow-hidden flex flex-col justify-between group"
                     >
                       {/* Top Header Card Ribbon */}
                       <div
@@ -3273,42 +3269,32 @@ export default function StudentDashboardPage() {
                         </div>
                       </div>
 
-                      {/* Card Action Buttons */}
-                      <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center gap-2">
+                      {/* Card Action Buttons: Keep only PNG download */}
+                      <div className="p-3 bg-slate-50 border-t border-slate-100">
                         <Button
                           size="sm"
                           variant="primary"
                           disabled={isDownloadingCertId === cert.id}
-                          onClick={async (e) => {
-                            e.stopPropagation();
+                          onClick={async () => {
                             setIsDownloadingCertId(cert.id);
+                            setDownloadingCert(cert);
                             try {
-                              setSelectedCertificate(cert);
-                              // Wait a tick for modal to mount
-                              await new Promise((r) => setTimeout(r, 150));
+                              // Small flush delay for headless canvas mount & font readiness
+                              await new Promise((r) => setTimeout(r, 200));
                               await downloadCertificateAsImage(
-                                `modal-cert-${cert.id}`,
+                                `headless-cert-${cert.id}`,
                                 `SRC-Certificate-${cert.recipientName.replace(/\s+/g, "_")}`
                               );
                             } finally {
                               setIsDownloadingCertId(null);
+                              setDownloadingCert(null);
                             }
                           }}
-                          className="flex-1 text-[11px] font-bold bg-[#17458F] text-white hover:bg-[#0f2e60]"
+                          className="w-full text-[11px] font-bold bg-[#17458F] text-white hover:bg-[#0f2e60] shadow-2xs"
                         >
-                          <Download className="w-3.5 h-3.5 mr-1" />
-                          {isDownloadingCertId === cert.id ? "Saving..." : "PNG"}
+                          <Download className="w-3.5 h-3.5 mr-1.5" />
+                          {isDownloadingCertId === cert.id ? "Saving Certificate PNG..." : "Download Certificate (PNG)"}
                         </Button>
-
-                        <Link
-                          href={linkedInUrl}
-                          target="_blank"
-                          onClick={(e) => e.stopPropagation()}
-                          title="Add to LinkedIn Profile"
-                          className="p-2 rounded-lg bg-[#0A66C2] text-white hover:bg-[#004182] transition-colors shrink-0"
-                        >
-                          <Share2 className="w-3.5 h-3.5" />
-                        </Link>
                       </div>
                     </div>
                   );
@@ -3608,63 +3594,26 @@ export default function StudentDashboardPage() {
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* MODAL: FULL-SCREEN CERTIFICATE VIEWER & EXPORT */}
+      {/* HEADLESS OFF-SCREEN CANVAS FOR HIGH-RES PNG EXPORT (NO MODAL) */}
       {/* ------------------------------------------------------------- */}
-      {selectedCertificate && (
-        <Modal
-          isOpen={Boolean(selectedCertificate)}
-          onClose={() => setSelectedCertificate(null)}
-          title="Official Collegiate Certificate"
-          maxWidth="4xl"
-          dialogClassName="sm:max-h-[96vh]"
-          contentClassName="p-3 sm:p-5 overflow-y-auto"
-          footer={
-            <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-3 w-full">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedCertificate(null)}
-                className="text-xs"
-              >
-                Close
-              </Button>
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => printCertificate()}
-                  className="text-xs flex-1 sm:flex-initial"
-                >
-                  <Printer className="w-3.5 h-3.5 mr-1" />
-                  Print A4
-                </Button>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={() =>
-                    downloadCertificateAsImage(
-                      `modal-cert-${selectedCertificate.id}`,
-                      `SRC-Certificate-${selectedCertificate.recipientName.replace(/\s+/g, "_")}`
-                    )
-                  }
-                  className="text-xs flex-1 sm:flex-initial bg-[#17458F] text-white"
-                >
-                  <Download className="w-3.5 h-3.5 mr-1" />
-                  Download 300 DPI PNG
-                </Button>
-              </div>
-            </div>
-          }
+      {downloadingCert && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "fixed",
+            left: "-9999px",
+            top: 0,
+            width: "1040px",
+            zIndex: -100,
+            pointerEvents: "none",
+            opacity: 0,
+          }}
         >
-          <div className="space-y-4">
-            <div className="bg-slate-100 p-2 sm:p-4 rounded-2xl overflow-x-auto">
-              <CertificateView
-                id={`modal-cert-${selectedCertificate.id}`}
-                certificate={selectedCertificate}
-              />
-            </div>
-          </div>
-        </Modal>
+          <CertificateView
+            id={`headless-cert-${downloadingCert.id}`}
+            certificate={downloadingCert}
+          />
+        </div>
       )}
 
     </div>
