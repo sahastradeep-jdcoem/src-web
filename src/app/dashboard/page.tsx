@@ -237,9 +237,11 @@ export default function StudentDashboardPage() {
     try {
       // Wait for offscreen certificate canvas to mount in DOM
       await new Promise((r) => setTimeout(r, 200));
+      const cleanEvent = (cert.eventName || "Event").trim();
+      const cleanRecipient = (cert.recipientName || "Student").trim().replace(/\s+/g, "_");
       await downloadCertificateAsImage(
         `export-cert-${cert.id}`,
-        `SRC-Certificate-${(cert.recipientName || "Student").replace(/\s+/g, "_")}`
+        `SRC-${cleanEvent} Certificate-${cleanRecipient}`
       );
     } finally {
       setDownloadingCert(null);

@@ -1928,12 +1928,14 @@ function AdminCertificatesContent() {
                 <Button
                   size="sm"
                   variant="primary"
-                  onClick={() =>
+                  onClick={() => {
+                    const cleanEvent = (previewCert.eventName || currentEvent?.name || "Event").trim();
+                    const cleanRecipient = (previewCert.recipientName || "Student").trim().replace(/\s+/g, "_");
                     downloadCertificateAsImage(
                       `modal-cert-${previewCert.id}`,
-                      `SRC-Certificate-${previewCert.recipientName.replace(/\s+/g, "_")}`
-                    )
-                  }
+                      `SRC-${cleanEvent} Certificate-${cleanRecipient}`
+                    );
+                  }}
                   className="text-xs bg-[#17458F] text-white"
                 >
                   <Download className="w-3.5 h-3.5 mr-1" />
