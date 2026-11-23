@@ -31,6 +31,7 @@ import {
   FileText,
   Printer,
   ChevronDown,
+  PenTool,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Badge } from "@/components/ui/Badge";
@@ -140,8 +141,15 @@ function AdminCertificatesContent() {
   const eventDropdownRef = useRef<HTMLDivElement | null>(null);
   const optionsListRef = useRef<HTMLDivElement | null>(null);
 
-  // Tab: "generate" | "issued"
-  const [activeTab, setActiveTab] = useState<"generate" | "issued">("generate");
+  // Tab: "generate" | "issued" | "signatures"
+  const [activeTab, setActiveTab] = useState<"generate" | "issued" | "signatures">("generate");
+
+  // Institutional Signatures (Single Source of Truth)
+  const [savedSignatories, setSavedSignatories] = useState<CertificateSignatory[]>(
+    DEFAULT_INSTITUTIONAL_SIGNATORIES
+  );
+  const [isSavingTruthSignatures, setIsSavingTruthSignatures] = useState(false);
+  const [truthSignaturesSuccess, setTruthSignaturesSuccess] = useState(false);
 
   // Certificate Generator form states
   const [certType, setCertType] = useState<CertificateType>("PARTICIPATION");
@@ -225,6 +233,7 @@ function AdminCertificatesContent() {
     getCertificateSettings().then((settings) => {
       if (isMounted && settings?.defaultSignatories?.length > 0) {
         setSignatories(settings.defaultSignatories);
+        setSavedSignatories(settings.defaultSignatories);
       }
       if (isMounted && settings?.defaultCitationTemplate) {
         setCitationTemplate(settings.defaultCitationTemplate);
@@ -731,6 +740,7 @@ function AdminCertificatesContent() {
           [currentEvent.id]: clubLogoUrl,
         } : undefined,
       });
+      setSavedSignatories(signatories);
       if (clubLogoUrl && currentEvent) {
         if (typeof window !== "undefined") {
           localStorage.setItem(`src_club_logo_${currentEvent.slug}`, clubLogoUrl);
@@ -744,6 +754,114 @@ function AdminCertificatesContent() {
       alert("Could not save default signatories. Please retry.");
     } finally {
       setIsSavingSignatories(false);
+    }
+  };
+
+  // Helpers for Institutional Saved Signatures (Single Source of Truth)
+  const handleUpdateSavedSignatory = (
+    index: number,
+    field: keyof CertificateSignatory,
+    value: string
+  ) => {
+    setSavedSignatories((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  };
+
+  const handleSavedSignatureUpload = async (
+    index: number,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Please upload a valid PNG or WebP image");
+      return;
+    }
+
+    try {
+      const optimizedUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+            const maxWidth = 600;
+            const maxHeight = 300;
+            let width = img.width;
+            let height = img.height;
+            if (width > maxWidth || height > maxHeight) {
+              const ratio = Math.min(maxWidth / width, maxHeight / height);
+              width = Math.round(width * ratio);
+              height = Math.round(height * ratio);
+            }
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+              ctx.clearRect(0, 0, width, height);
+              ctx.drawImage(img, 0, 0, width, height);
+              resolve(canvas.toDataURL("image/png"));
+            } else {
+              resolve(event.target?.result as string);
+            }
+          };
+          img.onerror = () => resolve(event.target?.result as string);
+          img.src = event.target?.result as string;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      setSavedSignatories((prev) => {
+        const next = [...prev];
+        next[index] = { ...next[index], signatureImageUrl: optimizedUrl };
+        return next;
+      });
+    } catch (err) {
+      console.error(err);
+      alert("Could not process signature image.");
+    }
+  };
+
+  const handleClearSavedSignature = (index: number) => {
+    setSavedSignatories((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], signatureImageUrl: "" };
+      return next;
+    });
+  };
+
+  const handleSaveTruthSignatures = async () => {
+    setIsSavingTruthSignatures(true);
+    setTruthSignaturesSuccess(false);
+    try {
+      await saveCertificateSettings({
+        defaultSignatories: savedSignatories,
+      });
+      // Synchronize in-memory active generator signatories as well
+      setSignatories(savedSignatories);
+      setTruthSignaturesSuccess(true);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("src_certificate_settings_updated", { detail: savedSignatories })
+        );
+      }
+      setTimeout(() => setTruthSignaturesSuccess(false), 5000);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to save authoritative institutional signatures. Please retry.");
+    } finally {
+      setIsSavingTruthSignatures(false);
+    }
+  };
+
+  const handleResetToStandardSignatures = () => {
+    if (confirm("Reset all 4 signatory slots back to standard institutional defaults?")) {
+      setSavedSignatories(DEFAULT_INSTITUTIONAL_SIGNATORIES);
     }
   };
 
@@ -1216,6 +1334,17 @@ function AdminCertificatesContent() {
               <Layers className="w-3.5 h-3.5 text-[#17458F]" />
               Issued ({eventCertificates.length})
             </button>
+            <button
+              onClick={() => setActiveTab("signatures")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === "signatures"
+                  ? "bg-white text-[#17458F] shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <PenTool className="w-3.5 h-3.5 text-indigo-600" />
+              Saved Signatures
+            </button>
           </div>
         </div>
       </div>
@@ -1255,6 +1384,18 @@ function AdminCertificatesContent() {
               No events found in the selected tenure.
             </div>
           )}
+
+          <div className="pt-4 border-t border-slate-100 flex items-center justify-center gap-2">
+            <span className="text-xs text-slate-500">Need to update institutional signatures?</span>
+            <button
+              type="button"
+              onClick={() => setActiveTab("signatures")}
+              className="text-xs font-bold text-[#17458F] hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <PenTool className="w-3 h-3 text-indigo-600" />
+              Configure Saved Signatures →
+            </button>
+          </div>
         </div>
       )}
       {activeTab === "generate" && currentEvent && (
@@ -1710,14 +1851,24 @@ function AdminCertificatesContent() {
                   <span className="text-xs font-bold text-slate-800">
                     Signatory Lines & PNG Signatures
                   </span>
-                  <button
-                    type="button"
-                    onClick={handleSaveDefaultSignatories}
-                    disabled={isSavingSignatories}
-                    className="text-[10px] font-bold text-[#17458F] hover:underline"
-                  >
-                    {isSavingSignatories ? "Saving..." : "Save Signatures as Default"}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("signatures")}
+                      className="text-[10px] font-bold text-indigo-600 hover:underline flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <PenTool className="w-2.5 h-2.5" />
+                      Manage All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveDefaultSignatories}
+                      disabled={isSavingSignatories}
+                      className="text-[10px] font-bold text-[#17458F] hover:underline cursor-pointer"
+                    >
+                      {isSavingSignatories ? "Saving..." : "Save as Default"}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2.5">
@@ -1960,6 +2111,264 @@ function AdminCertificatesContent() {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* 5. TAB 3: INSTITUTIONAL SAVED SIGNATURES (SINGLE SOURCE OF TRUTH) */}
+      {/* ------------------------------------------------------------- */}
+      {activeTab === "signatures" && (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 sm:p-8 space-y-6">
+          {/* Header & Truth Declaration */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+            <div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shadow-2xs">
+                  <PenTool className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-heading font-extrabold text-lg text-slate-900 flex items-center gap-2">
+                    Institutional Signatures
+                    <span className="text-[10px] font-bold tracking-wider uppercase px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                      Single Source of Truth
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
+                    Upload official transparent PNG signatures and configure designations for the 4 institutional signatory slots. Saved signatures are permanently written to Firestore and automatically applied to all newly issued certificates, live preview scans, student dashboard downloads, and cryptographic verification gateways.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 self-start md:self-center shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleResetToStandardSignatures}
+                className="text-xs text-slate-600 hover:text-slate-900 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                Reset Defaults
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={handleSaveTruthSignatures}
+                disabled={isSavingTruthSignatures}
+                className="text-xs bg-[#17458F] hover:bg-[#123670] text-white shadow-xs font-bold px-4 py-2 cursor-pointer"
+              >
+                {isSavingTruthSignatures ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                    Saving to Cloud...
+                  </>
+                ) : truthSignaturesSuccess ? (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 text-emerald-300" />
+                    Saved to Cloud!
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
+                    Save as Single Source of Truth
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {truthSignaturesSuccess && (
+            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-2.5 shadow-2xs animate-in fade-in duration-200">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>
+                <strong>Authoritative Signatures Synchronized:</strong> All 4 signature slots have been saved to Firestore and local memory as the persistent single source of truth across the entire platform.
+              </span>
+            </div>
+          )}
+
+          {/* 4 Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {savedSignatories.map((sig, idx) => {
+              const slotMeta = [
+                { title: "President, SRC", badge: "Executive Authority", defaultSub: "Session 2026-27" },
+                { title: "Faculty Coordinator (1)", badge: "Faculty In-Charge", defaultSub: "SRC, JDCOEM" },
+                { title: "Faculty Coordinator (2)", badge: "Faculty In-Charge", defaultSub: "SRC, JDCOEM" },
+                { title: "Dean (IQAC)", badge: "Institutional Authority", defaultSub: "IQAC" },
+              ][idx] || { title: `Signatory ${idx + 1}`, badge: "Institutional", defaultSub: "" };
+
+              return (
+                <div
+                  key={sig.id || `truth-sig-${idx}`}
+                  className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3.5 flex flex-col justify-between hover:border-slate-300 hover:shadow-xs transition-all"
+                >
+                  {/* Slot Header */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold tracking-wider uppercase px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
+                        Slot {idx + 1}
+                      </span>
+                      {sig.signatureImageUrl ? (
+                        <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                          <Check className="w-2.5 h-2.5" /> PNG Ready
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                          <AlertCircle className="w-2.5 h-2.5" /> Missing PNG
+                        </span>
+                      )}
+                    </div>
+                    <div className="pt-1">
+                      <h4 className="text-xs font-bold text-slate-900">{slotMeta.title}</h4>
+                      <p className="text-[10px] text-slate-400 font-medium">{slotMeta.badge}</p>
+                    </div>
+                  </div>
+
+                  {/* Visual Signature Preview Box (Checkerboard transparency preview) */}
+                  <div className="space-y-1.5">
+                    <span className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
+                      Signature PNG Preview
+                      {sig.signatureImageUrl && (
+                        <span className="text-[9px] font-normal text-slate-400">Transparent</span>
+                      )}
+                    </span>
+                    <div
+                      className="h-28 rounded-xl border border-slate-200 bg-slate-50 relative flex items-center justify-center p-2 overflow-hidden shadow-inner"
+                      style={{
+                        backgroundImage:
+                          "linear-gradient(45deg, #e2e8f0 25%, transparent 25%), linear-gradient(-45deg, #e2e8f0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e2e8f0 75%), linear-gradient(-45deg, transparent 75%, #e2e8f0 75%)",
+                        backgroundSize: "16px 16px",
+                        backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
+                      }}
+                    >
+                      {sig.signatureImageUrl ? (
+                        <img
+                          src={sig.signatureImageUrl}
+                          alt={sig.designation || `Signature Slot ${idx + 1}`}
+                          className="max-h-20 max-w-[90%] object-contain filter drop-shadow-xs"
+                        />
+                      ) : (
+                        <div className="text-center text-slate-400 p-2">
+                          <PenTool className="w-5 h-5 mx-auto mb-1 text-slate-300" />
+                          <p className="text-[10px] font-medium">No PNG signature uploaded</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Upload / Replace & Clear buttons */}
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <label className="flex-1 cursor-pointer px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-[11px] font-bold text-slate-700 flex items-center justify-center gap-1 transition-all">
+                        <Upload className="w-3 h-3 text-[#17458F]" />
+                        {sig.signatureImageUrl ? "Replace PNG" : "Upload PNG"}
+                        <input
+                          type="file"
+                          accept="image/png,image/webp"
+                          onChange={(e) => handleSavedSignatureUpload(idx, e)}
+                          className="hidden"
+                        />
+                      </label>
+                      {sig.signatureImageUrl && (
+                        <button
+                          type="button"
+                          onClick={() => handleClearSavedSignature(idx)}
+                          className="p-1.5 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-400 hover:text-red-500 border border-slate-200 transition-all cursor-pointer"
+                          title="Remove signature PNG"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Form fields */}
+                  <div className="space-y-2 pt-1 border-t border-slate-100">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 block uppercase tracking-wider">
+                        Printed Designation
+                      </label>
+                      <input
+                        type="text"
+                        value={sig.designation}
+                        onChange={(e) => handleUpdateSavedSignatory(idx, "designation", e.target.value)}
+                        placeholder="e.g. President, SRC"
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white font-bold text-xs text-slate-800 focus:outline-none focus:border-[#17458F]"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 block uppercase tracking-wider">
+                        Subtext / Organization
+                      </label>
+                      <input
+                        type="text"
+                        value={sig.organization || ""}
+                        onChange={(e) => handleUpdateSavedSignatory(idx, "organization", e.target.value)}
+                        placeholder={`e.g. ${slotMeta.defaultSub}`}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white text-xs text-slate-600 focus:outline-none focus:border-[#17458F]"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 block uppercase tracking-wider">
+                        Signatory Name (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={sig.name || ""}
+                        onChange={(e) => handleUpdateSavedSignatory(idx, "name", e.target.value)}
+                        placeholder="e.g. Dr. Name / Signer"
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white text-xs text-slate-600 focus:outline-none focus:border-[#17458F]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Footer Authority Pill */}
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+                    <span className="flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3 text-[#17458F]" />
+                      Authoritative Slot {idx + 1}
+                    </span>
+                    <span className="font-mono text-[9px] text-slate-400">1.414:1 Sync</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Bottom Callout Bar */}
+          <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4">
+            <div>
+              <h4 className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                Persistent Cloud Single Source of Truth
+              </h4>
+              <p className="text-[11px] text-indigo-700 mt-0.5">
+                Clicking &quot;Save as Single Source of Truth&quot; stores these 4 signatures in Firestore (`site_content/certificate_settings`) and local storage, immediately serving them to any certificate downloaded by students or scanned via QR.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={handleSaveTruthSignatures}
+              disabled={isSavingTruthSignatures}
+              className="text-xs bg-[#17458F] hover:bg-[#123670] text-white shadow-xs font-bold shrink-0 cursor-pointer"
+            >
+              {isSavingTruthSignatures ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
+                  Save as Single Source of Truth
+                </>
+              )}
+            </Button>
           </div>
         </div>
       )}
