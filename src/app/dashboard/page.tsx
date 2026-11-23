@@ -44,7 +44,6 @@ import {
   Edit2,
   Power,
   MessageCircle,
-  Eye,
   Printer
 } from "lucide-react";
 import { WhatsAppJoinCard } from "@/components/forms/WhatsAppJoinCard";
@@ -3175,13 +3174,6 @@ export default function StudentDashboardPage() {
                   Verified certificates issued by the Student Representation Council with permanent authenticity verification
                 </p>
               </div>
-
-              {certificates.length > 0 && (
-                <div className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full flex items-center gap-1.5 self-start sm:self-auto shadow-2xs">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>ISO 27001 Cryptographically Verified</span>
-                </div>
-              )}
             </div>
 
             {/* Empty State */}
@@ -3218,7 +3210,8 @@ export default function StudentDashboardPage() {
                   return (
                     <div
                       key={cert.id}
-                      className="bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:shadow-md transition-all overflow-hidden flex flex-col justify-between group"
+                      onClick={() => setSelectedCertificate(cert)}
+                      className="bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:shadow-md transition-all overflow-hidden flex flex-col justify-between group cursor-pointer"
                     >
                       {/* Top Header Card Ribbon */}
                       <div
@@ -3260,11 +3253,16 @@ export default function StudentDashboardPage() {
                           </div>
                         </div>
 
-                        {/* Status Stamp */}
+                        {/* Status Stamp / Rank */}
                         <div className="flex items-center justify-between pt-1 border-t border-slate-100">
                           {isRevoked ? (
                             <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded flex items-center gap-1">
                               Revoked Credential
+                            </span>
+                          ) : cert.type === "ACHIEVEMENT" || cert.rankOrPosition ? (
+                            <span className="text-[10px] font-extrabold text-amber-800 bg-amber-50 border border-amber-300 px-2.5 py-0.5 rounded flex items-center gap-1 shadow-2xs">
+                              <Award className="w-3.5 h-3.5 text-amber-600" />
+                              Rank: {cert.rankOrPosition || "1st"}
                             </span>
                           ) : (
                             <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded flex items-center gap-1">
@@ -3272,15 +3270,6 @@ export default function StudentDashboardPage() {
                               Genuine Verified
                             </span>
                           )}
-
-                          <Link
-                            href={cert.verificationUrl}
-                            target="_blank"
-                            className="text-[10px] font-bold text-[#17458F] hover:underline flex items-center gap-1"
-                          >
-                            <span>Verify</span>
-                            <ExternalLink className="w-2.5 h-2.5" />
-                          </Link>
                         </div>
                       </div>
 
@@ -3288,19 +3277,10 @@ export default function StudentDashboardPage() {
                       <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center gap-2">
                         <Button
                           size="sm"
-                          variant="outline"
-                          onClick={() => setSelectedCertificate(cert)}
-                          className="flex-1 text-[11px] font-bold"
-                        >
-                          <Eye className="w-3.5 h-3.5 mr-1 text-[#17458F]" />
-                          Inspect
-                        </Button>
-
-                        <Button
-                          size="sm"
                           variant="primary"
                           disabled={isDownloadingCertId === cert.id}
-                          onClick={async () => {
+                          onClick={async (e) => {
+                            e.stopPropagation();
                             setIsDownloadingCertId(cert.id);
                             try {
                               setSelectedCertificate(cert);
@@ -3323,6 +3303,7 @@ export default function StudentDashboardPage() {
                         <Link
                           href={linkedInUrl}
                           target="_blank"
+                          onClick={(e) => e.stopPropagation()}
                           title="Add to LinkedIn Profile"
                           className="p-2 rounded-lg bg-[#0A66C2] text-white hover:bg-[#004182] transition-colors shrink-0"
                         >
