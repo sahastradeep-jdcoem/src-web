@@ -3596,7 +3596,7 @@ export default function StudentDashboardPage() {
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* OFFSCREEN CANVAS FOR INSTANT HIGH-RES PNG DOWNLOAD (ZERO MODAL) */}
+      {/* OFFSCREEN CONTAINER (IDENTICAL DOM CONTAINER TO ADMIN PREVIEW) */}
       {/* ------------------------------------------------------------- */}
       {downloadingCert && (
         <div
@@ -3605,16 +3605,22 @@ export default function StudentDashboardPage() {
             position: "fixed",
             left: "-9999px",
             top: "-9999px",
-            width: "1040px",
+            width: "896px",
             zIndex: -100,
             pointerEvents: "none",
             opacity: 0,
           }}
         >
-          <CertificateView
-            id={`export-cert-${downloadingCert.id}`}
-            certificate={downloadingCert}
-          />
+          <div className="p-3 sm:p-5">
+            <div className="space-y-4">
+              <div className="bg-slate-100 p-2 sm:p-4 rounded-2xl overflow-x-auto">
+                <CertificateView
+                  id={`export-cert-${downloadingCert.id}`}
+                  certificate={downloadingCert}
+                />
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
