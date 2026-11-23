@@ -1056,7 +1056,7 @@ export default function AdminRolesPage() {
               </h2>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Access is strictly scoped to each club&apos;s events, listings, registrations, and payments.
+              Access is strictly scoped to each club&apos;s events, listings, registrations, certificates, and payments.
             </p>
           </div>
 

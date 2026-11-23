@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -33,12 +33,15 @@ import {
   ChevronDown,
   PenTool,
   Plus,
+  ShieldAlert,
+  Lock,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { EventItem, RegistrationRecord } from "@/types";
+import { isEntityOwnedByClub } from "@/types/rbac";
 import {
   CertificateRecord,
   CertificateType,
@@ -50,6 +53,7 @@ import {
   syncEventsFromFirestore,
   subscribeToEvents,
   resolveTenureForEvent,
+  canUserManageEvent,
 } from "@/lib/eventsStore";
 import {
   getStoredTenures,
@@ -105,7 +109,9 @@ export default function AdminCertificatesPage() {
 }
 
 function AdminCertificatesContent() {
-  const { user, isAdmin, isOwner } = useAuth();
+  const { user, isAdmin, isOwner, adminAccess } = useAuth();
+  const isClubOwner = adminAccess?.role === "CLUB_OWNER" && adminAccess.active !== false;
+  const isScopedEventManager = !isOwner && (isClubOwner || adminAccess?.role === "EVENT_COORDINATOR" || Boolean(adminAccess?.hasEventCoordinatorAccess));
   const searchParams = useSearchParams();
   const initialEventId = searchParams?.get("eventId") || "";
 
@@ -299,6 +305,87 @@ function AdminCertificatesContent() {
     return Array.from(map.values());
   }, [events, tenuresList]);
 
+  // Scoped events list for manual modal & event filters
+  const scopedAllKnownEvents = useMemo(() => {
+    if (!isScopedEventManager) return allKnownEvents;
+    return allKnownEvents.filter((e) => canUserManageEvent(e, adminAccess, user?.btId, allKnownEvents));
+  }, [allKnownEvents, isScopedEventManager, adminAccess, user?.btId]);
+
+  // Helper to determine if a registration record strictly belongs to the user's club or event coordinator scope
+  const isRegistrationOwned = useCallback((r: any) => {
+    if (!isScopedEventManager) return true;
+    if (!r) return false;
+    if (isClubOwner && isEntityOwnedByClub(r, adminAccess)) return true;
+    const rSlug = (r.eventSlug || "").toLowerCase();
+    const rId = (r.eventId || "").toLowerCase();
+    const rName = (r.eventName || "").toLowerCase();
+    const rParentId = (r.parentEventId || "").toLowerCase();
+    const rParentSlug = (r.parentEventSlug || "").toLowerCase();
+    const rParentName = (r.parentEventName || "").toLowerCase();
+
+    // 1. Direct event check
+    const directEvent = allKnownEvents.find((e) =>
+      (e.id && (e.id.toLowerCase() === rId || e.id.toLowerCase() === rSlug)) ||
+      (e.slug && (e.slug.toLowerCase() === rSlug || e.slug.toLowerCase() === rId)) ||
+      (e.name && e.name.toLowerCase() === rName)
+    );
+    if (directEvent) {
+      return canUserManageEvent(directEvent, adminAccess, user?.btId, allKnownEvents);
+    }
+
+    // 2. Parent umbrella event check
+    if (rParentId || rParentSlug || rParentName) {
+      const parentEvent = allKnownEvents.find((e) =>
+        (rParentId && e.id && e.id.toLowerCase() === rParentId) ||
+        (rParentSlug && e.slug && e.slug.toLowerCase() === rParentSlug) ||
+        (rParentName && e.name && e.name.toLowerCase() === rParentName)
+      );
+      if (parentEvent) {
+        return canUserManageEvent(parentEvent, adminAccess, user?.btId, allKnownEvents);
+      }
+    }
+    return false;
+  }, [isScopedEventManager, isClubOwner, adminAccess, user?.btId, allKnownEvents]);
+
+  // Helper to determine if a certificate strictly belongs to the user's club scope
+  const isCertificateOwned = useCallback((cert: CertificateRecord) => {
+    if (!isScopedEventManager) return true;
+    if (!cert) return false;
+
+    // 1. Direct entity check on cert attributes
+    if (isClubOwner && isEntityOwnedByClub({
+      slug: cert.eventSlug,
+      id: cert.eventId,
+      organizerClubSlug: cert.organizerClubSlug,
+      organizer: cert.organizerClub,
+    }, adminAccess)) {
+      return true;
+    }
+
+    // 2. Lookup event in allKnownEvents
+    const matchedEvt = allKnownEvents.find((e) =>
+      (cert.eventId && (e.id === cert.eventId || e.slug === cert.eventId)) ||
+      (cert.eventSlug && (e.slug === cert.eventSlug || e.id === cert.eventSlug)) ||
+      (cert.eventName && e.name.toLowerCase() === cert.eventName.toLowerCase())
+    );
+    if (matchedEvt) {
+      return canUserManageEvent(matchedEvt, adminAccess, user?.btId, allKnownEvents);
+    }
+
+    return false;
+  }, [isScopedEventManager, isClubOwner, adminAccess, user?.btId, allKnownEvents]);
+
+  // Scoped registrations & certificates for summary counts and lists
+  const scopedAllRegistrations = useMemo(() => {
+    if (!isScopedEventManager) return allRegistrations;
+    return allRegistrations.filter(isRegistrationOwned);
+  }, [allRegistrations, isScopedEventManager, isRegistrationOwned]);
+
+  const scopedAllCertificates = useMemo(() => {
+    if (!isScopedEventManager) return allCertificates;
+    return allCertificates.filter(isCertificateOwned);
+  }, [allCertificates, isScopedEventManager, isCertificateOwned]);
+
   // Sync event query param from URL on initial client load
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -356,8 +443,13 @@ function AdminCertificatesContent() {
       });
       result = Array.from(map.values());
     }
+
+    if (isScopedEventManager) {
+      return result.filter((e) => canUserManageEvent(e, adminAccess, user?.btId, allKnownEvents));
+    }
+
     return result;
-  }, [events, selectedTenureId, tenuresList]);
+  }, [events, selectedTenureId, tenuresList, isScopedEventManager, adminAccess, user?.btId, allKnownEvents]);
 
   // Autocomplete / search filtered events for dropdown
   const filteredDropdownEvents = useMemo(() => {
@@ -375,9 +467,11 @@ function AdminCertificatesContent() {
   const selectableEventOptions = useMemo(() => {
     const allOption = {
       slug: "all",
-      name: "All Events & Forms",
+      name: isClubOwner
+        ? `${adminAccess?.clubNames && adminAccess.clubNames.length > 0 ? adminAccess.clubNames.join(", ") : adminAccess?.clubName || "My Club"} Events & Certificates`
+        : "All Events & Forms",
       category: "Overview",
-      count: allRegistrations.length,
+      count: scopedAllRegistrations.length,
       isAll: true,
     };
 
@@ -395,7 +489,7 @@ function AdminCertificatesContent() {
       const childIds = new Set(childEvents.map((c) => (c.id || "").toLowerCase()));
       const childNames = new Set(childEvents.map((c) => (c.name || "").toLowerCase()));
 
-      const count = allRegistrations.filter((r) => {
+      const count = scopedAllRegistrations.filter((r) => {
         const rName = (r.eventName || "").toLowerCase();
         const rSlug = (r.eventSlug || "").toLowerCase();
         const rId = (r.eventId || "").toLowerCase();
@@ -441,7 +535,7 @@ function AdminCertificatesContent() {
     });
 
     return [allOption, ...eventOptions];
-  }, [filteredDropdownEvents, allRegistrations, allKnownEvents]);
+  }, [filteredDropdownEvents, scopedAllRegistrations, allKnownEvents, isClubOwner, adminAccess]);
 
   // Keep highlighted index in sync when search changes
   useEffect(() => {
@@ -560,6 +654,9 @@ function AdminCertificatesContent() {
   // Registrations for the current selected event
   const eventRegistrations = useMemo(() => {
     if (!currentEvent) return [];
+    if (isScopedEventManager && !canUserManageEvent(currentEvent, adminAccess, user?.btId, allKnownEvents)) {
+      return [];
+    }
     const eventId = (currentEvent.id || "").toLowerCase();
     const eventSlug = (currentEvent.slug || "").toLowerCase();
     const eventName = (currentEvent.name || "").toLowerCase();
@@ -574,11 +671,14 @@ function AdminCertificatesContent() {
         (eventName && rEventName === eventName)
       );
     });
-  }, [allRegistrations, currentEvent]);
+  }, [allRegistrations, currentEvent, isScopedEventManager, adminAccess, user?.btId, allKnownEvents]);
 
-  // Certificates for the current selected event (or filtered by tenure)
+  // Certificates for the current selected event (or filtered by tenure / club scope)
   const eventCertificates = useMemo(() => {
     if (currentEvent) {
+      if (isScopedEventManager && !canUserManageEvent(currentEvent, adminAccess, user?.btId, allKnownEvents)) {
+        return [];
+      }
       return allCertificates.filter(
         (c) => c.eventId === currentEvent.id || c.eventSlug === currentEvent.slug
       );
@@ -586,14 +686,18 @@ function AdminCertificatesContent() {
     if (selectedTenureId !== "all") {
       const tenureEventIds = new Set(tenureFilteredEvents.map((e) => (e.id || "").toLowerCase()));
       const tenureEventSlugs = new Set(tenureFilteredEvents.map((e) => (e.slug || "").toLowerCase()));
-      return allCertificates.filter(
+      const filtered = allCertificates.filter(
         (c) =>
           tenureEventIds.has((c.eventId || "").toLowerCase()) ||
           tenureEventSlugs.has((c.eventSlug || "").toLowerCase())
       );
+      if (isScopedEventManager) {
+        return filtered.filter(isCertificateOwned);
+      }
+      return filtered;
     }
-    return allCertificates;
-  }, [allCertificates, currentEvent, selectedTenureId, tenureFilteredEvents]);
+    return scopedAllCertificates;
+  }, [allCertificates, currentEvent, selectedTenureId, tenureFilteredEvents, isScopedEventManager, adminAccess, user?.btId, allKnownEvents, isCertificateOwned, scopedAllCertificates]);
 
   // Set of participant registration IDs that already have a certificate
   const certifiedRegIds = useMemo(() => {
@@ -776,6 +880,10 @@ function AdminCertificatesContent() {
   };
 
   const handleSaveTruthSignatures = async () => {
+    if (isScopedEventManager && !isOwner) {
+      alert("Unauthorized: Institutional signature templates represent central college governance and cannot be modified by Club Owners.");
+      return;
+    }
     setIsSavingTruthSignatures(true);
     setTruthSignaturesSuccess(false);
     try {
@@ -800,6 +908,10 @@ function AdminCertificatesContent() {
   };
 
   const handleResetToStandardSignatures = () => {
+    if (isScopedEventManager && !isOwner) {
+      alert("Unauthorized: Institutional signature templates represent central college governance and cannot be modified by Club Owners.");
+      return;
+    }
     if (confirm("Reset all 4 signatory slots back to standard institutional defaults?")) {
       setSavedSignatories(DEFAULT_INSTITUTIONAL_SIGNATORIES);
     }
@@ -808,6 +920,10 @@ function AdminCertificatesContent() {
   // Live preview builder for first selected participant
   const handleOpenLivePreview = () => {
     if (!currentEvent) return;
+    if (isScopedEventManager && !canUserManageEvent(currentEvent, adminAccess, user?.btId, allKnownEvents)) {
+      alert("Unauthorized: You can only preview certificates for events under your assigned club.");
+      return;
+    }
 
     const firstReg =
       filteredParticipants.find((p) => selectedRegIds.has(p.id || p.registrationId)) ||
@@ -882,6 +998,10 @@ function AdminCertificatesContent() {
   // 4. Batch Generate and Publish Action
   const handleBatchPublish = async () => {
     if (!currentEvent) return;
+    if (isScopedEventManager && !canUserManageEvent(currentEvent, adminAccess, user?.btId, allKnownEvents)) {
+      alert(`Unauthorized: You can only publish certificates for events organized by or collaborating with ${adminAccess?.clubNames && adminAccess.clubNames.length > 0 ? adminAccess.clubNames.join(", ") : adminAccess?.clubName || "your assigned club"}.`);
+      return;
+    }
     if (selectedRegIds.size === 0) {
       alert("Please select at least one participant to issue certificates.");
       return;
@@ -1009,6 +1129,10 @@ function AdminCertificatesContent() {
   // Revoke action
   const handleConfirmRevoke = async () => {
     if (!revokingCert) return;
+    if (isScopedEventManager && !isCertificateOwned(revokingCert)) {
+      alert("Unauthorized: You can only revoke certificates belonging to your assigned club.");
+      return;
+    }
     setIsRevoking(true);
     try {
       const ok = await revokeCertificateInFirestore(revokingCert.id, revokeReason);
@@ -1031,6 +1155,11 @@ function AdminCertificatesContent() {
 
   // Delete action
   const handleDeleteCert = async (certId: string) => {
+    const targetCert = allCertificates.find((c) => c.id === certId);
+    if (isScopedEventManager && targetCert && !isCertificateOwned(targetCert)) {
+      alert("Unauthorized: You can only delete certificates belonging to your assigned club.");
+      return;
+    }
     if (!window.confirm("Permanently delete this certificate document?")) return;
     try {
       const ok = await deleteCertificateFromFirestore(certId);
@@ -1063,6 +1192,11 @@ function AdminCertificatesContent() {
               <h1 className="text-xl sm:text-2xl font-heading font-extrabold text-[#0B132B]">
                 CERTIFICATE CONSOLE
               </h1>
+              {isClubOwner && (
+                <p className="text-xs text-[#E78023] font-bold mt-0.5">
+                  Club Scope: {adminAccess?.clubNames && adminAccess.clubNames.length > 0 ? adminAccess.clubNames.join(", ") : adminAccess?.clubName || "My Club"}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -1071,19 +1205,19 @@ function AdminCertificatesContent() {
         <div className="flex flex-wrap items-center gap-3 sm:gap-4">
           <div className="px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-center">
             <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
-              Issued Credentials
+              {isScopedEventManager ? "Club Credentials" : "Issued Credentials"}
             </span>
             <span className="font-heading font-extrabold text-lg text-[#17458F]">
-              {allCertificates.filter((c) => c.status === "PUBLISHED").length}
+              {scopedAllCertificates.filter((c) => c.status === "PUBLISHED").length}
             </span>
           </div>
 
           <div className="px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-center">
             <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
-              Certified Events
+              {isScopedEventManager ? "Club Events" : "Certified Events"}
             </span>
             <span className="font-heading font-extrabold text-lg text-emerald-600">
-              {new Set(allCertificates.map((c) => c.eventId)).size}
+              {new Set(scopedAllCertificates.map((c) => c.eventId)).size}
             </span>
           </div>
 
@@ -1283,17 +1417,19 @@ function AdminCertificatesContent() {
               <Layers className="w-3.5 h-3.5 text-[#17458F]" />
               Issued ({eventCertificates.length})
             </button>
-            <button
-              onClick={() => setActiveTab("signatures")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === "signatures"
-                  ? "bg-white text-[#17458F] shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <PenTool className="w-3.5 h-3.5 text-indigo-600" />
-              Saved Signatures
-            </button>
+            {(!isScopedEventManager || isOwner) && (
+              <button
+                onClick={() => setActiveTab("signatures")}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activeTab === "signatures"
+                    ? "bg-white text-[#17458F] shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <PenTool className="w-3.5 h-3.5 text-indigo-600" />
+                Saved Signatures
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1334,22 +1470,50 @@ function AdminCertificatesContent() {
             </div>
           )}
 
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-center gap-2">
-            <span className="text-xs text-slate-500">Need to update institutional signatures?</span>
-            <button
-              type="button"
-              onClick={() => setActiveTab("signatures")}
-              className="text-xs font-bold text-[#17458F] hover:underline flex items-center gap-1 cursor-pointer"
-            >
-              <PenTool className="w-3 h-3 text-indigo-600" />
-              Configure Saved Signatures →
-            </button>
-          </div>
+          {(!isScopedEventManager || isOwner) && (
+            <div className="pt-4 border-t border-slate-100 flex items-center justify-center gap-2">
+              <span className="text-xs text-slate-500">Need to update institutional signatures?</span>
+              <button
+                type="button"
+                onClick={() => setActiveTab("signatures")}
+                className="text-xs font-bold text-[#17458F] hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <PenTool className="w-3 h-3 text-indigo-600" />
+                Configure Saved Signatures →
+              </button>
+            </div>
+          )}
         </div>
       )}
       {activeTab === "generate" && currentEvent && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* LEFT 7 COLS: PARTICIPANT SELECTION */}
+        isScopedEventManager && !canUserManageEvent(currentEvent, adminAccess, user?.btId, allKnownEvents) ? (
+          <div className="bg-white rounded-3xl border border-red-200 shadow-xs p-8 sm:p-12 text-center space-y-4 max-w-2xl mx-auto">
+            <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-600 flex items-center justify-center mx-auto">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+            <div>
+              <h3 className="font-heading font-extrabold text-lg sm:text-xl text-slate-900">
+                Event Certificate Access Restricted
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto mt-1 leading-relaxed">
+                You only have management permissions for events belonging to your assigned club ({adminAccess?.clubIds?.join(", ") || "club"}). This event belongs to another entity or central SRC.
+              </p>
+            </div>
+            {scopedAllKnownEvents.length > 0 && (
+              <div className="pt-2">
+                <Button
+                  size="sm"
+                  onClick={() => handleSelectEventOption(scopedAllKnownEvents[0].id || scopedAllKnownEvents[0].slug)}
+                  className="bg-[#17458F] text-white text-xs"
+                >
+                  Switch to {scopedAllKnownEvents[0].name}
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* LEFT 7 COLS: PARTICIPANT SELECTION */}
           <div className="lg:col-span-7 space-y-4">
             <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
@@ -1788,6 +1952,7 @@ function AdminCertificatesContent() {
             </div>
           </div>
         </div>
+        )
       )}
 
       {/* ------------------------------------------------------------- */}
@@ -1964,6 +2129,29 @@ function AdminCertificatesContent() {
       {/* 5. TAB 3: INSTITUTIONAL SAVED SIGNATURES (SINGLE SOURCE OF TRUTH) */}
       {/* ------------------------------------------------------------- */}
       {activeTab === "signatures" && (
+        isScopedEventManager && !isOwner ? (
+          <div className="bg-white rounded-3xl border border-amber-200 shadow-xs p-8 text-center space-y-4 max-w-2xl mx-auto my-6">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center mx-auto">
+              <Lock className="w-7 h-7" />
+            </div>
+            <div>
+              <h3 className="font-heading font-extrabold text-lg text-slate-900">
+                Institutional Clearance Required
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
+                Institutional Signatures represent central SRC governance (Principal, Dean, Faculty In-Charge, and President) and are managed exclusively by Executive Council Leadership. These signatures are automatically applied to your club&apos;s event certificates.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setActiveTab("generate")}
+              className="text-xs cursor-pointer"
+            >
+              Return to Certificate Issuance
+            </Button>
+          </div>
+        ) : (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 sm:p-8 space-y-6">
           {/* Header & Truth Declaration */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
@@ -2216,6 +2404,7 @@ function AdminCertificatesContent() {
             </Button>
           </div>
         </div>
+        )
       )}
 
       {/* ------------------------------------------------------------- */}
@@ -2225,10 +2414,14 @@ function AdminCertificatesContent() {
         isOpen={isManualModalOpen}
         onClose={() => setIsManualModalOpen(false)}
         tenuresList={tenuresList}
-        allEvents={allKnownEvents}
+        allEvents={scopedAllKnownEvents}
         defaultSignatories={savedSignatories}
         initialTenureId={selectedTenureId !== "all" ? selectedTenureId : undefined}
-        initialEventId={currentEvent ? currentEvent.id || currentEvent.slug : undefined}
+        initialEventId={
+          currentEvent && (!isScopedEventManager || canUserManageEvent(currentEvent, adminAccess, user?.btId, allKnownEvents))
+            ? (currentEvent.id || currentEvent.slug)
+            : (scopedAllKnownEvents[0]?.id || scopedAllKnownEvents[0]?.slug)
+        }
         onSuccessPublished={(count) => {
           setPublishSuccessModal({ count });
         }}

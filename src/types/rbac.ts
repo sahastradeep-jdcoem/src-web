@@ -16,7 +16,8 @@ export type AdminCapability =
   | "club_manage"
   | "events_manage"
   | "engagement_manage"
-  | "club_registrations";
+  | "club_registrations"
+  | "certificates_manage";
 
 export interface AdminAccessClubScope {
   id: string;
@@ -88,6 +89,7 @@ export const ADMIN_ROLE_CAPABILITIES: Record<AdminAccessRole, AdminCapability[]>
     "events_manage",
     "engagement_manage",
     "club_registrations",
+    "certificates_manage",
     "payments",
   ],
   EVENT_COORDINATOR: [
@@ -155,7 +157,8 @@ export function adminRouteCapabilities(pathname: string): AdminCapability[] {
   if (pathname.startsWith("/admin/clubs")) return ["club_manage"];
   if (pathname.startsWith("/admin/events")) return ["events_manage"];
   if (pathname.startsWith("/admin/listings")) return ["engagement_manage"];
-  if (pathname.startsWith("/admin/registrations") || pathname.startsWith("/admin/certificates")) return ["club_registrations", "events_manage"];
+  if (pathname.startsWith("/admin/registrations")) return ["club_registrations", "events_manage"];
+  if (pathname.startsWith("/admin/certificates")) return ["certificates_manage", "club_registrations", "events_manage"];
   return ["all"];
 }
 
