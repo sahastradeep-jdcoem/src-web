@@ -1681,40 +1681,6 @@ function AdminCertificatesContent() {
                     style={{ backgroundColor: colorPalette.pillBg }}
                     title={`Pill: ${colorPalette.pillBg}`}
                   />
-
-                  {/* Preset quick buttons */}
-                  <div className="ml-auto flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setColorPalette(DEFAULT_CERTIFICATE_PALETTES.ocean)}
-                      className="w-5 h-5 rounded-full bg-[#0B2545] border border-white shadow-2xs"
-                      title="Ocean Blue"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setColorPalette(DEFAULT_CERTIFICATE_PALETTES.royalPurple)}
-                      className="w-5 h-5 rounded-full bg-[#2E1065] border border-white shadow-2xs"
-                      title="Royal Purple"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setColorPalette(DEFAULT_CERTIFICATE_PALETTES.emerald)}
-                      className="w-5 h-5 rounded-full bg-[#064E3B] border border-white shadow-2xs"
-                      title="Emerald Forest"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setColorPalette(DEFAULT_CERTIFICATE_PALETTES.crimson)}
-                      className="w-5 h-5 rounded-full bg-[#831843] border border-white shadow-2xs"
-                      title="Crimson"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setColorPalette(DEFAULT_CERTIFICATE_PALETTES.amberGold)}
-                      className="w-5 h-5 rounded-full bg-[#78350F] border border-white shadow-2xs"
-                      title="Amber Gold"
-                    />
-                  </div>
                 </div>
               </div>
 
