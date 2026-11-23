@@ -76,6 +76,7 @@ import {
   DEFAULT_INSTITUTIONAL_SIGNATORIES,
   DEFAULT_CITATION_TEMPLATE,
   DEFAULT_ACHIEVEMENT_CITATION_TEMPLATE,
+  compactCertificateForRegistry,
 } from "@/lib/certificatesStore";
 import {
   extractPosterColorPalette,
@@ -728,6 +729,7 @@ function AdminCertificatesContent() {
       .replace(/{department}/g, recipientDept);
 
     const certNum = generateCertificateNumber(currentEvent.slug, firstReg?.ticketCode || "001");
+    const origin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "https://srcjdcoem.in";
     const previewPayload: CertificateRecord = cleanUndefined({
       id: "preview-cert",
       certificateNumber: certNum,
@@ -755,15 +757,15 @@ function AdminCertificatesContent() {
       signatories: signatories || [],
       issueDate,
       status: "PUBLISHED",
-      verificationUrl: `${typeof window !== "undefined" ? window.location.origin : ""}/verify/certificate/preview-cert`,
-      qrPayload: `${typeof window !== "undefined" ? window.location.origin : ""}/verify/certificate/preview-cert`,
+      verificationUrl: `${origin}/verify/certificate/preview-cert`,
+      qrPayload: `${origin}/verify/certificate/preview-cert`,
       issuedBy: user?.displayName || "SRC Admin",
       issuedAt: new Date().toISOString(),
     });
 
     // Save to Firestore and local storage so that scanning the QR on live preview instantly verifies on phone
     saveCertificateToFirestore(previewPayload).catch(console.error);
-    saveSiteContentToFirestore("preview_certificate", previewPayload).catch(console.error);
+    saveSiteContentToFirestore("preview_certificate", compactCertificateForRegistry(previewPayload)).catch(console.error);
     if (typeof window !== "undefined") {
       try {
         localStorage.setItem("src_preview_cert", JSON.stringify(previewPayload));
@@ -795,14 +797,14 @@ function AdminCertificatesContent() {
       );
 
       const certsToSave: CertificateRecord[] = [];
-      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      const origin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "https://srcjdcoem.in";
 
       for (let i = 0; i < selectedList.length; i++) {
         const reg = selectedList[i];
         const rawRegId = reg.id || reg.registrationId || `reg_${i}`;
         const cleanRegId = String(rawRegId).replace(/[^a-zA-Z0-9_-]/g, "_");
         const cleanSlug = (currentEvent.slug || "event").replace(/[^a-zA-Z0-9_-]/g, "_");
-        const certId = `cert_${cleanSlug}_${cleanRegId}`;
+        const certId = `cert_${cleanSlug}_${cleanRegId}_${Date.now()}_${i + 1}`;
         const certNum = generateCertificateNumber(currentEvent.slug, reg.ticketCode || cleanRegId.slice(-4));
 
         const resolvedCitation = citationTemplate
@@ -849,6 +851,14 @@ function AdminCertificatesContent() {
       }
 
       await batchSaveCertificatesToFirestore(certsToSave);
+
+      // Also ensure institutional signatures are synced to persistent settings
+      if (signatories && signatories.length > 0) {
+        saveCertificateSettings({
+          defaultSignatories: signatories,
+          defaultCitationTemplate: citationTemplate,
+        }).catch(console.warn);
+      }
 
       // Instantly update local state so certificates appear immediately
       setAllCertificates((prev) => {

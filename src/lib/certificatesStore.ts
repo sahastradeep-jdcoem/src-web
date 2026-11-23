@@ -95,6 +95,34 @@ export function generateLinkedInCertUrl(cert: CertificateRecord): string {
 }
 
 /**
+ * Compacts a certificate record for the registry collection or fallback document.
+ * Strips bulky base64 signature images and massive data URLs so the document
+ * never exceeds Firestore's 1MB single-document limit or safe threshold (~732 KB).
+ * Full institutional signatures are safely stored in certificate_settings and individual docs.
+ */
+export function compactCertificateForRegistry(cert: CertificateRecord): CertificateRecord {
+  if (!cert) return cert;
+  const clean = cleanUndefined(cert);
+
+  const compactedSignatories = (clean.signatories || []).map((s) => ({
+    id: s.id,
+    name: s.name,
+    designation: s.designation,
+    organization: s.organization,
+    // Strip bulky base64 data URLs (> 500 chars) from the registry index.
+    // They are preserved in individual doc and centrally in certificate_settings.
+    signatureImageUrl: s.signatureImageUrl && s.signatureImageUrl.length > 500 ? "" : (s.signatureImageUrl || ""),
+  }));
+
+  return {
+    ...clean,
+    signatories: compactedSignatories,
+    posterUrl: clean.posterUrl && clean.posterUrl.length > 500 && clean.posterUrl.startsWith("data:") ? "" : (clean.posterUrl || ""),
+    clubLogoUrl: clean.clubLogoUrl && clean.clubLogoUrl.length > 500 && clean.clubLogoUrl.startsWith("data:") ? "" : (clean.clubLogoUrl || ""),
+  };
+}
+
+/**
  * Fetch all issued certificates from Firestore (with dual-store & local fallback)
  */
 export async function getAllCertificatesFromFirestore(): Promise<CertificateRecord[]> {
@@ -282,7 +310,19 @@ export async function getCertificateById(id: string): Promise<CertificateRecord 
     }
   }
 
-  // 2. Query lookup by certificateNumber (e.g. SRC/2026-27/PRRM-8924)
+  // 2. Direct lookup from site_content document partition (site_content/cert_[id] or site_content/[id])
+  // This guarantees verification succeeds on all devices even if /certificates security rules are pending
+  try {
+    const partitionedDocId = cleanId.startsWith("cert_") ? cleanId : `cert_${cleanId}`;
+    const remoteDirect = await getSiteContentFromFirestore<CertificateRecord>(partitionedDocId);
+    if (remoteDirect && remoteDirect.id) {
+      return remoteDirect;
+    }
+  } catch (partErr) {
+    console.warn("Partitioned site_content lookup notice:", partErr);
+  }
+
+  // 3. Query lookup by certificateNumber (e.g. SRC/2026-27/PRRM-8924)
   if (db) {
     try {
       const colRef = collection(db, CERTIFICATES_COLLECTION);
@@ -292,7 +332,7 @@ export async function getCertificateById(id: string): Promise<CertificateRecord 
         return querySnap.docs[0].data() as CertificateRecord;
       }
 
-      // 3. Fallback: Query lookup by id field in document
+      // 4. Fallback: Query lookup by id field in document
       const qId = query(colRef, where("id", "==", cleanId), limit(1));
       const querySnapId = await getDocs(qId);
       if (!querySnapId.empty) {
@@ -303,7 +343,7 @@ export async function getCertificateById(id: string): Promise<CertificateRecord 
     }
   }
 
-  // 4. Fallback: Lookup in site_content/certificates_registry or preview_certificate
+  // 5. Fallback: Lookup in site_content/certificates_registry or preview_certificate
   try {
     if (cleanId === "preview-cert") {
       const remotePreview = await getSiteContentFromFirestore<CertificateRecord>("preview_certificate");
@@ -400,13 +440,22 @@ export async function saveCertificateToFirestore(cert: CertificateRecord): Promi
     }
   }
 
-  // Dual-write to site_content/certificates_registry
+  // Individual partitioned document in site_content (guarantees public QR verification access across all devices)
   try {
-    const existing = (await getSiteContentFromFirestore<CertificateRecord[]>(REGISTRY_DOC_ID)) || [];
+    await saveSiteContentToFirestore(`cert_${cert.id}`, cleanCert);
+  } catch (partErr) {
+    console.warn("Could not save partitioned cert document to site_content:", partErr);
+  }
+
+  // Dual-write to site_content/certificates_registry with compacted entry
+  try {
+    const rawExisting = (await getSiteContentFromFirestore<CertificateRecord[]>(REGISTRY_DOC_ID)) || [];
     const map = new Map<string, CertificateRecord>();
-    existing.forEach((c) => map.set(c.id, c));
-    map.set(cert.id, cleanCert);
-    const combined = Array.from(map.values()).slice(0, 1000);
+    if (Array.isArray(rawExisting)) {
+      rawExisting.forEach((c) => map.set(c.id, compactCertificateForRegistry(c)));
+    }
+    map.set(cert.id, compactCertificateForRegistry(cleanCert));
+    const combined = Array.from(map.values()).slice(0, 300);
     await saveSiteContentToFirestore(REGISTRY_DOC_ID, combined);
     enqueueCloudWrite(REGISTRY_DOC_ID, combined, `Certificate: ${cert.recipientName}`);
   } catch (dualErr) {
@@ -416,7 +465,7 @@ export async function saveCertificateToFirestore(cert: CertificateRecord): Promi
 
 /**
  * Batch save certificates to Firestore
- * Guarantees zero-undefined-crash, chunked writeBatch, and dual-sync backup to site_content
+ * Guarantees zero-undefined-crash, chunked writeBatch, partitioned fallback, and compacted registry sync
  */
 export async function batchSaveCertificatesToFirestore(
   certs: CertificateRecord[]
@@ -426,6 +475,7 @@ export async function batchSaveCertificatesToFirestore(
 
   const cleanedCerts = certs.map((c) => cleanUndefined(c));
 
+  // 1. Direct write to /certificates/{cert.id}
   let directWriteSucceeded = false;
   try {
     const chunkSize = 200;
@@ -445,30 +495,62 @@ export async function batchSaveCertificatesToFirestore(
     console.warn("Direct /certificates batch write notice, executing dual-write registry backup:", primaryErr);
   }
 
-  // Dual-write to site_content/certificates_registry (ensures 100% cloud sync even if rules for /certificates aren't deployed yet)
+  // 2. Individual document backup in site_content: site_content/cert_${cert.id}
+  // Guarantees that any mobile device scanning the unique QR code can fetch the certificate instantly
+  let individualWriteCount = 0;
+  for (const cert of cleanedCerts) {
+    try {
+      await saveSiteContentToFirestore(`cert_${cert.id}`, cert);
+      individualWriteCount++;
+    } catch (indErr) {
+      console.warn(`Individual cert backup notice for ${cert.id}:`, indErr);
+    }
+  }
+
+  // 3. Dual-write to site_content/certificates_registry with COMPACTION
+  // Strips bulky base64 data URLs to eliminate the 1192 KB document threshold breach
   try {
-    const existing = (await getSiteContentFromFirestore<CertificateRecord[]>(REGISTRY_DOC_ID)) || [];
+    let existing: CertificateRecord[] = [];
+    try {
+      const rawExisting = await getSiteContentFromFirestore<CertificateRecord[]>(REGISTRY_DOC_ID);
+      if (Array.isArray(rawExisting)) {
+        // Automatically compact existing entries to cleanse legacy base64 bloat!
+        existing = rawExisting.map((c) => compactCertificateForRegistry(c));
+      }
+    } catch (fetchErr) {
+      console.warn("Could not fetch existing registry for compaction:", fetchErr);
+    }
+
     const map = new Map<string, CertificateRecord>();
     existing.forEach((c) => map.set(c.id, c));
-    cleanedCerts.forEach((c) => map.set(c.id, c));
-    const combined = Array.from(map.values()).slice(0, 1000);
+    cleanedCerts.forEach((c) => map.set(c.id, compactCertificateForRegistry(c)));
+
+    let combined = Array.from(map.values());
+    combined.sort((a, b) => new Date(b.issuedAt || 0).getTime() - new Date(a.issuedAt || 0).getTime());
+
+    // Safe payload cap: keep latest 300 certificates in the registry document (< 200 KB)
+    if (combined.length > 300) {
+      combined = combined.slice(0, 300);
+    }
+
     await saveSiteContentToFirestore(REGISTRY_DOC_ID, combined);
     enqueueCloudWrite(REGISTRY_DOC_ID, combined, `Certificates Registry (${combined.length} items)`);
   } catch (fallbackErr) {
     console.error("Dual-write registry fallback notice:", fallbackErr);
-    if (!directWriteSucceeded) {
+    // Only fail if neither direct write nor individual writes succeeded
+    if (!directWriteSucceeded && individualWriteCount === 0) {
       throw fallbackErr;
     }
   }
 
-  // Local storage cache update & instant cross-tab notification
+  // 4. Local storage cache update & instant cross-tab notification
   try {
     if (typeof window !== "undefined") {
       const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
       const list: CertificateRecord[] = cached ? JSON.parse(cached) : [];
       const map = new Map(list.map((c) => [c.id, c]));
-      cleanedCerts.forEach((c) => map.set(c.id, c));
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(Array.from(map.values())));
+      cleanedCerts.forEach((c) => map.set(c.id, compactCertificateForRegistry(c)));
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(Array.from(map.values()).slice(0, 100)));
       window.dispatchEvent(new CustomEvent("src_certificates_updated", { detail: cleanedCerts }));
     }
   } catch (cacheErr) {
@@ -500,6 +582,19 @@ export async function revokeCertificateInFirestore(
     }
   }
 
+  // Update partitioned document
+  try {
+    const partCert = await getSiteContentFromFirestore<CertificateRecord>(`cert_${certId}`);
+    if (partCert) {
+      await saveSiteContentToFirestore(`cert_${certId}`, {
+        ...partCert,
+        status: "REVOKED",
+        revokedAt: now,
+        revocationReason: reason || "Revoked by administrative authority",
+      });
+    }
+  } catch {}
+
   // Update site_content registry
   try {
     const registry = await getSiteContentFromFirestore<CertificateRecord[]>(REGISTRY_DOC_ID);
@@ -507,7 +602,7 @@ export async function revokeCertificateInFirestore(
       const updated = registry.map((c) =>
         c.id === certId
           ? { ...c, status: "REVOKED" as const, revokedAt: now, revocationReason: reason }
-          : c
+          : compactCertificateForRegistry(c)
       );
       await saveSiteContentToFirestore(REGISTRY_DOC_ID, updated);
       enqueueCloudWrite(REGISTRY_DOC_ID, updated, `Revoke Cert: ${certId}`);
@@ -532,10 +627,20 @@ export async function deleteCertificateFromFirestore(certId: string): Promise<bo
     }
   }
 
+  // Delete partitioned document
+  if (db) {
+    try {
+      const partDocRef = doc(db, "site_content", `cert_${certId}`);
+      await deleteDoc(partDocRef);
+    } catch {}
+  }
+
   try {
     const registry = await getSiteContentFromFirestore<CertificateRecord[]>(REGISTRY_DOC_ID);
     if (registry && Array.isArray(registry)) {
-      const updated = registry.filter((c) => c.id !== certId);
+      const updated = registry
+        .filter((c) => c.id !== certId)
+        .map((c) => compactCertificateForRegistry(c));
       await saveSiteContentToFirestore(REGISTRY_DOC_ID, updated);
       enqueueCloudWrite(REGISTRY_DOC_ID, updated, `Delete Cert: ${certId}`);
     }

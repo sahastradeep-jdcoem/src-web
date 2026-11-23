@@ -1,9 +1,10 @@
 "use client";
 
-import React from "react";
-import { CertificateRecord, CertificateColorPalette } from "@/types/certificates";
+import React, { useState, useEffect } from "react";
+import { CertificateRecord, CertificateColorPalette, CertificateSignatory } from "@/types/certificates";
 import { ScannableQRCode } from "@/components/ui/ScannableQRCode";
 import { DEFAULT_CERTIFICATE_PALETTES } from "@/lib/colorExtractor";
+import { getCertificateSettings, DEFAULT_INSTITUTIONAL_SIGNATORIES } from "@/lib/certificatesStore";
 
 interface CertificateViewProps {
   certificate: CertificateRecord;
@@ -22,6 +23,28 @@ export function CertificateView({
     certificate.colorPalette || DEFAULT_CERTIFICATE_PALETTES.ocean;
 
   const isRevoked = certificate.status === "REVOKED";
+
+  // Institutional default signatories fallback if certificate has empty signature images
+  const [defaultSignatories, setDefaultSignatories] = useState<CertificateSignatory[]>(DEFAULT_INSTITUTIONAL_SIGNATORIES);
+
+  useEffect(() => {
+    const hasMissingSig = (certificate.signatories || []).some((s) => !s.signatureImageUrl);
+    if (hasMissingSig) {
+      getCertificateSettings()
+        .then((settings) => {
+          if (settings?.defaultSignatories?.length > 0) {
+            setDefaultSignatories(settings.defaultSignatories);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [certificate]);
+
+  const qrVerificationUrl = certificate.verificationUrl?.startsWith("http")
+    ? certificate.verificationUrl
+    : certificate.verificationUrl
+    ? `https://srcjdcoem.in${certificate.verificationUrl.startsWith("/") ? "" : "/"}${certificate.verificationUrl}`
+    : `https://srcjdcoem.in/verify/certificate/${certificate.id || certificate.certificateNumber}`;
 
   // Sanitize remote club logo through proxy to prevent canvas CORS tainting during html2canvas export
   const clubLogoSrc = certificate.clubLogoUrl
@@ -202,7 +225,7 @@ export function CertificateView({
         <div className="absolute top-[118px] sm:top-[128px] md:top-[138px] right-7 sm:right-9 md:right-11 z-20 flex flex-col items-center">
           <div className="p-1 rounded-xl bg-white/95 border border-slate-200/90 shadow-xs flex flex-col items-center">
             <ScannableQRCode
-              value={certificate.verificationUrl}
+              value={qrVerificationUrl}
               size={48}
               level="M"
               fgColor={palette.primary}
@@ -391,47 +414,54 @@ export function CertificateView({
         className="relative z-10 pt-1 sm:pt-2 w-full"
       >
         <div className="grid grid-cols-4 gap-4 sm:gap-6 items-end text-center w-full max-w-3xl sm:max-w-4xl mx-auto px-4">
-          {certificate.signatories.slice(0, 4).map((sig, idx) => (
-            <div key={sig.id || idx} className="flex flex-col items-center">
-              {/* Signature Image (Transparent PNG) or Cursive Text */}
-              <div className="h-12 sm:h-16 md:h-[64px] flex items-end justify-center w-full px-1 -mb-2 sm:-mb-3 md:-mb-3.5 relative z-10 pointer-events-none">
-                {sig.signatureImageUrl ? (
-                  <img
-                    src={
-                      sig.signatureImageUrl.startsWith("http://") ||
-                      sig.signatureImageUrl.startsWith("https://")
-                        ? `/api/proxy-image?url=${encodeURIComponent(sig.signatureImageUrl)}`
-                        : sig.signatureImageUrl
-                    }
-                    alt={sig.name}
-                    className="h-11 sm:h-14 md:h-[64px] w-auto max-w-[130px] sm:max-w-[160px] md:max-w-[180px] object-contain"
-                  />
-                ) : (
-                  <span
-                    className="text-sm sm:text-lg md:text-xl text-slate-800 tracking-wider truncate max-w-full font-medium"
-                    style={{
-                      fontFamily: "'Great Vibes', cursive, 'Brush Script MT', sans-serif",
-                    }}
-                  >
-                    {sig.name}
-                  </span>
-                )}
-              </div>
+          {certificate.signatories.slice(0, 4).map((sig, idx) => {
+            const fallbackSig = defaultSignatories.find(
+              (d) => d.id === sig.id || d.designation === sig.designation
+            );
+            const signatureUrl = sig.signatureImageUrl || fallbackSig?.signatureImageUrl || "";
 
-              {/* Line */}
-              <div className="w-full h-[1.5px] bg-slate-800/80 mb-1 relative z-0" />
+            return (
+              <div key={sig.id || idx} className="flex flex-col items-center">
+                {/* Signature Image (Transparent PNG) or Cursive Text */}
+                <div className="h-12 sm:h-16 md:h-[64px] flex items-end justify-center w-full px-1 -mb-2 sm:-mb-3 md:-mb-3.5 relative z-10 pointer-events-none">
+                  {signatureUrl ? (
+                    <img
+                      src={
+                        signatureUrl.startsWith("http://") ||
+                        signatureUrl.startsWith("https://")
+                          ? `/api/proxy-image?url=${encodeURIComponent(signatureUrl)}`
+                          : signatureUrl
+                      }
+                      alt={sig.name}
+                      className="h-11 sm:h-14 md:h-[64px] w-auto max-w-[130px] sm:max-w-[160px] md:max-w-[180px] object-contain"
+                    />
+                  ) : (
+                    <span
+                      className="text-sm sm:text-lg md:text-xl text-slate-800 tracking-wider truncate max-w-full font-medium"
+                      style={{
+                        fontFamily: "'Great Vibes', cursive, 'Brush Script MT', sans-serif",
+                      }}
+                    >
+                      {sig.name}
+                    </span>
+                  )}
+                </div>
 
-              {/* Designation & Organization Below Line (Always high contrast on white) */}
-              <div className="leading-tight">
-                <p className="text-[10px] sm:text-[11px] font-bold text-slate-900 truncate max-w-full">
-                  {sig.designation}
-                </p>
-                <p className="text-[8px] sm:text-[9px] text-slate-500 font-medium truncate max-w-full">
-                  {sig.organization || "SRC, JDCOEM"}
-                </p>
+                {/* Line */}
+                <div className="w-full h-[1.5px] bg-slate-800/80 mb-1 relative z-0" />
+
+                {/* Designation & Organization Below Line (Always high contrast on white) */}
+                <div className="leading-tight">
+                  <p className="text-[10px] sm:text-[11px] font-bold text-slate-900 truncate max-w-full">
+                    {sig.designation}
+                  </p>
+                  <p className="text-[8px] sm:text-[9px] text-slate-500 font-medium truncate max-w-full">
+                    {sig.organization || "SRC, JDCOEM"}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </footer>
     </div>

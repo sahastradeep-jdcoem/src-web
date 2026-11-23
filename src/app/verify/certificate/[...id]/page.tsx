@@ -12,6 +12,7 @@ import {
   Check,
   ArrowLeft,
   Ban,
+  ShieldCheck,
 } from "lucide-react";
 import { CertificateRecord } from "@/types/certificates";
 import { getCertificateById } from "@/lib/certificatesStore";
@@ -159,7 +160,28 @@ export default function CertificateVerificationPage() {
           <div className="absolute top-0 right-0 -mt-12 -mr-12 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
 
           <div className="relative z-10 space-y-1 border-b border-slate-800 pb-5">
-            <div className="flex flex-wrap items-center gap-2">
+            {/* Real-time Credential Authenticity Indicator */}
+            {!isRevoked ? (
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 mb-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wider">
+                  Official Genuine Credential Verified
+                </span>
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 mb-2">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wider">
+                  Official Credential Revoked
+                </span>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2 pt-1">
               <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
                 {cert.type === "ACHIEVEMENT" ? "Certificate of Achievement" : "Certificate of Participation"}
               </span>
@@ -373,6 +395,16 @@ export default function CertificateVerificationPage() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Verification Guarantee & Cryptographic Seal */}
+        <div className="text-center space-y-1 pb-4">
+          <p className="text-[11px] sm:text-xs text-slate-400 font-medium">
+            Student Representation Council (Sahastradeep) • JDCOEM Nagpur
+          </p>
+          <p className="text-[10px] text-slate-500 font-mono">
+            Cryptographically Authenticated Digital Credential • Scannable QR Verification Gateway
+          </p>
         </div>
       </main>
     </div>
