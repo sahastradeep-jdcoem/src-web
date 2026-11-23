@@ -93,6 +93,24 @@ import { getStoredClubs, findClub, saveStoredClubs } from "@/lib/councilStore";
 import { CertificateView } from "@/components/certificates/CertificateView";
 import { downloadCertificateAsImage, printCertificate } from "@/lib/certificateExport";
 import { ManualCertificateModal } from "@/components/admin/certificates/ManualCertificateModal";
+import { findStudentByBtId } from "@/lib/usersStore";
+
+export interface EventCertificateRecipient {
+  uniqueKey: string;
+  registrationId: string;
+  ticketCode: string;
+  name: string;
+  btId: string;
+  email: string;
+  department: string;
+  year: string;
+  collegeName?: string;
+  teamType: "Individual" | "Team";
+  teamName?: string;
+  isLeader?: boolean;
+  memberIndex: number;
+  status: string;
+}
 
 export default function AdminCertificatesPage() {
   return (
@@ -699,67 +717,255 @@ function AdminCertificatesContent() {
     return scopedAllCertificates;
   }, [allCertificates, currentEvent, selectedTenureId, tenureFilteredEvents, isScopedEventManager, adminAccess, user?.btId, allKnownEvents, isCertificateOwned, scopedAllCertificates]);
 
-  // Set of participant registration IDs that already have a certificate
-  const certifiedRegIds = useMemo(() => {
+  // -------------------------------------------------------------
+  // Dynamic Participant & Team Member Expansion for Certificate Issuance
+  // -------------------------------------------------------------
+  // If the event is a team event, every single member of the squad (leader + teammates)
+  // is expanded into an individual recipient record so that separate certificates
+  // are issued for all participants (e.g. 62 teams of 2 = 124 certificates).
+  const allEventRecipients = useMemo<EventCertificateRecipient[]>(() => {
+    if (!currentEvent || eventRegistrations.length === 0) return [];
+
+    const recipients: EventCertificateRecipient[] = [];
+
+    eventRegistrations.forEach((reg, regIndex) => {
+      const regId = reg.id || reg.registrationId || `reg_${regIndex}`;
+      const ticketCode = reg.ticketCode || "";
+      const isTeam =
+        reg.teamType === "Team" ||
+        Boolean(reg.teamName) ||
+        (Array.isArray(reg.teamMembers) && reg.teamMembers.length > 0) ||
+        (Array.isArray((reg as any).members) && (reg as any).members.length > 0) ||
+        (currentEvent.teamType === "Team");
+
+      if (!isTeam) {
+        recipients.push({
+          uniqueKey: regId,
+          registrationId: regId,
+          ticketCode,
+          name: reg.participantName || "Delegate",
+          btId: reg.btId || "",
+          email: reg.email || "",
+          department: reg.department || "Engineering",
+          year: reg.year || "3rd Year",
+          collegeName: reg.collegeName || "JDCOEM Nagpur",
+          teamType: "Individual",
+          teamName: undefined,
+          isLeader: undefined,
+          memberIndex: 0,
+          status: reg.status || "CONFIRMED",
+        });
+        return;
+      }
+
+      // Team Event: expand all squad members
+      const rawMembers = Array.isArray(reg.teamMembers)
+        ? reg.teamMembers
+        : Array.isArray((reg as any).members)
+        ? (reg as any).members
+        : [];
+
+      interface ParsedMember {
+        name: string;
+        btId: string;
+        department?: string;
+        year?: string;
+        email?: string;
+        isLeader?: boolean;
+      }
+
+      const parsedMembers: ParsedMember[] = [];
+
+      rawMembers.forEach((m: any) => {
+        if (!m) return;
+        if (typeof m === "string") {
+          const str = m.trim();
+          const match = str.match(/^(.*?)(?:\s*\((.*?)\))?$/);
+          const memberName = match && match[1] ? match[1].trim() : str;
+          const memberBtId = match && match[2] ? match[2].trim().toUpperCase() : "";
+          parsedMembers.push({
+            name: memberName,
+            btId: memberBtId,
+            isLeader: false,
+          });
+        } else if (typeof m === "object") {
+          parsedMembers.push({
+            name: m.name || m.displayName || "",
+            btId: (m.btId || "").trim().toUpperCase(),
+            department: m.department || "",
+            year: m.year || "",
+            email: m.email || "",
+            isLeader: Boolean(m.isLeader),
+          });
+        }
+      });
+
+      // Check if team leader is already represented in parsedMembers
+      const leaderBtId = (reg.btId || "").trim().toUpperCase();
+      const leaderName = (reg.participantName || "").trim().toLowerCase();
+
+      const leaderInMembersIndex = parsedMembers.findIndex((m) => {
+        if (m.isLeader) return true;
+        if (leaderBtId && m.btId && m.btId === leaderBtId) return true;
+        if (leaderName && m.name.trim().toLowerCase() === leaderName) return true;
+        return false;
+      });
+
+      if (leaderInMembersIndex >= 0) {
+        parsedMembers[leaderInMembersIndex].isLeader = true;
+      } else {
+        // Prepend the registered team leader as the first member
+        parsedMembers.unshift({
+          name: reg.participantName || "Team Leader",
+          btId: leaderBtId,
+          department: reg.department || "",
+          year: reg.year || "",
+          email: reg.email || "",
+          isLeader: true,
+        });
+      }
+
+      // Ensure at least one member is marked as leader
+      if (!parsedMembers.some((m) => m.isLeader) && parsedMembers.length > 0) {
+        parsedMembers[0].isLeader = true;
+      }
+
+      // Enrich missing details using findStudentByBtId and college defaults
+      parsedMembers.forEach((member, memberIdx) => {
+        let name = member.name.trim();
+        let btId = (member.btId || "").trim().toUpperCase();
+        let dept = member.department || "";
+        let yr = member.year || "";
+        let email = member.email || "";
+
+        if (btId) {
+          const studentProfile = findStudentByBtId(btId);
+          if (studentProfile) {
+            if (!name || name.toLowerCase() === "student" || name.toLowerCase() === "delegate") {
+              name = studentProfile.name || name;
+            }
+            if (!dept && studentProfile.department) dept = studentProfile.department;
+            if (!yr && studentProfile.year) yr = studentProfile.year;
+            if (!email && studentProfile.email) email = studentProfile.email;
+          }
+        }
+
+        if (!name) name = member.isLeader ? (reg.participantName || "Team Leader") : `Teammate ${memberIdx + 1}`;
+        if (!dept) dept = reg.department || "Engineering";
+        if (!yr) yr = reg.year || "3rd Year";
+        if (!email) email = member.isLeader ? (reg.email || "") : (btId ? `${btId.toLowerCase()}@jdcoem.ac.in` : reg.email || "");
+
+        recipients.push({
+          uniqueKey: `${regId}_m${memberIdx}`,
+          registrationId: regId,
+          ticketCode: ticketCode ? `${ticketCode}` : "",
+          name,
+          btId,
+          email,
+          department: dept,
+          year: yr,
+          collegeName: reg.collegeName || "JDCOEM Nagpur",
+          teamType: "Team",
+          teamName: reg.teamName || undefined,
+          isLeader: member.isLeader,
+          memberIndex: memberIdx,
+          status: reg.status || "CONFIRMED",
+        });
+      });
+    });
+
+    return recipients;
+  }, [currentEvent, eventRegistrations]);
+
+  // Set of participant & team member identifier keys that already have a certificate
+  const certifiedRecipientKeys = useMemo(() => {
     const set = new Set<string>();
     eventCertificates.forEach((c) => {
-      if (c.registrationId) set.add(c.registrationId);
+      if (c.registrationId) {
+        if (c.recipientBtId) {
+          set.add(`${c.registrationId}_${c.recipientBtId.trim().toUpperCase()}`);
+        }
+        if (c.recipientName) {
+          set.add(`${c.registrationId}_${c.recipientName.trim().toLowerCase()}`);
+        }
+        if (c.recipientEmail) {
+          set.add(`${c.registrationId}_${c.recipientEmail.trim().toLowerCase()}`);
+        }
+        set.add(c.registrationId);
+      }
     });
     return set;
   }, [eventCertificates]);
 
-  // Filtered participants list for generation
+  const isRecipientCertified = (r: EventCertificateRecipient): boolean => {
+    if (r.teamType === "Team") {
+      if (r.btId && certifiedRecipientKeys.has(`${r.registrationId}_${r.btId.trim().toUpperCase()}`)) {
+        return true;
+      }
+      if (r.name && certifiedRecipientKeys.has(`${r.registrationId}_${r.name.trim().toLowerCase()}`)) {
+        return true;
+      }
+      if (r.email && certifiedRecipientKeys.has(`${r.registrationId}_${r.email.trim().toLowerCase()}`)) {
+        return true;
+      }
+      return false;
+    }
+    return certifiedRecipientKeys.has(r.registrationId);
+  };
+
+  // Filtered recipients list for generation
   const filteredParticipants = useMemo(() => {
-    return eventRegistrations.filter((reg) => {
+    return allEventRecipients.filter((p) => {
       // 1. Status Filter
-      if (participantFilter === "CHECKED_IN" && reg.status !== "CHECKED_IN") {
+      if (participantFilter === "CHECKED_IN" && p.status !== "CHECKED_IN") {
         return false;
       }
-      if (participantFilter === "UNCERTIFIED" && certifiedRegIds.has(reg.id || reg.registrationId)) {
+      if (participantFilter === "UNCERTIFIED" && isRecipientCertified(p)) {
         return false;
       }
-      if (reg.status === "CANCELLED") {
+      if (p.status === "CANCELLED") {
         return false;
       }
 
       // 2. Search
       if (participantSearch.trim()) {
         const query = participantSearch.toLowerCase();
-        const name = (reg.participantName || "").toLowerCase();
-        const btId = (reg.btId || "").toLowerCase();
-        const email = (reg.email || "").toLowerCase();
-        const dept = (reg.department || "").toLowerCase();
+        const name = (p.name || "").toLowerCase();
+        const btId = (p.btId || "").toLowerCase();
+        const email = (p.email || "").toLowerCase();
+        const dept = (p.department || "").toLowerCase();
+        const teamName = (p.teamName || "").toLowerCase();
         return (
           name.includes(query) ||
           btId.includes(query) ||
           email.includes(query) ||
-          dept.includes(query)
+          dept.includes(query) ||
+          teamName.includes(query)
         );
       }
       return true;
     });
-  }, [eventRegistrations, participantFilter, certifiedRegIds, participantSearch]);
+  }, [allEventRecipients, participantFilter, certifiedRecipientKeys, participantSearch]);
 
-  // Sync selected participant IDs when filtered list changes (auto-select checked-in participants)
+  // Sync selected recipient keys when filtered list changes (auto-select uncertified recipients)
   useEffect(() => {
     if (filteredParticipants.length > 0 && selectedRegIds.size === 0) {
       const newSelected = new Set<string>();
       filteredParticipants.forEach((p) => {
-        const id = p.id || p.registrationId;
-        if (!certifiedRegIds.has(id)) {
-          newSelected.add(id);
+        if (!isRecipientCertified(p)) {
+          newSelected.add(p.uniqueKey);
         }
       });
       setSelectedRegIds(newSelected);
     }
-  }, [filteredParticipants, certifiedRegIds]);
+  }, [filteredParticipants, certifiedRecipientKeys]);
 
   // Toggle selection
-  const handleToggleParticipant = (id: string) => {
+  const handleToggleParticipant = (uniqueKey: string) => {
     setSelectedRegIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(uniqueKey)) next.delete(uniqueKey);
+      else next.add(uniqueKey);
       return next;
     });
   };
@@ -769,7 +975,7 @@ function AdminCertificatesContent() {
       setSelectedRegIds(new Set());
     } else {
       const next = new Set<string>();
-      filteredParticipants.forEach((p) => next.add(p.id || p.registrationId));
+      filteredParticipants.forEach((p) => next.add(p.uniqueKey));
       setSelectedRegIds(next);
     }
   };
@@ -925,13 +1131,13 @@ function AdminCertificatesContent() {
       return;
     }
 
-    const firstReg =
-      filteredParticipants.find((p) => selectedRegIds.has(p.id || p.registrationId)) ||
+    const firstRecipient =
+      filteredParticipants.find((p) => selectedRegIds.has(p.uniqueKey)) ||
       filteredParticipants[0] ||
-      eventRegistrations[0];
+      allEventRecipients[0];
 
-    const recipientName = firstReg?.participantName || "Harsh Shende";
-    const recipientDept = firstReg?.department || "Computer Science & Engineering";
+    const recipientName = firstRecipient?.name || "Harsh Shende";
+    const recipientDept = firstRecipient?.department || "Computer Science & Engineering";
     const eventName = currentEvent.name;
 
     const resolvedCitation = citationTemplate
@@ -941,7 +1147,10 @@ function AdminCertificatesContent() {
       .replace(/{date}/g, currentEvent.date || issueDate)
       .replace(/{department}/g, recipientDept);
 
-    const certNum = generateCertificateNumber(currentEvent.slug, firstReg?.ticketCode || "001");
+    const certNum = generateCertificateNumber(
+      currentEvent.slug,
+      firstRecipient?.btId ? firstRecipient.btId.slice(-4) : (firstRecipient?.ticketCode || "001")
+    );
     const origin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "https://srcjdcoem.in";
     const previewPayload: CertificateRecord = cleanUndefined({
       id: "preview-cert",
@@ -950,13 +1159,13 @@ function AdminCertificatesContent() {
       title: certTitle,
       rankOrPosition: certType === "ACHIEVEMENT" ? (rankOrPosition || "1st") : undefined,
       recipientName,
-      recipientEmail: firstReg?.email || user?.email || "student@jdcoem.ac.in",
-      recipientBtId: firstReg?.btId || user?.btId || "BT22CS001",
+      recipientEmail: firstRecipient?.email || user?.email || "student@jdcoem.ac.in",
+      recipientBtId: firstRecipient?.btId || user?.btId || "BT22CS001",
       recipientDepartment: recipientDept,
-      recipientYear: firstReg?.year || "3rd Year",
-      recipientCollege: firstReg?.collegeName || "JDCOEM Nagpur",
-      registrationId: firstReg?.id || firstReg?.registrationId || "reg-001",
-      ticketCode: firstReg?.ticketCode || "TCK-001",
+      recipientYear: firstRecipient?.year || "3rd Year",
+      recipientCollege: firstRecipient?.collegeName || "JDCOEM Nagpur",
+      registrationId: firstRecipient?.registrationId || "reg-001",
+      ticketCode: firstRecipient?.ticketCode || "TCK-001",
       eventId: currentEvent.id,
       eventSlug: currentEvent.slug,
       eventName: currentEvent.name,
@@ -1016,27 +1225,32 @@ function AdminCertificatesContent() {
     setPublishProgress({ current: 0, total: selectedRegIds.size });
 
     try {
-      const selectedList = eventRegistrations.filter((r) =>
-        selectedRegIds.has(r.id || r.registrationId)
+      const selectedList = allEventRecipients.filter((r) =>
+        selectedRegIds.has(r.uniqueKey)
       );
 
       const certsToSave: CertificateRecord[] = [];
       const origin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "https://srcjdcoem.in";
 
       for (let i = 0; i < selectedList.length; i++) {
-        const reg = selectedList[i];
-        const rawRegId = reg.id || reg.registrationId || `reg_${i}`;
+        const recipient = selectedList[i];
+        const rawRegId = recipient.registrationId;
         const cleanRegId = String(rawRegId).replace(/[^a-zA-Z0-9_-]/g, "_");
         const cleanSlug = (currentEvent.slug || "event").replace(/[^a-zA-Z0-9_-]/g, "_");
-        const certId = `cert_${cleanSlug}_${cleanRegId}_${Date.now()}_${i + 1}`;
-        const certNum = generateCertificateNumber(currentEvent.slug, reg.ticketCode || cleanRegId.slice(-4));
+        const cleanBtId = (recipient.btId || "").replace(/[^a-zA-Z0-9_-]/g, "_");
+        const memberKey = recipient.teamType === "Team" ? `${cleanBtId || `m${recipient.memberIndex}`}` : "";
+        const certId = memberKey ? `cert_${cleanSlug}_${cleanRegId}_${memberKey}_${Date.now()}_${i + 1}` : `cert_${cleanSlug}_${cleanRegId}_${Date.now()}_${i + 1}`;
+        const certNum = generateCertificateNumber(
+          currentEvent.slug,
+          recipient.btId ? recipient.btId.slice(-4) : (recipient.ticketCode || cleanRegId.slice(-4))
+        );
 
         const resolvedCitation = citationTemplate
-          .replace(/{name}/g, reg.participantName || "Participant")
+          .replace(/{name}/g, recipient.name || "Participant")
           .replace(/{rank}/g, rankOrPosition || "1st")
           .replace(/{event}/g, currentEvent.name)
           .replace(/{date}/g, currentEvent.date || issueDate)
-          .replace(/{department}/g, reg.department || "Engineering");
+          .replace(/{department}/g, recipient.department || "Engineering");
 
         const verificationUrl = `${origin}/verify/certificate/${certId}`;
 
@@ -1046,14 +1260,14 @@ function AdminCertificatesContent() {
           type: certType,
           title: certTitle,
           rankOrPosition: certType === "ACHIEVEMENT" ? (rankOrPosition || "1st") : undefined,
-          recipientName: reg.participantName || "Delegate",
-          recipientEmail: (reg.email || "").trim().toLowerCase(),
-          recipientBtId: (reg.btId || "").trim().toUpperCase(),
-          recipientDepartment: reg.department || "Engineering",
-          recipientYear: reg.year || "3rd Year",
-          recipientCollege: reg.collegeName || "JDCOEM Nagpur",
+          recipientName: recipient.name || "Delegate",
+          recipientEmail: (recipient.email || "").trim().toLowerCase(),
+          recipientBtId: (recipient.btId || "").trim().toUpperCase(),
+          recipientDepartment: recipient.department || "Engineering",
+          recipientYear: recipient.year || "3rd Year",
+          recipientCollege: recipient.collegeName || "JDCOEM Nagpur",
           registrationId: rawRegId,
-          ticketCode: reg.ticketCode || "",
+          ticketCode: recipient.ticketCode || "",
           eventId: currentEvent.id,
           eventSlug: currentEvent.slug,
           eventName: currentEvent.name,
@@ -1523,7 +1737,8 @@ function AdminCertificatesContent() {
                     Select Eligible Participants
                   </h3>
                   <p className="text-xs text-slate-500">
-                    {filteredParticipants.length} matching delegates • {selectedRegIds.size} selected
+                    {filteredParticipants.length} matching recipient{filteredParticipants.length === 1 ? "" : "s"}
+                    {allEventRecipients.some((r) => r.teamType === "Team") ? ` (${eventRegistrations.length} squads)` : ""} • {selectedRegIds.size} selected
                   </p>
                 </div>
 
@@ -1591,15 +1806,14 @@ function AdminCertificatesContent() {
                     No participants found matching this filter.
                   </div>
                 ) : (
-                  filteredParticipants.map((reg) => {
-                    const id = reg.id || reg.registrationId;
-                    const isSelected = selectedRegIds.has(id);
-                    const isAlreadyCertified = certifiedRegIds.has(id);
+                  filteredParticipants.map((p) => {
+                    const isSelected = selectedRegIds.has(p.uniqueKey);
+                    const isAlreadyCertified = isRecipientCertified(p);
 
                     return (
                       <div
-                        key={id}
-                        onClick={() => handleToggleParticipant(id)}
+                        key={p.uniqueKey}
+                        onClick={() => handleToggleParticipant(p.uniqueKey)}
                         className={`flex items-center justify-between p-3 cursor-pointer transition-colors ${
                           isSelected ? "bg-amber-50/50" : "hover:bg-slate-50"
                         }`}
@@ -1612,11 +1826,27 @@ function AdminCertificatesContent() {
                             className="rounded text-[#17458F] focus:ring-[#17458F] h-4 w-4"
                           />
                           <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <p className="font-bold text-xs text-slate-900">
-                                {reg.participantName || "Delegate"}
+                                {p.name}
                               </p>
-                              {reg.status === "CHECKED_IN" && (
+                              {p.teamType === "Team" && (
+                                <span
+                                  className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
+                                    p.isLeader
+                                      ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                      : "bg-slate-100 text-slate-700 border border-slate-200"
+                                  }`}
+                                >
+                                  {p.isLeader ? "Team Leader" : "Teammate"}
+                                </span>
+                              )}
+                              {p.teamName && (
+                                <span className="text-[9px] font-medium text-slate-400">
+                                  Squad: <span className="font-semibold text-slate-600">{p.teamName}</span>
+                                </span>
+                              )}
+                              {p.status === "CHECKED_IN" && (
                                 <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800">
                                   Checked In
                                 </span>
@@ -1628,19 +1858,26 @@ function AdminCertificatesContent() {
                               )}
                             </div>
                             <p className="text-[11px] text-slate-500 font-medium">
-                              {reg.btId ? (
+                              {p.btId ? (
                                 <span className="font-mono text-[#E78023] font-bold mr-1.5">
-                                  {reg.btId}
+                                  {p.btId}
                                 </span>
                               ) : null}
-                              {reg.department} • {reg.email}
+                              {p.department}{p.email ? ` • ${p.email}` : ""}
                             </p>
                           </div>
                         </div>
 
-                        <span className="font-mono text-[10px] text-slate-400">
-                          {reg.ticketCode || id.slice(-6)}
-                        </span>
+                        <div className="text-right shrink-0">
+                          <span className="font-mono text-[10px] text-slate-400 block">
+                            {p.ticketCode || p.registrationId.slice(-6)}
+                          </span>
+                          {p.teamType === "Team" && (
+                            <span className="text-[9px] text-slate-400 font-medium">
+                              Member #{p.memberIndex + 1}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     );
                   })
