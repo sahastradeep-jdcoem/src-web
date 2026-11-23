@@ -1121,11 +1121,8 @@ function AdminCertificatesContent() {
             </div>
             <div>
               <h1 className="text-xl sm:text-2xl font-heading font-extrabold text-[#0B132B]">
-                Certificate Issuance & Credentials Console
+                CERTIFICATE CONSOLE
               </h1>
-              <p className="text-xs text-slate-500 font-medium">
-                Generate authentic digital certificates with scannable QR verification & direct student dashboard publishing
-              </p>
             </div>
           </div>
         </div>
