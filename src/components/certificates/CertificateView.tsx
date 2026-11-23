@@ -30,11 +30,25 @@ export function CertificateView({
   const isRevoked = certificate.status === "REVOKED";
 
   // Institutional default signatories fallback if certificate has empty signature images
-  const [defaultSignatories, setDefaultSignatories] = useState<CertificateSignatory[]>(DEFAULT_INSTITUTIONAL_SIGNATORIES);
+  // Synchronously initialize from localStorage cache so the very first render already has signature images!
+  const [defaultSignatories, setDefaultSignatories] = useState<CertificateSignatory[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("src_certificate_settings");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed?.defaultSignatories) && parsed.defaultSignatories.length > 0) {
+            return parsed.defaultSignatories;
+          }
+        }
+      } catch {}
+    }
+    return DEFAULT_INSTITUTIONAL_SIGNATORIES;
+  });
 
   useEffect(() => {
     const hasMissingSig = (certificate.signatories || []).some((s) => !s.signatureImageUrl);
-    if (hasMissingSig) {
+    if (hasMissingSig || defaultSignatories.some((s) => !s.signatureImageUrl)) {
       getCertificateSettings()
         .then((settings) => {
           if (settings?.defaultSignatories?.length > 0) {
@@ -442,9 +456,10 @@ export function CertificateView({
       >
         <div className="grid grid-cols-4 gap-4 sm:gap-6 items-end text-center w-full max-w-3xl sm:max-w-4xl mx-auto px-4">
           {certificate.signatories.slice(0, 4).map((sig, idx) => {
-            const fallbackSig = defaultSignatories.find(
-              (d) => d.id === sig.id || d.designation === sig.designation
-            );
+            // Strict slot-indexed fallback prevents duplication across identical designations
+            const fallbackSig =
+              (defaultSignatories && defaultSignatories[idx]) ||
+              defaultSignatories?.find((d) => d.id === sig.id);
             const signatureUrl = sig.signatureImageUrl || fallbackSig?.signatureImageUrl || "";
 
             return (

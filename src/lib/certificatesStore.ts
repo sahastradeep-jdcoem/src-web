@@ -851,7 +851,7 @@ export function resolveCertificateClubLogoSync(cert: Partial<CertificateRecord>)
       const preview = localStorage.getItem("src_preview_cert");
       if (preview) {
         const parsed = JSON.parse(preview);
-        if (parsed?.clubLogoUrl && (parsed.eventId === cert.eventId || parsed.eventName === cert.eventName || parsed.organizerClub === cert.organizerClub)) {
+        if (parsed?.clubLogoUrl && parsed.clubLogoUrl.trim()) {
           return parsed.clubLogoUrl.trim();
         }
       }
@@ -899,6 +899,88 @@ export async function resolveCertificateClubLogoAsync(cert: CertificateRecord): 
   }
 
   return "";
+}
+
+/**
+ * Fully hydrates a certificate record with uncompacted signatures and club logo before export or rendering:
+ * 1. Checks if signatures or club logo are missing (e.g. from registry compaction).
+ * 2. Fetches the uncompacted document from Firestore partition `site_content/cert_${cert.id}` or `/certificates/${cert.id}`.
+ * 3. Fetches `certificate_settings` to ensure all 4 default signatures are populated with 100% accuracy.
+ * 4. Resolves the club logo through all available fallbacks (settings, preview cert, event logo, clubs roster).
+ * 5. Returns a complete, fully-hydrated CertificateRecord ready for instant, artifact-free 300 DPI PNG export.
+ */
+export async function hydrateFullCertificate(cert: CertificateRecord): Promise<CertificateRecord> {
+  if (!cert) return cert;
+  let hydrated: CertificateRecord = { ...cert };
+
+  // 1. Fetch uncompacted individual document partition if cert has an ID
+  if (cert.id) {
+    try {
+      const fullDoc = await getCertificateById(cert.id);
+      if (fullDoc) {
+        if (fullDoc.clubLogoUrl && fullDoc.clubLogoUrl.trim()) {
+          hydrated.clubLogoUrl = fullDoc.clubLogoUrl.trim();
+        }
+        if (Array.isArray(fullDoc.signatories) && fullDoc.signatories.length > 0 && fullDoc.signatories.some((s) => s.signatureImageUrl)) {
+          hydrated.signatories = fullDoc.signatories;
+        }
+      }
+    } catch (e) {
+      console.warn("Could not fetch full cert doc for hydration:", e);
+    }
+  }
+
+  // 2. Fetch persistent certificate settings (signatories and default club logo)
+  let settings: CertificateSettings | null = null;
+  try {
+    settings = await getCertificateSettings();
+  } catch {}
+
+  // 3. Hydrate signatures by slot index if any signatory is missing signatureImageUrl
+  const hasMissingSig = !hydrated.signatories || hydrated.signatories.length === 0 || hydrated.signatories.some((s) => !s.signatureImageUrl);
+  if (hasMissingSig && settings?.defaultSignatories && settings.defaultSignatories.length > 0) {
+    const baseSignatories = (hydrated.signatories && hydrated.signatories.length > 0)
+      ? hydrated.signatories
+      : DEFAULT_INSTITUTIONAL_SIGNATORIES;
+
+    hydrated.signatories = baseSignatories.slice(0, 4).map((sig, idx) => {
+      if (sig.signatureImageUrl && sig.signatureImageUrl.trim()) return sig;
+      const fallback = settings!.defaultSignatories[idx] || settings!.defaultSignatories.find((d) => d.id === sig.id);
+      return {
+        ...sig,
+        signatureImageUrl: fallback?.signatureImageUrl || sig.signatureImageUrl || "",
+      };
+    });
+  }
+
+  // 4. Hydrate club logo if missing
+  if (!hydrated.clubLogoUrl || !hydrated.clubLogoUrl.trim()) {
+    try {
+      const logo = await resolveCertificateClubLogoAsync(hydrated);
+      if (logo && logo.trim()) {
+        hydrated.clubLogoUrl = logo.trim();
+      }
+    } catch {}
+  }
+
+  // 5. If still missing club logo, check preview cert or settings default logo
+  if (!hydrated.clubLogoUrl || !hydrated.clubLogoUrl.trim()) {
+    if (settings?.defaultClubLogoUrl && settings.defaultClubLogoUrl.trim()) {
+      hydrated.clubLogoUrl = settings.defaultClubLogoUrl.trim();
+    } else if (typeof window !== "undefined") {
+      try {
+        const previewRaw = localStorage.getItem("src_preview_cert");
+        if (previewRaw) {
+          const parsed = JSON.parse(previewRaw);
+          if (parsed?.clubLogoUrl && parsed.clubLogoUrl.trim()) {
+            hydrated.clubLogoUrl = parsed.clubLogoUrl.trim();
+          }
+        }
+      } catch {}
+    }
+  }
+
+  return hydrated;
 }
 
 /**

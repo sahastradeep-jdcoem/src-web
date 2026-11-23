@@ -117,9 +117,11 @@ import { CertificateRecord } from "@/types/certificates";
 import { 
   getStudentCertificatesFromFirestore, 
   subscribeToStudentCertificates,
-  hydrateCertificateClubLogo,
+  hydrateFullCertificate,
   resolveCertificateClubLogoSync,
+  getCertificateSettings,
 } from "@/lib/certificatesStore";
+import { syncClubsFromFirestore } from "@/lib/councilStore";
 import { CertificateView } from "@/components/certificates/CertificateView";
 import { downloadCertificateAsImage } from "@/lib/certificateExport";
 
@@ -236,16 +238,16 @@ export default function StudentDashboardPage() {
   const handleDownloadCertificate = async (cert: CertificateRecord) => {
     setIsDownloadingCertId(cert.id);
     try {
-      // Pre-hydrate certificate with club logo and signatories before DOM mount
-      const hydratedCert = await hydrateCertificateClubLogo(cert);
-      setDownloadingCert(hydratedCert);
+      // Pre-hydrate certificate with full uncompacted signatures and club logo before DOM mount
+      const fullyHydratedCert = await hydrateFullCertificate(cert);
+      setDownloadingCert(fullyHydratedCert);
 
       // Wait for offscreen certificate canvas to mount in DOM and images to be decoded
-      await new Promise((r) => setTimeout(r, 350));
-      const cleanEvent = (hydratedCert.eventName || "Event").trim();
-      const cleanRecipient = (hydratedCert.recipientName || "Student").trim().replace(/\s+/g, "_");
+      await new Promise((r) => setTimeout(r, 450));
+      const cleanEvent = (fullyHydratedCert.eventName || "Event").trim();
+      const cleanRecipient = (fullyHydratedCert.recipientName || "Student").trim().replace(/\s+/g, "_");
       await downloadCertificateAsImage(
-        `export-cert-${hydratedCert.id}`,
+        `export-cert-${fullyHydratedCert.id}`,
         `SRC-${cleanEvent} Certificate-${cleanRecipient}`
       );
     } finally {
@@ -394,6 +396,10 @@ export default function StudentDashboardPage() {
     const unsubEvents = subscribeToEvents((remote) => {
       if (remote && isCurrent) setEvents(remote);
     });
+
+    // Pre-sync clubs roster & certificate settings so club emblems and signatures are available in memory
+    syncClubsFromFirestore().catch(() => {});
+    getCertificateSettings().catch(() => {});
 
     // 2. SRC Dispatches
     setSrcDispatches(getStoredSrcDispatches());
