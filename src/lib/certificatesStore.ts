@@ -66,6 +66,9 @@ export const DEFAULT_INSTITUTIONAL_SIGNATORIES: CertificateSignatory[] = [
 ];
 
 export const DEFAULT_CITATION_TEMPLATE =
+  "In recognition of your enthusiastic participation in the {event}, showcasing dedication and a commendable commitment to excellence.";
+
+export const OLD_DEFAULT_CITATION_TEMPLATE =
   "For outstanding performance in the {event}, in recognition of your outstanding performance, dedication, and technical skills.";
 
 export const DEFAULT_ACHIEVEMENT_CITATION_TEMPLATE =
@@ -481,7 +484,7 @@ export async function getCertificateById(id: string): Promise<CertificateRecord 
         pillText: "#FFFFFF",
       },
       citation:
-        "For outstanding performance in the ProblemX, in recognition of your outstanding performance, dedication, and technical skills.",
+        "In recognition of your enthusiastic participation in the ProblemX, showcasing dedication and a commendable commitment to excellence.",
       signatories: DEFAULT_INSTITUTIONAL_SIGNATORIES,
       issueDate: new Date().toISOString().split("T")[0],
       status: "PUBLISHED",
@@ -798,9 +801,14 @@ export async function getCertificateSettings(): Promise<CertificateSettings> {
   try {
     const remote = await getSiteContentFromFirestore<CertificateSettings>(SETTINGS_DOC_ID);
     if (remote) {
+      const resolvedCitation =
+        remote.defaultCitationTemplate && remote.defaultCitationTemplate !== OLD_DEFAULT_CITATION_TEMPLATE
+          ? remote.defaultCitationTemplate
+          : DEFAULT_CITATION_TEMPLATE;
+
       const merged: CertificateSettings = {
         defaultSignatories: remote.defaultSignatories?.length > 0 ? remote.defaultSignatories : DEFAULT_INSTITUTIONAL_SIGNATORIES,
-        defaultCitationTemplate: remote.defaultCitationTemplate || DEFAULT_CITATION_TEMPLATE,
+        defaultCitationTemplate: resolvedCitation,
         defaultClubLogoUrl: remote.defaultClubLogoUrl || "",
         clubLogosByEvent: remote.clubLogosByEvent || {},
         updatedAt: remote.updatedAt,
@@ -821,7 +829,11 @@ export async function getCertificateSettings(): Promise<CertificateSettings> {
     try {
       const cached = localStorage.getItem("src_certificate_settings");
       if (cached) {
-        return JSON.parse(cached);
+        const parsed = JSON.parse(cached);
+        if (parsed.defaultCitationTemplate === OLD_DEFAULT_CITATION_TEMPLATE || !parsed.defaultCitationTemplate) {
+          parsed.defaultCitationTemplate = DEFAULT_CITATION_TEMPLATE;
+        }
+        return parsed;
       }
     } catch {}
   }

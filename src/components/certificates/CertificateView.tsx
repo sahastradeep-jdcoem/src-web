@@ -465,7 +465,7 @@ export function CertificateView({
         {/* Citation Body Text */}
         <p className="max-w-2xl text-xs sm:text-[13px] md:text-sm text-slate-700 leading-relaxed font-sans px-6 font-normal">
           {certificate.citation ||
-            `For outstanding performance in the ${certificate.eventName}, in recognition of your outstanding performance, dedication, and technical skills.`}
+            `In recognition of your enthusiastic participation in the ${certificate.eventName}, showcasing dedication and a commendable commitment to excellence.`}
         </p>
       </main>
 
