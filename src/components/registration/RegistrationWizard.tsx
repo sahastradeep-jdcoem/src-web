@@ -2127,21 +2127,6 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                 <h4 className="font-heading font-extrabold text-2xl text-[#0F172A] tracking-tight">
                   Registration Ineligible for Your Stream
                 </h4>
-                <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed">
-                  {!isDeptEligible && !isYrEligible ? (
-                    <>
-                      Students from your department (<strong className="text-slate-800">{formData.department || user?.department || "Your Department"}</strong>) and academic year (<strong className="text-slate-800">{formData.year || user?.year || "Your Year"}</strong>) are not eligible to register for this event.
-                    </>
-                  ) : !isDeptEligible ? (
-                    <>
-                      Students from your department (<strong className="text-slate-800">{formData.department || user?.department || "Your Department"}</strong>) are not eligible to register for this event.
-                    </>
-                  ) : (
-                    <>
-                      Students from your academic year (<strong className="text-slate-800">{formData.year || user?.year || "Your Year"}</strong>) are not eligible to register for this event.
-                    </>
-                  )}
-                </p>
 
                 <div className="p-4 rounded-2xl bg-white/80 border border-amber-200 text-left space-y-2 text-xs">
                   {event.eligibleDepartments && event.eligibleDepartments.length > 0 && event.eligibleDepartments.length < 15 && (
