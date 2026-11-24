@@ -928,38 +928,21 @@ export async function saveCertificateSettings(settings: Partial<CertificateSetti
 export function isCentralizedCertificate(cert?: Partial<CertificateRecord> | null): boolean {
   if (!cert) return true;
 
-  const slug = (cert.organizerClubSlug || "").toLowerCase().trim();
-  if (
-    slug === "src-council" ||
-    slug === "src" ||
-    slug === "central" ||
-    slug === "centralised" ||
-    slug === "centralized" ||
-    slug === "council"
-  ) {
-    return true;
-  }
+  const rawOrg = cert.organizerClub || "";
+  const rawSlug = cert.organizerClubSlug || "";
 
-  const org = (cert.organizerClub || "").toLowerCase().trim();
-  if (
-    !org ||
-    org === "src" ||
-    org === "src jdcoem" ||
-    org === "src, jdcoem" ||
-    org === "src council" ||
-    org === "student representative council" ||
-    org === "student representation council" ||
-    org === "central student council" ||
-    org === "centralised" ||
-    org === "centralized" ||
-    org.includes("src jdcoem") ||
-    org.includes("centralised") ||
-    org.includes("centralized")
-  ) {
-    return true;
-  }
+  // 1. Check if the certificate explicitly matches a chartered student club
+  try {
+    const clubs = getStoredClubs();
+    if (rawSlug || rawOrg) {
+      const clubMatch = findClub(clubs, rawSlug || rawOrg);
+      if (clubMatch) {
+        return false;
+      }
+    }
+  } catch {}
 
-  // Cross-reference with stored events if available
+  // 2. Cross-reference with stored events if eventId / eventSlug / eventName is provided
   try {
     const events = getStoredEvents();
     const matched = events.find(
@@ -984,8 +967,48 @@ export function isCentralizedCertificate(cert?: Partial<CertificateRecord> | nul
       ) {
         return true;
       }
+
+      // Check if the matched event is organized by a chartered student club
+      const clubs = getStoredClubs();
+      const eventClub = findClub(clubs, matched.organizerClubSlug || matched.organizer || "");
+      if (eventClub) {
+        return false;
+      }
     }
   } catch {}
+
+  // 3. Check explicit SRC / Central Council slugs
+  const slug = rawSlug.toLowerCase().trim();
+  if (
+    slug === "src-council" ||
+    slug === "src" ||
+    slug === "central" ||
+    slug === "centralised" ||
+    slug === "centralized" ||
+    slug === "council"
+  ) {
+    return true;
+  }
+
+  // 4. Check explicit SRC / Central Council organizer names
+  const org = rawOrg.toLowerCase().trim();
+  if (
+    !org ||
+    org === "src" ||
+    org === "src jdcoem" ||
+    org === "src, jdcoem" ||
+    org === "src council" ||
+    org === "student representative council" ||
+    org === "student representation council" ||
+    org === "central student council" ||
+    org === "centralised" ||
+    org === "centralized" ||
+    org.includes("src jdcoem") ||
+    org.includes("centralised") ||
+    org.includes("centralized")
+  ) {
+    return true;
+  }
 
   return false;
 }
