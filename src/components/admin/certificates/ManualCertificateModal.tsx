@@ -29,7 +29,7 @@ import {
   CertificateSignatory,
   CertificateColorPalette,
 } from "@/types/certificates";
-import { findStudentByBtId } from "@/lib/usersStore";
+import { findStudentByBtId, syncUsersFromFirestore } from "@/lib/usersStore";
 import { resolveTenureForEvent } from "@/lib/eventsStore";
 import {
   generateCertificateNumber,
@@ -37,6 +37,7 @@ import {
   DEFAULT_CITATION_TEMPLATE,
   DEFAULT_ACHIEVEMENT_CITATION_TEMPLATE,
   compactCertificateForRegistry,
+  isCentralizedCertificate,
 } from "@/lib/certificatesStore";
 import {
   extractPosterColorPalette,
@@ -186,6 +187,25 @@ export function ManualCertificateModal({
   const [clubLogoUrl, setClubLogoUrl] = useState<string>("");
   const [isExtractingColor, setIsExtractingColor] = useState(false);
 
+  // Sync users store from Firestore on mount so offline resolution has the freshest directory
+  useEffect(() => {
+    if (isOpen) {
+      syncUsersFromFirestore().catch(() => {});
+    }
+  }, [isOpen]);
+
+  // Centralised Event Determination (SRC JDCOEM Central Council vs Student Club)
+  const isCurrentEventCentral = useMemo(() => {
+    if (!currentEvent) return false;
+    return isCentralizedCertificate({
+      eventId: currentEvent.id,
+      eventSlug: currentEvent.slug,
+      eventName: currentEvent.name,
+      organizerClub: currentEvent.organizer,
+      organizerClubSlug: currentEvent.organizerClubSlug,
+    });
+  }, [currentEvent]);
+
   // Sync event changes to template styling
   useEffect(() => {
     if (!currentEvent) return;
@@ -194,20 +214,24 @@ export function ManualCertificateModal({
       setIssueDate(currentEvent.date);
     }
 
-    // Try finding cached/stored club logo
-    if (typeof window !== "undefined") {
-      const stored =
-        localStorage.getItem(`src_club_logo_${currentEvent.slug}`) ||
-        localStorage.getItem(`src_club_logo_${currentEvent.id}`);
-      if (stored) {
-        setClubLogoUrl(stored);
-      } else {
-        const eventLogo =
-          (currentEvent as any).clubLogo ||
-          (currentEvent as any).organizerLogo ||
-          (currentEvent as any).organizerClubLogo ||
-          "";
-        if (eventLogo) setClubLogoUrl(eventLogo);
+    if (isCurrentEventCentral) {
+      setClubLogoUrl("");
+    } else {
+      // Try finding cached/stored club logo
+      if (typeof window !== "undefined") {
+        const stored =
+          localStorage.getItem(`src_club_logo_${currentEvent.slug}`) ||
+          localStorage.getItem(`src_club_logo_${currentEvent.id}`);
+        if (stored) {
+          setClubLogoUrl(stored);
+        } else {
+          const eventLogo =
+            (currentEvent as any).clubLogo ||
+            (currentEvent as any).organizerLogo ||
+            (currentEvent as any).organizerClubLogo ||
+            "";
+          if (eventLogo) setClubLogoUrl(eventLogo);
+        }
       }
     }
 
@@ -227,70 +251,95 @@ export function ManualCertificateModal({
         })
         .catch(() => setIsExtractingColor(false));
     }
-  }, [currentEvent]);
+  }, [currentEvent, isCurrentEventCentral]);
 
-  // 3. Comma-separated BT IDs Input & Parsing
+  // 3. BT IDs Input & Enter-Key Verification Engine
   const [bulkBtInput, setBulkBtInput] = useState<string>("");
-  const [studentsData, setStudentsData] = useState<Record<string, ManualStudentEntry>>({});
+  const [invalidBtIds, setInvalidBtIds] = useState<string[]>([]);
+  const [verifiedStudents, setVerifiedStudents] = useState<ManualStudentEntry[]>([]);
   const [isPublishing, setIsPublishing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Parse BT IDs
-  const parsedBtIds = useMemo(() => {
-    if (!bulkBtInput.trim()) return [];
-    const tokens = bulkBtInput
-      .split(/[\n,;]+/)
+  // Process entered BT IDs on Enter key or button click
+  const handleProcessBtIds = () => {
+    const raw = bulkBtInput.trim();
+    if (!raw) return;
+
+    // Split by commas, newlines, semicolons, or spaces
+    const tokens = raw
+      .split(/[\n,;\s]+/)
       .map((s) => s.trim().toUpperCase())
       .filter((s) => s.length > 0);
-    return Array.from(new Set(tokens));
-  }, [bulkBtInput]);
 
-  // Sync parsed BT IDs with studentsData map (auto-resolves registered / council data)
-  useEffect(() => {
-    setStudentsData((prev) => {
-      const next: Record<string, ManualStudentEntry> = { ...prev };
+    if (tokens.length === 0) return;
 
-      // Initialize any newly entered BT ID
-      for (const bt of parsedBtIds) {
-        if (!next[bt]) {
-          const studentInfo = findStudentByBtId(bt);
-          next[bt] = {
+    // Deduplicate tokens in current batch
+    const uniqueTokens = Array.from(new Set(tokens));
+
+    const notFoundTokens: string[] = [];
+    const newValidEntries: ManualStudentEntry[] = [];
+    const existingBtIds = new Set(verifiedStudents.map((s) => s.btId));
+
+    for (const bt of uniqueTokens) {
+      const studentInfo = findStudentByBtId(bt);
+      if (studentInfo && studentInfo.name && studentInfo.name.trim()) {
+        // Valid student found in the system!
+        if (!existingBtIds.has(bt)) {
+          existingBtIds.add(bt);
+          newValidEntries.push({
             btId: bt,
-            name: studentInfo?.name || "",
-            department: studentInfo?.department || "Computer Science & Engineering",
-            year: studentInfo?.year || "3rd Year",
-            email: studentInfo?.email || `${bt.toLowerCase()}@jdcoem.ac.in`,
-            isAutoResolved: Boolean(studentInfo?.name),
-          };
+            name: studentInfo.name.trim(),
+            department: studentInfo.department || "Computer Science & Engineering",
+            year: studentInfo.year || "3rd Year",
+            email: studentInfo.email || `${bt.toLowerCase()}@jdcoem.ac.in`,
+            isAutoResolved: true,
+          });
         }
+      } else {
+        // Not found in system -> Invalid!
+        notFoundTokens.push(bt);
       }
+    }
 
-      // Cleanup entries that were completely removed from input
-      for (const key of Object.keys(next)) {
-        if (!parsedBtIds.includes(key)) {
-          delete next[key];
-        }
-      }
+    if (newValidEntries.length > 0) {
+      setVerifiedStudents((prev) => [...prev, ...newValidEntries]);
+    }
 
-      return next;
-    });
-  }, [parsedBtIds]);
+    if (notFoundTokens.length > 0) {
+      // Invalid IDs continue to display in the box with small red alert
+      setBulkBtInput(notFoundTokens.join(", "));
+      setInvalidBtIds(notFoundTokens);
+    } else {
+      // All were valid and processed: clear box and dismiss invalid alert
+      setBulkBtInput("");
+      setInvalidBtIds([]);
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setBulkBtInput(e.target.value);
+    if (invalidBtIds.length > 0) {
+      setInvalidBtIds([]);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleProcessBtIds();
+    }
+  };
 
   // Update specific student field
   const handleUpdateStudent = (btId: string, field: keyof ManualStudentEntry, value: string) => {
-    setStudentsData((prev) => ({
-      ...prev,
-      [btId]: {
-        ...prev[btId],
-        [field]: value,
-      },
-    }));
+    setVerifiedStudents((prev) =>
+      prev.map((s) => (s.btId === btId ? { ...s, [field]: value } : s))
+    );
   };
 
-  // Remove a BT ID
-  const handleRemoveBtId = (btToRemove: string) => {
-    const updatedTokens = parsedBtIds.filter((id) => id !== btToRemove);
-    setBulkBtInput(updatedTokens.join(", "));
+  // Remove a verified student from list
+  const handleRemoveStudent = (btToRemove: string) => {
+    setVerifiedStudents((prev) => prev.filter((s) => s.btId !== btToRemove));
   };
 
   // Club logo image upload handler
@@ -330,13 +379,16 @@ export function ManualCertificateModal({
       return;
     }
 
-    const firstBt = parsedBtIds[0];
-    const firstStudent = firstBt ? studentsData[firstBt] : null;
+    const firstStudent = verifiedStudents[0];
+    if (!firstStudent) {
+      setErrorMessage("Please enter and verify at least one student BT ID.");
+      return;
+    }
 
-    const recipientName = firstStudent?.name?.trim() || "Harsh Shende";
-    const recipientDept = firstStudent?.department || "Computer Science & Engineering";
-    const recipientBtId = firstStudent?.btId || "BT230036CS";
-    const recipientEmail = firstStudent?.email || user?.email || "student@jdcoem.ac.in";
+    const recipientName = firstStudent.name?.trim() || "Harsh Shende";
+    const recipientDept = firstStudent.department || "Computer Science & Engineering";
+    const recipientBtId = firstStudent.btId || "BT230036CS";
+    const recipientEmail = firstStudent.email || user?.email || "student@jdcoem.ac.in";
     const eventName = currentEvent.name;
 
     const resolvedCitation = citationTemplate
@@ -345,6 +397,14 @@ export function ManualCertificateModal({
       .replace(/{event}/g, eventName)
       .replace(/{date}/g, currentEvent.date || issueDate)
       .replace(/{department}/g, recipientDept);
+
+    const isCentral = isCentralizedCertificate({
+      eventId: currentEvent.id,
+      eventSlug: currentEvent.slug,
+      eventName: currentEvent.name,
+      organizerClub: currentEvent.organizer,
+      organizerClubSlug: currentEvent.organizerClubSlug,
+    });
 
     const certNum = generateCertificateNumber(currentEvent.slug, recipientBtId.slice(-4) || "001");
     const origin =
@@ -362,7 +422,7 @@ export function ManualCertificateModal({
       recipientEmail,
       recipientBtId,
       recipientDepartment: recipientDept,
-      recipientYear: firstStudent?.year || "3rd Year",
+      recipientYear: firstStudent.year || "3rd Year",
       recipientCollege: "JDCOEM Nagpur",
       registrationId: `offline-${recipientBtId.toLowerCase()}`,
       ticketCode: recipientBtId.slice(-6),
@@ -370,9 +430,9 @@ export function ManualCertificateModal({
       eventSlug: currentEvent.slug,
       eventName: currentEvent.name,
       eventDate: currentEvent.date || issueDate,
-      organizerClub: currentEvent.organizer || "Student Representative Council",
-      organizerClubSlug: currentEvent.organizerClubSlug || "",
-      clubLogoUrl: clubLogoUrl || "",
+      organizerClub: currentEvent.organizer || "Student Representation Council",
+      organizerClubSlug: currentEvent.organizerClubSlug || (isCentral ? "src-council" : ""),
+      clubLogoUrl: isCentral ? "" : (clubLogoUrl || ""),
       posterUrl: currentEvent.posterImage || currentEvent.poster || "",
       colorPalette,
       citation: resolvedCitation,
@@ -399,22 +459,21 @@ export function ManualCertificateModal({
       return;
     }
 
-    if (parsedBtIds.length === 0) {
-      setErrorMessage("Please enter at least one Student BT ID.");
+    if (verifiedStudents.length === 0) {
+      setErrorMessage("Please enter and verify at least one student BT ID.");
       return;
     }
 
     // Verify all entered BT IDs have a name
-    for (const bt of parsedBtIds) {
-      const st = studentsData[bt];
-      if (!st || !st.name.trim()) {
-        setErrorMessage(`Please enter student full name for BT ID: ${bt}`);
+    for (const st of verifiedStudents) {
+      if (!st.name.trim()) {
+        setErrorMessage(`Please enter student full name for BT ID: ${st.btId}`);
         return;
       }
     }
 
     const confirmed = window.confirm(
-      `Issue and publish ${parsedBtIds.length} official digital certificate(s) for "${currentEvent.name}"? They will appear immediately on the students' dashboards and public verification.`
+      `Issue and publish ${verifiedStudents.length} official digital certificate(s) for "${currentEvent.name}"? They will appear immediately on the students' dashboards and public verification.`
     );
     if (!confirmed) return;
 
@@ -427,10 +486,17 @@ export function ManualCertificateModal({
           ? window.location.origin
           : "https://srcjdcoem.in";
 
-      for (let i = 0; i < parsedBtIds.length; i++) {
-        const bt = parsedBtIds[i];
-        const st = studentsData[bt];
-        const cleanBtId = bt.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const isCentral = isCentralizedCertificate({
+        eventId: currentEvent.id,
+        eventSlug: currentEvent.slug,
+        eventName: currentEvent.name,
+        organizerClub: currentEvent.organizer,
+        organizerClubSlug: currentEvent.organizerClubSlug,
+      });
+
+      for (let i = 0; i < verifiedStudents.length; i++) {
+        const st = verifiedStudents[i];
+        const cleanBtId = st.btId.replace(/[^a-zA-Z0-9_-]/g, "_");
         const cleanSlug = (currentEvent.slug || "event").replace(/[^a-zA-Z0-9_-]/g, "_");
         const certId = `cert_${cleanSlug}_${cleanBtId}_${Date.now()}_${i + 1}`;
         const certNum = generateCertificateNumber(currentEvent.slug, cleanBtId.slice(-4));
@@ -463,9 +529,9 @@ export function ManualCertificateModal({
             eventSlug: currentEvent.slug,
             eventName: currentEvent.name,
             eventDate: currentEvent.date || issueDate,
-            organizerClub: currentEvent.organizer || "SRC Council",
-            organizerClubSlug: currentEvent.organizerClubSlug || "",
-            clubLogoUrl: clubLogoUrl || "",
+            organizerClub: currentEvent.organizer || "SRC, JDCOEM",
+            organizerClubSlug: currentEvent.organizerClubSlug || (isCentral ? "src-council" : ""),
+            clubLogoUrl: isCentral ? "" : (clubLogoUrl || ""),
             posterUrl: currentEvent.posterImage || currentEvent.poster || "",
             colorPalette,
             citation: resolvedCitation,
@@ -482,8 +548,8 @@ export function ManualCertificateModal({
 
       await batchSaveCertificatesToFirestore(certsToSave);
 
-      // Save club logo to local cache if present
-      if (clubLogoUrl && currentEvent) {
+      // Save club logo to local cache if present and not centralized
+      if (clubLogoUrl && currentEvent && !isCentral) {
         try {
           if (typeof window !== "undefined") {
             localStorage.setItem(`src_club_logo_${currentEvent.slug}`, clubLogoUrl);
@@ -820,8 +886,18 @@ export function ManualCertificateModal({
                 <Award className="w-3.5 h-3.5 text-[#E78023]" />
                 Center Club Emblem (Header)
               </label>
-              <span className="text-[10px] text-slate-400 font-medium">SRC JDCOEM</span>
+              {currentEvent?.organizer && (
+                <span className="text-[10px] text-slate-500 font-semibold truncate max-w-[150px]">
+                  {currentEvent.organizer}
+                </span>
+              )}
             </div>
+
+            {isCurrentEventCentral && (
+              <p className="text-[11px] text-amber-700 bg-amber-50/80 border border-amber-200/70 rounded-lg p-2 font-medium leading-relaxed">
+                <strong>Centralised Event:</strong> Organised by SRC JDCOEM. The center club emblem is cleanly omitted so only the official SRC and College headers appear.
+              </p>
+            )}
 
             <div className="flex items-center gap-2">
               <input
@@ -865,131 +941,165 @@ export function ManualCertificateModal({
               <div>
                 <label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                   <Users className="w-4 h-4 text-[#17458F]" />
-                  Enter Student BT IDs (Separated by Commas)
+                  Enter Student BT IDs
                 </label>
                 <p className="text-[11px] text-slate-500 mt-0.5">
-                  Paste or type student BT IDs separated by commas or newlines. Student names &amp; branches are auto-resolved from records.
+                  Type or paste BT ID(s) and press <kbd className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-300 font-mono text-[10px] font-bold text-slate-700">Enter ↵</kbd>. Names are auto-resolved from system records.
                 </p>
               </div>
 
-              {parsedBtIds.length > 0 && (
+              {verifiedStudents.length > 0 && (
                 <Badge variant="navy" size="sm">
-                  {parsedBtIds.length} Recipient{parsedBtIds.length === 1 ? "" : "s"}
+                  {verifiedStudents.length} Recipient{verifiedStudents.length === 1 ? "" : "s"}
                 </Badge>
               )}
             </div>
 
-            <textarea
-              rows={3}
-              value={bulkBtInput}
-              onChange={(e) => setBulkBtInput(e.target.value)}
-              placeholder="e.g. BT230036CS, BT240054DS, BT210115ME"
-              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono uppercase tracking-wide focus:border-[#17458F] focus:outline-none"
-            />
+            <div className="space-y-2">
+              <div className="relative">
+                <textarea
+                  rows={2}
+                  value={bulkBtInput}
+                  onChange={handleInputChange}
+                  onKeyDown={handleKeyDown}
+                  placeholder="e.g. BT22CS001, BT23CS002 (Press Enter to verify & add)"
+                  className={`w-full px-3 py-2 pr-24 rounded-xl border text-xs font-mono uppercase tracking-wide focus:outline-none transition-colors ${
+                    invalidBtIds.length > 0
+                      ? "border-rose-400 bg-rose-50/20 focus:border-rose-500"
+                      : "border-slate-300 bg-white focus:border-[#17458F]"
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={handleProcessBtIds}
+                  disabled={!bulkBtInput.trim()}
+                  className="absolute right-2.5 bottom-3 px-2.5 py-1 rounded-lg bg-[#17458F] hover:bg-[#123673] disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold text-[11px] shadow-2xs transition-all flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed"
+                  title="Press Enter or click to verify & add"
+                >
+                  <span>Add</span>
+                  <span className="font-mono text-[10px] opacity-80">↵</span>
+                </button>
+              </div>
+
+              {/* Small Red Alert for Invalid BT IDs */}
+              {invalidBtIds.length > 0 && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200/90 text-rose-800 text-xs flex items-start justify-between gap-2 animate-in fade-in duration-200">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold text-rose-900">
+                        {invalidBtIds.length === 1 ? "Invalid BT ID" : "Invalid BT IDs"}
+                      </p>
+                      <p className="text-[11px] text-rose-700 mt-0.5">
+                        {invalidBtIds.length === 1 ? (
+                          <>
+                            <span className="font-mono font-bold text-rose-900 bg-rose-100/70 px-1 py-0.5 rounded">{invalidBtIds[0]}</span> does not exist in the system.
+                          </>
+                        ) : (
+                          <>
+                            The following BT IDs do not exist in the system:{" "}
+                            {invalidBtIds.map((id, idx) => (
+                              <span key={id} className="font-mono font-bold text-rose-900 bg-rose-100/70 px-1 py-0.5 rounded mr-1">
+                                {id}{idx < invalidBtIds.length - 1 ? "," : ""}
+                              </span>
+                            ))}
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setInvalidBtIds([])}
+                    className="text-rose-400 hover:text-rose-700 p-0.5"
+                    title="Dismiss alert"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
 
             {/* Resolved Students Table / List */}
-            {parsedBtIds.length > 0 && (
+            {verifiedStudents.length > 0 && (
               <div className="space-y-2 pt-1">
                 <div className="flex items-center justify-between text-[11px] font-bold text-slate-600">
-                  <span>Recipient Verification &amp; Editable Credentials:</span>
+                  <span>Verified Recipients ({verifiedStudents.length}):</span>
                   <span className="text-[10px] text-slate-400">
                     Names appear directly on issued certificates
                   </span>
                 </div>
 
                 <div className="max-h-56 overflow-y-auto space-y-2 border border-slate-200 rounded-xl p-2 bg-slate-50/70 scrollbar-thin">
-                  {parsedBtIds.map((bt) => {
-                    const st = studentsData[bt] || {
-                      btId: bt,
-                      name: "",
-                      department: "Computer Science & Engineering",
-                      year: "3rd Year",
-                      email: "",
-                      isAutoResolved: false,
-                    };
-
-                    return (
-                      <div
-                        key={bt}
-                        className="p-2.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs space-y-2"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono font-extrabold text-xs text-[#17458F]">
-                              {bt}
-                            </span>
-                            {st.isAutoResolved ? (
-                              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                Verified in Records
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                Offline / Unregistered
-                              </span>
-                            )}
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveBtId(bt)}
-                            className="text-slate-400 hover:text-rose-600 p-1 rounded-lg transition-colors cursor-pointer"
-                            title="Remove this recipient"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                  {verifiedStudents.map((st) => (
+                    <div
+                      key={st.btId}
+                      className="p-2.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs space-y-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-extrabold text-xs text-[#17458F]">
+                            {st.btId}
+                          </span>
+                          <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            Verified in Records
+                          </span>
                         </div>
 
-                        {/* Inline Student Form Inputs */}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                          <div>
-                            <label className="text-[10px] font-bold text-slate-500 block mb-0.5">
-                              Student Full Name *
-                            </label>
-                            <input
-                              type="text"
-                              value={st.name}
-                              onChange={(e) => handleUpdateStudent(bt, "name", e.target.value)}
-                              placeholder="e.g. Rahul Sharma"
-                              className={`w-full px-2 py-1 rounded-lg border text-xs font-bold ${
-                                !st.name.trim()
-                                  ? "border-amber-400 bg-amber-50/50"
-                                  : "border-slate-200 bg-white"
-                              }`}
-                            />
-                          </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveStudent(st.btId)}
+                          className="text-slate-400 hover:text-rose-600 p-1 rounded-lg transition-colors cursor-pointer"
+                          title="Remove this recipient"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
 
-                          <div>
-                            <label className="text-[10px] font-bold text-slate-500 block mb-0.5">
-                              Department / Branch
-                            </label>
-                            <input
-                              type="text"
-                              value={st.department}
-                              onChange={(e) =>
-                                handleUpdateStudent(bt, "department", e.target.value)
-                              }
-                              placeholder="Department"
-                              className="w-full px-2 py-1 rounded-lg border border-slate-200 text-xs bg-white"
-                            />
-                          </div>
+                      {/* Inline Student Form Inputs */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 block mb-0.5">
+                            Student Full Name *
+                          </label>
+                          <input
+                            type="text"
+                            value={st.name}
+                            onChange={(e) => handleUpdateStudent(st.btId, "name", e.target.value)}
+                            placeholder="e.g. Rahul Sharma"
+                            className="w-full px-2 py-1 rounded-lg border border-slate-200 bg-white text-xs font-bold"
+                          />
+                        </div>
 
-                          <div>
-                            <label className="text-[10px] font-bold text-slate-500 block mb-0.5">
-                              Academic Year
-                            </label>
-                            <input
-                              type="text"
-                              value={st.year}
-                              onChange={(e) => handleUpdateStudent(bt, "year", e.target.value)}
-                              placeholder="e.g. 3rd Year"
-                              className="w-full px-2 py-1 rounded-lg border border-slate-200 text-xs bg-white"
-                            />
-                          </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 block mb-0.5">
+                            Department / Branch
+                          </label>
+                          <input
+                            type="text"
+                            value={st.department}
+                            onChange={(e) => handleUpdateStudent(st.btId, "department", e.target.value)}
+                            placeholder="Department"
+                            className="w-full px-2 py-1 rounded-lg border border-slate-200 text-xs bg-white"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 block mb-0.5">
+                            Academic Year
+                          </label>
+                          <input
+                            type="text"
+                            value={st.year}
+                            onChange={(e) => handleUpdateStudent(st.btId, "year", e.target.value)}
+                            placeholder="e.g. 3rd Year"
+                            className="w-full px-2 py-1 rounded-lg border border-slate-200 text-xs bg-white"
+                          />
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -1002,7 +1112,7 @@ export function ManualCertificateModal({
             type="button"
             variant="outline"
             onClick={handleTriggerLivePreview}
-            disabled={parsedBtIds.length === 0}
+            disabled={verifiedStudents.length === 0}
             className="w-full sm:w-auto text-xs"
           >
             <Eye className="w-3.5 h-3.5 mr-1 text-slate-600" />
@@ -1024,15 +1134,15 @@ export function ManualCertificateModal({
               type="button"
               variant="primary"
               onClick={handlePublishManualCertificates}
-              disabled={isPublishing || parsedBtIds.length === 0}
+              disabled={isPublishing || verifiedStudents.length === 0}
               className="text-xs bg-[#17458F] hover:bg-[#123673] text-white font-bold"
             >
               {isPublishing ? (
-                <>Issuing {parsedBtIds.length} Certificates...</>
+                <>Issuing {verifiedStudents.length} Certificates...</>
               ) : (
                 <>
                   <Award className="w-3.5 h-3.5 mr-1" />
-                  Publish {parsedBtIds.length > 0 ? `${parsedBtIds.length} ` : ""}Certificates
+                  Publish {verifiedStudents.length > 0 ? `${verifiedStudents.length} ` : ""}Certificates
                 </>
               )}
             </Button>
