@@ -127,6 +127,19 @@ export default function AdminCertificatesPage() {
   );
 }
 
+// Helpers for comparing signatories state to determine unsaved changes
+function normalizeSignatoriesForComparison(sigs: CertificateSignatory[]): string {
+  if (!Array.isArray(sigs)) return "";
+  return JSON.stringify(
+    sigs.map((s) => ({
+      name: (s.name || "").trim(),
+      designation: (s.designation || "").trim(),
+      organization: (s.organization || "").trim(),
+      signatureImageUrl: s.signatureImageUrl || "",
+    }))
+  );
+}
+
 function AdminCertificatesContent() {
   const { user, isAdmin, isOwner, adminAccess } = useAuth();
   const isClubOwner = adminAccess?.role === "CLUB_OWNER" && adminAccess.active !== false;
@@ -172,11 +185,46 @@ function AdminCertificatesContent() {
   const [activeTab, setActiveTab] = useState<"generate" | "issued" | "signatures">("generate");
 
   // Institutional Signatures (Single Source of Truth)
-  const [savedSignatories, setSavedSignatories] = useState<CertificateSignatory[]>(
-    DEFAULT_INSTITUTIONAL_SIGNATORIES
-  );
+  const [savedSignatories, setSavedSignatories] = useState<CertificateSignatory[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cachedSettings = localStorage.getItem("src_certificate_settings");
+        if (cachedSettings) {
+          const parsed = JSON.parse(cachedSettings);
+          if (parsed?.defaultSignatories && Array.isArray(parsed.defaultSignatories) && parsed.defaultSignatories.length > 0) {
+            return parsed.defaultSignatories;
+          }
+        }
+      } catch {}
+    }
+    return DEFAULT_INSTITUTIONAL_SIGNATORIES;
+  });
+  const [persistedSignatoriesJson, setPersistedSignatoriesJson] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cachedSettings = localStorage.getItem("src_certificate_settings");
+        if (cachedSettings) {
+          const parsed = JSON.parse(cachedSettings);
+          if (parsed?.defaultSignatories && Array.isArray(parsed.defaultSignatories) && parsed.defaultSignatories.length > 0) {
+            return normalizeSignatoriesForComparison(parsed.defaultSignatories);
+          }
+        }
+      } catch {}
+    }
+    return "";
+  });
   const [isSavingTruthSignatures, setIsSavingTruthSignatures] = useState(false);
   const [truthSignaturesSuccess, setTruthSignaturesSuccess] = useState(false);
+
+  // Computes whether current on-screen institutional signatures are synchronized & saved to storage
+  const isSignaturesSaved = useMemo(() => {
+    if (isSavingTruthSignatures) return false;
+    if (truthSignaturesSuccess) return true;
+    if (!persistedSignatoriesJson) {
+      return savedSignatories.some((s) => Boolean(s.signatureImageUrl));
+    }
+    return normalizeSignatoriesForComparison(savedSignatories) === persistedSignatoriesJson;
+  }, [isSavingTruthSignatures, truthSignaturesSuccess, persistedSignatoriesJson, savedSignatories]);
 
   // Certificate Generator form states
   const [certType, setCertType] = useState<CertificateType>("PARTICIPATION");
@@ -270,6 +318,7 @@ function AdminCertificatesContent() {
       if (isMounted && settings?.defaultSignatories?.length > 0) {
         setSignatories(settings.defaultSignatories);
         setSavedSignatories(settings.defaultSignatories);
+        setPersistedSignatoriesJson(normalizeSignatoriesForComparison(settings.defaultSignatories));
       }
       if (isMounted && settings?.defaultCitationTemplate) {
         setCitationTemplate(settings.defaultCitationTemplate);
@@ -1230,12 +1279,14 @@ function AdminCertificatesContent() {
       });
       // Synchronize in-memory active generator signatories as well
       setSignatories(savedSignatories);
+      setPersistedSignatoriesJson(normalizeSignatoriesForComparison(savedSignatories));
       setTruthSignaturesSuccess(true);
       if (typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent("src_certificate_settings_updated", { detail: savedSignatories })
         );
       }
+      setTimeout(() => setTruthSignaturesSuccess(false), 5000);
     } catch (e) {
       console.error(e);
       alert("Failed to save authoritative institutional signatures. Please retry.");
@@ -2640,7 +2691,7 @@ function AdminCertificatesContent() {
                 onClick={handleSaveTruthSignatures}
                 disabled={isSavingTruthSignatures}
                 className={`text-xs shadow-xs font-bold px-4 py-2 cursor-pointer transition-all ${
-                  truthSignaturesSuccess
+                  isSignaturesSaved
                     ? "bg-emerald-600 hover:bg-emerald-700 text-white"
                     : "bg-[#17458F] hover:bg-[#123670] text-white"
                 }`}
@@ -2650,7 +2701,7 @@ function AdminCertificatesContent() {
                     <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
                     Saving...
                   </>
-                ) : truthSignaturesSuccess ? (
+                ) : isSignaturesSaved ? (
                   <>
                     <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 text-white" />
                     Saved
