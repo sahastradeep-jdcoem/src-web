@@ -643,6 +643,77 @@ function AdminCertificatesContent() {
     });
   }, [currentEvent]);
 
+  // Resolve active tenure object for session subtext
+  const currentTenureObj = useMemo(() => {
+    if (selectedTenureId && selectedTenureId !== "all") {
+      return tenuresList.find((t) => t.id === selectedTenureId) || null;
+    }
+    if (currentEvent) {
+      const resolved = resolveTenureForEvent(currentEvent, tenuresList);
+      if (resolved) return resolved;
+    }
+    return tenuresList.find((t) => t.isCurrent) || tenuresList[0] || null;
+  }, [selectedTenureId, tenuresList, currentEvent]);
+
+  // Compute session subtext under President (e.g. "Session 2026-27", "Session 2025-26")
+  const activeSessionSubtext = useMemo(() => {
+    if (!currentTenureObj) return "Session 2026-27";
+    const raw = currentTenureObj.label || currentTenureObj.academicYear || "";
+    const clean = raw.trim();
+    if (clean.toLowerCase().startsWith("session")) return clean;
+    const match = clean.match(/(\d{4})\s*[-–/]\s*(\d{2,4})/);
+    if (match) {
+      const startYear = match[1];
+      const endYear = match[2].length === 4 ? match[2].slice(-2) : match[2];
+      return `Session ${startYear}-${endYear}`;
+    }
+    return clean ? `Session ${clean}` : "Session 2026-27";
+  }, [currentTenureObj]);
+
+  // Automatically sync President's organization / session subtext across saved and active signatories
+  useEffect(() => {
+    if (!activeSessionSubtext) return;
+
+    setSavedSignatories((prev) => {
+      let changed = false;
+      const updated = prev.map((sig, idx) => {
+        const isPresident = idx === 0 || /president/i.test(sig.designation || sig.name || "");
+        if (isPresident && sig.organization !== activeSessionSubtext) {
+          changed = true;
+          return { ...sig, organization: activeSessionSubtext };
+        }
+        return sig;
+      });
+      return changed ? updated : prev;
+    });
+
+    setSignatories((prev) => {
+      let changed = false;
+      const updated = prev.map((sig, idx) => {
+        const isPresident = idx === 0 || /president/i.test(sig.designation || sig.name || "");
+        if (isPresident && sig.organization !== activeSessionSubtext) {
+          changed = true;
+          return { ...sig, organization: activeSessionSubtext };
+        }
+        return sig;
+      });
+      return changed ? updated : prev;
+    });
+  }, [activeSessionSubtext]);
+
+  // Listen for tenure changes dispatched across other admin tabs (e.g. /admin/tenures)
+  useEffect(() => {
+    const handleTenureChanged = (e: any) => {
+      if (e?.detail?.id) {
+        setSelectedTenureId(e.detail.id);
+      }
+    };
+    window.addEventListener("src_tenure_changed", handleTenureChanged as EventListener);
+    return () => {
+      window.removeEventListener("src_tenure_changed", handleTenureChanged as EventListener);
+    };
+  }, []);
+
   // 3. Auto Color Scheme & Logo Extraction when Selected Event Changes
   useEffect(() => {
     if (!currentEvent) return;
@@ -2526,7 +2597,7 @@ function AdminCertificatesContent() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {savedSignatories.map((sig, idx) => {
               const slotMeta = [
-                { title: "President, SRC", badge: "Executive Authority", defaultSub: "Session 2026-27" },
+                { title: "President, SRC", badge: "Executive Authority", defaultSub: activeSessionSubtext },
                 { title: "Faculty Coordinator (1)", badge: "Faculty In-Charge", defaultSub: "SRC, JDCOEM" },
                 { title: "Faculty Coordinator (2)", badge: "Faculty In-Charge", defaultSub: "SRC, JDCOEM" },
                 { title: "Dean (IQAC)", badge: "Institutional Authority", defaultSub: "IQAC" },

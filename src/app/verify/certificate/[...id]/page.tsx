@@ -150,6 +150,8 @@ export default function CertificateVerificationPage() {
   }
 
   const isRevoked = cert.status === "REVOKED";
+  const presidentSig = cert.signatories?.find((s) => /president/i.test(s.designation || s.name || ""));
+  const certSession = presidentSig?.organization || (cert.certificateNumber?.match(/SRC\/([^/]+)\//)?.[1] ? `Session ${cert.certificateNumber.match(/SRC\/([^/]+)\//)![1]}` : "Session 2026-27");
 
   return (
     <div className="min-h-screen bg-[#0A0F1D] text-slate-100 flex flex-col items-center justify-center py-8 sm:py-12 px-4 sm:px-6 relative">
@@ -192,7 +194,7 @@ export default function CertificateVerificationPage() {
                 </span>
               )}
               <span className="text-slate-600 text-xs">•</span>
-              <span className="text-xs text-slate-400 font-medium">Session 2026-27</span>
+              <span className="text-xs text-slate-400 font-medium">{certSession}</span>
             </div>
             <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-white tracking-tight pt-1">
               {cert.title || "CERTIFICATE OF PARTICIPATION"}

@@ -206,6 +206,42 @@ export function ManualCertificateModal({
     });
   }, [currentEvent]);
 
+  // Resolve active tenure label for session subtext in manual certificates
+  const modalActiveTenure = useMemo(() => {
+    if (selectedTenureId && selectedTenureId !== "all") {
+      return tenuresList.find((t) => t.id === selectedTenureId) || null;
+    }
+    if (currentEvent) {
+      const resolved = resolveTenureForEvent(currentEvent, tenuresList);
+      if (resolved) return resolved;
+    }
+    return tenuresList.find((t) => t.isCurrent) || tenuresList[0] || null;
+  }, [selectedTenureId, tenuresList, currentEvent]);
+
+  const modalActiveSessionSubtext = useMemo(() => {
+    if (!modalActiveTenure) return "Session 2026-27";
+    const raw = modalActiveTenure.label || modalActiveTenure.academicYear || "";
+    const clean = raw.trim();
+    if (clean.toLowerCase().startsWith("session")) return clean;
+    const match = clean.match(/(\d{4})\s*[-–/]\s*(\d{2,4})/);
+    if (match) {
+      const startYear = match[1];
+      const endYear = match[2].length === 4 ? match[2].slice(-2) : match[2];
+      return `Session ${startYear}-${endYear}`;
+    }
+    return clean ? `Session ${clean}` : "Session 2026-27";
+  }, [modalActiveTenure]);
+
+  const resolvedSignatories = useMemo(() => {
+    return (defaultSignatories || []).map((sig, idx) => {
+      const isPresident = idx === 0 || /president/i.test(sig.designation || sig.name || "");
+      if (isPresident) {
+        return { ...sig, organization: modalActiveSessionSubtext };
+      }
+      return sig;
+    });
+  }, [defaultSignatories, modalActiveSessionSubtext]);
+
   // Sync event changes to template styling
   useEffect(() => {
     if (!currentEvent) return;
@@ -457,7 +493,7 @@ export function ManualCertificateModal({
       posterUrl: currentEvent.posterImage || currentEvent.poster || "",
       colorPalette,
       citation: resolvedCitation,
-      signatories: defaultSignatories || [],
+      signatories: resolvedSignatories,
       issueDate,
       status: "PUBLISHED",
       verificationUrl: `${origin}/verify/certificate/preview-cert`,
@@ -556,7 +592,7 @@ export function ManualCertificateModal({
             posterUrl: currentEvent.posterImage || currentEvent.poster || "",
             colorPalette,
             citation: resolvedCitation,
-            signatories: defaultSignatories || [],
+            signatories: resolvedSignatories,
             issueDate,
             status: "PUBLISHED" as const,
             verificationUrl,
