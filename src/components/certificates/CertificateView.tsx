@@ -116,10 +116,11 @@ export function CertificateView({
     <div
       id={id}
       data-certificate-root
-      className={`relative w-full max-w-[1040px] aspect-[1.414/1] bg-white text-slate-900 rounded-[28px] shadow-2xl overflow-hidden select-none border border-slate-200/90 mx-auto flex flex-col justify-between p-11 print:shadow-none print:border-none print:m-0 print:w-full print:aspect-auto ${className}`}
+      className={`relative w-full max-w-[1040px] aspect-[1.414/1] text-slate-900 rounded-[28px] shadow-2xl overflow-hidden select-none border border-slate-200/90 mx-auto flex flex-col justify-between p-11 print:shadow-none print:border-none print:m-0 print:w-full print:aspect-auto ${className}`}
       style={{
         boxSizing: "border-box",
         minHeight: "560px",
+        background: "radial-gradient(ellipse at center, #FFFFFF 0%, #FAFCFF 70%, #F5F7FB 100%)",
       }}
     >
       {/* ------------------------------------------------------------- */}
@@ -132,29 +133,37 @@ export function CertificateView({
       {/* ------------------------------------------------------------- */}
       {/* ROYAL INSET DIPLOMA BORDERS (HIGH-END ACADEMIC PRESTIGE)      */}
       {/* ------------------------------------------------------------- */}
-      <div className="absolute inset-4 border border-slate-200/90 rounded-[22px] pointer-events-none z-10" />
+      <div className="absolute inset-3.5 border-[1.5px] border-slate-300/85 rounded-[22px] pointer-events-none z-10" />
       <div
-        className="absolute inset-5.5 border rounded-[18px] pointer-events-none z-10 opacity-35"
+        className="absolute inset-5 border border-dashed rounded-[18px] pointer-events-none z-10 opacity-35"
         style={{ borderColor: palette.secondary }}
       />
+      <div
+        className="absolute inset-[26px] border-[0.75px] rounded-[14px] pointer-events-none z-10 opacity-40"
+        style={{ borderColor: palette.accent }}
+      />
 
-      {/* Corner Bracket Accents (Top-Left, Top-Right, Bottom-Left, Bottom-Right) */}
-      <div
-        className="absolute top-4 left-4 w-4 h-4 border-t-2 border-l-2 rounded-tl-sm pointer-events-none z-10 opacity-70"
-        style={{ borderColor: palette.accent }}
-      />
-      <div
-        className="absolute top-4 right-4 w-4 h-4 border-t-2 border-r-2 rounded-tr-sm pointer-events-none z-10 opacity-70"
-        style={{ borderColor: palette.accent }}
-      />
-      <div
-        className="absolute bottom-4 left-4 w-4 h-4 border-b-2 border-l-2 rounded-bl-sm pointer-events-none z-10 opacity-70"
-        style={{ borderColor: palette.accent }}
-      />
-      <div
-        className="absolute bottom-4 right-4 w-4 h-4 border-b-2 border-r-2 rounded-br-sm pointer-events-none z-10 opacity-70"
-        style={{ borderColor: palette.accent }}
-      />
+      {/* Engraved Victorian Corner Rosette Filigrees (Top-Left, Top-Right, Bottom-Left, Bottom-Right) */}
+      <div className="absolute top-3.5 left-3.5 w-6 h-6 pointer-events-none z-10">
+        <div className="absolute top-0 left-0 w-6 h-6 border-t-[2px] border-l-[2px] rounded-tl-[8px]" style={{ borderColor: palette.accent, opacity: 0.85 }} />
+        <div className="absolute top-1.5 left-1.5 w-3.5 h-3.5 border-t border-l rounded-tl-[4px]" style={{ borderColor: palette.secondary, opacity: 0.65 }} />
+        <div className="absolute top-2 left-2 w-1.5 h-1.5 rotate-45 rounded-[0.5px]" style={{ backgroundColor: palette.accent, opacity: 0.95 }} />
+      </div>
+      <div className="absolute top-3.5 right-3.5 w-6 h-6 pointer-events-none z-10">
+        <div className="absolute top-0 right-0 w-6 h-6 border-t-[2px] border-r-[2px] rounded-tr-[8px]" style={{ borderColor: palette.accent, opacity: 0.85 }} />
+        <div className="absolute top-1.5 right-1.5 w-3.5 h-3.5 border-t border-r rounded-tr-[4px]" style={{ borderColor: palette.secondary, opacity: 0.65 }} />
+        <div className="absolute top-2 right-2 w-1.5 h-1.5 rotate-45 rounded-[0.5px]" style={{ backgroundColor: palette.accent, opacity: 0.95 }} />
+      </div>
+      <div className="absolute bottom-3.5 left-3.5 w-6 h-6 pointer-events-none z-10">
+        <div className="absolute bottom-0 left-0 w-6 h-6 border-b-[2px] border-l-[2px] rounded-bl-[8px]" style={{ borderColor: palette.accent, opacity: 0.85 }} />
+        <div className="absolute bottom-1.5 left-1.5 w-3.5 h-3.5 border-b border-l rounded-bl-[4px]" style={{ borderColor: palette.secondary, opacity: 0.65 }} />
+        <div className="absolute bottom-2 left-2 w-1.5 h-1.5 rotate-45 rounded-[0.5px]" style={{ backgroundColor: palette.accent, opacity: 0.95 }} />
+      </div>
+      <div className="absolute bottom-3.5 right-3.5 w-6 h-6 pointer-events-none z-10">
+        <div className="absolute bottom-0 right-0 w-6 h-6 border-b-[2px] border-r-[2px] rounded-br-[8px]" style={{ borderColor: palette.accent, opacity: 0.85 }} />
+        <div className="absolute bottom-1.5 right-1.5 w-3.5 h-3.5 border-b border-r rounded-br-[4px]" style={{ borderColor: palette.secondary, opacity: 0.65 }} />
+        <div className="absolute bottom-2 right-2 w-1.5 h-1.5 rotate-45 rounded-[0.5px]" style={{ backgroundColor: palette.accent, opacity: 0.95 }} />
+      </div>
 
       {/* ------------------------------------------------------------- */}
       {/* DYNAMIC FLUID WAVE CORNER DECORATIONS (PERIPHERAL CORNERS ONLY) */}
@@ -220,6 +229,24 @@ export function CertificateView({
           strokeLinecap="round"
         />
 
+        {/* Shimmering Gold Foil Contour Ribbons */}
+        <path
+          d="M160 237C200 202 235 167 260 122C285 80 305 40 318 10"
+          stroke="#DFB76C"
+          strokeWidth="1.5"
+          strokeOpacity="0.85"
+          strokeLinecap="round"
+        />
+        <path
+          d="M200 237C235 205 260 175 278 135C295 95 308 60 318 35"
+          stroke="#F5DEB3"
+          strokeWidth="1"
+          strokeOpacity="0.6"
+          strokeLinecap="round"
+        />
+
+        <circle cx="245" cy="165" r="1.5" fill="#DFB76C" fillOpacity="0.75" />
+        <circle cx="275" cy="115" r="1.5" fill="#DFB76C" fillOpacity="0.8" />
         <circle cx="265" cy="140" r="1.5" fill="#FFFFFF" fillOpacity="0.5" />
         <circle cx="290" cy="95" r="1.5" fill="#FFFFFF" fillOpacity="0.6" />
       </svg>
@@ -257,7 +284,39 @@ export function CertificateView({
           strokeOpacity="0.45"
           strokeLinecap="round"
         />
+        {/* Shimmering Gold Accent Contour */}
+        <path
+          d="M-15 110C12 125 35 145 75 165"
+          stroke="#DFB76C"
+          strokeWidth="1.5"
+          strokeOpacity="0.85"
+          strokeLinecap="round"
+        />
+        <circle cx="45" cy="120" r="1.5" fill="#DFB76C" fillOpacity="0.75" />
       </svg>
+
+      {/* Diploma Security Guilloché Concentric Inset Rings */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+        <div
+          className="w-[520px] h-[520px] rounded-full border border-dashed flex items-center justify-center opacity-[0.035]"
+          style={{ borderColor: palette.primary }}
+        >
+          <div
+            className="w-[450px] h-[450px] rounded-full border border-dotted flex items-center justify-center"
+            style={{ borderColor: palette.secondary }}
+          >
+            <div
+              className="w-[380px] h-[380px] rounded-full border-[1.5px] border-dashed flex items-center justify-center"
+              style={{ borderColor: palette.primary }}
+            >
+              <div
+                className="w-[310px] h-[310px] rounded-full border border-dotted"
+                style={{ borderColor: palette.accent }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Subtle background crest watermark */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] z-0">
@@ -342,16 +401,25 @@ export function CertificateView({
           </div>
         </div>
 
-        {/* Center: Organizing Club Logo (Fills the entire golden circle, no internal padding) */}
+        {/* Center: Organizing Club Logo (Guild Medallion Seal) */}
         {clubLogoSrc && (
           <div className="flex flex-col items-center justify-center shrink-0 px-2">
-            <div className="relative h-16 w-16 rounded-full overflow-hidden bg-white shadow-md border-2 border-amber-500 ring-4 ring-amber-300/40 flex items-center justify-center">
-              <img
-                src={clubLogoSrc}
-                alt={certificate.organizerClub || "Event Club"}
-                crossOrigin="anonymous"
-                className="w-full h-full object-cover rounded-full"
-              />
+            <div
+              className="p-[2.5px] rounded-full shadow-md flex items-center justify-center"
+              style={{
+                background: "linear-gradient(135deg, #ECC878 0%, #D4AF37 40%, #A67C1E 70%, #F5DEB3 100%)",
+              }}
+            >
+              <div className="p-[1.5px] rounded-full bg-slate-900/10 flex items-center justify-center">
+                <div className="relative h-16 w-16 rounded-full overflow-hidden bg-white shadow-xs border-2 border-amber-500/90 flex items-center justify-center">
+                  <img
+                    src={clubLogoSrc}
+                    alt={certificate.organizerClub || "Event Club"}
+                    crossOrigin="anonymous"
+                    className="w-full h-full object-cover rounded-full"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -442,20 +510,41 @@ export function CertificateView({
             {certificate.recipientName || "Participant Name"}
           </h2>
 
-          {/* Ornamental Divider with Centered Diamond */}
-          <div className="flex items-center justify-center gap-3 w-80 mx-auto">
+          {/* Royal Diploma Ornamental Divider */}
+          <div className="flex items-center justify-center gap-2 w-80 mx-auto">
             <div
-              className="h-[1.5px] flex-1 rounded-full opacity-65"
+              className="h-[1.5px] flex-1 rounded-full opacity-60"
               style={{
                 background: `linear-gradient(to right, transparent, ${palette.secondary})`,
               }}
             />
             <div
-              className="w-2.5 h-2.5 rotate-45 rounded-[1px] shadow-xs shrink-0"
+              className="w-1 h-1 rounded-full opacity-50 shrink-0"
               style={{ backgroundColor: palette.secondary }}
             />
             <div
-              className="h-[1.5px] flex-1 rounded-full opacity-65"
+              className="w-2 h-2 rotate-45 rounded-[0.5px] opacity-75 shrink-0"
+              style={{ backgroundColor: palette.secondary }}
+            />
+            <div
+              className="w-3 h-3 rotate-45 rounded-[1px] shadow-xs shrink-0 flex items-center justify-center"
+              style={{
+                backgroundColor: palette.secondary,
+                boxShadow: `0 0 6px ${palette.borderGlow || "rgba(212,175,55,0.3)"}`,
+              }}
+            >
+              <div className="w-1 h-1 rounded-[0.5px] bg-white/90" />
+            </div>
+            <div
+              className="w-2 h-2 rotate-45 rounded-[0.5px] opacity-75 shrink-0"
+              style={{ backgroundColor: palette.secondary }}
+            />
+            <div
+              className="w-1 h-1 rounded-full opacity-50 shrink-0"
+              style={{ backgroundColor: palette.secondary }}
+            />
+            <div
+              className="h-[1.5px] flex-1 rounded-full opacity-60"
               style={{
                 background: `linear-gradient(to left, transparent, ${palette.secondary})`,
               }}
