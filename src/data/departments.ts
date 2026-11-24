@@ -74,6 +74,231 @@ export const DEPARTMENT_SHORT_NAMES: Record<string, string> = {
 };
 
 /**
+ * Returns short acronym form for departments (e.g. CSE, AI, IT, DS, CY, CE, EE, ME, ETC, MBA, BBA, MCA, DIP, BCA)
+ */
+export function getDepartmentShortName(deptName?: string | null): string {
+  if (!deptName) return "";
+  const trimmed = deptName.trim();
+  if (DEPARTMENT_SHORT_NAMES[trimmed]) {
+    return DEPARTMENT_SHORT_NAMES[trimmed];
+  }
+  
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("data science") || lower === "ds") return "DS";
+  if (lower.includes("cyber security") || lower.includes("cyber") || lower === "cy") return "CY";
+  if (lower.includes("artificial intelligence") || lower === "ai") return "AI";
+  if (lower.includes("computer science") || lower === "cse") return "CSE";
+  if (lower.includes("information tech") || lower === "it") return "IT";
+  if (lower.includes("civil") || lower === "ce") return "CE";
+  if (lower.includes("electrical") || lower === "ee") return "EE";
+  if (lower.includes("mechanical") || lower === "me") return "ME";
+  if (lower.includes("telecommunication") || lower.includes("etc") || lower.includes("extc")) return "ETC";
+  if (lower.includes("master of business") || lower === "mba") return "MBA";
+  if (lower.includes("bachelor of business") || lower === "bba") return "BBA";
+  if (lower.includes("bachelor of computer") || lower === "bca") return "BCA";
+  if (lower.includes("master of computer") || lower === "mca") return "MCA";
+  if (lower.includes("diploma") || lower === "dip") return "DIP";
+  if (lower.includes("basic science") || lower.includes("humanities") || lower === "bsh") return "BSH";
+
+  return trimmed;
+}
+
+/**
+ * Intelligently resolves legacy, variant, or external degree strings into an accredited canonical department name.
+ * e.g. "Data Science Engineering" -> "CSE(Data Science)"
+ * e.g. "B.Tech - Bachelor of Technology • JD College of Engineering and Management" -> "Computer Science and Engineering"
+ */
+export function resolveCanonicalDepartmentName(
+  deptName?: string | null,
+  activeDepts?: string[]
+): string {
+  const list = activeDepts && activeDepts.length > 0 ? activeDepts : DEFAULT_DEPARTMENTS;
+  if (!deptName) {
+    return list[0] || DEFAULT_DEPARTMENTS[0] || "Computer Science and Engineering";
+  }
+
+  const trimmed = deptName.trim();
+  if (!trimmed) {
+    return list[0] || DEFAULT_DEPARTMENTS[0] || "Computer Science and Engineering";
+  }
+
+  // 1. Exact case-insensitive match
+  const exactMatch = list.find((d) => d.toLowerCase() === trimmed.toLowerCase());
+  if (exactMatch) return exactMatch;
+
+  // 1.5. If deptName contains bullet separator (e.g. "B.Tech - Bachelor of Technology • JDCOEM"), inspect segments
+  if (trimmed.includes("•")) {
+    const parts = trimmed.split("•").map((p) => p.trim());
+    for (const part of parts) {
+      const match = list.find((d) => d.toLowerCase() === part.toLowerCase());
+      if (match) return match;
+      const partLower = part.toLowerCase();
+      if (partLower.includes("computer science") || partLower === "cse") {
+        const cseMatch = list.find(
+          (d) =>
+            d.toLowerCase().includes("computer science") &&
+            !d.toLowerCase().includes("data") &&
+            !d.toLowerCase().includes("artificial") &&
+            !d.toLowerCase().includes("cyber")
+        );
+        if (cseMatch) return cseMatch;
+      }
+      if (partLower.includes("data science") || partLower === "ds") {
+        const dsMatch = list.find((d) => d.toLowerCase().includes("data science") || d.toLowerCase() === "ds");
+        if (dsMatch) return dsMatch;
+      }
+      if (partLower.includes("artificial intelligence") || partLower === "ai") {
+        const aiMatch = list.find((d) => d.toLowerCase().includes("artificial intelligence"));
+        if (aiMatch) return aiMatch;
+      }
+      if (partLower.includes("information tech") || partLower === "it") {
+        const itMatch = list.find((d) => d.toLowerCase().includes("information tech"));
+        if (itMatch) return itMatch;
+      }
+      if (partLower.includes("civil") || partLower === "ce") {
+        const ceMatch = list.find((d) => d.toLowerCase().includes("civil"));
+        if (ceMatch) return ceMatch;
+      }
+      if (partLower.includes("mechanical") || partLower === "me") {
+        const meMatch = list.find((d) => d.toLowerCase().includes("mechanical"));
+        if (meMatch) return meMatch;
+      }
+      if (partLower.includes("electrical") || partLower === "ee") {
+        const eeMatch = list.find((d) => d.toLowerCase().includes("electrical"));
+        if (eeMatch) return eeMatch;
+      }
+      if (partLower.includes("telecommunication") || partLower.includes("etc") || partLower.includes("extc")) {
+        const etcMatch = list.find((d) => d.toLowerCase().includes("telecommunication") || d.toLowerCase().includes("etc"));
+        if (etcMatch) return etcMatch;
+      }
+      if (partLower.includes("bachelor of business") || partLower === "bba") {
+        const bbaMatch = list.find((d) => d.toLowerCase().includes("bba") || d.toLowerCase().includes("bachelor of business"));
+        if (bbaMatch) return bbaMatch;
+      }
+      if (partLower.includes("master of business") || partLower === "mba") {
+        const mbaMatch = list.find((d) => d.toLowerCase().includes("mba") || d.toLowerCase().includes("master of business"));
+        if (mbaMatch) return mbaMatch;
+      }
+      if (partLower.includes("bachelor of computer") || partLower === "bca") {
+        const bcaMatch = list.find((d) => d.toLowerCase().includes("bca") || d.toLowerCase().includes("bachelor of computer"));
+        if (bcaMatch) return bcaMatch;
+      }
+      if (partLower.includes("master of computer") || partLower === "mca") {
+        const mcaMatch = list.find((d) => d.toLowerCase().includes("mca") || d.toLowerCase().includes("master of computer"));
+        if (mcaMatch) return mcaMatch;
+      }
+      if (partLower.includes("diploma") || partLower.includes("poly") || partLower === "dip") {
+        const dipMatch = list.find((d) => d.toLowerCase().includes("diploma") || d.toLowerCase().includes("poly"));
+        if (dipMatch) return dipMatch;
+      }
+    }
+  }
+
+  // 2. Specific alias normalization
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("data science") || lower === "ds" || lower.includes("cse(ds)") || lower.includes("cse (ds)")) {
+    const dsMatch = list.find((d) => d.toLowerCase().includes("data science") || d.toLowerCase().includes("(ds)"));
+    if (dsMatch) return dsMatch;
+  }
+
+  if (lower.includes("cyber security") || lower.includes("cyber") || lower === "cy") {
+    const cyMatch = list.find((d) => d.toLowerCase().includes("cyber"));
+    if (cyMatch) return cyMatch;
+  }
+
+  if (lower.includes("artificial intelligence") || lower === "ai" || lower.includes("cse(ai)") || lower.includes("cse (ai)")) {
+    const aiMatch = list.find((d) => d.toLowerCase().includes("artificial intelligence") || d.toLowerCase().includes("(ai)"));
+    if (aiMatch) return aiMatch;
+  }
+
+  if (lower.includes("information technology") || lower === "it" || lower.includes("cse(it)")) {
+    const itMatch = list.find((d) => d.toLowerCase().includes("information technology") || d.toLowerCase().includes("information tech"));
+    if (itMatch) return itMatch;
+  }
+
+  if (lower.includes("computer science") || lower === "cse") {
+    const cseMatch = list.find(
+      (d) =>
+        d.toLowerCase().includes("computer science") &&
+        !d.toLowerCase().includes("data") &&
+        !d.toLowerCase().includes("artificial") &&
+        !d.toLowerCase().includes("cyber")
+    );
+    if (cseMatch) return cseMatch;
+  }
+
+  if (lower.includes("civil") || lower === "ce") {
+    const ceMatch = list.find((d) => d.toLowerCase().includes("civil") || d.toLowerCase() === "ce");
+    if (ceMatch) return ceMatch;
+  }
+
+  if (lower.includes("mechanical") || lower === "me") {
+    const meMatch = list.find((d) => d.toLowerCase().includes("mechanical") || d.toLowerCase() === "me");
+    if (meMatch) return meMatch;
+  }
+
+  if (lower.includes("electrical") || lower === "ee") {
+    const eeMatch = list.find((d) => d.toLowerCase().includes("electrical") || d.toLowerCase() === "ee");
+    if (eeMatch) return eeMatch;
+  }
+
+  if (lower.includes("telecommunication") || lower.includes("etc") || lower.includes("extc")) {
+    const etcMatch = list.find((d) => d.toLowerCase().includes("telecommunication") || d.toLowerCase().includes("etc"));
+    if (etcMatch) return etcMatch;
+  }
+
+  if (lower.includes("bachelor of business") || lower === "bba") {
+    const bbaMatch = list.find((d) => d.toLowerCase().includes("bba") || d.toLowerCase().includes("bachelor of business"));
+    if (bbaMatch) return bbaMatch;
+  }
+
+  if (lower.includes("master of business") || lower === "mba") {
+    const mbaMatch = list.find((d) => d.toLowerCase().includes("mba") || d.toLowerCase().includes("master of business"));
+    if (mbaMatch) return mbaMatch;
+  }
+
+  if (lower.includes("bachelor of computer") || lower === "bca") {
+    const bcaMatch = list.find((d) => d.toLowerCase().includes("bca") || d.toLowerCase().includes("bachelor of computer"));
+    if (bcaMatch) return bcaMatch;
+  }
+
+  if (lower.includes("master of computer") || lower === "mca") {
+    const mcaMatch = list.find((d) => d.toLowerCase().includes("mca") || d.toLowerCase().includes("master of computer"));
+    if (mcaMatch) return mcaMatch;
+  }
+
+  if (lower.includes("diploma") || lower.includes("poly") || lower === "dip") {
+    const dipMatch = list.find((d) => d.toLowerCase().includes("diploma") || d.toLowerCase().includes("poly"));
+    if (dipMatch) return dipMatch;
+  }
+
+  if (lower.includes("basic science") || lower.includes("humanities") || lower === "bsh" || lower === "bshd") {
+    const bshMatch = list.find((d) => d.toLowerCase().includes("basic science") || d.toLowerCase().includes("humanities") || d.toLowerCase().includes("bsh"));
+    if (bshMatch) return bshMatch;
+  }
+
+  // 3. Acronym code match
+  const code = getDepartmentShortName(trimmed);
+  if (code) {
+    const codeMatch = list.find((d) => getDepartmentShortName(d) === code);
+    if (codeMatch) return codeMatch;
+  }
+
+  // 4. If string is a known external degree format without matching branch (e.g. "B.Tech - Bachelor of Technology • JDCOEM")
+  if (
+    trimmed.includes("•") || 
+    lower.startsWith("b.tech") || 
+    lower.startsWith("b.e.") || 
+    lower.startsWith("bachelor of technology") ||
+    lower.startsWith("bachelor of engineering")
+  ) {
+    return list.find((d) => d.includes("Computer Science")) || list[0] || "Computer Science and Engineering";
+  }
+
+  return trimmed;
+}
+
+/**
  * Department-specific College ID format examples for JDCOEM
  */
 export const DEPARTMENT_BT_ID_EXAMPLES: Record<string, string> = {

@@ -19,6 +19,7 @@ import {
   getClubLeaders
 } from "./councilStore";
 import { safeStorageSet } from "@/lib/safeStorage";
+import { resolveCanonicalDepartmentName } from "@/data/departments";
 
 export const USERS_STORAGE_KEY = "src_registered_users";
 
@@ -959,9 +960,20 @@ export function getStoredUsers(): RegisteredUserRecord[] {
     .map((user) => {
       const cleanBtId = user.btId ? user.btId.trim().toUpperCase() : "";
       const designationInfo = cleanBtId ? resolveDesignationByBtId(cleanBtId, user.name || user.email, rosterCache) : null;
+      const isFaculty = user.role === "FACULTY" || user.userType === "FACULTY" || Boolean(user.employeeId);
+      const isExternal = isExternalUser(user);
+      const isJdcoem = !isFaculty && !isExternal;
+      const sanitizedDept = isJdcoem && user.department
+        ? resolveCanonicalDepartmentName(user.department)
+        : user.department;
+
       return {
         ...user,
         btId: cleanBtId,
+        department: sanitizedDept,
+        collegeName: isJdcoem ? "JDCOEM Nagpur" : user.collegeName,
+        degree: isJdcoem ? "" : user.degree,
+        customBranch: isJdcoem ? "" : user.customBranch,
         designationBadge: designationInfo 
           ? designationInfo.designationBadge 
           : (cleanBtId ? undefined : (formatDesignationBadge(user.designationBadge) || undefined)),
@@ -1055,13 +1067,15 @@ export function mergeRemoteUsers(remoteUsers: Partial<RegisteredUserRecord>[]): 
         firstName: r.firstName || localMatch?.firstName || "",
         lastName: r.lastName || localMatch?.lastName || "",
         btId: cleanBtId,
-        department: r.department || localMatch?.department || (isRemoteExplicitExternal ? "External Stream" : "Computer Science and Engineering"),
+        department: isJdcoemStudent 
+          ? resolveCanonicalDepartmentName(r.department || localMatch?.department || "Computer Science and Engineering")
+          : (r.department || localMatch?.department || (isRemoteExplicitExternal ? "External Stream" : "Computer Science and Engineering")),
         year: isRemoteExplicitFaculty ? "" : (r.year || localMatch?.year || "3rd Year"),
         phone: r.phone || localMatch?.phone || "",
-        collegeName: resolvedCollegeName,
+        collegeName: isJdcoemStudent ? "JDCOEM Nagpur" : resolvedCollegeName,
         city: isRemoteExplicitExternal ? (r.city || localMatch?.city || "") : (isJdcoemStudent ? (r.city || localMatch?.city || "Nagpur") : (r.city || localMatch?.city || "")),
-        degree: isRemoteExplicitExternal ? (r.degree || r.customBranch || localMatch?.degree || "") : "",
-        customBranch: isRemoteExplicitExternal ? (r.customBranch || r.degree || localMatch?.customBranch || "") : "",
+        degree: isJdcoemStudent ? "" : (isRemoteExplicitExternal ? (r.degree || r.customBranch || localMatch?.degree || "") : ""),
+        customBranch: isJdcoemStudent ? "" : (isRemoteExplicitExternal ? (r.customBranch || r.degree || localMatch?.customBranch || "") : ""),
         title: r.title || localMatch?.title,
         facultyDesignation: r.facultyDesignation || localMatch?.facultyDesignation,
         facultyDepartment: r.facultyDepartment || localMatch?.facultyDepartment,
@@ -1224,7 +1238,9 @@ export function saveRegisteredUser(user: Partial<RegisteredUserRecord>): void {
       firstName: user.firstName !== undefined ? user.firstName : (existing?.firstName || ""),
       lastName: user.lastName !== undefined ? user.lastName : (existing?.lastName || ""),
       btId: cleanBtId,
-      department: user.department || existing?.department || "Basic Science & Humanities Dept.",
+      department: isJdcoemStudent
+        ? resolveCanonicalDepartmentName(user.department || existing?.department || "Basic Science & Humanities Dept.")
+        : (user.department || existing?.department || "Basic Science & Humanities Dept."),
       year: isExplicitFaculty ? "" : (user.year !== undefined ? user.year : (existing?.year || "1st Year")),
       phone: user.phone !== undefined ? user.phone : (existing?.phone || ""),
       profileCompleted: user.profileCompleted !== undefined ? user.profileCompleted : (existing?.profileCompleted !== undefined ? existing.profileCompleted : true),

@@ -185,13 +185,18 @@ export default function AdminUsersPage() {
     const initialUserType: "JDCOEM_STUDENT" | "FACULTY" | "EXTERNAL_STUDENT" = 
       isFaculty ? "FACULTY" : (isExternal ? "EXTERNAL_STUDENT" : "JDCOEM_STUDENT");
 
+    const resolvedDept = resolveCanonicalDepartmentName(u.facultyDepartment || u.department || "Computer Science and Engineering", departments);
+    const safeDept = departments.includes(resolvedDept)
+      ? resolvedDept
+      : (departments.find((d) => d.includes("Computer Science")) || departments[0] || "Computer Science and Engineering");
+
     setUserToEdit(u);
     setEditUserForm({
       displayName: u.displayName || "",
       email: u.email || "",
       btId: isFaculty || isExternal ? "" : (u.btId || ""),
       employeeId: u.employeeId || "",
-      department: resolveCanonicalDepartmentName(u.facultyDepartment || u.department || "Computer Science and Engineering", departments),
+      department: isExternal ? (u.customBranch || u.department || safeDept) : safeDept,
       year: u.year || "3rd Year",
       phone: u.phone || "",
       role: isOwner ? "OWNER" : (u.role === "COUNCIL_ADMIN" ? "COUNCIL_ADMIN" : isFaculty ? "FACULTY" : "STUDENT"),
@@ -200,8 +205,8 @@ export default function AdminUsersPage() {
       title: u.title || "Prof.",
       collegeName: u.collegeName || (isExternal ? "Other College" : "JDCOEM Nagpur"),
       city: u.city || "",
-      degree: u.degree || "",
-      customBranch: u.customBranch || "",
+      degree: isExternal ? (u.degree || "") : "",
+      customBranch: isExternal ? (u.customBranch || "") : "",
     });
   };
 
@@ -226,6 +231,11 @@ export default function AdminUsersPage() {
       targetRole = "STUDENT";
     }
 
+    const canonicalJdcoemDept = resolveCanonicalDepartmentName(editUserForm.department, departments);
+    const safeJdcoemDept = departments.includes(canonicalJdcoemDept)
+      ? canonicalJdcoemDept
+      : (departments.find((d) => d.includes("Computer Science")) || departments[0] || "Computer Science and Engineering");
+
     const updatedRecord: RegisteredUserRecord = {
       ...userToEdit,
       displayName: editUserForm.displayName.trim(),
@@ -233,7 +243,7 @@ export default function AdminUsersPage() {
       btId: cleanBt,
       employeeId: cleanEmpId || undefined,
       department: isUserJdcoem
-        ? editUserForm.department
+        ? safeJdcoemDept
         : isUserFaculty
         ? editUserForm.department
         : (editUserForm.customBranch.trim() || editUserForm.department || "General Stream"),
@@ -249,9 +259,9 @@ export default function AdminUsersPage() {
       collegeName: isUserExternal 
         ? (editUserForm.collegeName.trim() || "Other College") 
         : "JDCOEM Nagpur",
-      degree: isUserExternal ? editUserForm.degree.trim() : undefined,
-      customBranch: isUserExternal ? editUserForm.customBranch.trim() : undefined,
-      city: isUserExternal ? editUserForm.city.trim() : (userToEdit.city || undefined),
+      degree: isUserExternal ? editUserForm.degree.trim() : "",
+      customBranch: isUserExternal ? editUserForm.customBranch.trim() : "",
+      city: isUserExternal ? editUserForm.city.trim() : (userToEdit.city || "Nagpur"),
       firstName: parts[0] || userToEdit.firstName || "",
       lastName: parts.slice(1).join(" ") || userToEdit.lastName || "",
       profileCompleted: isUserFaculty 
@@ -279,6 +289,9 @@ export default function AdminUsersPage() {
 
     saveRegisteredUser(updatedRecord);
     setUsers(getStoredUsers());
+    if (selectedUser && (selectedUser.uid === updatedRecord.uid || (selectedUser.email && updatedRecord.email && selectedUser.email.toLowerCase() === updatedRecord.email.toLowerCase()))) {
+      setSelectedUser(updatedRecord);
+    }
     showNotice(
       isOwner 
         ? `Successfully updated ${updatedRecord.displayName} as System Owner.`
@@ -631,7 +644,11 @@ export default function AdminUsersPage() {
         "Flag Reason": validation.isFlagged ? (validation.reason || "Format mismatch") : "N/A",
         "College / University": u.collegeName || "JDCOEM Nagpur",
         "City": u.city || "Nagpur",
-        "Department / Branch": u.facultyDepartment || u.department || u.customBranch || "",
+        "Department / Branch": u.role === "FACULTY" || u.userType === "FACULTY"
+          ? (u.facultyDepartment || u.department || "")
+          : isExternalUser(u)
+          ? (u.degree || u.customBranch || u.department || "")
+          : (resolveCanonicalDepartmentName(u.department, departments) || ""),
         "Academic Year / Role": u.facultyDesignation || u.year || "",
         "Faculty Status": u.facultyApprovalStatus || "N/A",
         "WhatsApp Contact": u.phone || "",
@@ -1107,7 +1124,7 @@ export default function AdminUsersPage() {
 
                       {/* Department & Specialization */}
                       <td className="py-4 px-6">
-                        <div className="text-slate-900 font-bold max-w-xs truncate" title={u.facultyDepartment || u.department || u.customBranch}>
+                        <div className="text-slate-900 font-bold max-w-xs truncate" title={isFaculty ? (u.facultyDepartment || u.department) : isExternal ? (u.degree || u.customBranch || u.department) : resolveCanonicalDepartmentName(u.department, departments)}>
                           {isFaculty ? (
                             <span>{u.facultyDepartment || u.department || "Academic Department"}</span>
                           ) : isExternal ? (
@@ -1115,10 +1132,10 @@ export default function AdminUsersPage() {
                           ) : (
                             <>
                               <span className="lg:hidden inline-block px-2 py-0.5 rounded-md bg-slate-100 text-[#17458F] font-mono text-[11px] font-bold">
-                                {getDepartmentShortName(u.department || "Basic Science & Humanities Dept.")}
+                                {getDepartmentShortName(resolveCanonicalDepartmentName(u.department, departments))}
                               </span>
                               <span className="hidden lg:inline">
-                                {u.department || "Basic Science & Humanities"}
+                                {resolveCanonicalDepartmentName(u.department, departments)}
                               </span>
                             </>
                           )}
@@ -1575,7 +1592,11 @@ export default function AdminUsersPage() {
               <div className="p-3.5 rounded-xl bg-slate-50 space-y-1 border border-slate-100">
                 <span className="text-slate-400 uppercase text-[10px] font-bold">Department / Stream</span>
                 <p className="font-bold text-slate-900">
-                  {selectedUser.facultyDepartment || selectedUser.customBranch || selectedUser.department || "General Stream"}
+                  {selectedUser.role === "FACULTY" || selectedUser.userType === "FACULTY" || Boolean(selectedUser.employeeId)
+                    ? (selectedUser.facultyDepartment || selectedUser.department || "Academic Department")
+                    : isExternalUser(selectedUser)
+                    ? (selectedUser.degree || selectedUser.customBranch || selectedUser.department || "General Stream")
+                    : resolveCanonicalDepartmentName(selectedUser.department, departments)}
                 </p>
               </div>
 
@@ -2118,12 +2139,21 @@ export default function AdminUsersPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setEditUserForm((prev) => ({
-                      ...prev,
-                      userType: "JDCOEM_STUDENT",
-                      role: prev.role === "FACULTY" ? "STUDENT" : prev.role,
-                      collegeName: "JDCOEM Nagpur",
-                    }));
+                    setEditUserForm((prev) => {
+                      const cleanDept = resolveCanonicalDepartmentName(prev.department, departments);
+                      const safeDept = departments.includes(cleanDept)
+                        ? cleanDept
+                        : (departments.find((d) => d.includes("Computer Science")) || departments[0] || "Computer Science and Engineering");
+                      return {
+                        ...prev,
+                        userType: "JDCOEM_STUDENT",
+                        role: prev.role === "FACULTY" ? "STUDENT" : prev.role,
+                        collegeName: "JDCOEM Nagpur",
+                        department: safeDept,
+                        degree: "",
+                        customBranch: "",
+                      };
+                    });
                   }}
                   className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition-all text-left flex items-center gap-2.5 cursor-pointer ${
                     editUserForm.userType === "JDCOEM_STUDENT"
