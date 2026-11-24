@@ -29,7 +29,7 @@ import {
   CertificateSignatory,
   CertificateColorPalette,
 } from "@/types/certificates";
-import { findStudentByBtId, syncUsersFromFirestore } from "@/lib/usersStore";
+import { findStudentByBtId, lookupUserByBtId, syncUsersFromFirestore } from "@/lib/usersStore";
 import { resolveTenureForEvent } from "@/lib/eventsStore";
 import {
   generateCertificateNumber,
@@ -261,12 +261,15 @@ export function ManualCertificateModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Process entered BT IDs on Enter key or button click
-  const handleProcessBtIds = () => {
+  const handleProcessBtIds = async () => {
     const raw = bulkBtInput.trim();
     if (!raw) return;
 
-    // Split by commas, newlines, semicolons, or spaces
-    const tokens = raw
+    // Normalize patterns like "bt 23" -> "BT23"
+    const normalizedRaw = raw.replace(/\b([a-zA-Z]{2,5})\s+(\d+)/g, "$1$2");
+
+    // Split by commas, newlines, semicolons, or whitespace
+    const tokens = normalizedRaw
       .split(/[\n,;\s]+/)
       .map((s) => s.trim().toUpperCase())
       .filter((s) => s.length > 0);
@@ -281,13 +284,25 @@ export function ManualCertificateModal({
     const existingBtIds = new Set(verifiedStudents.map((s) => s.btId));
 
     for (const bt of uniqueTokens) {
-      // Incomplete prefixes (e.g. "BT", "BT2", "BT25") are strictly invalid
-      if (bt.length < 6) {
-        notFoundTokens.push(bt);
-        continue;
+      // 1. Synchronous lookup across users, council, hosting, clubs, founders, registrations
+      let studentInfo = findStudentByBtId(bt);
+
+      // 2. Asynchronous fallback lookup in Firestore if not cached locally
+      if (!studentInfo || !studentInfo.name) {
+        try {
+          const remoteUser = await lookupUserByBtId(bt);
+          if (remoteUser && (remoteUser.displayName || remoteUser.name)) {
+            studentInfo = {
+              name: remoteUser.displayName || remoteUser.name || "",
+              department: remoteUser.department || undefined,
+              year: remoteUser.year || undefined,
+              email: remoteUser.email || undefined,
+              source: "user",
+            };
+          }
+        } catch {}
       }
 
-      const studentInfo = findStudentByBtId(bt);
       if (studentInfo && studentInfo.name && studentInfo.name.trim()) {
         // Valid student found in the system!
         if (!existingBtIds.has(bt)) {

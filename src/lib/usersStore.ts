@@ -391,16 +391,11 @@ export interface StudentDetails {
  */
 export function findStudentByBtId(btId: string): StudentDetails | null {
   if (!btId || !btId.trim()) return null;
-  const cleanBtId = btId.trim().toUpperCase();
-
-  // Strict structural sanity check:
-  // An official BT ID must be at least 6 characters (e.g. BT21CS001, BT210036CS, JPOLY24074, 104228).
-  // Incomplete prefixes like "BT", "BT2", "BT25" must NEVER match anything.
-  if (cleanBtId.length < 6) return null;
+  const cleanBtId = btId.trim().toUpperCase().replace(/\s+/g, "");
 
   // 1. Check registered users first (most authoritative for student profile data)
   const users = getStoredUsers();
-  const matchedUser = users.find((u) => u.btId && u.btId.trim().toUpperCase() === cleanBtId);
+  const matchedUser = users.find((u) => u.btId && u.btId.trim().toUpperCase().replace(/\s+/g, "") === cleanBtId);
   if (matchedUser) {
     const fullName = matchedUser.displayName || 
       `${matchedUser.firstName || ""} ${matchedUser.lastName || ""}`.trim() || 
@@ -418,7 +413,7 @@ export function findStudentByBtId(btId: string): StudentDetails | null {
 
   // 2. Check Admin Council
   const council = getStoredCouncilMembers();
-  const matchedCouncil = council.find((m) => m.btId && m.btId.trim().toUpperCase() === cleanBtId);
+  const matchedCouncil = council.find((m) => m.btId && m.btId.trim().toUpperCase().replace(/\s+/g, "") === cleanBtId);
   if (matchedCouncil && matchedCouncil.name) {
     return {
       name: matchedCouncil.name,
@@ -431,7 +426,7 @@ export function findStudentByBtId(btId: string): StudentDetails | null {
 
   // 3. Check Hosting Committee & Spokespersons
   const hosting = getStoredHostingCommittee();
-  const matchedHosting = hosting.find((m) => m.btId && m.btId.trim().toUpperCase() === cleanBtId);
+  const matchedHosting = hosting.find((m) => m.btId && m.btId.trim().toUpperCase().replace(/\s+/g, "") === cleanBtId);
   if (matchedHosting && matchedHosting.name) {
     return {
       name: matchedHosting.name,
@@ -446,7 +441,7 @@ export function findStudentByBtId(btId: string): StudentDetails | null {
   const clubs = getStoredClubs();
   for (const c of clubs) {
     const leaders = getClubLeaders(c);
-    const matchedLeader = leaders.find((l) => l.btId && l.btId.trim().toUpperCase() === cleanBtId);
+    const matchedLeader = leaders.find((l) => l.btId && l.btId.trim().toUpperCase().replace(/\s+/g, "") === cleanBtId);
     if (matchedLeader && matchedLeader.name) {
       return {
         name: matchedLeader.name,
@@ -460,7 +455,7 @@ export function findStudentByBtId(btId: string): StudentDetails | null {
 
   // 5. Check Founding Members
   const founders = getStoredFoundingMembers();
-  const matchedFounder = founders.find((m) => m.btId && m.btId.trim().toUpperCase() === cleanBtId);
+  const matchedFounder = founders.find((m) => m.btId && m.btId.trim().toUpperCase().replace(/\s+/g, "") === cleanBtId);
   if (matchedFounder && matchedFounder.name) {
     return {
       name: matchedFounder.name,
@@ -475,7 +470,7 @@ export function findStudentByBtId(btId: string): StudentDetails | null {
   try {
     const canonical = require("@/data/canonicalCouncil.json");
     if (Array.isArray(canonical)) {
-      const match = canonical.find((c: any) => c.btId && c.btId.trim().toUpperCase() === cleanBtId);
+      const match = canonical.find((c: any) => c.btId && c.btId.trim().toUpperCase().replace(/\s+/g, "") === cleanBtId);
       if (match && match.name) {
         return {
           name: match.name,
@@ -496,16 +491,14 @@ export function findStudentByBtId(btId: string): StudentDetails | null {
         const parsed = JSON.parse(storedRegs);
         if (Array.isArray(parsed)) {
           const match = parsed.find((r: any) => {
-            const rBt = (r.btId || "").trim().toUpperCase();
-            if (rBt !== cleanBtId) return false;
-            // Also ensure the registration record has a valid length
-            return rBt.length >= 6;
+            const rBt = (r.btId || "").trim().toUpperCase().replace(/\s+/g, "");
+            return rBt === cleanBtId;
           });
           if (match) {
             // Check if this student exists in the authoritative users store with a DIFFERENT BT ID
             const rEmail = (match.email || "").trim().toLowerCase();
             const existingRegisteredUser = rEmail ? users.find((u) => u.email && u.email.trim().toLowerCase() === rEmail) : null;
-            if (existingRegisteredUser && existingRegisteredUser.btId && existingRegisteredUser.btId.trim().toUpperCase() !== cleanBtId) {
+            if (existingRegisteredUser && existingRegisteredUser.btId && existingRegisteredUser.btId.trim().toUpperCase().replace(/\s+/g, "") !== cleanBtId) {
               // The student's real registered account has a different BT ID! Do not return them for this mismatched/stale BT ID.
               return null;
             }
