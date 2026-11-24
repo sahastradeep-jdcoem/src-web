@@ -903,7 +903,7 @@ export async function saveCertificateSettings(settings: Partial<CertificateSetti
   const cleanSettings = cleanUndefined({
     defaultSignatories: settings.defaultSignatories || existing?.defaultSignatories || DEFAULT_INSTITUTIONAL_SIGNATORIES,
     defaultCitationTemplate: settings.defaultCitationTemplate || existing?.defaultCitationTemplate || DEFAULT_CITATION_TEMPLATE,
-    defaultClubLogoUrl: settings.defaultClubLogoUrl !== undefined ? settings.defaultClubLogoUrl : (existing?.defaultClubLogoUrl || ""),
+    defaultClubLogoUrl: settings.defaultClubLogoUrl || "",
     clubLogosByEvent: mergedClubLogos,
     updatedAt: new Date().toISOString(),
     updatedBy: settings.updatedBy || existing?.updatedBy,
@@ -921,13 +921,86 @@ export async function saveCertificateSettings(settings: Partial<CertificateSetti
 }
 
 /**
+ * Determines whether a certificate or event is centralised / organized directly by SRC JDCOEM.
+ * Centralised events are organized by the Central Student Representative Council,
+ * NOT an individual student club, and therefore must NEVER display a center club emblem.
+ */
+export function isCentralizedCertificate(cert?: Partial<CertificateRecord> | null): boolean {
+  if (!cert) return true;
+
+  const slug = (cert.organizerClubSlug || "").toLowerCase().trim();
+  if (
+    slug === "src-council" ||
+    slug === "src" ||
+    slug === "central" ||
+    slug === "centralised" ||
+    slug === "centralized" ||
+    slug === "council"
+  ) {
+    return true;
+  }
+
+  const org = (cert.organizerClub || "").toLowerCase().trim();
+  if (
+    !org ||
+    org === "src" ||
+    org === "src jdcoem" ||
+    org === "src, jdcoem" ||
+    org === "src council" ||
+    org === "student representative council" ||
+    org === "student representation council" ||
+    org === "central student council" ||
+    org === "centralised" ||
+    org === "centralized" ||
+    org.includes("src jdcoem") ||
+    org.includes("centralised") ||
+    org.includes("centralized")
+  ) {
+    return true;
+  }
+
+  // Cross-reference with stored events if available
+  try {
+    const events = getStoredEvents();
+    const matched = events.find(
+      (e) =>
+        (cert.eventId && e.id === cert.eventId) ||
+        (cert.eventSlug && e.slug === cert.eventSlug) ||
+        (cert.eventName && (e.name === cert.eventName || (e as any).title === cert.eventName))
+    );
+    if (matched) {
+      if (matched.isParentFest) return true;
+      const evOrg = (matched.organizer || "").toLowerCase().trim();
+      const evSlug = (matched.organizerClubSlug || "").toLowerCase().trim();
+      if (
+        evSlug === "src-council" ||
+        evSlug === "src" ||
+        evOrg === "src jdcoem" ||
+        evOrg === "src, jdcoem" ||
+        evOrg.includes("src jdcoem") ||
+        evOrg === "student representative council" ||
+        evOrg === "student representation council" ||
+        evOrg.includes("council")
+      ) {
+        return true;
+      }
+    }
+  } catch {}
+
+  return false;
+}
+
+/**
  * Synchronously resolves the organizing club logo for a certificate record:
- * 1. Certificate's own non-empty clubLogoUrl
- * 2. System Clubs roster (`getStoredClubs()`) matched by organizerClubSlug or organizerClub
- * 3. Events catalog (`getStoredEvents()`) matched by eventId, eventSlug, or eventName
- * 4. LocalStorage caches (`src_certificate_settings`, `src_club_logo_*`, `src_preview_cert`)
+ * 1. Guarantees empty string for centralised SRC JDCOEM events (no club logo).
+ * 2. Certificate's own non-empty clubLogoUrl
+ * 3. System Clubs roster (`getStoredClubs()`) matched by organizerClubSlug or organizerClub
+ * 4. Events catalog (`getStoredEvents()`) matched by eventId, eventSlug, or eventName
+ * 5. LocalStorage event-specific caches (`src_club_logo_*`)
  */
 export function resolveCertificateClubLogoSync(cert: Partial<CertificateRecord>): string {
+  if (!cert) return "";
+  if (isCentralizedCertificate(cert)) return "";
   if (cert.clubLogoUrl && cert.clubLogoUrl.trim()) return cert.clubLogoUrl.trim();
 
   // 1. Try clubs roster by organizerClubSlug or organizerClub
@@ -948,6 +1021,11 @@ export function resolveCertificateClubLogoSync(cert: Partial<CertificateRecord>)
         (cert.eventName && (e.name === cert.eventName || (e as any).title === cert.eventName))
     );
     if (matchedEv) {
+      if (matchedEv.isParentFest) return "";
+      const evOrg = (matchedEv.organizer || "").toLowerCase().trim();
+      const evSlug = (matchedEv.organizerClubSlug || "").toLowerCase().trim();
+      if (evSlug === "src-council" || evOrg === "src jdcoem" || evOrg.includes("council")) return "";
+
       if ((matchedEv as any).clubLogoUrl) return (matchedEv as any).clubLogoUrl;
       const clubs = getStoredClubs();
       const matched = findClub(clubs, matchedEv.organizerClubSlug || matchedEv.organizer || "");
@@ -956,7 +1034,7 @@ export function resolveCertificateClubLogoSync(cert: Partial<CertificateRecord>)
     }
   } catch {}
 
-  // 3. Try cached certificate settings in localStorage
+  // 3. Try cached certificate settings in localStorage (strictly matching event slug/id)
   if (typeof window !== "undefined") {
     try {
       const cachedSettings = localStorage.getItem("src_certificate_settings");
@@ -964,26 +1042,21 @@ export function resolveCertificateClubLogoSync(cert: Partial<CertificateRecord>)
         const parsed = JSON.parse(cachedSettings) as CertificateSettings;
         const slug = cert.eventSlug || "";
         const id = cert.eventId || "";
-        const byEvent = parsed.clubLogosByEvent?.[slug] || parsed.clubLogosByEvent?.[id];
+        const byEvent = (slug && parsed.clubLogosByEvent?.[slug]) || (id && parsed.clubLogosByEvent?.[id]);
         if (byEvent && byEvent.trim()) return byEvent.trim();
-        if (parsed.defaultClubLogoUrl && parsed.defaultClubLogoUrl.trim()) return parsed.defaultClubLogoUrl.trim();
       }
     } catch {}
 
-    // 4. Try localStorage direct event logo keys
+    // 4. Try localStorage direct event logo keys (strictly matching current event)
     try {
-      const cachedBySlug = cert.eventSlug ? localStorage.getItem(`src_club_logo_${cert.eventSlug}`) : null;
-      if (cachedBySlug && cachedBySlug.trim()) return cachedBySlug.trim();
+      if (cert.eventSlug) {
+        const cachedBySlug = localStorage.getItem(`src_club_logo_${cert.eventSlug}`);
+        if (cachedBySlug && cachedBySlug.trim()) return cachedBySlug.trim();
+      }
 
-      const cachedById = cert.eventId ? localStorage.getItem(`src_club_logo_${cert.eventId}`) : null;
-      if (cachedById && cachedById.trim()) return cachedById.trim();
-
-      const preview = localStorage.getItem("src_preview_cert");
-      if (preview) {
-        const parsed = JSON.parse(preview);
-        if (parsed?.clubLogoUrl && parsed.clubLogoUrl.trim()) {
-          return parsed.clubLogoUrl.trim();
-        }
+      if (cert.eventId) {
+        const cachedById = localStorage.getItem(`src_club_logo_${cert.eventId}`);
+        if (cachedById && cachedById.trim()) return cachedById.trim();
       }
     } catch {}
   }
@@ -997,6 +1070,9 @@ export function resolveCertificateClubLogoSync(cert: Partial<CertificateRecord>)
  * partitioned document site_content/cert_${cert.id}, and site_content/cert_logo_${slug}.
  */
 export async function resolveCertificateClubLogoAsync(cert: CertificateRecord): Promise<string> {
+  if (!cert) return "";
+  if (isCentralizedCertificate(cert)) return "";
+
   const syncLogo = resolveCertificateClubLogoSync(cert);
   if (syncLogo) return syncLogo;
 
@@ -1005,19 +1081,16 @@ export async function resolveCertificateClubLogoAsync(cert: CertificateRecord): 
     return inMemoryEventLogos.get(cacheKey)!;
   }
 
-  // 1. Fetch remote certificate settings (in-memory cached)
+  // 1. Fetch remote certificate settings (in-memory cached, strictly matching this event)
   try {
     const settings = await getCertificateSettings();
     if (settings) {
       const slug = cert.eventSlug || "";
       const id = cert.eventId || "";
-      const byEvent = settings.clubLogosByEvent?.[slug] || settings.clubLogosByEvent?.[id];
+      const byEvent = (slug && settings.clubLogosByEvent?.[slug]) || (id && settings.clubLogosByEvent?.[id]);
       if (byEvent && byEvent.trim()) {
         if (cacheKey) inMemoryEventLogos.set(cacheKey, byEvent.trim());
         return byEvent.trim();
-      }
-      if (settings.defaultClubLogoUrl && settings.defaultClubLogoUrl.trim()) {
-        return settings.defaultClubLogoUrl.trim();
       }
     }
   } catch {}
@@ -1088,31 +1161,16 @@ export async function hydrateFullCertificate(cert: CertificateRecord): Promise<C
     });
   }
 
-  // 4. Hydrate club logo if missing
-  if (!hydrated.clubLogoUrl || !hydrated.clubLogoUrl.trim()) {
+  // 4. Hydrate club logo if missing (strictly skip for centralised events)
+  if (isCentralizedCertificate(hydrated)) {
+    hydrated.clubLogoUrl = "";
+  } else if (!hydrated.clubLogoUrl || !hydrated.clubLogoUrl.trim()) {
     try {
       const logo = await resolveCertificateClubLogoAsync(hydrated);
       if (logo && logo.trim()) {
         hydrated.clubLogoUrl = logo.trim();
       }
     } catch {}
-  }
-
-  // 5. If still missing club logo, check preview cert or settings default logo
-  if (!hydrated.clubLogoUrl || !hydrated.clubLogoUrl.trim()) {
-    if (settings?.defaultClubLogoUrl && settings.defaultClubLogoUrl.trim()) {
-      hydrated.clubLogoUrl = settings.defaultClubLogoUrl.trim();
-    } else if (typeof window !== "undefined") {
-      try {
-        const previewRaw = localStorage.getItem("src_preview_cert");
-        if (previewRaw) {
-          const parsed = JSON.parse(previewRaw);
-          if (parsed?.clubLogoUrl && parsed.clubLogoUrl.trim()) {
-            hydrated.clubLogoUrl = parsed.clubLogoUrl.trim();
-          }
-        }
-      } catch {}
-    }
   }
 
   return hydrated;
@@ -1122,6 +1180,9 @@ export async function hydrateFullCertificate(cert: CertificateRecord): Promise<C
  * Hydrates a certificate with its organizing club logo before export or rendering
  */
 export async function hydrateCertificateClubLogo(cert: CertificateRecord): Promise<CertificateRecord> {
+  if (isCentralizedCertificate(cert)) {
+    return { ...cert, clubLogoUrl: "" };
+  }
   if (cert.clubLogoUrl && cert.clubLogoUrl.trim()) return cert;
   const logo = await resolveCertificateClubLogoAsync(cert);
   if (logo) {

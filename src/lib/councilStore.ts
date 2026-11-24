@@ -1038,6 +1038,25 @@ export function findClub(allClubs: ClubItem[], targetSlugOrId: string): ClubItem
   if (!targetSlugOrId || !Array.isArray(allClubs)) return null;
   const cleanTarget = targetSlugOrId.toLowerCase().trim();
 
+  // Guard against Central Council / SRC matches - SRC is the Central Council, NOT a club!
+  if (
+    cleanTarget === "src" ||
+    cleanTarget === "src-council" ||
+    cleanTarget === "src jdcoem" ||
+    cleanTarget === "src, jdcoem" ||
+    cleanTarget === "src council" ||
+    cleanTarget === "student representative council" ||
+    cleanTarget === "student representation council" ||
+    cleanTarget === "central student council" ||
+    cleanTarget === "central" ||
+    cleanTarget === "centralised" ||
+    cleanTarget === "centralized" ||
+    cleanTarget === "centralised event" ||
+    cleanTarget === "centralized event"
+  ) {
+    return null;
+  }
+
   // 1. Direct slug match
   const bySlug = allClubs.find((c) => c?.slug?.toLowerCase().trim() === cleanTarget);
   if (bySlug) return bySlug;
@@ -1060,12 +1079,14 @@ export function findClub(allClubs: ClubItem[], targetSlugOrId: string): ClubItem
   });
   if (byStrippedName) return byStrippedName;
 
-
-
-  // 6. Generic partial contains matching
+  // 5. Generic partial contains matching (strictly for distinctive club names, NEVER generic words like 'event')
   const byFuzzy = allClubs.find((c) => {
     const n = c?.name?.toLowerCase() || "";
-    return n.includes(cleanTarget) || cleanTarget.includes(n.replace(/\s+club$/, ""));
+    const strippedClubName = n.replace(/\s+club$/, "").trim();
+    if (strippedClubName === "event" || strippedClubName.length < 4) {
+      return n === cleanTarget || strippedClubName === cleanTarget;
+    }
+    return n.includes(cleanTarget) || cleanTarget.includes(strippedClubName);
   });
   if (byFuzzy) return byFuzzy;
 

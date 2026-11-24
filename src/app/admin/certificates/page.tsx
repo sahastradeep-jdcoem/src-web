@@ -83,6 +83,7 @@ import {
   DEFAULT_CITATION_TEMPLATE,
   DEFAULT_ACHIEVEMENT_CITATION_TEMPLATE,
   compactCertificateForRegistry,
+  isCentralizedCertificate,
 } from "@/lib/certificatesStore";
 import {
   extractPosterColorPalette,
@@ -630,6 +631,18 @@ function AdminCertificatesContent() {
     return allKnownEvents.find((e) => e.id === selectedEventId || e.slug.toLowerCase() === selectedEventId.toLowerCase() || e.name.toLowerCase() === selectedEventId.toLowerCase()) || null;
   }, [allKnownEvents, selectedEventId]);
 
+  // Centralised Event Determination (SRC JDCOEM Central Council vs Student Club)
+  const isCurrentEventCentral = useMemo(() => {
+    if (!currentEvent) return false;
+    return isCentralizedCertificate({
+      eventId: currentEvent.id,
+      eventSlug: currentEvent.slug,
+      eventName: currentEvent.name,
+      organizerClub: currentEvent.organizer,
+      organizerClubSlug: currentEvent.organizerClubSlug,
+    });
+  }, [currentEvent]);
+
   // 3. Auto Color Scheme & Logo Extraction when Selected Event Changes
   useEffect(() => {
     if (!currentEvent) return;
@@ -658,7 +671,13 @@ function AdminCertificatesContent() {
       setIsExtractingColor(false);
     }
 
-    // Auto-detect club logo from system clubs roster
+    // Check if the current event is a centralised event organized by SRC JDCOEM
+    if (isCurrentEventCentral) {
+      setClubLogoUrl("");
+      return;
+    }
+
+    // Auto-detect club logo from system clubs roster for club-organized events
     try {
       const clubs = getStoredClubs();
       const matchedClub = findClub(
@@ -679,7 +698,7 @@ function AdminCertificatesContent() {
       console.warn("Could not lookup club logo", e);
       setClubLogoUrl("");
     }
-  }, [currentEvent]);
+  }, [currentEvent, isCurrentEventCentral]);
 
   // Registrations for the current selected event
   const eventRegistrations = useMemo(() => {
@@ -1164,6 +1183,14 @@ function AdminCertificatesContent() {
       firstRecipient?.btId ? firstRecipient.btId.slice(-4) : (firstRecipient?.ticketCode || "001")
     );
     const origin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "https://srcjdcoem.in";
+    const isCentral = isCentralizedCertificate({
+      eventId: currentEvent.id,
+      eventSlug: currentEvent.slug,
+      eventName: currentEvent.name,
+      organizerClub: currentEvent.organizer,
+      organizerClubSlug: currentEvent.organizerClubSlug,
+    });
+
     const previewPayload: CertificateRecord = cleanUndefined({
       id: "preview-cert",
       certificateNumber: certNum,
@@ -1183,8 +1210,8 @@ function AdminCertificatesContent() {
       eventName: currentEvent.name,
       eventDate: currentEvent.date || "",
       organizerClub: currentEvent.organizer || "Student Representation Council",
-      organizerClubSlug: currentEvent.organizerClubSlug || "",
-      clubLogoUrl: clubLogoUrl || "",
+      organizerClubSlug: currentEvent.organizerClubSlug || (isCentral ? "src-council" : ""),
+      clubLogoUrl: isCentral ? "" : (clubLogoUrl || ""),
       posterUrl: currentEvent.posterImage || currentEvent.poster || "",
       colorPalette,
       citation: resolvedCitation,
@@ -1206,9 +1233,12 @@ function AdminCertificatesContent() {
     if (typeof window !== "undefined") {
       try {
         localStorage.setItem("src_preview_cert", JSON.stringify(previewPayload));
-        if (previewPayload.clubLogoUrl && currentEvent) {
+        if (previewPayload.clubLogoUrl && currentEvent && !isCentral) {
           localStorage.setItem(`src_club_logo_${currentEvent.slug}`, previewPayload.clubLogoUrl);
           localStorage.setItem(`src_club_logo_${currentEvent.id}`, previewPayload.clubLogoUrl);
+        } else if (currentEvent) {
+          localStorage.removeItem(`src_club_logo_${currentEvent.slug}`);
+          localStorage.removeItem(`src_club_logo_${currentEvent.id}`);
         }
       } catch {}
     }
@@ -1243,6 +1273,13 @@ function AdminCertificatesContent() {
 
       const certsToSave: CertificateRecord[] = [];
       const origin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "https://srcjdcoem.in";
+      const isCentral = isCentralizedCertificate({
+        eventId: currentEvent.id,
+        eventSlug: currentEvent.slug,
+        eventName: currentEvent.name,
+        organizerClub: currentEvent.organizer,
+        organizerClubSlug: currentEvent.organizerClubSlug,
+      });
 
       for (let i = 0; i < selectedList.length; i++) {
         const recipient = selectedList[i];
@@ -1284,9 +1321,9 @@ function AdminCertificatesContent() {
           eventSlug: currentEvent.slug,
           eventName: currentEvent.name,
           eventDate: currentEvent.date || "",
-          organizerClub: currentEvent.organizer || "SRC Council",
-          organizerClubSlug: currentEvent.organizerClubSlug || "",
-          clubLogoUrl: clubLogoUrl || "",
+          organizerClub: currentEvent.organizer || "SRC, JDCOEM",
+          organizerClubSlug: currentEvent.organizerClubSlug || (isCentral ? "src-council" : ""),
+          clubLogoUrl: isCentral ? "" : (clubLogoUrl || ""),
           posterUrl: currentEvent.posterImage || currentEvent.poster || "",
           colorPalette,
           citation: resolvedCitation,
@@ -1302,18 +1339,25 @@ function AdminCertificatesContent() {
 
       await batchSaveCertificatesToFirestore(certsToSave);
 
-      // Also ensure institutional signatures & event club logo are synced to persistent settings
+      // Also ensure institutional signatures are synced to persistent settings
       saveCertificateSettings({
         defaultSignatories: (savedSignatories && savedSignatories.length > 0) ? savedSignatories : signatories,
         defaultCitationTemplate: citationTemplate,
-        defaultClubLogoUrl: clubLogoUrl || undefined,
-        clubLogosByEvent: currentEvent ? {
+        defaultClubLogoUrl: "",
+        clubLogosByEvent: (currentEvent && !isCentral) ? {
           [currentEvent.slug]: clubLogoUrl,
           [currentEvent.id]: clubLogoUrl,
         } : undefined,
       }).catch(console.warn);
 
-      if (clubLogoUrl && currentEvent) {
+      if (isCentral && currentEvent) {
+        try {
+          if (typeof window !== "undefined") {
+            localStorage.removeItem(`src_club_logo_${currentEvent.slug}`);
+            localStorage.removeItem(`src_club_logo_${currentEvent.id}`);
+          }
+        } catch {}
+      } else if (clubLogoUrl && currentEvent) {
         try {
           if (typeof window !== "undefined") {
             localStorage.setItem(`src_club_logo_${currentEvent.slug}`, clubLogoUrl);
@@ -2122,6 +2166,12 @@ function AdminCertificatesContent() {
                     </span>
                   )}
                 </div>
+
+                {isCurrentEventCentral && (
+                  <p className="text-[11px] text-amber-700 bg-amber-50/80 border border-amber-200/70 rounded-lg p-2 font-medium leading-relaxed">
+                    <strong>Centralised Event:</strong> Organised by SRC JDCOEM. The center club emblem is cleanly omitted so only the official SRC and College headers appear.
+                  </p>
+                )}
 
                 <div className="flex items-center gap-2">
                   {clubLogoUrl ? (

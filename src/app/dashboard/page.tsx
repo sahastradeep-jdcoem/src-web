@@ -120,6 +120,7 @@ import {
   hydrateFullCertificate,
   resolveCertificateClubLogoSync,
   getCertificateSettings,
+  isCentralizedCertificate,
 } from "@/lib/certificatesStore";
 import { syncClubsFromFirestore } from "@/lib/councilStore";
 import { CertificateView } from "@/components/certificates/CertificateView";
@@ -720,6 +721,9 @@ export default function StudentDashboardPage() {
           const hydrated = cloudCerts
             .filter((c) => c.id !== "preview-cert" && c.status === "PUBLISHED")
             .map((c) => {
+              if (isCentralizedCertificate(c)) {
+                return { ...c, clubLogoUrl: "" };
+              }
               if (c.clubLogoUrl) return c;
               const logo = resolveCertificateClubLogoSync(c);
               return logo ? { ...c, clubLogoUrl: logo } : c;
@@ -3268,7 +3272,7 @@ export default function StudentDashboardPage() {
                       >
                         <div className="flex items-center justify-between pb-1">
                           <span className="text-[10px] font-extrabold uppercase tracking-widest text-amber-300 truncate max-w-[180px]">
-                            {cert.organizerClub || "SRC JDCOEM"}
+                            {isCentralizedCertificate(cert) ? "SRC JDCOEM" : (cert.organizerClub || "SRC JDCOEM")}
                           </span>
                           <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-white/15 text-slate-200 shrink-0">
                             {cert.certificateNumber}

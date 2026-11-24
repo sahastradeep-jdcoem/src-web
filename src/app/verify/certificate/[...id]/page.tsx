@@ -15,7 +15,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { CertificateRecord } from "@/types/certificates";
-import { getCertificateById } from "@/lib/certificatesStore";
+import { getCertificateById, isCentralizedCertificate } from "@/lib/certificatesStore";
 
 export default function CertificateVerificationPage() {
   const params = useParams();
@@ -325,7 +325,7 @@ export default function CertificateVerificationPage() {
                     Organizing Club / Body
                   </span>
                   <p className="font-semibold text-slate-200">
-                    {cert.organizerClub || "Student Representation Council"}
+                    {isCentralizedCertificate(cert) ? "SRC JDCOEM" : (cert.organizerClub || "Student Representation Council")}
                   </p>
                 </div>
 
