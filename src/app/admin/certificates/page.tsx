@@ -119,7 +119,7 @@ export default function AdminCertificatesPage() {
     <React.Suspense
       fallback={
         <div className="p-8 text-center text-xs text-slate-500 font-medium">
-          Loading certificate console...
+          Loading certificate studio...
         </div>
       }
     >
@@ -1610,7 +1610,7 @@ function AdminCertificatesContent() {
             </div>
             <div>
               <h1 className="text-xl sm:text-2xl font-heading font-extrabold text-[#0B132B]">
-                CERTIFICATE CONSOLE
+                CERTIFICATE STUDIO
               </h1>
               {isClubOwner && (
                 <p className="text-xs text-[#E78023] font-bold mt-0.5">
