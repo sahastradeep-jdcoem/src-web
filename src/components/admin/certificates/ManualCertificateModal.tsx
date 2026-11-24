@@ -281,6 +281,12 @@ export function ManualCertificateModal({
     const existingBtIds = new Set(verifiedStudents.map((s) => s.btId));
 
     for (const bt of uniqueTokens) {
+      // Incomplete prefixes (e.g. "BT", "BT2", "BT25") are strictly invalid
+      if (bt.length < 6) {
+        notFoundTokens.push(bt);
+        continue;
+      }
+
       const studentInfo = findStudentByBtId(bt);
       if (studentInfo && studentInfo.name && studentInfo.name.trim()) {
         // Valid student found in the system!

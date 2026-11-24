@@ -393,6 +393,11 @@ export function findStudentByBtId(btId: string): StudentDetails | null {
   if (!btId || !btId.trim()) return null;
   const cleanBtId = btId.trim().toUpperCase();
 
+  // Strict structural sanity check:
+  // An official BT ID must be at least 6 characters (e.g. BT21CS001, BT210036CS, JPOLY24074, 104228).
+  // Incomplete prefixes like "BT", "BT2", "BT25" must NEVER match anything.
+  if (cleanBtId.length < 6) return null;
+
   // 1. Check registered users first (most authoritative for student profile data)
   const users = getStoredUsers();
   const matchedUser = users.find((u) => u.btId && u.btId.trim().toUpperCase() === cleanBtId);
@@ -490,8 +495,21 @@ export function findStudentByBtId(btId: string): StudentDetails | null {
       if (storedRegs) {
         const parsed = JSON.parse(storedRegs);
         if (Array.isArray(parsed)) {
-          const match = parsed.find((r: any) => r.btId && r.btId.trim().toUpperCase() === cleanBtId);
+          const match = parsed.find((r: any) => {
+            const rBt = (r.btId || "").trim().toUpperCase();
+            if (rBt !== cleanBtId) return false;
+            // Also ensure the registration record has a valid length
+            return rBt.length >= 6;
+          });
           if (match) {
+            // Check if this student exists in the authoritative users store with a DIFFERENT BT ID
+            const rEmail = (match.email || "").trim().toLowerCase();
+            const existingRegisteredUser = rEmail ? users.find((u) => u.email && u.email.trim().toLowerCase() === rEmail) : null;
+            if (existingRegisteredUser && existingRegisteredUser.btId && existingRegisteredUser.btId.trim().toUpperCase() !== cleanBtId) {
+              // The student's real registered account has a different BT ID! Do not return them for this mismatched/stale BT ID.
+              return null;
+            }
+
             const name = match.participantName || match.leaderName || match.name;
             if (name) {
               return {
