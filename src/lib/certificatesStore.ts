@@ -74,6 +74,13 @@ export const OLD_DEFAULT_CITATION_TEMPLATE =
 export const DEFAULT_ACHIEVEMENT_CITATION_TEMPLATE =
   "For securing {rank} position in {event}, in recognition of your outstanding performance, exceptional dedication, and meritorious achievement.";
 
+export function getDefaultCitationForType(type: CertificateType): string {
+  if (type === "ACHIEVEMENT") {
+    return DEFAULT_ACHIEVEMENT_CITATION_TEMPLATE;
+  }
+  return DEFAULT_CITATION_TEMPLATE;
+}
+
 /**
  * Generates an official, tamper-evident certificate serial number
  * e.g. "SRC/2026-27/PRRM-8924"

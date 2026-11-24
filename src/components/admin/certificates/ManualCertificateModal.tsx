@@ -36,6 +36,7 @@ import {
   batchSaveCertificatesToFirestore,
   DEFAULT_CITATION_TEMPLATE,
   DEFAULT_ACHIEVEMENT_CITATION_TEMPLATE,
+  getDefaultCitationForType,
   compactCertificateForRegistry,
   isCentralizedCertificate,
 } from "@/lib/certificatesStore";
@@ -191,8 +192,9 @@ export function ManualCertificateModal({
   useEffect(() => {
     if (isOpen) {
       syncUsersFromFirestore().catch(() => {});
+      setCitationTemplate(getDefaultCitationForType(certType));
     }
-  }, [isOpen]);
+  }, [isOpen, certType]);
 
   // Centralised Event Determination (SRC JDCOEM Central Council vs Student Club)
   const isCurrentEventCentral = useMemo(() => {
@@ -840,13 +842,9 @@ export function ManualCertificateModal({
               <button
                 type="button"
                 onClick={() => {
-                  if (certType === "ACHIEVEMENT") {
-                    setCitationTemplate(DEFAULT_ACHIEVEMENT_CITATION_TEMPLATE);
-                  } else {
-                    setCitationTemplate(DEFAULT_CITATION_TEMPLATE);
-                  }
+                  setCitationTemplate(getDefaultCitationForType(certType));
                 }}
-                className="text-[10px] text-[#17458F] hover:underline font-semibold"
+                className="text-[10px] text-[#17458F] hover:underline font-semibold cursor-pointer"
               >
                 Reset Default Citation
               </button>

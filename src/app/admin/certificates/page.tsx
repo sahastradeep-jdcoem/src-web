@@ -82,6 +82,7 @@ import {
   DEFAULT_INSTITUTIONAL_SIGNATORIES,
   DEFAULT_CITATION_TEMPLATE,
   DEFAULT_ACHIEVEMENT_CITATION_TEMPLATE,
+  getDefaultCitationForType,
   compactCertificateForRegistry,
   isCentralizedCertificate,
 } from "@/lib/certificatesStore";
@@ -319,9 +320,6 @@ function AdminCertificatesContent() {
         setSignatories(settings.defaultSignatories);
         setSavedSignatories(settings.defaultSignatories);
         setPersistedSignatoriesJson(normalizeSignatoriesForComparison(settings.defaultSignatories));
-      }
-      if (isMounted && settings?.defaultCitationTemplate) {
-        setCitationTemplate(settings.defaultCitationTemplate);
       }
     });
 
@@ -1494,7 +1492,7 @@ function AdminCertificatesContent() {
       // Also ensure institutional signatures are synced to persistent settings
       saveCertificateSettings({
         defaultSignatories: (savedSignatories && savedSignatories.length > 0) ? savedSignatories : signatories,
-        defaultCitationTemplate: citationTemplate,
+        defaultCitationTemplate: DEFAULT_CITATION_TEMPLATE,
         defaultClubLogoUrl: "",
         clubLogosByEvent: (currentEvent && !isCentral) ? {
           [currentEvent.slug]: clubLogoUrl,
@@ -2207,13 +2205,9 @@ function AdminCertificatesContent() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (certType === "ACHIEVEMENT") {
-                        setCitationTemplate(DEFAULT_ACHIEVEMENT_CITATION_TEMPLATE);
-                      } else {
-                        setCitationTemplate(DEFAULT_CITATION_TEMPLATE);
-                      }
+                      setCitationTemplate(getDefaultCitationForType(certType));
                     }}
-                    className="text-[10px] text-[#17458F] hover:underline font-semibold"
+                    className="text-[10px] text-[#17458F] hover:underline font-semibold cursor-pointer"
                   >
                     Reset Default Citation
                   </button>
