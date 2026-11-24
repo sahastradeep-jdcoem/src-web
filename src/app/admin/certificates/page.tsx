@@ -793,16 +793,8 @@ function AdminCertificatesContent() {
     });
   }, [allRegistrations, currentEvent, isScopedEventManager, adminAccess, user?.btId, allKnownEvents]);
 
-  // Certificates for the current selected event (or filtered by tenure / club scope)
-  const eventCertificates = useMemo(() => {
-    if (currentEvent) {
-      if (isScopedEventManager && !canUserManageEvent(currentEvent, adminAccess, user?.btId, allKnownEvents)) {
-        return [];
-      }
-      return allCertificates.filter(
-        (c) => c.eventId === currentEvent.id || c.eventSlug === currentEvent.slug
-      );
-    }
+  // Total certificates count in current tenure scope (used for summary badges and load-all prompt)
+  const totalTenureCertificatesCount = useMemo(() => {
     if (selectedTenureId !== "all") {
       const tenureEventIds = new Set(tenureFilteredEvents.map((e) => (e.id || "").toLowerCase()));
       const tenureEventSlugs = new Set(tenureFilteredEvents.map((e) => (e.slug || "").toLowerCase()));
@@ -811,13 +803,49 @@ function AdminCertificatesContent() {
           tenureEventIds.has((c.eventId || "").toLowerCase()) ||
           tenureEventSlugs.has((c.eventSlug || "").toLowerCase())
       );
-      if (isScopedEventManager) {
-        return filtered.filter(isCertificateOwned);
-      }
-      return filtered;
+      return isScopedEventManager ? filtered.filter(isCertificateOwned).length : filtered.length;
     }
-    return scopedAllCertificates;
-  }, [allCertificates, currentEvent, selectedTenureId, tenureFilteredEvents, isScopedEventManager, adminAccess, user?.btId, allKnownEvents, isCertificateOwned, scopedAllCertificates]);
+    return scopedAllCertificates.length;
+  }, [allCertificates, selectedTenureId, tenureFilteredEvents, isScopedEventManager, isCertificateOwned, scopedAllCertificates]);
+
+  const isEventSelectionActive = Boolean(currentEvent || selectedEventId === "all");
+
+  // Certificates for the current selected event (or all events ONLY if explicitly chosen)
+  // Keeps performance lightning fast by not eagerly loading massive datasets when no event filter is set
+  const eventCertificates = useMemo(() => {
+    if (!selectedEventId || selectedEventId === "") {
+      return [];
+    }
+
+    if (currentEvent) {
+      if (isScopedEventManager && !canUserManageEvent(currentEvent, adminAccess, user?.btId, allKnownEvents)) {
+        return [];
+      }
+      return allCertificates.filter(
+        (c) => c.eventId === currentEvent.id || c.eventSlug === currentEvent.slug
+      );
+    }
+
+    // Only if "all" is explicitly selected
+    if (selectedEventId === "all") {
+      if (selectedTenureId !== "all") {
+        const tenureEventIds = new Set(tenureFilteredEvents.map((e) => (e.id || "").toLowerCase()));
+        const tenureEventSlugs = new Set(tenureFilteredEvents.map((e) => (e.slug || "").toLowerCase()));
+        const filtered = allCertificates.filter(
+          (c) =>
+            tenureEventIds.has((c.eventId || "").toLowerCase()) ||
+            tenureEventSlugs.has((c.eventSlug || "").toLowerCase())
+        );
+        if (isScopedEventManager) {
+          return filtered.filter(isCertificateOwned);
+        }
+        return filtered;
+      }
+      return scopedAllCertificates;
+    }
+
+    return [];
+  }, [allCertificates, currentEvent, selectedEventId, selectedTenureId, tenureFilteredEvents, isScopedEventManager, adminAccess, user?.btId, allKnownEvents, isCertificateOwned, scopedAllCertificates]);
 
   // -------------------------------------------------------------
   // Dynamic Participant & Team Member Expansion for Certificate Issuance
@@ -1756,7 +1784,7 @@ function AdminCertificatesContent() {
               }`}
             >
               <Layers className="w-3.5 h-3.5 text-[#17458F]" />
-              Issued ({eventCertificates.length})
+              Issued {isEventSelectionActive ? `(${eventCertificates.length})` : ""}
             </button>
             {(!isScopedEventManager || isOwner) && (
               <button
@@ -2329,6 +2357,52 @@ function AdminCertificatesContent() {
       {/* 4. TAB 2: ISSUED CERTIFICATES TABLE */}
       {/* ------------------------------------------------------------- */}
       {activeTab === "issued" && (
+        !isEventSelectionActive ? (
+          <div className="bg-white rounded-3xl border border-slate-200 p-8 sm:p-12 text-center shadow-xs space-y-4">
+            <div className="w-16 h-16 rounded-2xl bg-[#17458F]/10 border border-[#17458F]/20 text-[#17458F] flex items-center justify-center mx-auto">
+              <Layers className="w-8 h-8" />
+            </div>
+            <div>
+              <h3 className="font-heading font-extrabold text-lg sm:text-xl text-slate-900">
+                Select an Event or Choose &quot;All Events&quot;
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto mt-1 leading-relaxed">
+                To keep website loading instant and prevent unnecessary data traffic, select a specific event from the filter above, or click below to inspect all credentials:
+              </p>
+            </div>
+
+            <div className="pt-2 flex flex-col items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => setSelectedEventId("all")}
+                className="px-5 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123673] text-white font-bold text-xs shadow-xs transition-all cursor-pointer inline-flex items-center gap-2"
+              >
+                <Layers className="w-4 h-4" />
+                <span>Load All Events ({totalTenureCertificatesCount})</span>
+              </button>
+
+              {tenureFilteredEvents.length > 0 && (
+                <div className="pt-3 border-t border-slate-100 max-w-2xl w-full">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                    Or select an event directly:
+                  </span>
+                  <div className="flex flex-wrap justify-center gap-2 max-h-48 overflow-y-auto p-1">
+                    {tenureFilteredEvents.slice(0, 12).map((evt) => (
+                      <button
+                        key={evt.id || evt.slug}
+                        type="button"
+                        onClick={() => handleSelectEventOption(evt.id || evt.slug)}
+                        className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-50 hover:bg-[#17458F] hover:text-white text-slate-700 border border-slate-200 transition-all cursor-pointer shadow-2xs hover:shadow-xs"
+                      >
+                        {evt.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <div>
@@ -2493,6 +2567,7 @@ function AdminCertificatesContent() {
             </table>
           </div>
         </div>
+        )
       )}
 
       {/* ------------------------------------------------------------- */}
