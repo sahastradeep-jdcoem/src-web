@@ -52,6 +52,7 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
   const [qrBlob, setQrBlob] = useState<Blob | null>(null);
   const [qrError, setQrError] = useState<string | null>(null);
   const [isQrDownloading, setIsQrDownloading] = useState(false);
+  const [isQrSharing, setIsQrSharing] = useState(false);
 
   // Reset to initial choose screen whenever modal opens
   useEffect(() => {
@@ -60,6 +61,7 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
       setCopiedLink(false);
       setShowInstructions(false);
       setIsQrDownloading(false);
+      setIsQrSharing(false);
     }
   }, [isOpen, payload]);
 
@@ -185,8 +187,8 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
     }
   };
 
-  // Robust Download QR Code Image Handler
-  const handleDownloadQr = async () => {
+  // Direct Download QR Code Image Handler (Pure, direct file download to disk)
+  const handleDownloadQr = () => {
     if (!qrBlob && !qrDataUrl) {
       toast.show("QR code is not ready yet", "error");
       return;
@@ -196,42 +198,23 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
     try {
       const filename = getQrDownloadFilename(payload.url, payload.title);
 
-      // Support mobile Web Share API for saving directly to photo library
-      if (qrBlob && typeof navigator !== "undefined" && navigator.canShare) {
-        const file = new File([qrBlob], filename, { type: "image/png" });
-        if (navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({
-              files: [file],
-              title: `${payload.title} QR Code`,
-            });
-            toast.show("QR Code saved / shared successfully!", "success");
-            setIsQrDownloading(false);
-            return;
-          } catch (shareErr: any) {
-            if (shareErr?.name === "AbortError") {
-              setIsQrDownloading(false);
-              return;
-            }
-          }
-        }
-      }
-
-      // Standard browser download
+      // Direct file download using anchor tag with blob / dataUrl
       const downloadUrl = qrBlob ? URL.createObjectURL(qrBlob) : qrDataUrl!;
       const downloadLink = document.createElement("a");
       downloadLink.href = downloadUrl;
       downloadLink.download = filename;
-      downloadLink.rel = "noopener";
+      downloadLink.style.display = "none";
       document.body.appendChild(downloadLink);
       downloadLink.click();
 
       setTimeout(() => {
-        document.body.removeChild(downloadLink);
+        if (downloadLink.parentNode) {
+          document.body.removeChild(downloadLink);
+        }
         if (qrBlob) URL.revokeObjectURL(downloadUrl);
-      }, 250);
+      }, 1000);
 
-      toast.show("QR Code downloaded in Ultra-HD (1024×1024)!", "success", {
+      toast.show("QR Code downloaded directly!", "success", {
         title: "Download Complete",
       });
     } catch (err) {
@@ -242,7 +225,47 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
     }
   };
 
-  // Robust Download Story Image Handler (Works on both Desktop & iOS/Android browsers)
+  // Optional Native Web Share Handler for QR Code
+  const handleShareQr = async () => {
+    if (!qrBlob && !qrDataUrl) {
+      toast.show("QR code is not ready yet", "error");
+      return;
+    }
+    setIsQrSharing(true);
+
+    try {
+      const filename = getQrDownloadFilename(payload.url, payload.title);
+      let file: File | null = null;
+      if (qrBlob) {
+        file = new File([qrBlob], filename, { type: "image/png" });
+      }
+
+      if (file && typeof navigator !== "undefined" && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `${payload.title} QR Code`,
+          text: `Scan QR Code to view ${payload.title} on Sahastradeep • SRC JDCOEM`,
+        });
+        toast.show("QR Code shared successfully!", "success");
+      } else if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({
+          title: `${payload.title} QR Code`,
+          url: payload.url,
+        });
+        toast.show("Event link shared successfully!", "success");
+      } else {
+        await handleCopyLink();
+      }
+    } catch (err: any) {
+      if (err?.name !== "AbortError") {
+        console.error("[SocialShareModal] QR Share failed:", err);
+      }
+    } finally {
+      setIsQrSharing(false);
+    }
+  };
+
+  // Robust Direct Download Story Image Handler (Pure, direct file download to disk)
   const handleDownload = async () => {
     setIsDownloading(true);
 
@@ -256,43 +279,24 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
         setStoryBlob(currentBlob);
       }
 
-      // Check if mobile Web Share API can share the file directly into photos
-      if (typeof navigator !== "undefined" && navigator.canShare) {
-        const file = new File([currentBlob], downloadFileName, { type: "image/png" });
-        if (navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({
-              files: [file],
-              title: payload.title,
-            });
-            toast.show("Image saved / shared successfully!", "success");
-            setIsDownloading(false);
-            return;
-          } catch (shareErr: any) {
-            if (shareErr?.name === "AbortError") {
-              setIsDownloading(false);
-              return;
-            }
-          }
-        }
-      }
-
-      // Standard blob download fallback via object URL
+      // Direct blob download via object URL
       const objectUrl = URL.createObjectURL(currentBlob);
       const downloadLink = document.createElement("a");
       downloadLink.href = objectUrl;
       downloadLink.download = downloadFileName;
-      downloadLink.rel = "noopener";
+      downloadLink.style.display = "none";
       document.body.appendChild(downloadLink);
       downloadLink.click();
 
       // Clean up after click
       setTimeout(() => {
-        document.body.removeChild(downloadLink);
+        if (downloadLink.parentNode) {
+          document.body.removeChild(downloadLink);
+        }
         URL.revokeObjectURL(objectUrl);
-      }, 250);
+      }, 1000);
 
-      toast.show("Story image downloaded! Check your gallery or downloads.", "success", {
+      toast.show("Story image downloaded! Check your downloads.", "success", {
         title: "Image Saved",
       });
       setShowInstructions(true);
@@ -601,13 +605,13 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
               </div>
 
               {/* Action Buttons */}
-              <div className="mt-5 flex flex-col sm:flex-row items-center gap-2.5 w-full max-w-xs">
+              <div className="mt-5 flex items-center gap-2.5 w-full max-w-xs">
                 {/* Download Button */}
                 <button
                   type="button"
                   onClick={handleDownloadQr}
                   disabled={isQrRendering || !!qrError || !qrDataUrl || isQrDownloading}
-                  className="w-full sm:flex-1 py-3 px-4 rounded-2xl bg-[#17458F] dark:bg-blue-600 hover:bg-[#123670] dark:hover:bg-blue-700 text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md shadow-blue-900/20 dark:shadow-blue-900/40 cursor-pointer active:scale-[0.98] disabled:opacity-50 min-h-[46px]"
+                  className="flex-1 py-3 px-3.5 rounded-2xl bg-[#17458F] dark:bg-blue-600 hover:bg-[#123670] dark:hover:bg-blue-700 text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md shadow-blue-900/20 dark:shadow-blue-900/40 cursor-pointer active:scale-[0.98] disabled:opacity-50 min-h-[46px]"
                 >
                   {isQrDownloading ? (
                     <Loader2 className="w-4 h-4 animate-spin text-white" />
@@ -617,19 +621,35 @@ export function SocialShareModal({ isOpen, onClose, payload }: SocialShareModalP
                   <span>Download QR Code</span>
                 </button>
 
+                {/* Native Share Button */}
+                <button
+                  type="button"
+                  onClick={handleShareQr}
+                  disabled={isQrRendering || !!qrError || !qrDataUrl || isQrSharing}
+                  className="w-[46px] h-[46px] shrink-0 rounded-2xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 transition-all flex items-center justify-center cursor-pointer active:scale-[0.98] disabled:opacity-50"
+                  title="Share QR Code"
+                  aria-label="Share QR Code"
+                >
+                  {isQrSharing ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-[#17458F]" />
+                  ) : (
+                    <Share2 className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                  )}
+                </button>
+
                 {/* Copy Canonical Link Button */}
                 <button
                   type="button"
                   onClick={handleCopyLink}
-                  className="w-full sm:w-auto py-3 px-3.5 rounded-2xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] min-h-[46px]"
+                  className="w-[46px] h-[46px] shrink-0 rounded-2xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all flex items-center justify-center cursor-pointer active:scale-[0.98]"
                   title="Copy Link"
+                  aria-label="Copy Link"
                 >
                   {copiedLink ? (
                     <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   ) : (
                     <Copy className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                   )}
-                  <span className="sm:hidden">{copiedLink ? "Copied" : "Copy Link"}</span>
                 </button>
               </div>
             </div>
