@@ -2659,12 +2659,8 @@ function AdminCertificatesContent() {
                   <PenTool className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-heading font-extrabold text-lg text-slate-900 flex items-center gap-2">
+                  <h3 className="font-heading font-extrabold text-lg text-slate-900">
                     Institutional Signatures
-                    <span className="text-[10px] font-bold tracking-wider uppercase px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-                      <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                      Single Source of Truth
-                    </span>
                   </h3>
                   <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
                     Upload official transparent PNG signatures and configure designations for the 4 institutional signatory slots. Saved signatures are permanently written to Firestore and automatically applied to all newly issued certificates, live preview scans, student dashboard downloads, and cryptographic verification gateways.
@@ -2871,19 +2867,6 @@ function AdminCertificatesContent() {
                 </div>
               );
             })}
-          </div>
-
-          {/* Bottom Callout Bar */}
-          <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 flex items-center gap-3 mt-4">
-            <div>
-              <h4 className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-indigo-600" />
-                Persistent Cloud Single Source of Truth
-              </h4>
-              <p className="text-[11px] text-indigo-700 mt-0.5">
-                Clicking &quot;Save&quot; stores these 4 signatures in Firestore (`site_content/certificate_settings`) and local storage, immediately serving them to any certificate downloaded by students or scanned via QR.
-              </p>
-            </div>
           </div>
         </div>
         )
