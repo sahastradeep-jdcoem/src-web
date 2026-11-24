@@ -1143,6 +1143,7 @@ function AdminCertificatesContent() {
     field: keyof CertificateSignatory,
     value: string
   ) => {
+    setTruthSignaturesSuccess(false);
     setSavedSignatories((prev) => {
       const copy = [...prev];
       copy[index] = { ...copy[index], [field]: value };
@@ -1196,6 +1197,7 @@ function AdminCertificatesContent() {
         reader.readAsDataURL(file);
       });
 
+      setTruthSignaturesSuccess(false);
       setSavedSignatories((prev) => {
         const next = [...prev];
         next[index] = { ...next[index], signatureImageUrl: optimizedUrl };
@@ -1208,6 +1210,7 @@ function AdminCertificatesContent() {
   };
 
   const handleClearSavedSignature = (index: number) => {
+    setTruthSignaturesSuccess(false);
     setSavedSignatories((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], signatureImageUrl: "" };
@@ -1221,7 +1224,6 @@ function AdminCertificatesContent() {
       return;
     }
     setIsSavingTruthSignatures(true);
-    setTruthSignaturesSuccess(false);
     try {
       await saveCertificateSettings({
         defaultSignatories: savedSignatories,
@@ -1234,7 +1236,6 @@ function AdminCertificatesContent() {
           new CustomEvent("src_certificate_settings_updated", { detail: savedSignatories })
         );
       }
-      setTimeout(() => setTruthSignaturesSuccess(false), 5000);
     } catch (e) {
       console.error(e);
       alert("Failed to save authoritative institutional signatures. Please retry.");
@@ -1249,6 +1250,7 @@ function AdminCertificatesContent() {
       return;
     }
     if (confirm("Reset all 4 signatory slots back to standard institutional defaults?")) {
+      setTruthSignaturesSuccess(false);
       setSavedSignatories(DEFAULT_INSTITUTIONAL_SIGNATORIES);
     }
   };
@@ -2637,22 +2639,26 @@ function AdminCertificatesContent() {
                 size="sm"
                 onClick={handleSaveTruthSignatures}
                 disabled={isSavingTruthSignatures}
-                className="text-xs bg-[#17458F] hover:bg-[#123670] text-white shadow-xs font-bold px-4 py-2 cursor-pointer"
+                className={`text-xs shadow-xs font-bold px-4 py-2 cursor-pointer transition-all ${
+                  truthSignaturesSuccess
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                    : "bg-[#17458F] hover:bg-[#123670] text-white"
+                }`}
               >
                 {isSavingTruthSignatures ? (
                   <>
                     <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                    Saving to Cloud...
+                    Saving...
                   </>
                 ) : truthSignaturesSuccess ? (
                   <>
-                    <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 text-emerald-300" />
-                    Saved to Cloud!
+                    <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 text-white" />
+                    Saved
                   </>
                 ) : (
                   <>
                     <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
-                    Save as Single Source of Truth
+                    Save
                   </>
                 )}
               </Button>
@@ -2817,36 +2823,16 @@ function AdminCertificatesContent() {
           </div>
 
           {/* Bottom Callout Bar */}
-          <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4">
+          <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 flex items-center gap-3 mt-4">
             <div>
               <h4 className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-indigo-600" />
                 Persistent Cloud Single Source of Truth
               </h4>
               <p className="text-[11px] text-indigo-700 mt-0.5">
-                Clicking &quot;Save as Single Source of Truth&quot; stores these 4 signatures in Firestore (`site_content/certificate_settings`) and local storage, immediately serving them to any certificate downloaded by students or scanned via QR.
+                Clicking &quot;Save&quot; stores these 4 signatures in Firestore (`site_content/certificate_settings`) and local storage, immediately serving them to any certificate downloaded by students or scanned via QR.
               </p>
             </div>
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              onClick={handleSaveTruthSignatures}
-              disabled={isSavingTruthSignatures}
-              className="text-xs bg-[#17458F] hover:bg-[#123670] text-white shadow-xs font-bold shrink-0 cursor-pointer"
-            >
-              {isSavingTruthSignatures ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
-                  Save as Single Source of Truth
-                </>
-              )}
-            </Button>
           </div>
         </div>
         )
