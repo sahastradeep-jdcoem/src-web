@@ -17,6 +17,7 @@ import {
   Trash2,
   CheckCircle2,
   Layers,
+  Loader2,
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -1187,19 +1188,42 @@ export function ManualCertificateModal({
               variant="primary"
               onClick={handlePublishManualCertificates}
               disabled={isPublishing || verifiedStudents.length === 0}
-              className="text-xs bg-[#17458F] hover:bg-[#123673] text-white font-bold"
+              className="text-xs bg-[#17458F] hover:bg-[#123673] text-white font-bold disabled:opacity-75 transition-all cursor-pointer flex items-center justify-center gap-1.5"
             >
               {isPublishing ? (
-                <>Issuing {verifiedStudents.length} Certificates...</>
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                  <span>Issuing {verifiedStudents.length} Certificates...</span>
+                </>
               ) : (
                 <>
                   <Award className="w-3.5 h-3.5 mr-1" />
-                  Publish {verifiedStudents.length > 0 ? `${verifiedStudents.length} ` : ""}Certificates
+                  <span>Publish {verifiedStudents.length > 0 ? `${verifiedStudents.length} ` : ""}Certificates</span>
                 </>
               )}
             </Button>
           </div>
         </div>
+
+        {/* Active Publishing Loading Overlay */}
+        {isPublishing && (
+          <div className="absolute inset-0 z-50 bg-white/85 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center rounded-3xl space-y-3">
+            <div className="w-14 h-14 rounded-2xl bg-[#17458F]/10 border border-[#17458F]/20 text-[#17458F] flex items-center justify-center shadow-inner">
+              <Loader2 className="w-7 h-7 animate-spin" />
+            </div>
+            <div>
+              <h4 className="font-heading font-extrabold text-base text-slate-900">
+                Issuing Official Certificates...
+              </h4>
+              <p className="text-xs text-slate-500 mt-1 max-w-xs leading-relaxed">
+                Writing {verifiedStudents.length} digital credentials to cloud database and generating QR verification records.
+              </p>
+            </div>
+            <div className="w-48 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+              <div className="bg-[#17458F] h-full rounded-full animate-pulse w-3/4" />
+            </div>
+          </div>
+        )}
       </div>
     </Modal>
   );

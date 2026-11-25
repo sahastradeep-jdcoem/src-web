@@ -35,6 +35,7 @@ import {
   Plus,
   ShieldAlert,
   Lock,
+  Loader2,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Badge } from "@/components/ui/Badge";
@@ -2386,12 +2387,19 @@ function AdminCertificatesContent() {
                   variant="primary"
                   onClick={handleBatchPublish}
                   disabled={isPublishing || selectedRegIds.size === 0}
-                  className="flex-1 text-xs bg-[#17458F] text-white hover:bg-[#0f2e60]"
+                  className="flex-1 text-xs bg-[#17458F] text-white hover:bg-[#0f2e60] disabled:opacity-75 transition-all cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                  <Award className="w-3.5 h-3.5 mr-1 text-amber-400" />
-                  {isPublishing
-                    ? `Publishing (${publishProgress?.current || 0}/${publishProgress?.total || 0})...`
-                    : `Publish ${selectedRegIds.size} Certs`}
+                  {isPublishing ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                      <span>Publishing ({selectedRegIds.size})...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Award className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Publish {selectedRegIds.size} Certs</span>
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
@@ -2997,6 +3005,30 @@ function AdminCertificatesContent() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* 6.5 ACTIVE PUBLISHING MODAL OVERLAY */}
+      {/* ------------------------------------------------------------- */}
+      {isPublishing && (
+        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 select-none">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl border border-slate-100 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="w-16 h-16 rounded-2xl bg-[#17458F]/10 border border-[#17458F]/20 text-[#17458F] flex items-center justify-center mx-auto shadow-inner">
+              <Loader2 className="w-8 h-8 animate-spin" />
+            </div>
+            <div>
+              <h3 className="font-heading font-extrabold text-lg text-slate-900">
+                Publishing Credentials...
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                Writing {selectedRegIds.size} digital credentials to cloud database and generating live verification links.
+              </p>
+            </div>
+            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+              <div className="bg-[#17458F] h-full rounded-full animate-pulse w-3/4" />
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ------------------------------------------------------------- */}

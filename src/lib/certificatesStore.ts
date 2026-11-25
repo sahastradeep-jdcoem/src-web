@@ -612,66 +612,7 @@ export async function batchSaveCertificatesToFirestore(
     }
   }
 
-  // 3. Dual-write to site_content/certificates_registry with COMPACTION
-  // Strips bulky base64 data URLs to eliminate the 1192 KB document threshold breach
-  try {
-    let existing: CertificateRecord[] = [];
-    try {
-      const rawExisting = await getSiteContentFromFirestore<CertificateRecord[]>(REGISTRY_DOC_ID);
-      if (Array.isArray(rawExisting)) {
-        existing = rawExisting.map((c) => compactCertificateForRegistry(c));
-      }
-    } catch (fetchErr) {
-      console.warn("Could not fetch existing registry for compaction:", fetchErr);
-    }
-
-    const map = new Map<string, CertificateRecord>();
-    existing.forEach((c) => map.set(c.id, c));
-    cleanedCerts.forEach((c) => map.set(c.id, compactCertificateForRegistry(c)));
-
-    let combined = Array.from(map.values());
-    combined.sort((a, b) => new Date(b.issuedAt || 0).getTime() - new Date(a.issuedAt || 0).getTime());
-
-    // Safe payload cap: keep latest 150 certificates in the registry document (< 100 KB)
-    if (combined.length > 150) {
-      combined = combined.slice(0, 150);
-    }
-
-    await saveSiteContentToFirestore(REGISTRY_DOC_ID, combined);
-  } catch (fallbackErr) {
-    console.error("Dual-write registry fallback notice:", fallbackErr);
-    if (!directWriteSucceeded && individualWriteCount === 0) {
-      throw fallbackErr;
-    }
-  }
-
-  // 3b. Persist event club logos ONCE per unique event in the batch (eliminates 400x redundant writes)
-  const uniqueLogos = new Map<string, { slug?: string; id?: string; url: string }>();
-  for (const cert of cleanedCerts) {
-    if (cert.clubLogoUrl && cert.clubLogoUrl.trim()) {
-      const key = cert.eventSlug || cert.eventId || "";
-      if (key && !uniqueLogos.has(key)) {
-        uniqueLogos.set(key, { slug: cert.eventSlug, id: cert.eventId, url: cert.clubLogoUrl.trim() });
-      }
-    }
-  }
-
-  for (const [, item] of uniqueLogos) {
-    try {
-      if (typeof window !== "undefined") {
-        if (item.slug) localStorage.setItem(`src_club_logo_${item.slug}`, item.url);
-        if (item.id) localStorage.setItem(`src_club_logo_${item.id}`, item.url);
-      }
-      if (item.slug) {
-        saveSiteContentToFirestore(`cert_logo_${item.slug}`, { logoUrl: item.url }).catch(() => {});
-      }
-      if (item.id) {
-        saveSiteContentToFirestore(`cert_logo_${item.id}`, { logoUrl: item.url }).catch(() => {});
-      }
-    } catch {}
-  }
-
-  // 4. Local storage cache update & instant cross-tab notification
+  // 3. Local storage cache update & instant cross-tab notification
   try {
     if (typeof window !== "undefined") {
       const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -683,6 +624,75 @@ export async function batchSaveCertificatesToFirestore(
     }
   } catch (cacheErr) {
     console.warn("Could not cache certificates locally:", cacheErr);
+  }
+
+  // Helper for background secondary sync (registry compaction & club logo persistence)
+  const performSecondarySync = async () => {
+    // Dual-write to site_content/certificates_registry with COMPACTION
+    try {
+      let existing: CertificateRecord[] = [];
+      try {
+        const rawExisting = await getSiteContentFromFirestore<CertificateRecord[]>(REGISTRY_DOC_ID);
+        if (Array.isArray(rawExisting)) {
+          existing = rawExisting.map((c) => compactCertificateForRegistry(c));
+        }
+      } catch (fetchErr) {
+        console.warn("Could not fetch existing registry for compaction:", fetchErr);
+      }
+
+      const map = new Map<string, CertificateRecord>();
+      existing.forEach((c) => map.set(c.id, c));
+      cleanedCerts.forEach((c) => map.set(c.id, compactCertificateForRegistry(c)));
+
+      let combined = Array.from(map.values());
+      combined.sort((a, b) => new Date(b.issuedAt || 0).getTime() - new Date(a.issuedAt || 0).getTime());
+
+      // Safe payload cap: keep latest 150 certificates in the registry document (< 100 KB)
+      if (combined.length > 150) {
+        combined = combined.slice(0, 150);
+      }
+
+      await saveSiteContentToFirestore(REGISTRY_DOC_ID, combined);
+    } catch (fallbackErr) {
+      console.error("Dual-write registry fallback notice:", fallbackErr);
+    }
+
+    // Persist event club logos ONCE per unique event in the batch
+    const uniqueLogos = new Map<string, { slug?: string; id?: string; url: string }>();
+    for (const cert of cleanedCerts) {
+      if (cert.clubLogoUrl && cert.clubLogoUrl.trim()) {
+        const key = cert.eventSlug || cert.eventId || "";
+        if (key && !uniqueLogos.has(key)) {
+          uniqueLogos.set(key, { slug: cert.eventSlug, id: cert.eventId, url: cert.clubLogoUrl.trim() });
+        }
+      }
+    }
+
+    for (const [, item] of uniqueLogos) {
+      try {
+        if (typeof window !== "undefined") {
+          if (item.slug) localStorage.setItem(`src_club_logo_${item.slug}`, item.url);
+          if (item.id) localStorage.setItem(`src_club_logo_${item.id}`, item.url);
+        }
+        if (item.slug) {
+          saveSiteContentToFirestore(`cert_logo_${item.slug}`, { logoUrl: item.url }).catch(() => {});
+        }
+        if (item.id) {
+          saveSiteContentToFirestore(`cert_logo_${item.id}`, { logoUrl: item.url }).catch(() => {});
+        }
+      } catch {}
+    }
+  };
+
+  if (directWriteSucceeded) {
+    // If primary authoritative batch write succeeded, run secondary backup sync in background
+    performSecondarySync().catch(console.warn);
+  } else {
+    // If direct write failed, wait for secondary backup so write isn't lost
+    await performSecondarySync();
+    if (individualWriteCount === 0) {
+      throw new Error("Failed to write certificates to cloud");
+    }
   }
 
   return { success: true, count: certs.length };
