@@ -533,10 +533,21 @@ export async function saveCertificateToFirestore(cert: CertificateRecord): Promi
   }
 
   let directWriteSucceeded = false;
+  const compactCert = compactCertificateForRegistry(cleanCert);
+  if (cleanCert.clubLogoUrl && cleanCert.clubLogoUrl.startsWith("data:") && (cleanCert.eventSlug || cleanCert.eventId)) {
+    const logoUrl = cleanCert.clubLogoUrl.trim();
+    if (cleanCert.eventSlug) {
+      saveSiteContentToFirestore(`cert_logo_${cleanCert.eventSlug}`, { logoUrl }).catch(() => {});
+    }
+    if (cleanCert.eventId) {
+      saveSiteContentToFirestore(`cert_logo_${cleanCert.eventId}`, { logoUrl }).catch(() => {});
+    }
+  }
+
   if (db) {
     try {
       const docRef = doc(db, CERTIFICATES_COLLECTION, cert.id);
-      await setDoc(docRef, cleanCert, { merge: true });
+      await setDoc(docRef, compactCert, { merge: true });
       directWriteSucceeded = true;
     } catch (err) {
       console.warn("Direct save to /certificates failed, saving to site_content fallback:", err);
@@ -546,7 +557,7 @@ export async function saveCertificateToFirestore(cert: CertificateRecord): Promi
   // Only fallback to individual partitioned document in site_content if primary collection write failed
   if (!directWriteSucceeded) {
     try {
-      await saveSiteContentToFirestore(`cert_${cert.id}`, cleanCert);
+      await saveSiteContentToFirestore(`cert_${cert.id}`, compactCert);
     } catch (partErr) {
       console.warn("Could not save partitioned cert document to site_content:", partErr);
     }
@@ -578,13 +589,17 @@ export async function batchSaveCertificatesToFirestore(
   if (!db) throw new Error("Database connection not established");
 
   const cleanedCerts = certs.map((c) => cleanUndefined(c));
+  // Strip redundant base64 signature/logo/poster payloads (~600KB -> ~1.2KB per cert);
+  // CertificateView & hydrateFullCertificate hydrate them from certificate_settings and cert_logo_{slug}.
+  const compactCerts = cleanedCerts.map((c) => compactCertificateForRegistry(c));
 
-  // 1. Direct write to /certificates/{cert.id}
+  // 1. Direct write to /certificates/{cert.id} in parallel 400-doc batches
   let directWriteSucceeded = false;
   try {
-    const chunkSize = 200;
-    for (let i = 0; i < cleanedCerts.length; i += chunkSize) {
-      const chunk = cleanedCerts.slice(i, i + chunkSize);
+    const chunkSize = 400;
+    const commitPromises: Promise<void>[] = [];
+    for (let i = 0; i < compactCerts.length; i += chunkSize) {
+      const chunk = compactCerts.slice(i, i + chunkSize);
       const batch = writeBatch(db);
 
       for (const cert of chunk) {
@@ -592,8 +607,9 @@ export async function batchSaveCertificatesToFirestore(
         batch.set(docRef, cert, { merge: true });
       }
 
-      await batch.commit();
+      commitPromises.push(batch.commit());
     }
+    await Promise.all(commitPromises);
     directWriteSucceeded = true;
   } catch (primaryErr) {
     console.warn("Direct /certificates batch write notice, executing dual-write registry backup:", primaryErr);
@@ -602,14 +618,10 @@ export async function batchSaveCertificatesToFirestore(
   // 2. Individual document backup in site_content ONLY if direct write failed
   let individualWriteCount = 0;
   if (!directWriteSucceeded) {
-    for (const cert of cleanedCerts) {
-      try {
-        await saveSiteContentToFirestore(`cert_${cert.id}`, cert);
-        individualWriteCount++;
-      } catch (indErr) {
-        console.warn(`Individual cert backup notice for ${cert.id}:`, indErr);
-      }
-    }
+    const fallbackResults = await Promise.allSettled(
+      compactCerts.map((cert) => saveSiteContentToFirestore(`cert_${cert.id}`, cert))
+    );
+    individualWriteCount = fallbackResults.filter((r) => r.status === "fulfilled").length;
   }
 
   // 3. Local storage cache update & instant cross-tab notification
@@ -618,9 +630,9 @@ export async function batchSaveCertificatesToFirestore(
       const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
       const list: CertificateRecord[] = cached ? JSON.parse(cached) : [];
       const map = new Map(list.map((c) => [c.id, c]));
-      cleanedCerts.forEach((c) => map.set(c.id, compactCertificateForRegistry(c)));
+      compactCerts.forEach((c) => map.set(c.id, c));
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(Array.from(map.values()).slice(0, 100)));
-      window.dispatchEvent(new CustomEvent("src_certificates_updated", { detail: cleanedCerts }));
+      window.dispatchEvent(new CustomEvent("src_certificates_updated", { detail: compactCerts }));
     }
   } catch (cacheErr) {
     console.warn("Could not cache certificates locally:", cacheErr);
@@ -642,7 +654,7 @@ export async function batchSaveCertificatesToFirestore(
 
       const map = new Map<string, CertificateRecord>();
       existing.forEach((c) => map.set(c.id, c));
-      cleanedCerts.forEach((c) => map.set(c.id, compactCertificateForRegistry(c)));
+      compactCerts.forEach((c) => map.set(c.id, c));
 
       let combined = Array.from(map.values());
       combined.sort((a, b) => new Date(b.issuedAt || 0).getTime() - new Date(a.issuedAt || 0).getTime());
@@ -657,7 +669,7 @@ export async function batchSaveCertificatesToFirestore(
       console.error("Dual-write registry fallback notice:", fallbackErr);
     }
 
-    // Persist event club logos ONCE per unique event in the batch
+    // Persist event club logos ONCE per unique event in the batch (extracted from uncompacted cleanedCerts)
     const uniqueLogos = new Map<string, { slug?: string; id?: string; url: string }>();
     for (const cert of cleanedCerts) {
       if (cert.clubLogoUrl && cert.clubLogoUrl.trim()) {

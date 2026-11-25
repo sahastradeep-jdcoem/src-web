@@ -1490,6 +1490,7 @@ function AdminCertificatesContent() {
       }
 
       await batchSaveCertificatesToFirestore(certsToSave);
+      setPublishProgress({ current: certsToSave.length, total: certsToSave.length });
 
       // Also ensure institutional signatures are synced to persistent settings
       saveCertificateSettings({
