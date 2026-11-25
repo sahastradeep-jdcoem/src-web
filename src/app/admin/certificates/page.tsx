@@ -1069,40 +1069,62 @@ function AdminCertificatesContent() {
     return recipients;
   }, [currentEvent, eventRegistrations]);
 
-  // Set of participant & team member identifier keys that already have a certificate
-  const certifiedRecipientKeys = useMemo(() => {
-    const set = new Set<string>();
+  // Helper to ignore non-unique college names stored in legacy registration BT ID fields
+  const isUniqueStudentId = (id: string) =>
+    id.length >= 3 &&
+    !/^(jdcoem|jdcoem\s*nagpur|jd\s*college)$/i.test(id) &&
+    !/college\s+of\s+engineering/i.test(id);
+
+  // Set of participant & team member identifier keys that already have an active (non-revoked)
+  // certificate of the selected certType for this event (catches both Manual and Automated certs)
+  const certifiedLookup = useMemo(() => {
+    const regKeys = new Set<string>();
+    const btIds = new Set<string>();
+    const emails = new Set<string>();
+
     eventCertificates.forEach((c) => {
+      if (c.status === "REVOKED") return;
+      if (c.type !== certType) return;
+
+      const cleanBt = (c.recipientBtId || "").trim().toUpperCase();
+      const cleanEmail = (c.recipientEmail || "").trim().toLowerCase();
+      const cleanName = (c.recipientName || "").trim().toLowerCase();
+
+      if (cleanBt && isUniqueStudentId(cleanBt)) {
+        btIds.add(cleanBt);
+      }
+      if (cleanEmail && !cleanEmail.startsWith("offline-")) {
+        emails.add(cleanEmail);
+      }
       if (c.registrationId) {
-        if (c.recipientBtId) {
-          set.add(`${c.registrationId}_${c.recipientBtId.trim().toUpperCase()}`);
-        }
-        if (c.recipientName) {
-          set.add(`${c.registrationId}_${c.recipientName.trim().toLowerCase()}`);
-        }
-        if (c.recipientEmail) {
-          set.add(`${c.registrationId}_${c.recipientEmail.trim().toLowerCase()}`);
-        }
-        set.add(c.registrationId);
+        if (cleanBt) regKeys.add(`${c.registrationId}_${cleanBt}`);
+        if (cleanName) regKeys.add(`${c.registrationId}_${cleanName}`);
+        if (cleanEmail) regKeys.add(`${c.registrationId}_${cleanEmail}`);
+        regKeys.add(c.registrationId);
       }
     });
-    return set;
-  }, [eventCertificates]);
+
+    return { regKeys, btIds, emails };
+  }, [eventCertificates, certType]);
 
   const isRecipientCertified = (r: EventCertificateRecipient): boolean => {
+    const cleanBt = (r.btId || "").trim().toUpperCase();
+    const cleanEmail = (r.email || "").trim().toLowerCase();
+    const cleanName = (r.name || "").trim().toLowerCase();
+
+    if (cleanBt && isUniqueStudentId(cleanBt) && certifiedLookup.btIds.has(cleanBt)) {
+      return true;
+    }
+    if (cleanEmail && certifiedLookup.emails.has(cleanEmail)) {
+      return true;
+    }
     if (r.teamType === "Team") {
-      if (r.btId && certifiedRecipientKeys.has(`${r.registrationId}_${r.btId.trim().toUpperCase()}`)) {
-        return true;
-      }
-      if (r.name && certifiedRecipientKeys.has(`${r.registrationId}_${r.name.trim().toLowerCase()}`)) {
-        return true;
-      }
-      if (r.email && certifiedRecipientKeys.has(`${r.registrationId}_${r.email.trim().toLowerCase()}`)) {
-        return true;
-      }
+      if (cleanBt && certifiedLookup.regKeys.has(`${r.registrationId}_${cleanBt}`)) return true;
+      if (cleanName && certifiedLookup.regKeys.has(`${r.registrationId}_${cleanName}`)) return true;
+      if (cleanEmail && certifiedLookup.regKeys.has(`${r.registrationId}_${cleanEmail}`)) return true;
       return false;
     }
-    return certifiedRecipientKeys.has(r.registrationId);
+    return certifiedLookup.regKeys.has(r.registrationId);
   };
 
   // Filtered recipients list for generation
@@ -1137,23 +1159,42 @@ function AdminCertificatesContent() {
       }
       return true;
     });
-  }, [allEventRecipients, participantFilter, certifiedRecipientKeys, participantSearch]);
+  }, [allEventRecipients, participantFilter, certifiedLookup, participantSearch]);
 
-  // Sync selected recipient keys when filtered list changes (auto-select uncertified recipients)
+  // Sync selected recipient keys when filtered list or certType changes (auto-select uncertified only)
   useEffect(() => {
-    if (filteredParticipants.length > 0 && selectedRegIds.size === 0) {
+    if (filteredParticipants.length === 0) return;
+    setSelectedRegIds((prev) => {
+      // Prune any already-certified recipients from selection
+      const pruned = new Set<string>();
+      prev.forEach((key) => {
+        const match = filteredParticipants.find((p) => p.uniqueKey === key);
+        if (match && !isRecipientCertified(match)) {
+          pruned.add(key);
+        }
+      });
+      if (pruned.size > 0) return pruned;
+
+      // Otherwise auto-select all uncertified recipients
       const newSelected = new Set<string>();
       filteredParticipants.forEach((p) => {
         if (!isRecipientCertified(p)) {
           newSelected.add(p.uniqueKey);
         }
       });
-      setSelectedRegIds(newSelected);
-    }
-  }, [filteredParticipants, certifiedRecipientKeys]);
+      return newSelected;
+    });
+  }, [filteredParticipants, certifiedLookup]);
 
-  // Toggle selection
+  // Toggle selection (block selecting already-certified recipients)
   const handleToggleParticipant = (uniqueKey: string) => {
+    const target = filteredParticipants.find((p) => p.uniqueKey === uniqueKey);
+    if (target && isRecipientCertified(target)) {
+      alert(
+        `Certificate already exists for ${target.name}${target.btId ? ` (${target.btId})` : ""} for this event (${certType}).`
+      );
+      return;
+    }
     setSelectedRegIds((prev) => {
       const next = new Set(prev);
       if (next.has(uniqueKey)) next.delete(uniqueKey);
@@ -1163,11 +1204,16 @@ function AdminCertificatesContent() {
   };
 
   const handleSelectAllParticipants = () => {
-    if (selectedRegIds.size === filteredParticipants.length) {
+    const uncertifiedVisible = filteredParticipants.filter((p) => !isRecipientCertified(p));
+    if (uncertifiedVisible.length === 0) {
+      setSelectedRegIds(new Set());
+      return;
+    }
+    if (selectedRegIds.size === uncertifiedVisible.length) {
       setSelectedRegIds(new Set());
     } else {
       const next = new Set<string>();
-      filteredParticipants.forEach((p) => next.add(p.uniqueKey));
+      uncertifiedVisible.forEach((p) => next.add(p.uniqueKey));
       setSelectedRegIds(next);
     }
   };
@@ -1420,6 +1466,20 @@ function AdminCertificatesContent() {
     }
     if (selectedRegIds.size === 0) {
       alert("Please select at least one participant to issue certificates.");
+      return;
+    }
+
+    const selectedListCheck = allEventRecipients.filter((r) => selectedRegIds.has(r.uniqueKey));
+    const duplicateRecipients = selectedListCheck.filter((r) => isRecipientCertified(r));
+    if (duplicateRecipients.length > 0) {
+      const dupPreview = duplicateRecipients
+        .slice(0, 5)
+        .map((r) => (r.btId ? `${r.name} (${r.btId})` : r.name))
+        .join(", ");
+      const extra = duplicateRecipients.length > 5 ? ` and ${duplicateRecipients.length - 5} more` : "";
+      alert(
+        `Certificate already exists for ${duplicateRecipients.length} selected recipient(s): ${dupPreview}${extra}. Please deselect them or use the "Uncertified Only" filter.`
+      );
       return;
     }
 
