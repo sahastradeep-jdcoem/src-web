@@ -193,6 +193,7 @@ export function ManualCertificateModal({
     if (isOpen) {
       syncUsersFromFirestore().catch(() => {});
       setCitationTemplate(getDefaultCitationForType(certType));
+      setIssueDate(new Date().toISOString().split("T")[0]);
     }
   }, [isOpen, certType]);
 
@@ -247,10 +248,6 @@ export function ManualCertificateModal({
   // Sync event changes to template styling
   useEffect(() => {
     if (!currentEvent) return;
-
-    if (currentEvent.date) {
-      setIssueDate(currentEvent.date);
-    }
 
     if (isCurrentEventCentral) {
       setClubLogoUrl("");
