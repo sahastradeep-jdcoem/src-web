@@ -638,7 +638,7 @@ export function ManualCertificateModal({
       subtitle="Issue official digital credentials directly for students who attended offline or were not registered online."
       maxWidth="4xl"
     >
-      <div className="space-y-5 max-h-[75vh] overflow-y-auto px-1 pr-2 scrollbar-thin">
+      <div className="space-y-5">
         {/* Error Notice */}
         {errorMessage && (
           <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center justify-between gap-2">
