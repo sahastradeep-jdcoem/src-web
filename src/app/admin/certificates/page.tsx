@@ -2912,6 +2912,7 @@ function AdminCertificatesContent() {
         onClose={() => setIsManualModalOpen(false)}
         tenuresList={tenuresList}
         allEvents={scopedAllKnownEvents}
+        existingCertificates={allCertificates}
         defaultSignatories={savedSignatories}
         initialTenureId={selectedTenureId !== "all" ? selectedTenureId : undefined}
         initialEventId={

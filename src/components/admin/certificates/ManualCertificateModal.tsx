@@ -63,6 +63,7 @@ interface ManualCertificateModalProps {
   onClose: () => void;
   tenuresList: CouncilTenure[];
   allEvents: EventItem[];
+  existingCertificates?: CertificateRecord[];
   defaultSignatories: CertificateSignatory[];
   initialTenureId?: string;
   initialEventId?: string;
@@ -75,6 +76,7 @@ export function ManualCertificateModal({
   onClose,
   tenuresList,
   allEvents,
+  existingCertificates = [],
   defaultSignatories,
   initialTenureId,
   initialEventId,
@@ -292,9 +294,28 @@ export function ManualCertificateModal({
   // 3. BT IDs Input & Enter-Key Verification Engine
   const [bulkBtInput, setBulkBtInput] = useState<string>("");
   const [invalidBtIds, setInvalidBtIds] = useState<string[]>([]);
+  const [duplicateBtIds, setDuplicateBtIds] = useState<string[]>([]);
   const [verifiedStudents, setVerifiedStudents] = useState<ManualStudentEntry[]>([]);
   const [isPublishing, setIsPublishing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Set of BT IDs that already have a non-revoked certificate of the selected type for the current event
+  const alreadyCertifiedBtIds = useMemo(() => {
+    const set = new Set<string>();
+    if (!currentEvent || !Array.isArray(existingCertificates)) return set;
+    const evtId = (currentEvent.id || "").toLowerCase();
+    const evtSlug = (currentEvent.slug || "").toLowerCase();
+    existingCertificates.forEach((c) => {
+      if (c.status === "REVOKED") return;
+      const matchesEvent =
+        (evtId && (c.eventId || "").toLowerCase() === evtId) ||
+        (evtSlug && (c.eventSlug || "").toLowerCase() === evtSlug);
+      if (matchesEvent && c.type === certType && c.recipientBtId) {
+        set.add(c.recipientBtId.trim().toUpperCase());
+      }
+    });
+    return set;
+  }, [currentEvent, existingCertificates, certType]);
 
   // Process entered BT IDs on Enter key or button click
   const handleProcessBtIds = async () => {
@@ -316,10 +337,17 @@ export function ManualCertificateModal({
     const uniqueTokens = Array.from(new Set(tokens));
 
     const notFoundTokens: string[] = [];
+    const duplicateFoundTokens: string[] = [];
     const newValidEntries: ManualStudentEntry[] = [];
     const existingBtIds = new Set(verifiedStudents.map((s) => s.btId));
 
     for (const bt of uniqueTokens) {
+      // Check if a certificate already exists for this BT ID + event + type
+      if (alreadyCertifiedBtIds.has(bt)) {
+        duplicateFoundTokens.push(bt);
+        continue;
+      }
+
       // 1. Synchronous lookup across users, council, hosting, clubs, founders, registrations
       let studentInfo = findStudentByBtId(bt);
 
@@ -362,14 +390,17 @@ export function ManualCertificateModal({
       setVerifiedStudents((prev) => [...prev, ...newValidEntries]);
     }
 
-    if (notFoundTokens.length > 0) {
-      // Invalid IDs continue to display in the box with small red alert
-      setBulkBtInput(notFoundTokens.join(", "));
+    const remainingTokens = [...notFoundTokens, ...duplicateFoundTokens];
+    if (remainingTokens.length > 0) {
+      // Unresolved/duplicate IDs remain in the box with red alert
+      setBulkBtInput(remainingTokens.join(", "));
       setInvalidBtIds(notFoundTokens);
+      setDuplicateBtIds(duplicateFoundTokens);
     } else {
-      // All were valid and processed: clear box and dismiss invalid alert
+      // All were valid and processed: clear box and dismiss alerts
       setBulkBtInput("");
       setInvalidBtIds([]);
+      setDuplicateBtIds([]);
     }
   };
 
@@ -377,6 +408,9 @@ export function ManualCertificateModal({
     setBulkBtInput(e.target.value);
     if (invalidBtIds.length > 0) {
       setInvalidBtIds([]);
+    }
+    if (duplicateBtIds.length > 0) {
+      setDuplicateBtIds([]);
     }
   };
 
@@ -521,7 +555,17 @@ export function ManualCertificateModal({
       return;
     }
 
-    // Verify all entered BT IDs have a name
+    // Verify all entered BT IDs have a name and do not already have a certificate
+    const duplicateInList = verifiedStudents
+      .filter((st) => alreadyCertifiedBtIds.has(st.btId.trim().toUpperCase()))
+      .map((st) => st.btId);
+    if (duplicateInList.length > 0) {
+      setErrorMessage(
+        `Certificate already exists for: ${duplicateInList.join(", ")}. Please remove duplicate recipients before publishing.`
+      );
+      return;
+    }
+
     for (const st of verifiedStudents) {
       if (!st.name.trim()) {
         setErrorMessage(`Please enter student full name for BT ID: ${st.btId}`);
@@ -1066,6 +1110,45 @@ export function ManualCertificateModal({
                     type="button"
                     onClick={() => setInvalidBtIds([])}
                     className="text-rose-400 hover:text-rose-700 p-0.5"
+                    title="Dismiss alert"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* Duplicate / Already Certified Alert Banner */}
+              {duplicateBtIds.length > 0 && (
+                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex items-start justify-between gap-2 animate-in fade-in duration-150">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-[11px] font-bold text-amber-900">
+                        Certificate Already Exists
+                      </p>
+                      <p className="text-[11px] text-amber-800 mt-0.5">
+                        {duplicateBtIds.length === 1 ? (
+                          <>
+                            A {certType.toLowerCase()} certificate already exists for{" "}
+                            <span className="font-mono font-bold text-amber-950 bg-amber-100/80 px-1 py-0.5 rounded">{duplicateBtIds[0]}</span> in this event.
+                          </>
+                        ) : (
+                          <>
+                            A {certType.toLowerCase()} certificate already exists for:{" "}
+                            {duplicateBtIds.map((id, idx) => (
+                              <span key={id} className="font-mono font-bold text-amber-950 bg-amber-100/80 px-1 py-0.5 rounded mr-1">
+                                {id}{idx < duplicateBtIds.length - 1 ? "," : ""}
+                              </span>
+                            ))}
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDuplicateBtIds([])}
+                    className="text-amber-500 hover:text-amber-800 p-0.5"
                     title="Dismiss alert"
                   >
                     <X className="w-3.5 h-3.5" />
