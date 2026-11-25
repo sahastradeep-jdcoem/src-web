@@ -349,6 +349,19 @@ function AdminCertificatesContent() {
       }
     });
 
+    const handleLocalCertificatesUpdated = (e: Event) => {
+      const detail = (e as CustomEvent<CertificateRecord[]>).detail;
+      if (!isMounted || !Array.isArray(detail) || detail.length === 0) return;
+      setAllCertificates((prev) => {
+        const map = new Map(prev.map((c) => [c.id, c]));
+        detail.forEach((c) => map.set(c.id, c));
+        return Array.from(map.values()).sort(
+          (a, b) => new Date(b.issuedAt || 0).getTime() - new Date(a.issuedAt || 0).getTime()
+        );
+      });
+    };
+    window.addEventListener("src_certificates_updated", handleLocalCertificatesUpdated);
+
     const handleClickOutside = (event: MouseEvent) => {
       if (eventDropdownRef.current && !eventDropdownRef.current.contains(event.target as Node)) {
         setIsEventDropdownOpen(false);
@@ -362,6 +375,7 @@ function AdminCertificatesContent() {
       unsubTenures();
       unsubRegs();
       unsubCerts();
+      window.removeEventListener("src_certificates_updated", handleLocalCertificatesUpdated);
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
