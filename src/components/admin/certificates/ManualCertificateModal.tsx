@@ -595,6 +595,7 @@ export function ManualCertificateModal({
             signatories: resolvedSignatories,
             issueDate,
             status: "PUBLISHED" as const,
+            issuanceMode: "MANUAL" as const,
             verificationUrl,
             qrPayload: verificationUrl,
             issuedBy: user?.displayName || user?.email || "SRC Admin",

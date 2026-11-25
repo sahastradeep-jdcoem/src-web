@@ -1481,6 +1481,7 @@ function AdminCertificatesContent() {
           signatories: (savedSignatories && savedSignatories.length > 0) ? savedSignatories : (signatories || []),
           issueDate,
           status: "PUBLISHED" as const,
+          issuanceMode: "AUTOMATED" as const,
           verificationUrl,
           qrPayload: verificationUrl,
           issuedBy: user?.displayName || user?.email || "SRC Admin",
@@ -2504,6 +2505,7 @@ function AdminCertificatesContent() {
                   <th className="p-3">Recipient</th>
                   <th className="p-3">Event</th>
                   <th className="p-3">Type</th>
+                  <th className="p-3">Mode</th>
                   <th className="p-3">Issue Date</th>
                   <th className="p-3">Status</th>
                   <th className="p-3 text-right">Actions</th>
@@ -2546,6 +2548,19 @@ function AdminCertificatesContent() {
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
                           {cert.type}
                         </span>
+                      </td>
+                      <td className="p-3">
+                        {cert.issuanceMode === "MANUAL" ||
+                        (typeof cert.registrationId === "string" &&
+                          cert.registrationId.startsWith("offline-")) ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80">
+                            Manual
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-[#17458F] border border-blue-200/80">
+                            Automated
+                          </span>
+                        )}
                       </td>
                       <td className="p-3 font-mono text-[11px] text-slate-500">{cert.issueDate}</td>
                       <td className="p-3">
@@ -2613,7 +2628,7 @@ function AdminCertificatesContent() {
 
                 {eventCertificates.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-400">
+                    <td colSpan={8} className="p-8 text-center text-slate-400">
                       No issued certificates found{currentEvent ? ` for "${currentEvent.name}"` : ""}.
                     </td>
                   </tr>

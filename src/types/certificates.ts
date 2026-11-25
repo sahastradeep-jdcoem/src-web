@@ -59,6 +59,7 @@ export interface CertificateRecord {
   // Verification & Metadata
   issueDate: string; // YYYY-MM-DD
   status: CertificateStatus;
+  issuanceMode?: "MANUAL" | "AUTOMATED";
   verificationUrl: string;
   qrPayload: string;
   issuedBy: string; // Admin UID or Name
