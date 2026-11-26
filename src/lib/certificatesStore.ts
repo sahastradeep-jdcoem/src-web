@@ -824,8 +824,18 @@ export function subscribeToCertificates(
       if (!snapshot.empty) {
         const list: CertificateRecord[] = [];
         snapshot.forEach((docSnap) => {
-          list.push(docSnap.data() as CertificateRecord);
+          const data = docSnap.data() as CertificateRecord;
+          if (data.id !== "preview-cert") {
+            list.push(data);
+          }
         });
+        // Keep localStorage cache synchronized with authoritative server state
+        // so deleted/stale items don't flash on subsequent page refreshes.
+        if (!snapshot.metadata.fromCache && typeof window !== "undefined") {
+          try {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list.slice(0, 100)));
+          } catch {}
+        }
         callback(list);
       } else {
         // Fallback check site_content/certificates_registry
