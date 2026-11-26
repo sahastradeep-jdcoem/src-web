@@ -91,16 +91,31 @@ export function sanitizeEventItem(event: EventItem): EventItem {
       : isPaidVal
       ? 100
       : 0,
-    teamFeeAmount: !isNoReg && isPaidVal && typeof event.teamFeeAmount === "number" ? event.teamFeeAmount : undefined,
-    feePricingModel: event.feePricingModel || "per_person",
+    teamType: event.isParentFest ? "Individual" : event.teamType,
+    minTeamSize: !event.isParentFest && event.teamType !== "Individual" ? event.minTeamSize : undefined,
+    maxTeamSize: !event.isParentFest && event.teamType !== "Individual" ? event.maxTeamSize : undefined,
+    teamFeeAmount: !isNoReg && isPaidVal && event.teamType !== "Individual" && typeof event.teamFeeAmount === "number" ? event.teamFeeAmount : undefined,
+    feePricingModel: event.teamType === "Individual" ? "per_person" : (event.feePricingModel || "per_person"),
     entryFee: isNoReg
       ? "Free Walk-in Entry"
       : isPaidVal
-      ? (event.entryFee && !event.entryFee.toLowerCase().includes("free")
-          ? event.entryFee
-          : (event.feePricingModel === "per_team" && event.teamFeeAmount
-              ? `₹${event.teamFeeAmount} / team`
-              : `₹${event.feeAmount || 100} / person`))
+      ? (() => {
+          const resolvedFee =
+            typeof event.feeAmount === "number" && event.feeAmount > 0
+              ? event.feeAmount
+              : event.entryFee && event.entryFee.match(/₹\s*(\d+)/)
+              ? parseInt(event.entryFee.match(/₹\s*(\d+)/)![1], 10)
+              : 100;
+          if (event.teamType === "Individual") {
+            return `₹${resolvedFee}`;
+          }
+          if (event.entryFee && !event.entryFee.toLowerCase().includes("free")) {
+            return event.entryFee;
+          }
+          return event.feePricingModel === "per_team" && event.teamFeeAmount
+            ? `₹${event.teamFeeAmount} / team`
+            : `₹${resolvedFee} / person`;
+        })()
       : "Free Entry",
     collaboratingClubs: Array.isArray(event.collaboratingClubs)
       ? event.collaboratingClubs.filter((c) => c && c.name && c.slug)

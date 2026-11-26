@@ -341,7 +341,9 @@ export default function AdminEventsPage() {
     const entryFeeText = isNoReg
       ? "Free Walk-in Entry"
       : formData.isPaid
-      ? (formData.feePricingModel === "per_team" && formData.teamFeeAmount 
+      ? (formData.teamType === "Individual"
+          ? `₹${formData.feeAmount}`
+          : formData.feePricingModel === "per_team" && formData.teamFeeAmount 
           ? `₹${formData.teamFeeAmount} / team`
           : `₹${formData.feeAmount} / person`)
       : "Free Entry";
@@ -388,8 +390,8 @@ export default function AdminEventsPage() {
       entryFee: isUmbrella ? "Free Entry" : entryFeeText,
       isPaid: isNoReg ? false : Boolean(formData.isPaid),
       feeAmount: isNoReg ? 0 : (formData.isPaid ? (Number(formData.feeAmount) > 0 ? Number(formData.feeAmount) : 100) : 0),
-      teamFeeAmount: !isNoReg && formData.isPaid && formData.feePricingModel === "per_team" ? Number(formData.teamFeeAmount) || 0 : undefined,
-      feePricingModel: isNoReg ? undefined : (formData.isPaid ? formData.feePricingModel : undefined),
+      teamFeeAmount: !isNoReg && formData.isPaid && formData.teamType !== "Individual" && formData.feePricingModel === "per_team" ? Number(formData.teamFeeAmount) || 0 : undefined,
+      feePricingModel: isNoReg ? undefined : (formData.isPaid ? (formData.teamType === "Individual" ? "per_person" : formData.feePricingModel) : undefined),
       customQuestions: isUmbrella ? undefined : (formData.customQuestions && formData.customQuestions.length > 0 ? formData.customQuestions : undefined),
       isParentFest: isUmbrella,
       parentEventId: isUmbrella ? undefined : (formData.parentEventId || undefined),
@@ -711,7 +713,9 @@ export default function AdminEventsPage() {
     const entryFeeText = isNoReg
       ? "Free Walk-in Entry"
       : formData.isPaid
-      ? (formData.feePricingModel === "per_team" && formData.teamFeeAmount 
+      ? (formData.teamType === "Individual"
+          ? `₹${formData.feeAmount}`
+          : formData.feePricingModel === "per_team" && formData.teamFeeAmount 
           ? `₹${formData.teamFeeAmount} / team`
           : `₹${formData.feeAmount} / person`)
       : "Free Entry";
@@ -777,8 +781,8 @@ export default function AdminEventsPage() {
       entryFee: isUmbrella ? "Free Entry" : entryFeeText,
       isPaid: isNoReg ? false : Boolean(formData.isPaid),
       feeAmount: isNoReg ? 0 : (formData.isPaid ? (Number(formData.feeAmount) > 0 ? Number(formData.feeAmount) : 100) : 0),
-      teamFeeAmount: !isNoReg && formData.isPaid && formData.feePricingModel === "per_team" ? Number(formData.teamFeeAmount) || 0 : undefined,
-      feePricingModel: isNoReg ? undefined : (formData.isPaid ? formData.feePricingModel : undefined),
+      teamFeeAmount: !isNoReg && formData.isPaid && formData.teamType !== "Individual" && formData.feePricingModel === "per_team" ? Number(formData.teamFeeAmount) || 0 : undefined,
+      feePricingModel: isNoReg ? undefined : (formData.isPaid ? (formData.teamType === "Individual" ? "per_person" : formData.feePricingModel) : undefined),
       customQuestions: isUmbrella ? undefined : (formData.customQuestions && formData.customQuestions.length > 0 ? formData.customQuestions : undefined),
       isParentFest: isUmbrella,
       parentEventId: isUmbrella ? undefined : (formData.parentEventId || undefined),
@@ -1591,7 +1595,7 @@ export default function AdminEventsPage() {
                           : "bg-emerald-50 text-emerald-700 border-emerald-200"
                       )}
                     >
-                      {isPaid ? (evt.entryFee || `₹${evt.feeAmount || 0} / person`) : "Free Entry"}
+                      {isPaid ? (evt.entryFee || (evt.teamType === "Individual" ? `₹${evt.feeAmount || 0}` : `₹${evt.feeAmount || 0} / person`)) : "Free Entry"}
                     </span>
                   </div>
                 </div>

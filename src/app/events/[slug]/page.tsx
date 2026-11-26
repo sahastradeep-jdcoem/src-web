@@ -1057,7 +1057,7 @@ export default function EventDetailPage() {
                       {event.noRegistrationRequired ? "Open Walk-in" : (event.teamType || "Individual")}
                     </span>
                   </div>
-                  {!event.noRegistrationRequired && event.maxTeamSize && (
+                  {!event.noRegistrationRequired && event.teamType !== "Individual" && event.maxTeamSize && (
                     <div className="flex justify-between items-center py-1 border-b border-slate-100">
                       <span className="text-slate-500">Team Size:</span>
                       <span className="font-bold text-slate-900">

@@ -2079,7 +2079,13 @@ export function EventFormModal({
                   <button
                     key={opt}
                     type="button"
-                    onClick={() => setForm({ ...form, teamType: opt })}
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        teamType: opt,
+                        ...(opt === "Individual" ? { feePricingModel: "per_person", teamFeeAmount: 0 } : {}),
+                      })
+                    }
                     className={cn(
                       "py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer",
                       form.teamType === opt

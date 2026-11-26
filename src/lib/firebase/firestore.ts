@@ -12,7 +12,8 @@ import {
   onSnapshot,
   Timestamp,
   updateDoc,
-  serverTimestamp
+  serverTimestamp,
+  deleteField
 } from "firebase/firestore";
 import { db } from "./config";
 import { UserProfile } from "@/types/auth";
@@ -2128,8 +2129,26 @@ export async function saveEventToFirestore(event: EventItem): Promise<void> {
       // 1 Event = 1 Document: the top-level event document is authoritative.
       // Do not swallow permission errors here; callers enqueue the complete
       // event payload and surface an expired-admin-session error when needed.
+      const firestorePayload: Record<string, any> = {
+        ...sanitized,
+        updatedAt: serverTimestamp(),
+      };
+
+      // Explicitly delete stale team/fee fields in Firestore when switched to Individual, Umbrella, or Free
+      if (event.teamType === "Individual" || event.isParentFest) {
+        firestorePayload.minTeamSize = deleteField();
+        firestorePayload.maxTeamSize = deleteField();
+        firestorePayload.teamFeeAmount = deleteField();
+      }
+      if (!event.isPaid || event.noRegistrationRequired || event.isParentFest) {
+        firestorePayload.teamFeeAmount = deleteField();
+        firestorePayload.feePricingModel = deleteField();
+      } else if (event.teamType === "Individual" || event.feePricingModel !== "per_team") {
+        firestorePayload.teamFeeAmount = deleteField();
+      }
+
       const eventDocRef = doc(db, EVENTS_COLLECTION, docId);
-      await setDoc(eventDocRef, { ...sanitized, updatedAt: serverTimestamp() }, { merge: true });
+      await setDoc(eventDocRef, firestorePayload, { merge: true });
     }
   } catch (error: any) {
     console.error(`Firestore saveEventToFirestore error [${event.id || event.slug}]:`, error?.code || "", error?.message || error);
