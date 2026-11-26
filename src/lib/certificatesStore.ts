@@ -139,37 +139,40 @@ export function compactCertificateForRegistry(cert: CertificateRecord): Certific
  */
 export async function getAllCertificatesFromFirestore(): Promise<CertificateRecord[]> {
   try {
-    if (db) {
-      try {
-        const colRef = collection(db, CERTIFICATES_COLLECTION);
-        const q = query(colRef, orderBy("issuedAt", "desc"), limit(1000));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          const list: CertificateRecord[] = [];
-          snap.forEach((docSnap) => {
-            const data = docSnap.data() as CertificateRecord;
-            if (data.id !== "preview-cert") {
-              list.push(data);
-            }
-          });
-          try {
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list.slice(0, 100)));
-          } catch {}
-          return list;
+    const map = new Map<string, CertificateRecord>();
+
+    const [directRes, registryRes] = await Promise.allSettled([
+      db
+        ? getDocs(query(collection(db, CERTIFICATES_COLLECTION), orderBy("issuedAt", "desc"), limit(1000)))
+        : Promise.resolve(null),
+      getSiteContentFromFirestore<CertificateRecord[]>(REGISTRY_DOC_ID),
+    ]);
+
+    if (registryRes.status === "fulfilled" && Array.isArray(registryRes.value)) {
+      registryRes.value.forEach((c) => {
+        if (c && c.id && c.id !== "preview-cert") {
+          map.set(c.id, c);
         }
-      } catch (err) {
-        console.warn("Direct /certificates fetch error, falling back to site_content registry:", err);
-      }
+      });
     }
 
-    // Fallback: site_content/certificates_registry
-    const remoteList = await getSiteContentFromFirestore<CertificateRecord[]>(REGISTRY_DOC_ID);
-    if (remoteList && Array.isArray(remoteList) && remoteList.length > 0) {
-      const cleanList = remoteList.filter((c) => c.id !== "preview-cert");
+    if (directRes.status === "fulfilled" && directRes.value && !directRes.value.empty) {
+      directRes.value.forEach((docSnap) => {
+        const data = docSnap.data() as CertificateRecord;
+        if (data && data.id && data.id !== "preview-cert") {
+          map.set(data.id, data);
+        }
+      });
+    }
+
+    if (map.size > 0) {
+      const merged = Array.from(map.values()).sort(
+        (a, b) => new Date(b.issuedAt || 0).getTime() - new Date(a.issuedAt || 0).getTime()
+      );
       try {
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cleanList.slice(0, 100)));
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merged.slice(0, 100)));
       } catch {}
-      return cleanList;
+      return merged;
     }
 
     const cached = typeof localStorage !== "undefined" ? localStorage.getItem(LOCAL_STORAGE_KEY) : null;
@@ -815,44 +818,65 @@ export function subscribeToCertificates(
     getAllCertificatesFromFirestore().then(callback);
     return () => {};
   }
+
+  let latestDirectList: CertificateRecord[] = [];
+  let latestRegistryList: CertificateRecord[] = [];
+  let hasRegistryLoaded = false;
+
+  const emitMerged = (fromServerSnapshot: boolean) => {
+    const map = new Map<string, CertificateRecord>();
+    latestRegistryList.forEach((c) => {
+      if (c && c.id && c.id !== "preview-cert") map.set(c.id, c);
+    });
+    latestDirectList.forEach((c) => {
+      if (c && c.id && c.id !== "preview-cert") map.set(c.id, c);
+    });
+    const merged = Array.from(map.values()).sort(
+      (a, b) => new Date(b.issuedAt || 0).getTime() - new Date(a.issuedAt || 0).getTime()
+    );
+    if (fromServerSnapshot && hasRegistryLoaded && typeof window !== "undefined") {
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merged.slice(0, 100)));
+      } catch {}
+    }
+    callback(merged);
+  };
+
+  getSiteContentFromFirestore<CertificateRecord[]>(REGISTRY_DOC_ID)
+    .then((remote) => {
+      hasRegistryLoaded = true;
+      if (Array.isArray(remote)) {
+        latestRegistryList = remote.filter((c) => c && c.id !== "preview-cert");
+        emitMerged(false);
+      }
+    })
+    .catch(() => {
+      hasRegistryLoaded = true;
+    });
+
   const colRef = collection(db, CERTIFICATES_COLLECTION);
   const q = query(colRef, orderBy("issuedAt", "desc"), limit(500));
 
   return onSnapshot(
     q,
     (snapshot) => {
-      if (!snapshot.empty) {
-        const list: CertificateRecord[] = [];
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data() as CertificateRecord;
-          if (data.id !== "preview-cert") {
-            list.push(data);
-          }
-        });
-        // Keep localStorage cache synchronized with authoritative server state
-        // so deleted/stale items don't flash on subsequent page refreshes.
-        if (!snapshot.metadata.fromCache && typeof window !== "undefined") {
-          try {
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list.slice(0, 100)));
-          } catch {}
+      const list: CertificateRecord[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as CertificateRecord;
+        if (data && data.id !== "preview-cert") {
+          list.push(data);
         }
-        callback(list);
-      } else {
-        // Fallback check site_content/certificates_registry
-        getSiteContentFromFirestore<CertificateRecord[]>(REGISTRY_DOC_ID).then((remote) => {
-          if (remote && Array.isArray(remote) && remote.length > 0) {
-            callback(remote);
-          } else {
-            callback([]);
-          }
-        });
-      }
+      });
+      latestDirectList = list;
+      emitMerged(!snapshot.metadata.fromCache);
     },
     (error) => {
       console.warn("Certificates stream error, falling back to site_content registry:", error);
       getSiteContentFromFirestore<CertificateRecord[]>(REGISTRY_DOC_ID).then((remote) => {
+        hasRegistryLoaded = true;
         if (remote && Array.isArray(remote)) {
-          callback(remote);
+          latestRegistryList = remote.filter((c) => c && c.id !== "preview-cert");
+          emitMerged(false);
         }
       });
     }
