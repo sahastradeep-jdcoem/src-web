@@ -624,20 +624,6 @@ export async function batchSaveCertificatesToFirestore(
     individualWriteCount = fallbackResults.filter((r) => r.status === "fulfilled").length;
   }
 
-  // 3. Local storage cache update & instant cross-tab notification
-  try {
-    if (typeof window !== "undefined") {
-      const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
-      const list: CertificateRecord[] = cached ? JSON.parse(cached) : [];
-      const map = new Map(list.map((c) => [c.id, c]));
-      compactCerts.forEach((c) => map.set(c.id, c));
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(Array.from(map.values()).slice(0, 100)));
-      window.dispatchEvent(new CustomEvent("src_certificates_updated", { detail: compactCerts }));
-    }
-  } catch (cacheErr) {
-    console.warn("Could not cache certificates locally:", cacheErr);
-  }
-
   // Helper for background secondary sync (registry compaction & club logo persistence)
   const performSecondarySync = async () => {
     // Dual-write to site_content/certificates_registry with COMPACTION
@@ -703,8 +689,26 @@ export async function batchSaveCertificatesToFirestore(
     // If direct write failed, wait for secondary backup so write isn't lost
     await performSecondarySync();
     if (individualWriteCount === 0) {
-      throw new Error("Failed to write certificates to cloud");
+      throw new Error("Failed to write certificates to cloud. Please check your permissions or internet connection.");
     }
+  }
+
+  // 3. Local storage cache update & instant cross-tab notification (ONLY after cloud write succeeds)
+  // Sort by issuedAt descending BEFORE slicing so newly published certificates are never truncated
+  try {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+      const list: CertificateRecord[] = cached ? JSON.parse(cached) : [];
+      const map = new Map(list.map((c) => [c.id, c]));
+      compactCerts.forEach((c) => map.set(c.id, c));
+      const sorted = Array.from(map.values()).sort(
+        (a, b) => new Date(b.issuedAt || 0).getTime() - new Date(a.issuedAt || 0).getTime()
+      );
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sorted.slice(0, 100)));
+      window.dispatchEvent(new CustomEvent("src_certificates_updated", { detail: compactCerts }));
+    }
+  } catch (cacheErr) {
+    console.warn("Could not cache certificates locally:", cacheErr);
   }
 
   return { success: true, count: certs.length };

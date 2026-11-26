@@ -155,7 +155,8 @@ service cloud.firestore {
         (hasRole('PROTOCOL_OFFICER') && (docId == 'src_dispatches' || docId == 'src_dispatch_responses')) ||
         (hasRole('TREASURER') && (docId == 'payment_config' || docId == 'gmail_oauth_config' || docId == 'gmail_oauth_connection')) ||
         (hasRole('CHIEF_EDITOR') && (docId == 'gallery_photos' || docId == 'gallery_categories')) ||
-        (isClubOwner() && (docId == 'clubs' || docId == 'listings')) ||
+        (isClubOwner() && (docId == 'clubs' || docId == 'listings' || docId == 'certificates_registry' || docId.matches('^cert_logo_.*'))) ||
+        (isEventCoordinator() && (docId == 'certificates_registry' || docId.matches('^cert_logo_.*'))) ||
         (docId in ['gmail_oauth_config', 'gmail_oauth_connection']);
     }
 
