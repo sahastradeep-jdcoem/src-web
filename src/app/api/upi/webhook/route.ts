@@ -950,7 +950,8 @@ export async function POST(req: NextRequest) {
         }
 
         if (matchingDoc && extractedSender) {
-          const regName = matchingDoc.data()?.participantName || matchingDoc.data()?.leaderName || "";
+          const mData = (typeof matchingDoc.data === "function" ? matchingDoc.data() : matchingDoc.data) || {};
+          const regName = mData.participantName || mData.leaderName || "";
           if (!isNameCompatible(extractedSender, regName)) {
             // Friend account payment:
             // If matched by exact 12-digit bank UTR or verified checkout orderId,
@@ -1010,6 +1011,31 @@ export async function POST(req: NextRequest) {
             }
           } else {
             updatePayload["paymentDetails.bankUtr"] = utr;
+          }
+
+          // Ensure verified_upi_payments/{finalPaymentId} exists before updating registration
+          // (e.g. when Paytm synthetic signal matches a registration with a manually entered 12-digit UTR)
+          if (finalPaymentId && finalPaymentId !== utr) {
+            try {
+              await setDoc(doc(db, "verified_upi_payments", finalPaymentId), {
+                utr: finalPaymentId,
+                amount: Number(amount || regData.amountPaid || 0),
+                rawNotification: combinedText,
+                status: "MATCHED",
+                isSyntheticUtr: false,
+                reconciledFromSynthetic: utr,
+                source: sourceAppName,
+                matchedRegistrationId: matchingDoc.id,
+                matchedOrderId: matchedOrderId || regData.orderId || null,
+                matchedStudentName: matchedStudentName || null,
+                payerName: payerName || null,
+                isFriendPayment: Boolean(isFriendPayment),
+                receivedAt: now,
+                transactionTimestamp,
+                notificationTimestamp: rawPostTime || contentDate.getTime(),
+                matchedAt: now,
+              }, { merge: true });
+            } catch {}
           }
 
           const docRef = matchingDoc.ref || doc(db, "registrations", matchingDoc.id);
