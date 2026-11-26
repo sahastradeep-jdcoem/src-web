@@ -57,18 +57,36 @@ export function evaluateCandidateAgainstRegistration(
   const candOrderId = (cand.orderId || cand.matchedOrderId || "").trim();
   const candRegId = (cand.registrationId || cand.matchedRegistrationId || "").trim();
 
-  // Strict Invariant: If candidate is explicitly tied to another registration or order, DISQUALIFY
+  // Pre-compute 12-digit Bank UTR match so an exact globally-unique bank UTR can reconcile
+  // even if the student refreshed the checkout modal and generated a second orderId.
+  const studentManualUtr = (
+    (reg as any).submittedUtr ||
+    (reg as any).paymentDetails?.bankUtr ||
+    (reg as any).customAnswers?.upiUtr ||
+    regPaymentId ||
+    ""
+  ).trim();
+
+  const is12DigitBankUtrMatch = Boolean(
+    candUtr &&
+    /^\d{12}$/.test(candUtr) &&
+    studentManualUtr &&
+    /^\d{12}$/.test(studentManualUtr) &&
+    candUtr === studentManualUtr
+  );
+
+  // Strict Invariant: If candidate is explicitly tied to another registration, DISQUALIFY
   if (candRegId && regDocId && candRegId !== regDocId && candRegId !== regTicketId) {
     return null;
   }
-  if (candOrderId && regOrderId && candOrderId !== regOrderId) {
+  if (candOrderId && regOrderId && candOrderId !== regOrderId && !is12DigitBankUtrMatch) {
     return null;
   }
 
   // Strict Invariant: If candidate has a payer name that contradicts student name,
-  // do not match unless there is an explicit Order ID or Pass ID link
+  // do not match unless there is an explicit Order ID, Pass ID, or 12-digit Bank UTR link
   const candPayer = (cand.payerName || "").trim();
-  if (candPayer && regName) {
+  if (candPayer && regName && !is12DigitBankUtrMatch) {
     const isNameMatch = isNameCompatible(candPayer, regName);
     const hasExplicitIdLink = Boolean(
       (regOrderId && candOrderId && regOrderId === candOrderId) ||
@@ -93,22 +111,6 @@ export function evaluateCandidateAgainstRegistration(
 
   // Dimension 3: Bank UTR Reference Match
   // Invariant: If manually entered 12-digit UTR matches a Bank SMS 12-digit UTR, it is an unequivocal 100% match!
-  const studentManualUtr = (
-    (reg as any).submittedUtr ||
-    (reg as any).paymentDetails?.bankUtr ||
-    (reg as any).customAnswers?.upiUtr ||
-    regPaymentId ||
-    ""
-  ).trim();
-
-  const is12DigitBankUtrMatch = Boolean(
-    candUtr &&
-    /^\d{12}$/.test(candUtr) &&
-    studentManualUtr &&
-    /^\d{12}$/.test(studentManualUtr) &&
-    candUtr === studentManualUtr
-  );
-
   if (is12DigitBankUtrMatch) {
     score += 100;
     matchedDims.push("100% Bank UTR Match");

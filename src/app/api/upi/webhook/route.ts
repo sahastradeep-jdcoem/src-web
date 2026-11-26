@@ -304,25 +304,90 @@ export async function POST(req: NextRequest) {
           const existingPayer = existingData?.payerName || payerName || null;
           const existingIsFriend = Boolean(existingData?.isFriendPayment ?? isFriendPayment);
 
+          // Self-heal: If payment was already recorded before student submitted manual UTR,
+          // check if a PENDING registration now exists with this exact 12-digit UTR and auto-approve it.
+          let healedRegId: string | null = existingRegId;
+          let healedStudent: string | null = existingStudent;
+          if (!existingRegId && !isSyntheticUtr && utr) {
+            try {
+              let pendingSnap = await getDocs(query(collection(db, "registrations"), where("paymentId", "==", utr), limit(1)));
+              if (pendingSnap.empty) {
+                pendingSnap = await getDocs(query(collection(db, "registrations"), where("customAnswers.upiUtr", "==", utr), limit(1)));
+              }
+              if (!pendingSnap.empty) {
+                const regDoc = pendingSnap.docs[0];
+                const rData = regDoc.data();
+                if (rData?.paymentStatus !== "PAID") {
+                  await updateDoc(regDoc.ref, {
+                    paymentStatus: "PAID",
+                    status: "CONFIRMED",
+                    paymentId: utr,
+                    paidAt: now,
+                    amountPaid: Number(amount || existingData?.amount || rData.amountPaid || 0),
+                    verifiedBy: "Auto-Gateway (SRC PayHook - Bank SMS)",
+                    verifiedAt: now,
+                    payerName: existingPayer || null,
+                    isFriendPayment: existingIsFriend,
+                    "paymentDetails.paymentStatus": "PAID",
+                    "paymentDetails.utr": utr,
+                    "paymentDetails.bankUtr": utr,
+                    "paymentDetails.amount": Number(amount || existingData?.amount || rData.amountPaid || 0),
+                    "paymentDetails.verifiedAt": now,
+                  });
+                }
+                healedRegId = regDoc.id;
+                healedStudent = rData.participantName || rData.leaderName || existingStudent || "Student";
+                await setDoc(paymentDocRef, {
+                  status: "MATCHED",
+                  matchedRegistrationId: healedRegId,
+                  matchedOrderId: existingOrderId || rData.orderId || null,
+                  matchedStudentName: healedStudent,
+                  matchedAt: now,
+                }, { merge: true }).catch(() => {});
+              }
+            } catch (healErr) {
+              console.warn("Notice: duplicate-signal late registration heal warning:", healErr);
+            }
+          }
+
           // Return early on duplicate signal with zero redundant writes
           return NextResponse.json({
             success: true,
             isDuplicate: true,
             utr,
             amount,
-            matched: Boolean(existingRegId || existingOrderId),
-            matchedRegistrationId: existingRegId,
+            matched: Boolean(healedRegId || existingOrderId),
+            matchedRegistrationId: healedRegId,
             matchedOrderId: existingOrderId,
-            matchedStudentName: existingStudent,
+            matchedStudentName: healedStudent,
             payerName: existingPayer,
             isFriendPayment: existingIsFriend,
-            message: existingStudent
-              ? `Duplicate payment notification acknowledged for ${existingStudent}. Already verified as PAID.`
+            message: healedStudent
+              ? `Duplicate payment notification acknowledged for ${healedStudent}. Already verified as PAID.`
               : `Duplicate payment notification acknowledged for UTR ${utr}. Already recorded.`,
           });
         }
       } catch (idempotencyErr) {
         console.warn("Notice: idempotency lookup warning (proceeding):", idempotencyErr);
+      }
+
+      // Pre-record ledger entry in verified_upi_payments BEFORE updating active_checkout_sessions or registrations.
+      // Firestore security rules (Transition 2 & isVerifiedPaidRegistration Case 2) require verified_upi_payments/{utr}
+      // to exist prior to unauthenticated server-side payment status escalation.
+      try {
+        await setDoc(paymentDocRef, {
+          utr,
+          amount,
+          rawNotification: combinedText,
+          status: "UNCLAIMED",
+          isSyntheticUtr,
+          source: sourceAppName,
+          receivedAt: now,
+          transactionTimestamp,
+          notificationTimestamp: rawPostTime || contentDate.getTime(),
+        }, { merge: true });
+      } catch (preLedgerErr) {
+        console.warn("Notice: pre-ledger verified_upi_payments write warning:", preLedgerErr);
       }
 
       // 3A. Match active checkout session (for zero-touch hands-free auto-approval on the student's checkout screen)
@@ -340,6 +405,11 @@ export async function POST(req: NextRequest) {
             if (extractedSender && !isNameCompatible(extractedSender, matchedStudentName)) {
               isFriendPayment = true;
             }
+            await setDoc(paymentDocRef, {
+              status: "MATCHED",
+              matchedOrderId: sessionSnap.id,
+              matchedStudentName,
+            }, { merge: true }).catch(() => {});
             await updateDoc(sessionRef, {
               status: "COMPLETED",
               utr,
@@ -368,6 +438,11 @@ export async function POST(req: NextRequest) {
             const sessDoc = utrSessionSnap.docs[0];
             matchedOrderId = sessDoc.id;
             matchedStudentName = sessDoc.data().participantName || sessDoc.data().leaderName || sessDoc.data().email || "Student";
+            await setDoc(paymentDocRef, {
+              status: "MATCHED",
+              matchedOrderId: sessDoc.id,
+              matchedStudentName,
+            }, { merge: true }).catch(() => {});
             await setDoc(sessDoc.ref, {
               status: "COMPLETED",
               utr,
@@ -513,6 +588,12 @@ export async function POST(req: NextRequest) {
               } else {
                 matchedOrderId = bestMatch.id;
                 matchedStudentName = bestMatch.data.participantName || bestMatch.data.leaderName || bestMatch.data.email || "Student";
+                // Link matchedOrderId on verified_upi_payments first so Firestore Transition 2 passes
+                await setDoc(paymentDocRef, {
+                  status: "MATCHED",
+                  matchedOrderId: bestMatch.id,
+                  matchedStudentName,
+                }, { merge: true }).catch(() => {});
                 await setDoc(doc(db, "active_checkout_sessions", bestMatch.id), {
                   status: "COMPLETED",
                   utr,

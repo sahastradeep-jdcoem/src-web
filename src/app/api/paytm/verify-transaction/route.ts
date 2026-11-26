@@ -135,9 +135,10 @@ export async function POST(req: NextRequest) {
           const paymentData = paymentSnap.data();
           const expectedAmount = Number(amount || 0);
           
-          // Anti-Fraud: Only allow auto-verification if payment is UNCLAIMED or already matched to this specific orderId
+          // Anti-Fraud: Allow auto-verification if payment is UNCLAIMED, already matched to this orderId,
+          // or not yet claimed by any registration (since duplicate-UTR check above already verified uniqueness).
           const isEligibleToClaim = 
-            (!paymentData.status || paymentData.status === "UNCLAIMED" || paymentData.matchedOrderId === orderId);
+            (!paymentData.status || paymentData.status === "UNCLAIMED" || paymentData.matchedOrderId === orderId || !paymentData.matchedRegistrationId);
 
           // If amount is valid or matches expected fee (allowing for micro-paisa offset tolerance of <= ₹1.00)
           if (isEligibleToClaim && (!expectedAmount || (paymentData.amount && Math.abs(Number(paymentData.amount) - expectedAmount) <= 1.0) || (paymentData.amount && paymentData.amount >= expectedAmount))) {
