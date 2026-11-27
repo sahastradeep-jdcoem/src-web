@@ -286,6 +286,7 @@ export async function POST(req: NextRequest) {
     let matchedRegistrationId: string | null = null;
     let matchedOrderId: string | null = null;
     let matchedStudentName: string | null = null;
+    let matchedEventName: string | null = null;
     let payerName: string | null = extractedSender || null;
     let isFriendPayment = false;
 
@@ -1240,6 +1241,7 @@ export async function POST(req: NextRequest) {
           matchedRegistrationId = matchingDoc.id;
           const regData = (typeof matchingDoc.data === "function" ? matchingDoc.data() : matchingDoc.data) || {};
           matchedStudentName = regData.participantName || regData.leaderName || matchedStudentName || "Student";
+          matchedEventName = regData.eventTitle || regData.eventName || matchedEventName || null;
 
           // Invariant: If student manually entered a 12-digit UTR, NEVER overwrite it with a synthetic AUTO-PTM- reference!
           const rawExistingPaymentId = String(regData.paymentId || "").trim();
@@ -1454,6 +1456,7 @@ export async function POST(req: NextRequest) {
           matchedOrderId: matchedOrderId || null,
           matchedRegistrationId: matchedRegistrationId || null,
           matchedStudentName: matchedStudentName || null,
+          matchedEventName: matchedEventName || null,
           payerName: payerName || null,
           isFriendPayment: Boolean(isFriendPayment),
           source: sourceAppName,

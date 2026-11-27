@@ -2317,7 +2317,7 @@ export default function AdminPaymentsPage() {
 
       {/* 4. TRANSACTIONS LEDGER TABLE OR PAYHOOK SIGNALS */}
       {statusTab === "signals" ? (
-        <PayhookSignalsSection userEmail={user?.email} />
+        <PayhookSignalsSection userEmail={user?.email} registrations={registrations} />
       ) : (
         <div className="space-y-4">
           {pendingVerifiedMatches.length > 0 && (

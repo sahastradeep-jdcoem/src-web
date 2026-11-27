@@ -45,6 +45,7 @@ export interface WebhookLogItem {
   matchedOrderId?: string | null;
   matchedRegistrationId?: string | null;
   matchedStudentName?: string | null;
+  matchedEventName?: string | null;
   payerName?: string | null;
   isFriendPayment?: boolean;
   source?: string;
@@ -120,9 +121,18 @@ function parseNotificationContentTimestamp(log: WebhookLogItem): number {
 interface PayhookSignalsSectionProps {
   onClose?: () => void;
   userEmail?: string | null;
+  registrations?: Array<{
+    id: string;
+    registrationId?: string;
+    orderId?: string;
+    paymentId?: string;
+    eventTitle?: string;
+    eventName?: string;
+    paymentDetails?: any;
+  }>;
 }
 
-export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSectionProps) {
+export function PayhookSignalsSection({ onClose, userEmail, registrations = [] }: PayhookSignalsSectionProps) {
   const [logs, setLogs] = useState<WebhookLogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSendingPing, setIsSendingPing] = useState(false);
@@ -134,6 +144,39 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const [isGmailModalOpen, setIsGmailModalOpen] = useState(false);
   const [groupDuplicates, setGroupDuplicates] = useState(true);
+
+  // Fast lookup maps for resolving matched event name across both new and historical webhook signals
+  const eventLookupMaps = React.useMemo(() => {
+    const byRegId = new Map<string, string>();
+    const byOrderId = new Map<string, string>();
+    const byUtr = new Map<string, string>();
+
+    for (const r of registrations) {
+      const evName = String(r.eventTitle || r.eventName || "").trim();
+      if (!evName) continue;
+      if (r.id) byRegId.set(String(r.id).trim(), evName);
+      if (r.registrationId) byRegId.set(String(r.registrationId).trim(), evName);
+      if (r.orderId) byOrderId.set(String(r.orderId).trim(), evName);
+      if (r.paymentId) byUtr.set(String(r.paymentId).trim(), evName);
+      if (r.paymentDetails?.utr) byUtr.set(String(r.paymentDetails.utr).trim(), evName);
+      if (r.paymentDetails?.syntheticUtr) byUtr.set(String(r.paymentDetails.syntheticUtr).trim(), evName);
+    }
+    return { byRegId, byOrderId, byUtr };
+  }, [registrations]);
+
+  const resolveEventName = (log: WebhookLogItem): string | null => {
+    if (log.matchedEventName) return log.matchedEventName;
+    if (log.matchedRegistrationId && eventLookupMaps.byRegId.has(String(log.matchedRegistrationId).trim())) {
+      return eventLookupMaps.byRegId.get(String(log.matchedRegistrationId).trim()) || null;
+    }
+    if (log.matchedOrderId && eventLookupMaps.byOrderId.has(String(log.matchedOrderId).trim())) {
+      return eventLookupMaps.byOrderId.get(String(log.matchedOrderId).trim()) || null;
+    }
+    if (log.extractedUtr && log.extractedUtr !== "TEST_PING" && eventLookupMaps.byUtr.has(String(log.extractedUtr).trim())) {
+      return eventLookupMaps.byUtr.get(String(log.extractedUtr).trim()) || null;
+    }
+    return null;
+  };
 
   // Automatically open modal if redirected back from Google OAuth
   useEffect(() => {
@@ -624,6 +667,7 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
                   <th className="py-3 px-4">Signal Type</th>
                   <th className="py-3 px-4">Source / Package</th>
                   <th className="py-3 px-4">Amount &amp; UTR</th>
+                  <th className="py-3 px-4">Event</th>
                   <th className="py-3 px-4">Notification Content</th>
                   <th className="py-3 px-4 text-right">Action</th>
                 </tr>
@@ -632,6 +676,7 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
                 {displayedLogs.map((log) => {
                   const isTestPing = log.status === "TEST_PING" || log.extractedUtr === "TEST_PING";
                   const isMatched = log.status === "MATCHED";
+                  const matchedEvent = isTestPing ? null : resolveEventName(log);
 
                   return (
                     <tr 
@@ -707,6 +752,20 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
                               </div>
                             )}
                           </div>
+                        )}
+                      </td>
+
+                      {/* Matched Event */}
+                      <td className="py-3 px-4 max-w-[190px]">
+                        {matchedEvent ? (
+                          <span
+                            className="inline-block text-[11px] font-semibold text-slate-800 bg-slate-100 border border-slate-200/80 px-2 py-0.5 rounded-md truncate max-w-[180px]"
+                            title={matchedEvent}
+                          >
+                            {matchedEvent}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-[11px]">—</span>
                         )}
                       </td>
 
@@ -808,6 +867,13 @@ export function PayhookSignalsSection({ onClose, userEmail }: PayhookSignalsSect
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Matched Student:</span>
                   <p className="font-semibold text-slate-900">{selectedLog.matchedStudentName}</p>
+                </div>
+              )}
+
+              {resolveEventName(selectedLog) && (
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Matched Event:</span>
+                  <p className="font-semibold text-slate-900">{resolveEventName(selectedLog)}</p>
                 </div>
               )}
 
