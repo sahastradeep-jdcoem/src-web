@@ -142,14 +142,41 @@ function getApprovalBadgeInfo(r: any, verifiedUpiMap: Map<string, any>) {
   const synthUtr = String(r.paymentDetails?.syntheticUtr || r.paymentDetails?.gatewaySignalId || "").trim();
   const orderId = String(r.orderId || "").trim();
 
-  // 1. Explicit Admin / Human Manual Approval: (Admin, Manual)
+  // 1. Determine if student manually entered a UTR: "Manual" vs "Auto"
+  const submittedUtr = String(r.submittedUtr || r.customAnswers?.upiUtr || "").trim();
+  const hasManualUtr = Boolean(
+    r.isManualUtr === true ||
+    r.paymentDetails?.isManualUtr === true ||
+    /^\d{12}$/.test(submittedUtr) ||
+    (/^\d{12}$/.test(paymentId) && Boolean(synthUtr)) ||
+    (r.paymentStatus === "PENDING" && /^\d{12}$/.test(paymentId))
+  );
+
+  const modeLabel = hasManualUtr ? "Manual" : "Auto";
+  const modeStyle = hasManualUtr
+    ? "bg-amber-50 text-amber-800 border-amber-200/80"
+    : "bg-sky-50 text-sky-700 border-sky-200/80";
+
+  // 2. If not yet approved (PENDING), show no approval source badge yet
+  if (r.paymentStatus !== "PAID") {
+    return {
+      source: null,
+      modeLabel,
+      modeStyle,
+      sourceBadgeText: null,
+      sourceBadgeStyle: "",
+    };
+  }
+
+  // 3. Explicit Admin / Human Manual Approval: (Admin)
   const isExplicitManual = verifiedBy.includes("admin") || verifiedBy.includes("treasurer") || verifiedBy.includes("manual");
   if (isExplicitManual) {
     return {
       source: "Admin",
-      mode: "Manual",
-      badgeText: "(Admin, Manual)",
-      badgeStyle: "bg-amber-50 text-amber-800 border-amber-200/80",
+      modeLabel,
+      modeStyle,
+      sourceBadgeText: "(Admin)",
+      sourceBadgeStyle: "bg-amber-50 text-amber-800 border-amber-200/80",
     };
   }
 
@@ -161,24 +188,17 @@ function getApprovalBadgeInfo(r: any, verifiedUpiMap: Map<string, any>) {
 
   const signalSource = String(upiSignal?.source || "").toLowerCase();
 
-  // 2. Determine if student manually entered a UTR
-  const submittedUtr = String(r.submittedUtr || r.customAnswers?.upiUtr || "").trim();
-  const hasManualUtr = Boolean(
-    r.isManualUtr === true ||
-    r.paymentDetails?.isManualUtr === true ||
-    /^\d{12}$/.test(submittedUtr) ||
-    (/^\d{12}$/.test(paymentId) && Boolean(synthUtr)) ||
-    (r.paymentStatus === "PENDING" && /^\d{12}$/.test(paymentId))
-  );
-
-  // 3. Determine Source: Gmail vs SMS vs Paytm vs Cashfree vs Instamojo
+  // 4. Determine Approval Source: (Gmail), (SMS), (Paytm), (Cashfree), (Instamojo)
   let source = "Paytm";
+  let sourceBadgeStyle = "bg-blue-50 text-blue-700 border-blue-200/80";
+
   if (
     signalSource.includes("gmail") ||
     signalSource.includes("email") ||
     verifiedBy.includes("gmail")
   ) {
     source = "Gmail";
+    sourceBadgeStyle = "bg-rose-50 text-rose-700 border-rose-200/80";
   } else if (
     signalSource.includes("sms") ||
     signalSource.includes("messages") ||
@@ -186,6 +206,7 @@ function getApprovalBadgeInfo(r: any, verifiedUpiMap: Map<string, any>) {
     verifiedBy.includes("sms")
   ) {
     source = "SMS";
+    sourceBadgeStyle = "bg-emerald-50 text-emerald-700 border-emerald-200/80";
   } else if (
     paymentId.startsWith("AUTO-PTM-") ||
     synthUtr.startsWith("AUTO-PTM-") ||
@@ -194,35 +215,22 @@ function getApprovalBadgeInfo(r: any, verifiedUpiMap: Map<string, any>) {
     orderId.startsWith("SRC-PTM-")
   ) {
     source = "Paytm";
+    sourceBadgeStyle = "bg-blue-50 text-blue-700 border-blue-200/80";
   } else if (orderId.startsWith("CF_") || verifiedBy.includes("cashfree")) {
     source = "Cashfree";
+    sourceBadgeStyle = "bg-slate-100 text-slate-700 border-slate-200/80";
   } else if (orderId.startsWith("IM_") || verifiedBy.includes("instamojo")) {
     source = "Instamojo";
+    sourceBadgeStyle = "bg-slate-100 text-slate-700 border-slate-200/80";
   }
 
-  // 4. Format mode label: "Manual UTR" vs "Auto"
-  const modeLabel = hasManualUtr ? "Manual UTR" : "Auto";
-  const badgeText = `(${source}, ${modeLabel})`;
-
-  // 5. Crisp visual styling
-  let badgeStyle = "bg-blue-50 text-blue-700 border-blue-200/80";
-  if (source === "Gmail" && !hasManualUtr) {
-    badgeStyle = "bg-rose-50 text-rose-700 border-rose-200/80";
-  } else if (source === "Gmail" && hasManualUtr) {
-    badgeStyle = "bg-rose-100 text-rose-800 border-rose-300/80";
-  } else if (source === "SMS" && !hasManualUtr) {
-    badgeStyle = "bg-emerald-50 text-emerald-700 border-emerald-200/80";
-  } else if (source === "SMS" && hasManualUtr) {
-    badgeStyle = "bg-teal-50 text-teal-800 border-teal-200/80";
-  } else if (source === "Paytm" && hasManualUtr) {
-    badgeStyle = "bg-indigo-50 text-indigo-700 border-indigo-200/80";
-  } else if (source === "Paytm" && !hasManualUtr) {
-    badgeStyle = "bg-blue-50 text-blue-700 border-blue-200/80";
-  } else {
-    badgeStyle = "bg-slate-100 text-slate-700 border-slate-200/80";
-  }
-
-  return { source, mode: modeLabel, badgeText, badgeStyle };
+  return {
+    source,
+    modeLabel,
+    modeStyle,
+    sourceBadgeText: `(${source})`,
+    sourceBadgeStyle,
+  };
 }
 
 export default function AdminPaymentsPage() {
@@ -2413,23 +2421,6 @@ export default function AdminPaymentsPage() {
                     <tr key={r.id} className="hover:bg-slate-50/75 transition-colors">
                       {/* Order & Reference */}
                       <td className="py-3.5 px-4 space-y-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-slate-900 tracking-tight">
-                            {r.orderId || r.id.slice(0, 14)}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleCopy(r.orderId || r.id, `ord-${r.id}`)}
-                            title="Copy Order ID"
-                            className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer"
-                          >
-                            {copiedUtr === `ord-${r.id}` ? (
-                              <Check className="w-3 h-3 text-emerald-600" />
-                            ) : (
-                              <Copy className="w-3 h-3" />
-                            )}
-                          </button>
-                        </div>
                         {(() => {
                           const rawPaymentId = String(r.paymentId || "").trim();
                           const isDirectSynth = rawPaymentId.startsWith("AUTO-PTM-");
@@ -2440,132 +2431,87 @@ export default function AdminPaymentsPage() {
                           const studentClaimedUtr = String(
                             (!isDirectSynth && /^\d{12}$/.test(rawPaymentId))
                               ? rawPaymentId
-                              : ((r as any).paymentDetails?.bankUtr || (r as any).customAnswers?.upiUtr || (r as any).submittedUtr || "")
+                              : ((r as any).submittedUtr || (r as any).paymentDetails?.bankUtr || (r as any).customAnswers?.upiUtr || "")
                           ).trim();
                           const hasValidStudentUtr = /^\d{12}$/.test(studentClaimedUtr);
 
-                          // Strict Invariant: A genuine Bank SMS match must strictly belong to THIS registration or order.
+                          // Strict Invariant: A genuine Bank SMS / Gmail 12-digit UTR match belonging to THIS registration or order
+                          // automatically replaces any synthetic REF: AUTO-PTM-... display.
                           const realBankMatch = Array.from(verifiedUpiMap.values()).find((v) => {
                             if (v.utr.startsWith("AUTO-PTM-") || !/^\d{12}$/.test(v.utr)) return false;
                             return v.matchedRegistrationId === r.id || (Boolean(r.orderId) && v.matchedOrderId === r.orderId);
                           });
 
-                          const { badgeText, badgeStyle } = getApprovalBadgeInfo(r, verifiedUpiMap);
+                          const { modeLabel, modeStyle, sourceBadgeText, sourceBadgeStyle } = getApprovalBadgeInfo(r, verifiedUpiMap);
 
-                          // Case 1: Genuine Bank SMS specifically matched to this student
-                          if (realBankMatch) {
-                            return (
-                              <div className="space-y-0.5">
-                                <div className="flex items-center gap-1.5 text-[11px] font-mono text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md w-fit">
-                                  <span>UTR:</span>
-                                  <span className="font-bold">{realBankMatch.utr}</span>
-                                  <span className={`text-[10px] font-semibold font-sans px-1.5 py-0.5 rounded border normal-case tracking-normal ${badgeStyle}`}>
-                                    {badgeText}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleCopy(realBankMatch.utr, `utr-${r.id}`)}
-                                    title="Copy Bank UTR"
-                                    className="p-0.5 rounded text-emerald-700 hover:text-emerald-950 cursor-pointer"
-                                  >
-                                    {copiedUtr === `utr-${r.id}` ? (
-                                      <Check className="w-2.5 h-2.5 text-emerald-700" />
-                                    ) : (
-                                      <Copy className="w-2.5 h-2.5" />
+                          const genuineUtr = realBankMatch?.utr || (hasValidStudentUtr ? studentClaimedUtr : (!isDirectSynth && rawPaymentId ? rawPaymentId : ""));
+                          const displayCode = genuineUtr || rawPaymentId;
+                          const isShowingGenuineUtr = Boolean(genuineUtr);
+                          const codeLabel = isShowingGenuineUtr ? "UTR:" : "REF:";
+
+                          const pillClass = realBankMatch
+                            ? "text-emerald-800 bg-emerald-50 border-emerald-200"
+                            : isShowingGenuineUtr
+                            ? "text-slate-700 bg-slate-50 border-slate-200"
+                            : "text-slate-700 bg-slate-100 border-slate-200";
+
+                          return (
+                            <>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-mono font-bold text-slate-900 tracking-tight">
+                                  {r.orderId || r.id.slice(0, 14)}
+                                </span>
+                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border leading-none ${modeStyle}`}>
+                                  {modeLabel}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopy(r.orderId || r.id, `ord-${r.id}`)}
+                                  title="Copy Order ID"
+                                  aria-label="Copy Order ID"
+                                  className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer"
+                                >
+                                  {copiedUtr === `ord-${r.id}` ? (
+                                    <Check className="w-3 h-3 text-emerald-600" />
+                                  ) : (
+                                    <Copy className="w-3 h-3" />
+                                  )}
+                                </button>
+                              </div>
+
+                              {displayCode && (
+                                <div className="space-y-0.5">
+                                  <div className={`flex items-center gap-1.5 text-[11px] font-mono border px-2 py-0.5 rounded-md w-fit ${pillClass}`}>
+                                    <span>{codeLabel}</span>
+                                    <span className="font-bold">{displayCode}</span>
+                                    {sourceBadgeText && (
+                                      <span className={`text-[10px] font-semibold font-sans px-1.5 py-0.5 rounded border normal-case tracking-normal ${sourceBadgeStyle}`}>
+                                        {sourceBadgeText}
+                                      </span>
                                     )}
-                                  </button>
-                                </div>
-                                {synthUtr && synthUtr !== realBankMatch.utr && (
-                                  <div className="text-[10px] text-slate-400 font-mono">
-                                    Signal: <span className="text-slate-500">{synthUtr}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopy(displayCode, `utr-${r.id}`)}
+                                      title={`Copy ${isShowingGenuineUtr ? "UTR" : "Reference"}`}
+                                      aria-label={`Copy ${isShowingGenuineUtr ? "UTR" : "Reference"}`}
+                                      className="p-0.5 rounded text-slate-500 hover:text-slate-900 cursor-pointer"
+                                    >
+                                      {copiedUtr === `utr-${r.id}` ? (
+                                        <Check className="w-2.5 h-2.5 text-emerald-700" />
+                                      ) : (
+                                        <Copy className="w-2.5 h-2.5" />
+                                      )}
+                                    </button>
                                   </div>
-                                )}
-                              </div>
-                            );
-                          }
-
-                          // Case 2: Student manually entered genuine 12-digit UTR, confirmed by Paytm notification signal
-                          if (hasValidStudentUtr && synthUtr) {
-                            return (
-                              <div className="space-y-0.5">
-                                <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-800 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md w-fit">
-                                  <span>UTR:</span>
-                                  <span className="font-bold">{studentClaimedUtr}</span>
-                                  <span className={`text-[10px] font-semibold font-sans px-1.5 py-0.5 rounded border normal-case tracking-normal ${badgeStyle}`}>
-                                    {badgeText}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleCopy(studentClaimedUtr, `utr-${r.id}`)}
-                                    title="Copy Student UTR"
-                                    className="p-0.5 rounded text-slate-500 hover:text-slate-900 cursor-pointer"
-                                  >
-                                    {copiedUtr === `utr-${r.id}` ? (
-                                      <Check className="w-2.5 h-2.5 text-indigo-700" />
-                                    ) : (
-                                      <Copy className="w-2.5 h-2.5" />
-                                    )}
-                                  </button>
-                                </div>
-                                <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
-                                  <span>Signal:</span>
-                                  <span className="text-slate-600 font-medium">{synthUtr}</span>
-                                </div>
-                              </div>
-                            );
-                          }
-
-                          // Case 3: Only synthetic Paytm notification exists (no student-entered 12-digit UTR)
-                          if (isDirectSynth) {
-                            return (
-                              <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md w-fit">
-                                <span>REF:</span>
-                                <span className="font-semibold text-slate-800">{rawPaymentId}</span>
-                                <span className={`text-[10px] font-semibold font-sans px-1.5 py-0.5 rounded border normal-case tracking-normal ${badgeStyle}`}>
-                                  {badgeText}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopy(rawPaymentId, `utr-${r.id}`)}
-                                  title="Copy Paytm Signal Ref"
-                                  className="p-0.5 rounded text-slate-400 hover:text-slate-700 cursor-pointer"
-                                >
-                                  {copiedUtr === `utr-${r.id}` ? (
-                                    <Check className="w-2.5 h-2.5 text-emerald-600" />
-                                  ) : (
-                                    <Copy className="w-2.5 h-2.5" />
+                                  {isShowingGenuineUtr && synthUtr && synthUtr !== displayCode && (
+                                    <div className="text-[10px] text-slate-400 font-mono">
+                                      Signal: <span className="text-slate-500">{synthUtr}</span>
+                                    </div>
                                   )}
-                                </button>
-                              </div>
-                            );
-                          }
-
-                          // Case 4: Standard 12-digit Bank UTR / SMS
-                          if (rawPaymentId || studentClaimedUtr) {
-                            const displayUtr = hasValidStudentUtr ? studentClaimedUtr : rawPaymentId;
-                            return (
-                              <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-600 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md w-fit">
-                                <span>UTR:</span>
-                                <span className="font-semibold text-slate-800">{displayUtr}</span>
-                                <span className={`text-[10px] font-semibold font-sans px-1.5 py-0.5 rounded border normal-case tracking-normal ${badgeStyle}`}>
-                                  {badgeText}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopy(displayUtr, `utr-${r.id}`)}
-                                  title="Copy UTR"
-                                  className="p-0.5 rounded text-slate-400 hover:text-slate-700 cursor-pointer"
-                                >
-                                  {copiedUtr === `utr-${r.id}` ? (
-                                    <Check className="w-2.5 h-2.5 text-emerald-600" />
-                                  ) : (
-                                    <Copy className="w-2.5 h-2.5" />
-                                  )}
-                                </button>
-                              </div>
-                            );
-                          }
-                          return null;
+                                </div>
+                              )}
+                            </>
+                          );
                         })()}
                         <div className="text-[10px] text-slate-400">
                           {r.paidAt ? new Date(r.paidAt).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }) : (r.registeredAt ? new Date(r.registeredAt).toLocaleDateString("en-IN") : "N/A")}
