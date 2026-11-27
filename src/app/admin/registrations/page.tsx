@@ -2923,6 +2923,27 @@ export default function AdminRegistrationsPage() {
                       <p className="text-xs text-slate-500 font-mono font-semibold">
                         Reg ID: {currentIndividual.registrationId} • Code: {currentIndividual.ticketCode}
                       </p>
+                      <p className="text-xs text-slate-500 font-medium flex items-center gap-1.5 pt-0.5">
+                        <Clock className="w-3.5 h-3.5 text-[#17458F]" />
+                        <span>
+                          Registered:{" "}
+                          <strong className="text-slate-700 font-semibold">
+                            {(() => {
+                              const regMs = getRegistrationTimestampMs(currentIndividual);
+                              return regMs > 0
+                                ? new Date(regMs).toLocaleString("en-IN", {
+                                    day: "2-digit",
+                                    month: "short",
+                                    year: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    hour12: true,
+                                  })
+                                : currentIndividual.registeredAt || "N/A";
+                            })()}
+                          </strong>
+                        </span>
+                      </p>
                     </div>
 
                     <div className="flex items-center gap-2">
