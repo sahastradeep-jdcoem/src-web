@@ -73,6 +73,7 @@ import {
 import {
   getAllCertificatesFromFirestore,
   subscribeToCertificates,
+  subscribeToEventCertificates,
   saveCertificateToFirestore,
   batchSaveCertificatesToFirestore,
   revokeCertificateInFirestore,
@@ -872,6 +873,27 @@ function AdminCertificatesContent() {
 
   const isEventSelectionActive = Boolean(currentEvent || selectedEventId === "all");
 
+  // Event-scoped real-time listener (where eventId/eventSlug == currentEvent)
+  // Bypasses global limit(500) so selecting any event always streams 100% of its certificates.
+  const [selectedEventCerts, setSelectedEventCerts] = useState<CertificateRecord[] | null>(null);
+
+  useEffect(() => {
+    if (!currentEvent) {
+      setSelectedEventCerts(null);
+      return;
+    }
+    let active = true;
+    const unsub = subscribeToEventCertificates(currentEvent.id, currentEvent.slug, (evtCerts) => {
+      if (!active) return;
+      setSelectedEventCerts(evtCerts);
+    });
+    return () => {
+      active = false;
+      setSelectedEventCerts(null);
+      unsub();
+    };
+  }, [currentEvent?.id, currentEvent?.slug]);
+
   // Certificates for the current selected event (or all events ONLY if explicitly chosen)
   // Keeps performance lightning fast by not eagerly loading massive datasets when no event filter is set
   const eventCertificates = useMemo(() => {
@@ -883,8 +905,17 @@ function AdminCertificatesContent() {
       if (isScopedEventManager && !canUserManageEvent(currentEvent, adminAccess, user?.btId, allKnownEvents)) {
         return [];
       }
-      return allCertificates.filter(
+      const fallbackFiltered = allCertificates.filter(
         (c) => c.eventId === currentEvent.id || c.eventSlug === currentEvent.slug
+      );
+      if (selectedEventCerts === null) {
+        return fallbackFiltered;
+      }
+      const map = new Map<string, CertificateRecord>();
+      fallbackFiltered.forEach((c) => map.set(c.id, c));
+      selectedEventCerts.forEach((c) => map.set(c.id, c));
+      return Array.from(map.values()).sort(
+        (a, b) => new Date(b.issuedAt || 0).getTime() - new Date(a.issuedAt || 0).getTime()
       );
     }
 
@@ -907,7 +938,7 @@ function AdminCertificatesContent() {
     }
 
     return [];
-  }, [allCertificates, currentEvent, selectedEventId, selectedTenureId, tenureFilteredEvents, isScopedEventManager, adminAccess, user?.btId, allKnownEvents, isCertificateOwned, scopedAllCertificates]);
+  }, [allCertificates, selectedEventCerts, currentEvent, selectedEventId, selectedTenureId, tenureFilteredEvents, isScopedEventManager, adminAccess, user?.btId, allKnownEvents, isCertificateOwned, scopedAllCertificates]);
 
   // -------------------------------------------------------------
   // Dynamic Participant & Team Member Expansion for Certificate Issuance

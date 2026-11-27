@@ -35,6 +35,7 @@ import { resolveTenureForEvent } from "@/lib/eventsStore";
 import {
   generateCertificateNumber,
   batchSaveCertificatesToFirestore,
+  subscribeToEventCertificates,
   DEFAULT_CITATION_TEMPLATE,
   DEFAULT_ACHIEVEMENT_CITATION_TEMPLATE,
   getDefaultCitationForType,
@@ -298,14 +299,32 @@ export function ManualCertificateModal({
   const [verifiedStudents, setVerifiedStudents] = useState<ManualStudentEntry[]>([]);
   const [isPublishing, setIsPublishing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [modalEventCerts, setModalEventCerts] = useState<CertificateRecord[]>([]);
+
+  // Subscribe to selected event's certificates so duplicate detection works even beyond global limit(500)
+  useEffect(() => {
+    if (!isOpen || !currentEvent) {
+      setModalEventCerts([]);
+      return;
+    }
+    let active = true;
+    const unsub = subscribeToEventCertificates(currentEvent.id, currentEvent.slug, (certs) => {
+      if (active) setModalEventCerts(certs);
+    });
+    return () => {
+      active = false;
+      unsub();
+    };
+  }, [isOpen, currentEvent?.id, currentEvent?.slug]);
 
   // Set of BT IDs that already have a non-revoked certificate of the selected type for the current event
   const alreadyCertifiedBtIds = useMemo(() => {
     const set = new Set<string>();
-    if (!currentEvent || !Array.isArray(existingCertificates)) return set;
+    if (!currentEvent) return set;
     const evtId = (currentEvent.id || "").toLowerCase();
     const evtSlug = (currentEvent.slug || "").toLowerCase();
-    existingCertificates.forEach((c) => {
+    const combined = [...(existingCertificates || []), ...modalEventCerts];
+    combined.forEach((c) => {
       if (c.status === "REVOKED") return;
       const matchesEvent =
         (evtId && (c.eventId || "").toLowerCase() === evtId) ||
@@ -315,7 +334,7 @@ export function ManualCertificateModal({
       }
     });
     return set;
-  }, [currentEvent, existingCertificates, certType]);
+  }, [currentEvent, existingCertificates, modalEventCerts, certType]);
 
   // Process entered BT IDs on Enter key or button click
   const handleProcessBtIds = async () => {

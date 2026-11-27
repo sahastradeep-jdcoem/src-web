@@ -867,6 +867,120 @@ export function subscribeToCertificates(
 }
 
 /**
+ * Real-time listener scoped strictly to a specific event (by eventId & eventSlug).
+ * Bypasses global limit(500) so events scale cleanly even with 10,000+ total certificates.
+ */
+export function subscribeToEventCertificates(
+  eventId: string | undefined | null,
+  eventSlug: string | undefined | null,
+  callback: (certs: CertificateRecord[]) => void
+): () => void {
+  const cleanId = (eventId || "").trim();
+  const cleanSlug = (eventSlug || "").trim();
+  if (!cleanId && !cleanSlug) {
+    callback([]);
+    return () => {};
+  }
+
+  if (!db) {
+    getAllCertificatesFromFirestore().then((all) => {
+      callback(
+        all.filter(
+          (c) =>
+            (cleanId && (c.eventId === cleanId || c.eventSlug === cleanId)) ||
+            (cleanSlug && (c.eventSlug === cleanSlug || c.eventId === cleanSlug))
+        )
+      );
+    });
+    return () => {};
+  }
+
+  const colRef = collection(db, CERTIFICATES_COLLECTION);
+  const idMap = new Map<string, CertificateRecord>();
+  const slugMap = new Map<string, CertificateRecord>();
+  const registryMap = new Map<string, CertificateRecord>();
+
+  const emitMerged = () => {
+    const merged = new Map<string, CertificateRecord>();
+    registryMap.forEach((v, k) => merged.set(k, v));
+    idMap.forEach((v, k) => merged.set(k, v));
+    slugMap.forEach((v, k) => merged.set(k, v));
+    const list = Array.from(merged.values()).sort(
+      (a, b) => new Date(b.issuedAt || 0).getTime() - new Date(a.issuedAt || 0).getTime()
+    );
+    callback(list);
+  };
+
+  getSiteContentFromFirestore<CertificateRecord[]>(REGISTRY_DOC_ID)
+    .then((remote) => {
+      if (Array.isArray(remote)) {
+        registryMap.clear();
+        remote.forEach((c) => {
+          if (!c || c.id === "preview-cert") return;
+          const matchesEvent =
+            (cleanId && (c.eventId === cleanId || c.eventSlug === cleanId)) ||
+            (cleanSlug && (c.eventSlug === cleanSlug || c.eventId === cleanSlug));
+          if (matchesEvent) {
+            registryMap.set(c.id, c);
+          }
+        });
+        emitMerged();
+      }
+    })
+    .catch(() => {});
+
+  const unsubs: (() => void)[] = [];
+
+  if (cleanId) {
+    const qId = query(colRef, where("eventId", "==", cleanId));
+    unsubs.push(
+      onSnapshot(
+        qId,
+        (snapshot) => {
+          idMap.clear();
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data() as CertificateRecord;
+            if (data && data.id !== "preview-cert") {
+              idMap.set(data.id, data);
+            }
+          });
+          emitMerged();
+        },
+        (err) => {
+          console.warn("Event certificates (eventId) stream notice:", err);
+        }
+      )
+    );
+  }
+
+  if (cleanSlug && cleanSlug !== cleanId) {
+    const qSlug = query(colRef, where("eventSlug", "==", cleanSlug));
+    unsubs.push(
+      onSnapshot(
+        qSlug,
+        (snapshot) => {
+          slugMap.clear();
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data() as CertificateRecord;
+            if (data && data.id !== "preview-cert") {
+              slugMap.set(data.id, data);
+            }
+          });
+          emitMerged();
+        },
+        (err) => {
+          console.warn("Event certificates (eventSlug) stream notice:", err);
+        }
+      )
+    );
+  }
+
+  return () => {
+    unsubs.forEach((u) => u());
+  };
+}
+
+/**
  * Get persistent administrative certificate settings (signatories, default citations, club emblems)
  * Features in-memory caching and promise deduplication to eliminate burst Firestore reads.
  */
