@@ -167,6 +167,7 @@ export default function AdminRegistrationsPage() {
   // Search & Filters for Table tab
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [tableSortOrder, setTableSortOrder] = useState<"asc" | "desc">("asc");
   
   // Question View State
   const [selectedQuestionIndex, setSelectedQuestionIndex] = useState(0);
@@ -960,9 +961,9 @@ export default function AdminRegistrationsPage() {
   // Export Excel button is enabled only after selecting a specific event filter
   const isExportDisabled = !selectedEventSlug || selectedEventSlug === "all" || eventRegistrations.length === 0;
 
-  // Filtered registrations for the Table tab (with search & status)
+  // Filtered registrations for the Table tab (with search, status & sort order)
   const tableFilteredRegistrations = useMemo(() => {
-    return eventRegistrations.filter((r) => {
+    const filtered = eventRegistrations.filter((r) => {
       const matchesSearch =
         r.participantName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         r.registrationId.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -980,7 +981,12 @@ export default function AdminRegistrationsPage() {
 
       return matchesSearch && matchesStatus;
     });
-  }, [eventRegistrations, searchQuery, statusFilter]);
+
+    if (tableSortOrder === "desc") {
+      return [...filtered].reverse();
+    }
+    return filtered;
+  }, [eventRegistrations, searchQuery, statusFilter, tableSortOrder]);
 
   // Summary Metrics for the active event scope
   const metrics = useMemo(() => {
@@ -3165,6 +3171,33 @@ export default function AdminRegistrationsPage() {
                     {st}
                   </button>
                 ))}
+              </div>
+
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setTableSortOrder("asc")}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                    tableSortOrder === "asc"
+                      ? "bg-white text-[#17458F] shadow-2xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                  title="Sort Oldest to Newest"
+                >
+                  Old → New
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTableSortOrder("desc")}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                    tableSortOrder === "desc"
+                      ? "bg-white text-[#17458F] shadow-2xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                  title="Sort Newest to Oldest"
+                >
+                  New → Old
+                </button>
               </div>
 
               <div className="hidden sm:flex items-center gap-2 border-l border-slate-200 pl-3">
