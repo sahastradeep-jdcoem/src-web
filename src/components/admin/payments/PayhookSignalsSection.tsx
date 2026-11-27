@@ -209,6 +209,18 @@ export function PayhookSignalsSection({ onClose, userEmail, registrations = [] }
       const existing = result.find((r) => {
         if (!r.extractedAmount || r.status === "TEST_PING") return false;
 
+        // Never merge two signals that matched different students
+        if (r.matchedStudentName && log.matchedStudentName && r.matchedStudentName !== log.matchedStudentName) {
+          return false;
+        }
+
+        // Never merge two signals with different genuine 12-digit Bank UTRs
+        const rIsRealUtr = Boolean(r.extractedUtr && /^\d{12}$/.test(r.extractedUtr));
+        const logIsRealUtr = Boolean(log.extractedUtr && /^\d{12}$/.test(log.extractedUtr));
+        if (rIsRealUtr && logIsRealUtr && r.extractedUtr !== log.extractedUtr) {
+          return false;
+        }
+
         // 1. Same explicit 12-digit UTR
         if (r.extractedUtr && log.extractedUtr && r.extractedUtr === log.extractedUtr) {
           return true;
@@ -361,7 +373,7 @@ export function PayhookSignalsSection({ onClose, userEmail, registrations = [] }
       const q = query(
         collection(db, "upi_webhook_logs"),
         orderBy("receivedAt", "desc"),
-        limit(40)
+        limit(200)
       );
 
       const unsubscribe = onSnapshot(q, (snapshot) => {
