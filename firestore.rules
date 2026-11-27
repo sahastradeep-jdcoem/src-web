@@ -305,6 +305,13 @@ service cloud.firestore {
           (
             resource.data.status == 'WAITING' &&
             request.resource.data.status in ['FAILED', 'DROPPED']
+          ) ||
+          // Transition 4: Allow linking registrationId or upgrading with Bank SMS UTR on an already-COMPLETED session
+          (
+            resource.data.status == 'COMPLETED' &&
+            request.resource.data.status == 'COMPLETED' &&
+            request.resource.data.receivedAmount >= resource.data.amount &&
+            (!('registrationId' in resource.data) || resource.data.registrationId == null || resource.data.registrationId == '' || request.resource.data.registrationId == resource.data.registrationId)
           )
         )
       );

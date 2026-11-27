@@ -257,26 +257,14 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      if (sessionRef && sessionSnap?.exists()) {
-        tx.set(
-          sessionRef,
-          {
-            status: "COMPLETED",
-            registrationId: targetRegId,
-            receivedAmount: finalAmount,
-            utr: resolvedUtr || sessionData?.utr || null,
-            paidAt: finalPaidAt,
-            completedAt: sessionData?.completedAt || nowIso,
-          },
-          { merge: true }
-        );
-      }
-
       return {
         finalPaymentId,
         resolvedUtr,
         finalAmount,
         finalPaidAt,
+        shouldUpdateSession: Boolean(sessionRef && sessionSnap?.exists()),
+        sessionCompletedAt: sessionData?.completedAt || nowIso,
+        sessionExistingUtr: sessionData?.utr || null,
         sourceApp:
           ledgerData?.sourceApp ||
           ledgerData?.packageName ||
@@ -286,6 +274,22 @@ export async function POST(req: NextRequest) {
         hasLedger: Boolean(ledgerSnap?.exists()),
       };
     });
+
+    // Step 1B: Update session AFTER ledgerRef lock commits (satisfies Firestore Rules Transition 2 get())
+    if (sessionRef && lockResult.shouldUpdateSession) {
+      await setDoc(
+        sessionRef,
+        {
+          status: "COMPLETED",
+          registrationId: targetRegId,
+          receivedAmount: lockResult.finalAmount,
+          utr: lockResult.resolvedUtr || lockResult.sessionExistingUtr || null,
+          paidAt: lockResult.finalPaidAt,
+          completedAt: lockResult.sessionCompletedAt,
+        },
+        { merge: true }
+      ).catch((e) => console.warn("Session link update notice:", e));
+    }
 
     // Step 2: Update (or create ONLY if registrationData provided AND session was COMPLETED) registrations/{targetRegId}
     const regRef = doc(db, "registrations", targetRegId);

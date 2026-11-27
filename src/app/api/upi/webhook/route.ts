@@ -922,7 +922,7 @@ export async function POST(req: NextRequest) {
                 const candidateRegId = bestMatch.data.registrationId || null;
                 const sessionRef = doc(db, "active_checkout_sessions", candidateOrderId);
 
-                // Atomic 1:1 Lock via Firestore Transaction: prevent two concurrent signals or two sessions double-claiming
+                // Step A: Atomic 1:1 Lock on verified_upi_payments/{utr} ONLY so it commits BEFORE session transition
                 const txClaimed = await runTransaction(db, async (tx) => {
                   const [pSnap, sSnap] = await Promise.all([
                     tx.get(paymentDocRef),
@@ -950,28 +950,35 @@ export async function POST(req: NextRequest) {
                     { merge: true }
                   );
 
-                  tx.set(
-                    sessionRef,
-                    {
-                      status: "COMPLETED",
-                      utr,
-                      receivedAmount: amount,
-                      paidAt: now,
-                      completedAt: now,
-                      rawNotification: combinedText,
-                      payerName: payerName || null,
-                      isFriendPayment: Boolean(isFriendPayment),
-                    },
-                    { merge: true }
-                  );
-
                   return true;
-                }).catch(() => false);
+                }).catch((err) => {
+                  console.error("Tier 2 ledger lock transaction error:", err);
+                  return false;
+                });
 
+                // Step B: Now that verified_upi_payments/{utr} is committed with matchedOrderId, complete the session
                 if (txClaimed) {
-                  matchedOrderId = candidateOrderId;
-                  matchedStudentName = candidateStudent;
-                  matchedEventName = bestMatch.data.eventName || bestMatch.data.eventTitle || matchedEventName || null;
+                  try {
+                    await setDoc(
+                      sessionRef,
+                      {
+                        status: "COMPLETED",
+                        utr,
+                        receivedAmount: amount,
+                        paidAt: now,
+                        completedAt: now,
+                        rawNotification: combinedText,
+                        payerName: payerName || null,
+                        isFriendPayment: Boolean(isFriendPayment),
+                      },
+                      { merge: true }
+                    );
+                    matchedOrderId = candidateOrderId;
+                    matchedStudentName = candidateStudent;
+                    matchedEventName = bestMatch.data.eventName || bestMatch.data.eventTitle || matchedEventName || null;
+                  } catch (sessErr) {
+                    console.error("Tier 2 session completion error:", sessErr);
+                  }
                 }
               }
             }
@@ -993,7 +1000,7 @@ export async function POST(req: NextRequest) {
             const pendingCheckSnap = await getDocs(query(
               collection(db, "registrations"),
               where("paymentStatus", "==", "PENDING"),
-              limit(25)
+              limit(150)
             ));
             if (!pendingCheckSnap.empty) {
               const candSig = {
@@ -1131,6 +1138,7 @@ export async function POST(req: NextRequest) {
                   const recSessionRef = doc(db, "active_checkout_sessions", recovered.id);
                   const recRegId = recovered.data.registrationId || null;
 
+                  // Step A: Lock paymentDocRef atomically BEFORE updating session status
                   const revived = await runTransaction(db, async (tx) => {
                     const [pSnap, sSnap] = await Promise.all([
                       tx.get(paymentDocRef),
@@ -1143,11 +1151,6 @@ export async function POST(req: NextRequest) {
                       (pData?.claimedByRegistrationId && recRegId && pData.claimedByRegistrationId !== recRegId)
                     ) {
                       return false;
-                    }
-
-                    if (extractedSender && !isNameCompatible(extractedSender, recName)) {
-                      isFriendPayment = true;
-                      payerName = extractedSender;
                     }
 
                     tx.set(
@@ -1163,30 +1166,41 @@ export async function POST(req: NextRequest) {
                       { merge: true }
                     );
 
-                    tx.set(
-                      recSessionRef,
-                      {
-                        status: "COMPLETED",
-                        utr,
-                        receivedAmount: amount,
-                        paidAt: now,
-                        completedAt: now,
-                        transactionTimestamp,
-                        rawNotification: combinedText,
-                        payerName: payerName || null,
-                        isFriendPayment: Boolean(isFriendPayment),
-                        recoveredFromExpired: true,
-                      },
-                      { merge: true }
-                    );
-
                     return true;
-                  }).catch(() => false);
+                  }).catch((err) => {
+                    console.error("Tier 2B ledger lock error:", err);
+                    return false;
+                  });
 
+                  // Step B: Complete EXPIRED session after ledger lock commits
                   if (revived) {
-                    matchedOrderId = recovered.id;
-                    matchedStudentName = recName;
-                    matchedEventName = recovered.data.eventName || recovered.data.eventTitle || matchedEventName || null;
+                    if (extractedSender && !isNameCompatible(extractedSender, recName)) {
+                      isFriendPayment = true;
+                      payerName = extractedSender;
+                    }
+                    try {
+                      await setDoc(
+                        recSessionRef,
+                        {
+                          status: "COMPLETED",
+                          utr,
+                          receivedAmount: amount,
+                          paidAt: now,
+                          completedAt: now,
+                          transactionTimestamp,
+                          rawNotification: combinedText,
+                          payerName: payerName || null,
+                          isFriendPayment: Boolean(isFriendPayment),
+                          recoveredFromExpired: true,
+                        },
+                        { merge: true }
+                      );
+                      matchedOrderId = recovered.id;
+                      matchedStudentName = recName;
+                      matchedEventName = recovered.data.eventName || recovered.data.eventTitle || matchedEventName || null;
+                    } catch (revErr) {
+                      console.error("Tier 2B session revival error:", revErr);
+                    }
                   }
                 }
               }
@@ -1378,15 +1392,17 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Query by paymentId (UTR)
-        if (!matchingDoc && !isSyntheticUtr) {
+        // Query by paymentId or submittedUtr (UTR)
+        if (!matchingDoc && !isSyntheticUtr && utr) {
           try {
-            const regQuery = query(
-              collection(db, "registrations"),
-              where("paymentId", "==", utr),
-              limit(1)
+            let regSnap = await getDocs(
+              query(collection(db, "registrations"), where("paymentId", "==", utr), limit(1))
             );
-            let regSnap = await getDocs(regQuery);
+            if (regSnap.empty) {
+              regSnap = await getDocs(
+                query(collection(db, "registrations"), where("submittedUtr", "==", utr), limit(1))
+              );
+            }
             if (!regSnap.empty) {
               matchingDoc = regSnap.docs[0];
             }
@@ -1431,7 +1447,7 @@ export async function POST(req: NextRequest) {
             const pendingRegsQuery = query(
               collection(db, "registrations"),
               where("paymentStatus", "==", "PENDING"),
-              limit(25)
+              limit(150)
             );
             const pendingRegsSnap = await getDocs(pendingRegsQuery);
             if (!pendingRegsSnap.empty) {

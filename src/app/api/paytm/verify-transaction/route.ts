@@ -156,11 +156,12 @@ export async function POST(req: NextRequest) {
     let verifiedAmount = authoritativeExpectedAmount;
     try {
       const { db } = await import("@/lib/firebase/config");
-      const { doc, runTransaction } = await import("firebase/firestore");
+      const { doc, runTransaction, setDoc } = await import("firebase/firestore");
       if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
         const paymentDocRef = doc(db, "verified_upi_payments", utr);
         const sessionRef = orderId ? doc(db, "active_checkout_sessions", String(orderId)) : null;
 
+        // Step A: Lock verified_upi_payments/{utr} atomically FIRST before updating checkout session
         const txResult = await runTransaction(db, async (tx) => {
           const paymentSnap = await tx.get(paymentDocRef);
           if (!paymentSnap.exists()) {
@@ -218,24 +219,25 @@ export async function POST(req: NextRequest) {
             { merge: true }
           );
 
-          if (sessionRef) {
-            tx.set(
-              sessionRef,
-              {
-                status: "COMPLETED",
-                utr,
-                submittedUtr: utr,
-                receivedAmount: payAmt,
-                paidAt: paymentData.receivedAt || nowIso,
-                completedAt: nowIso,
-                ...(resolvedRegId ? { registrationId: resolvedRegId } : {}),
-              },
-              { merge: true }
-            );
-          }
-
-          return { matched: true, payAmt };
+          return { matched: true, payAmt, paidAt: paymentData.receivedAt || nowIso, nowIso };
         });
+
+        // Step B: Complete active_checkout_sessions/{orderId} AFTER ledger lock commits
+        if (txResult.matched && sessionRef) {
+          await setDoc(
+            sessionRef,
+            {
+              status: "COMPLETED",
+              utr,
+              submittedUtr: utr,
+              receivedAmount: txResult.payAmt,
+              paidAt: txResult.paidAt,
+              completedAt: txResult.nowIso,
+              ...(resolvedRegId ? { registrationId: resolvedRegId } : {}),
+            },
+            { merge: true }
+          ).catch((e) => console.warn("Session completion notice after verify-transaction lock:", e));
+        }
 
         if (txResult.matched) {
           autoVerifiedViaWebhook = true;
