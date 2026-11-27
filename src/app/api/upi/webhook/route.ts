@@ -294,6 +294,22 @@ export async function POST(req: NextRequest) {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       const paymentDocRef = doc(db, "verified_upi_payments", utr!);
 
+      // Lazy per-request cache for PENDING registrations (avoids running the 150-doc query twice in Tier 2B + Step 5)
+      const firestoreDb = db;
+      let pendingRegsSnapPromise: ReturnType<typeof getDocs> | null = null;
+      const getPendingRegsSnapOnce = () => {
+        if (!pendingRegsSnapPromise) {
+          pendingRegsSnapPromise = getDocs(
+            query(
+              collection(firestoreDb, "registrations"),
+              where("paymentStatus", "==", "PENDING"),
+              limit(150)
+            )
+          );
+        }
+        return pendingRegsSnapPromise;
+      };
+
       // IDEMPOTENCY CHECK: Did we already record & process this exact payment notification?
       try {
         const existingPaymentSnap = await getDoc(paymentDocRef);
@@ -758,12 +774,12 @@ export async function POST(req: NextRequest) {
                     });
                   }
                 }
-                // Also check active_checkout_sessions (allow read: if true) for COMPLETED sessions for this student + event
+                  // Also check active_checkout_sessions (allow read: if true) for COMPLETED sessions for this student + event
                 if (!alreadyPaid && (wEmail || (wBtId && wBtId !== "STUDENT"))) {
                   const completedSessionsSnap = await getDocs(
                     w.data.eventId
-                      ? query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"), where("eventId", "==", w.data.eventId))
-                      : query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"))
+                      ? query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"), where("eventId", "==", w.data.eventId), limit(30))
+                      : query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"), limit(30))
                   );
                   alreadyPaid = completedSessionsSnap.docs.some((cd) => {
                     const s = cd.data();
@@ -997,11 +1013,7 @@ export async function POST(req: NextRequest) {
           //    from stealing a signal meant for a student who already submitted their registration!)
           let hasPendingRegMatch = false;
           try {
-            const pendingCheckSnap = await getDocs(query(
-              collection(db, "registrations"),
-              where("paymentStatus", "==", "PENDING"),
-              limit(150)
-            ));
+            const pendingCheckSnap = await getPendingRegsSnapOnce();
             if (!pendingCheckSnap.empty) {
               const candSig = {
                 utr: isSyntheticUtr ? undefined : utr || undefined,
@@ -1012,7 +1024,7 @@ export async function POST(req: NextRequest) {
                 source: sourceAppName,
               };
               hasPendingRegMatch = pendingCheckSnap.docs.some((d) => {
-                const rd = d.data();
+                const rd = d.data() as Record<string, any>;
                 const ev = evaluateCandidateAgainstRegistration(candSig, {
                   id: d.id,
                   registrationId: rd.registrationId,
@@ -1074,8 +1086,8 @@ export async function POST(req: NextRequest) {
                   try {
                     const completedSnap = await getDocs(
                       expEventId
-                        ? query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"), where("eventId", "==", expEventId))
-                        : query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"))
+                        ? query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"), where("eventId", "==", expEventId), limit(30))
+                        : query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"), limit(30))
                     );
                     alreadyPaid = completedSnap.docs.some((cd) => {
                       const s = cd.data();
@@ -1444,12 +1456,7 @@ export async function POST(req: NextRequest) {
         // Guard: Skip if signal already matched a different active checkout session (unless exact UTR match).
         if (!matchingDoc && !matchedOrderId && amount > 0) {
           try {
-            const pendingRegsQuery = query(
-              collection(db, "registrations"),
-              where("paymentStatus", "==", "PENDING"),
-              limit(150)
-            );
-            const pendingRegsSnap = await getDocs(pendingRegsQuery);
+            const pendingRegsSnap = await getPendingRegsSnapOnce();
             if (!pendingRegsSnap.empty) {
               const candSignal = {
                 orderId: matchedOrderId || undefined,
@@ -1465,7 +1472,7 @@ export async function POST(req: NextRequest) {
               };
 
               const scoredRegCandidates = pendingRegsSnap.docs.map((d) => {
-                const data = d.data();
+                const data = d.data() as Record<string, any>;
                 const evalMatch = evaluateCandidateAgainstRegistration(candSignal, {
                   id: d.id,
                   registrationId: data.registrationId,

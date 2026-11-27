@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     if (cleanEmail || (cleanBt && cleanBt !== "STUDENT")) {
       try {
         const { db } = await import("@/lib/firebase/config");
-        const { collection, query, where, getDocs } = await import("firebase/firestore");
+        const { collection, query, where, getDocs, limit } = await import("firebase/firestore");
         if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
           const isEventRecordMatch = (data: any): boolean => {
             if (!data || data.status === "CANCELLED" || data.paymentStatus === "FAILED") return false;
@@ -76,8 +76,8 @@ export async function POST(req: NextRequest) {
             const { doc, getDoc } = await import("firebase/firestore");
             const completedSnap = await getDocs(
               eventId
-                ? query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"), where("eventId", "==", eventId))
-                : query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"))
+                ? query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"), where("eventId", "==", eventId), limit(50))
+                : query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"), limit(50))
             );
             const matchingCompletedDocs = completedSnap.docs.filter((d: any) => {
               const s = d.data();

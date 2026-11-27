@@ -429,7 +429,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       } catch {}
     };
 
-    const interval = setInterval(pollQueue, 5000);
+    const interval = setInterval(pollQueue, 8000);
     return () => {
       stopped = true;
       clearInterval(interval);
@@ -3712,7 +3712,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
             <div className="flex items-center justify-center gap-2 text-xs text-slate-500 py-1">
               <Loader2 className="w-4 h-4 animate-spin text-[#17458F]" />
-              <span>Checking slot availability every 5 seconds...</span>
+              <span>Checking slot availability every 8 seconds...</span>
             </div>
 
             <button

@@ -686,17 +686,83 @@ export default function AdminPaymentsPage() {
     };
   }, []);
 
-  // Reconcile and enrich each registration record with the actual gateway received amount
+  // Precompute O(1) lookup indices over verifiedUpiMap and candidate array ONCE per ledger/session change
+  const {
+    upiByOrderIdMap,
+    upiByRegIdMap,
+    realBankByOrderIdMap,
+    realBankByRegIdMap,
+    precomputedCandidates,
+  } = useMemo(() => {
+    const byOrder = new Map<string, any>();
+    const byReg = new Map<string, any>();
+    const bankByOrder = new Map<string, any>();
+    const bankByReg = new Map<string, any>();
+    const candidates: PaymentCandidateSignal[] = [];
+
+    for (const sess of completedSessionsMap.values()) {
+      candidates.push({
+        orderId: sess.orderId,
+        registrationId: sess.registrationId,
+        utr: sess.utr,
+        submittedUtr: sess.submittedUtr,
+        amount: sess.amount,
+        receivedAmount: sess.receivedAmount,
+        payerName: sess.payerName,
+        timestamp: sess.transactionTimestamp || sess.paidAt,
+        source: "active_checkout_session",
+      });
+    }
+
+    for (const v of verifiedUpiMap.values()) {
+      const ord = v.claimedByOrderId || v.matchedOrderId;
+      const reg = v.claimedByRegistrationId || v.matchedRegistrationId;
+      if (ord && !byOrder.has(ord)) byOrder.set(ord, v);
+      if (reg && !byReg.has(reg)) byReg.set(reg, v);
+
+      const isRealBankUtr = !v.utr.startsWith("AUTO-PTM-") && /^\d{12}$/.test(v.utr);
+      if (isRealBankUtr) {
+        if (ord && !bankByOrder.has(ord)) bankByOrder.set(ord, v);
+        if (reg && !bankByReg.has(reg)) bankByReg.set(reg, v);
+      }
+
+      candidates.push({
+        orderId: ord,
+        registrationId: reg,
+        matchedOrderId: v.matchedOrderId,
+        matchedRegistrationId: v.matchedRegistrationId,
+        claimedByOrderId: v.claimedByOrderId,
+        claimedByRegistrationId: v.claimedByRegistrationId,
+        status: v.status,
+        utr: v.utr,
+        amount: v.amount,
+        payerName: v.payerName,
+        timestamp: v.transactionTimestamp || v.receivedAt,
+        source: "verified_upi_payments",
+      } as any);
+    }
+
+    return {
+      upiByOrderIdMap: byOrder,
+      upiByRegIdMap: byReg,
+      realBankByOrderIdMap: bankByOrder,
+      realBankByRegIdMap: bankByReg,
+      precomputedCandidates: candidates,
+    };
+  }, [verifiedUpiMap, completedSessionsMap]);
+
+  // Reconcile and enrich each registration record with the actual gateway received amount (O(1) per row)
   const enrichedRegistrations = useMemo(() => {
     return registrations.map((r) => {
       // 1. Cross-reference against completed active checkout session (stores micro-paisa amount)
       const session = r.orderId ? completedSessionsMap.get(r.orderId) : null;
       const sessionAmt = Number(session?.receivedAmount || session?.amount || 0);
 
-      // 2. Cross-reference against verified incoming UPI ledger
+      // 2. O(1) Cross-reference against verified incoming UPI ledger
       const upiSignal = (r.paymentId ? verifiedUpiMap.get(r.paymentId) : null)
-        || (r.orderId ? Array.from(verifiedUpiMap.values()).find((v) => v.matchedOrderId === r.orderId) : null)
-        || Array.from(verifiedUpiMap.values()).find((v) => v.matchedRegistrationId === r.id || v.matchedRegistrationId === r.registrationId);
+        || (r.orderId ? upiByOrderIdMap.get(r.orderId) : null)
+        || upiByRegIdMap.get(r.id)
+        || (r.registrationId ? upiByRegIdMap.get(r.registrationId) : null);
       const signalAmt = Number(upiSignal?.amount || 0);
 
       const gatewayActualAmount = sessionAmt > 0 ? sessionAmt : (signalAmt > 0 ? signalAmt : 0);
@@ -714,7 +780,7 @@ export default function AdminPaymentsPage() {
       }
       return r;
     });
-  }, [registrations, completedSessionsMap, verifiedUpiMap]);
+  }, [registrations, completedSessionsMap, verifiedUpiMap, upiByOrderIdMap, upiByRegIdMap]);
 
   // Filter Payments by Tenure & Event
   const filteredByTenure = useMemo(() => {
@@ -939,12 +1005,10 @@ export default function AdminPaymentsPage() {
         const ledgerByPayId = payId ? verifiedUpiMap.get(payId) : undefined;
         const ledgerByBankUtr = bankUtr ? verifiedUpiMap.get(bankUtr) : undefined;
         const ledgerBySynth = synthUtr ? verifiedUpiMap.get(synthUtr) : undefined;
-        const ledgerByLink = Array.from(verifiedUpiMap.values()).find(
-          (v) =>
-            v.claimedByRegistrationId === r.id ||
-            v.matchedRegistrationId === r.id ||
-            (r.orderId && (v.claimedByOrderId === r.orderId || v.matchedOrderId === r.orderId))
-        );
+        const ledgerByLink =
+          upiByRegIdMap.get(r.id) ||
+          (r.registrationId ? upiByRegIdMap.get(r.registrationId) : undefined) ||
+          (r.orderId ? upiByOrderIdMap.get(r.orderId) : undefined);
 
         const matchedLedger = ledgerByBankUtr || ledgerByPayId || ledgerBySynth || ledgerByLink;
         const matchedSession = r.orderId ? completedSessionsMap.get(r.orderId) : undefined;
@@ -1085,46 +1149,10 @@ export default function AdminPaymentsPage() {
     });
   }, [filteredByEvent, statusTab, searchQuery, suspiciousAuditMap, duplicatesAuditMap]);
 
-  // Multi-Dimensional Convergence Scoring Engine between Registration and Incoming Payment Signals
-  // Selects the payment matching the MAXIMUM number of dimensions and meeting strict confidence criteria
+  // Multi-Dimensional Convergence Scoring Engine using precomputed signal candidates
   const getVerifiedMatchForRecord = useCallback((r: RegistrationRecord) => {
-    const candidates: PaymentCandidateSignal[] = [];
-
-    // 1. Completed active checkout sessions
-    for (const sess of completedSessionsMap.values()) {
-      candidates.push({
-        orderId: sess.orderId,
-        registrationId: sess.registrationId,
-        utr: sess.utr,
-        submittedUtr: sess.submittedUtr,
-        amount: sess.amount,
-        receivedAmount: sess.receivedAmount,
-        payerName: sess.payerName,
-        timestamp: sess.transactionTimestamp || sess.paidAt,
-        source: "active_checkout_session",
-      });
-    }
-
-    // 2. Verified incoming UPI ledger payments (including 1:1 lock fields)
-    for (const v of verifiedUpiMap.values()) {
-      candidates.push({
-        orderId: v.claimedByOrderId || v.matchedOrderId,
-        registrationId: v.claimedByRegistrationId || v.matchedRegistrationId,
-        matchedOrderId: v.matchedOrderId,
-        matchedRegistrationId: v.matchedRegistrationId,
-        claimedByOrderId: v.claimedByOrderId,
-        claimedByRegistrationId: v.claimedByRegistrationId,
-        status: v.status,
-        utr: v.utr,
-        amount: v.amount,
-        payerName: v.payerName,
-        timestamp: v.transactionTimestamp || v.receivedAt,
-        source: "verified_upi_payments",
-      } as any);
-    }
-
-    return findBestMultiDimensionalMatch(r, candidates) || undefined;
-  }, [completedSessionsMap, verifiedUpiMap]);
+    return findBestMultiDimensionalMatch(r, precomputedCandidates) || undefined;
+  }, [precomputedCandidates]);
 
   // Registrations with Pending UTR that have a STRICTLY eligible verified match (requiring Score >= 75 & Identity Anchor)
   const pendingVerifiedMatches = useMemo(() => {
@@ -2605,7 +2633,7 @@ export default function AdminPaymentsPage() {
                   const isPending = r.paymentStatus === "PENDING" || (r.status === "PENDING" && r.paymentStatus !== "PAID");
                   const isRefunded = r.refundStatus === "PROCESSED" || r.paymentStatus === "REFUNDED";
                   const isCancelled = r.status === "CANCELLED" || r.paymentStatus === "FAILED";
-                  const verifiedMatch = getVerifiedMatchForRecord(r);
+                  const verifiedMatch = isPending ? getVerifiedMatchForRecord(r) : undefined;
                   const suspiciousReasons = suspiciousAuditMap.get(r.id);
                   const duplicateInfo = duplicatesAuditMap.get(r.id);
 
@@ -2627,12 +2655,11 @@ export default function AdminPaymentsPage() {
                           ).trim();
                           const hasValidStudentUtr = /^\d{12}$/.test(studentClaimedUtr);
 
-                          // Strict Invariant: A genuine Bank SMS / Gmail 12-digit UTR match belonging to THIS registration or order
-                          // automatically replaces any synthetic REF: AUTO-PTM-... display.
-                          const realBankMatch = Array.from(verifiedUpiMap.values()).find((v) => {
-                            if (v.utr.startsWith("AUTO-PTM-") || !/^\d{12}$/.test(v.utr)) return false;
-                            return v.matchedRegistrationId === r.id || (Boolean(r.orderId) && v.matchedOrderId === r.orderId);
-                          });
+                          // Strict Invariant: O(1) lookup for genuine Bank SMS / Gmail 12-digit UTR match belonging to THIS registration or order
+                          const realBankMatch =
+                            realBankByRegIdMap.get(r.id) ||
+                            (r.registrationId ? realBankByRegIdMap.get(r.registrationId) : undefined) ||
+                            (r.orderId ? realBankByOrderIdMap.get(r.orderId) : undefined);
 
                           const { modeLabel, modeStyle, sourceBadgeText, sourceBadgeStyle } = getApprovalBadgeInfo(r, verifiedUpiMap);
 

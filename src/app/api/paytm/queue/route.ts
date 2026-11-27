@@ -12,7 +12,7 @@ import {
 } from "firebase/firestore";
 
 const MAX_CONCURRENT_CHECKOUTS = 3;
-const QUEUE_HEARTBEAT_STALE_MS = 25 * 1000;
+const QUEUE_HEARTBEAT_STALE_MS = 35 * 1000;
 const ADMISSION_HOLD_MS = 30 * 1000;
 const DEFAULT_SESSION_TTL_MS = 4 * 60 * 1000;
 
@@ -125,14 +125,23 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 1. Inspect active WAITING checkout sessions and evict expired timers immediately
-    const waitingSnap = await getDocs(
-      query(
-        collection(db, "active_checkout_sessions"),
-        where("status", "==", "WAITING"),
-        limit(150)
-      )
-    );
+    // 1 & 2. Fetch active WAITING checkout sessions and checkout_queue tickets in parallel
+    const [waitingSnap, queueSnap] = await Promise.all([
+      getDocs(
+        query(
+          collection(db, "active_checkout_sessions"),
+          where("status", "==", "WAITING"),
+          limit(150)
+        )
+      ),
+      getDocs(
+        query(
+          collection(db, "checkout_queue"),
+          where("status", "in", ["QUEUED", "ADMITTED"]),
+          limit(200)
+        )
+      ),
+    ]);
 
     const cleanupPromises: Promise<any>[] = [];
     const activeOtherSessions: Array<{ orderId: string; expiresAtMs: number }> = [];
@@ -167,15 +176,6 @@ export async function POST(req: NextRequest) {
         activeOtherSessions.push({ orderId: d.id, expiresAtMs: expMs });
       }
     }
-
-    // 2. Inspect checkout_queue tickets (QUEUED and ADMITTED) and evict stale heartbeats
-    const queueSnap = await getDocs(
-      query(
-        collection(db, "checkout_queue"),
-        where("status", "in", ["QUEUED", "ADMITTED"]),
-        limit(200)
-      )
-    );
 
     const ticketId =
       rawTicketId && typeof rawTicketId === "string" && rawTicketId.trim()
