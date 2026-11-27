@@ -458,6 +458,119 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Pre-Tier-2 Name-Compatible Bank SMS Reconciliation:
+      // If a real 12-digit Bank SMS arrives shortly after a Paytm push notification (AUTO-PTM-*)
+      // for the same amount AND compatible payer/student name, reconcile it into that COMPLETED
+      // transaction immediately BEFORE Tier 2/2B can match any other student's WAITING/EXPIRED session.
+      if (!matchedOrderId && amount > 0 && !isSyntheticUtr && extractedSender) {
+        try {
+          let preMatchedCompleted: any = null;
+
+          // 1. Check COMPLETED active_checkout_sessions within 180s burst window
+          const preCompletedSnap = await getDocs(query(
+            collection(db, "active_checkout_sessions"),
+            where("status", "==", "COMPLETED"),
+            where("amount", "==", Number(amount)),
+            limit(10)
+          ));
+          if (!preCompletedSnap.empty) {
+            const matchSess = preCompletedSnap.docs.find((d) => {
+              const data = d.data();
+              const expectedAmt = Number(data.amount) || 0;
+              if (Math.abs(expectedAmt - Number(amount)) >= 0.005) return false;
+              const existingUtr = String(data.utr || "");
+              if (existingUtr && !existingUtr.startsWith("AUTO-PTM-") && existingUtr !== utr) return false;
+              const sessionTimeMs = new Date(data.transactionTimestamp || data.paidAt || data.createdAt || 0).getTime();
+              if (Math.abs(contentDate.getTime() - sessionTimeMs) > 180 * 1000) return false;
+
+              const sName = String(data.participantName || data.leaderName || "");
+              const pName = String(data.payerName || "");
+              return isNameCompatible(extractedSender, sName) || isNameCompatible(extractedSender, pName);
+            });
+            if (matchSess) {
+              preMatchedCompleted = {
+                id: matchSess.id,
+                data: matchSess.data(),
+                isSession: true,
+              };
+            }
+          }
+
+          // 2. Check PAID registrations with AUTO-PTM-* synthetic UTR within 180s burst window
+          if (!preMatchedCompleted) {
+            const prePaidRegsSnap = await getDocs(query(
+              collection(db, "registrations"),
+              where("paymentStatus", "==", "PAID"),
+              where("amountPaid", "==", Number(amount)),
+              limit(10)
+            ));
+            if (!prePaidRegsSnap.empty) {
+              const matchReg = prePaidRegsSnap.docs.find((d) => {
+                const data = d.data();
+                const expectedAmt = Number(data.amountPaid || data.paymentDetails?.amount || 0);
+                if (Math.abs(expectedAmt - Number(amount)) >= 0.005) return false;
+                const regTimeMs = new Date(data.paidAt || data.registeredAt || data.createdAt || 0).getTime();
+                if (Math.abs(contentDate.getTime() - regTimeMs) > 180 * 1000) return false;
+                const regUtr = String(data.paymentId || data.paymentDetails?.utr || "");
+                const isSynth = regUtr.startsWith("AUTO-PTM-") || Boolean(data.paymentDetails?.syntheticUtr);
+                if (!isSynth) return false;
+
+                const sName = String(data.participantName || data.leaderName || "");
+                const pName = String(data.payerName || "");
+                return isNameCompatible(extractedSender, sName) || isNameCompatible(extractedSender, pName);
+              });
+              if (matchReg) {
+                preMatchedCompleted = {
+                  id: matchReg.id,
+                  data: matchReg.data(),
+                  isRegistration: true,
+                };
+              }
+            }
+          }
+
+          if (preMatchedCompleted) {
+            const rData = preMatchedCompleted.data;
+            matchedOrderId = preMatchedCompleted.isSession ? preMatchedCompleted.id : (rData.orderId || null);
+            matchedRegistrationId = preMatchedCompleted.isRegistration ? preMatchedCompleted.id : (rData.registrationId || null);
+            matchedStudentName = rData.participantName || rData.leaderName || "Student";
+
+            if (matchedOrderId) {
+              await setDoc(doc(db, "active_checkout_sessions", matchedOrderId), {
+                bankUtr: utr,
+                realUtr: utr,
+                utr,
+                reconciledViaBankSms: true,
+                bankSmsText: combinedText,
+                reconciledAt: now,
+              }, { merge: true }).catch(() => {});
+            }
+
+            if (matchedRegistrationId) {
+              await setDoc(doc(db, "registrations", matchedRegistrationId), {
+                paymentId: utr,
+                "paymentDetails.utr": utr,
+                "paymentDetails.bankUtr": utr,
+                "paymentDetails.reconciledFromBankSms": true,
+                "paymentDetails.syntheticUtrReplaced": rData.paymentId || rData.utr || null,
+                "paymentDetails.bankPayer": payerName || null,
+              }, { merge: true }).catch(() => {});
+            }
+
+            const prevSynthUtr = rData.paymentId || rData.utr;
+            if (prevSynthUtr && prevSynthUtr !== utr) {
+              await setDoc(doc(db, "verified_upi_payments", prevSynthUtr), {
+                status: "MERGED",
+                reconciledToBankUtr: utr,
+                note: `Merged into official Bank SMS UTR ${utr}`,
+              }, { merge: true }).catch(() => {});
+            }
+          }
+        } catch (preReconcileErr) {
+          console.warn("Notice: pre-Tier-2 Bank SMS reconciliation warning:", preReconcileErr);
+        }
+      }
+
       // If not matched by explicit order ID, match by amount from recent WAITING sessions (within last 30 min)
       if (!matchedOrderId && amount > 0) {
         try {
@@ -468,7 +581,51 @@ export async function POST(req: NextRequest) {
           );
           const waitingSnap = await getDocs(waitingSessionsQuery);
           if (!waitingSnap.empty) {
-            const allWaiting = waitingSnap.docs.map((d) => ({ ref: d.ref, id: d.id, data: d.data() }));
+            const rawWaiting = waitingSnap.docs.map((d) => ({ ref: d.ref, id: d.id, data: d.data() }));
+
+            // Exclude WAITING sessions belonging to students who ALREADY hold a confirmed PAID registration for that event
+            const allWaiting: typeof rawWaiting = [];
+            for (const w of rawWaiting) {
+              let alreadyPaid = false;
+              const wEmail = String(w.data.email || "").trim().toLowerCase();
+              const wBtId = String(w.data.btId || "").trim().toUpperCase();
+              const wEventId = String(w.data.eventId || "").trim().toLowerCase();
+              try {
+                if (wEmail) {
+                  const paidByEmail = await getDocs(query(
+                    collection(db, "registrations"),
+                    where("email", "==", wEmail),
+                    where("paymentStatus", "==", "PAID"),
+                    limit(5)
+                  ));
+                  if (!paidByEmail.empty) {
+                    alreadyPaid = paidByEmail.docs.some((pd) => {
+                      const d = pd.data();
+                      if (d.status === "CANCELLED") return false;
+                      return !wEventId || String(d.eventId || "").trim().toLowerCase() === wEventId;
+                    });
+                  }
+                }
+                if (!alreadyPaid && wBtId && wBtId !== "STUDENT") {
+                  const paidByBt = await getDocs(query(
+                    collection(db, "registrations"),
+                    where("btId", "==", wBtId),
+                    where("paymentStatus", "==", "PAID"),
+                    limit(5)
+                  ));
+                  if (!paidByBt.empty) {
+                    alreadyPaid = paidByBt.docs.some((pd) => {
+                      const d = pd.data();
+                      if (d.status === "CANCELLED") return false;
+                      return !wEventId || String(d.eventId || "").trim().toLowerCase() === wEventId;
+                    });
+                  }
+                }
+              } catch {}
+              if (!alreadyPaid) {
+                allWaiting.push(w);
+              }
+            }
 
             // Comparator function for multi-tier disambiguation
             const sortCandidates = (a: any, b: any) => {
@@ -1166,50 +1323,80 @@ export async function POST(req: NextRequest) {
               const sData = sessSnap.data();
               if (sData?.registrationData && typeof sData.registrationData === "object") {
                 const draft = sData.registrationData;
-                const regId = sData.registrationId || draft.id || `SRC-${String(sData.eventId || "EVT").slice(0, 3).toUpperCase()}-26-${Math.floor(10000 + Math.random() * 90000)}`;
-                const tkCode = draft.ticketCode || `${String(sData.eventId || "EVT").slice(0, 3).toUpperCase()}26-TK-${Math.floor(1000 + Math.random() * 9000)}`;
 
-                const sDataSubmittedUtr = String(
-                  sData.submittedUtr ||
-                  draft.paymentId ||
-                  draft.paymentDetails?.bankUtr ||
-                  draft.customAnswers?.upiUtr ||
-                  ""
-                ).trim();
-                const hasValidSubmittedUtr = /^\d{12}$/.test(sDataSubmittedUtr);
-                const finalDraftPaymentId = (isSyntheticUtr && hasValidSubmittedUtr) ? sDataSubmittedUtr : utr;
+                // Duplicate Registration Guard: never auto-create a second pass if student already has a confirmed registration for this event
+                let existingRegForStudent: any = null;
+                try {
+                  const dEmail = String(draft.email || sData.email || "").trim().toLowerCase();
+                  const dBtId = String(draft.btId || sData.btId || "").trim().toUpperCase();
+                  const dEventId = String(sData.eventId || draft.eventId || "").trim().toLowerCase();
+                  const dEventSlug = String(draft.eventSlug || "").trim().toLowerCase();
+                  const isSameEvent = (rd: any) => {
+                    if (!rd || rd.status === "CANCELLED" || rd.paymentStatus === "FAILED") return false;
+                    const rId = String(rd.eventId || "").trim().toLowerCase();
+                    const rSlug = String(rd.eventSlug || "").trim().toLowerCase();
+                    return (dEventId && (rId === dEventId || rSlug === dEventId)) || (dEventSlug && (rSlug === dEventSlug || rId === dEventSlug));
+                  };
+                  if (dEmail) {
+                    const eSnap = await getDocs(query(collection(db, "registrations"), where("email", "==", dEmail), limit(10)));
+                    existingRegForStudent = eSnap.docs.find((d) => isSameEvent(d.data())) || null;
+                  }
+                  if (!existingRegForStudent && dBtId && dBtId !== "STUDENT") {
+                    const bSnap = await getDocs(query(collection(db, "registrations"), where("btId", "==", dBtId), limit(10)));
+                    existingRegForStudent = bSnap.docs.find((d) => isSameEvent(d.data())) || null;
+                  }
+                } catch {}
 
-                const newRecord = {
-                  ...draft,
-                  id: regId,
-                  orderId: matchedOrderId,
-                  paymentStatus: "PAID",
-                  status: "CONFIRMED",
-                  paymentId: finalDraftPaymentId,
-                  amountPaid: Number(amount || sData.amount || draft.amountPaid || 0),
-                  ticketCode: tkCode,
-                  qrPayload: draft.qrPayload || `SRC:PASS:${regId}:${tkCode}:${sData.eventId}`,
-                  paidAt: now,
-                  registeredAt: draft.registeredAt || now,
-                  createdAt: now,
-                  verifiedBy: isSyntheticUtr ? "Paytm Auto-Gateway (SRC PayHook)" : "Bank SMS Auto-Gateway (SRC PayHook)",
-                  verifiedAt: now,
-                  payerName: payerName || null,
-                  isFriendPayment: Boolean(isFriendPayment),
-                  paymentDetails: {
-                    ...(draft.paymentDetails || {}),
+                if (existingRegForStudent) {
+                  console.warn(`Duplicate registration prevented in webhook for ${draft.email || draft.btId} (existing pass: ${existingRegForStudent.id})`);
+                  matchedOrderId = null;
+                  matchedRegistrationId = null;
+                } else {
+                  const regId = sData.registrationId || draft.id || `SRC-${String(sData.eventId || "EVT").slice(0, 3).toUpperCase()}-26-${Math.floor(10000 + Math.random() * 90000)}`;
+                  const tkCode = draft.ticketCode || `${String(sData.eventId || "EVT").slice(0, 3).toUpperCase()}26-TK-${Math.floor(1000 + Math.random() * 9000)}`;
+
+                  const sDataSubmittedUtr = String(
+                    sData.submittedUtr ||
+                    draft.paymentId ||
+                    draft.paymentDetails?.bankUtr ||
+                    draft.customAnswers?.upiUtr ||
+                    ""
+                  ).trim();
+                  const hasValidSubmittedUtr = /^\d{12}$/.test(sDataSubmittedUtr);
+                  const finalDraftPaymentId = (isSyntheticUtr && hasValidSubmittedUtr) ? sDataSubmittedUtr : utr;
+
+                  const newRecord = {
+                    ...draft,
+                    id: regId,
+                    orderId: matchedOrderId,
                     paymentStatus: "PAID",
-                    utr: finalDraftPaymentId,
-                    amount: Number(amount || sData.amount || draft.amountPaid || 0),
-                    ...(isSyntheticUtr ? { syntheticUtr: utr } : { bankUtr: utr }),
-                    ...(hasValidSubmittedUtr ? { bankUtr: sDataSubmittedUtr } : {}),
+                    status: "CONFIRMED",
+                    paymentId: finalDraftPaymentId,
+                    amountPaid: Number(amount || sData.amount || draft.amountPaid || 0),
+                    ticketCode: tkCode,
+                    qrPayload: draft.qrPayload || `SRC:PASS:${regId}:${tkCode}:${sData.eventId}`,
+                    paidAt: now,
+                    registeredAt: draft.registeredAt || now,
+                    createdAt: now,
+                    verifiedBy: isSyntheticUtr ? "Paytm Auto-Gateway (SRC PayHook)" : "Bank SMS Auto-Gateway (SRC PayHook)",
                     verifiedAt: now,
-                  },
-                };
+                    payerName: payerName || null,
+                    isFriendPayment: Boolean(isFriendPayment),
+                    paymentDetails: {
+                      ...(draft.paymentDetails || {}),
+                      paymentStatus: "PAID",
+                      utr: finalDraftPaymentId,
+                      amount: Number(amount || sData.amount || draft.amountPaid || 0),
+                      ...(isSyntheticUtr ? { syntheticUtr: utr } : { bankUtr: utr }),
+                      ...(hasValidSubmittedUtr ? { bankUtr: sDataSubmittedUtr } : {}),
+                      verifiedAt: now,
+                    },
+                  };
 
-                await setDoc(doc(db, "registrations", regId), newRecord, { merge: true });
-                matchedRegistrationId = regId;
-                matchedStudentName = newRecord.leaderName || newRecord.participantName || matchedStudentName || "Student";
+                  await setDoc(doc(db, "registrations", regId), newRecord, { merge: true });
+                  matchedRegistrationId = regId;
+                  matchedStudentName = newRecord.leaderName || newRecord.participantName || matchedStudentName || "Student";
+                }
               }
             }
           } catch (autoCreateErr) {

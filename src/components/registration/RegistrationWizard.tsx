@@ -1072,6 +1072,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           paytmMid: paymentConfig.paytmMid,
           registrationId: pendingRegistrationDraftRef.current?.regId,
           registrationData: pendingRegistrationDraftRef.current?.payload,
+          previousOrderId: paytmCheckoutData.orderId,
         }),
       });
 
@@ -1514,6 +1515,18 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
         if (!orderRes.ok) {
           const errJson = await orderRes.json().catch(() => ({}));
+          if (orderRes.status === 409) {
+            try {
+              const dup = await checkExistingStudentRegistration(
+                event.id,
+                event.slug,
+                formData.email || user?.email,
+                formData.btId || user?.btId,
+                event.name
+              );
+              if (dup) setExistingRegistration(dup);
+            } catch {}
+          }
           throw new Error(errJson.error || "Failed to initialize Paytm payment gateway.");
         }
 

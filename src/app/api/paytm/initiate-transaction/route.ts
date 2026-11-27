@@ -21,7 +21,8 @@ export async function POST(req: NextRequest) {
       payeeName: clientPayeeName,
       paytmMid: clientMid,
       registrationId,
-      registrationData
+      registrationData,
+      previousOrderId,
     } = body;
 
     if (!amount || Number(amount) <= 0) {
@@ -29,6 +30,74 @@ export async function POST(req: NextRequest) {
         { error: "Invalid registration fee amount." },
         { status: 400 }
       );
+    }
+
+    // Server-side duplicate registration check (prevents multiple passes via multiple tabs/sessions)
+    const cleanEmail = String(email || "").trim().toLowerCase();
+    const cleanBt = String(btId || "").trim().toUpperCase();
+    const cleanEventId = String(eventId || "").trim().toLowerCase();
+    const cleanEventName = String(eventName || "").trim().toLowerCase();
+
+    if (cleanEmail || (cleanBt && cleanBt !== "STUDENT")) {
+      try {
+        const { db } = await import("@/lib/firebase/config");
+        const { collection, query, where, getDocs } = await import("firebase/firestore");
+        if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+          const isEventRecordMatch = (data: any): boolean => {
+            if (!data || data.status === "CANCELLED" || data.paymentStatus === "FAILED") return false;
+            const rId = String(data.eventId || "").trim().toLowerCase();
+            const rSlug = String(data.eventSlug || "").trim().toLowerCase();
+            const rName = String(data.eventName || data.eventTitle || "").trim().toLowerCase();
+            if (cleanEventId && (rId === cleanEventId || rSlug === cleanEventId)) return true;
+            if (cleanEventName && rName && rName === cleanEventName) return true;
+            return false;
+          };
+
+          const isStudentMatch = (data: any): boolean => {
+            const rEmail = String(data.email || "").trim().toLowerCase();
+            const rBt = String(data.btId || "").trim().toUpperCase();
+            if (cleanEmail && rEmail === cleanEmail) return true;
+            if (cleanBt && cleanBt !== "STUDENT" && rBt === cleanBt) return true;
+            const members = Array.isArray(data.teamMembers) ? data.teamMembers : Array.isArray(data.members) ? data.members : [];
+            return members.some((m: any) => {
+              const mEmail = String(m?.email || "").trim().toLowerCase();
+              const mBt = String(m?.btId || "").trim().toUpperCase();
+              return (cleanEmail && mEmail === cleanEmail) || (cleanBt && cleanBt !== "STUDENT" && mBt === cleanBt);
+            });
+          };
+
+          const dupQueries: Promise<any>[] = [];
+          if (cleanEmail) {
+            dupQueries.push(getDocs(query(collection(db, "registrations"), where("email", "==", cleanEmail))));
+            dupQueries.push(getDocs(query(collection(db, "registrations"), where("allMemberEmails", "array-contains", cleanEmail))));
+          }
+          if (cleanBt && cleanBt !== "STUDENT") {
+            dupQueries.push(getDocs(query(collection(db, "registrations"), where("btId", "==", cleanBt))));
+            dupQueries.push(getDocs(query(collection(db, "registrations"), where("allMemberBtIds", "array-contains", cleanBt))));
+          }
+
+          const dupSnaps = await Promise.allSettled(dupQueries);
+          for (const res of dupSnaps) {
+            if (res.status === "fulfilled" && res.value?.docs) {
+              const found = res.value.docs.find((d: any) => {
+                const data = d.data();
+                return isEventRecordMatch(data) && isStudentMatch(data);
+              });
+              if (found) {
+                return NextResponse.json(
+                  {
+                    success: false,
+                    error: `A confirmed pass already exists for ${eventName || "this event"} (Registration ID: ${found.id}). Duplicate registrations are not allowed.`,
+                  },
+                  { status: 409 }
+                );
+              }
+            }
+          }
+        }
+      } catch (dupErr) {
+        console.warn("Notice: duplicate check warning in paytm initiate-transaction:", dupErr);
+      }
     }
 
     // Server-side price validation to prevent client-side fee tampering
@@ -171,8 +240,52 @@ export async function POST(req: NextRequest) {
     // Register active checkout session in Firestore for zero-touch auto-detection
     try {
       const { db } = await import("@/lib/firebase/config");
-      const { doc, setDoc } = await import("firebase/firestore");
+      const { doc, setDoc, collection, query, where, getDocs, limit } = await import("firebase/firestore");
       if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+        const nowIso = new Date().toISOString();
+
+        // Supersede any prior WAITING sessions for this student + event (prevents multi-session race/hijack)
+        try {
+          if (previousOrderId && typeof previousOrderId === "string") {
+            await setDoc(doc(db, "active_checkout_sessions", previousOrderId), {
+              status: "SUPERSEDED",
+              supersededAt: nowIso,
+              supersededBy: orderId,
+            }, { merge: true }).catch(() => {});
+          }
+
+          if (cleanEmail || (cleanBt && cleanBt !== "STUDENT")) {
+            const waitingSnap = await getDocs(query(
+              collection(db, "active_checkout_sessions"),
+              where("status", "==", "WAITING"),
+              limit(30)
+            ));
+            const supersedePromises: Promise<any>[] = [];
+            waitingSnap.docs.forEach((d) => {
+              const s = d.data();
+              const sEmail = String(s.email || "").trim().toLowerCase();
+              const sBt = String(s.btId || "").trim().toUpperCase();
+              const sEventId = String(s.eventId || "").trim().toLowerCase();
+              const sameStudent = (cleanEmail && sEmail === cleanEmail) || (cleanBt && cleanBt !== "STUDENT" && sBt === cleanBt);
+              const sameEvent = !cleanEventId || !sEventId || sEventId === cleanEventId;
+              if (sameStudent && sameEvent) {
+                supersedePromises.push(
+                  setDoc(d.ref, {
+                    status: "SUPERSEDED",
+                    supersededAt: nowIso,
+                    supersededBy: orderId,
+                  }, { merge: true }).catch(() => {})
+                );
+              }
+            });
+            if (supersedePromises.length > 0) {
+              await Promise.allSettled(supersedePromises);
+            }
+          }
+        } catch (supErr) {
+          console.warn("Notice: session superseding warning:", supErr);
+        }
+
         await setDoc(doc(db, "active_checkout_sessions", orderId), {
           orderId,
           amount: finalPayableAmount,
