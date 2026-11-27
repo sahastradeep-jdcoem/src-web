@@ -859,12 +859,14 @@ export async function POST(req: NextRequest) {
                 return (Date.now() - cTime) < 24 * 60 * 60 * 1000;
               });
 
-              // Exclude expired sessions belonging to students who ALREADY have a PAID registration for that event
+              // Exclude expired sessions belonging to students who ALREADY have a PAID registration or COMPLETED session for that event
               const matchingExpired: typeof recentExpired = [];
               for (const exp of recentExpired) {
                 let alreadyPaid = false;
                 const expEmail = String(exp.data.email || "").trim().toLowerCase();
+                const expBtId = String(exp.data.btId || "").trim().toUpperCase();
                 const expEventId = exp.data.eventId;
+                const expEventIdLower = String(expEventId || "").trim().toLowerCase();
                 if (expEmail) {
                   try {
                     const paidByEmail = await getDocs(query(
@@ -876,6 +878,24 @@ export async function POST(req: NextRequest) {
                     if (!paidByEmail.empty) {
                       alreadyPaid = paidByEmail.docs.some((pd) => !expEventId || pd.data().eventId === expEventId);
                     }
+                  } catch {}
+                }
+                if (!alreadyPaid && (expEmail || (expBtId && expBtId !== "STUDENT"))) {
+                  try {
+                    const completedSnap = await getDocs(
+                      expEventId
+                        ? query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"), where("eventId", "==", expEventId))
+                        : query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"))
+                    );
+                    alreadyPaid = completedSnap.docs.some((cd) => {
+                      const s = cd.data();
+                      const sEmail = String(s.email || "").trim().toLowerCase();
+                      const sBt = String(s.btId || "").trim().toUpperCase();
+                      const sEv = String(s.eventId || "").trim().toLowerCase();
+                      const sameEv = !expEventIdLower || !sEv || sEv === expEventIdLower;
+                      if (!sameEv) return false;
+                      return Boolean((expEmail && sEmail === expEmail) || (expBtId && expBtId !== "STUDENT" && sBt === expBtId));
+                    });
                   } catch {}
                 }
                 if (!alreadyPaid) {
