@@ -214,56 +214,45 @@ export async function getStudentCertificatesFromFirestore(
   const resultsMap = new Map<string, CertificateRecord>();
   const normEmail = (email || "").trim().toLowerCase();
   const normBtId = (btId || "").trim().toUpperCase();
-  let queryFailed = false;
 
-  if (db) {
-    try {
-      const colRef = collection(db, CERTIFICATES_COLLECTION);
+  // Always check both /certificates collection AND site_content/certificates_registry
+  // so legacy/fallback certificates are never hidden from the student dashboard.
+  const [emailSnapRes, btIdSnapRes, registryRes] = await Promise.allSettled([
+    db && normEmail
+      ? getDocs(query(collection(db, CERTIFICATES_COLLECTION), where("recipientEmail", "==", normEmail), limit(50)))
+      : Promise.resolve(null),
+    db && normBtId
+      ? getDocs(query(collection(db, CERTIFICATES_COLLECTION), where("recipientBtId", "==", normBtId), limit(50)))
+      : Promise.resolve(null),
+    getSiteContentFromFirestore<CertificateRecord[]>(REGISTRY_DOC_ID),
+  ]);
 
-      if (normEmail) {
-        const qEmail = query(colRef, where("recipientEmail", "==", normEmail), limit(50));
-        const snapEmail = await getDocs(qEmail);
-        snapEmail.forEach((d) => {
-          const cert = d.data() as CertificateRecord;
-          if (cert.id !== "preview-cert" && cert.status === "PUBLISHED") {
-            resultsMap.set(cert.id, cert);
-          }
-        });
+  if (registryRes.status === "fulfilled" && Array.isArray(registryRes.value)) {
+    registryRes.value.forEach((cert) => {
+      const matchEmail = normEmail && cert.recipientEmail?.trim().toLowerCase() === normEmail;
+      const matchBtId = normBtId && cert.recipientBtId?.trim().toUpperCase() === normBtId;
+      if ((matchEmail || matchBtId) && cert.id !== "preview-cert" && cert.status === "PUBLISHED") {
+        resultsMap.set(cert.id, cert);
       }
-
-      if (normBtId) {
-        const qBtId = query(colRef, where("recipientBtId", "==", normBtId), limit(50));
-        const snapBtId = await getDocs(qBtId);
-        snapBtId.forEach((d) => {
-          const cert = d.data() as CertificateRecord;
-          if (cert.id !== "preview-cert" && cert.status === "PUBLISHED") {
-            resultsMap.set(cert.id, cert);
-          }
-        });
-      }
-    } catch (err) {
-      queryFailed = true;
-      console.warn("Direct student certificates query warning, checking fallback registry:", err);
-    }
-  } else {
-    queryFailed = true;
+    });
   }
 
-  // Fallback: Check site_content/certificates_registry ONLY IF primary collection queries threw an error
-  // If queries succeeded with 0 results, the student simply has 0 certificates—never download the whole registry!
-  if (queryFailed && resultsMap.size === 0) {
-    try {
-      const registry = await getSiteContentFromFirestore<CertificateRecord[]>(REGISTRY_DOC_ID);
-      if (registry && Array.isArray(registry)) {
-        registry.forEach((cert) => {
-          const matchEmail = normEmail && cert.recipientEmail?.toLowerCase() === normEmail;
-          const matchBtId = normBtId && cert.recipientBtId?.toUpperCase() === normBtId;
-          if ((matchEmail || matchBtId) && cert.id !== "preview-cert" && cert.status === "PUBLISHED") {
-            resultsMap.set(cert.id, cert);
-          }
-        });
+  if (emailSnapRes.status === "fulfilled" && emailSnapRes.value) {
+    emailSnapRes.value.forEach((d) => {
+      const cert = d.data() as CertificateRecord;
+      if (cert.id !== "preview-cert" && cert.status === "PUBLISHED") {
+        resultsMap.set(cert.id, cert);
       }
-    } catch {}
+    });
+  }
+
+  if (btIdSnapRes.status === "fulfilled" && btIdSnapRes.value) {
+    btIdSnapRes.value.forEach((d) => {
+      const cert = d.data() as CertificateRecord;
+      if (cert.id !== "preview-cert" && cert.status === "PUBLISHED") {
+        resultsMap.set(cert.id, cert);
+      }
+    });
   }
 
   return Array.from(resultsMap.values()).sort(
@@ -293,94 +282,88 @@ export function subscribeToStudentCertificates(
   }
 
   const colRef = collection(db, CERTIFICATES_COLLECTION);
-  if (normEmail && normBtId) {
-    const emailMap = new Map<string, CertificateRecord>();
-    const btIdMap = new Map<string, CertificateRecord>();
+  const registryMap = new Map<string, CertificateRecord>();
+  const emailMap = new Map<string, CertificateRecord>();
+  const btIdMap = new Map<string, CertificateRecord>();
 
-    const mergeAndNotify = () => {
-      const mergedMap = new Map<string, CertificateRecord>();
-      emailMap.forEach((v, k) => mergedMap.set(k, v));
-      btIdMap.forEach((v, k) => mergedMap.set(k, v));
-      const list = Array.from(mergedMap.values());
-      list.sort((a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime());
-      callback(list);
-    };
+  const mergeAndNotify = () => {
+    const mergedMap = new Map<string, CertificateRecord>();
+    registryMap.forEach((v, k) => mergedMap.set(k, v));
+    emailMap.forEach((v, k) => mergedMap.set(k, v));
+    btIdMap.forEach((v, k) => mergedMap.set(k, v));
+    const list = Array.from(mergedMap.values());
+    list.sort((a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime());
+    callback(list);
+  };
 
-    const qEmail = query(colRef, where("recipientEmail", "==", normEmail), limit(50));
-    const qBtId = query(colRef, where("recipientBtId", "==", normBtId), limit(50));
-
-    const unsubEmail = onSnapshot(
-      qEmail,
-      (snapshot) => {
-        emailMap.clear();
-        snapshot.forEach((docSnap) => {
-          const cert = docSnap.data() as CertificateRecord;
-          if (cert.id !== "preview-cert" && cert.status === "PUBLISHED") {
-            emailMap.set(cert.id, cert);
+  // Load legacy/backup registry once and merge with live /certificates listeners
+  getSiteContentFromFirestore<CertificateRecord[]>(REGISTRY_DOC_ID)
+    .then((registry) => {
+      if (Array.isArray(registry)) {
+        registryMap.clear();
+        registry.forEach((cert) => {
+          const matchEmail = normEmail && cert.recipientEmail?.trim().toLowerCase() === normEmail;
+          const matchBtId = normBtId && cert.recipientBtId?.trim().toUpperCase() === normBtId;
+          if ((matchEmail || matchBtId) && cert.id !== "preview-cert" && cert.status === "PUBLISHED") {
+            registryMap.set(cert.id, cert);
           }
         });
         mergeAndNotify();
-      },
-      (error) => {
-        console.warn("Certificates email subscription warning:", error);
-        getStudentCertificatesFromFirestore(normEmail, normBtId).then(callback);
       }
-    );
+    })
+    .catch(() => {});
 
-    const unsubBtId = onSnapshot(
-      qBtId,
-      (snapshot) => {
-        btIdMap.clear();
-        snapshot.forEach((docSnap) => {
-          const cert = docSnap.data() as CertificateRecord;
-          if (cert.id !== "preview-cert" && cert.status === "PUBLISHED") {
-            btIdMap.set(cert.id, cert);
-          }
-        });
-        mergeAndNotify();
-      },
-      (error) => {
-        console.warn("Certificates BT ID subscription warning:", error);
-        getStudentCertificatesFromFirestore(normEmail, normBtId).then(callback);
-      }
-    );
+  const unsubs: (() => void)[] = [];
 
-    return () => {
-      unsubEmail();
-      unsubBtId();
-    };
-  }
-
-  let q;
   if (normEmail) {
-    q = query(colRef, where("recipientEmail", "==", normEmail), limit(50));
-  } else if (normBtId) {
-    q = query(colRef, where("recipientBtId", "==", normBtId), limit(50));
-  }
-
-  if (!q) {
-    callback([]);
-    return () => {};
-  }
-
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const list: CertificateRecord[] = [];
-      snapshot.forEach((docSnap) => {
-        const cert = docSnap.data() as CertificateRecord;
-        if (cert.id !== "preview-cert" && cert.status === "PUBLISHED") {
-          list.push(cert);
+    const qEmail = query(colRef, where("recipientEmail", "==", normEmail), limit(50));
+    unsubs.push(
+      onSnapshot(
+        qEmail,
+        (snapshot) => {
+          emailMap.clear();
+          snapshot.forEach((docSnap) => {
+            const cert = docSnap.data() as CertificateRecord;
+            if (cert.id !== "preview-cert" && cert.status === "PUBLISHED") {
+              emailMap.set(cert.id, cert);
+            }
+          });
+          mergeAndNotify();
+        },
+        (error) => {
+          console.warn("Certificates email subscription warning:", error);
+          getStudentCertificatesFromFirestore(normEmail, normBtId).then(callback);
         }
-      });
-      list.sort((a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime());
-      callback(list);
-    },
-    (error) => {
-      console.warn("Certificates subscription warning, checking fallback registry:", error);
-      getStudentCertificatesFromFirestore(normEmail, normBtId).then(callback);
-    }
-  );
+      )
+    );
+  }
+
+  if (normBtId) {
+    const qBtId = query(colRef, where("recipientBtId", "==", normBtId), limit(50));
+    unsubs.push(
+      onSnapshot(
+        qBtId,
+        (snapshot) => {
+          btIdMap.clear();
+          snapshot.forEach((docSnap) => {
+            const cert = docSnap.data() as CertificateRecord;
+            if (cert.id !== "preview-cert" && cert.status === "PUBLISHED") {
+              btIdMap.set(cert.id, cert);
+            }
+          });
+          mergeAndNotify();
+        },
+        (error) => {
+          console.warn("Certificates BT ID subscription warning:", error);
+          getStudentCertificatesFromFirestore(normEmail, normBtId).then(callback);
+        }
+      )
+    );
+  }
+
+  return () => {
+    unsubs.forEach((u) => u());
+  };
 }
 
 /**
