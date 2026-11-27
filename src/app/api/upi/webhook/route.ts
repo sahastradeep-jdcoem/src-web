@@ -1147,7 +1147,8 @@ export async function POST(req: NextRequest) {
 
         // 5. Multi-Factor Reconciliation for "PENDING REVIEW" registrations:
         // When PayHook was delayed/offline, student registered with manual UTR or is awaiting payment approval.
-        if (!matchingDoc && amount > 0) {
+        // Guard: Skip if signal already matched a different active checkout session (unless exact UTR match).
+        if (!matchingDoc && !matchedOrderId && amount > 0) {
           try {
             const pendingRegsQuery = query(
               collection(db, "registrations"),

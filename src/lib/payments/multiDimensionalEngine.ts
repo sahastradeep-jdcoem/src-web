@@ -75,6 +75,18 @@ export function evaluateCandidateAgainstRegistration(
     candUtr === studentManualUtr
   );
 
+  // Strict Invariant: If student entered a 12-digit UTR and incoming signal has a DIFFERENT 12-digit Bank UTR,
+  // they are two distinct bank transactions — NEVER auto-approve!
+  if (
+    studentManualUtr &&
+    /^\d{12}$/.test(studentManualUtr) &&
+    candUtr &&
+    /^\d{12}$/.test(candUtr) &&
+    studentManualUtr !== candUtr
+  ) {
+    return null;
+  }
+
   // Strict Invariant: If candidate is explicitly tied to another registration, DISQUALIFY
   if (candRegId && regDocId && candRegId !== regDocId && candRegId !== regTicketId) {
     return null;
@@ -132,8 +144,13 @@ export function evaluateCandidateAgainstRegistration(
         matchedDims.push("Exact Amount");
       }
     } else if (diff <= 1.00) {
-      score += DIMENSION_WEIGHTS.BASE_FEE_MATCH;
-      matchedDims.push("Fee Match (±₹1)");
+      // Only allow ±₹1.00 base fee tolerance if they don't have conflicting micro-paisa offsets (e.g. 20.01 vs 20.02)
+      const regHasMicro = Math.round(regAmt * 100) % 100 !== 0;
+      const candHasMicro = Math.round(candAmount * 100) % 100 !== 0;
+      if (!(regHasMicro && candHasMicro)) {
+        score += DIMENSION_WEIGHTS.BASE_FEE_MATCH;
+        matchedDims.push("Fee Match (±₹1)");
+      }
     }
   }
 
