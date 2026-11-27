@@ -127,6 +127,9 @@ interface PayhookSignalsSectionProps {
     registrationId?: string;
     orderId?: string;
     paymentId?: string;
+    paymentStatus?: string;
+    participantName?: string;
+    leaderName?: string;
     eventTitle?: string;
     eventName?: string;
     paymentDetails?: any;
@@ -147,37 +150,45 @@ export function PayhookSignalsSection({ onClose, userEmail, registrations = [] }
   const [groupDuplicates, setGroupDuplicates] = useState(true);
   const [signalSearch, setSignalSearch] = useState("");
 
-  // Fast lookup maps for resolving matched event name across both new and historical webhook signals
-  const eventLookupMaps = React.useMemo(() => {
-    const byRegId = new Map<string, string>();
-    const byOrderId = new Map<string, string>();
-    const byUtr = new Map<string, string>();
+  // Fast lookup maps for resolving matched registration, event name, student name, and live PAID status
+  const matchedRegLookupMaps = React.useMemo(() => {
+    type RegSummary = { eventName: string; studentName: string; isPaid: boolean };
+    const byRegId = new Map<string, RegSummary>();
+    const byOrderId = new Map<string, RegSummary>();
+    const byUtr = new Map<string, RegSummary>();
 
     for (const r of registrations) {
       const evName = String(r.eventTitle || r.eventName || "").trim();
-      if (!evName) continue;
-      if (r.id) byRegId.set(String(r.id).trim(), evName);
-      if (r.registrationId) byRegId.set(String(r.registrationId).trim(), evName);
-      if (r.orderId) byOrderId.set(String(r.orderId).trim(), evName);
-      if (r.paymentId) byUtr.set(String(r.paymentId).trim(), evName);
-      if (r.paymentDetails?.utr) byUtr.set(String(r.paymentDetails.utr).trim(), evName);
-      if (r.paymentDetails?.syntheticUtr) byUtr.set(String(r.paymentDetails.syntheticUtr).trim(), evName);
+      const studentName = String(r.participantName || r.leaderName || "").trim();
+      const isPaid = r.paymentStatus === "PAID";
+      const summary: RegSummary = { eventName: evName, studentName, isPaid };
+
+      if (r.id) byRegId.set(String(r.id).trim(), summary);
+      if (r.registrationId) byRegId.set(String(r.registrationId).trim(), summary);
+      if (r.orderId) byOrderId.set(String(r.orderId).trim(), summary);
+      if (r.paymentId) byUtr.set(String(r.paymentId).trim(), summary);
+      if (r.paymentDetails?.utr) byUtr.set(String(r.paymentDetails.utr).trim(), summary);
+      if (r.paymentDetails?.syntheticUtr) byUtr.set(String(r.paymentDetails.syntheticUtr).trim(), summary);
     }
     return { byRegId, byOrderId, byUtr };
   }, [registrations]);
 
-  const resolveEventName = (log: WebhookLogItem): string | null => {
-    if (log.matchedEventName) return log.matchedEventName;
-    if (log.matchedRegistrationId && eventLookupMaps.byRegId.has(String(log.matchedRegistrationId).trim())) {
-      return eventLookupMaps.byRegId.get(String(log.matchedRegistrationId).trim()) || null;
+  const resolveMatchedReg = (log: WebhookLogItem) => {
+    if (log.matchedRegistrationId && matchedRegLookupMaps.byRegId.has(String(log.matchedRegistrationId).trim())) {
+      return matchedRegLookupMaps.byRegId.get(String(log.matchedRegistrationId).trim()) || null;
     }
-    if (log.matchedOrderId && eventLookupMaps.byOrderId.has(String(log.matchedOrderId).trim())) {
-      return eventLookupMaps.byOrderId.get(String(log.matchedOrderId).trim()) || null;
+    if (log.matchedOrderId && matchedRegLookupMaps.byOrderId.has(String(log.matchedOrderId).trim())) {
+      return matchedRegLookupMaps.byOrderId.get(String(log.matchedOrderId).trim()) || null;
     }
-    if (log.extractedUtr && log.extractedUtr !== "TEST_PING" && eventLookupMaps.byUtr.has(String(log.extractedUtr).trim())) {
-      return eventLookupMaps.byUtr.get(String(log.extractedUtr).trim()) || null;
+    if (log.extractedUtr && log.extractedUtr !== "TEST_PING" && matchedRegLookupMaps.byUtr.has(String(log.extractedUtr).trim())) {
+      return matchedRegLookupMaps.byUtr.get(String(log.extractedUtr).trim()) || null;
     }
     return null;
+  };
+
+  const resolveEventName = (log: WebhookLogItem): string | null => {
+    if (log.matchedEventName) return log.matchedEventName;
+    return resolveMatchedReg(log)?.eventName || null;
   };
 
   // Automatically open modal if redirected back from Google OAuth
@@ -702,10 +713,12 @@ export function PayhookSignalsSection({ onClose, userEmail, registrations = [] }
                   .filter((log) => {
                     const q = signalSearch.trim().toLowerCase();
                     if (!q) return true;
-                    const evName = (resolveEventName(log) || "").toLowerCase();
+                    const matchedReg = resolveMatchedReg(log);
+                    const evName = (log.matchedEventName || matchedReg?.eventName || "").toLowerCase();
+                    const stName = (log.matchedStudentName || matchedReg?.studentName || "").toLowerCase();
                     return (
                       String(log.extractedUtr || "").toLowerCase().includes(q) ||
-                      String(log.matchedStudentName || "").toLowerCase().includes(q) ||
+                      stName.includes(q) ||
                       String(log.payerName || "").toLowerCase().includes(q) ||
                       String(log.matchedOrderId || "").toLowerCase().includes(q) ||
                       String(log.extractedAmount || "").includes(q) ||
@@ -715,8 +728,10 @@ export function PayhookSignalsSection({ onClose, userEmail, registrations = [] }
                   })
                   .map((log) => {
                   const isTestPing = log.status === "TEST_PING" || log.extractedUtr === "TEST_PING";
-                  const isMatched = log.status === "MATCHED";
-                  const matchedEvent = isTestPing ? null : resolveEventName(log);
+                  const matchedReg = isTestPing ? null : resolveMatchedReg(log);
+                  const isMatched = log.status === "MATCHED" || Boolean(matchedReg?.isPaid);
+                  const matchedEvent = isTestPing ? null : (log.matchedEventName || matchedReg?.eventName || null);
+                  const matchedStudent = isTestPing ? null : (log.matchedStudentName || matchedReg?.studentName || null);
 
                   return (
                     <tr 
@@ -814,10 +829,10 @@ export function PayhookSignalsSection({ onClose, userEmail, registrations = [] }
                         <p className="text-xs text-slate-600 truncate font-mono">
                           {log.combinedText || "(empty text)"}
                         </p>
-                        {log.matchedStudentName && (
+                        {matchedStudent && (
                           <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                             <span className="text-[10px] text-[#17458F] font-semibold">
-                              Student: {log.matchedStudentName}
+                              Student: {matchedStudent}
                             </span>
                             {log.isFriendPayment && log.payerName && (
                               <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 font-medium">
