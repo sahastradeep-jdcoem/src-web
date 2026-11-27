@@ -1088,6 +1088,9 @@ export default function AdminPaymentsPage() {
           }
           if (hasValidManualUtr) {
             updatePayload["paymentDetails.bankUtr"] = rawStudentManualUtr;
+            updatePayload.isManualUtr = true;
+            updatePayload.submittedUtr = rawStudentManualUtr;
+            updatePayload["paymentDetails.isManualUtr"] = true;
           } else if (!isSynth && /^\d{12}$/.test(finalUtr)) {
             updatePayload["paymentDetails.bankUtr"] = finalUtr;
           }
@@ -1133,6 +1136,7 @@ export default function AdminPaymentsPage() {
                 verifiedBy: isPaytmSignal ? "Paytm Auto-Gateway (SRC PayHook - Paytm Notification)" : "Bank SMS Auto-Gateway (SRC PayHook)",
                 verifiedAt: nowIso,
                 payerName: verifiedPay.payerName || (r as any).payerName,
+                ...(hasValidManualUtr ? { isManualUtr: true, submittedUtr: rawStudentManualUtr } : {}),
               }
             : r
         )

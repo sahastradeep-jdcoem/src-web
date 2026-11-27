@@ -1288,6 +1288,12 @@ export async function POST(req: NextRequest) {
             updatePayload["paymentDetails.bankUtr"] = utr;
           }
 
+          if (existingManualUtr || regData.isManualUtr || regData.submittedUtr) {
+            updatePayload.isManualUtr = true;
+            updatePayload.submittedUtr = existingManualUtr || regData.submittedUtr;
+            updatePayload["paymentDetails.isManualUtr"] = true;
+          }
+
           // Ensure verified_upi_payments/{finalPaymentId} exists before updating registration
           // (e.g. when Paytm synthetic signal matches a registration with a manually entered 12-digit UTR)
           if (finalPaymentId && finalPaymentId !== utr) {

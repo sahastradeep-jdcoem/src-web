@@ -1133,6 +1133,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     }
 
     setIsVerifyingPaytm(true);
+    autoDetectCompletedRef.current = true;
     try {
       const verifyRes = await fetch("/api/paytm/verify-transaction", {
         method: "POST",
@@ -1175,9 +1176,11 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         });
         setPaytmCheckoutData(null);
       } else {
+        autoDetectCompletedRef.current = false;
         alert(verifyData.error || "Payment verification failed. Please check your transaction details.");
       }
     } catch (err: any) {
+      autoDetectCompletedRef.current = false;
       console.error("Payment verification error:", err);
       alert("Error verifying payment. Please ensure your transaction completed successfully.");
     } finally {
@@ -1202,11 +1205,15 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       autoDetectCompletedRef.current = true;
       setIsAutoDetectingPayment(false);
 
+      const typedUtr = paytmUtr.trim();
+      const userEnteredManualUtr = /^\d{12}$/.test(typedUtr);
+
       await completeRegistration({
         paymentStatus: "PAID",
-        paymentId: completedUtr || `UPI-AUTO-${Date.now().toString().slice(-8)}`,
+        paymentId: completedUtr || (userEnteredManualUtr ? typedUtr : `UPI-AUTO-${Date.now().toString().slice(-8)}`),
         orderId: currentOrderId,
         amountPaid: currentAmount,
+        ...(userEnteredManualUtr ? { isManualUtr: true, submittedUtr: typedUtr } : {}),
       });
       setPaytmCheckoutData(null);
     };
