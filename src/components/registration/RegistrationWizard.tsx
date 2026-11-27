@@ -1066,6 +1066,29 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       }
     });
 
+    const activeMembers = formData.teamType === "Team" ? teamMembers : [];
+    const allMemberEmails = Array.from(
+      new Set(
+        [
+          formData.email ? String(formData.email).toLowerCase().trim() : null,
+          ...activeMembers.map((m: any) => (m?.email ? String(m.email).toLowerCase().trim() : null)),
+        ].filter(Boolean)
+      )
+    ) as string[];
+
+    const allMemberBtIds = Array.from(
+      new Set(
+        [
+          !isExternal && formData.btId && formData.btId !== "STUDENT"
+            ? String(formData.btId).toUpperCase().trim()
+            : null,
+          ...activeMembers.map((m: any) =>
+            m?.btId && m.btId !== "STUDENT" ? String(m.btId).toUpperCase().trim() : null
+          ),
+        ].filter(Boolean)
+      )
+    ) as string[];
+
     return {
       id: regId,
       eventId: event.id,
@@ -1091,6 +1114,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       teamSize: formData.teamType === "Team" ? teamMembers.length : 1,
       teamName: formData.teamType === "Team" ? formData.teamName : undefined,
       teamMembers: formData.teamType === "Team" ? teamMembers : undefined,
+      allMemberEmails: allMemberEmails.length > 0 ? allMemberEmails : undefined,
+      allMemberBtIds: allMemberBtIds.length > 0 ? allMemberBtIds : undefined,
       qrPayload: isExternal 
         ? `SRC:EXTERNAL:${regId}:${tkCode}:${event.id}:${user?.uid || "EXT"}`
         : `SRC:JDCOEM:${regId}:${tkCode}:${event.id}:${formData.btId}`,
