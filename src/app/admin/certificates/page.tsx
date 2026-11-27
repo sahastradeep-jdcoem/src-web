@@ -559,16 +559,6 @@ function AdminCertificatesContent() {
 
   // Selectable event options list for keyboard navigation and rendering
   const selectableEventOptions = useMemo(() => {
-    const allOption = {
-      slug: "all",
-      name: isClubOwner
-        ? `${adminAccess?.clubNames && adminAccess.clubNames.length > 0 ? adminAccess.clubNames.join(", ") : adminAccess?.clubName || "My Club"} Events & Certificates`
-        : "All Events & Forms",
-      category: "Overview",
-      count: scopedAllRegistrations.length,
-      isAll: true,
-    };
-
     const eventOptions = filteredDropdownEvents.map((evt) => {
       // Find all child events if this is an umbrella parent fest
       const childEvents = evt.isParentFest
@@ -628,8 +618,8 @@ function AdminCertificatesContent() {
       };
     });
 
-    return [allOption, ...eventOptions];
-  }, [filteredDropdownEvents, scopedAllRegistrations, allKnownEvents, isClubOwner, adminAccess]);
+    return eventOptions;
+  }, [filteredDropdownEvents, scopedAllRegistrations, allKnownEvents]);
 
   // Keep highlighted index in sync when search changes
   useEffect(() => {
@@ -1809,8 +1799,6 @@ function AdminCertificatesContent() {
                     ? eventSearchQuery
                     : !selectedEventId
                     ? ""
-                    : selectedEventId === "all"
-                    ? "All Events & Forms"
                     : (allKnownEvents.find(e => e.id === selectedEventId || e.slug.toLowerCase() === selectedEventId.toLowerCase() || e.name.toLowerCase() === selectedEventId.toLowerCase())?.name || selectedEventId)
                 }
                 onFocus={() => {
@@ -1823,10 +1811,8 @@ function AdminCertificatesContent() {
                 }}
                 onKeyDown={handleEventInputKeyDown}
                 placeholder={
-                  !selectedEventId 
-                    ? "Select an event or choose 'All Events'..." 
-                    : selectedEventId === "all" 
-                    ? "All Events selected (search to change)..." 
+                  !selectedEventId
+                    ? "Select an event or competition..."
                     : "Change event (use ↑↓ keys & Enter)..."
                 }
                 className="w-full pl-10 pr-9 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:outline-none focus:border-[#17458F] shadow-2xs"
@@ -1975,28 +1961,9 @@ function AdminCertificatesContent() {
               Select an Event to Issue Certificates
             </h3>
             <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto mt-1">
-              Official digital certificates are generated and issued per event or competition. Choose an event from the filter above or pick from the active events below:
+              Official digital certificates are generated and issued per event or competition. Choose an event from the filter above to begin.
             </p>
           </div>
-
-          {tenureFilteredEvents.length > 0 ? (
-            <div className="flex flex-wrap justify-center gap-2 max-w-2xl mx-auto pt-2">
-              {tenureFilteredEvents.slice(0, 10).map((evt) => (
-                <button
-                  key={evt.id || evt.slug}
-                  type="button"
-                  onClick={() => handleSelectEventOption(evt.id || evt.slug)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-50 hover:bg-[#17458F] hover:text-white text-slate-700 border border-slate-200 transition-all cursor-pointer shadow-2xs hover:shadow-xs"
-                >
-                  {evt.name}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="text-xs text-slate-400 pt-2">
-              No events found in the selected tenure.
-            </div>
-          )}
 
           {(!isScopedEventManager || isOwner) && (
             <div className="pt-4 border-t border-slate-100 flex items-center justify-center gap-2">
@@ -2526,42 +2493,11 @@ function AdminCertificatesContent() {
             </div>
             <div>
               <h3 className="font-heading font-extrabold text-lg sm:text-xl text-slate-900">
-                Select an Event or Choose &quot;All Events&quot;
+                Select an Event to View Issued Certificates
               </h3>
               <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto mt-1 leading-relaxed">
-                To keep website loading instant and prevent unnecessary data traffic, select a specific event from the filter above, or click below to inspect all credentials:
+                Choose a specific event from the filter above to inspect its issued credentials.
               </p>
-            </div>
-
-            <div className="pt-2 flex flex-col items-center justify-center gap-3">
-              <button
-                type="button"
-                onClick={() => setSelectedEventId("all")}
-                className="px-5 py-2.5 rounded-xl bg-[#17458F] hover:bg-[#123673] text-white font-bold text-xs shadow-xs transition-all cursor-pointer inline-flex items-center gap-2"
-              >
-                <Layers className="w-4 h-4" />
-                <span>Load All Events ({totalTenureCertificatesCount})</span>
-              </button>
-
-              {tenureFilteredEvents.length > 0 && (
-                <div className="pt-3 border-t border-slate-100 max-w-2xl w-full">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
-                    Or select an event directly:
-                  </span>
-                  <div className="flex flex-wrap justify-center gap-2 max-h-48 overflow-y-auto p-1">
-                    {tenureFilteredEvents.slice(0, 12).map((evt) => (
-                      <button
-                        key={evt.id || evt.slug}
-                        type="button"
-                        onClick={() => handleSelectEventOption(evt.id || evt.slug)}
-                        className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-50 hover:bg-[#17458F] hover:text-white text-slate-700 border border-slate-200 transition-all cursor-pointer shadow-2xs hover:shadow-xs"
-                      >
-                        {evt.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         ) : (
