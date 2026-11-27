@@ -17,7 +17,8 @@ import {
   CheckCheck,
   Trash2,
   Loader2,
-  Mail
+  Mail,
+  Search
 } from "lucide-react";
 import { db } from "@/lib/firebase/config";
 import { 
@@ -144,6 +145,7 @@ export function PayhookSignalsSection({ onClose, userEmail, registrations = [] }
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const [isGmailModalOpen, setIsGmailModalOpen] = useState(false);
   const [groupDuplicates, setGroupDuplicates] = useState(true);
+  const [signalSearch, setSignalSearch] = useState("");
 
   // Fast lookup maps for resolving matched event name across both new and historical webhook signals
   const eventLookupMaps = React.useMemo(() => {
@@ -373,7 +375,7 @@ export function PayhookSignalsSection({ onClose, userEmail, registrations = [] }
       const q = query(
         collection(db, "upi_webhook_logs"),
         orderBy("receivedAt", "desc"),
-        limit(200)
+        limit(300)
       );
 
       const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -624,7 +626,18 @@ export function PayhookSignalsSection({ onClose, userEmail, registrations = [] }
             </h4>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={signalSearch}
+                onChange={(e) => setSignalSearch(e.target.value)}
+                placeholder="Search UTR, student, event, amount..."
+                className="pl-8 pr-3 py-1.5 w-56 sm:w-64 rounded-xl border border-slate-200 bg-slate-50/70 focus:bg-white text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#17458F] transition-colors"
+              />
+            </div>
+
             <label className="inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -685,7 +698,22 @@ export function PayhookSignalsSection({ onClose, userEmail, registrations = [] }
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {displayedLogs.map((log) => {
+                {displayedLogs
+                  .filter((log) => {
+                    const q = signalSearch.trim().toLowerCase();
+                    if (!q) return true;
+                    const evName = (resolveEventName(log) || "").toLowerCase();
+                    return (
+                      String(log.extractedUtr || "").toLowerCase().includes(q) ||
+                      String(log.matchedStudentName || "").toLowerCase().includes(q) ||
+                      String(log.payerName || "").toLowerCase().includes(q) ||
+                      String(log.matchedOrderId || "").toLowerCase().includes(q) ||
+                      String(log.extractedAmount || "").includes(q) ||
+                      String(log.combinedText || "").toLowerCase().includes(q) ||
+                      evName.includes(q)
+                    );
+                  })
+                  .map((log) => {
                   const isTestPing = log.status === "TEST_PING" || log.extractedUtr === "TEST_PING";
                   const isMatched = log.status === "MATCHED";
                   const matchedEvent = isTestPing ? null : resolveEventName(log);
