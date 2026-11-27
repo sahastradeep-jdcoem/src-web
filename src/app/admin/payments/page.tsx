@@ -65,7 +65,7 @@ import { EventItem, RegistrationRecord } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { isEntityOwnedByClub } from "@/types/rbac";
 
-type PaymentTabFilter = "all" | "completed" | "pending" | "suspicious" | "refunded" | "cancelled" | "signals";
+type PaymentTabFilter = "all" | "completed" | "pending" | "suspicious" | "duplicates" | "refunded" | "cancelled" | "signals";
 
 function formatIndianCurrency(amount: number): string {
   if (amount % 1 !== 0) {
@@ -975,6 +975,67 @@ export default function AdminPaymentsPage() {
     return reasonsMap;
   }, [filteredByEvent, verifiedUpiMap, completedSessionsMap]);
 
+  // Duplicate Registration & Payment Audit: Finds same-student-in-event duplicates (pre-fix webhook/tab dupes) & shared UTR/Order duplicates
+  const duplicatesAuditMap = useMemo(() => {
+    const active = filteredByEvent.filter(
+      (r) =>
+        r.status !== "CANCELLED" &&
+        r.paymentStatus !== "FAILED" &&
+        r.paymentStatus !== "REFUNDED" &&
+        r.refundStatus !== "PROCESSED"
+    );
+
+    const groups = new Map<string, { label: string; ids: string[] }>();
+    const addToGroup = (key: string, label: string, regId: string) => {
+      if (!groups.has(key)) groups.set(key, { label, ids: [] });
+      const entry = groups.get(key)!;
+      if (!entry.ids.includes(regId)) entry.ids.push(regId);
+    };
+
+    for (const r of active) {
+      const evKey = String(r.eventId || r.eventSlug || r.eventName || "event").trim().toLowerCase();
+      const email = String(r.email || "").trim().toLowerCase();
+      const btId = String(r.btId || "").trim().toUpperCase();
+      const phoneDigits = String(r.phone || "").replace(/\D/g, "").slice(-10);
+      const cleanName = String(r.participantName || "").trim().toLowerCase().replace(/\s+/g, " ");
+
+      if (email) {
+        addToGroup(`${evKey}::email::${email}`, `Email (${email})`, r.id);
+      }
+      if (btId && btId !== "STUDENT" && btId.length >= 4) {
+        addToGroup(`${evKey}::bt::${btId}`, `BT ID (${btId})`, r.id);
+      }
+      if (phoneDigits.length >= 10 && cleanName.length >= 3) {
+        addToGroup(`${evKey}::pn::${phoneDigits}::${cleanName}`, `Name+Phone (${r.participantName})`, r.id);
+      }
+
+      const rawUtr = String(r.paymentId || (r as any).paymentDetails?.bankUtr || "").trim();
+      if (/^\d{12}$/.test(rawUtr)) {
+        addToGroup(`global::utr::${rawUtr}`, `UTR (${rawUtr})`, r.id);
+      }
+      const orderId = String(r.orderId || "").trim();
+      if (orderId) {
+        addToGroup(`global::order::${orderId}`, `Order ID (${orderId})`, r.id);
+      }
+    }
+
+    const dupMap = new Map<string, { reasons: string[]; groupKey: string }>();
+    for (const [key, grp] of groups.entries()) {
+      if (grp.ids.length < 2) continue;
+      const badge = `${grp.ids.length}× Duplicate ${grp.label}`;
+      for (const regId of grp.ids) {
+        const prev = dupMap.get(regId);
+        if (prev) {
+          if (!prev.reasons.includes(badge)) prev.reasons.push(badge);
+        } else {
+          dupMap.set(regId, { reasons: [badge], groupKey: key });
+        }
+      }
+    }
+
+    return dupMap;
+  }, [filteredByEvent]);
+
   // Primary Table Rows (Filtered by Status Tab & Search)
   const displayedPayments = useMemo(() => {
     let list = filteredByEvent;
@@ -986,6 +1047,8 @@ export default function AdminPaymentsPage() {
       list = list.filter((r) => r.paymentStatus === "PENDING" || (r.status === "PENDING" && r.paymentStatus !== "PAID"));
     } else if (statusTab === "suspicious") {
       list = list.filter((r) => suspiciousAuditMap.has(r.id));
+    } else if (statusTab === "duplicates") {
+      list = list.filter((r) => duplicatesAuditMap.has(r.id));
     } else if (statusTab === "refunded") {
       list = list.filter((r) => r.refundStatus === "PROCESSED" || r.paymentStatus === "REFUNDED");
     } else if (statusTab === "cancelled") {
@@ -1006,8 +1069,13 @@ export default function AdminPaymentsPage() {
       );
     }
 
-    // Sort Latest First (Newest transactions on top)
+    // Sort: When viewing Duplicates tab, keep duplicate pairs/groups adjacent; otherwise latest first
     return [...list].sort((a, b) => {
+      if (statusTab === "duplicates") {
+        const gA = duplicatesAuditMap.get(a.id)?.groupKey || "";
+        const gB = duplicatesAuditMap.get(b.id)?.groupKey || "";
+        if (gA !== gB) return gA.localeCompare(gB);
+      }
       const targetA = a.paidAt || a.registeredAt || a.createdAt || a.refundedAt;
       const targetB = b.paidAt || b.registeredAt || b.createdAt || b.refundedAt;
       const timeA = getTimestampMs(targetA) || 0;
@@ -1015,7 +1083,7 @@ export default function AdminPaymentsPage() {
       if (timeB !== timeA) return timeB - timeA;
       return String(b.id || "").localeCompare(String(a.id || ""));
     });
-  }, [filteredByEvent, statusTab, searchQuery, suspiciousAuditMap]);
+  }, [filteredByEvent, statusTab, searchQuery, suspiciousAuditMap, duplicatesAuditMap]);
 
   // Multi-Dimensional Convergence Scoring Engine between Registration and Incoming Payment Signals
   // Selects the payment matching the MAXIMUM number of dimensions and meeting strict confidence criteria
@@ -2286,6 +2354,20 @@ export default function AdminPaymentsPage() {
           </button>
           <button
             type="button"
+            onClick={() => setStatusTab("duplicates")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${
+              statusTab === "duplicates"
+                ? "bg-orange-600 text-white shadow-2xs"
+                : duplicatesAuditMap.size > 0
+                ? "text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200"
+                : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            <Copy className={`w-3.5 h-3.5 ${statusTab === "duplicates" ? "text-white" : "text-orange-600"}`} />
+            <span>Duplicates ({!selectedEventSlug ? "—" : duplicatesAuditMap.size})</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setStatusTab("refunded")}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
               statusTab === "refunded" ? "bg-purple-700 text-white shadow-2xs" : "text-slate-600 hover:bg-slate-100"
@@ -2525,9 +2607,10 @@ export default function AdminPaymentsPage() {
                   const isCancelled = r.status === "CANCELLED" || r.paymentStatus === "FAILED";
                   const verifiedMatch = getVerifiedMatchForRecord(r);
                   const suspiciousReasons = suspiciousAuditMap.get(r.id);
+                  const duplicateInfo = duplicatesAuditMap.get(r.id);
 
                   return (
-                    <tr key={r.id} className={`transition-colors ${suspiciousReasons ? "bg-rose-50/40 hover:bg-rose-50/70" : "hover:bg-slate-50/75"}`}>
+                    <tr key={r.id} className={`transition-colors ${suspiciousReasons ? "bg-rose-50/40 hover:bg-rose-50/70" : duplicateInfo ? "bg-orange-50/40 hover:bg-orange-50/70" : "hover:bg-slate-50/75"}`}>
                       {/* Order & Reference */}
                       <td className="py-3.5 px-4 space-y-1">
                         {(() => {
@@ -2592,6 +2675,12 @@ export default function AdminPaymentsPage() {
                                 <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-100 border border-rose-300 text-rose-800 text-[10px] font-bold">
                                   <AlertTriangle className="w-3 h-3 shrink-0" />
                                   <span>{suspiciousReasons[0]}</span>
+                                </div>
+                              )}
+                              {duplicateInfo && duplicateInfo.reasons.length > 0 && (
+                                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-orange-100 border border-orange-300 text-orange-800 text-[10px] font-bold">
+                                  <Copy className="w-3 h-3 shrink-0" />
+                                  <span>{duplicateInfo.reasons[0]}</span>
                                 </div>
                               )}
 
