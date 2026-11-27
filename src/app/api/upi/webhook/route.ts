@@ -1649,57 +1649,82 @@ export async function POST(req: NextRequest) {
           matchedStudentName = regData.participantName || regData.leaderName || matchedStudentName || "Student";
           matchedEventName = regData.eventTitle || regData.eventName || matchedEventName || null;
 
-          // Invariant: If student manually entered a 12-digit UTR, NEVER overwrite it with a synthetic AUTO-PTM- reference!
+          // Invariant: Only treat an existing 12-digit UTR as a student-entered Manual UTR if the registration
+          // actually recorded manual submission (isManualUtr / submittedUtr / customAnswers.upiUtr / PENDING status).
+          // NEVER mark an already-PAID auto-approved Bank SMS pass as Manual when a late Paytm signal arrives!
           const rawExistingPaymentId = String(regData.paymentId || "").trim();
-          const rawExistingBankUtr = String(
-            regData.paymentDetails?.bankUtr ||
-            regData.paymentDetails?.utr ||
-            regData.customAnswers?.upiUtr ||
+          const rawManualFieldUtr = String(
             regData.submittedUtr ||
+            regData.customAnswers?.upiUtr ||
+            (regData.isManualUtr || regData.paymentDetails?.isManualUtr ? (regData.paymentDetails?.bankUtr || regData.paymentDetails?.utr || rawExistingPaymentId) : "") ||
             ""
           ).trim();
 
-          const existingManualUtr = /^\d{12}$/.test(rawExistingPaymentId)
+          const existingManualUtr = /^\d{12}$/.test(rawManualFieldUtr)
+            ? rawManualFieldUtr
+            : (regData.paymentStatus === "PENDING" && /^\d{12}$/.test(rawExistingPaymentId) ? rawExistingPaymentId : "");
+
+          const existingVerifiedBankUtr = /^\d{12}$/.test(rawExistingPaymentId)
             ? rawExistingPaymentId
-            : (/^\d{12}$/.test(rawExistingBankUtr) ? rawExistingBankUtr : "");
+            : (/^\d{12}$/.test(String(regData.paymentDetails?.bankUtr || "")) ? String(regData.paymentDetails.bankUtr) : "");
+
+          const isAlreadyPaidViaBankSms = Boolean(
+            regData.paymentStatus === "PAID" &&
+            isSyntheticUtr &&
+            existingVerifiedBankUtr
+          );
 
           let finalPaymentId = utr;
-          if (isSyntheticUtr && existingManualUtr) {
-            finalPaymentId = existingManualUtr;
+          if (isSyntheticUtr && (existingManualUtr || existingVerifiedBankUtr)) {
+            finalPaymentId = existingManualUtr || existingVerifiedBankUtr;
           }
 
-          const updatePayload: Record<string, any> = {
-            paymentStatus: "PAID",
-            status: "CONFIRMED",
-            paymentId: finalPaymentId,
-            paidAt: now,
-            amountPaid: Number(amount || regData.amountPaid || 0),
-            verifiedBy: isSyntheticUtr ? "Auto-Gateway (SRC PayHook - Paytm Notification)" : "Auto-Gateway (SRC PayHook - Bank SMS)",
-            verifiedAt: now,
-            payerName: payerName || null,
-            isFriendPayment: Boolean(isFriendPayment),
-            "paymentDetails.paymentStatus": "PAID",
-            "paymentDetails.utr": finalPaymentId,
-            "paymentDetails.amount": amount,
-            "paymentDetails.payerName": payerName || null,
-            "paymentDetails.isFriendPayment": Boolean(isFriendPayment),
-            "paymentDetails.verifiedAt": now,
-          };
+          const updatePayload: Record<string, any> = isAlreadyPaidViaBankSms
+            ? {
+                // Late Paytm signal arriving after Bank SMS already auto-approved this pass:
+                // Preserve PAID status, genuine 12-digit Bank UTR, Auto/Manual mode, and SMS+Paytm dual attribution!
+                "paymentDetails.syntheticUtr": utr,
+                "paymentDetails.gatewaySignalId": utr,
+                "paymentDetails.reconciledWithPaytm": true,
+                "paymentDetails.paytmPayer": payerName || null,
+                verifiedBy: regData.isManualUtr
+                  ? "Auto-Gateway (Student UTR • SMS & Paytm)"
+                  : "Auto-Gateway (SRC PayHook - SMS & Paytm)",
+              }
+            : {
+                paymentStatus: "PAID",
+                status: "CONFIRMED",
+                paymentId: finalPaymentId,
+                paidAt: now,
+                amountPaid: Number(amount || regData.amountPaid || 0),
+                verifiedBy: isSyntheticUtr ? "Auto-Gateway (SRC PayHook - Paytm Notification)" : "Auto-Gateway (SRC PayHook - Bank SMS)",
+                verifiedAt: now,
+                payerName: payerName || null,
+                isFriendPayment: Boolean(isFriendPayment),
+                "paymentDetails.paymentStatus": "PAID",
+                "paymentDetails.utr": finalPaymentId,
+                "paymentDetails.amount": amount,
+                "paymentDetails.payerName": payerName || null,
+                "paymentDetails.isFriendPayment": Boolean(isFriendPayment),
+                "paymentDetails.verifiedAt": now,
+              };
 
-          if (isSyntheticUtr) {
-            updatePayload["paymentDetails.syntheticUtr"] = utr;
-            updatePayload["paymentDetails.gatewaySignalId"] = utr;
-            if (existingManualUtr) {
-              updatePayload["paymentDetails.bankUtr"] = existingManualUtr;
+          if (!isAlreadyPaidViaBankSms) {
+            if (isSyntheticUtr) {
+              updatePayload["paymentDetails.syntheticUtr"] = utr;
+              updatePayload["paymentDetails.gatewaySignalId"] = utr;
+              if (existingManualUtr) {
+                updatePayload["paymentDetails.bankUtr"] = existingManualUtr;
+              }
+            } else {
+              updatePayload["paymentDetails.bankUtr"] = utr;
             }
-          } else {
-            updatePayload["paymentDetails.bankUtr"] = utr;
-          }
 
-          if (existingManualUtr || regData.isManualUtr || regData.submittedUtr) {
-            updatePayload.isManualUtr = true;
-            updatePayload.submittedUtr = existingManualUtr || regData.submittedUtr;
-            updatePayload["paymentDetails.isManualUtr"] = true;
+            if (existingManualUtr || regData.isManualUtr || regData.submittedUtr) {
+              updatePayload.isManualUtr = true;
+              updatePayload.submittedUtr = existingManualUtr || regData.submittedUtr;
+              updatePayload["paymentDetails.isManualUtr"] = true;
+            }
           }
 
           // Lock verified_upi_payments/{finalPaymentId} AND incoming paymentDocRef atomically 1:1 BEFORE activating registration!
@@ -1721,14 +1746,14 @@ export async function POST(req: NextRequest) {
               return false;
             }
 
-            // If a synthetic Paytm signal (AUTO-PTM-...) approved a manual 12-digit UTR pass,
-            // lock the synthetic doc to this registration so it can NEVER be reused by another student.
+            // When late Paytm signal arrives for an already-PAID Bank SMS pass, mark Paytm doc MERGED (keep Bank SMS doc source intact)
+            // When Paytm synthetic signal matches a PENDING manual 12-digit UTR, create/update verified_upi_payments/{finalPaymentId}.
             tx.set(
               paymentDocRef,
               {
                 utr,
                 amount: Number(amount || pData?.amount || regData.amountPaid || 0),
-                status: (isDuplicateNotification && isSyntheticUtr) ? "MERGED" : "MATCHED",
+                status: ((isDuplicateNotification && isSyntheticUtr) || isAlreadyPaidViaBankSms) ? "MERGED" : "MATCHED",
                 isSyntheticUtr,
                 source: sourceAppName,
                 claimedByRegistrationId: targetRegId,
@@ -1743,14 +1768,13 @@ export async function POST(req: NextRequest) {
                 transactionTimestamp,
                 notificationTimestamp: rawPostTime || contentDate.getTime(),
                 matchedAt: pData?.matchedAt || now,
-                ...(finalPaymentId !== utr ? { linkedManualUtr: finalPaymentId } : {}),
+                ...(isAlreadyPaidViaBankSms ? { reconciledToBankUtr: finalPaymentId } : {}),
+                ...(finalPaymentId !== utr && !isAlreadyPaidViaBankSms ? { linkedManualUtr: finalPaymentId } : {}),
               },
               { merge: true }
             );
 
-            // When Paytm synthetic signal matches a manual 12-digit UTR, create/update verified_upi_payments/{finalPaymentId}
-            // so isVerifiedPaidRegistration Case 2 & audit checks recognize it immediately.
-            if (finalPaymentId && finalPaymentId !== utr) {
+            if (finalPaymentId && finalPaymentId !== utr && !isAlreadyPaidViaBankSms) {
               tx.set(
                 finalLedgerRef,
                 {

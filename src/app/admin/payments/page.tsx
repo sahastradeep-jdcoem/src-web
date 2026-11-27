@@ -143,12 +143,13 @@ function getApprovalBadgeInfo(r: any, verifiedUpiMap: Map<string, any>) {
   const orderId = String(r.orderId || "").trim();
 
   // 1. Determine if student manually entered a UTR: "Manual" vs "Auto"
+  // Note: Having both a 12-digit Bank UTR and an AUTO-PTM- synthetic signal happens during normal auto-approval
+  // dual-signal merging (e.g. Bank SMS + Paytm), so NEVER treat that combination alone as Manual!
   const submittedUtr = String(r.submittedUtr || r.customAnswers?.upiUtr || "").trim();
   const hasManualUtr = Boolean(
     r.isManualUtr === true ||
     r.paymentDetails?.isManualUtr === true ||
     /^\d{12}$/.test(submittedUtr) ||
-    (/^\d{12}$/.test(paymentId) && Boolean(synthUtr)) ||
     (r.paymentStatus === "PENDING" && /^\d{12}$/.test(paymentId))
   );
 
@@ -169,7 +170,7 @@ function getApprovalBadgeInfo(r: any, verifiedUpiMap: Map<string, any>) {
   }
 
   // 3. Explicit Admin / Human Manual Approval: (Admin)
-  const isExplicitManual = verifiedBy.includes("admin") || verifiedBy.includes("treasurer") || verifiedBy.includes("manual");
+  const isExplicitManual = verifiedBy.includes("admin") || verifiedBy.includes("treasurer") || verifiedBy.includes("manual verification");
   if (isExplicitManual) {
     return {
       source: "Admin",
@@ -180,15 +181,40 @@ function getApprovalBadgeInfo(r: any, verifiedUpiMap: Map<string, any>) {
     };
   }
 
-  // Find corresponding signal in verifiedUpiMap if any
-  const upiSignal = (paymentId ? verifiedUpiMap.get(paymentId) : null)
-    || (synthUtr ? verifiedUpiMap.get(synthUtr) : null)
-    || (orderId ? Array.from(verifiedUpiMap.values()).find((v: any) => v.matchedOrderId === orderId) : null)
-    || Array.from(verifiedUpiMap.values()).find((v: any) => v.matchedRegistrationId === r.id);
+  // Find corresponding signals in verifiedUpiMap if any
+  const primarySignal = paymentId ? verifiedUpiMap.get(paymentId) : null;
+  const synthSignal = synthUtr ? verifiedUpiMap.get(synthUtr) : null;
+  const fallbackSignal =
+    (orderId ? Array.from(verifiedUpiMap.values()).find((v: any) => v.matchedOrderId === orderId || v.claimedByOrderId === orderId) : null) ||
+    Array.from(verifiedUpiMap.values()).find((v: any) => v.matchedRegistrationId === r.id || v.claimedByRegistrationId === r.id);
 
+  const upiSignal = primarySignal || synthSignal || fallbackSignal;
   const signalSource = String(upiSignal?.source || "").toLowerCase();
+  const primarySource = String(primarySignal?.source || "").toLowerCase();
+  const synthSource = String(synthSignal?.source || "").toLowerCase();
 
-  // 4. Determine Approval Source: (Gmail), (SMS), (Paytm), (Cashfree), (Instamojo)
+  const hasSmsSignal = Boolean(
+    signalSource.includes("sms") ||
+    signalSource.includes("messages") ||
+    signalSource.includes("canara") ||
+    primarySource.includes("sms") ||
+    primarySource.includes("messages") ||
+    verifiedBy.includes("sms") ||
+    r.paymentDetails?.reconciledFromBankSms ||
+    (/^\d{12}$/.test(paymentId) && primarySignal && !primarySignal.utr?.startsWith("AUTO-PTM-") && !primarySource.includes("paytm"))
+  );
+
+  const hasPaytmSignal = Boolean(
+    paymentId.startsWith("AUTO-PTM-") ||
+    synthUtr.startsWith("AUTO-PTM-") ||
+    r.paymentDetails?.reconciledWithPaytm ||
+    Boolean(r.paymentDetails?.syntheticUtrReplaced) ||
+    synthSource.includes("paytm") ||
+    signalSource.includes("paytm") ||
+    verifiedBy.includes("paytm")
+  );
+
+  // 4. Determine Approval Source: (SMS & Paytm), (Gmail), (SMS), (Paytm), (Cashfree), (Instamojo)
   let source = "Paytm";
   let sourceBadgeStyle = "bg-blue-50 text-blue-700 border-blue-200/80";
 
@@ -199,21 +225,13 @@ function getApprovalBadgeInfo(r: any, verifiedUpiMap: Map<string, any>) {
   ) {
     source = "Gmail";
     sourceBadgeStyle = "bg-rose-50 text-rose-700 border-rose-200/80";
-  } else if (
-    signalSource.includes("sms") ||
-    signalSource.includes("messages") ||
-    signalSource.includes("canara") ||
-    verifiedBy.includes("sms")
-  ) {
+  } else if (hasSmsSignal && hasPaytmSignal) {
+    source = "SMS & Paytm";
+    sourceBadgeStyle = "bg-teal-50 text-teal-800 border-teal-200/80";
+  } else if (hasSmsSignal) {
     source = "SMS";
     sourceBadgeStyle = "bg-emerald-50 text-emerald-700 border-emerald-200/80";
-  } else if (
-    paymentId.startsWith("AUTO-PTM-") ||
-    synthUtr.startsWith("AUTO-PTM-") ||
-    signalSource.includes("paytm") ||
-    verifiedBy.includes("paytm") ||
-    orderId.startsWith("SRC-PTM-")
-  ) {
+  } else if (hasPaytmSignal || orderId.startsWith("SRC-PTM-")) {
     source = "Paytm";
     sourceBadgeStyle = "bg-blue-50 text-blue-700 border-blue-200/80";
   } else if (orderId.startsWith("CF_") || verifiedBy.includes("cashfree")) {
