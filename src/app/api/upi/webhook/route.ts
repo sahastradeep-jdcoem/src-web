@@ -13,7 +13,8 @@ import {
   orderBy,
   updateDoc,
   deleteDoc,
-  writeBatch
+  writeBatch,
+  runTransaction
 } from "firebase/firestore";
 import {
   extractUtrFromText,
@@ -298,53 +299,86 @@ export async function POST(req: NextRequest) {
         const existingPaymentSnap = await getDoc(paymentDocRef);
         if (existingPaymentSnap.exists()) {
           const existingData = existingPaymentSnap.data();
-          const existingStatus = existingData?.status || "MATCHED";
+          const existingRegId =
+            existingData?.claimedByRegistrationId ||
+            existingData?.matchedRegistrationId ||
+            null;
           const existingStudent = existingData?.matchedStudentName || null;
-          const existingRegId = existingData?.matchedRegistrationId || null;
-          const existingOrderId = existingData?.matchedOrderId || null;
+          const existingOrderId =
+            existingData?.claimedByOrderId || existingData?.matchedOrderId || null;
           const existingPayer = existingData?.payerName || payerName || null;
           const existingIsFriend = Boolean(existingData?.isFriendPayment ?? isFriendPayment);
 
-          // Self-heal: If payment was already recorded before student submitted manual UTR,
-          // check if a PENDING registration now exists with this exact 12-digit UTR and auto-approve it.
+          // Self-heal: ONLY if this ledger UTR is still unclaimed (no claimedByRegistrationId/matchedRegistrationId),
+          // check if a PENDING registration exists with this exact 12-digit UTR and atomically claim 1:1.
           let healedRegId: string | null = existingRegId;
           let healedStudent: string | null = existingStudent;
-          if (!existingRegId && !isSyntheticUtr && utr) {
+          if (!existingRegId && !isSyntheticUtr && utr && /^\d{12}$/.test(utr)) {
             try {
-              let pendingSnap = await getDocs(query(collection(db, "registrations"), where("paymentId", "==", utr), limit(1)));
+              let pendingSnap = await getDocs(query(collection(db, "registrations"), where("paymentId", "==", utr), limit(3)));
               if (pendingSnap.empty) {
-                pendingSnap = await getDocs(query(collection(db, "registrations"), where("customAnswers.upiUtr", "==", utr), limit(1)));
+                pendingSnap = await getDocs(query(collection(db, "registrations"), where("submittedUtr", "==", utr), limit(3)));
               }
-              if (!pendingSnap.empty) {
-                const regDoc = pendingSnap.docs[0];
-                const rData = regDoc.data();
-                if (rData?.paymentStatus !== "PAID") {
-                  await updateDoc(regDoc.ref, {
-                    paymentStatus: "PAID",
-                    status: "CONFIRMED",
-                    paymentId: utr,
-                    paidAt: now,
-                    amountPaid: Number(amount || existingData?.amount || rData.amountPaid || 0),
-                    verifiedBy: "Auto-Gateway (SRC PayHook - Bank SMS)",
-                    verifiedAt: now,
-                    payerName: existingPayer || null,
-                    isFriendPayment: existingIsFriend,
-                    "paymentDetails.paymentStatus": "PAID",
-                    "paymentDetails.utr": utr,
-                    "paymentDetails.bankUtr": utr,
-                    "paymentDetails.amount": Number(amount || existingData?.amount || rData.amountPaid || 0),
-                    "paymentDetails.verifiedAt": now,
+              if (pendingSnap.empty) {
+                pendingSnap = await getDocs(query(collection(db, "registrations"), where("customAnswers.upiUtr", "==", utr), limit(3)));
+              }
+              const pendingCandidate = pendingSnap.docs.find((d) => d.data()?.paymentStatus !== "PAID");
+              if (pendingCandidate) {
+                const rData = pendingCandidate.data();
+                const expectedFee = Number(rData.amountPaid || rData.paymentDetails?.amount || 0);
+                const ledgerAmt = Number(amount || existingData?.amount || 0);
+                const feeOk = expectedFee <= 0 || ledgerAmt >= expectedFee - 1.0;
+
+                if (feeOk) {
+                  const locked = await runTransaction(db, async (tx) => {
+                    const pSnap = await tx.get(paymentDocRef);
+                    if (!pSnap.exists()) return false;
+                    const pData = pSnap.data();
+                    if (
+                      (pData.claimedByRegistrationId && pData.claimedByRegistrationId !== pendingCandidate.id) ||
+                      (pData.matchedRegistrationId && pData.matchedRegistrationId !== pendingCandidate.id)
+                    ) {
+                      return false;
+                    }
+                    const sName = rData.participantName || rData.leaderName || existingStudent || "Student";
+                    tx.set(
+                      paymentDocRef,
+                      {
+                        status: "MATCHED",
+                        claimedByRegistrationId: pendingCandidate.id,
+                        claimedByOrderId: existingOrderId || rData.orderId || null,
+                        matchedRegistrationId: pendingCandidate.id,
+                        matchedOrderId: existingOrderId || rData.orderId || null,
+                        matchedStudentName: sName,
+                        matchedAt: pData.matchedAt || now,
+                      },
+                      { merge: true }
+                    );
+                    return sName;
                   });
+
+                  if (locked) {
+                    const finalPaidAmt = Number(ledgerAmt || expectedFee || 0);
+                    await updateDoc(pendingCandidate.ref, {
+                      paymentStatus: "PAID",
+                      status: "CONFIRMED",
+                      paymentId: utr,
+                      paidAt: now,
+                      amountPaid: finalPaidAmt,
+                      verifiedBy: "Auto-Gateway (SRC PayHook - Bank SMS)",
+                      verifiedAt: now,
+                      payerName: existingPayer || null,
+                      isFriendPayment: existingIsFriend,
+                      "paymentDetails.paymentStatus": "PAID",
+                      "paymentDetails.utr": utr,
+                      "paymentDetails.bankUtr": utr,
+                      "paymentDetails.amount": finalPaidAmt,
+                      "paymentDetails.verifiedAt": now,
+                    });
+                    healedRegId = pendingCandidate.id;
+                    healedStudent = locked;
+                  }
                 }
-                healedRegId = regDoc.id;
-                healedStudent = rData.participantName || rData.leaderName || existingStudent || "Student";
-                await setDoc(paymentDocRef, {
-                  status: "MATCHED",
-                  matchedRegistrationId: healedRegId,
-                  matchedOrderId: existingOrderId || rData.orderId || null,
-                  matchedStudentName: healedStudent,
-                  matchedAt: now,
-                }, { merge: true }).catch(() => {});
               }
             } catch (healErr) {
               console.warn("Notice: duplicate-signal late registration heal warning:", healErr);
@@ -467,49 +501,78 @@ export async function POST(req: NextRequest) {
           let preMatchedCompleted: any = null;
 
           // 1. Check COMPLETED active_checkout_sessions (allow read: if true) within 600s burst window
-          const preCompletedSnap = await getDocs(query(
-            collection(db, "active_checkout_sessions"),
-            where("status", "==", "COMPLETED"),
-            where("amount", "==", Number(amount)),
-            limit(15)
-          ));
-          if (!preCompletedSnap.empty) {
-            const matchSess = preCompletedSnap.docs.find((d) => {
-              const data = d.data();
-              const expectedAmt = Number(data.amount) || 0;
-              if (Math.abs(expectedAmt - Number(amount)) >= 0.005) return false;
-              const existingUtr = String(data.utr || "");
-              if (!isSyntheticUtr) {
-                // Bank SMS arriving after Paytm: target must be synthetic or same UTR
-                if (existingUtr && !existingUtr.startsWith("AUTO-PTM-") && existingUtr !== utr) return false;
-              } else {
-                // Late Paytm push arriving after Bank SMS: target must already have a real UTR (or same synthetic)
-                if (!existingUtr) return false;
+          // 0. If a genuine 12-digit Bank SMS arrives for a pass that was ALREADY auto-approved via Paytm
+          //    while the student had manually typed this exact 12-digit UTR (or Bank SMS matches paymentId),
+          //    immediately merge Bank SMS onto that registration & mark synthetic AUTO-PTM- as MERGED!
+          if (!isSyntheticUtr && utr && /^\d{12}$/.test(utr)) {
+            try {
+              const [byPayIdSnap, bySubmittedSnap] = await Promise.all([
+                getDocs(query(collection(db, "registrations"), where("paymentId", "==", utr), limit(3))),
+                getDocs(query(collection(db, "registrations"), where("submittedUtr", "==", utr), limit(3))),
+              ]);
+              const paidManualMatch = [...byPayIdSnap.docs, ...bySubmittedSnap.docs].find(
+                (d) => d.data()?.paymentStatus === "PAID"
+              );
+              if (paidManualMatch) {
+                preMatchedCompleted = {
+                  id: paidManualMatch.id,
+                  data: paidManualMatch.data(),
+                  isRegistration: true,
+                };
               }
-              const sessionTimeMs = new Date(data.transactionTimestamp || data.paidAt || data.createdAt || 0).getTime();
-              if (Math.abs(contentDate.getTime() - sessionTimeMs) > 600 * 1000) return false;
+            } catch {}
+          }
 
-              const sName = String(data.participantName || data.leaderName || "");
-              const pName = String(data.payerName || "");
-              return isNameCompatible(extractedSender, sName) || isNameCompatible(extractedSender, pName);
-            });
-            if (matchSess) {
-              preMatchedCompleted = {
-                id: matchSess.id,
-                data: matchSess.data(),
-                isSession: true,
-              };
+          // 1. Check COMPLETED sessions matching exact amount (2h window for Bank SMS upgrading synthetic AUTO-PTM-)
+          if (!preMatchedCompleted) {
+            const preCompletedSnap = await getDocs(query(
+              collection(db, "active_checkout_sessions"),
+              where("status", "==", "COMPLETED"),
+              where("amount", "==", Number(amount)),
+              limit(30)
+            ));
+            if (!preCompletedSnap.empty) {
+              const matchSess = preCompletedSnap.docs.find((d) => {
+                const data = d.data();
+                const expectedAmt = Number(data.amount) || 0;
+                if (Math.abs(expectedAmt - Number(amount)) >= 0.005) return false;
+                const existingUtr = String(data.utr || "");
+                if (!isSyntheticUtr) {
+                  // Bank SMS arriving after Paytm: target must be synthetic AUTO-PTM- or same UTR
+                  if (existingUtr && !existingUtr.startsWith("AUTO-PTM-") && existingUtr !== utr) return false;
+                } else {
+                  // Late Paytm push arriving after Bank SMS: target must already have a real UTR (or same synthetic)
+                  if (!existingUtr) return false;
+                }
+                const sessionTimeMs = new Date(data.transactionTimestamp || data.paidAt || data.createdAt || 0).getTime();
+                const maxDiffMs = !isSyntheticUtr ? 2 * 60 * 60 * 1000 : 600 * 1000;
+                if (Math.abs(contentDate.getTime() - sessionTimeMs) > maxDiffMs) return false;
+
+                if (existingUtr && existingUtr === utr) return true;
+                const sName = String(data.participantName || data.leaderName || "");
+                const pName = String(data.payerName || "");
+                const sPhone = String(data.phone || "").replace(/\D/g, "").slice(-6);
+                const phoneOk = Boolean(sPhone.length >= 6 && combinedText.includes(sPhone));
+                return isNameCompatible(extractedSender, sName) || isNameCompatible(extractedSender, pName) || phoneOk;
+              });
+              if (matchSess) {
+                preMatchedCompleted = {
+                  id: matchSess.id,
+                  data: matchSess.data(),
+                  isSession: true,
+                };
+              }
             }
           }
 
-          // 2. Check PAID registrations with AUTO-PTM-* synthetic UTR within 600s burst window (for Bank SMS)
+          // 2. Check PAID registrations with AUTO-PTM-* or syntheticUtr within 2h window (for Bank SMS)
           if (!preMatchedCompleted && !isSyntheticUtr) {
             try {
               const prePaidRegsSnap = await getDocs(query(
                 collection(db, "registrations"),
                 where("paymentStatus", "==", "PAID"),
                 where("amountPaid", "==", Number(amount)),
-                limit(10)
+                limit(30)
               ));
               if (!prePaidRegsSnap.empty) {
                 const matchReg = prePaidRegsSnap.docs.find((d) => {
@@ -517,10 +580,22 @@ export async function POST(req: NextRequest) {
                   const expectedAmt = Number(data.amountPaid || data.paymentDetails?.amount || 0);
                   if (Math.abs(expectedAmt - Number(amount)) >= 0.005) return false;
                   const regTimeMs = new Date(data.paidAt || data.registeredAt || data.createdAt || 0).getTime();
-                  if (Math.abs(contentDate.getTime() - regTimeMs) > 600 * 1000) return false;
+                  if (Math.abs(contentDate.getTime() - regTimeMs) > 2 * 60 * 60 * 1000) return false;
                   const regUtr = String(data.paymentId || data.paymentDetails?.utr || "");
-                  const isSynth = regUtr.startsWith("AUTO-PTM-") || Boolean(data.paymentDetails?.syntheticUtr);
+                  const isSynth =
+                    regUtr.startsWith("AUTO-PTM-") ||
+                    Boolean(data.paymentDetails?.syntheticUtr) ||
+                    Boolean(data.paymentDetails?.syntheticUtrReplaced);
                   if (!isSynth) return false;
+                  // Never hijack a pass that already received a DIFFERENT Bank SMS UTR!
+                  if (
+                    data.paymentDetails?.bankUtr &&
+                    /^\d{12}$/.test(String(data.paymentDetails.bankUtr)) &&
+                    String(data.paymentDetails.bankUtr) !== utr &&
+                    data.paymentDetails?.reconciledFromBankSms
+                  ) {
+                    return false;
+                  }
 
                   const sName = String(data.participantName || data.leaderName || "");
                   const pName = String(data.payerName || "");
@@ -542,37 +617,86 @@ export async function POST(req: NextRequest) {
             matchedOrderId = preMatchedCompleted.isSession ? preMatchedCompleted.id : (rData.orderId || null);
             matchedRegistrationId = preMatchedCompleted.isRegistration ? preMatchedCompleted.id : (rData.registrationId || null);
             matchedStudentName = rData.participantName || rData.leaderName || "Student";
+            matchedEventName = rData.eventTitle || rData.eventName || matchedEventName || null;
+
+            const prevSynthUtr =
+              rData.paymentDetails?.syntheticUtr ||
+              rData.paymentDetails?.gatewaySignalId ||
+              ((String(rData.paymentId || rData.utr || "").startsWith("AUTO-PTM-"))
+                ? (rData.paymentId || rData.utr)
+                : null);
 
             if (!isSyntheticUtr) {
-              if (matchedOrderId) {
-                await setDoc(doc(db, "active_checkout_sessions", matchedOrderId), {
-                  bankUtr: utr,
-                  realUtr: utr,
-                  utr,
-                  reconciledViaBankSms: true,
-                  bankSmsText: combinedText,
-                  reconciledAt: now,
-                }, { merge: true }).catch(() => {});
-              }
+              // Lock the Bank SMS paymentDocRef 1:1 atomically before updating reg/session
+              const lockedOk = await runTransaction(db, async (tx) => {
+                const pSnap = await tx.get(paymentDocRef);
+                const pData = pSnap.exists() ? pSnap.data() : null;
+                if (
+                  pData?.claimedByRegistrationId &&
+                  matchedRegistrationId &&
+                  pData.claimedByRegistrationId !== matchedRegistrationId
+                ) {
+                  return false;
+                }
+                tx.set(
+                  paymentDocRef,
+                  {
+                    status: "MATCHED",
+                    claimedByRegistrationId: matchedRegistrationId || pData?.claimedByRegistrationId || null,
+                    claimedByOrderId: matchedOrderId || pData?.claimedByOrderId || null,
+                    matchedRegistrationId: matchedRegistrationId || pData?.matchedRegistrationId || null,
+                    matchedOrderId: matchedOrderId || pData?.matchedOrderId || null,
+                    matchedStudentName,
+                    matchedEventName,
+                    reconciledFromSynthetic: prevSynthUtr || null,
+                    matchedAt: pData?.matchedAt || now,
+                  },
+                  { merge: true }
+                );
+                return true;
+              }).catch(() => false);
 
-              if (matchedRegistrationId) {
-                await setDoc(doc(db, "registrations", matchedRegistrationId), {
-                  paymentId: utr,
-                  "paymentDetails.utr": utr,
-                  "paymentDetails.bankUtr": utr,
-                  "paymentDetails.reconciledFromBankSms": true,
-                  "paymentDetails.syntheticUtrReplaced": rData.paymentId || rData.utr || null,
-                  "paymentDetails.bankPayer": payerName || null,
-                }, { merge: true }).catch(() => {});
-              }
+              if (lockedOk) {
+                if (matchedOrderId) {
+                  await setDoc(doc(db, "active_checkout_sessions", matchedOrderId), {
+                    bankUtr: utr,
+                    realUtr: utr,
+                    utr,
+                    reconciledViaBankSms: true,
+                    bankSmsText: combinedText,
+                    reconciledAt: now,
+                  }, { merge: true }).catch(() => {});
+                }
 
-              const prevSynthUtr = rData.paymentId || rData.utr;
-              if (prevSynthUtr && prevSynthUtr !== utr) {
-                await setDoc(doc(db, "verified_upi_payments", prevSynthUtr), {
-                  status: "MERGED",
-                  reconciledToBankUtr: utr,
-                  note: `Merged into official Bank SMS UTR ${utr}`,
-                }, { merge: true }).catch(() => {});
+                if (matchedRegistrationId) {
+                  const preserveManual = Boolean(rData.isManualUtr || rData.submittedUtr || rData.paymentDetails?.isManualUtr);
+                  const regMergePayload: Record<string, any> = {
+                    paymentId: utr,
+                    "paymentDetails.utr": utr,
+                    "paymentDetails.bankUtr": utr,
+                    "paymentDetails.reconciledFromBankSms": true,
+                    "paymentDetails.syntheticUtrReplaced": prevSynthUtr || null,
+                    "paymentDetails.bankPayer": payerName || rData.payerName || null,
+                    verifiedBy: preserveManual
+                      ? "Auto-Gateway (Manual UTR Verified via Bank SMS)"
+                      : "Auto-Gateway (Paytm + Bank SMS Merged)",
+                  };
+                  if (preserveManual) {
+                    regMergePayload.isManualUtr = true;
+                    regMergePayload["paymentDetails.isManualUtr"] = true;
+                  }
+                  await setDoc(doc(db, "registrations", matchedRegistrationId), regMergePayload, { merge: true }).catch(() => {});
+                }
+
+                if (prevSynthUtr && prevSynthUtr !== utr) {
+                  await setDoc(doc(db, "verified_upi_payments", prevSynthUtr), {
+                    status: "MERGED",
+                    reconciledToBankUtr: utr,
+                    claimedByRegistrationId: matchedRegistrationId || null,
+                    claimedByOrderId: matchedOrderId || null,
+                    note: `Merged into official Bank SMS UTR ${utr}`,
+                  }, { merge: true }).catch(() => {});
+                }
               }
             } else {
               // Late Paytm push arriving after an already-completed transaction: merge without modifying the real Bank UTR
@@ -590,7 +714,7 @@ export async function POST(req: NextRequest) {
           const waitingSessionsQuery = query(
             collection(db, "active_checkout_sessions"),
             where("status", "==", "WAITING"),
-            limit(15)
+            limit(50)
           );
           const waitingSnap = await getDocs(waitingSessionsQuery);
           if (!waitingSnap.empty) {
@@ -702,12 +826,32 @@ export async function POST(req: NextRequest) {
                 })
                 .sort(sortCandidates);
 
-              if (exactPaisaCandidates.length > 0) {
+              if (exactPaisaCandidates.length === 1) {
                 bestMatch = exactPaisaCandidates[0];
                 const studentName = bestMatch.data.participantName || bestMatch.data.leaderName || "Student";
                 if (extractedSender && !isNameCompatible(extractedSender, studentName)) {
                   isFriendPayment = true;
                   payerName = extractedSender;
+                }
+              } else if (exactPaisaCandidates.length > 1) {
+                // Conflict protection: if multiple active sessions share the exact paisa amount,
+                // ONLY match if payer name or phone disambiguates uniquely; never pick index [0] blindly.
+                const textLower = combinedText.toLowerCase();
+                const unambiguous = exactPaisaCandidates.find((c) => {
+                  const sName = String(c.data.participantName || c.data.leaderName || "");
+                  const sPhone = String(c.data.phone || "").replace(/\D/g, "").slice(-6);
+                  return (
+                    (extractedSender && isNameCompatible(extractedSender, sName)) ||
+                    (sPhone.length >= 6 && textLower.includes(sPhone))
+                  );
+                });
+                bestMatch = unambiguous || null;
+                if (bestMatch) {
+                  const studentName = bestMatch.data.participantName || bestMatch.data.leaderName || "Student";
+                  if (extractedSender && !isNameCompatible(extractedSender, studentName)) {
+                    isFriendPayment = true;
+                    payerName = extractedSender;
+                  }
                 }
               }
             } else {
@@ -773,23 +917,62 @@ export async function POST(req: NextRequest) {
                   attemptedAmount: amount,
                 }, { merge: true });
               } else {
-                matchedOrderId = bestMatch.id;
-                matchedStudentName = bestMatch.data.participantName || bestMatch.data.leaderName || bestMatch.data.email || "Student";
-                // Link matchedOrderId on verified_upi_payments first so Firestore Transition 2 passes
-                await setDoc(paymentDocRef, {
-                  status: "MATCHED",
-                  matchedOrderId: bestMatch.id,
-                  matchedStudentName,
-                }, { merge: true }).catch(() => {});
-                await setDoc(doc(db, "active_checkout_sessions", bestMatch.id), {
-                  status: "COMPLETED",
-                  utr,
-                  receivedAmount: amount,
-                  paidAt: now,
-                  rawNotification: combinedText,
-                  payerName: payerName || null,
-                  isFriendPayment: Boolean(isFriendPayment),
-                }, { merge: true });
+                const candidateOrderId = bestMatch.id;
+                const candidateStudent = bestMatch.data.participantName || bestMatch.data.leaderName || bestMatch.data.email || "Student";
+                const candidateRegId = bestMatch.data.registrationId || null;
+                const sessionRef = doc(db, "active_checkout_sessions", candidateOrderId);
+
+                // Atomic 1:1 Lock via Firestore Transaction: prevent two concurrent signals or two sessions double-claiming
+                const txClaimed = await runTransaction(db, async (tx) => {
+                  const [pSnap, sSnap] = await Promise.all([
+                    tx.get(paymentDocRef),
+                    tx.get(sessionRef),
+                  ]);
+                  if (!sSnap.exists() || sSnap.data()?.status !== "WAITING") return false;
+                  const pData = pSnap.exists() ? pSnap.data() : null;
+                  if (
+                    (pData?.claimedByOrderId && pData.claimedByOrderId !== candidateOrderId) ||
+                    (pData?.claimedByRegistrationId && candidateRegId && pData.claimedByRegistrationId !== candidateRegId)
+                  ) {
+                    return false;
+                  }
+
+                  tx.set(
+                    paymentDocRef,
+                    {
+                      status: "MATCHED",
+                      claimedByOrderId: candidateOrderId,
+                      ...(candidateRegId ? { claimedByRegistrationId: candidateRegId, matchedRegistrationId: candidateRegId } : {}),
+                      matchedOrderId: candidateOrderId,
+                      matchedStudentName: candidateStudent,
+                      matchedAt: now,
+                    },
+                    { merge: true }
+                  );
+
+                  tx.set(
+                    sessionRef,
+                    {
+                      status: "COMPLETED",
+                      utr,
+                      receivedAmount: amount,
+                      paidAt: now,
+                      completedAt: now,
+                      rawNotification: combinedText,
+                      payerName: payerName || null,
+                      isFriendPayment: Boolean(isFriendPayment),
+                    },
+                    { merge: true }
+                  );
+
+                  return true;
+                }).catch(() => false);
+
+                if (txClaimed) {
+                  matchedOrderId = candidateOrderId;
+                  matchedStudentName = candidateStudent;
+                  matchedEventName = bestMatch.data.eventName || bestMatch.data.eventTitle || matchedEventName || null;
+                }
               }
             }
           }
@@ -929,36 +1112,82 @@ export async function POST(req: NextRequest) {
 
                 const recovered = matchingExpired[0];
                 const recName = recovered.data.participantName || recovered.data.leaderName || recovered.data.email || "Student";
-                const nameMatches = !extractedSender || isNameCompatible(extractedSender, recName);
+                const recPhone = String(recovered.data.phone || "").replace(/\D/g, "").slice(-6);
+                const textLower = combinedText.toLowerCase();
+                const nameMatches = Boolean(extractedSender && isNameCompatible(extractedSender, recName));
+                const phoneMatches = Boolean(recPhone.length >= 6 && textLower.includes(recPhone));
                 const recAgeMs = Math.abs(incomingMs - new Date(recovered.data.createdAt || 0).getTime());
+                const isFractionalPaisa = Math.round(Number(amount) * 100) % 100 !== 0;
 
-                // Safety gate: If payer name contradicts student name, only recover if it is the sole
-                // recent expired session within 45 minutes; otherwise leave UNCLAIMED for manual/UTR match.
-                if (nameMatches || (matchingExpired.length === 1 && recAgeMs <= 45 * 60 * 1000)) {
-                  matchedOrderId = recovered.id;
-                  matchedStudentName = recName;
-                  if (extractedSender && !isNameCompatible(extractedSender, matchedStudentName)) {
-                    isFriendPayment = true;
-                    payerName = extractedSender;
+                // Strict Anti-Hijack Revival Gate:
+                // Never revive EXPIRED sessions without Name/Phone identity UNLESS it is the sole
+                // micro-paisa exact match within 15 minutes (never round amounts or 24h sessions).
+                const canSafelyRevive =
+                  nameMatches ||
+                  phoneMatches ||
+                  (!extractedSender && isFractionalPaisa && matchingExpired.length === 1 && recAgeMs <= 15 * 60 * 1000);
+
+                if (canSafelyRevive) {
+                  const recSessionRef = doc(db, "active_checkout_sessions", recovered.id);
+                  const recRegId = recovered.data.registrationId || null;
+
+                  const revived = await runTransaction(db, async (tx) => {
+                    const [pSnap, sSnap] = await Promise.all([
+                      tx.get(paymentDocRef),
+                      tx.get(recSessionRef),
+                    ]);
+                    if (!sSnap.exists() || sSnap.data()?.status !== "EXPIRED") return false;
+                    const pData = pSnap.exists() ? pSnap.data() : null;
+                    if (
+                      (pData?.claimedByOrderId && pData.claimedByOrderId !== recovered.id) ||
+                      (pData?.claimedByRegistrationId && recRegId && pData.claimedByRegistrationId !== recRegId)
+                    ) {
+                      return false;
+                    }
+
+                    if (extractedSender && !isNameCompatible(extractedSender, recName)) {
+                      isFriendPayment = true;
+                      payerName = extractedSender;
+                    }
+
+                    tx.set(
+                      paymentDocRef,
+                      {
+                        status: "MATCHED",
+                        claimedByOrderId: recovered.id,
+                        ...(recRegId ? { claimedByRegistrationId: recRegId, matchedRegistrationId: recRegId } : {}),
+                        matchedOrderId: recovered.id,
+                        matchedStudentName: recName,
+                        matchedAt: now,
+                      },
+                      { merge: true }
+                    );
+
+                    tx.set(
+                      recSessionRef,
+                      {
+                        status: "COMPLETED",
+                        utr,
+                        receivedAmount: amount,
+                        paidAt: now,
+                        completedAt: now,
+                        transactionTimestamp,
+                        rawNotification: combinedText,
+                        payerName: payerName || null,
+                        isFriendPayment: Boolean(isFriendPayment),
+                        recoveredFromExpired: true,
+                      },
+                      { merge: true }
+                    );
+
+                    return true;
+                  }).catch(() => false);
+
+                  if (revived) {
+                    matchedOrderId = recovered.id;
+                    matchedStudentName = recName;
+                    matchedEventName = recovered.data.eventName || recovered.data.eventTitle || matchedEventName || null;
                   }
-                  await setDoc(paymentDocRef, {
-                    status: "MATCHED",
-                    matchedOrderId: recovered.id,
-                    matchedStudentName,
-                  }, { merge: true }).catch(() => {});
-                  await setDoc(doc(db, "active_checkout_sessions", recovered.id), {
-                    status: "COMPLETED",
-                    utr,
-                    receivedAmount: amount,
-                    paidAt: now,
-                    transactionTimestamp,
-                    rawNotification: combinedText,
-                    payerName: payerName || null,
-                    isFriendPayment: Boolean(isFriendPayment),
-                    recoveredFromExpired: true,
-                  }, { merge: true }).catch((e) => {
-                    console.warn("Notice: expired session status update note:", e);
-                  });
                 }
               }
             }
@@ -1225,14 +1454,17 @@ export async function POST(req: NextRequest) {
                   id: d.id,
                   registrationId: data.registrationId,
                   orderId: data.orderId,
-                  paymentId: data.paymentId || data.paymentDetails?.utr || data.customAnswers?.upiUtr,
+                  paymentId: data.paymentId || data.submittedUtr || data.paymentDetails?.utr || data.customAnswers?.upiUtr,
+                  submittedUtr: data.submittedUtr,
+                  paymentDetails: data.paymentDetails,
+                  customAnswers: data.customAnswers,
                   amountPaid: Number(data.amountPaid || data.paymentDetails?.amount || 0),
                   participantName: data.participantName,
                   leaderName: data.leaderName,
                   phone: data.phone,
                   registeredAt: data.registeredAt,
                   createdAt: data.createdAt,
-                });
+                } as any);
 
                 return {
                   ref: d.ref,
@@ -1346,33 +1578,91 @@ export async function POST(req: NextRequest) {
             updatePayload["paymentDetails.isManualUtr"] = true;
           }
 
-          // Ensure verified_upi_payments/{finalPaymentId} exists before updating registration
-          // (e.g. when Paytm synthetic signal matches a registration with a manually entered 12-digit UTR)
-          if (finalPaymentId && finalPaymentId !== utr) {
-            try {
-              await setDoc(doc(db, "verified_upi_payments", finalPaymentId), {
-                utr: finalPaymentId,
-                amount: Number(amount || regData.amountPaid || 0),
-                rawNotification: combinedText,
-                status: "MATCHED",
-                isSyntheticUtr: false,
-                reconciledFromSynthetic: utr,
+          // Lock verified_upi_payments/{finalPaymentId} AND incoming paymentDocRef atomically 1:1 BEFORE activating registration!
+          const targetRegId = matchingDoc.id;
+          const targetOrderId = matchedOrderId || regData.orderId || null;
+          const resolvedLedgerDocId = String(finalPaymentId || utr || `TXN-${Date.now()}`);
+          const finalLedgerRef = doc(db, "verified_upi_payments", resolvedLedgerDocId);
+
+          const atomicLockOk = await runTransaction(db, async (tx) => {
+            const pSnap = await tx.get(paymentDocRef);
+            const pData = pSnap.exists() ? pSnap.data() : null;
+            if (pData?.claimedByRegistrationId && pData.claimedByRegistrationId !== targetRegId) {
+              return false;
+            }
+
+            const finalSnap = resolvedLedgerDocId !== utr ? await tx.get(finalLedgerRef) : pSnap;
+            const finalData = finalSnap?.exists() ? finalSnap.data() : null;
+            if (finalData?.claimedByRegistrationId && finalData.claimedByRegistrationId !== targetRegId) {
+              return false;
+            }
+
+            // If a synthetic Paytm signal (AUTO-PTM-...) approved a manual 12-digit UTR pass,
+            // lock the synthetic doc to this registration so it can NEVER be reused by another student.
+            tx.set(
+              paymentDocRef,
+              {
+                utr,
+                amount: Number(amount || pData?.amount || regData.amountPaid || 0),
+                status: (isDuplicateNotification && isSyntheticUtr) ? "MERGED" : "MATCHED",
+                isSyntheticUtr,
                 source: sourceAppName,
-                matchedRegistrationId: matchingDoc.id,
-                matchedOrderId: matchedOrderId || regData.orderId || null,
-                matchedStudentName: matchedStudentName || null,
+                claimedByRegistrationId: targetRegId,
+                claimedByOrderId: targetOrderId,
+                matchedRegistrationId: targetRegId,
+                matchedOrderId: targetOrderId,
+                matchedStudentName,
+                matchedEventName,
                 payerName: payerName || null,
                 isFriendPayment: Boolean(isFriendPayment),
-                receivedAt: now,
+                receivedAt: pData?.receivedAt || now,
                 transactionTimestamp,
                 notificationTimestamp: rawPostTime || contentDate.getTime(),
-                matchedAt: now,
-              }, { merge: true });
-            } catch {}
-          }
+                matchedAt: pData?.matchedAt || now,
+                ...(finalPaymentId !== utr ? { linkedManualUtr: finalPaymentId } : {}),
+              },
+              { merge: true }
+            );
 
-          const docRef = matchingDoc.ref || doc(db, "registrations", matchingDoc.id);
-          await updateDoc(docRef, updatePayload);
+            // When Paytm synthetic signal matches a manual 12-digit UTR, create/update verified_upi_payments/{finalPaymentId}
+            // so isVerifiedPaidRegistration Case 2 & audit checks recognize it immediately.
+            if (finalPaymentId && finalPaymentId !== utr) {
+              tx.set(
+                finalLedgerRef,
+                {
+                  utr: finalPaymentId,
+                  amount: Number(amount || regData.amountPaid || 0),
+                  rawNotification: combinedText,
+                  status: "MATCHED",
+                  isSyntheticUtr: false,
+                  reconciledFromSynthetic: utr,
+                  source: sourceAppName,
+                  claimedByRegistrationId: targetRegId,
+                  claimedByOrderId: targetOrderId,
+                  matchedRegistrationId: targetRegId,
+                  matchedOrderId: targetOrderId,
+                  matchedStudentName: matchedStudentName || null,
+                  matchedEventName: matchedEventName || null,
+                  payerName: payerName || null,
+                  isFriendPayment: Boolean(isFriendPayment),
+                  receivedAt: finalData?.receivedAt || now,
+                  transactionTimestamp,
+                  notificationTimestamp: rawPostTime || contentDate.getTime(),
+                  matchedAt: finalData?.matchedAt || now,
+                },
+                { merge: true }
+              );
+            }
+
+            return true;
+          }).catch(() => false);
+
+          if (atomicLockOk) {
+            const docRef = matchingDoc.ref || doc(db, "registrations", targetRegId);
+            await updateDoc(docRef, updatePayload);
+          } else {
+            console.warn(`Webhook 1:1 lock blocked assignment of UTR ${utr} to ${targetRegId} (already claimed).`);
+          }
         }
         // Invariant: A webhook signal must NEVER create a new registration record on its own;
         // it may only update an existing registration (or mark the checkout session COMPLETED for the client to submit).
@@ -1380,25 +1670,29 @@ export async function POST(req: NextRequest) {
         console.warn("Notice: registrations update warning:", regErr);
       }
 
-      // 3C. Save ledger entry in verified_upi_payments
+      // 3C. Save/preserve ledger entry in verified_upi_payments (respecting any 1:1 lock & MERGED status set above)
       const isMatched = Boolean(matchedRegistrationId || matchedOrderId);
       try {
+        const preC = await getDoc(paymentDocRef);
+        const curC = preC.exists() ? preC.data() : null;
+        const preserveMerged = curC?.status === "MERGED";
         await setDoc(paymentDocRef, {
           utr,
           amount,
           rawNotification: combinedText,
-          status: (isDuplicateNotification && isSyntheticUtr) ? "MERGED" : (isMatched ? "MATCHED" : "UNCLAIMED"),
+          status: preserveMerged ? "MERGED" : ((isDuplicateNotification && isSyntheticUtr) ? "MERGED" : (isMatched ? "MATCHED" : "UNCLAIMED")),
           isSyntheticUtr,
           source: sourceAppName,
-          matchedRegistrationId: matchedRegistrationId || null,
-          matchedOrderId: matchedOrderId || null,
-          matchedStudentName: matchedStudentName || null,
-          payerName: payerName || null,
+          ...(matchedRegistrationId ? { claimedByRegistrationId: curC?.claimedByRegistrationId || matchedRegistrationId, matchedRegistrationId: curC?.matchedRegistrationId || matchedRegistrationId } : {}),
+          ...(matchedOrderId ? { claimedByOrderId: curC?.claimedByOrderId || matchedOrderId, matchedOrderId: curC?.matchedOrderId || matchedOrderId } : {}),
+          matchedStudentName: curC?.matchedStudentName || matchedStudentName || null,
+          matchedEventName: curC?.matchedEventName || matchedEventName || null,
+          payerName: payerName || curC?.payerName || null,
           isFriendPayment: Boolean(isFriendPayment),
-          receivedAt: now,
+          receivedAt: curC?.receivedAt || now,
           transactionTimestamp,
           notificationTimestamp: rawPostTime || contentDate.getTime(),
-          matchedAt: isMatched ? now : null,
+          matchedAt: curC?.matchedAt || (isMatched ? now : null),
         }, { merge: true });
       } catch (ledgerErr) {
         console.warn("Notice: verified_upi_payments ledger write warning:", ledgerErr);

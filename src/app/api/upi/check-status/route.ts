@@ -60,111 +60,45 @@ export async function GET(req: NextRequest) {
               return NextResponse.json({ status: "EXPIRED", orderId });
             }
 
-            // Self-healing: If session is WAITING, check if an unclaimed payment with matching amount arrived DURING this session's lifetime
+            // Active WAITING session: STRICTLY READ-ONLY (never steal UNCLAIMED payments on GET)
             if (data?.status === "WAITING" && data?.amount) {
               const expiresAtMs = data.expiresAt ? new Date(data.expiresAt).getTime() : 0;
               if (expiresAtMs > 0 && Date.now() > expiresAtMs) {
-                const { setDoc } = await import("firebase/firestore");
-                await setDoc(sessionRef, { status: "EXPIRED" }, { merge: true });
                 return NextResponse.json({ status: "EXPIRED", orderId });
               }
 
-              const sessionAmt = Number(data.amount);
-              const sessionCreatedTime = data.createdAt ? new Date(data.createdAt).getTime() : 0;
-
-              // Only check if we have a valid session creation timestamp
-              if (sessionCreatedTime > 0) {
-                // Target query: filter strictly by exact amount and limit to 3 to prevent full-collection scans
-                const paymentsSnap = await getDocs(
-                  query(
-                    collection(db, "verified_upi_payments"),
-                    where("status", "==", "UNCLAIMED"),
-                    where("amount", "==", sessionAmt),
-                    limit(3)
-                  )
-                );
-
-                const match = paymentsSnap.docs.find((pDoc) => {
-                  const pData = pDoc.data();
-                  const pAmt = Number(pData.amount || 0);
-
-                  // 1. Exact amount match (micro-paisa tolerance)
-                  if (Math.abs(pAmt - sessionAmt) >= 0.005) return false;
-
-                  // 2. Reject synthetic UTRs (spam/promotional notifications without real bank UTR)
-                  if (pData.isSyntheticUtr || !pData.utr || !/^\d{12}$/.test(pData.utr)) {
-                    return false;
-                  }
-
-                  // 3. Strict Time Window Invariant:
-                  // The payment MUST have been received AFTER this checkout session was created.
-                  const paymentTime = pData.receivedAt ? new Date(pData.receivedAt).getTime() : 0;
-                  if (!paymentTime || paymentTime < sessionCreatedTime - 30000) {
-                    return false;
-                  }
-
-                  // 4. Payment must have been received within 30 minutes of session creation
-                  if (sessionCreatedTime > 0 && paymentTime > sessionCreatedTime + 30 * 60 * 1000) {
-                    return false;
-                  }
-
-                  return true;
-                });
-
-                if (match) {
-                  const pData = match.data();
-                  const now = new Date().toISOString();
-                  const { setDoc } = await import("firebase/firestore");
-                  await setDoc(sessionRef, {
-                    status: "COMPLETED",
-                    utr: pData.utr,
-                    receivedAmount: pData.amount,
-                    paidAt: pData.receivedAt || now,
-                  }, { merge: true });
-
-                  await setDoc(match.ref, {
-                    status: "MATCHED",
-                    matchedOrderId: orderId,
-                    matchedStudentName: data.participantName || "Student",
-                    matchedAt: now,
-                  }, { merge: true });
-
-                  return NextResponse.json({
-                    status: "PAID",
-                    orderId,
-                    utr: pData.utr,
-                    amount: pData.amount,
-                    paidAt: pData.receivedAt || now,
-                  });
-                }
-              }
-
-              // Active session is confirmed WAITING; return immediately without falling through to query registrations collection!
               return NextResponse.json({ status: "WAITING", orderId });
             }
           }
         } catch {}
       }
 
-      // 2. Check verified_upi_payments by UTR
-      if (utr && /^\d{12}$/.test(utr)) {
+      // 2. Check verified_upi_payments by UTR ONLY when gated by matching regId or orderId ownership
+      if (utr && /^\d{12}$/.test(utr) && (regId || orderId)) {
         try {
           const payDocRef = doc(db, "verified_upi_payments", utr);
           const paySnap = await getDoc(payDocRef);
           if (paySnap.exists()) {
             const data = paySnap.data();
-            return NextResponse.json({
-              status: "PAID",
-              orderId: data.matchedOrderId || orderId,
-              utr,
-              amount: data.amount,
-              paidAt: data.receivedAt,
-            });
+            const isOwned =
+              data.status === "MATCHED" &&
+              (!regId || data.claimedByRegistrationId === regId || data.matchedRegistrationId === regId) &&
+              (!orderId || data.claimedByOrderId === orderId || data.matchedOrderId === orderId);
+            if (isOwned) {
+              return NextResponse.json({
+                status: "PAID",
+                orderId: data.matchedOrderId || orderId,
+                utr,
+                amount: data.amount,
+                paidAt: data.receivedAt,
+                registrationId: data.claimedByRegistrationId || data.matchedRegistrationId || regId || null,
+              });
+            }
           }
         } catch {}
       }
 
-      // 3. Check registrations collection by regId, orderId, or paymentId (UTR)
+      // 3. Check registrations collection by regId or orderId
       try {
         if (regId) {
           const regDoc = await getDoc(doc(db, "registrations", regId));
@@ -177,6 +111,7 @@ export async function GET(req: NextRequest) {
                 utr: data.paymentId || utr,
                 amount: data.amountPaid,
                 paidAt: data.paidAt,
+                registrationId: regDoc.id,
               });
             }
           }
@@ -186,7 +121,8 @@ export async function GET(req: NextRequest) {
           const qOrder = query(collection(db, "registrations"), where("orderId", "==", orderId), limit(1));
           const snapOrder = await getDocs(qOrder);
           if (!snapOrder.empty) {
-            const data = snapOrder.docs[0].data();
+            const regDoc = snapOrder.docs[0];
+            const data = regDoc.data();
             if (data?.paymentStatus === "PAID") {
               return NextResponse.json({
                 status: "PAID",
@@ -194,23 +130,7 @@ export async function GET(req: NextRequest) {
                 utr: data.paymentId || utr,
                 amount: data.amountPaid,
                 paidAt: data.paidAt,
-              });
-            }
-          }
-        }
-
-        if (utr && /^\d{12}$/.test(utr)) {
-          const qUtr = query(collection(db, "registrations"), where("paymentId", "==", utr), limit(1));
-          const snapUtr = await getDocs(qUtr);
-          if (!snapUtr.empty) {
-            const data = snapUtr.docs[0].data();
-            if (data?.paymentStatus === "PAID") {
-              return NextResponse.json({
-                status: "PAID",
-                orderId: data.orderId || orderId,
-                utr,
-                amount: data.amountPaid,
-                paidAt: data.paidAt,
+                registrationId: regDoc.id,
               });
             }
           }

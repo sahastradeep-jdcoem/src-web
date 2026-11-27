@@ -7,6 +7,7 @@ export async function POST(req: NextRequest) {
       orderId, 
       txnId, 
       amount, 
+      registrationId,
       txnToken,
       paymentMethod = "UPI" 
     } = body;
@@ -98,22 +99,41 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check for duplicate UTR submissions in Firestore to prevent reusing the same payment receipt
+    // Check for duplicate UTR submissions across paymentId, submittedUtr, and paymentDetails.bankUtr
+    // AND resolve authoritative expectedAmount from active_checkout_sessions/{orderId}
+    let authoritativeExpectedAmount = Number(amount || 0);
+    let resolvedRegId = String(registrationId || "").trim();
+
     try {
       const { db } = await import("@/lib/firebase/config");
-      const { collection, query, where, getDocs, limit } = await import("firebase/firestore");
+      const { collection, doc, getDoc, query, where, getDocs, limit } = await import("firebase/firestore");
       if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-        const q = query(
-          collection(db, "registrations"),
-          where("paymentId", "==", utr),
-          limit(1)
+        if (orderId) {
+          const sessionSnap = await getDoc(doc(db, "active_checkout_sessions", String(orderId)));
+          if (sessionSnap.exists()) {
+            const sData = sessionSnap.data();
+            const sAmt = Number(sData?.amount || 0);
+            if (sAmt > 0) authoritativeExpectedAmount = sAmt;
+            if (!resolvedRegId && sData?.registrationId) {
+              resolvedRegId = String(sData.registrationId).trim();
+            }
+          }
+        }
+
+        const [qPayId, qSubUtr, qBankUtr] = await Promise.all([
+          getDocs(query(collection(db, "registrations"), where("paymentId", "==", utr), limit(3))),
+          getDocs(query(collection(db, "registrations"), where("submittedUtr", "==", utr), limit(3))),
+          getDocs(query(collection(db, "registrations"), where("paymentDetails.bankUtr", "==", utr), limit(3))),
+        ]);
+
+        const conflictingReg = [...qPayId.docs, ...qSubUtr.docs, ...qBankUtr.docs].find(
+          (d) => !resolvedRegId || d.id !== resolvedRegId
         );
-        const snap = await getDocs(q);
-        if (!snap.empty) {
+        if (conflictingReg) {
           return NextResponse.json(
-            { 
-              verified: false, 
-              error: `Duplicate UTR detected: This 12-digit UTR (${utr}) has already been submitted for another registration. Please provide your unique payment receipt.` 
+            {
+              verified: false,
+              error: `Duplicate UTR detected: This 12-digit UTR (${utr}) has already been submitted for another registration. Please provide your unique payment receipt.`,
             },
             { status: 400 }
           );
@@ -123,103 +143,124 @@ export async function POST(req: NextRequest) {
       console.warn("Notice: could not run server-side duplicate UTR check:", dbErr);
     }
 
-    // Check if the 12-digit UTR was already confirmed via our live mobile webhook
+    if (!authoritativeExpectedAmount || authoritativeExpectedAmount <= 0) {
+      return NextResponse.json(
+        { verified: false, error: "Invalid or missing authoritative checkout fee for verification." },
+        { status: 400 }
+      );
+    }
+
+    // Check if THIS exact 12-digit UTR was already confirmed by our live Bank SMS webhook
+    // Lock 1:1 atomically using runTransaction (NEVER blindly steal UNCLAIMED AUTO-PTM- signals!)
     let autoVerifiedViaWebhook = false;
+    let verifiedAmount = authoritativeExpectedAmount;
     try {
       const { db } = await import("@/lib/firebase/config");
-      const { doc, getDoc, updateDoc } = await import("firebase/firestore");
+      const { doc, runTransaction } = await import("firebase/firestore");
       if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
         const paymentDocRef = doc(db, "verified_upi_payments", utr);
-        const paymentSnap = await getDoc(paymentDocRef);
-        if (paymentSnap.exists()) {
+        const sessionRef = orderId ? doc(db, "active_checkout_sessions", String(orderId)) : null;
+
+        const txResult = await runTransaction(db, async (tx) => {
+          const paymentSnap = await tx.get(paymentDocRef);
+          if (!paymentSnap.exists()) {
+            return { matched: false };
+          }
           const paymentData = paymentSnap.data();
-          const expectedAmount = Number(amount || 0);
-          
-          // Anti-Fraud: Allow auto-verification if payment is UNCLAIMED, already matched to this orderId,
-          // or not yet claimed by any registration (since duplicate-UTR check above already verified uniqueness).
-          const isEligibleToClaim = 
-            (!paymentData.status || paymentData.status === "UNCLAIMED" || paymentData.matchedOrderId === orderId || !paymentData.matchedRegistrationId);
 
-          // If amount is valid or matches expected fee (allowing for micro-paisa offset tolerance of <= ₹1.00)
-          if (isEligibleToClaim && (!expectedAmount || (paymentData.amount && Math.abs(Number(paymentData.amount) - expectedAmount) <= 1.0) || (paymentData.amount && paymentData.amount >= expectedAmount))) {
-            autoVerifiedViaWebhook = true;
-            await updateDoc(paymentDocRef, {
+          // 1:1 Exclusivity Guard
+          if (
+            paymentData.claimedByRegistrationId &&
+            (!resolvedRegId || paymentData.claimedByRegistrationId !== resolvedRegId)
+          ) {
+            throw new Error(`CONFLICT:UTR ${utr} is already claimed by another registration.`);
+          }
+          if (
+            paymentData.claimedByOrderId &&
+            paymentData.claimedByOrderId !== orderId &&
+            (!resolvedRegId || paymentData.claimedByRegistrationId !== resolvedRegId)
+          ) {
+            throw new Error(`CONFLICT:UTR ${utr} is already locked to another checkout order.`);
+          }
+
+          const payAmt = Number(paymentData.amount || 0);
+          if (payAmt <= 0) return { matched: false };
+
+          const expHasMicro = Math.round(authoritativeExpectedAmount * 100) % 100 !== 0;
+          const payHasMicro = Math.round(payAmt * 100) % 100 !== 0;
+          const diff = Math.abs(payAmt - authoritativeExpectedAmount);
+          const hasMicroConflict = expHasMicro && payHasMicro && diff >= 0.005;
+
+          const isAmountValid =
+            !hasMicroConflict &&
+            (diff <= 1.0 || payAmt >= authoritativeExpectedAmount);
+
+          const isEligibleToClaim =
+            !paymentData.status ||
+            paymentData.status === "UNCLAIMED" ||
+            paymentData.matchedOrderId === orderId ||
+            paymentData.claimedByRegistrationId === resolvedRegId;
+
+          if (!isEligibleToClaim || !isAmountValid) {
+            return { matched: false };
+          }
+
+          const nowIso = new Date().toISOString();
+          tx.set(
+            paymentDocRef,
+            {
               status: "MATCHED",
+              claimedByOrderId: orderId,
+              ...(resolvedRegId ? { claimedByRegistrationId: resolvedRegId, matchedRegistrationId: resolvedRegId } : {}),
               matchedOrderId: orderId,
-              matchedAt: new Date().toISOString(),
-            });
-          }
-        }
+              matchedAt: paymentData.matchedAt || nowIso,
+            },
+            { merge: true }
+          );
 
-        // Check for UNCLAIMED synthetic payment record (e.g. Paytm push notification without UTR that arrived earlier)
-        if (!autoVerifiedViaWebhook && amount) {
-          try {
-            const { collection, query, where, getDocs, setDoc, limit } = await import("firebase/firestore");
-            const expectedAmount = Number(amount || 0);
-            const unclaimedQuery = query(
-              collection(db, "verified_upi_payments"),
-              where("status", "==", "UNCLAIMED"),
-              where("amount", "==", expectedAmount),
-              limit(3)
+          if (sessionRef) {
+            tx.set(
+              sessionRef,
+              {
+                status: "COMPLETED",
+                utr,
+                submittedUtr: utr,
+                receivedAmount: payAmt,
+                paidAt: paymentData.receivedAt || nowIso,
+                completedAt: nowIso,
+                ...(resolvedRegId ? { registrationId: resolvedRegId } : {}),
+              },
+              { merge: true }
             );
-            const unclaimedSnap = await getDocs(unclaimedQuery);
-            if (!unclaimedSnap.empty) {
-              const unclaimedMatch = unclaimedSnap.docs.find((d) => {
-                const data = d.data();
-                // Only upgrade synthetic AUTO-PTM- signals (never overwrite a different genuine 12-digit Bank SMS UTR!)
-                const isSynth = Boolean(data.isSyntheticUtr) || String(data.utr || "").startsWith("AUTO-PTM-");
-                if (!isSynth) return false;
-
-                // Must be recent (within last 45 minutes) so stale unclaimed payments from earlier cannot be claimed
-                const recMs = new Date(data.transactionTimestamp || data.receivedAt || 0).getTime();
-                if (!recMs || Math.abs(Date.now() - recMs) > 45 * 60 * 1000) return false;
-
-                const payAmt = Number(data.amount) || 0;
-                // Micro-paisa exact match
-                return Math.abs(payAmt - expectedAmount) < 0.005;
-              });
-
-              if (unclaimedMatch) {
-                autoVerifiedViaWebhook = true;
-                const mData = unclaimedMatch.data();
-                const now = new Date().toISOString();
-
-                // Upgrade synthetic record with the student's submitted 12-digit UTR!
-                await setDoc(doc(db, "verified_upi_payments", utr), {
-                  ...mData,
-                  utr,
-                  status: "MATCHED",
-                  matchedOrderId: orderId,
-                  matchedAt: now,
-                  reconciledFromSynthetic: mData.utr || null,
-                }, { merge: true });
-
-                if (mData.utr && mData.utr !== utr) {
-                  await setDoc(unclaimedMatch.ref, {
-                    status: "MERGED",
-                    reconciledToBankUtr: utr,
-                  }, { merge: true });
-                }
-              }
-            }
-          } catch (unclaimedErr) {
-            console.warn("Notice: unclaimed verified_upi_payments lookup note:", unclaimedErr);
           }
+
+          return { matched: true, payAmt };
+        });
+
+        if (txResult.matched) {
+          autoVerifiedViaWebhook = true;
+          verifiedAmount = txResult.payAmt || authoritativeExpectedAmount;
         }
       }
-    } catch (whErr) {
+    } catch (whErr: any) {
+      if (String(whErr?.message || "").startsWith("CONFLICT:")) {
+        return NextResponse.json(
+          { verified: false, error: whErr.message.replace(/^CONFLICT:/, "") },
+          { status: 409 }
+        );
+      }
       console.warn("Notice: could not query verified_upi_payments:", whErr);
     }
 
     if (autoVerifiedViaWebhook) {
       return NextResponse.json({
         verified: true,
-        paymentStatus: "PAID", // Auto-approved on the spot!
+        paymentStatus: "PAID", // Auto-approved on the spot via genuine 12-digit Bank UTR!
         paymentId: utr,
         orderId: orderId,
-        amount: Number(amount || 0),
+        amount: verifiedAmount,
         gateway: "Paytm Auto-Gateway",
-        message: "Payment confirmed in real-time via Paytm webhook! Pass activated.",
+        message: "Payment confirmed in real-time via Bank UTR webhook! Pass activated.",
       });
     }
 
@@ -228,7 +269,7 @@ export async function POST(req: NextRequest) {
       paymentStatus: "PENDING", // PENDING until approved by Treasurer or phone webhook
       paymentId: utr,
       orderId: orderId,
-      amount: Number(amount || 0),
+      amount: authoritativeExpectedAmount,
       gateway: "Paytm UPI",
       message: "UTR submitted successfully. Delegate pass created in Pending Verification status.",
     });

@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { mockEvents } from "@/data/events";
-import { getSiteContentFromFirestore } from "@/lib/firebase/firestore";
+import { getEventFromFirestore, getSiteContentFromFirestore } from "@/lib/firebase/firestore";
 import { PublicPaymentConfig } from "@/lib/paymentConfigStore";
+
+const MAX_CONCURRENT_CHECKOUTS = 3;
+const CHECKOUT_SESSION_TTL_MS = 4 * 60 * 1000; // 4 minutes per slot
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,6 +26,7 @@ export async function POST(req: NextRequest) {
       registrationId,
       registrationData,
       previousOrderId,
+      queueTicketId,
     } = body;
 
     if (!amount || Number(amount) <= 0) {
@@ -135,17 +139,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Server-side price validation to prevent client-side fee tampering
+    // Server-side price validation (Firestore event authoritative, fallback to static mockEvents)
     if (eventId) {
-      const canonicalEvent = mockEvents.find(
-        (e) => e.id === eventId || e.slug === eventId
-      );
+      const canonicalEvent =
+        (await getEventFromFirestore(String(eventId)).catch(() => null)) ||
+        mockEvents.find((e) => e.id === eventId || e.slug === eventId);
       if (canonicalEvent && canonicalEvent.isPaid) {
-        let expectedFee = canonicalEvent.feeAmount || 0;
+        let expectedFee = Number(canonicalEvent.feeAmount || 0);
         if (teamType === "Team" && canonicalEvent.feePricingModel === "per_team" && canonicalEvent.teamFeeAmount) {
-          expectedFee = canonicalEvent.teamFeeAmount;
+          expectedFee = Number(canonicalEvent.teamFeeAmount);
         } else if (teamType === "Team" && canonicalEvent.feePricingModel === "per_person") {
-          expectedFee = (canonicalEvent.feeAmount || 0) * (Number(teamSize) || 1);
+          expectedFee = Number(canonicalEvent.feeAmount || 0) * (Number(teamSize) || 1);
         }
 
         if (expectedFee > 0 && Math.abs(Number(amount) - expectedFee) > 0.01) {
@@ -184,8 +188,7 @@ export async function POST(req: NextRequest) {
       mid = clientMid.trim();
     }
 
-    // Micro-Paisa Dynamic Offset Engine:
-    // Guarantees 100% collision-free instant auto-verification across simultaneous payments
+    // Enforce 3-slot Concurrency Queue + Collision-free Micro-Paisa Dynamic Offset Engine
     const baseAmount = Number(amount);
     let finalPayableAmount = baseAmount;
     let microPaisaOffset = 0;
@@ -193,26 +196,98 @@ export async function POST(req: NextRequest) {
     if (baseAmount > 0) {
       try {
         const { db } = await import("@/lib/firebase/config");
-        const { collection, query, where, getDocs, limit } = await import("firebase/firestore");
+        const { collection, query, where, getDocs, limit, doc, setDoc } = await import("firebase/firestore");
         if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
           const baseInt = Math.floor(baseAmount);
-          const activeSessionsQuery = query(
-            collection(db, "active_checkout_sessions"),
-            where("status", "==", "WAITING"),
-            limit(30)
-          );
-          const snap = await getDocs(activeSessionsQuery);
-          const usedOffsets = new Set<number>();
-
           const nowMs = Date.now();
-          snap.docs.forEach((d) => {
-            const sData = d.data();
-            const expMs = sData.expiresAt 
-              ? new Date(sData.expiresAt).getTime() 
-              : (sData.createdAt ? new Date(sData.createdAt).getTime() + 5 * 60 * 1000 : 0);
+          const nowIso = new Date(nowMs).toISOString();
 
-            // Only reserve offsets for active, unexpired sessions (< 5 minutes old)
-            if (expMs > nowMs) {
+          const [waitingSnap, completedSnap] = await Promise.all([
+            getDocs(
+              query(
+                collection(db, "active_checkout_sessions"),
+                where("status", "==", "WAITING"),
+                limit(150)
+              )
+            ),
+            getDocs(
+              query(
+                collection(db, "active_checkout_sessions"),
+                where("status", "==", "COMPLETED"),
+                limit(150)
+              )
+            ),
+          ]);
+
+          const usedOffsets = new Set<number>();
+          const expiredCleanups: Promise<any>[] = [];
+          let activeOtherSlots = 0;
+
+          waitingSnap.docs.forEach((d) => {
+            const sData = d.data();
+            const expMs = sData.expiresAt
+              ? new Date(sData.expiresAt).getTime()
+              : (sData.createdAt ? new Date(sData.createdAt).getTime() + CHECKOUT_SESSION_TTL_MS : 0);
+
+            if (expMs <= nowMs) {
+              expiredCleanups.push(
+                setDoc(
+                  d.ref,
+                  { status: "EXPIRED", expiredAt: nowIso, expiredReason: "TTL_EXPIRED" },
+                  { merge: true }
+                ).catch(() => {})
+              );
+              return;
+            }
+
+            // Unexpired WAITING slot: reserve its micro-paisa offset
+            const sAmt = Number(sData.amount || 0);
+            if (Math.floor(sAmt) === baseInt) {
+              const diffPaise = Math.round((sAmt - baseInt) * 100);
+              if (diffPaise >= 1 && diffPaise <= 99) {
+                usedOffsets.add(diffPaise);
+              }
+            }
+
+            // Count slots occupied by OTHER users
+            const sEmail = String(sData.email || "").trim().toLowerCase();
+            const sBt = String(sData.btId || "").trim().toUpperCase();
+            const sEventId = String(sData.eventId || "").trim().toLowerCase();
+            const sameStudent =
+              (cleanEmail && sEmail === cleanEmail) ||
+              (cleanBt && cleanBt !== "STUDENT" && sBt === cleanBt);
+            const sameEvent = !cleanEventId || !sEventId || sEventId === cleanEventId;
+
+            if (!(sameStudent && sameEvent) && d.id !== previousOrderId) {
+              activeOtherSlots++;
+            }
+          });
+
+          if (expiredCleanups.length > 0) {
+            await Promise.allSettled(expiredCleanups);
+          }
+
+          // Hard server-side concurrency barrier: only 3 active QR checkouts allowed at once
+          if (activeOtherSlots >= MAX_CONCURRENT_CHECKOUTS) {
+            return NextResponse.json(
+              {
+                queued: true,
+                error: "Payment counter is currently busy (3/3 active checkouts). Please wait in the queue.",
+                activeSlotsUsed: activeOtherSlots,
+                maxSlots: MAX_CONCURRENT_CHECKOUTS,
+              },
+              { status: 429 }
+            );
+          }
+
+          // Also reserve micro-paisa offsets used by COMPLETED sessions within the last 10 minutes
+          // so a rapid succession payment never clashes with a late-arriving Bank SMS
+          completedSnap.docs.forEach((d) => {
+            const sData = d.data();
+            const compMs = sData.completedAt
+              ? new Date(sData.completedAt).getTime()
+              : (sData.createdAt ? new Date(sData.createdAt).getTime() : 0);
+            if (compMs && nowMs - compMs <= 10 * 60 * 1000) {
               const sAmt = Number(sData.amount || 0);
               if (Math.floor(sAmt) === baseInt) {
                 const diffPaise = Math.round((sAmt - baseInt) * 100);
@@ -270,7 +345,7 @@ export async function POST(req: NextRequest) {
       bhimLink = `upi://pay?${baseUpiParams}`;
     }
 
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + CHECKOUT_SESSION_TTL_MS).toISOString();
 
     // Register active checkout session in Firestore for zero-touch auto-detection
     try {
@@ -293,7 +368,7 @@ export async function POST(req: NextRequest) {
             const waitingSnap = await getDocs(query(
               collection(db, "active_checkout_sessions"),
               where("status", "==", "WAITING"),
-              limit(30)
+              limit(150)
             ));
             const supersedePromises: Promise<any>[] = [];
             waitingSnap.docs.forEach((d) => {
@@ -333,15 +408,29 @@ export async function POST(req: NextRequest) {
           phone: phone || "",
           btId: btId || "",
           registrationId: registrationId || null,
+          queueTicketId: queueTicketId || null,
           registrationData: registrationData ? {
             ...registrationData,
             amountPaid: finalPayableAmount,
             orderId,
           } : null,
           status: "WAITING",
-          createdAt: new Date().toISOString(),
+          createdAt: nowIso,
           expiresAt,
         });
+
+        // Release queue ticket seamlessly now that WAITING session occupies the slot
+        if (queueTicketId && typeof queueTicketId === "string") {
+          await setDoc(
+            doc(db, "checkout_queue", queueTicketId),
+            {
+              status: "RELEASED",
+              releasedAt: nowIso,
+              convertedOrderId: orderId,
+            },
+            { merge: true }
+          ).catch(() => {});
+        }
       }
     } catch (sessionErr) {
       console.warn("Notice: could not record active_checkout_sessions:", sessionErr);

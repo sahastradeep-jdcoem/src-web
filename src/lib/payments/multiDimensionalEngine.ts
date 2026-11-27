@@ -21,7 +21,7 @@ export const DIMENSION_WEIGHTS = {
 
 export const AUTO_APPROVE_CRITERIA = {
   MIN_DIMENSIONS: 2,
-  MIN_SCORE: 60,
+  MIN_SCORE: 75,
   MAX_SCORE_BASELINE: 120, // 120 pts = 100% confidence
 } as const;
 
@@ -54,8 +54,13 @@ export function evaluateCandidateAgainstRegistration(
   const candAmount = cand.receivedAmount || cand.amount || 0;
   const candUtr = (cand.utr || cand.submittedUtr || "").trim();
 
-  const candOrderId = (cand.orderId || cand.matchedOrderId || "").trim();
-  const candRegId = (cand.registrationId || cand.matchedRegistrationId || "").trim();
+  const candStatus = String((cand as any).status || "").toUpperCase();
+  if (candStatus === "MERGED") {
+    return null;
+  }
+
+  const candOrderId = (cand.orderId || cand.matchedOrderId || (cand as any).claimedByOrderId || "").trim();
+  const candRegId = (cand.registrationId || cand.matchedRegistrationId || (cand as any).claimedByRegistrationId || "").trim();
 
   // Pre-compute 12-digit Bank UTR match so an exact globally-unique bank UTR can reconcile
   // even if the student refreshed the checkout modal and generated a second orderId.
@@ -87,7 +92,7 @@ export function evaluateCandidateAgainstRegistration(
     return null;
   }
 
-  // Strict Invariant: If candidate is explicitly tied to another registration, DISQUALIFY
+  // Strict 1:1 Lock Invariant: If candidate is already claimed by / tied to another registration or order, DISQUALIFY
   if (candRegId && regDocId && candRegId !== regDocId && candRegId !== regTicketId) {
     return null;
   }
@@ -193,13 +198,33 @@ export function evaluateCandidateAgainstRegistration(
   const dimsCount = matchedDims.length;
   if (dimsCount === 0 || score < 20) return null;
 
-  // Invariant: Exact 12-digit UTR match with Bank SMS is a guaranteed 100% confidence match
-  const confidence = is12DigitBankUtrMatch
+  const hasAmountCompatibility =
+    regAmt === 0 ||
+    candAmount === 0 ||
+    matchedDims.includes("Micro-Paisa") ||
+    matchedDims.includes("Exact Amount") ||
+    matchedDims.includes("Fee Match (±₹1)");
+
+  const hasOrderOrPassAnchor =
+    matchedDims.includes("Order ID") || matchedDims.includes("Pass ID");
+  const hasNameOrPhoneAnchor =
+    matchedDims.includes("Student Name") || matchedDims.includes("Phone");
+
+  // Identity Anchor Invariant: Never auto-approve on Amount + Time alone.
+  // Require 12-digit UTR match (with valid fee), Order/Pass ID + valid fee, or Name/Phone + valid fee + <=45m window.
+  const hasValidIdentityAnchor =
+    (is12DigitBankUtrMatch && hasAmountCompatibility) ||
+    (hasOrderOrPassAnchor && hasAmountCompatibility) ||
+    (hasNameOrPhoneAnchor && hasAmountCompatibility && (timeDeltaSecs === undefined || timeDeltaSecs <= 2700));
+
+  // Invariant: Exact 12-digit UTR match with compatible amount is a guaranteed 100% confidence match
+  const confidence = (is12DigitBankUtrMatch && hasAmountCompatibility)
     ? 100
     : Math.min(100, Math.round((score / AUTO_APPROVE_CRITERIA.MAX_SCORE_BASELINE) * 100));
 
-  const isEligible = is12DigitBankUtrMatch || (
-    dimsCount >= AUTO_APPROVE_CRITERIA.MIN_DIMENSIONS && score >= AUTO_APPROVE_CRITERIA.MIN_SCORE
+  const isEligible = hasValidIdentityAnchor && (
+    (is12DigitBankUtrMatch && hasAmountCompatibility) ||
+    (dimsCount >= AUTO_APPROVE_CRITERIA.MIN_DIMENSIONS && score >= AUTO_APPROVE_CRITERIA.MIN_SCORE)
   );
 
   // Invariant: If student manually entered a genuine 12-digit UTR, NEVER replace it with a synthetic AUTO-PTM- reference!
@@ -253,4 +278,16 @@ export function findBestMultiDimensionalMatch(
   });
 
   return scored[0];
+}
+
+/**
+ * Convenience helper that returns the best match ONLY if it satisfies strict auto-approval criteria
+ * (MIN_SCORE >= 75 or valid 12-digit UTR match, plus mandatory identity anchor).
+ */
+export function findAutoApprovableMatch(
+  reg: RegistrationForMatching,
+  candidates: PaymentCandidateSignal[]
+): MultiDimensionalMatch | null {
+  const best = findBestMultiDimensionalMatch(reg, candidates);
+  return best && best.isEligibleForAutoApproval ? best : null;
 }

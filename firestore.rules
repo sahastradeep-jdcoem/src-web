@@ -134,17 +134,22 @@ service cloud.firestore {
     }
 
     // Verification check for paid registrations (against active checkout sessions or verified UPI ledger)
-    function isVerifiedPaidRegistration() {
+    function isVerifiedPaidRegistration(regId) {
       return (
-        // Case 1: Verified via completed active checkout session with verified received amount
+        // Case 1: Verified via completed active checkout session locked to this registration (or unlinked)
         (request.resource.data.orderId != null &&
          exists(/databases/$(database)/documents/active_checkout_sessions/$(request.resource.data.orderId)) &&
          get(/databases/$(database)/documents/active_checkout_sessions/$(request.resource.data.orderId)).data.status == 'COMPLETED' &&
-         get(/databases/$(database)/documents/active_checkout_sessions/$(request.resource.data.orderId)).data.receivedAmount >= get(/databases/$(database)/documents/active_checkout_sessions/$(request.resource.data.orderId)).data.amount) ||
-        // Case 2: Verified via verified incoming UPI payments ledger
+         get(/databases/$(database)/documents/active_checkout_sessions/$(request.resource.data.orderId)).data.receivedAmount >= get(/databases/$(database)/documents/active_checkout_sessions/$(request.resource.data.orderId)).data.amount &&
+         (!('registrationId' in get(/databases/$(database)/documents/active_checkout_sessions/$(request.resource.data.orderId)).data) ||
+          get(/databases/$(database)/documents/active_checkout_sessions/$(request.resource.data.orderId)).data.registrationId == null ||
+          get(/databases/$(database)/documents/active_checkout_sessions/$(request.resource.data.orderId)).data.registrationId == '' ||
+          get(/databases/$(database)/documents/active_checkout_sessions/$(request.resource.data.orderId)).data.registrationId == regId)) ||
+        // Case 2: Verified via 1:1 locked incoming UPI payments ledger (must be MATCHED to this registration)
         (request.resource.data.paymentId != null &&
          exists(/databases/$(database)/documents/verified_upi_payments/$(request.resource.data.paymentId)) &&
-         get(/databases/$(database)/documents/verified_upi_payments/$(request.resource.data.paymentId)).data.status in ['MATCHED', 'UNCLAIMED'])
+         get(/databases/$(database)/documents/verified_upi_payments/$(request.resource.data.paymentId)).data.status == 'MATCHED' &&
+         get(/databases/$(database)/documents/verified_upi_payments/$(request.resource.data.paymentId)).data.claimedByRegistrationId == regId)
       );
     }
 
@@ -221,20 +226,21 @@ service cloud.firestore {
         (isAuthenticated() || (request.resource.data.email is string && request.resource.data.email.size() > 0)) &&
         (
           request.resource.data.paymentStatus in ['FREE', 'PENDING'] ||
-          isVerifiedPaidRegistration()
+          isVerifiedPaidRegistration(regId)
         )
       );
 
       // Registration updates:
       // Allowed for privileged admins, treasurers, club owners, event coordinators (or signed-in users with a valid BT ID), self-registered applicants without altering payment status, or verified paid registration
       allow update: if isPrivilegedAdmin() || hasRole('TREASURER') || isClubOwner() || isEventCoordinator() || (
-        isSignedIn() && getUserBtId() != null
-      ) || (
         isAuthenticated() &&
         request.auth.token.email != null &&
         resource.data.email == request.auth.token.email &&
-        request.resource.data.paymentStatus == resource.data.paymentStatus
-      ) || isVerifiedPaidRegistration();
+        request.resource.data.paymentStatus == resource.data.paymentStatus &&
+        (!('amountPaid' in request.resource.data) || !('amountPaid' in resource.data) || request.resource.data.amountPaid == resource.data.amountPaid) &&
+        (!('paymentId' in request.resource.data) || !('paymentId' in resource.data) || request.resource.data.paymentId == resource.data.paymentId) &&
+        (!('status' in request.resource.data) || !('status' in resource.data) || request.resource.data.status == resource.data.status)
+      ) || isVerifiedPaidRegistration(regId);
 
       allow delete: if isPrivilegedAdmin();
     }
@@ -245,15 +251,22 @@ service cloud.firestore {
       allow list: if isPrivilegedAdmin() || hasRole('TREASURER') || isClubOwner() || isEventCoordinator() || (
         isAuthenticated() && request.auth.token.email != null
       );
-      allow create: if isPrivilegedAdmin() || isClubOwner() || isEventCoordinator() || isAuthenticated();
+      allow create: if isPrivilegedAdmin() || isClubOwner() || isEventCoordinator() || (
+        isAuthenticated() &&
+        (
+          request.resource.data.paymentStatus in ['FREE', 'PENDING'] ||
+          isVerifiedPaidRegistration(regId)
+        )
+      );
       allow update: if isPrivilegedAdmin() || hasRole('TREASURER') || isClubOwner() || isEventCoordinator() || (
-        isSignedIn() && getUserBtId() != null
-      ) || (
         isAuthenticated() &&
         request.auth.token.email != null &&
         resource.data.email == request.auth.token.email &&
-        request.resource.data.paymentStatus == resource.data.paymentStatus
-      ) || isVerifiedPaidRegistration();
+        request.resource.data.paymentStatus == resource.data.paymentStatus &&
+        (!('amountPaid' in request.resource.data) || !('amountPaid' in resource.data) || request.resource.data.amountPaid == resource.data.amountPaid) &&
+        (!('paymentId' in request.resource.data) || !('paymentId' in resource.data) || request.resource.data.paymentId == resource.data.paymentId) &&
+        (!('status' in request.resource.data) || !('status' in resource.data) || request.resource.data.status == resource.data.status)
+      ) || isVerifiedPaidRegistration(regId);
       allow delete: if isPrivilegedAdmin();
     }
 
@@ -321,7 +334,19 @@ service cloud.firestore {
       allow update: if isPrivilegedAdmin() || (
         request.resource.data.utr == resource.data.utr &&
         request.resource.data.amount == resource.data.amount &&
-        request.resource.data.receivedAt == resource.data.receivedAt
+        request.resource.data.receivedAt == resource.data.receivedAt &&
+        (
+          !('claimedByRegistrationId' in resource.data) ||
+          resource.data.claimedByRegistrationId == null ||
+          resource.data.claimedByRegistrationId == '' ||
+          request.resource.data.claimedByRegistrationId == resource.data.claimedByRegistrationId
+        ) &&
+        (
+          !('claimedByOrderId' in resource.data) ||
+          resource.data.claimedByOrderId == null ||
+          resource.data.claimedByOrderId == '' ||
+          request.resource.data.claimedByOrderId == resource.data.claimedByOrderId
+        )
       );
 
       allow delete: if isPrivilegedAdmin();
@@ -353,6 +378,16 @@ service cloud.firestore {
 
       // Certificate issuance, updates, and revocation
       allow create, update, delete: if isPrivilegedAdmin() || isClubOwner() || isEventCoordinator();
+    }
+
+    // Pre-QR 3-slot checkout concurrency queue (managed via server queue API)
+    match /checkout_queue/{ticketId} {
+      allow read: if true;
+      allow create, update: if isPrivilegedAdmin() || (
+        request.resource.data.eventId is string &&
+        request.resource.data.status in ['QUEUED', 'ADMITTED', 'RELEASED', 'EXPIRED']
+      );
+      allow delete: if isPrivilegedAdmin() || resource.data.status in ['RELEASED', 'EXPIRED'];
     }
   }
 }

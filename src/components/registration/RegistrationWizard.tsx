@@ -42,7 +42,8 @@ import {
   ChevronRight,
   MessageCircle,
   X,
-  AlertTriangle
+  AlertTriangle,
+  Loader2
 } from "lucide-react";
 import { CancelRegistrationModal } from "@/components/registration/CancelRegistrationModal";
 import confetti from "canvas-confetti";
@@ -323,6 +324,117 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   const [isRegeneratingQR, setIsRegeneratingQR] = useState(false);
   const [isAutoDetectingPayment, setIsAutoDetectingPayment] = useState(false);
   const autoDetectCompletedRef = useRef(false);
+  const [checkoutQueueState, setCheckoutQueueState] = useState<{
+    ticketId: string;
+    position: number;
+    queueLength: number;
+    activeSlotsUsed: number;
+    maxSlots: number;
+    estimatedWaitSeconds: number;
+  } | null>(null);
+  const activeQueueTicketIdRef = useRef<string | null>(null);
+
+  // Heartbeat loop while waiting in the pre-QR 3-slot checkout queue
+  useEffect(() => {
+    if (!checkoutQueueState?.ticketId || paytmCheckoutData) return;
+
+    let stopped = false;
+    const pollQueue = async () => {
+      if (stopped) return;
+      try {
+        const res = await fetch("/api/paytm/queue", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "heartbeat",
+            ticketId: checkoutQueueState.ticketId,
+            eventId: event.id,
+            email: formData.email,
+            btId: formData.btId,
+          }),
+        });
+        if (!res.ok || stopped) return;
+        const qData = await res.json();
+        if (stopped) return;
+
+        if (qData.status === "ADMITTED") {
+          setCheckoutQueueState(null);
+          setIsSubmitting(true);
+          const targetDraft = pendingRegistrationDraftRef.current;
+          const orderRes = await fetch("/api/paytm/initiate-transaction", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              amount: targetDraft?.payload?.amountPaid || (event.isPaid ? (event.feeAmount || 0) : 0),
+              eventId: event.id,
+              eventName: event.name,
+              participantName: formData.fullName,
+              email: formData.email,
+              phone: formData.phone,
+              btId: formData.btId,
+              teamType: formData.teamType,
+              teamSize: formData.teamType === "Team" ? teamMembers.length : 1,
+              tenureId: resolveEventTenure(event, getStoredTenures()).id,
+              upiId: paymentConfig.paytmUpiId,
+              payeeName: paymentConfig.paytmMerchantName,
+              paytmMid: paymentConfig.paytmMid,
+              registrationId: targetDraft?.regId,
+              registrationData: targetDraft?.payload,
+              queueTicketId: qData.ticketId,
+            }),
+          });
+
+          if (orderRes.status === 429) {
+            setIsSubmitting(false);
+            return;
+          }
+          const orderData = await orderRes.json().catch(() => ({}));
+          if (orderRes.ok && orderData.success) {
+            const actualAmt = Number(orderData.amount || targetDraft?.payload?.amountPaid || 0);
+            if (pendingRegistrationDraftRef.current?.payload) {
+              pendingRegistrationDraftRef.current.payload.amountPaid = actualAmt;
+              pendingRegistrationDraftRef.current.payload.orderId = orderData.orderId;
+            }
+            setShowManualUtr(false);
+            setPaytmUtr("");
+            autoDetectCompletedRef.current = false;
+            setPaytmCheckoutData({
+              orderId: orderData.orderId,
+              amount: actualAmt,
+              baseAmount: orderData.baseAmount || orderData.amount,
+              microPaisaOffset: orderData.microPaisaOffset || 0,
+              formattedAmount: orderData.formattedAmount,
+              upiLink: orderData.upiLink,
+              gpayLink: orderData.gpayLink,
+              phonepeLink: orderData.phonepeLink,
+              paytmLink: orderData.paytmLink,
+              bhimLink: orderData.bhimLink,
+              payeeName: orderData.payeeName || paymentConfig.paytmMerchantName || "SRC JDCOEM",
+              upiId: orderData.upiId || paymentConfig.paytmUpiId || "paytm.s3tuv70@pty",
+              expiresAt: orderData.expiresAt,
+            });
+            setIsPaymentInstructionsOpen(true);
+          }
+          setIsSubmitting(false);
+        } else if (qData.status === "QUEUED") {
+          setCheckoutQueueState({
+            ticketId: qData.ticketId,
+            position: Number(qData.position || 1),
+            queueLength: Number(qData.queueLength || 1),
+            activeSlotsUsed: Number(qData.activeSlotsUsed || 3),
+            maxSlots: Number(qData.maxSlots || 3),
+            estimatedWaitSeconds: Number(qData.estimatedWaitSeconds || 45),
+          });
+        }
+      } catch {}
+    };
+
+    const interval = setInterval(pollQueue, 5000);
+    return () => {
+      stopped = true;
+      clearInterval(interval);
+    };
+  }, [checkoutQueueState?.ticketId, paytmCheckoutData, event.id, event.name, event.isPaid, event.feeAmount, formData.email, formData.btId, formData.fullName, formData.phone, formData.teamType]);
 
   // Realtime synchronization of Payment Gateway and Treasurer UPI settings
   useEffect(() => {
@@ -1018,10 +1130,53 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
     const registrationPayload = buildRegistrationPayload(regId, tkCode, paymentDetails);
 
-    try {
-      await saveRegistrationToFirestore(registrationPayload);
-    } catch (e) {
-      console.warn("Firestore registration save fallback handled", e);
+    let confirmedViaServer = false;
+    if (
+      paymentDetails?.paymentStatus === "PAID" &&
+      paymentDetails?.orderId &&
+      paymentConfig.gateway === "paytm_business"
+    ) {
+      try {
+        const confirmRes = await fetch("/api/upi/confirm-pass", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            registrationId: regId,
+            orderId: paymentDetails.orderId,
+            utr: paymentDetails.paymentId,
+            registrationData: registrationPayload,
+          }),
+        });
+        if (confirmRes.ok) {
+          const confirmJson = await confirmRes.json().catch(() => ({}));
+          if (confirmJson.confirmed && confirmJson.paymentId) {
+            registrationPayload.paymentId = confirmJson.paymentId;
+            registrationPayload.amountPaid = confirmJson.amount || registrationPayload.amountPaid;
+            confirmedViaServer = true;
+          }
+        }
+      } catch (confirmErr) {
+        console.warn("Server confirm-pass notice:", confirmErr);
+      }
+    }
+
+    if (!confirmedViaServer) {
+      try {
+        await saveRegistrationToFirestore(registrationPayload);
+      } catch (e) {
+        console.warn("Firestore registration save fallback handled", e);
+      }
+    } else {
+      // Sync confirmed record into local cache without redundant unverified write
+      try {
+        const existingLocal = JSON.parse(localStorage.getItem("src_local_registrations") || "[]");
+        const nextLocal = [
+          registrationPayload,
+          ...(Array.isArray(existingLocal) ? existingLocal.filter((r: any) => r.id !== regId) : []),
+        ];
+        localStorage.setItem("src_local_registrations", JSON.stringify(nextLocal));
+        window.dispatchEvent(new CustomEvent("src_registrations_updated", { detail: nextLocal }));
+      } catch {}
     }
 
     setTimeout(() => {
@@ -1151,6 +1306,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           orderId: paytmCheckoutData.orderId,
           txnId: cleanedUtr,
           amount: paytmCheckoutData.amount,
+          registrationId: pendingRegistrationDraftRef.current?.regId,
         }),
       });
 
@@ -1360,23 +1516,29 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
                   window.dispatchEvent(new CustomEvent("src_registrations_updated", { detail: updated }));
                 } catch {}
 
-                // Attempt to update registration directly from authenticated student browser
+                // Confirm via server-authoritative confirm-pass endpoint (never mutate PAID directly from client)
                 try {
-                  if (db && regId) {
-                    const existingRegUtr = String(generatedTicket?.paymentId || "").trim();
-                    const hasValidExisting = /^\d{12}$/.test(existingRegUtr);
-                    const finalUtr = (isIncomingSynth && hasValidExisting) ? existingRegUtr : (sData.utr || existingRegUtr);
-
-                    await updateDoc(doc(db, "registrations", regId), {
-                      paymentStatus: "PAID",
-                      status: "CONFIRMED",
-                      paymentId: finalUtr,
-                      paidAt: sData.paidAt || new Date().toISOString(),
-                      ...(completedAmt > 0 ? { amountPaid: completedAmt, "paymentDetails.amount": completedAmt } : {}),
-                      verifiedBy: isIncomingSynth ? "SRC PayHook Auto-Gateway (Paytm Notification)" : "SRC PayHook Auto-Gateway (Bank SMS)",
-                      ...(isIncomingSynth ? { "paymentDetails.syntheticUtr": sData.utr } : { "paymentDetails.bankUtr": sData.utr }),
-                      ...(hasValidExisting ? { "paymentDetails.bankUtr": existingRegUtr } : {}),
+                  if (regId) {
+                    const confirmRes = await fetch("/api/upi/confirm-pass", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        registrationId: regId,
+                        orderId,
+                        utr: sData.utr,
+                      }),
                     });
+                    if (confirmRes.ok) {
+                      const confirmJson = await confirmRes.json().catch(() => ({}));
+                      if (confirmJson.confirmed && confirmJson.paymentId) {
+                        setGeneratedTicket((prev) => prev ? {
+                          ...prev,
+                          paymentStatus: "PAID",
+                          paymentId: confirmJson.paymentId,
+                          amountPaid: confirmJson.amount || prev.amountPaid,
+                        } : null);
+                      }
+                    }
                   }
                 } catch {}
 
@@ -1509,79 +1671,141 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     });
     pendingRegistrationDraftRef.current = { regId: draftRegId, tkCode: draftTkCode, payload: draftPayload };
 
-    // 2. Alternate Payment Gateway: Paytm for Business Dynamic UPI
-    if (paymentConfig.gateway === "paytm_business") {
-      try {
-        const orderRes = await fetch("/api/paytm/initiate-transaction", {
+    // Helper to enter/re-enter pre-QR 3-slot queue and initiate QR once admitted
+    const enterCheckoutQueueOrInitiate = async (queueTicketId?: string) => {
+      const targetDraft = pendingRegistrationDraftRef.current;
+      const orderRes = await fetch("/api/paytm/initiate-transaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: totalPayableAmount,
+          eventId: event.id,
+          eventName: event.name,
+          participantName: formData.fullName,
+          email: formData.email,
+          phone: formData.phone,
+          btId: formData.btId,
+          teamType: formData.teamType,
+          teamSize: formData.teamType === "Team" ? teamMembers.length : 1,
+          tenureId: resolveEventTenure(event, getStoredTenures()).id,
+          upiId: paymentConfig.paytmUpiId,
+          payeeName: paymentConfig.paytmMerchantName,
+          paytmMid: paymentConfig.paytmMid,
+          registrationId: targetDraft?.regId || draftRegId,
+          registrationData: targetDraft?.payload || draftPayload,
+          queueTicketId,
+        }),
+      });
+
+      if (orderRes.status === 429) {
+        // Server queue full: enter waiting queue before showing QR
+        const qRes = await fetch("/api/paytm/queue", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            amount: totalPayableAmount,
+            action: "enter",
+            ticketId: queueTicketId || activeQueueTicketIdRef.current || undefined,
             eventId: event.id,
-            eventName: event.name,
-            participantName: formData.fullName,
             email: formData.email,
-            phone: formData.phone,
             btId: formData.btId,
-            teamType: formData.teamType,
-            teamSize: formData.teamType === "Team" ? teamMembers.length : 1,
-            tenureId: resolveEventTenure(event, getStoredTenures()).id,
-            upiId: paymentConfig.paytmUpiId,
-            payeeName: paymentConfig.paytmMerchantName,
-            paytmMid: paymentConfig.paytmMid,
-            registrationId: draftRegId,
-            registrationData: draftPayload,
           }),
         });
-
-        if (!orderRes.ok) {
-          const errJson = await orderRes.json().catch(() => ({}));
-          if (orderRes.status === 409) {
-            try {
-              const dup = await checkExistingStudentRegistration(
-                event.id,
-                event.slug,
-                formData.email || user?.email,
-                formData.btId || user?.btId,
-                event.name
-              );
-              if (dup) setExistingRegistration(dup);
-            } catch {}
-          }
-          throw new Error(errJson.error || "Failed to initialize Paytm payment gateway.");
+        const qJson = await qRes.json().catch(() => ({}));
+        if (qJson.status === "QUEUED") {
+          activeQueueTicketIdRef.current = qJson.ticketId;
+          setCheckoutQueueState({
+            ticketId: qJson.ticketId,
+            position: Number(qJson.position || 1),
+            queueLength: Number(qJson.queueLength || 1),
+            activeSlotsUsed: Number(qJson.activeSlotsUsed || 3),
+            maxSlots: Number(qJson.maxSlots || 3),
+            estimatedWaitSeconds: Number(qJson.estimatedWaitSeconds || 45),
+          });
+          setIsSubmitting(false);
+          return;
         }
+      }
 
-        const orderData = await orderRes.json();
-        if (!orderData.success) {
-          throw new Error(orderData.error || "Failed to generate payment payload.");
+      if (!orderRes.ok) {
+        const errJson = await orderRes.json().catch(() => ({}));
+        if (orderRes.status === 409) {
+          try {
+            const dup = await checkExistingStudentRegistration(
+              event.id,
+              event.slug,
+              formData.email || user?.email,
+              formData.btId || user?.btId,
+              event.name
+            );
+            if (dup) setExistingRegistration(dup);
+          } catch {}
         }
+        throw new Error(errJson.error || "Failed to initialize Paytm payment gateway.");
+      }
 
-        const actualPayableAmount = Number(orderData.amount || totalPayableAmount);
-        if (pendingRegistrationDraftRef.current?.payload) {
-          pendingRegistrationDraftRef.current.payload.amountPaid = actualPayableAmount;
-          pendingRegistrationDraftRef.current.payload.orderId = orderData.orderId;
-        }
+      const orderData = await orderRes.json();
+      if (!orderData.success) {
+        throw new Error(orderData.error || "Failed to generate payment payload.");
+      }
 
-        setShowManualUtr(false);
-        setPaytmUtr("");
-        autoDetectCompletedRef.current = false;
-        setPaytmCheckoutData({
-          orderId: orderData.orderId,
-          amount: actualPayableAmount,
-          baseAmount: orderData.baseAmount || orderData.amount,
-          microPaisaOffset: orderData.microPaisaOffset || 0,
-          formattedAmount: orderData.formattedAmount,
-          upiLink: orderData.upiLink,
-          gpayLink: orderData.gpayLink,
-          phonepeLink: orderData.phonepeLink,
-          paytmLink: orderData.paytmLink,
-          bhimLink: orderData.bhimLink,
-          payeeName: orderData.payeeName || paymentConfig.paytmMerchantName || "SRC JDCOEM",
-          upiId: orderData.upiId || paymentConfig.paytmUpiId || "paytm.s3tuv70@pty",
-          expiresAt: orderData.expiresAt,
+      const actualPayableAmount = Number(orderData.amount || totalPayableAmount);
+      if (pendingRegistrationDraftRef.current?.payload) {
+        pendingRegistrationDraftRef.current.payload.amountPaid = actualPayableAmount;
+        pendingRegistrationDraftRef.current.payload.orderId = orderData.orderId;
+      }
+
+      setCheckoutQueueState(null);
+      setShowManualUtr(false);
+      setPaytmUtr("");
+      autoDetectCompletedRef.current = false;
+      setPaytmCheckoutData({
+        orderId: orderData.orderId,
+        amount: actualPayableAmount,
+        baseAmount: orderData.baseAmount || orderData.amount,
+        microPaisaOffset: orderData.microPaisaOffset || 0,
+        formattedAmount: orderData.formattedAmount,
+        upiLink: orderData.upiLink,
+        gpayLink: orderData.gpayLink,
+        phonepeLink: orderData.phonepeLink,
+        paytmLink: orderData.paytmLink,
+        bhimLink: orderData.bhimLink,
+        payeeName: orderData.payeeName || paymentConfig.paytmMerchantName || "SRC JDCOEM",
+        upiId: orderData.upiId || paymentConfig.paytmUpiId || "paytm.s3tuv70@pty",
+        expiresAt: orderData.expiresAt,
+      });
+      setIsPaymentInstructionsOpen(true);
+      setIsSubmitting(false);
+    };
+
+    // 2. Alternate Payment Gateway: Paytm for Business Dynamic UPI (with pre-QR 3-slot queue)
+    if (paymentConfig.gateway === "paytm_business") {
+      try {
+        const queueRes = await fetch("/api/paytm/queue", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "enter",
+            eventId: event.id,
+            email: formData.email,
+            btId: formData.btId,
+          }),
         });
-        setIsPaymentInstructionsOpen(true);
-        setIsSubmitting(false);
+        const queueData = await queueRes.json().catch(() => ({}));
+        if (queueRes.ok && queueData.status === "QUEUED") {
+          activeQueueTicketIdRef.current = queueData.ticketId;
+          setCheckoutQueueState({
+            ticketId: queueData.ticketId,
+            position: Number(queueData.position || 1),
+            queueLength: Number(queueData.queueLength || 1),
+            activeSlotsUsed: Number(queueData.activeSlotsUsed || 3),
+            maxSlots: Number(queueData.maxSlots || 3),
+            estimatedWaitSeconds: Number(queueData.estimatedWaitSeconds || 45),
+          });
+          setIsSubmitting(false);
+          return;
+        }
+
+        await enterCheckoutQueueOrInitiate(queueData?.ticketId);
       } catch (err: any) {
         console.error("Paytm transaction error:", err);
         alert(err?.message || "Failed to initiate Paytm payment. Please try again.");
@@ -3451,16 +3675,83 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         />
       )}
 
+      {/* Modal: Pre-QR Checkout Queue (Max 3 Concurrent Payments) */}
+      {checkoutQueueState && !paytmCheckoutData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center">
+                  <Clock className="w-5 h-5 text-amber-600 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900">
+                    Payment Checkout Queue
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    High-security mode: Max {checkoutQueueState.maxSlots} simultaneous payments
+                  </p>
+                </div>
+              </div>
+              <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                {checkoutQueueState.activeSlotsUsed}/{checkoutQueueState.maxSlots} Busy
+              </span>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 text-center space-y-2">
+              <div className="text-xs uppercase tracking-wider font-semibold text-slate-500">
+                Your Queue Position
+              </div>
+              <div className="text-3xl font-black text-[#17458F]">
+                #{checkoutQueueState.position}
+              </div>
+              <p className="text-xs text-slate-600">
+                Estimated wait: ~{checkoutQueueState.estimatedWaitSeconds}s • QR code unlocks automatically as soon as a slot opens. Do not close this tab.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-2 text-xs text-slate-500 py-1">
+              <Loader2 className="w-4 h-4 animate-spin text-[#17458F]" />
+              <span>Checking slot availability every 5 seconds...</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={async () => {
+                const tid = checkoutQueueState.ticketId;
+                setCheckoutQueueState(null);
+                activeQueueTicketIdRef.current = null;
+                setIsSubmitting(false);
+                fetch("/api/paytm/queue", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ action: "leave", ticketId: tid }),
+                }).catch(() => {});
+              }}
+              className="w-full min-h-[44px] rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              Leave Queue & Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Modal: Payment Instructions & Rules */}
       {paytmCheckoutData && (
         <PaymentInstructionsModal
           isOpen={isPaymentInstructionsOpen}
           onClose={() => {
+            const oid = paytmCheckoutData.orderId;
             setIsPaymentInstructionsOpen(false);
             setPaytmCheckoutData(null);
+            fetch("/api/paytm/queue", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "release", orderId: oid, ticketId: activeQueueTicketIdRef.current }),
+            }).catch(() => {});
           }}
           onProceed={async () => {
-            const newExpiryIso = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+            const newExpiryIso = new Date(Date.now() + 4 * 60 * 1000).toISOString();
             setPaytmCheckoutData((prev) => (prev ? { ...prev, expiresAt: newExpiryIso } : null));
             setIsPaymentInstructionsOpen(false);
 
@@ -3488,7 +3779,15 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
         <PaytmCheckoutModal
           isOpen={true}
           onClose={() => {
-            if (!isVerifyingPaytm && !isRegeneratingQR) setPaytmCheckoutData(null);
+            if (!isVerifyingPaytm && !isRegeneratingQR) {
+              const oid = paytmCheckoutData.orderId;
+              setPaytmCheckoutData(null);
+              fetch("/api/paytm/queue", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "release", orderId: oid, ticketId: activeQueueTicketIdRef.current }),
+              }).catch(() => {});
+            }
           }}
           paytmCheckoutData={paytmCheckoutData}
           event={event}

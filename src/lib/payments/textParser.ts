@@ -180,12 +180,22 @@ export function extractSenderName(text: string): string | null {
   if (!text) return null;
   const clean = text
     .replace(/&nbsp;/gi, " ")
-    .replace(/[\u200B-\u200D\uFEFF]/g, "");
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/₹/g, " Rs ");
 
-  const m = clean.match(/(?:received\s+from|from|paid\s+by|sent\s+by)\s+([A-Za-z\s]{3,45}?)(?:\s+(?:received|rs|inr|on\s+paytm|via|using|\.|\d|\()|$)/i);
+  const m = clean.match(
+    /(?:received\s+from|paid\s+by|sent\s+by|credited\s+by|from)\s+([A-Za-z][A-Za-z\s.]{2,48}?)(?=\s+(?:received|rs\b|inr\b|on\s+paytm|on\s+\d|via\b|using\b|vpa\b|upi\b|ref\b|utr\b|txnid\b|info\b)|[.,;/|(\d]|$)/i
+  );
   if (m && m[1]) {
-    const cleaned = m[1].trim().replace(/\s+/g, " ");
-    if (cleaned.length >= 3 && !/^(the|a|an|account|bank|upi|paytm|phonepe|gpay|customer|payment)$/i.test(cleaned)) {
+    const cleaned = m[1]
+      .replace(/\b(?:mr|mrs|ms|miss|shri|smt|dr)\.?\s+/gi, " ")
+      .replace(/\./g, " ")
+      .trim()
+      .replace(/\s+/g, " ");
+    if (
+      cleaned.length >= 3 &&
+      !/^(the|a|an|account|acct|bank|upi|paytm|phonepe|gpay|customer|payment|dear|user|vpa|canara|sbi|hdfc|icici|axis)$/i.test(cleaned)
+    ) {
       return cleaned;
     }
   }

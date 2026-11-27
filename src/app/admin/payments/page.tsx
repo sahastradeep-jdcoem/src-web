@@ -53,7 +53,7 @@ import {
   StudentRegistrationRecord
 } from "@/lib/firebase/firestore";
 import { db, auth } from "@/lib/firebase/config";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, setDoc, runTransaction } from "firebase/firestore";
 import { PaymentConfigModal } from "@/components/admin/registrations/PaymentConfigModal";
 import { SyncCashfreeModal } from "@/components/admin/payments/SyncCashfreeModal";
 import { 
@@ -65,7 +65,7 @@ import { EventItem, RegistrationRecord } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { isEntityOwnedByClub } from "@/types/rbac";
 
-type PaymentTabFilter = "all" | "completed" | "pending" | "refunded" | "cancelled" | "signals";
+type PaymentTabFilter = "all" | "completed" | "pending" | "suspicious" | "refunded" | "cancelled" | "signals";
 
 function formatIndianCurrency(amount: number): string {
   if (amount % 1 !== 0) {
@@ -406,7 +406,7 @@ export default function AdminPaymentsPage() {
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(getStoredPaymentConfig());
 
   // Real-time verified UPI ledger map for instant reconciliation
-  const [verifiedUpiMap, setVerifiedUpiMap] = useState<Map<string, { utr: string; amount: number; status: string; receivedAt?: string; transactionTimestamp?: string; payerName?: string; matchedOrderId?: string; matchedRegistrationId?: string; source?: string }>>(new Map());
+  const [verifiedUpiMap, setVerifiedUpiMap] = useState<Map<string, { utr: string; amount: number; status: string; receivedAt?: string; transactionTimestamp?: string; payerName?: string; matchedOrderId?: string; matchedRegistrationId?: string; claimedByOrderId?: string; claimedByRegistrationId?: string; source?: string }>>(new Map());
 
   // Real-time completed checkout sessions map (orderId -> session)
   const [completedSessionsMap, setCompletedSessionsMap] = useState<Map<string, { orderId: string; registrationId?: string; utr: string; submittedUtr?: string; amount: number; receivedAmount?: number; payerName?: string; paidAt?: string; transactionTimestamp?: string; status: string }>>(new Map());
@@ -611,7 +611,7 @@ export default function AdminPaymentsPage() {
         if (db) {
           const q = query(collection(db, "verified_upi_payments"), orderBy("receivedAt", "desc"), limit(150));
           unsub = onSnapshot(q, (snap) => {
-            const map = new Map<string, { utr: string; amount: number; status: string; receivedAt?: string; transactionTimestamp?: string; payerName?: string; matchedOrderId?: string; matchedRegistrationId?: string; source?: string }>();
+            const map = new Map<string, { utr: string; amount: number; status: string; receivedAt?: string; transactionTimestamp?: string; payerName?: string; matchedOrderId?: string; matchedRegistrationId?: string; claimedByOrderId?: string; claimedByRegistrationId?: string; source?: string }>();
             snap.forEach((d) => {
               const data = d.data();
               if (data?.utr) {
@@ -624,6 +624,8 @@ export default function AdminPaymentsPage() {
                   payerName: data.payerName,
                   matchedOrderId: data.matchedOrderId,
                   matchedRegistrationId: data.matchedRegistrationId,
+                  claimedByOrderId: data.claimedByOrderId,
+                  claimedByRegistrationId: data.claimedByRegistrationId,
                   source: data.source || data.sender || "",
                 });
               }
@@ -713,64 +715,6 @@ export default function AdminPaymentsPage() {
       return r;
     });
   }, [registrations, completedSessionsMap, verifiedUpiMap]);
-
-  // Self-Healing Invariant: Automatically synchronize Firestore registration records with exact gateway received amounts
-  const selfHealedIdsRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (enrichedRegistrations.length === 0) return;
-    for (const r of enrichedRegistrations) {
-      if (selfHealedIdsRef.current.has(r.id)) continue;
-      const session = r.orderId ? completedSessionsMap.get(r.orderId) : null;
-      const sessionAmt = Number(session?.receivedAmount || session?.amount || 0);
-      const upiSignal = (r.paymentId ? verifiedUpiMap.get(r.paymentId) : null)
-        || (r.orderId ? Array.from(verifiedUpiMap.values()).find((v) => v.matchedOrderId === r.orderId) : null);
-      const signalAmt = Number(upiSignal?.amount || 0);
-      const actualAmt = sessionAmt > 0 ? sessionAmt : (signalAmt > 0 ? signalAmt : 0);
-
-      if (actualAmt > 0 && r.amountPaid === actualAmt) {
-        const rawReg = registrations.find((item) => item.id === r.id);
-        if (rawReg && Math.abs((rawReg.amountPaid || 0) - actualAmt) > 0.005) {
-          selfHealedIdsRef.current.add(r.id);
-          (async () => {
-            try {
-              const { db } = await import("@/lib/firebase/config");
-              const { doc, updateDoc } = await import("firebase/firestore");
-              if (db && r.id) {
-                await updateDoc(doc(db, "registrations", r.id), {
-                  amountPaid: actualAmt,
-                  "paymentDetails.amount": actualAmt,
-                  "paymentDetails.receivedAmount": actualAmt,
-                });
-              }
-            } catch (err) {
-              console.warn("Notice: Self-healing Firestore amount update note:", err);
-            }
-          })();
-        }
-      }
-
-      // Self-Healing Invariant: If registration paymentId was overwritten with synthetic AUTO-PTM-
-      // but student had manually entered a 12-digit UTR, restore paymentId to the student's entered UTR!
-      const rawReg = registrations.find((item) => item.id === r.id);
-      const studentBankUtr = String((rawReg as any)?.paymentDetails?.bankUtr || (rawReg as any)?.customAnswers?.upiUtr || "").trim();
-      if (rawReg?.paymentId?.startsWith("AUTO-PTM-") && /^\d{12}$/.test(studentBankUtr)) {
-        (async () => {
-          try {
-            const { db } = await import("@/lib/firebase/config");
-            const { doc, updateDoc } = await import("firebase/firestore");
-            if (db && r.id) {
-              await updateDoc(doc(db, "registrations", r.id), {
-                paymentId: studentBankUtr,
-                "paymentDetails.utr": studentBankUtr,
-                "paymentDetails.bankUtr": studentBankUtr,
-                "paymentDetails.syntheticUtr": rawReg.paymentId,
-              });
-            }
-          } catch {}
-        })();
-      }
-    }
-  }, [enrichedRegistrations, registrations, completedSessionsMap, verifiedUpiMap]);
 
   // Filter Payments by Tenure & Event
   const filteredByTenure = useMemo(() => {
@@ -950,6 +894,87 @@ export default function AdminPaymentsPage() {
     return canUserManageEvent(currentSelectedEventObj, adminAccess, user?.btId, allKnownEvents);
   }, [currentSelectedEventObj, adminAccess, user?.btId, allKnownEvents]);
 
+  // Retroactive Audit Engine: Detects duplicate 12-digit UTRs, mismatched ledger owners, or unbacked PAID passes
+  const suspiciousAuditMap = useMemo(() => {
+    const reasonsMap = new Map<string, string[]>();
+    const utrUsageCounts = new Map<string, number>();
+
+    const allPaid = filteredByEvent.filter(
+      (r) => r.paymentStatus === "PAID" && r.status !== "CANCELLED" && !r.refundStatus
+    );
+
+    // Count occurrences of every 12-digit numeric UTR across all active PAID passes
+    for (const r of allPaid) {
+      const utr = String(r.paymentId || (r as any).paymentDetails?.bankUtr || "").trim();
+      if (/^\d{12}$/.test(utr)) {
+        utrUsageCounts.set(utr, (utrUsageCounts.get(utr) || 0) + 1);
+      }
+    }
+
+    for (const r of allPaid) {
+      const reasons: string[] = [];
+      const fee = Number(r.amountPaid || 0);
+      const payId = String(r.paymentId || "").trim();
+      const bankUtr = String((r as any).paymentDetails?.bankUtr || "").trim();
+      const synthUtr = String((r as any).paymentDetails?.syntheticUtr || "").trim();
+      const verifiedByLower = String(r.verifiedBy || "").toLowerCase();
+
+      const resolved12Utr = /^\d{12}$/.test(payId)
+        ? payId
+        : (/^\d{12}$/.test(bankUtr) ? bankUtr : "");
+
+      if (resolved12Utr && (utrUsageCounts.get(resolved12Utr) || 0) > 1) {
+        reasons.push(`Duplicate 12-digit UTR (${resolved12Utr}) shared across ${utrUsageCounts.get(resolved12Utr)} passes`);
+      }
+
+      const isThirdPartyOrAdmin =
+        fee <= 0 ||
+        verifiedByLower.includes("cashfree") ||
+        verifiedByLower.includes("instamojo") ||
+        verifiedByLower.includes("admin") ||
+        verifiedByLower.includes("treasurer") ||
+        verifiedByLower.includes("manual verification");
+
+      if (!isThirdPartyOrAdmin && fee > 0) {
+        const ledgerByPayId = payId ? verifiedUpiMap.get(payId) : undefined;
+        const ledgerByBankUtr = bankUtr ? verifiedUpiMap.get(bankUtr) : undefined;
+        const ledgerBySynth = synthUtr ? verifiedUpiMap.get(synthUtr) : undefined;
+        const ledgerByLink = Array.from(verifiedUpiMap.values()).find(
+          (v) =>
+            v.claimedByRegistrationId === r.id ||
+            v.matchedRegistrationId === r.id ||
+            (r.orderId && (v.claimedByOrderId === r.orderId || v.matchedOrderId === r.orderId))
+        );
+
+        const matchedLedger = ledgerByBankUtr || ledgerByPayId || ledgerBySynth || ledgerByLink;
+        const matchedSession = r.orderId ? completedSessionsMap.get(r.orderId) : undefined;
+
+        if (!matchedLedger && !matchedSession) {
+          reasons.push("No PayHook signal or checkout proof in ledger");
+        } else {
+          const claimedOwner = matchedLedger?.claimedByRegistrationId || matchedLedger?.matchedRegistrationId;
+          if (claimedOwner && claimedOwner !== r.id && claimedOwner !== r.registrationId) {
+            reasons.push(`Ledger UTR is claimed by another pass (${claimedOwner.slice(-6)})`);
+          }
+          const sessOwner = matchedSession?.registrationId;
+          if (sessOwner && sessOwner !== r.id && sessOwner !== r.registrationId) {
+            reasons.push(`Checkout session belongs to another pass (${sessOwner.slice(-6)})`);
+          }
+          const verifiedAmt = Number(matchedSession?.receivedAmount || matchedSession?.amount || matchedLedger?.amount || 0);
+          if (verifiedAmt > 0 && verifiedAmt + 1.0 < fee) {
+            reasons.push(`Underpaid proof (Signal ₹${verifiedAmt} vs Fee ₹${fee})`);
+          }
+        }
+      }
+
+      if (reasons.length > 0) {
+        reasonsMap.set(r.id, reasons);
+      }
+    }
+
+    return reasonsMap;
+  }, [filteredByEvent, verifiedUpiMap, completedSessionsMap]);
+
   // Primary Table Rows (Filtered by Status Tab & Search)
   const displayedPayments = useMemo(() => {
     let list = filteredByEvent;
@@ -959,6 +984,8 @@ export default function AdminPaymentsPage() {
       list = list.filter((r) => r.paymentStatus === "PAID" && r.status !== "CANCELLED" && !r.refundStatus);
     } else if (statusTab === "pending") {
       list = list.filter((r) => r.paymentStatus === "PENDING" || (r.status === "PENDING" && r.paymentStatus !== "PAID"));
+    } else if (statusTab === "suspicious") {
+      list = list.filter((r) => suspiciousAuditMap.has(r.id));
     } else if (statusTab === "refunded") {
       list = list.filter((r) => r.refundStatus === "PROCESSED" || r.paymentStatus === "REFUNDED");
     } else if (statusTab === "cancelled") {
@@ -988,7 +1015,7 @@ export default function AdminPaymentsPage() {
       if (timeB !== timeA) return timeB - timeA;
       return String(b.id || "").localeCompare(String(a.id || ""));
     });
-  }, [filteredByEvent, statusTab, searchQuery]);
+  }, [filteredByEvent, statusTab, searchQuery, suspiciousAuditMap]);
 
   // Multi-Dimensional Convergence Scoring Engine between Registration and Incoming Payment Signals
   // Selects the payment matching the MAXIMUM number of dimensions and meeting strict confidence criteria
@@ -1010,30 +1037,36 @@ export default function AdminPaymentsPage() {
       });
     }
 
-    // 2. Verified incoming UPI ledger payments
+    // 2. Verified incoming UPI ledger payments (including 1:1 lock fields)
     for (const v of verifiedUpiMap.values()) {
       candidates.push({
-        orderId: v.matchedOrderId,
-        registrationId: v.matchedRegistrationId,
+        orderId: v.claimedByOrderId || v.matchedOrderId,
+        registrationId: v.claimedByRegistrationId || v.matchedRegistrationId,
         matchedOrderId: v.matchedOrderId,
         matchedRegistrationId: v.matchedRegistrationId,
+        claimedByOrderId: v.claimedByOrderId,
+        claimedByRegistrationId: v.claimedByRegistrationId,
+        status: v.status,
         utr: v.utr,
         amount: v.amount,
         payerName: v.payerName,
         timestamp: v.transactionTimestamp || v.receivedAt,
         source: "verified_upi_payments",
-      });
+      } as any);
     }
 
     return findBestMultiDimensionalMatch(r, candidates) || undefined;
   }, [completedSessionsMap, verifiedUpiMap]);
 
-  // Registrations with Pending UTR that have a matching signal in verified_upi_payments or completed checkout sessions
+  // Registrations with Pending UTR that have a STRICTLY eligible verified match (requiring Score >= 75 & Identity Anchor)
   const pendingVerifiedMatches = useMemo(() => {
     return filteredByEvent
       .filter((r) => r.paymentStatus === "PENDING" || (r.status === "PENDING" && r.paymentStatus !== "PAID"))
       .map((r) => ({ record: r, match: getVerifiedMatchForRecord(r) }))
-      .filter((item): item is { record: RegistrationRecord; match: NonNullable<ReturnType<typeof getVerifiedMatchForRecord>> } => Boolean(item.match));
+      .filter(
+        (item): item is { record: RegistrationRecord; match: NonNullable<ReturnType<typeof getVerifiedMatchForRecord>> } =>
+          Boolean(item.match && item.match.isEligibleForAutoApproval)
+      );
   }, [filteredByEvent, getVerifiedMatchForRecord]);
 
   // Instant 1-Tap Auto-Reconciliation with Verified Bank Signal
@@ -1064,14 +1097,58 @@ export default function AdminPaymentsPage() {
 
     setIsApproving(true);
     try {
+      const { db } = await import("@/lib/firebase/config");
+      if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+        // Atomic 1:1 Lock Check in Firestore Transaction so 1 signal can NEVER be assigned to 2 students
+        await runTransaction(db, async (tx) => {
+          const ledgerRef = doc(db, "verified_upi_payments", finalUtr);
+          const ledgerSnap = await tx.get(ledgerRef);
+          if (ledgerSnap.exists()) {
+            const lData = ledgerSnap.data();
+            if (
+              lData.claimedByRegistrationId &&
+              lData.claimedByRegistrationId !== docId &&
+              lData.claimedByRegistrationId !== regTicketId
+            ) {
+              throw new Error(`Payment signal ${finalUtr} is already claimed by ${lData.matchedStudentName || lData.claimedByRegistrationId}.`);
+            }
+          }
+
+          tx.set(
+            ledgerRef,
+            {
+              status: "MATCHED",
+              claimedByRegistrationId: docId,
+              claimedByOrderId: targetRecord.orderId || null,
+              matchedRegistrationId: docId,
+              matchedOrderId: targetRecord.orderId || null,
+              matchedStudentName: targetRecord.participantName,
+              matchedAt: nowIso,
+            },
+            { merge: true }
+          );
+
+          if (targetRecord.orderId) {
+            tx.set(
+              doc(db, "active_checkout_sessions", targetRecord.orderId),
+              {
+                status: "COMPLETED",
+                registrationId: docId,
+                utr: finalUtr,
+                receivedAmount: verifiedPay.amount,
+              },
+              { merge: true }
+            );
+          }
+        });
+      }
+
       await updateRegistrationPaymentStatus(docId, "PAID", "SRC Auto-Reconciliation (PayHook)", verifiedPay.amount);
       if (regTicketId !== docId) {
         await updateRegistrationPaymentStatus(regTicketId, "PAID", "SRC Auto-Reconciliation (PayHook)", verifiedPay.amount);
       }
 
-      const { db } = await import("@/lib/firebase/config");
       if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-        const { doc, updateDoc, setDoc } = await import("firebase/firestore");
         try {
           const updatePayload: Record<string, any> = {
             paymentStatus: "PAID",
@@ -1101,29 +1178,6 @@ export default function AdminPaymentsPage() {
         } catch (e) {
           console.warn("Direct doc update warning:", e);
         }
-
-        if (targetRecord.orderId) {
-          try {
-            await setDoc(doc(db, "active_checkout_sessions", targetRecord.orderId), {
-              status: "COMPLETED",
-              registrationId: docId,
-              utr: finalUtr,
-              receivedAmount: verifiedPay.amount,
-            }, { merge: true });
-          } catch {}
-        }
-
-        try {
-          await setDoc(doc(db, "verified_upi_payments", finalUtr), {
-            status: "MATCHED",
-            matchedRegistrationId: docId,
-            matchedOrderId: targetRecord.orderId || null,
-            matchedStudentName: targetRecord.participantName,
-            matchedAt: nowIso,
-          }, { merge: true });
-        } catch (e) {
-          console.warn("Verified payment update warning:", e);
-        }
       }
 
       setRegistrations((prev) =>
@@ -1147,35 +1201,68 @@ export default function AdminPaymentsPage() {
 
       setFeedbackNotice(`Reconciled & Approved! Pass issued for ${targetRecord.participantName} (UTR: ${resolvedPaymentId}).`);
       setTimeout(() => setFeedbackNotice(null), 5000);
-    } catch (err) {
+    } catch (err: any) {
       console.error("1-Tap Auto-Approve error:", err);
+      alert(err?.message || "Failed to approve payment match.");
     } finally {
       setIsApproving(false);
     }
   }, [verifiedUpiMap]);
 
-  // Automatic Zero-Touch Reconciler:
-  // When an admin opens or views this page and pending registrations have verified matches,
-  // automatically approve them in Firestore without requiring manual clicking!
-  const autoApprovedIdsRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (pendingVerifiedMatches.length === 0 || isApproving) return;
+  // Revert Suspicious / Unbacked PAID Pass back to PENDING Verification
+  const handleRevertToPending = useCallback(async (targetRecord: RegistrationRecord) => {
+    const ok = window.confirm(
+      `Revert pass for ${targetRecord.participantName} (${targetRecord.orderId || targetRecord.id}) back to PENDING?\n\nThis will deactivate their confirmed pass until genuine payment is verified.`
+    );
+    if (!ok) return;
 
-    const toApprove = pendingVerifiedMatches.filter(({ record }) => !autoApprovedIdsRef.current.has(record.id));
-    if (toApprove.length === 0) return;
+    setIsApproving(true);
+    try {
+      const nowIso = new Date().toISOString();
+      const keptManualUtr = String((targetRecord as any).submittedUtr || "").trim();
+      const hasValidManual = /^\d{12}$/.test(keptManualUtr);
 
-    toApprove.forEach(({ record }) => autoApprovedIdsRef.current.add(record.id));
+      await updateRegistrationPaymentStatus(targetRecord.id, "PENDING", "Reverted by Admin Audit", targetRecord.amountPaid);
 
-    (async () => {
-      for (const { record, match } of toApprove) {
-        try {
-          await handle1TapAutoApprove(record, match);
-        } catch (e) {
-          console.warn("Auto-reconciliation error for", record.id, e);
-        }
+      const { db } = await import("@/lib/firebase/config");
+      if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+        await updateDoc(doc(db, "registrations", targetRecord.id), {
+          paymentStatus: "PENDING",
+          status: "PENDING",
+          paymentId: hasValidManual ? keptManualUtr : null,
+          verifiedBy: null,
+          verifiedAt: null,
+          paidAt: null,
+          revertedByAdminAt: nowIso,
+          revertedReason: (suspiciousAuditMap.get(targetRecord.id) || []).join("; ") || "Manual Admin Audit Revert",
+          "paymentDetails.paymentStatus": "PENDING",
+        });
       }
-    })();
-  }, [pendingVerifiedMatches, isApproving]);
+
+      setRegistrations((prev) =>
+        prev.map((r) =>
+          r.id === targetRecord.id
+            ? {
+                ...r,
+                paymentStatus: "PENDING",
+                status: "PENDING",
+                paymentId: hasValidManual ? keptManualUtr : undefined,
+                verifiedBy: undefined,
+                paidAt: undefined,
+              }
+            : r
+        )
+      );
+
+      setFeedbackNotice(`Pass for ${targetRecord.participantName} reverted to PENDING for verification.`);
+      setTimeout(() => setFeedbackNotice(null), 5000);
+    } catch (err: any) {
+      console.error("Revert to pending error:", err);
+      alert(err?.message || "Failed to revert pass status.");
+    } finally {
+      setIsApproving(false);
+    }
+  }, [suspiciousAuditMap]);
 
   // KPI Metrics Calculation (Strict Revenue & Refund Tracking)
   const kpiStats = useMemo(() => {
@@ -2185,6 +2272,20 @@ export default function AdminPaymentsPage() {
           </button>
           <button
             type="button"
+            onClick={() => setStatusTab("suspicious")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${
+              statusTab === "suspicious"
+                ? "bg-rose-600 text-white shadow-2xs"
+                : suspiciousAuditMap.size > 0
+                ? "text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200"
+                : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            <AlertTriangle className={`w-3.5 h-3.5 ${statusTab === "suspicious" ? "text-white" : "text-rose-600"}`} />
+            <span>Suspicious / Unbacked ({!selectedEventSlug ? "—" : suspiciousAuditMap.size})</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setStatusTab("refunded")}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
               statusTab === "refunded" ? "bg-purple-700 text-white shadow-2xs" : "text-slate-600 hover:bg-slate-100"
@@ -2423,9 +2524,10 @@ export default function AdminPaymentsPage() {
                   const isRefunded = r.refundStatus === "PROCESSED" || r.paymentStatus === "REFUNDED";
                   const isCancelled = r.status === "CANCELLED" || r.paymentStatus === "FAILED";
                   const verifiedMatch = getVerifiedMatchForRecord(r);
+                  const suspiciousReasons = suspiciousAuditMap.get(r.id);
 
                   return (
-                    <tr key={r.id} className="hover:bg-slate-50/75 transition-colors">
+                    <tr key={r.id} className={`transition-colors ${suspiciousReasons ? "bg-rose-50/40 hover:bg-rose-50/70" : "hover:bg-slate-50/75"}`}>
                       {/* Order & Reference */}
                       <td className="py-3.5 px-4 space-y-1">
                         {(() => {
@@ -2485,6 +2587,13 @@ export default function AdminPaymentsPage() {
                                   )}
                                 </button>
                               </div>
+
+                              {suspiciousReasons && suspiciousReasons.length > 0 && (
+                                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-100 border border-rose-300 text-rose-800 text-[10px] font-bold">
+                                  <AlertTriangle className="w-3 h-3 shrink-0" />
+                                  <span>{suspiciousReasons[0]}</span>
+                                </div>
+                              )}
 
                               {displayCode && (
                                 <div className="space-y-0.5">
@@ -2667,6 +2776,21 @@ export default function AdminPaymentsPage() {
                                 <span>Approve</span>
                               </Button>
                             )
+                          )}
+
+                          {/* Revert Unbacked / Suspicious Paid Pass to Pending */}
+                          {isPaid && suspiciousReasons && (
+                            <Button
+                              onClick={() => handleRevertToPending(r)}
+                              variant="outline"
+                              size="sm"
+                              disabled={isApproving}
+                              title={suspiciousReasons.join(" | ")}
+                              className="text-amber-800 bg-amber-50 border-amber-300 hover:bg-amber-100 font-bold text-[11px] px-2.5 py-1 h-auto"
+                            >
+                              <AlertTriangle className="w-3 h-3 mr-1 text-amber-600" />
+                              <span>Revert Pending</span>
+                            </Button>
                           )}
 
                           {/* Refund (For Paid records) */}

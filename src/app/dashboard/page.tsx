@@ -624,41 +624,36 @@ export default function StudentDashboardPage() {
                 const res = await fetch(`/api/upi/check-status?orderId=${encodeURIComponent(pending.orderId!)}`);
                 if (res.ok) {
                   const data = await res.json();
-                  if (data.status === "PAID") {
-                    const resolvedAmount = Number(data.amount || pending.amountPaid || 0);
-                    const isIncomingSynth = String(data.utr || "").startsWith("AUTO-PTM-");
-                    const existingUtr = String(pending.paymentId || (pending as any).paymentDetails?.bankUtr || "").trim();
-                    const hasValidExistingUtr = /^\d{12}$/.test(existingUtr);
-                    const finalPaymentId = (isIncomingSynth && hasValidExistingUtr) ? existingUtr : (data.utr || existingUtr);
+                  if (data.status === "PAID" && pending.id) {
+                    const confirmRes = await fetch("/api/upi/confirm-pass", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        registrationId: pending.id,
+                        orderId: pending.orderId,
+                        utr: data.utr,
+                      }),
+                    });
 
-                    const { db } = await import("@/lib/firebase/config");
-                    const { doc, updateDoc } = await import("firebase/firestore");
-                    if (db && pending.id) {
-                      await updateDoc(doc(db, "registrations", pending.id), {
-                        paymentStatus: "PAID",
-                        status: "CONFIRMED",
-                        paymentId: finalPaymentId,
-                        paidAt: data.paidAt || new Date().toISOString(),
-                        ...(resolvedAmount > 0 ? { amountPaid: resolvedAmount, "paymentDetails.amount": resolvedAmount } : {}),
-                        verifiedBy: isIncomingSynth ? "SRC PayHook Auto-Gateway (Paytm Notification)" : "SRC PayHook Auto-Gateway (Bank SMS)",
-                        ...(isIncomingSynth ? { "paymentDetails.syntheticUtr": data.utr } : { "paymentDetails.bankUtr": data.utr }),
-                        ...(hasValidExistingUtr ? { "paymentDetails.bankUtr": existingUtr } : {}),
-                      });
-                    }
-                    if (isCurrent) {
-                      setRegistrations((prev) =>
-                        prev.map((item) =>
-                          item.id === pending.id
-                            ? { 
-                                ...item, 
-                                paymentStatus: "PAID", 
-                                status: "CONFIRMED", 
-                                paymentId: finalPaymentId,
-                                amountPaid: resolvedAmount > 0 ? resolvedAmount : item.amountPaid,
-                              }
-                            : item
-                        )
-                      );
+                    if (confirmRes.ok) {
+                      const confirmJson = await confirmRes.json().catch(() => ({}));
+                      if (confirmJson.confirmed && isCurrent) {
+                        const resolvedAmount = Number(confirmJson.amount || data.amount || pending.amountPaid || 0);
+                        const finalPaymentId = confirmJson.paymentId || pending.paymentId;
+                        setRegistrations((prev) =>
+                          prev.map((item) =>
+                            item.id === pending.id
+                              ? {
+                                  ...item,
+                                  paymentStatus: "PAID",
+                                  status: "CONFIRMED",
+                                  paymentId: finalPaymentId,
+                                  amountPaid: resolvedAmount > 0 ? resolvedAmount : item.amountPaid,
+                                }
+                              : item
+                          )
+                        );
+                      }
                     }
                   }
                 }
