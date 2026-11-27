@@ -459,20 +459,19 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Pre-Tier-2 Name-Compatible Bank SMS Reconciliation:
-      // If a real 12-digit Bank SMS arrives shortly after a Paytm push notification (AUTO-PTM-*)
-      // for the same amount AND compatible payer/student name, reconcile it into that COMPLETED
-      // transaction immediately BEFORE Tier 2/2B can match any other student's WAITING/EXPIRED session.
-      if (!matchedOrderId && amount > 0 && !isSyntheticUtr && extractedSender) {
+      // Pre-Tier-2 Bi-Directional Name-Compatible Reconciliation (10-minute / 600s window):
+      // 1) If a real 12-digit Bank SMS arrives after a Paytm push (AUTO-PTM-*), upgrade that COMPLETED session.
+      // 2) If a delayed Paytm push (AUTO-PTM-*) arrives after a real Bank SMS, merge it into that COMPLETED session.
+      if (!matchedOrderId && amount > 0 && extractedSender) {
         try {
           let preMatchedCompleted: any = null;
 
-          // 1. Check COMPLETED active_checkout_sessions within 180s burst window
+          // 1. Check COMPLETED active_checkout_sessions (allow read: if true) within 600s burst window
           const preCompletedSnap = await getDocs(query(
             collection(db, "active_checkout_sessions"),
             where("status", "==", "COMPLETED"),
             where("amount", "==", Number(amount)),
-            limit(10)
+            limit(15)
           ));
           if (!preCompletedSnap.empty) {
             const matchSess = preCompletedSnap.docs.find((d) => {
@@ -480,9 +479,15 @@ export async function POST(req: NextRequest) {
               const expectedAmt = Number(data.amount) || 0;
               if (Math.abs(expectedAmt - Number(amount)) >= 0.005) return false;
               const existingUtr = String(data.utr || "");
-              if (existingUtr && !existingUtr.startsWith("AUTO-PTM-") && existingUtr !== utr) return false;
+              if (!isSyntheticUtr) {
+                // Bank SMS arriving after Paytm: target must be synthetic or same UTR
+                if (existingUtr && !existingUtr.startsWith("AUTO-PTM-") && existingUtr !== utr) return false;
+              } else {
+                // Late Paytm push arriving after Bank SMS: target must already have a real UTR (or same synthetic)
+                if (!existingUtr) return false;
+              }
               const sessionTimeMs = new Date(data.transactionTimestamp || data.paidAt || data.createdAt || 0).getTime();
-              if (Math.abs(contentDate.getTime() - sessionTimeMs) > 180 * 1000) return false;
+              if (Math.abs(contentDate.getTime() - sessionTimeMs) > 600 * 1000) return false;
 
               const sName = String(data.participantName || data.leaderName || "");
               const pName = String(data.payerName || "");
@@ -497,37 +502,39 @@ export async function POST(req: NextRequest) {
             }
           }
 
-          // 2. Check PAID registrations with AUTO-PTM-* synthetic UTR within 180s burst window
-          if (!preMatchedCompleted) {
-            const prePaidRegsSnap = await getDocs(query(
-              collection(db, "registrations"),
-              where("paymentStatus", "==", "PAID"),
-              where("amountPaid", "==", Number(amount)),
-              limit(10)
-            ));
-            if (!prePaidRegsSnap.empty) {
-              const matchReg = prePaidRegsSnap.docs.find((d) => {
-                const data = d.data();
-                const expectedAmt = Number(data.amountPaid || data.paymentDetails?.amount || 0);
-                if (Math.abs(expectedAmt - Number(amount)) >= 0.005) return false;
-                const regTimeMs = new Date(data.paidAt || data.registeredAt || data.createdAt || 0).getTime();
-                if (Math.abs(contentDate.getTime() - regTimeMs) > 180 * 1000) return false;
-                const regUtr = String(data.paymentId || data.paymentDetails?.utr || "");
-                const isSynth = regUtr.startsWith("AUTO-PTM-") || Boolean(data.paymentDetails?.syntheticUtr);
-                if (!isSynth) return false;
+          // 2. Check PAID registrations with AUTO-PTM-* synthetic UTR within 600s burst window (for Bank SMS)
+          if (!preMatchedCompleted && !isSyntheticUtr) {
+            try {
+              const prePaidRegsSnap = await getDocs(query(
+                collection(db, "registrations"),
+                where("paymentStatus", "==", "PAID"),
+                where("amountPaid", "==", Number(amount)),
+                limit(10)
+              ));
+              if (!prePaidRegsSnap.empty) {
+                const matchReg = prePaidRegsSnap.docs.find((d) => {
+                  const data = d.data();
+                  const expectedAmt = Number(data.amountPaid || data.paymentDetails?.amount || 0);
+                  if (Math.abs(expectedAmt - Number(amount)) >= 0.005) return false;
+                  const regTimeMs = new Date(data.paidAt || data.registeredAt || data.createdAt || 0).getTime();
+                  if (Math.abs(contentDate.getTime() - regTimeMs) > 600 * 1000) return false;
+                  const regUtr = String(data.paymentId || data.paymentDetails?.utr || "");
+                  const isSynth = regUtr.startsWith("AUTO-PTM-") || Boolean(data.paymentDetails?.syntheticUtr);
+                  if (!isSynth) return false;
 
-                const sName = String(data.participantName || data.leaderName || "");
-                const pName = String(data.payerName || "");
-                return isNameCompatible(extractedSender, sName) || isNameCompatible(extractedSender, pName);
-              });
-              if (matchReg) {
-                preMatchedCompleted = {
-                  id: matchReg.id,
-                  data: matchReg.data(),
-                  isRegistration: true,
-                };
+                  const sName = String(data.participantName || data.leaderName || "");
+                  const pName = String(data.payerName || "");
+                  return isNameCompatible(extractedSender, sName) || isNameCompatible(extractedSender, pName);
+                });
+                if (matchReg) {
+                  preMatchedCompleted = {
+                    id: matchReg.id,
+                    data: matchReg.data(),
+                    isRegistration: true,
+                  };
+                }
               }
-            }
+            } catch {}
           }
 
           if (preMatchedCompleted) {
@@ -536,35 +543,40 @@ export async function POST(req: NextRequest) {
             matchedRegistrationId = preMatchedCompleted.isRegistration ? preMatchedCompleted.id : (rData.registrationId || null);
             matchedStudentName = rData.participantName || rData.leaderName || "Student";
 
-            if (matchedOrderId) {
-              await setDoc(doc(db, "active_checkout_sessions", matchedOrderId), {
-                bankUtr: utr,
-                realUtr: utr,
-                utr,
-                reconciledViaBankSms: true,
-                bankSmsText: combinedText,
-                reconciledAt: now,
-              }, { merge: true }).catch(() => {});
-            }
+            if (!isSyntheticUtr) {
+              if (matchedOrderId) {
+                await setDoc(doc(db, "active_checkout_sessions", matchedOrderId), {
+                  bankUtr: utr,
+                  realUtr: utr,
+                  utr,
+                  reconciledViaBankSms: true,
+                  bankSmsText: combinedText,
+                  reconciledAt: now,
+                }, { merge: true }).catch(() => {});
+              }
 
-            if (matchedRegistrationId) {
-              await setDoc(doc(db, "registrations", matchedRegistrationId), {
-                paymentId: utr,
-                "paymentDetails.utr": utr,
-                "paymentDetails.bankUtr": utr,
-                "paymentDetails.reconciledFromBankSms": true,
-                "paymentDetails.syntheticUtrReplaced": rData.paymentId || rData.utr || null,
-                "paymentDetails.bankPayer": payerName || null,
-              }, { merge: true }).catch(() => {});
-            }
+              if (matchedRegistrationId) {
+                await setDoc(doc(db, "registrations", matchedRegistrationId), {
+                  paymentId: utr,
+                  "paymentDetails.utr": utr,
+                  "paymentDetails.bankUtr": utr,
+                  "paymentDetails.reconciledFromBankSms": true,
+                  "paymentDetails.syntheticUtrReplaced": rData.paymentId || rData.utr || null,
+                  "paymentDetails.bankPayer": payerName || null,
+                }, { merge: true }).catch(() => {});
+              }
 
-            const prevSynthUtr = rData.paymentId || rData.utr;
-            if (prevSynthUtr && prevSynthUtr !== utr) {
-              await setDoc(doc(db, "verified_upi_payments", prevSynthUtr), {
-                status: "MERGED",
-                reconciledToBankUtr: utr,
-                note: `Merged into official Bank SMS UTR ${utr}`,
-              }, { merge: true }).catch(() => {});
+              const prevSynthUtr = rData.paymentId || rData.utr;
+              if (prevSynthUtr && prevSynthUtr !== utr) {
+                await setDoc(doc(db, "verified_upi_payments", prevSynthUtr), {
+                  status: "MERGED",
+                  reconciledToBankUtr: utr,
+                  note: `Merged into official Bank SMS UTR ${utr}`,
+                }, { merge: true }).catch(() => {});
+              }
+            } else {
+              // Late Paytm push arriving after an already-completed transaction: merge without modifying the real Bank UTR
+              isDuplicateNotification = true;
             }
           }
         } catch (preReconcileErr) {
@@ -621,6 +633,23 @@ export async function POST(req: NextRequest) {
                       return !wEventId || String(d.eventId || "").trim().toLowerCase() === wEventId;
                     });
                   }
+                }
+                // Also check active_checkout_sessions (allow read: if true) for COMPLETED sessions for this student + event
+                if (!alreadyPaid && (wEmail || (wBtId && wBtId !== "STUDENT"))) {
+                  const completedSessionsSnap = await getDocs(
+                    w.data.eventId
+                      ? query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"), where("eventId", "==", w.data.eventId))
+                      : query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"))
+                  );
+                  alreadyPaid = completedSessionsSnap.docs.some((cd) => {
+                    const s = cd.data();
+                    const sEmail = String(s.email || "").trim().toLowerCase();
+                    const sBt = String(s.btId || "").trim().toUpperCase();
+                    const sEv = String(s.eventId || "").trim().toLowerCase();
+                    const sameEvent = !wEventId || !sEv || sEv === wEventId;
+                    if (!sameEvent) return false;
+                    return Boolean((wEmail && sEmail === wEmail) || (wBtId && wBtId !== "STUDENT" && sBt === wBtId));
+                  });
                 }
               } catch {}
               if (!alreadyPaid) {
@@ -1354,12 +1383,32 @@ export async function POST(req: NextRequest) {
                     const bSnap = await getDocs(query(collection(db, "registrations"), where("btId", "==", dBtId), limit(10)));
                     existingRegForStudent = bSnap.docs.find((d) => isSameEvent(d.data())) || null;
                   }
+                  // Also check active_checkout_sessions (allow read: if true) for another COMPLETED session for this student + event
+                  if (!existingRegForStudent && (dEmail || (dBtId && dBtId !== "STUDENT"))) {
+                    const completedSnap = await getDocs(
+                      sData.eventId
+                        ? query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"), where("eventId", "==", sData.eventId))
+                        : query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"))
+                    );
+                    existingRegForStudent = completedSnap.docs.find((cd) => {
+                      if (cd.id === matchedOrderId) return false;
+                      const cs = cd.data();
+                      const csEmail = String(cs.email || "").trim().toLowerCase();
+                      const csBt = String(cs.btId || "").trim().toUpperCase();
+                      const csEv = String(cs.eventId || "").trim().toLowerCase();
+                      const sameEv = !dEventId || !csEv || csEv === dEventId;
+                      if (!sameEv) return false;
+                      return Boolean((dEmail && csEmail === dEmail) || (dBtId && dBtId !== "STUDENT" && csBt === dBtId));
+                    }) || null;
+                  }
                 } catch {}
 
-                if (existingRegForStudent) {
-                  console.warn(`Duplicate registration prevented in webhook for ${draft.email || draft.btId} (existing pass: ${existingRegForStudent.id})`);
-                  matchedOrderId = null;
-                  matchedRegistrationId = null;
+                if (existingRegForStudent || isDuplicateNotification) {
+                  console.warn(`Duplicate registration prevented in webhook for ${draft.email || draft.btId} (existing: ${existingRegForStudent?.id || matchedOrderId})`);
+                  if (!isDuplicateNotification) {
+                    matchedOrderId = null;
+                    matchedRegistrationId = null;
+                  }
                 } else {
                   const regId = sData.registrationId || draft.id || `SRC-${String(sData.eventId || "EVT").slice(0, 3).toUpperCase()}-26-${Math.floor(10000 + Math.random() * 90000)}`;
                   const tkCode = draft.ticketCode || `${String(sData.eventId || "EVT").slice(0, 3).toUpperCase()}26-TK-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -1423,7 +1472,7 @@ export async function POST(req: NextRequest) {
           utr,
           amount,
           rawNotification: combinedText,
-          status: isMatched ? "MATCHED" : "UNCLAIMED",
+          status: (isDuplicateNotification && isSyntheticUtr) ? "MERGED" : (isMatched ? "MATCHED" : "UNCLAIMED"),
           isSyntheticUtr,
           source: sourceAppName,
           matchedRegistrationId: matchedRegistrationId || null,

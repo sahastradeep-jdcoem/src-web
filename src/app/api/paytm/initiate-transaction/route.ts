@@ -66,6 +66,41 @@ export async function POST(req: NextRequest) {
             });
           };
 
+          // Check active_checkout_sessions (allow read: if true) for already-COMPLETED sessions for this student + event
+          try {
+            const completedSnap = await getDocs(
+              eventId
+                ? query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"), where("eventId", "==", eventId))
+                : query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"))
+            );
+            const completedDup = completedSnap.docs.find((d: any) => {
+              const s = d.data();
+              const sEmail = String(s.email || "").trim().toLowerCase();
+              const sBt = String(s.btId || "").trim().toUpperCase();
+              const sEventId = String(s.eventId || "").trim().toLowerCase();
+              const sEventName = String(s.eventName || "").trim().toLowerCase();
+              const sameEvent =
+                (cleanEventId && sEventId === cleanEventId) ||
+                (cleanEventName && sEventName === cleanEventName);
+              if (!sameEvent) return false;
+              if (cleanEmail && sEmail === cleanEmail) return true;
+              if (cleanBt && cleanBt !== "STUDENT" && sBt === cleanBt) return true;
+              const rd = s.registrationData;
+              if (rd && isStudentMatch(rd)) return true;
+              return false;
+            });
+            if (completedDup) {
+              const dupData = completedDup.data();
+              return NextResponse.json(
+                {
+                  success: false,
+                  error: `A confirmed pass already exists for ${eventName || "this event"} (Order ID: ${completedDup.id}${dupData?.registrationId ? `, Registration ID: ${dupData.registrationId}` : ""}). Duplicate registrations are not allowed.`,
+                },
+                { status: 409 }
+              );
+            }
+          } catch {}
+
           const dupQueries: Promise<any>[] = [];
           if (cleanEmail) {
             dupQueries.push(getDocs(query(collection(db, "registrations"), where("email", "==", cleanEmail))));
@@ -244,12 +279,12 @@ export async function POST(req: NextRequest) {
       if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
         const nowIso = new Date().toISOString();
 
-        // Supersede any prior WAITING sessions for this student + event (prevents multi-session race/hijack)
+        // Expire any prior WAITING sessions for this student + event (uses Transition 1: WAITING -> EXPIRED)
         try {
           if (previousOrderId && typeof previousOrderId === "string") {
             await setDoc(doc(db, "active_checkout_sessions", previousOrderId), {
-              status: "SUPERSEDED",
-              supersededAt: nowIso,
+              status: "EXPIRED",
+              expiredAt: nowIso,
               supersededBy: orderId,
             }, { merge: true }).catch(() => {});
           }
@@ -271,8 +306,8 @@ export async function POST(req: NextRequest) {
               if (sameStudent && sameEvent) {
                 supersedePromises.push(
                   setDoc(d.ref, {
-                    status: "SUPERSEDED",
-                    supersededAt: nowIso,
+                    status: "EXPIRED",
+                    expiredAt: nowIso,
                     supersededBy: orderId,
                   }, { merge: true }).catch(() => {})
                 );
