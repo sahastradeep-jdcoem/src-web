@@ -440,7 +440,7 @@ export function PayhookSignalsSection({ onClose, userEmail, registrations = [] }
       } else {
         setPingResult({
           ok: false,
-          message: `Ping failed (${res.status}): ${data.error || "Unexpected response"}`,
+          message: `Ping failed (${res.status}): ${data.error || data.message || "Unexpected response"}`,
         });
       }
     } catch (err: any) {

@@ -209,8 +209,10 @@ export async function POST(req: NextRequest) {
     const combinedText = `${title} ${sender} ${text || trimmedText}`.trim();
 
     // Guard: Reject promotional, marketing, loan, credit card offer, or debit notifications
+    // Always allow explicit connectivity test pings from Admin Console or SRC PayHook Android app
+    const isExplicitTestPing = /\b(?:test\s*ping|connectivity\s+test|ping\s+test|webhook\s+test)\b/i.test(combinedText);
     const promoCheck = isPromotionalOrMarketingNotification(combinedText, title, sender);
-    if (promoCheck.isPromotional) {
+    if (promoCheck.isPromotional && !isExplicitTestPing) {
       return NextResponse.json({
         success: false,
         ignored: true,
