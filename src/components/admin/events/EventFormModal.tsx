@@ -103,6 +103,7 @@ export interface EventFormData {
   minTeamSize: number;
   maxTeamSize: number;
   noRegistrationRequired?: boolean;
+  maxRegistrations?: number;
   registrationStartDate: string;
   registrationDeadline: string;
   isPaid: boolean;
@@ -422,6 +423,10 @@ export function EventFormModal({
         ? JSON.parse(JSON.stringify(initialData.eligibleYears))
         : [...ALL_STUDY_YEARS],
       noRegistrationRequired: Boolean(initialData?.noRegistrationRequired),
+      maxRegistrations:
+        typeof initialData?.maxRegistrations === "number" && initialData.maxRegistrations > 0
+          ? Math.floor(initialData.maxRegistrations)
+          : undefined,
       registrationStartDate: initialData?.registrationStartDate || defaultRawDate,
       registrationDeadline: parseToIsoDate(initialData?.registrationDeadline) || initialData?.registrationDeadline || "",
       isPaid: initialData?.isPaid || false,
@@ -543,6 +548,12 @@ export function EventFormModal({
           ? Boolean(initialData.isPaid)
           : Boolean((initialData.feeAmount && initialData.feeAmount > 0) || (initialData as any).entryFee?.includes("₹")),
         feeAmount: typeof initialData.feeAmount === "number" && initialData.feeAmount > 0 ? initialData.feeAmount : (initialData.isPaid ? 100 : 0),
+        maxRegistrations:
+          !initialData.noRegistrationRequired &&
+          typeof initialData.maxRegistrations === "number" &&
+          initialData.maxRegistrations > 0
+            ? Math.floor(initialData.maxRegistrations)
+            : undefined,
         whatsappGroupUrl: initialData.whatsappGroupUrl || "",
         whatsappGroupName: initialData.whatsappGroupName || "",
         gateCheckInBtIds: Array.isArray(initialData.gateCheckInBtIds) ? JSON.parse(JSON.stringify(initialData.gateCheckInBtIds)) : [],
@@ -1228,6 +1239,7 @@ export function EventFormModal({
             schedule: [],
             prizes: [],
             noRegistrationRequired: true,
+            maxRegistrations: undefined,
             isPaid: false,
             feeAmount: 0,
             feePricingModel: "per_person",
@@ -2431,6 +2443,91 @@ export function EventFormModal({
                       className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#17458F] cursor-pointer"
                     />
                   </div>
+                </div>
+
+                {/* Shift to Registration Closed at No. of Responses */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-[#17458F]" />
+                      <span>Response Limit (Auto-Close)</span>
+                    </label>
+                    <span
+                      className={cn(
+                        "text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border",
+                        form.maxRegistrations && form.maxRegistrations > 0
+                          ? "bg-amber-50 text-amber-800 border-amber-200"
+                          : "bg-slate-100 text-slate-600 border-slate-200"
+                      )}
+                    >
+                      {form.maxRegistrations && form.maxRegistrations > 0
+                        ? `Closes at ${form.maxRegistrations} Responses`
+                        : "Unlimited Responses"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, maxRegistrations: undefined })}
+                      className={cn(
+                        "py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                        !(form.maxRegistrations && form.maxRegistrations > 0)
+                          ? "bg-[#17458F] text-white border-[#17458F] shadow-xs"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                      )}
+                    >
+                      <Check className={cn("w-3.5 h-3.5", !(form.maxRegistrations && form.maxRegistrations > 0) ? "opacity-100" : "opacity-0")} />
+                      <span>Unlimited</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          maxRegistrations:
+                            form.maxRegistrations && form.maxRegistrations > 0 ? form.maxRegistrations : 50,
+                        })
+                      }
+                      className={cn(
+                        "py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                        Boolean(form.maxRegistrations && form.maxRegistrations > 0)
+                          ? "bg-[#17458F] text-white border-[#17458F] shadow-xs"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                      )}
+                    >
+                      <Check className={cn("w-3.5 h-3.5", Boolean(form.maxRegistrations && form.maxRegistrations > 0) ? "opacity-100" : "opacity-0")} />
+                      <span>Cap at No. of Responses</span>
+                    </button>
+                  </div>
+
+                  {Boolean(form.maxRegistrations && form.maxRegistrations > 0) && (
+                    <div className="p-3.5 rounded-xl bg-white border border-[#17458F]/20 space-y-2 animate-in fade-in duration-200">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block">
+                        Shift to Registration Closed at (No. of Responses) *
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={form.maxRegistrations ?? ""}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          if (raw === "") {
+                            setForm({ ...form, maxRegistrations: 1 });
+                            return;
+                          }
+                          const parsed = parseInt(raw, 10);
+                          setForm({ ...form, maxRegistrations: isNaN(parsed) ? 1 : Math.max(1, parsed) });
+                        }}
+                        placeholder="e.g. 50"
+                        className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:border-[#17458F]"
+                      />
+                      <p className="text-[10px] text-slate-500 font-medium">
+                        Once active (non-cancelled) registrations reach this count, the event automatically shifts to <strong>Registration Closed</strong> and blocks new entries.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Registration Fee & Gateway Pricing */}

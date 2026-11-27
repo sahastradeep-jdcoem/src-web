@@ -1460,6 +1460,70 @@ export function subscribeToRegistrationsFromFirestore(
 }
 
 /**
+ * Returns the count of active (non-cancelled, non-test, non-hub) registrations for a given event.
+ */
+export async function getEventActiveRegistrationCount(
+  eventId?: string,
+  eventSlug?: string
+): Promise<number> {
+  if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return 0;
+  const cleanSlug = (eventSlug || "").trim();
+  const cleanId = (eventId || "").trim();
+  if (!cleanSlug && !cleanId) return 0;
+
+  try {
+    const colRef = collection(db, REGISTRATIONS_COLLECTION);
+    const q = cleanSlug
+      ? query(colRef, where("eventSlug", "==", cleanSlug))
+      : query(colRef, where("eventId", "==", cleanId));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.filter((d) => {
+      const data = { id: d.id, ...d.data() } as any;
+      return !isHubRecord(data) && !isTestPassRecord(data) && data.status !== "CANCELLED";
+    }).length;
+  } catch (error) {
+    console.warn("Could not query event registration count:", error);
+    return 0;
+  }
+}
+
+/**
+ * Real-time listener for the active (non-cancelled) registration count of an event.
+ */
+export function subscribeToEventRegistrationCount(
+  eventSlug: string,
+  eventId: string | undefined,
+  onCount: (count: number) => void
+): () => void {
+  if (!db || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return () => {};
+  const cleanSlug = (eventSlug || "").trim();
+  const cleanId = (eventId || "").trim();
+  if (!cleanSlug && !cleanId) return () => {};
+
+  try {
+    const colRef = collection(db, REGISTRATIONS_COLLECTION);
+    const q = cleanSlug
+      ? query(colRef, where("eventSlug", "==", cleanSlug))
+      : query(colRef, where("eventId", "==", cleanId));
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const count = snapshot.docs.filter((d) => {
+          const data = { id: d.id, ...d.data() } as any;
+          return !isHubRecord(data) && !isTestPassRecord(data) && data.status !== "CANCELLED";
+        }).length;
+        onCount(count);
+      },
+      () => {
+        // Ignore permission errors for unauthenticated public visitors
+      }
+    );
+  } catch {
+    return () => {};
+  }
+}
+
+/**
  * Cancel an existing event registration (strictly for free events only).
  * Requires a mandatory non-empty cancellation reason.
  */
@@ -2145,6 +2209,9 @@ export async function saveEventToFirestore(event: EventItem): Promise<void> {
         firestorePayload.feePricingModel = deleteField();
       } else if (event.teamType === "Individual" || event.feePricingModel !== "per_team") {
         firestorePayload.teamFeeAmount = deleteField();
+      }
+      if (!event.maxRegistrations || event.maxRegistrations <= 0 || event.noRegistrationRequired || event.isParentFest) {
+        firestorePayload.maxRegistrations = deleteField();
       }
 
       const eventDocRef = doc(db, EVENTS_COLLECTION, docId);

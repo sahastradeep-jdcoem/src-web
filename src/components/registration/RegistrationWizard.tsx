@@ -8,7 +8,7 @@ import { WhatsAppJoinCard } from "@/components/forms/WhatsAppJoinCard";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
-import { saveRegistrationToFirestore, checkExistingStudentRegistration, StudentRegistrationRecord } from "@/lib/firebase/firestore";
+import { saveRegistrationToFirestore, checkExistingStudentRegistration, subscribeToEventRegistrationCount, getEventActiveRegistrationCount, StudentRegistrationRecord } from "@/lib/firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
@@ -282,6 +282,15 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   const [isVerifyingTeammate, setIsVerifyingTeammate] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeRegCount, setActiveRegCount] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (!event?.maxRegistrations || event.maxRegistrations <= 0) {
+      setActiveRegCount(undefined);
+      return;
+    }
+    return subscribeToEventRegistrationCount(event.slug, event.id, setActiveRegCount);
+  }, [event?.slug, event?.id, event?.maxRegistrations]);
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>(() => getStoredPaymentConfig());
   const [customAnswers, setCustomAnswers] = useState<Record<string, any>>({});
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
@@ -744,7 +753,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
   };
 
   const handleProceedToStep2 = async () => {
-    const effectiveStatus = getEventEffectiveStatus(event);
+    const effectiveStatus = getEventEffectiveStatus(event, activeRegCount);
     const isCompleted = effectiveStatus === "Completed";
     const isDeadlinePassed = isRegistrationDeadlinePassed(event);
     const isAllowedToRegister = effectiveStatus === "Registration Open" || effectiveStatus === "Dates Coming Soon (Open)";
@@ -1428,7 +1437,12 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
 
   const handleConfirmRegistration = async () => {
     if (isSubmitting) return;
-    const effectiveStatus = getEventEffectiveStatus(event);
+    let latestCount = activeRegCount;
+    if (typeof event.maxRegistrations === "number" && event.maxRegistrations > 0) {
+      latestCount = await getEventActiveRegistrationCount(event.id, event.slug);
+      setActiveRegCount(latestCount);
+    }
+    const effectiveStatus = getEventEffectiveStatus(event, latestCount);
     const isCompleted = effectiveStatus === "Completed";
     const isDeadlinePassed = isRegistrationDeadlinePassed(event);
     const isAllowedToRegister = effectiveStatus === "Registration Open" || effectiveStatus === "Dates Coming Soon (Open)";
@@ -1927,7 +1941,7 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     );
   }
 
-  const isWizardRegistrationClosed = getEventEffectiveStatus(event) === "Registration Closed";
+  const isWizardRegistrationClosed = getEventEffectiveStatus(event, activeRegCount) === "Registration Closed";
   if (isWizardRegistrationClosed) {
     return (
       <div className="max-w-xl mx-auto p-8 rounded-3xl bg-white border border-slate-200 text-center space-y-5 shadow-sm">

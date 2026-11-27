@@ -128,6 +128,9 @@ export function sanitizeEventItem(event: EventItem): EventItem {
     endDate: event.endDate || undefined,
     isMultiDay: Boolean(event.isMultiDay),
     noRegistrationRequired: isNoReg,
+    maxRegistrations: !isNoReg && typeof event.maxRegistrations === "number" && event.maxRegistrations > 0
+      ? Math.floor(event.maxRegistrations)
+      : undefined,
     coordinatorContacts: Array.isArray(event.coordinatorContacts)
       ? event.coordinatorContacts
           .filter((c) => c && (Boolean(c.name?.trim()) || Boolean(c.phone?.trim())))
@@ -439,14 +442,35 @@ export function isEventCompletedByDate(event: Partial<EventItem> | null | undefi
 }
 
 /**
- * Resolves the effective status of an event taking into account automatic completion and future rescheduling.
+ * Returns true when an event has a maxRegistrations cap and active responses have reached or exceeded it.
  */
-export function getEventEffectiveStatus(event: Partial<EventItem> | null | undefined): EventItem["status"] {
+export function isEventRegistrationFull(
+  event: Partial<EventItem> | null | undefined,
+  activeCount?: number
+): boolean {
+  if (!event || event.noRegistrationRequired || event.isParentFest) return false;
+  if (typeof event.maxRegistrations !== "number" || event.maxRegistrations <= 0) return false;
+  if (typeof activeCount === "number") {
+    return activeCount >= event.maxRegistrations;
+  }
+  return false;
+}
+
+/**
+ * Resolves the effective status of an event taking into account automatic completion, response caps, and future rescheduling.
+ */
+export function getEventEffectiveStatus(
+  event: Partial<EventItem> | null | undefined,
+  activeRegistrationCount?: number
+): EventItem["status"] {
   if (!event) return "Upcoming";
   if (event.isCancelled || event.status === "Cancelled") return "Cancelled";
   if (event.status === "draft") return "draft";
   if (event.status === "Coming Soon") return "Coming Soon";
-  if (event.status === "Dates Coming Soon (Open)") return "Dates Coming Soon (Open)";
+  if (event.status === "Dates Coming Soon (Open)") {
+    if (isEventRegistrationFull(event, activeRegistrationCount)) return "Registration Closed";
+    return "Dates Coming Soon (Open)";
+  }
   if (event.status === "Registration Closed") {
     const isCompleted = isEventCompletedByDate(event);
     if (isCompleted) return "Completed";
@@ -456,6 +480,10 @@ export function getEventEffectiveStatus(event: Partial<EventItem> | null | undef
   const targetDateStr = event.rawEndDate || event.rawDate || event.endDate || event.date;
   const isCompleted = isEventCompletedByDate(event);
   if (isCompleted) return "Completed";
+
+  if (isEventRegistrationFull(event, activeRegistrationCount)) {
+    return "Registration Closed";
+  }
 
   // If status is marked "Completed" in raw data, but the event date is today or in the future:
   // Admin rescheduled the event to a future date! Auto-shift status back to active.

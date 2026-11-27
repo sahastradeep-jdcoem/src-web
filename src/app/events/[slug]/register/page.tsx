@@ -29,7 +29,7 @@ import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { isExternalUser } from "@/lib/usersStore";
 import { validateStudentBtId } from "@/lib/departmentsStore";
-import { checkExistingStudentRegistration, StudentRegistrationRecord } from "@/lib/firebase/firestore";
+import { checkExistingStudentRegistration, StudentRegistrationRecord, subscribeToEventRegistrationCount } from "@/lib/firebase/firestore";
 
 export default function EventRegisterPage() {
   const router = useRouter();
@@ -43,6 +43,16 @@ export default function EventRegisterPage() {
   const [selectedSubEvent, setSelectedSubEvent] = useState<EventItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [existingRegistration, setExistingRegistration] = useState<StudentRegistrationRecord | null>(null);
+  const [activeRegCount, setActiveRegCount] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (!event?.maxRegistrations || event.maxRegistrations <= 0) {
+      setActiveRegCount(undefined);
+      return;
+    }
+    const targetEvent = selectedSubEvent || event;
+    return subscribeToEventRegistrationCount(targetEvent.slug, targetEvent.id, setActiveRegCount);
+  }, [event, selectedSubEvent]);
 
   // If user has a flagged BT ID, ensure notification is prominently shown when entering registration
   useEffect(() => {
@@ -409,7 +419,7 @@ export default function EventRegisterPage() {
     );
   }
 
-  const isEventRegistrationClosed = getEventEffectiveStatus(event) === "Registration Closed";
+  const isEventRegistrationClosed = getEventEffectiveStatus(event, activeRegCount) === "Registration Closed";
   if (isEventRegistrationClosed) {
     return (
       <div className="min-h-[70vh] bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center space-y-6">

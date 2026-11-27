@@ -42,6 +42,7 @@ import { ScheduleTimeline } from "@/components/events/ScheduleTimeline";
 import { PrizeCard } from "@/components/events/PrizeCard";
 import { EventRulesSection } from "@/components/events/EventRulesSection";
 import { useAuth } from "@/context/AuthContext";
+import { subscribeToEventRegistrationCount } from "@/lib/firebase/firestore";
 import { cn } from "@/lib/utils";
 import { isExternalUser } from "@/lib/usersStore";
 import { toast } from "@/lib/toastStore";
@@ -75,11 +76,20 @@ export default function EventDetailPage() {
   const [event, setEvent] = useState<EventItem | null>(null);
   const [parentEvent, setParentEvent] = useState<EventItem | null>(null);
   const [subEvents, setSubEvents] = useState<EventItem[]>([]);
+  const [activeRegCount, setActiveRegCount] = useState<number | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
   const [copiedLink, setCopiedLink] = useState(false);
   const [existingRegistration, setExistingRegistration] = useState<StudentRegistrationRecord | null>(null);
 
   const { openShare } = useSocialShare();
+
+  useEffect(() => {
+    if (!event?.maxRegistrations || event.maxRegistrations <= 0) {
+      setActiveRegCount(undefined);
+      return;
+    }
+    return subscribeToEventRegistrationCount(event.slug, event.id, setActiveRegCount);
+  }, [event?.slug, event?.id, event?.maxRegistrations]);
 
   useEffect(() => {
     if (!user || !event) return;
@@ -353,7 +363,7 @@ export default function EventDetailPage() {
     )
   );
 
-  const effectiveStatus = getEventEffectiveStatus(event);
+  const effectiveStatus = getEventEffectiveStatus(event, activeRegCount);
   const isDatesComingSoonOpen = effectiveStatus === "Dates Coming Soon (Open)" || (isParentDatesComingSoon && effectiveStatus === "Registration Open");
   const isComingSoon = effectiveStatus === "Coming Soon" || (isParentDatesComingSoon && effectiveStatus === "Upcoming");
   const isUpcoming = effectiveStatus === "Upcoming" && !isComingSoon;

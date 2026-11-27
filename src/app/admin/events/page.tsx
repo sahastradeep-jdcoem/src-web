@@ -50,6 +50,7 @@ import {
   subscribeToEvents,
   sortEventsByDate,
   isRegistrationDeadlinePassed,
+  isEventRegistrationFull,
   parseDateStringToTimestamp,
   getEventEffectiveStatus,
   resolveTenureForEvent,
@@ -61,7 +62,8 @@ import {
   cancelEventRegistrations,
   getEventFromFirestore,
   deleteEventPermanentlyFromFirestore,
-  deleteActiveCheckoutSessionsForEvent
+  deleteActiveCheckoutSessionsForEvent,
+  subscribeToRegistrationsFromFirestore
 } from "@/lib/firebase/firestore";
 import { purgePendingQueueFor } from "@/lib/dataSyncEngine";
 import { 
@@ -110,6 +112,20 @@ export default function AdminEventsPage() {
   const [isDeletingEvent, setIsDeletingEvent] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [pendingUploads, setPendingUploads] = useState(0);
+  const [regCountsByKey, setRegCountsByKey] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    const unsubRegs = subscribeToRegistrationsFromFirestore((regs) => {
+      const counts: Record<string, number> = {};
+      regs.forEach((r) => {
+        if (r.status === "CANCELLED") return;
+        if (r.eventSlug) counts[r.eventSlug] = (counts[r.eventSlug] || 0) + 1;
+        if (r.eventId) counts[r.eventId] = (counts[r.eventId] || 0) + 1;
+      });
+      setRegCountsByKey(counts);
+    });
+    return () => unsubRegs();
+  }, []);
 
   const scopedClubsList = useMemo(() => isClubOwner
     ? clubsList.filter((club) => isEntityOwnedByClub(club, adminAccess))
@@ -385,6 +401,7 @@ export default function AdminEventsPage() {
       minTeamSize: !isUmbrella && formData.teamType !== "Individual" ? formData.minTeamSize : undefined,
       maxTeamSize: !isUmbrella && formData.teamType !== "Individual" ? formData.maxTeamSize : undefined,
       noRegistrationRequired: isNoReg,
+      maxRegistrations: !isNoReg && formData.maxRegistrations && formData.maxRegistrations > 0 ? Math.floor(formData.maxRegistrations) : undefined,
       registrationStartDate: isNoReg ? undefined : (formData.registrationStartDate || new Date().toISOString().split("T")[0]),
       registrationDeadline: regDeadlineFormatted,
       entryFee: isUmbrella ? "Free Entry" : entryFeeText,
@@ -597,6 +614,12 @@ export default function AdminEventsPage() {
       minTeamSize: editingEvent.minTeamSize || 2,
       maxTeamSize: editingEvent.maxTeamSize || 4,
       noRegistrationRequired: Boolean(editingEvent.noRegistrationRequired),
+      maxRegistrations:
+        !editingEvent.noRegistrationRequired &&
+        typeof editingEvent.maxRegistrations === "number" &&
+        editingEvent.maxRegistrations > 0
+          ? Math.floor(editingEvent.maxRegistrations)
+          : undefined,
       registrationStartDate: parsedStartDate,
       registrationDeadline: parsedDeadline,
       isPaid: editingEvent.noRegistrationRequired
@@ -776,6 +799,7 @@ export default function AdminEventsPage() {
       minTeamSize: !isUmbrella && formData.teamType !== "Individual" ? formData.minTeamSize : undefined,
       maxTeamSize: !isUmbrella && formData.teamType !== "Individual" ? formData.maxTeamSize : undefined,
       noRegistrationRequired: isNoReg,
+      maxRegistrations: !isNoReg && formData.maxRegistrations && formData.maxRegistrations > 0 ? Math.floor(formData.maxRegistrations) : undefined,
       registrationStartDate: isNoReg ? undefined : formData.registrationStartDate,
       registrationDeadline: regDeadlineFormatted || (isNoReg ? "Not Required" : editingEvent.registrationDeadline),
       entryFee: isUmbrella ? "Free Entry" : entryFeeText,
@@ -1558,32 +1582,47 @@ export default function AdminEventsPage() {
                           <span>Walk-in Entry</span>
                         </span>
                       ) : (
-                        <Badge
-                          variant={
-                            isCancelled
-                              ? "rose"
-                              : evt.status === "Coming Soon"
-                              ? "warning"
-                              : evt.status === "Upcoming"
-                              ? "warning"
+                        <>
+                          <Badge
+                            variant={
+                              isCancelled
+                                ? "rose"
+                                : evt.status === "Coming Soon"
+                                ? "warning"
+                                : evt.status === "Upcoming"
+                                ? "warning"
+                                : evt.status === "Dates Coming Soon (Open)"
+                                ? (isRegistrationDeadlinePassed(evt) || isEventRegistrationFull(evt, regCountsByKey[evt.slug] ?? regCountsByKey[evt.id] ?? 0) ? "slate" : "orange")
+                                : evt.status === "Registration Open" && (isRegistrationDeadlinePassed(evt) || isEventRegistrationFull(evt, regCountsByKey[evt.slug] ?? regCountsByKey[evt.id] ?? 0))
+                                ? "slate"
+                                : evt.status === "Registration Open"
+                                ? "orange"
+                                : "slate"
+                            }
+                            size="sm"
+                          >
+                            {isCancelled
+                              ? "Cancelled"
                               : evt.status === "Dates Coming Soon (Open)"
-                              ? (isRegistrationDeadlinePassed(evt) ? "slate" : "orange")
-                              : evt.status === "Registration Open" && isRegistrationDeadlinePassed(evt)
-                              ? "slate"
-                              : evt.status === "Registration Open"
-                              ? "orange"
-                              : "slate"
-                          }
-                          size="sm"
-                        >
-                          {isCancelled
-                            ? "Cancelled"
-                            : evt.status === "Dates Coming Soon (Open)"
-                            ? (isRegistrationDeadlinePassed(evt) ? "Registration Closed" : "Dates TBA • Reg Open")
-                            : evt.status === "Registration Open" && isRegistrationDeadlinePassed(evt)
-                            ? "Registration Closed"
-                            : evt.status}
-                        </Badge>
+                              ? (isRegistrationDeadlinePassed(evt) || isEventRegistrationFull(evt, regCountsByKey[evt.slug] ?? regCountsByKey[evt.id] ?? 0) ? "Registration Closed" : "Dates TBA • Reg Open")
+                              : evt.status === "Registration Open" && (isRegistrationDeadlinePassed(evt) || isEventRegistrationFull(evt, regCountsByKey[evt.slug] ?? regCountsByKey[evt.id] ?? 0))
+                              ? "Registration Closed"
+                              : evt.status}
+                          </Badge>
+                          {typeof evt.maxRegistrations === "number" && evt.maxRegistrations > 0 && !isWalkIn && (
+                            <span
+                              className={cn(
+                                "px-2 py-0.5 rounded-full text-[10px] font-bold border",
+                                isEventRegistrationFull(evt, regCountsByKey[evt.slug] ?? regCountsByKey[evt.id] ?? 0)
+                                  ? "bg-rose-50 text-rose-700 border-rose-200"
+                                  : "bg-slate-100 text-slate-700 border-slate-200"
+                              )}
+                              title={`Auto-closes at ${evt.maxRegistrations} responses`}
+                            >
+                              {regCountsByKey[evt.slug] ?? regCountsByKey[evt.id] ?? 0}/{evt.maxRegistrations} Cap
+                            </span>
+                          )}
+                        </>
                       )}
                     </div>
 
