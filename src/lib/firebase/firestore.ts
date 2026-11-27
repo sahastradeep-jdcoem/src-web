@@ -819,6 +819,33 @@ export async function findUserByBtIdInFirestore(btId: string): Promise<UserProfi
   return null;
 }
 
+/**
+ * Query Firestore to find an active user profile matching a given email address.
+ * Used for seamless account migration when an admin updates a student's email.
+ */
+export async function findUserByEmailInFirestore(email: string): Promise<(UserProfile & { uid: string }) | null> {
+  if (!db || !email || !email.trim() || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    return null;
+  }
+  const cleanEmail = email.trim().toLowerCase();
+  try {
+    const usersRef = collection(db, USERS_COLLECTION);
+    const q = query(usersRef, where("email", "==", cleanEmail));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      for (const d of snapshot.docs) {
+        const data = d.data() as UserProfile;
+        if (!data.isDeleted && data.status !== "deleted") {
+          return { ...data, uid: d.id };
+        }
+      }
+    }
+  } catch (error) {
+    console.warn("Could not query user by email in Firestore:", error);
+  }
+  return null;
+}
+
 let usersMux: {
   subscribers: Set<(users: UserProfile[]) => void>;
   unsubscriber: (() => void) | null;

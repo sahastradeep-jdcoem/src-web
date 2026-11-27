@@ -195,6 +195,14 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow write: if isUserOwner(userId) || isAdmin();
+      allow delete: if isUserOwner(userId) || isAdmin() || (
+        isAuthenticated() &&
+        request.auth.token.email != null &&
+        resource != null &&
+        resource.data.email != null &&
+        resource.data.email.lower() == request.auth.token.email.lower() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid))
+      );
     }
 
     // Event registrations & pass records

@@ -17,6 +17,8 @@ import {
   checkIsAdminInFirestore, 
   getUserProfileFromFirestore, 
   saveUserProfileToFirestore,
+  deleteUserProfileFromFirestore,
+  findUserByEmailInFirestore,
   getAdminAccessFromFirestore,
   subscribeToAdminAccessForUser,
   findBtIdByEmailInRosters
@@ -68,6 +70,40 @@ export function determineProfileCompletion(
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+/**
+ * Resolves a user's Firestore profile by UID, or migrates an existing profile
+ * if an admin updated its email to match the newly authenticated Firebase user.
+ */
+async function resolveOrMigrateUserProfile(fbUser: AuthUserProfile): Promise<UserProfile | null> {
+  const directProfile = await getUserProfileFromFirestore(fbUser.uid);
+  if (directProfile && !directProfile.isDeleted && directProfile.status !== "deleted") {
+    return directProfile;
+  }
+  if (!fbUser.email) return directProfile;
+
+  const emailMatch = await findUserByEmailInFirestore(fbUser.email);
+  if (!emailMatch || emailMatch.uid === fbUser.uid) {
+    return directProfile;
+  }
+
+  const oldUid = emailMatch.uid;
+  const migratedProfile: UserProfile = {
+    ...emailMatch,
+    uid: fbUser.uid,
+    email: fbUser.email.trim().toLowerCase(),
+    photoURL: fbUser.photoURL || emailMatch.photoURL || null,
+    lastActive: new Date().toISOString(),
+  };
+
+  await saveUserProfileToFirestore(fbUser.uid, migratedProfile);
+  try {
+    await deleteUserProfileFromFirestore(oldUid);
+  } catch (err) {
+    console.warn("Could not delete superseded user doc during email migration:", err);
+  }
+  return migratedProfile;
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -124,7 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Subscribe to Auth listener
     const unsubscribe = subscribeToAuth(async (fbUser) => {
       if (fbUser && fbUser.email) {
-        let storedProfile = await getUserProfileFromFirestore(fbUser.uid);
+        let storedProfile = await resolveOrMigrateUserProfile(fbUser);
 
         let localProfile: Partial<UserProfile> = {};
         try {
@@ -390,7 +426,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       const fbUser = await firebaseGoogleSignIn();
       if (fbUser) {
-        let storedProfile = await getUserProfileFromFirestore(fbUser.uid);
+        let storedProfile = await resolveOrMigrateUserProfile(fbUser);
         let localProfile: Partial<UserProfile> = {};
         try {
           const cached = localStorage.getItem("src_auth_user");
