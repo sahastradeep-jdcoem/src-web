@@ -162,13 +162,14 @@ function getApprovalBadgeInfo(r: any, verifiedUpiMap: Map<string, any>) {
   const signalSource = String(upiSignal?.source || "").toLowerCase();
 
   // 2. Determine if student manually entered a UTR
-  const studentClaimedUtr = String(
-    r.paymentDetails?.bankUtr ||
-    r.customAnswers?.upiUtr ||
-    r.submittedUtr ||
-    ""
-  ).trim();
-  const hasManualUtr = /^\d{12}$/.test(studentClaimedUtr) || (/^\d{12}$/.test(paymentId) && Boolean(synthUtr));
+  const submittedUtr = String(r.submittedUtr || r.customAnswers?.upiUtr || "").trim();
+  const hasManualUtr = Boolean(
+    r.isManualUtr === true ||
+    r.paymentDetails?.isManualUtr === true ||
+    /^\d{12}$/.test(submittedUtr) ||
+    (/^\d{12}$/.test(paymentId) && Boolean(synthUtr)) ||
+    (r.paymentStatus === "PENDING" && /^\d{12}$/.test(paymentId))
+  );
 
   // 3. Determine Source: Gmail vs SMS vs Paytm vs Cashfree vs Instamojo
   let source = "Paytm";
@@ -1027,13 +1028,18 @@ export default function AdminPaymentsPage() {
   // Instant 1-Tap Auto-Reconciliation with Verified Bank Signal
   const handle1TapAutoApprove = useCallback(async (
     targetRecord: RegistrationRecord,
-    verifiedPay: { utr: string; amount: number; payerName?: string }
+    verifiedPay: { utr: string; amount: number; payerName?: string; source?: string }
   ) => {
     const docId = targetRecord.id;
     const regTicketId = targetRecord.registrationId || targetRecord.id;
     const finalUtr = verifiedPay.utr;
     const isSynth = finalUtr.startsWith("AUTO-PTM-");
+    const matchingLedger = verifiedUpiMap.get(finalUtr)
+      || Array.from(verifiedUpiMap.values()).find((v) => v.matchedRegistrationId === docId || (targetRecord.orderId && v.matchedOrderId === targetRecord.orderId));
+    const ledgerSourceLower = String(matchingLedger?.source || verifiedPay.source || "").toLowerCase();
+    const isPaytmSignal = isSynth || ledgerSourceLower.includes("paytm");
     const rawStudentManualUtr = String(
+      (targetRecord as any).submittedUtr ||
       (targetRecord as any).paymentDetails?.bankUtr ||
       (targetRecord as any).customAnswers?.upiUtr ||
       targetRecord.paymentId ||
@@ -1062,7 +1068,7 @@ export default function AdminPaymentsPage() {
             paymentId: resolvedPaymentId,
             paidAt: nowIso,
             amountPaid: Number(verifiedPay.amount || targetRecord.amountPaid || 0),
-            verifiedBy: isSynth ? "Paytm Auto-Gateway (SRC PayHook - Paytm Notification)" : "Bank SMS Auto-Gateway (SRC PayHook)",
+            verifiedBy: isPaytmSignal ? "Paytm Auto-Gateway (SRC PayHook - Paytm Notification)" : "Bank SMS Auto-Gateway (SRC PayHook)",
             verifiedAt: nowIso,
             payerName: verifiedPay.payerName || null,
             "paymentDetails.amount": verifiedPay.amount,
@@ -1116,7 +1122,7 @@ export default function AdminPaymentsPage() {
                 paymentId: resolvedPaymentId,
                 paidAt: nowIso,
                 amountPaid: Number(verifiedPay.amount || r.amountPaid || 0),
-                verifiedBy: "Paytm Auto-Gateway (SRC PayHook)",
+                verifiedBy: isPaytmSignal ? "Paytm Auto-Gateway (SRC PayHook - Paytm Notification)" : "Bank SMS Auto-Gateway (SRC PayHook)",
                 verifiedAt: nowIso,
                 payerName: verifiedPay.payerName || (r as any).payerName,
               }
@@ -1131,7 +1137,7 @@ export default function AdminPaymentsPage() {
     } finally {
       setIsApproving(false);
     }
-  }, []);
+  }, [verifiedUpiMap]);
 
   // Automatic Zero-Touch Reconciler:
   // When an admin opens or views this page and pending registrations have verified matches,

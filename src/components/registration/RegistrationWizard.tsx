@@ -920,6 +920,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     paymentId?: string;
     orderId?: string;
     amountPaid?: number;
+    isManualUtr?: boolean;
+    submittedUtr?: string;
   }) => {
     // Build structured custom answers preserving human-readable question titles
     const structuredAnswers: Record<string, any> = {};
@@ -975,6 +977,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
       paymentId: paymentDetails?.paymentId,
       orderId: paymentDetails?.orderId,
       amountPaid: paymentDetails?.amountPaid || 0,
+      ...(paymentDetails?.isManualUtr ? { isManualUtr: true, submittedUtr: paymentDetails.submittedUtr || paymentDetails.paymentId } : {}),
+      ...(paymentDetails?.isManualUtr ? { paymentDetails: { utr: paymentDetails.paymentId, bankUtr: paymentDetails.submittedUtr || paymentDetails.paymentId, isManualUtr: true } } : {}),
       currency: "INR",
       paidAt: paymentDetails?.paymentStatus === "PAID" ? new Date().toISOString() : undefined,
       registeredAt: new Date().toISOString(),
@@ -990,6 +994,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
     amountPaid?: number;
     registrationId?: string;
     ticketCode?: string;
+    isManualUtr?: boolean;
+    submittedUtr?: string;
   }) => {
     if (!user) {
       openAuthModal();
@@ -1163,6 +1169,8 @@ export function RegistrationWizard({ event }: RegistrationWizardProps) {
           paymentId: verifyData.paymentId || cleanedUtr,
           orderId: paytmCheckoutData.orderId,
           amountPaid: paytmCheckoutData.amount || totalPayableAmount,
+          isManualUtr: true,
+          submittedUtr: cleanedUtr,
         });
         setPaytmCheckoutData(null);
       } else {
