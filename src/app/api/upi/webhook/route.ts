@@ -511,15 +511,14 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Pre-Tier-2 Bi-Directional Name-Compatible Reconciliation (10-minute / 600s window):
-      // 1) If a real 12-digit Bank SMS arrives after a Paytm push (AUTO-PTM-*), upgrade that COMPLETED session.
-      // 2) If a delayed Paytm push (AUTO-PTM-*) arrives after a real Bank SMS, merge it into that COMPLETED session.
-      if (!matchedOrderId && amount > 0 && extractedSender) {
+      // Pre-Tier-2 Bi-Directional Reconciliation (Newest-first, zero composite index):
+      // 1) If a real 12-digit Bank SMS arrives after a Paytm push (AUTO-PTM-*) within 2h, upgrade that COMPLETED session & PAID reg.
+      // 2) If a delayed Paytm push (AUTO-PTM-*) arrives after a real Bank SMS within 10m, merge it cleanly.
+      if (!matchedOrderId && amount > 0) {
         try {
           let preMatchedCompleted: any = null;
 
-          // 1. Check COMPLETED active_checkout_sessions (allow read: if true) within 600s burst window
-          // 0. If a genuine 12-digit Bank SMS arrives for a pass that was ALREADY auto-approved via Paytm
+          // 0. If a genuine 12-digit Bank SMS arrives for a pass ALREADY auto-approved via Paytm
           //    while the student had manually typed this exact 12-digit UTR (or Bank SMS matches paymentId),
           //    immediately merge Bank SMS onto that registration & mark synthetic AUTO-PTM- as MERGED!
           if (!isSyntheticUtr && utr && /^\d{12}$/.test(utr)) {
@@ -541,38 +540,47 @@ export async function POST(req: NextRequest) {
             } catch {}
           }
 
-          // 1. Check COMPLETED sessions matching exact amount (2h window for Bank SMS upgrading synthetic AUTO-PTM-)
+          // 1. Check NEWEST 80 verified_upi_payments & NEWEST 50 active_checkout_sessions (ordered desc so high-volume amounts like .01 never get cut off by old rows!)
           if (!preMatchedCompleted) {
-            const preCompletedSnap = await getDocs(query(
-              collection(db, "active_checkout_sessions"),
-              where("status", "==", "COMPLETED"),
-              where("amount", "==", Number(amount)),
-              limit(30)
-            ));
-            if (!preCompletedSnap.empty) {
-              const matchSess = preCompletedSnap.docs.find((d) => {
+            const [recentLedgerSnap, recentSessionsSnap] = await Promise.all([
+              getDocs(query(collection(db, "verified_upi_payments"), orderBy("receivedAt", "desc"), limit(80))),
+              getDocs(query(collection(db, "active_checkout_sessions"), orderBy("createdAt", "desc"), limit(50))),
+            ]);
+
+            // 1A. Match against newest COMPLETED checkout sessions
+            if (!recentSessionsSnap.empty) {
+              const sessMatches = recentSessionsSnap.docs.filter((d) => {
                 const data = d.data();
+                if (data.status !== "COMPLETED") return false;
                 const expectedAmt = Number(data.amount) || 0;
                 if (Math.abs(expectedAmt - Number(amount)) >= 0.005) return false;
                 const existingUtr = String(data.utr || "");
                 if (!isSyntheticUtr) {
-                  // Bank SMS arriving after Paytm: target must be synthetic AUTO-PTM- or same UTR
                   if (existingUtr && !existingUtr.startsWith("AUTO-PTM-") && existingUtr !== utr) return false;
                 } else {
-                  // Late Paytm push arriving after Bank SMS: target must already have a real UTR (or same synthetic)
                   if (!existingUtr) return false;
                 }
                 const sessionTimeMs = new Date(data.transactionTimestamp || data.paidAt || data.createdAt || 0).getTime();
+                const diffMs = Math.abs(contentDate.getTime() - sessionTimeMs);
                 const maxDiffMs = !isSyntheticUtr ? 2 * 60 * 60 * 1000 : 600 * 1000;
-                if (Math.abs(contentDate.getTime() - sessionTimeMs) > maxDiffMs) return false;
+                if (diffMs > maxDiffMs) return false;
 
                 if (existingUtr && existingUtr === utr) return true;
-                const sName = String(data.participantName || data.leaderName || "");
-                const pName = String(data.payerName || "");
-                const sPhone = String(data.phone || "").replace(/\D/g, "").slice(-6);
-                const phoneOk = Boolean(sPhone.length >= 6 && combinedText.includes(sPhone));
-                return isNameCompatible(extractedSender, sName) || isNameCompatible(extractedSender, pName) || phoneOk;
+                if (extractedSender) {
+                  const sName = String(data.participantName || data.leaderName || "");
+                  const pName = String(data.payerName || "");
+                  const sPhone = String(data.phone || "").replace(/\D/g, "").slice(-6);
+                  const phoneOk = Boolean(sPhone.length >= 6 && combinedText.includes(sPhone));
+                  return isNameCompatible(extractedSender, sName) || isNameCompatible(extractedSender, pName) || phoneOk;
+                }
+                // Senderless SMS: only eligible if <= 180s and unique (checked below)
+                return diffMs <= 180 * 1000;
               });
+
+              const matchSess =
+                sessMatches.length === 1 || (extractedSender && sessMatches.length > 0)
+                  ? sessMatches[0]
+                  : null;
               if (matchSess) {
                 preMatchedCompleted = {
                   id: matchSess.id,
@@ -581,31 +589,93 @@ export async function POST(req: NextRequest) {
                 };
               }
             }
+
+            // 1B. Match against newest verified_upi_payments signals (catches direct registration approvals even if session was missing/expired)
+            if (!preMatchedCompleted && !recentLedgerSnap.empty) {
+              const ledgerMatches = recentLedgerSnap.docs.filter((d) => {
+                const data = d.data();
+                if (data.utr === utr || data.status === "MERGED") return false;
+                const vAmt = Number(data.amount || 0);
+                if (Math.abs(vAmt - Number(amount)) >= 0.005) return false;
+                const vUtr = String(data.utr || "");
+                if (!isSyntheticUtr) {
+                  // Bank SMS looking for recent AUTO-PTM- signal
+                  if (!vUtr.startsWith("AUTO-PTM-") && !data.isSyntheticUtr) return false;
+                } else {
+                  // Late Paytm looking for recent real Bank SMS signal
+                  if (vUtr.startsWith("AUTO-PTM-") || data.isSyntheticUtr) return false;
+                }
+                const vTimeMs = new Date(data.transactionTimestamp || data.receivedAt || 0).getTime();
+                const diffMs = Math.abs(contentDate.getTime() - vTimeMs);
+                const maxDiffMs = !isSyntheticUtr ? 2 * 60 * 60 * 1000 : 600 * 1000;
+                if (diffMs > maxDiffMs) return false;
+
+                if (extractedSender) {
+                  const sName = String(data.matchedStudentName || "");
+                  const pName = String(data.payerName || "");
+                  return (
+                    (sName && isNameCompatible(extractedSender, sName)) ||
+                    (pName && isNameCompatible(extractedSender, pName))
+                  );
+                }
+                return diffMs <= 180 * 1000;
+              });
+
+              const matchLedger =
+                ledgerMatches.length === 1 || (extractedSender && ledgerMatches.length > 0)
+                  ? ledgerMatches[0]
+                  : null;
+              if (matchLedger) {
+                const lData = matchLedger.data();
+                const lRegId = lData.claimedByRegistrationId || lData.matchedRegistrationId || null;
+                const lOrdId = lData.claimedByOrderId || lData.matchedOrderId || null;
+                if (lRegId || lOrdId) {
+                  preMatchedCompleted = {
+                    id: lRegId || lOrdId,
+                    data: {
+                      ...lData,
+                      orderId: lOrdId,
+                      registrationId: lRegId,
+                      paymentId: lData.utr,
+                      participantName: lData.matchedStudentName,
+                      eventName: lData.matchedEventName,
+                    },
+                    isRegistration: Boolean(lRegId),
+                    isSession: !lRegId && Boolean(lOrdId),
+                  };
+                }
+              }
+            }
           }
 
-          // 2. Check PAID registrations with AUTO-PTM-* or syntheticUtr within 2h window (for Bank SMS)
+          // 2. Fallback: Check PAID registrations with AUTO-PTM-* or syntheticUtr (fetch up to 100 & sort newest-first in memory)
           if (!preMatchedCompleted && !isSyntheticUtr) {
             try {
               const prePaidRegsSnap = await getDocs(query(
                 collection(db, "registrations"),
                 where("paymentStatus", "==", "PAID"),
                 where("amountPaid", "==", Number(amount)),
-                limit(30)
+                limit(100)
               ));
               if (!prePaidRegsSnap.empty) {
-                const matchReg = prePaidRegsSnap.docs.find((d) => {
+                const sortedPaid = [...prePaidRegsSnap.docs].sort((a, b) => {
+                  const ta = new Date(a.data().paidAt || a.data().registeredAt || a.data().createdAt || 0).getTime() || 0;
+                  const tb = new Date(b.data().paidAt || b.data().registeredAt || b.data().createdAt || 0).getTime() || 0;
+                  return tb - ta;
+                });
+                const regMatches = sortedPaid.filter((d) => {
                   const data = d.data();
                   const expectedAmt = Number(data.amountPaid || data.paymentDetails?.amount || 0);
                   if (Math.abs(expectedAmt - Number(amount)) >= 0.005) return false;
                   const regTimeMs = new Date(data.paidAt || data.registeredAt || data.createdAt || 0).getTime();
-                  if (Math.abs(contentDate.getTime() - regTimeMs) > 2 * 60 * 60 * 1000) return false;
+                  const diffMs = Math.abs(contentDate.getTime() - regTimeMs);
+                  if (diffMs > 2 * 60 * 60 * 1000) return false;
                   const regUtr = String(data.paymentId || data.paymentDetails?.utr || "");
                   const isSynth =
                     regUtr.startsWith("AUTO-PTM-") ||
                     Boolean(data.paymentDetails?.syntheticUtr) ||
                     Boolean(data.paymentDetails?.syntheticUtrReplaced);
                   if (!isSynth) return false;
-                  // Never hijack a pass that already received a DIFFERENT Bank SMS UTR!
                   if (
                     data.paymentDetails?.bankUtr &&
                     /^\d{12}$/.test(String(data.paymentDetails.bankUtr)) &&
@@ -615,10 +685,18 @@ export async function POST(req: NextRequest) {
                     return false;
                   }
 
-                  const sName = String(data.participantName || data.leaderName || "");
-                  const pName = String(data.payerName || "");
-                  return isNameCompatible(extractedSender, sName) || isNameCompatible(extractedSender, pName);
+                  if (extractedSender) {
+                    const sName = String(data.participantName || data.leaderName || "");
+                    const pName = String(data.payerName || "");
+                    return isNameCompatible(extractedSender, sName) || isNameCompatible(extractedSender, pName);
+                  }
+                  return diffMs <= 180 * 1000;
                 });
+
+                const matchReg =
+                  regMatches.length === 1 || (extractedSender && regMatches.length > 0)
+                    ? regMatches[0]
+                    : null;
                 if (matchReg) {
                   preMatchedCompleted = {
                     id: matchReg.id,
@@ -636,6 +714,22 @@ export async function POST(req: NextRequest) {
             matchedRegistrationId = preMatchedCompleted.isRegistration ? preMatchedCompleted.id : (rData.registrationId || null);
             matchedStudentName = rData.participantName || rData.leaderName || "Student";
             matchedEventName = rData.eventTitle || rData.eventName || matchedEventName || null;
+
+            // Always resolve matchedRegistrationId from orderId if session hadn't stored it yet
+            if (!matchedRegistrationId && matchedOrderId) {
+              try {
+                const regByOrd = await getDocs(
+                  query(collection(db, "registrations"), where("orderId", "==", matchedOrderId), limit(1))
+                );
+                if (!regByOrd.empty) {
+                  const foundReg = regByOrd.docs[0];
+                  const fData = foundReg.data();
+                  matchedRegistrationId = foundReg.id;
+                  matchedStudentName = fData.participantName || fData.leaderName || matchedStudentName;
+                  matchedEventName = fData.eventTitle || fData.eventName || matchedEventName;
+                }
+              } catch {}
+            }
 
             const prevSynthUtr =
               rData.paymentDetails?.syntheticUtr ||
@@ -1231,18 +1325,18 @@ export async function POST(req: NextRequest) {
         try {
           let matchedCompletedData: any = null;
 
-          // Check 1: Completed active checkout sessions (Strict <= 180s burst window or exact UTR match, filtered by amount)
+          // Check 1: Newest 50 active checkout sessions (ordered desc so high-volume amounts are never missed)
           const completedQuery = query(
             collection(db, "active_checkout_sessions"),
-            where("status", "==", "COMPLETED"),
-            where("amount", "==", Number(amount)),
-            limit(5)
+            orderBy("createdAt", "desc"),
+            limit(50)
           );
           const completedSnap = await getDocs(completedQuery);
 
           if (!completedSnap.empty) {
             const recentMatch = completedSnap.docs.find((d) => {
               const data = d.data();
+              if (data.status !== "COMPLETED") return false;
               const expectedAmt = Number(data.amount) || 0;
               if (Math.abs(expectedAmt - Number(amount)) >= 0.005) return false;
 
@@ -1292,17 +1386,22 @@ export async function POST(req: NextRequest) {
             }
           }
 
-          // Check 2: Canonical registrations completed with synthetic UTR (e.g. AUTO-PTM-xxx, filtered by amount)
+          // Check 2: Canonical registrations completed with synthetic UTR (fetch up to 100 & sort newest-first in memory)
           if (!matchedCompletedData) {
             const paidRegsQuery = query(
               collection(db, "registrations"),
               where("paymentStatus", "==", "PAID"),
               where("amountPaid", "==", Number(amount)),
-              limit(5)
+              limit(100)
             );
             const paidRegsSnap = await getDocs(paidRegsQuery);
             if (!paidRegsSnap.empty) {
-              const synthMatch = paidRegsSnap.docs.find((d) => {
+              const sortedPaidRegs = [...paidRegsSnap.docs].sort((a, b) => {
+                const ta = new Date(a.data().paidAt || a.data().registeredAt || a.data().createdAt || 0).getTime() || 0;
+                const tb = new Date(b.data().paidAt || b.data().registeredAt || b.data().createdAt || 0).getTime() || 0;
+                return tb - ta;
+              });
+              const synthMatch = sortedPaidRegs.find((d) => {
                 const data = d.data();
                 const expectedAmt = Number(data.amountPaid || data.paymentDetails?.amount || 0);
                 if (Math.abs(expectedAmt - Number(amount)) >= 0.005) return false;

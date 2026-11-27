@@ -152,7 +152,7 @@ export function PayhookSignalsSection({ onClose, userEmail, registrations = [] }
 
   // Fast lookup maps for resolving matched registration, event name, student name, and live PAID status
   const matchedRegLookupMaps = React.useMemo(() => {
-    type RegSummary = { eventName: string; studentName: string; isPaid: boolean };
+    type RegSummary = { eventName: string; studentName: string; isPaid: boolean; mergedToUtr?: string };
     const byRegId = new Map<string, RegSummary>();
     const byOrderId = new Map<string, RegSummary>();
     const byUtr = new Map<string, RegSummary>();
@@ -168,7 +168,15 @@ export function PayhookSignalsSection({ onClose, userEmail, registrations = [] }
       if (r.orderId) byOrderId.set(String(r.orderId).trim(), summary);
       if (r.paymentId) byUtr.set(String(r.paymentId).trim(), summary);
       if (r.paymentDetails?.utr) byUtr.set(String(r.paymentDetails.utr).trim(), summary);
-      if (r.paymentDetails?.syntheticUtr) byUtr.set(String(r.paymentDetails.syntheticUtr).trim(), summary);
+      if (r.paymentDetails?.bankUtr) byUtr.set(String(r.paymentDetails.bankUtr).trim(), summary);
+      if (r.paymentDetails?.syntheticUtr) {
+        const curBank = r.paymentId && /^\d{12}$/.test(String(r.paymentId)) ? String(r.paymentId) : undefined;
+        byUtr.set(String(r.paymentDetails.syntheticUtr).trim(), { ...summary, mergedToUtr: curBank });
+      }
+      if (r.paymentDetails?.syntheticUtrReplaced) {
+        const curBank = r.paymentId && /^\d{12}$/.test(String(r.paymentId)) ? String(r.paymentId) : undefined;
+        byUtr.set(String(r.paymentDetails.syntheticUtrReplaced).trim(), { ...summary, mergedToUtr: curBank });
+      }
     }
     return { byRegId, byOrderId, byUtr };
   }, [registrations]);
@@ -767,6 +775,11 @@ export function PayhookSignalsSection({ onClose, userEmail, registrations = [] }
                                 <span className="text-[9px] font-mono text-emerald-600 ml-0.5 opacity-80">(DUP)</span>
                               )}
                             </span>
+                            {matchedReg?.mergedToUtr && matchedReg.mergedToUtr !== log.extractedUtr && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 font-mono font-bold">
+                                MERGED → {matchedReg.mergedToUtr}
+                              </span>
+                            )}
                             {log.burstCount && log.burstCount > 1 && (
                               <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200 font-mono font-bold">
                                 {log.burstCount} bursts
