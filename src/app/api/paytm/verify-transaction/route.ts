@@ -166,6 +166,14 @@ export async function POST(req: NextRequest) {
             if (!unclaimedSnap.empty) {
               const unclaimedMatch = unclaimedSnap.docs.find((d) => {
                 const data = d.data();
+                // Only upgrade synthetic AUTO-PTM- signals (never overwrite a different genuine 12-digit Bank SMS UTR!)
+                const isSynth = Boolean(data.isSyntheticUtr) || String(data.utr || "").startsWith("AUTO-PTM-");
+                if (!isSynth) return false;
+
+                // Must be recent (within last 45 minutes) so stale unclaimed payments from earlier cannot be claimed
+                const recMs = new Date(data.transactionTimestamp || data.receivedAt || 0).getTime();
+                if (!recMs || Math.abs(Date.now() - recMs) > 45 * 60 * 1000) return false;
+
                 const payAmt = Number(data.amount) || 0;
                 // Micro-paisa exact match
                 return Math.abs(payAmt - expectedAmount) < 0.005;
