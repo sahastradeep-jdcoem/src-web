@@ -71,13 +71,15 @@ export async function POST(req: NextRequest) {
           };
 
           // Check active_checkout_sessions (allow read: if true) for already-COMPLETED sessions for this student + event
+          // Verify via single-doc getDoc (allow get: if true) that the registration still exists and wasn't deleted by admin
           try {
+            const { doc, getDoc } = await import("firebase/firestore");
             const completedSnap = await getDocs(
               eventId
                 ? query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"), where("eventId", "==", eventId))
                 : query(collection(db, "active_checkout_sessions"), where("status", "==", "COMPLETED"))
             );
-            const completedDup = completedSnap.docs.find((d: any) => {
+            const matchingCompletedDocs = completedSnap.docs.filter((d: any) => {
               const s = d.data();
               const sEmail = String(s.email || "").trim().toLowerCase();
               const sBt = String(s.btId || "").trim().toUpperCase();
@@ -93,12 +95,25 @@ export async function POST(req: NextRequest) {
               if (rd && isStudentMatch(rd)) return true;
               return false;
             });
-            if (completedDup) {
-              const dupData = completedDup.data();
+
+            for (const compDoc of matchingCompletedDocs) {
+              const dupData = compDoc.data();
+              const targetRegId = dupData?.registrationId || dupData?.registrationData?.id;
+              if (targetRegId) {
+                const regSnap = await getDoc(doc(db, "registrations", targetRegId));
+                if (!regSnap.exists()) {
+                  // Registration was deleted by admin — do not ghost-block the student
+                  continue;
+                }
+                const regData = regSnap.data();
+                if (regData?.status === "CANCELLED" || regData?.paymentStatus === "FAILED") {
+                  continue;
+                }
+              }
               return NextResponse.json(
                 {
                   success: false,
-                  error: `A confirmed pass already exists for ${eventName || "this event"} (Order ID: ${completedDup.id}${dupData?.registrationId ? `, Registration ID: ${dupData.registrationId}` : ""}). Duplicate registrations are not allowed.`,
+                  error: `A confirmed pass already exists for ${eventName || "this event"} (Order ID: ${compDoc.id}${targetRegId ? `, Registration ID: ${targetRegId}` : ""}). Duplicate registrations are not allowed.`,
                 },
                 { status: 409 }
               );

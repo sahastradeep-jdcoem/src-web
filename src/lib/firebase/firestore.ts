@@ -1642,7 +1642,17 @@ export async function deleteRegistrationFromFirestore(id: string): Promise<boole
   try {
     if (db && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
       const docRef = doc(db, REGISTRATIONS_COLLECTION, id);
+      let linkedOrderId: string | null = null;
+      try {
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          linkedOrderId = snap.data()?.orderId || null;
+        }
+      } catch {}
       await deleteDoc(docRef);
+      if (linkedOrderId) {
+        await deleteDoc(doc(db, "active_checkout_sessions", linkedOrderId)).catch(() => {});
+      }
     }
   } catch (error) {
     console.warn("Firestore delete error for registration:", id, error);
