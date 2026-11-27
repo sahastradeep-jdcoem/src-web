@@ -269,9 +269,9 @@ service cloud.firestore {
         (
           // Transition 1: Expire waiting session
           (resource.data.status == 'WAITING' && request.resource.data.status == 'EXPIRED') ||
-          // Transition 2: Complete waiting session with legitimate payment verified in ledger
+          // Transition 2: Complete waiting or expired session with legitimate payment verified in ledger
           (
-            resource.data.status == 'WAITING' &&
+            resource.data.status in ['WAITING', 'EXPIRED'] &&
             request.resource.data.status == 'COMPLETED' &&
             request.resource.data.utr is string &&
             request.resource.data.utr.size() >= 4 &&

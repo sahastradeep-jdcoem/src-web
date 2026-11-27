@@ -611,50 +611,149 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Tier 2B: Delayed Offline Backlog Revival:
-      // If the phone was offline or switched off during checkout, the student's 5-minute session expired.
-      // Now that the phone sent the delayed signal, revive the expired session to COMPLETED and issue the pass!
+      // Tier 2B: Delayed Offline Backlog Revival (with strict anti-hijack & name-priority guards):
+      // Before reviving an EXPIRED session, verify no PENDING registration already matches this signal,
+      // never revive an EXPIRED session for a student who already paid for this event, and rank by name & time proximity.
       if (!matchedOrderId && amount > 0) {
         try {
-          const expiredSessionsQuery = query(
-            collection(db, "active_checkout_sessions"),
-            where("status", "==", "EXPIRED"),
-            where("amount", "==", Number(amount)),
-            limit(5)
-          );
-          const expiredSnap = await getDocs(expiredSessionsQuery);
-          if (!expiredSnap.empty) {
-            const allExpired = expiredSnap.docs.map(d => ({ ref: d.ref, id: d.id, data: d.data() }));
+          // 1. Check if a PENDING registration matches this signal first (prevents an abandoned EXPIRED session
+          //    from stealing a signal meant for a student who already submitted their registration!)
+          let hasPendingRegMatch = false;
+          try {
+            const pendingCheckSnap = await getDocs(query(
+              collection(db, "registrations"),
+              where("paymentStatus", "==", "PENDING"),
+              limit(25)
+            ));
+            if (!pendingCheckSnap.empty) {
+              const candSig = {
+                utr: isSyntheticUtr ? undefined : utr || undefined,
+                submittedUtr: utr || undefined,
+                amount,
+                payerName: extractedSender || undefined,
+                timestamp: contentDate.toISOString(),
+                source: sourceAppName,
+              };
+              hasPendingRegMatch = pendingCheckSnap.docs.some((d) => {
+                const rd = d.data();
+                const ev = evaluateCandidateAgainstRegistration(candSig, {
+                  id: d.id,
+                  registrationId: rd.registrationId,
+                  orderId: rd.orderId,
+                  paymentId: rd.paymentId || rd.paymentDetails?.utr || rd.customAnswers?.upiUtr,
+                  amountPaid: Number(rd.amountPaid || rd.paymentDetails?.amount || 0),
+                  participantName: rd.participantName,
+                  leaderName: rd.leaderName,
+                  phone: rd.phone,
+                  registeredAt: rd.registeredAt,
+                  createdAt: rd.createdAt,
+                });
+                return Boolean(ev?.isEligibleForAutoApproval);
+              });
+            }
+          } catch {}
 
-            // Filter expired sessions created within last 24 hours with matching amount
-            const matchingExpired = allExpired.filter(d => {
-              const expectedAmt = Number(d.data.amount) || 0;
-              if (Math.abs(expectedAmt - Number(amount)) >= 0.005) return false;
-              const cTime = new Date(d.data.createdAt || 0).getTime();
-              return (Date.now() - cTime) < 24 * 60 * 60 * 1000;
-            });
+          if (!hasPendingRegMatch) {
+            const expiredSessionsQuery = query(
+              collection(db, "active_checkout_sessions"),
+              where("status", "==", "EXPIRED"),
+              where("amount", "==", Number(amount)),
+              limit(20)
+            );
+            const expiredSnap = await getDocs(expiredSessionsQuery);
+            if (!expiredSnap.empty) {
+              const allExpired = expiredSnap.docs.map(d => ({ ref: d.ref, id: d.id, data: d.data() }));
 
-            if (matchingExpired.length > 0) {
-              // Sort newest first
-              matchingExpired.sort((a, b) => new Date(b.data.createdAt || 0).getTime() - new Date(a.data.createdAt || 0).getTime());
-              const recovered = matchingExpired[0];
-              matchedOrderId = recovered.id;
-              matchedStudentName = recovered.data.participantName || recovered.data.leaderName || recovered.data.email || "Student";
-              if (extractedSender && !isNameCompatible(extractedSender, matchedStudentName)) {
-                isFriendPayment = true;
-                payerName = extractedSender;
+              // Filter expired sessions created within last 24 hours with matching amount
+              const recentExpired = allExpired.filter(d => {
+                const expectedAmt = Number(d.data.amount) || 0;
+                if (Math.abs(expectedAmt - Number(amount)) >= 0.005) return false;
+                const cTime = new Date(d.data.createdAt || 0).getTime();
+                return (Date.now() - cTime) < 24 * 60 * 60 * 1000;
+              });
+
+              // Exclude expired sessions belonging to students who ALREADY have a PAID registration for that event
+              const matchingExpired: typeof recentExpired = [];
+              for (const exp of recentExpired) {
+                let alreadyPaid = false;
+                const expEmail = String(exp.data.email || "").trim().toLowerCase();
+                const expEventId = exp.data.eventId;
+                if (expEmail) {
+                  try {
+                    const paidByEmail = await getDocs(query(
+                      collection(db, "registrations"),
+                      where("email", "==", expEmail),
+                      where("paymentStatus", "==", "PAID"),
+                      limit(5)
+                    ));
+                    if (!paidByEmail.empty) {
+                      alreadyPaid = paidByEmail.docs.some((pd) => !expEventId || pd.data().eventId === expEventId);
+                    }
+                  } catch {}
+                }
+                if (!alreadyPaid) {
+                  matchingExpired.push(exp);
+                }
               }
-              await setDoc(doc(db, "active_checkout_sessions", recovered.id), {
-                status: "COMPLETED",
-                utr,
-                receivedAmount: amount,
-                paidAt: now,
-                transactionTimestamp,
-                rawNotification: combinedText,
-                payerName: payerName || null,
-                isFriendPayment: Boolean(isFriendPayment),
-                recoveredFromExpired: true,
-              }, { merge: true });
+
+              if (matchingExpired.length > 0) {
+                const incomingMs = contentDate.getTime();
+                // Rank by: 1) Name compatibility, 2) Phone match, 3) Closest timestamp to payment
+                matchingExpired.sort((a, b) => {
+                  const nameA = String(a.data.participantName || a.data.leaderName || "");
+                  const nameB = String(b.data.participantName || b.data.leaderName || "");
+                  const aNameOk = Boolean(extractedSender && isNameCompatible(extractedSender, nameA));
+                  const bNameOk = Boolean(extractedSender && isNameCompatible(extractedSender, nameB));
+                  if (aNameOk && !bNameOk) return -1;
+                  if (!aNameOk && bNameOk) return 1;
+
+                  const textLower = combinedText.toLowerCase();
+                  const phoneA = String(a.data.phone || "").replace(/\D/g, "").slice(-6);
+                  const phoneB = String(b.data.phone || "").replace(/\D/g, "").slice(-6);
+                  const aPhoneOk = Boolean(phoneA.length >= 6 && textLower.includes(phoneA));
+                  const bPhoneOk = Boolean(phoneB.length >= 6 && textLower.includes(phoneB));
+                  if (aPhoneOk && !bPhoneOk) return -1;
+                  if (!aPhoneOk && bPhoneOk) return 1;
+
+                  const deltaA = Math.abs(incomingMs - new Date(a.data.createdAt || 0).getTime());
+                  const deltaB = Math.abs(incomingMs - new Date(b.data.createdAt || 0).getTime());
+                  return deltaA - deltaB;
+                });
+
+                const recovered = matchingExpired[0];
+                const recName = recovered.data.participantName || recovered.data.leaderName || recovered.data.email || "Student";
+                const nameMatches = !extractedSender || isNameCompatible(extractedSender, recName);
+                const recAgeMs = Math.abs(incomingMs - new Date(recovered.data.createdAt || 0).getTime());
+
+                // Safety gate: If payer name contradicts student name, only recover if it is the sole
+                // recent expired session within 45 minutes; otherwise leave UNCLAIMED for manual/UTR match.
+                if (nameMatches || (matchingExpired.length === 1 && recAgeMs <= 45 * 60 * 1000)) {
+                  matchedOrderId = recovered.id;
+                  matchedStudentName = recName;
+                  if (extractedSender && !isNameCompatible(extractedSender, matchedStudentName)) {
+                    isFriendPayment = true;
+                    payerName = extractedSender;
+                  }
+                  await setDoc(paymentDocRef, {
+                    status: "MATCHED",
+                    matchedOrderId: recovered.id,
+                    matchedStudentName,
+                  }, { merge: true }).catch(() => {});
+                  await setDoc(doc(db, "active_checkout_sessions", recovered.id), {
+                    status: "COMPLETED",
+                    utr,
+                    receivedAmount: amount,
+                    paidAt: now,
+                    transactionTimestamp,
+                    rawNotification: combinedText,
+                    payerName: payerName || null,
+                    isFriendPayment: Boolean(isFriendPayment),
+                    recoveredFromExpired: true,
+                  }, { merge: true }).catch((e) => {
+                    console.warn("Notice: expired session status update note:", e);
+                  });
+                }
+              }
             }
           }
         } catch (expReviveErr) {
@@ -696,6 +795,25 @@ export async function POST(req: NextRequest) {
               // If incoming has real UTR and session already has a different real UTR, don't collide
               if (!isSyntheticUtr && data.utr && !data.utr.startsWith("AUTO-PTM-") && data.utr !== utr) {
                 return false;
+              }
+
+              // Two different Paytm push notifications (different AUTO-PTM- hashes) should not absorb
+              // each other unless payer/student name matches (prevents Student B's payment from merging into Student A's)
+              if (isSyntheticUtr && data.utr && data.utr.startsWith("AUTO-PTM-") && data.utr !== utr) {
+                const sName = String(data.participantName || data.leaderName || "");
+                const pName = String(data.payerName || "");
+                if (!extractedSender || (!isNameCompatible(extractedSender, sName) && !isNameCompatible(extractedSender, pName))) {
+                  return false;
+                }
+              }
+
+              // Do not absorb if both signals have contradictory payer/student names
+              if (extractedSender) {
+                const sName = String(data.participantName || data.leaderName || "");
+                const pName = String(data.payerName || "");
+                if ((sName || pName) && !isNameCompatible(extractedSender, sName) && !isNameCompatible(extractedSender, pName)) {
+                  return false;
+                }
               }
               return true;
             });
