@@ -933,6 +933,10 @@ export async function POST(req: NextRequest) {
               // ─────────────────────────────────────────────────────────────
               const exactPaisaCandidates = allWaiting
                 .filter((d) => {
+                  const subUtr = String(d.data.submittedUtr || "").trim();
+                  if (!isSyntheticUtr && utr && /^\d{12}$/.test(utr) && /^\d{12}$/.test(subUtr) && subUtr !== utr) {
+                    return false;
+                  }
                   const expectedAmt = Number(d.data.amount) || 0;
                   return Math.abs(expectedAmt - Number(amount)) < 0.005;
                 })
@@ -973,6 +977,10 @@ export async function POST(req: NextRequest) {
               // ─────────────────────────────────────────────────────────────
               const roundCandidates = allWaiting
                 .filter((d) => {
+                  const subUtr = String(d.data.submittedUtr || "").trim();
+                  if (!isSyntheticUtr && utr && /^\d{12}$/.test(utr) && /^\d{12}$/.test(subUtr) && subUtr !== utr) {
+                    return false;
+                  }
                   const expectedAmt = Number(d.data.amount) || 0;
                   const hasMicroOffset = (d.data.microPaisaOffset && d.data.microPaisaOffset > 0) || (Math.round(expectedAmt * 100) % 100 !== 0);
                   if (hasMicroOffset) return false; // Do not mix with micro-paisa sessions
@@ -1598,8 +1606,12 @@ export async function POST(req: NextRequest) {
                 };
               }).filter((c): c is typeof c & { evalMatch: NonNullable<typeof c.evalMatch> } => Boolean(c.evalMatch));
 
-              // Rank by MAXIMUM matched dimensions first, then highest score, then closest time delta
+              // Rank: 100% Bank UTR Match FIRST, then maximum matched dimensions, highest score, closest time delta
               scoredRegCandidates.sort((a, b) => {
+                const aBankExact = a.evalMatch.matchedDimensions.includes("100% Bank UTR Match");
+                const bBankExact = b.evalMatch.matchedDimensions.includes("100% Bank UTR Match");
+                if (aBankExact !== bBankExact) return aBankExact ? -1 : 1;
+
                 if (b.evalMatch.matchedDimensionsCount !== a.evalMatch.matchedDimensionsCount) {
                   return b.evalMatch.matchedDimensionsCount - a.evalMatch.matchedDimensionsCount;
                 }
@@ -1663,6 +1675,16 @@ export async function POST(req: NextRequest) {
           const existingManualUtr = /^\d{12}$/.test(rawManualFieldUtr)
             ? rawManualFieldUtr
             : (regData.paymentStatus === "PENDING" && /^\d{12}$/.test(rawExistingPaymentId) ? rawExistingPaymentId : "");
+
+          // Strict Invariant: If student manually entered a 12-digit UTR and incoming Bank SMS has a DIFFERENT 12-digit UTR,
+          // they MUST match completely — NEVER mark this registration as matched/paid!
+          const hasManualBankUtrMismatch = Boolean(
+            !isSyntheticUtr &&
+            utr &&
+            /^\d{12}$/.test(utr) &&
+            existingManualUtr &&
+            existingManualUtr !== utr
+          );
 
           const existingVerifiedBankUtr = /^\d{12}$/.test(rawExistingPaymentId)
             ? rawExistingPaymentId
@@ -1733,7 +1755,9 @@ export async function POST(req: NextRequest) {
           const resolvedLedgerDocId = String(finalPaymentId || utr || `TXN-${Date.now()}`);
           const finalLedgerRef = doc(db, "verified_upi_payments", resolvedLedgerDocId);
 
-          const atomicLockOk = await runTransaction(db, async (tx) => {
+          const atomicLockOk = hasManualBankUtrMismatch
+            ? false
+            : await runTransaction(db, async (tx) => {
             const pSnap = await tx.get(paymentDocRef);
             const pData = pSnap.exists() ? pSnap.data() : null;
             if (pData?.claimedByRegistrationId && pData.claimedByRegistrationId !== targetRegId) {

@@ -266,8 +266,21 @@ export function findBestMultiDimensionalMatch(
 
   if (scored.length === 0) return null;
 
-  // Rank: Maximum matched dimensions FIRST, then highest score, then smallest time delta
+  // Rank:
+  // 1. Exact 12-digit Bank UTR Match ALWAYS takes #1 priority (above synthetic Paytm signals with more secondary dims)
+  // 2. Non-synthetic Bank SMS signals take priority over synthetic AUTO-PTM- signals when eligible
+  // 3. Maximum matched dimensions, highest score, smallest time delta
   scored.sort((a, b) => {
+    const aBankExact = a.matchedDimensions.includes("100% Bank UTR Match");
+    const bBankExact = b.matchedDimensions.includes("100% Bank UTR Match");
+    if (aBankExact !== bBankExact) return aBankExact ? -1 : 1;
+
+    const aIsBankSms = !a.utr.startsWith("AUTO-PTM-") && /^\d{12}$/.test(a.utr) && String(a.source || "").toLowerCase().includes("sms");
+    const bIsBankSms = !b.utr.startsWith("AUTO-PTM-") && /^\d{12}$/.test(b.utr) && String(b.source || "").toLowerCase().includes("sms");
+    if (aIsBankSms !== bIsBankSms && a.isEligibleForAutoApproval === b.isEligibleForAutoApproval) {
+      return aIsBankSms ? -1 : 1;
+    }
+
     if (b.matchedDimensionsCount !== a.matchedDimensionsCount) {
       return b.matchedDimensionsCount - a.matchedDimensionsCount;
     }
